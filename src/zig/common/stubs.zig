@@ -652,8 +652,9 @@ pub fn Stubs(comptime c: type) type {
                 return @intCast(c.KE_OK);
             }
 
-            fn queryRegister(self: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize) callconv(.c) c.ke_query_id {
-                return mint(self);
+            fn queryRegister(self: ?*c.ke_ecs, _: [*c]const c.ke_component_id, _: usize, out_query: [*c]c.ke_query_id) callconv(.c) c.ke_result {
+                out_query.* = mint(self);
+                return @intCast(c.KE_OK);
             }
         };
 

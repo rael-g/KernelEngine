@@ -267,20 +267,17 @@ fn bindNow(
     if (entity == c.KE_ENTITY_INVALID) return error.InvalidArgument;
     if (bindingOf(s, entity) != null) return error.AlreadyExists;
 
-    _ = s.ecs.component_add.?(s.ecs, entity, s.binding_cid) orelse return error.OutOfMemory;
-    t.entities.append(heap.gpa, entity) catch {
-        _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
-        return error.OutOfMemory;
-    };
+    var binding: ?*anyopaque = null;
+    try R.check(s.ecs.component_add.?(s.ecs, entity, s.binding_cid, &binding));
+    errdefer _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+    try t.entities.append(heap.gpa, entity);
+    errdefer _ = t.entities.pop();
 
-    _ = s.ecs.component_add.?(s.ecs, entity, t.tag);
+    var tagged: ?*anyopaque = null;
+    try R.check(s.ecs.component_add.?(s.ecs, entity, t.tag, &tagged));
+    errdefer _ = s.ecs.component_remove.?(s.ecs, entity, t.tag);
 
-    const moved = s.ecs.component_get.?(s.ecs, entity, s.binding_cid) orelse {
-        _ = t.entities.pop();
-        s.ecs.component_remove.?(s.ecs, entity, t.tag);
-        _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
-        return error.OutOfMemory;
-    };
+    const moved = s.ecs.component_get.?(s.ecs, entity, s.binding_cid) orelse return error.OutOfMemory;
     const b: *Binding = @ptrCast(@alignCast(moved));
     b.type_id = type_id;
     b.instance = instance;
@@ -302,17 +299,19 @@ const PendingUnbind = struct {
 };
 
 /// Run by the command queue when a recorded bind is applied. It passes no error channel, so a bind
-/// that fails at that point is dropped and nothing reports it.
+/// that fails at that point is dropped and only logged.
 fn cbBind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     const p: *const PendingBind = @ptrCast(@alignCast(user.?));
-    bindNow(p.s, p.entity, p.type_id, p.instance) catch {};
+    bindNow(p.s, p.entity, p.type_id, p.instance) catch |err|
+        log.warn("binding the recorded entity {d} failed: {t}", .{ p.entity, err });
 }
 
 /// Run by the command queue when a recorded unbind is applied; an entity without a binding by then
 /// is left alone.
 fn cbUnbind(_: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) void {
     const p: *const PendingUnbind = @ptrCast(@alignCast(user.?));
-    unbindNow(p.s, p.entity);
+    unbindNow(p.s, p.entity) catch |err|
+        log.warn("unbinding the recorded entity {d} failed: {t}", .{ p.entity, err });
 }
 
 /// Slot `bind_deferred`. Checks the type, the entity and the command queue when it is called, but
@@ -351,15 +350,15 @@ fn unbindDeferred(
 }
 
 /// Slot `unbind`. Removes the entity's binding at once; an entity with none is left alone.
-fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) void {
-    const self = self_in orelse return;
-    unbindNow(stateOf(self), entity);
+fn unbind(self_in: ?*c.ke_script_host, entity: c.ke_entity) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    return R.of(unbindNow(stateOf(self), entity));
 }
 
 /// Removes the entity from its type's list keeping the others in binding order, and rewrites the
 /// index of every binding that moved down, so each index keeps naming its entity. An entity with
 /// no binding is left untouched.
-fn unbindNow(s: *State, entity: c.ke_entity) void {
+fn unbindNow(s: *State, entity: c.ke_entity) R.Error!void {
     const b = bindingOf(s, entity) orelse return;
     const tag = if (typeAt(s, b.type_id)) |t| t.tag else 0;
     if (typeAt(s, b.type_id)) |t| {
@@ -372,8 +371,8 @@ fn unbindNow(s: *State, entity: c.ke_entity) void {
     }
     b.type_id = c.KE_SCRIPT_TYPE_NONE;
     b.instance = null;
-    if (tag != 0) s.ecs.component_remove.?(s.ecs, entity, tag);
-    _ = s.ecs.component_remove.?(s.ecs, entity, s.binding_cid);
+    if (tag != 0) try R.check(s.ecs.component_remove.?(s.ecs, entity, tag));
+    try R.check(s.ecs.component_remove.?(s.ecs, entity, s.binding_cid));
 }
 
 /// Slot `instance_of`. Writes the type and instance bound to the entity and returns true; an
@@ -702,7 +701,7 @@ test "each type has its own tag, apart from the group of tags, carried by a boun
     const ecs = &h.tree.ecs.vtable;
     try testing.expect(ecs.component_get.?(ecs, e, tag) != null);
 
-    h.host().unbind.?(h.host(), e);
+    try R.check(h.host().unbind.?(h.host(), e));
     try testing.expect(ecs.component_get.?(ecs, e, tag) == null);
 }
 
@@ -749,7 +748,7 @@ test "instance count follows bind and unbind" {
     try testing.expectEqual(R.ok, h.host().bind.?(h.host(), b, id, &mb));
     try testing.expectEqual(@as(u32, 2), h.host().instance_count.?(h.host(), id));
 
-    h.host().unbind.?(h.host(), a);
+    try R.check(h.host().unbind.?(h.host(), a));
     try testing.expectEqual(@as(u32, 1), h.host().instance_count.?(h.host(), id));
     try testing.expect(!h.host().instance_of.?(h.host(), a, null, null));
 }
@@ -767,12 +766,12 @@ test "unbinding an entity keeps the others in binding order" {
         try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e.*, id, m));
     }
 
-    h.host().unbind.?(h.host(), entities[1]);
+    try R.check(h.host().unbind.?(h.host(), entities[1]));
     var count: u32 = 0;
     const listed = h.host().instances.?(h.host(), id, &count);
     try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[2], entities[3] }, listed[0..count]);
 
-    h.host().unbind.?(h.host(), entities[2]);
+    try R.check(h.host().unbind.?(h.host(), entities[2]));
     const after = h.host().instances.?(h.host(), id, &count);
     try testing.expectEqualSlices(c.ke_entity, &.{ entities[0], entities[3] }, after[0..count]);
 }
@@ -852,8 +851,8 @@ test "unbinding one instance leaves every other one reachable" {
         try testing.expectEqual(R.ok, h.host().bind.?(h.host(), e.*, id, &marks[i]));
     }
 
-    h.host().unbind.?(h.host(), entities[0]);
-    h.host().unbind.?(h.host(), entities[2]);
+    try R.check(h.host().unbind.?(h.host(), entities[0]));
+    try R.check(h.host().unbind.?(h.host(), entities[2]));
 
     var count: u32 = 0;
     const listed = h.host().instances.?(h.host(), id, &count);
@@ -874,7 +873,7 @@ test "the last instance unbound empties its type" {
     const only = h.tree.create("Only", 0);
     var mark: u32 = 1;
     try testing.expectEqual(R.ok, h.host().bind.?(h.host(), only, id, &mark));
-    h.host().unbind.?(h.host(), only);
+    try R.check(h.host().unbind.?(h.host(), only));
 
     var count: u32 = 1;
     _ = h.host().instances.?(h.host(), id, &count);

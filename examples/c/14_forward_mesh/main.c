@@ -43,6 +43,20 @@ static void check(const char *what, ke_result result)
     if (result != KE_OK) die_result(what, result);
 }
 
+static ke_entity spawn_entity(ke_ecs *ecs)
+{
+    ke_entity entity = KE_ENTITY_INVALID;
+    check("entity_create", ecs->entity_create(ecs, &entity));
+    return entity;
+}
+
+static void *attach(ke_ecs *ecs, ke_entity entity, ke_component_id cid)
+{
+    void *data = NULL;
+    check("component_add", ecs->component_add(ecs, entity, cid, &data));
+    return data;
+}
+
 static double now_seconds(void)
 {
 #if defined(_WIN32)
@@ -202,27 +216,27 @@ int main(void)
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };
 
-    ke_entity cam = ecs.ref->entity_create(ecs.ref);
-    ke_transform_component *cam_t = ecs.ref->component_add(ecs.ref, cam, transform_cid);
+    ke_entity cam = spawn_entity(ecs.ref);
+    ke_transform_component *cam_t = attach(ecs.ref, cam, transform_cid);
     *cam_t = (ke_transform_component){ .position = { 1.5f, 1.5f, -3.0f }, .scale = { 1.0f, 1.0f, 1.0f } };
-    ke_world_transform_component *cam_w = ecs.ref->component_add(ecs.ref, cam, world_cid);
+    ke_world_transform_component *cam_w = attach(ecs.ref, cam, world_cid);
     *cam_w = (ke_world_transform_component){ .matrix = identity };
     cam_w->matrix.m[12] = 1.5f;
     cam_w->matrix.m[13] = 1.5f;
     cam_w->matrix.m[14] = -3.0f;
-    ke_camera_component *cam_c = ecs.ref->component_add(ecs.ref, cam, camera_cid);
+    ke_camera_component *cam_c = attach(ecs.ref, cam, camera_cid);
     *cam_c = (ke_camera_component){ .fov = 60.0f, .near_plane = 0.1f, .far_plane = 100.0f, .cull_mask = UINT32_MAX };
 
-    ke_entity ent = ecs.ref->entity_create(ecs.ref);
-    ke_transform_component *ent_t = ecs.ref->component_add(ecs.ref, ent, transform_cid);
+    ke_entity ent = spawn_entity(ecs.ref);
+    ke_transform_component *ent_t = attach(ecs.ref, ent, transform_cid);
     *ent_t = (ke_transform_component){ .scale = { 1.0f, 1.0f, 1.0f } };
-    ke_world_transform_component *ent_w = ecs.ref->component_add(ecs.ref, ent, world_cid);
+    ke_world_transform_component *ent_w = attach(ecs.ref, ent, world_cid);
     *ent_w = (ke_world_transform_component){ .matrix = identity };
-    ke_mesh_component *ent_m = ecs.ref->component_add(ecs.ref, ent, mesh_cid);
+    ke_mesh_component *ent_m = attach(ecs.ref, ent, mesh_cid);
     *ent_m = (ke_mesh_component){ .mesh = cube_h, .material = mat, .layers = 1 };
 
-    ke_entity sun = ecs.ref->entity_create(ecs.ref);
-    ke_directional_light_component *sun_l = ecs.ref->component_add(ecs.ref, sun, light_cid);
+    ke_entity sun = spawn_entity(ecs.ref);
+    ke_directional_light_component *sun_l = attach(ecs.ref, sun, light_cid);
     *sun_l = (ke_directional_light_component){
         .direction = { -0.4f, -1.0f, -0.3f },
         .color = { 1.0f, 1.0f, 1.0f },

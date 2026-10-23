@@ -1,0 +1,1 @@
+add_compile_definitions(FLECS_SOFT_ASSERT FLECS_KEEP_ASSERT)

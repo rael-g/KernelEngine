@@ -251,12 +251,12 @@
         },
         {
           "name": "unbind",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [
             "unroots:entity"
           ],
           "doc": "Drops the binding for \u0060entity\u0060, if any. The instance itself is the binding runtime\u0027s to release.",
-          "return_doc": null,
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null host; the ecs\u0027s code when it refuses to detach the binding.",
           "params": [
             {
               "name": "entity",

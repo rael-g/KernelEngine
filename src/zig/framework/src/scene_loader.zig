@@ -145,9 +145,13 @@ fn applyComponentBlock(
     }
 
     const existing = e.component_get.?(e, entity, meta.cid);
-    const comp = e.component_add.?(e, entity, meta.cid) orelse {
-        return structural("component '{s}' could not be added to the entity", .{comp_name});
+    var added: ?*anyopaque = null;
+    R.check(e.component_add.?(e, entity, meta.cid, &added)) catch |err| {
+        log.warn("component '{s}' could not be added to the entity: {t}", .{ comp_name, err });
+        return err;
     };
+    const comp = added orelse
+        return structural("component '{s}' has no storage to hold the authored values", .{comp_name});
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
         @memset(bytes[0..meta.size], 0);
@@ -633,20 +637,23 @@ fn fakeSlot(f: *FakeEcs, entity: c.ke_entity, cid: c.ke_component_id) ?*?[*]u8 {
     return &f.storage[row][cid - 1];
 }
 
-fn fakeEntityCreate(self: ?*c.ke_ecs) callconv(.c) c.ke_entity {
+fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    if (f.next_entity >= fake_max_entities) return c.KE_ENTITY_INVALID;
+    out_entity.* = c.KE_ENTITY_INVALID;
+    if (f.next_entity >= fake_max_entities) return R.code(error.OutOfMemory);
     f.next_entity += 1;
     f.alive[f.next_entity - 1] = true;
-    return f.next_entity;
+    out_entity.* = f.next_entity;
+    return R.ok;
 }
 
-fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) void {
+fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return;
+    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
     const row = entity - 1;
     f.alive[row] = false;
     for (&f.storage[row]) |*cell| cell.* = null;
+    return R.ok;
 }
 
 fn fakeComponentRegister(
@@ -696,25 +703,32 @@ fn fakeComponentAdd(
     self: ?*c.ke_ecs,
     entity: c.ke_entity,
     component: c.ke_component_id,
-) callconv(.c) ?*anyopaque {
+    out_data: [*c]?*anyopaque,
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    const slot = fakeSlot(f, entity, component) orelse return null;
-    if (slot.*) |existing| return existing;
+    out_data.* = null;
+    const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
+    if (slot.*) |existing| {
+        out_data.* = existing;
+        return R.ok;
+    }
     const size = f.components[component - 1].size;
-    const block = f.arena.allocator().alignedAlloc(u8, .of(u64), @max(size, 1)) catch return null;
+    const block = f.arena.allocator().alignedAlloc(u8, .of(u64), @max(size, 1)) catch return R.code(error.OutOfMemory);
     @memset(block, 0);
     slot.* = block.ptr;
-    return block.ptr;
+    out_data.* = block.ptr;
+    return R.ok;
 }
 
 fn fakeComponentRemove(
     self: ?*c.ke_ecs,
     entity: c.ke_entity,
     component: c.ke_component_id,
-) callconv(.c) void {
+) callconv(.c) c.ke_result {
     const f = fakeEcsOf(self);
-    const slot = fakeSlot(f, entity, component) orelse return;
+    const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
     slot.* = null;
+    return R.ok;
 }
 
 fn fakeComponentGet(

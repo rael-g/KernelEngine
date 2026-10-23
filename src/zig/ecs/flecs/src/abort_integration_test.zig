@@ -1,12 +1,12 @@
-//! Runs the abort probe as a child process and checks that it exits with a failure status and
-//! logs flecs's own message on standard error.
+//! Runs the abort probe as a child process and checks that the hook logs flecs's message and the
+//! stack where flecs called it.
 
 const std = @import("std");
 const testing = std.testing;
 
 const build_options = @import("build_options");
 
-test "a real flecs internal assertion logs flecs's message and ends the process" {
+test "the abort hook logs flecs's message and the stack it was called from" {
     var threaded: std.Io.Threaded = .init(testing.allocator, .{});
     defer threaded.deinit();
     const io = threaded.io();
@@ -17,8 +17,7 @@ test "a real flecs internal assertion logs flecs's message and ends the process"
     defer testing.allocator.free(result.stdout);
     defer testing.allocator.free(result.stderr);
 
-    try testing.expect(result.term == .exited);
-    try testing.expect(result.term.exited != 0);
-    try testing.expect(std.mem.indexOf(u8, result.stderr, "flecs fatal:") != null);
-    try testing.expect(std.mem.indexOf(u8, result.stderr, "component cannot be a tag") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "flecs internal failure:") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "probe internal failure") != null);
+    try testing.expect(std.mem.indexOf(u8, result.stderr, "debugRunAbortHook") != null);
 }
