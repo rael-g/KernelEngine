@@ -20,5 +20,5 @@ public unsafe partial struct ke_ecs_commands
     public delegate* unmanaged[Cdecl]<ke_ecs_commands*, ulong, KernelEngine.Result.Native.ke_result> despawn;
 
     [NativeTypeName("ke_result (*)(ke_ecs_commands *, ke_defer_fn, const void *, size_t)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs_commands*, delegate* unmanaged[Cdecl]<ke_ecs*, void*, void>, void*, nuint, KernelEngine.Result.Native.ke_result> defer;
+    public delegate* unmanaged[Cdecl]<ke_ecs_commands*, delegate* unmanaged[Cdecl]<ke_ecs*, void*, KernelEngine.Result.Native.ke_result>, void*, nuint, KernelEngine.Result.Native.ke_result> defer;
 }
