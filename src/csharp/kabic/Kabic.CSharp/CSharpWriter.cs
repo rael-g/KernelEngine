@@ -1777,6 +1777,7 @@ public static class CSharpWriter
         var stars = t.Count(c => c == '*');
         var basis = model.ResolveAlias(t.TrimEnd('*', ' '));
         if (stars == 0 && IsBoolType(basis, convention)) return "bool";
+        if (convention.ReturnsResult(basis)) return convention.ResultManagedType + new string('*', stars);
         return Idioms.CsForeignType(basis, convention) + new string('*', stars);
     }
 
@@ -1948,7 +1949,8 @@ public static class CSharpWriter
                 + " which declares no lane to receive it — the typedef has to mark it [context]");
 
         var errorLane = callback.Lanes.Select((l, i) => (l, i))
-            .Where(x => ReceivesFailure(x.l.Type, convention)).Select(x => (int?)x.i).FirstOrDefault()
+            .Where(x => ReceivesFailure(x.l.Type, convention) || convention.ReturnsResult(x.l.Type))
+            .Select(x => (int?)x.i).FirstOrDefault()
             ?? throw new InvalidOperationException(
                 $"{slot.Name}.{fn.Name}: a completion is how the operation says it ended, and it can"
                 + $" only say it failed through a lane handed the error itself; {callback.Name}"
@@ -2332,6 +2334,11 @@ public static class CSharpWriter
             ? "void* ctx"
             : $"{BlittableLane(model, l.Type, convention)} arg{i}");
         var err = $"arg{completion.ErrorLane}";
+        var byResult = convention.ReturnsResult(lanes[completion.ErrorLane].Type);
+        var errFailed = byResult ? $"{err} != {convention.ResultManagedType}.{convention.ResultOk}" : $"{err} != null";
+        var errException = byResult
+            ? $"{convention.ResultHelperClass}.FromCode({err}, \"{slot.Name}\")"
+            : $"{convention.ErrorHelperClass}.FromNative({err}, \"{slot.Name}\")";
 
         string Answer()
         {
@@ -2343,8 +2350,8 @@ public static class CSharpWriter
         }
 
         var failed = completion.Owned is not null
-            ? $"{err} != null || arg{completion.ResultLane} == null"
-            : $"{err} != null";
+            ? $"{errFailed} || arg{completion.ResultLane} == null"
+            : errFailed;
 
         o.Add("    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]");
         o.Add($"    private static void {completion.Trampoline}({string.Join(", ", ps)})");
@@ -2355,7 +2362,7 @@ public static class CSharpWriter
         o.Add("        try");
         o.Add("        {");
         o.Add($"            if ({failed})");
-        o.Add($"                state.Source.TrySetException({convention.ErrorHelperClass}.FromNative({err}, \"{slot.Name}\"));");
+        o.Add($"                state.Source.TrySetException({errException});");
         o.Add("            else");
         o.Add($"                {Answer()}");
         o.Add("        }");

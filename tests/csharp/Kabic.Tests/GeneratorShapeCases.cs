@@ -633,6 +633,25 @@ internal static class GeneratorShapeCases
                 Param("error", "const ke_error *"), Param("bundle", "ke_probe_bundle *"),
                 Param("user_data", "void *", "context"))]);
 
+        Expect("a completion handed the result code fails the Task with the code's exception",
+            Vtable("ke_probe",
+                Slot("open_async", "ke_task *", Param("self", "ke_probe *", "self"),
+                    Param("path", "const char *", "utf8"),
+                    Param("on_done", "ke_probe_done_func", "completion:user_data"),
+                    Param("user_data", "void *")),
+                Slot("close", "void", "releases:Bundle", Param("self", "ke_probe *", "self"),
+                    Param("bundle", "ke_probe_bundle *"))),
+            contains: ["public Task<Bundle> OpenAsync(ke_probe* self, string path)",
+                       "private static void OpenAsyncOnDoneTrampoline(KernelEngine.Result.Native.ke_result arg0, ke_probe_bundle* arg1, void* ctx)",
+                       "if (arg0 != KernelEngine.Result.Native.ke_result.KE_OK || arg1 == null)",
+                       "state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, \"open_async\"));"],
+            absent: ["ke_error"],
+            structs: [ViewJson("ke_probe_bundle")],
+            aliases: new() { ["ke_probe_done_func"] = "void (*)(ke_result, ke_probe_bundle *, void *)" },
+            callbacks: [Callback("ke_probe_done_func", "void",
+                Param("result", "ke_result"), Param("bundle", "ke_probe_bundle *"),
+                Param("user_data", "void *", "context"))]);
+
         Expect("an answer nothing claims ownership of is refused, not handed over as a pointer",
             Vtable("ke_probe",
                 Slot("open_async", "ke_task *", Param("self", "ke_probe *", "self"),
