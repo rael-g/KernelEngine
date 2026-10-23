@@ -6,7 +6,7 @@ const std = @import("std");
 /// Turns off the signal stack that the standard library would allocate for this library.
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_window_glfw").logFn };
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 

@@ -4,7 +4,7 @@
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/asset/image_loader.h>
 #include <kernel_engine/text/font.h>
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 
 #ifdef __cplusplus
 extern "C"

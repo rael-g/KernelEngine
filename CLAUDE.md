@@ -26,7 +26,7 @@ build/native/bin/docir query <name> src                           # what the sou
 
 `--global-cache-dir` is not optional housekeeping: without it Zig caches into the user's home. The local cache is `.zig-cache` at the repository root, where Zig puts it by default; the root build gives `vcpkg install` both through `ZIG_LOCAL_CACHE_DIR` and `ZIG_GLOBAL_CACHE_DIR`, because vcpkg's CMake runs `zig cc` from directories of its own.
 
-Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The two exceptions are at the repository root and ignored by git: `.zig-cache/`, the local cache of Zig, and `zig-pkg/`, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, docir). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). Every plugin links `ke_common` with an `$ORIGIN` runpath, so a plugin copied beside it finds it; running an example or `dotnet test` needs no `LD_LIBRARY_PATH`.
+Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The two exceptions are at the repository root and ignored by git: `.zig-cache/`, the local cache of Zig, and `zig-pkg/`, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, docir). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). A plugin that links another library carries an `$ORIGIN` runpath, so a plugin copied beside it finds it; running an example or `dotnet test` needs no `LD_LIBRARY_PATH`.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
@@ -88,7 +88,7 @@ Contracts worth knowing by name:
 
 Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
-No C++ implementation. The one `.cpp` in the tree, `src/zig/common/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
+No C++ implementation. The one `.cpp` in the tree, `src/zig/result/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
 Dependencies enter through dependency management: vcpkg for native libraries, NuGet for .NET, `build.zig.zon` for Zig packages and C sources built by the graph. A pinned fetch step in the root `build.zig` is the exception for what none of them carries, a vendored copy the exception after that, and the machine's environment or the operating system's package manager is never a source — see [`docs/conventions/build.md`](docs/conventions/build.md).
 
@@ -156,7 +156,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
 - **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
-- **Error handling**: a call that can fail takes `ke_error **out_error` and, on failure, fills it with `KE_ERROR_SET` and returns its failure sentinel (`false`, a null handle, an invalid id). All callers check the return.
+- **Error handling**: a call that can fail returns `ke_result` (`KE_OK` or the code of the failure), writes its value through a last `out_` parameter, and logs the reason with `log.warn`. All callers check the code.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
 - **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
 - **Shape of a plugin**, where the language is silent:
@@ -201,7 +201,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases.
 
-6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, fills a `ke_error` and returns the failure sentinel of the call.
+6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, is a `ke_result` code returned by the call.
 
 7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers.
 

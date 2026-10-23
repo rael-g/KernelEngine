@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_WINDOW_GLFW_C_H_
 #define KERNEL_ENGINE_WINDOW_GLFW_C_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/window/window.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/input/input.h>

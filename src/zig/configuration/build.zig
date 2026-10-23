@@ -11,7 +11,6 @@ pub fn build(b: *std.Build) void {
     const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_config = b.option([]const u8, "ke-config-include", "Path to kernel_engine/configuration include dir") orelse @panic("-Dke-config-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "Dir containing ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/configuration.zig"),
@@ -23,9 +22,6 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_common });
     mod.addIncludePath(.{ .cwd_relative = ke_result });
     mod.addIncludePath(.{ .cwd_relative = ke_config });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_CONFIGURATION_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -52,8 +48,6 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(.{ .cwd_relative = ke_common });
     test_mod.addIncludePath(.{ .cwd_relative = ke_result });
     test_mod.addIncludePath(.{ .cwd_relative = ke_config });
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
     test_mod.addImport("log", ke_logger_build.log(b));

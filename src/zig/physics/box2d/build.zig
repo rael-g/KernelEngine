@@ -14,8 +14,6 @@ pub fn build(b: *std.Build) void {
     const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const box2d_include = b.option([]const u8, "box2d-include", "Box2D headers dir") orelse @panic("-Dbox2d-include required");
     const box2d_lib = b.option([]const u8, "box2d-lib", "absolute path to the Box2D library") orelse @panic("-Dbox2d-lib required");
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/box2d_physics.zig"),
@@ -31,15 +29,7 @@ pub fn build(b: *std.Build) void {
 
     mod.addObjectFile(.{ .cwd_relative = box2d_lib });
 
-    const kerror_mod = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -68,13 +58,7 @@ pub fn build(b: *std.Build) void {
     }
     test_mod.addIncludePath(b.path("include"));
     test_mod.addObjectFile(.{ .cwd_relative = box2d_lib });
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     test_mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));

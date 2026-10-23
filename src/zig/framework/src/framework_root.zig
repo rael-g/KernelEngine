@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_framework").logFn };
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 comptime {
     _ = @import("components_apply.zig");

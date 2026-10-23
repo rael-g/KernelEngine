@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_audio_miniaudio").logFn };
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const heap = @import("heap");
 const gpa = heap.gpa;

@@ -15,8 +15,6 @@ pub fn build(b: *std.Build) void {
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const flecs_include = b.option([]const u8, "flecs-include", "flecs headers dir") orelse @panic("-Dflecs-include required");
     const flecs_lib = b.option([]const u8, "flecs-lib", "absolute path to the flecs static library") orelse @panic("-Dflecs-lib required");
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/ecs_flecs.zig"),
@@ -38,15 +36,7 @@ pub fn build(b: *std.Build) void {
         mod.linkSystemLibrary("dbghelp", .{});
     }
 
-    const kerror_mod = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     mod.addCMacro("flecs_STATIC", "");
 
@@ -81,13 +71,7 @@ pub fn build(b: *std.Build) void {
         test_mod.linkSystemLibrary("ws2_32", .{});
         test_mod.linkSystemLibrary("dbghelp", .{});
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     test_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     test_mod.addCMacro("flecs_STATIC", "");
 
@@ -114,13 +98,7 @@ pub fn build(b: *std.Build) void {
         probe_mod.linkSystemLibrary("ws2_32", .{});
         probe_mod.linkSystemLibrary("dbghelp", .{});
     }
-    probe_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    probe_mod.linkSystemLibrary("ke_common", .{});
-    probe_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    probe_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     probe_mod.addCMacro("KE_ECS_FLECS_EXPORT", "");
     probe_mod.addCMacro("flecs_STATIC", "");
     probe_mod.addImport("c", ke_build.cImports(b, probe_mod, b.path("src/c.h")));
@@ -135,7 +113,6 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .windows) {
         const beside = b.addWriteFiles();
         const probe_path = beside.addCopyFile(probe_exe.getEmittedBin(), probe_exe.out_filename);
-        _ = beside.addCopyFile(.{ .cwd_relative = b.pathJoin(&.{ ke_lib_dir, "ke_common.dll" }) }, "ke_common.dll");
         integration_options.addOptionPath("probe_exe_path", probe_path);
     } else {
         integration_options.addOptionPath("probe_exe_path", probe_exe.getEmittedBin());

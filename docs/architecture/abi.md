@@ -8,13 +8,12 @@ on the generated page of its header, under `src/c/`.
 
 | part | declared in | receives | hands on |
 |---|---|---|---|
-| contract struct | one header per contract in `src/c/<domain>/` | a call through a slot, with the struct as first argument | the result, or a failure through `ke_error` |
+| contract struct | one header per contract in `src/c/<domain>/` | a call through a slot, with the struct as first argument | a `ke_result`, and a value through a last `out_` parameter |
 | owner | `ke_<name>_handle`, beside its contract, for example `ke_window_handle` | nothing | the borrowed contract pointer (`ref`) and the function that destroys it (`destroy`) |
-| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | a `_params` struct, such as `ke_window_glfw_params`, and an error output | an owner |
-| error record | `ke_error` and `ke_error_type` in `kernel_engine/common/error.h` | `ke_error_set`, through `KE_ERROR_SET` and `KE_ERROR_WRAP` | the failing call's output, and `ke_error_last` |
-| error library | `ke_common`, built from `src/zig/common/src/error.zig` | nothing | the eight generic error types, `ke_error_is`, `ke_error_fatal` |
-| error helper | `Errors` in `src/zig/common/kerror.zig` | the plugin's own translated C namespace | `fail`, `failWithType` and `wrap`, each a call to `ke_error_set` |
-| managed translation | `NativeErrors` in `src/csharp/common` | a `ke_error` pointer | a .NET exception, or a `ke_error` written from one |
+| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | a `_params` struct, such as `ke_window_glfw_params`, and the `out_` handle | `KE_OK` and an owner through the output |
+| result code | `ke_result` in `kernel_engine/result/result.h` | nothing | `KE_OK`, or the code of the failure |
+| result helper | `Result` in `src/zig/result/result.zig` | the plugin's own translated C namespace | `R.ok`, `R.code`, `R.check` and `R.Error`, the conversions between a Zig error and a code |
+| managed translation | `NativeResults` in `src/csharp/result` | a `ke_result` | a .NET exception, or a `ke_result` written from one |
 
 **A call goes through a pointer.** A caller holds a pointer to a contract struct and calls one of
 its slots, handing the struct back as first argument. The only symbol resolved by name is the
@@ -24,22 +23,16 @@ factory.
 `destroy` takes it back. Everything else that needs the object receives the borrowed contract
 pointer. A factory that fails returns an owner whose `ref` is null.
 
-**A failure is an output and a sentinel.** A call that can fail takes `ke_error **out_error`
-last. On failure the callee fills it and returns its sentinel (false, a null handle, an invalid
-id); the caller checks the return. The record lives in per-thread storage, so a pointer to it
-holds until later failures on the same thread overwrite it, and what must outlive that is copied.
+**A failure is a code.** A call that can fail returns `ke_result`: `KE_OK`, or the code of the failure.
+A value the call produces is written through a last `out_` parameter, left zeroed on failure. The
+reason is logged where it happens, and the caller checks the code; ignoring it is a compiler warning.
 
-**An error type is a node in a tree.** Each `ke_error_type` has a name and an optional parent. A
-domain declares its types beside its API and points the parent at one of the eight generic
-roots, `KE_ERROR_GENERAL` among them. `ke_error_is` matches a type by address or by name, and
-walks the parents.
+**A code belongs to a domain.** The domain sits in the high 16 bits and the number in the low, built
+by `KE_RESULT_CODE`. The generic codes, `KE_RESULT_GENERAL` among them, are domain zero, and a code
+the managed side does not know becomes the general exception.
 
-**The managed side maps by name.** `NativeErrors.FromNative` walks the type chain, looks each name up in
-the generated table of exceptions, and falls back to a general one. The cause chain becomes the
-inner exception, and the full type name is kept in the exception's `Data` under `TypeKey`.
-
-**One call ends the process.** `ke_error_fatal` prints the chain and exits; the header reserves it
-for a caller with nowhere left to send an error.
+**The managed side maps by code.** `NativeResults.FromCode` looks the code up in the generated table
+of exceptions and falls back to a general one; `ToCode` goes the other way for a callback that threw.
 
 **Booleans are C `bool`.** A slot or a struct that crosses the ABI takes C `bool`, one byte. It
 reaches C# as a one-byte `bool` because every engine assembly disables runtime marshalling
@@ -69,8 +62,4 @@ belongs does not compile in C. Its bits pack an index and a generation, sized by
 
 ## What the parts agree on without a contract
 
-- The dotted names of the generic error types, "ke.error" and "ke.error.not_found" to
-  "ke.error.already_exists", are written in `src/zig/common/src/error_types.zig`. The generated
-  `NativeErrors.Kinds.g.cs` matches the same strings.
-- The order of the `Kind` enum of `Errors` is the order of those names.
-- The key "ke.error_type" under which `NativeErrors` stores the native type name.
+- The numbers of the generic codes, written in `result.h`, and the table of exceptions generated from them.

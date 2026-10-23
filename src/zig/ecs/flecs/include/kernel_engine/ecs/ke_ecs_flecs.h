@@ -1,7 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <stdint.h>
 
@@ -34,8 +33,8 @@ typedef struct ke_ecs_flecs_params
 
 /// Creates a ke_ecs vtable backed by an internally-owned world.
 /// Also installs process-wide log and abort handlers: an internal assertion
-/// failure in the world ends the process through ke_error_fatal, with a
-/// readable message, and does not return.
+/// failure in the world logs flecs's message and ends the process with a
+/// failure status, and does not return.
 /// @param params [borrowed,optional] NULL takes every default.
 /// @param out_ecs [out] Receives the ECS; left zeroed on failure.
 /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_ecs or a world_id_base that leaves

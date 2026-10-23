@@ -19,7 +19,6 @@ pub fn build(b: *std.Build) void {
     const ke_view      = b.option([]const u8, "ke-view-include",      "kernel_engine/view include dir")      orelse @panic("-Dke-view-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
     const object_uniforms_src = b.option([]const u8, "object-uniforms-src", "path to the shared Zig object_uniforms.zig") orelse @panic("-Dobject-uniforms-src required");
-    const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/shadow_module.zig"),
@@ -32,9 +31,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_SHADOW_EXPORT", "");
 
     const zmath = b.dependency("zmath", .{});
@@ -65,8 +61,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_view, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addCMacro("KE_RENDER_SHADOW_EXPORT", "");
 
     test_mod.addImport("zmath", zmath.module("root"));

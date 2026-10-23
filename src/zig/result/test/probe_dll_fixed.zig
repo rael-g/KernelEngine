@@ -2,7 +2,7 @@
 
 const std = @import("std");
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 extern fn ke_probe_ctor_ran() c_int;
 extern fn ke_probe_marker() [*c]const u8;

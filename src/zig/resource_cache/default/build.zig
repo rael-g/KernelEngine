@@ -12,9 +12,7 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const ke_rc = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
 
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/resource_cache.zig"),
@@ -26,11 +24,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_rc }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
     mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_RESOURCE_CACHE_DEFAULT_EXPORT", "");
 
@@ -58,13 +51,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_rc }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
     test_mod.addIncludePath(b.path("include"));
     test_mod.addCMacro("KE_RESOURCE_CACHE_DEFAULT_EXPORT", "");
 

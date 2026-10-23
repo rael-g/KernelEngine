@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_VIEW_VIEW_SPACE_H_
 #define KERNEL_ENGINE_VIEW_VIEW_SPACE_H_
 
-#include <kernel_engine/common/error.h>
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/render/gpu/ndc_convention.h>
 

@@ -53,7 +53,7 @@ whatever `--prefix` the native build was given, so the two agree only when the n
 
 The copy is an item of the library project, and an executable that references that project through
 `ProjectReference` receives it in its own output directory: the example `00_runtime_minimal` imports
-no targets file, and its output directory holds `libke_common.so`, `libke_ecs_flecs.so`,
+no targets file, and its output directory holds `libke_ecs_flecs.so`,
 `libke_input_default.so` and the other libraries of the projects it references
 (`ls build/artifacts/bin/00_runtime_minimal/debug`). A library a project does not declare is not
 copied.

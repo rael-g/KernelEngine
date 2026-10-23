@@ -7,10 +7,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-  <ItemGroup>
-    <NativeDep Include="ke_common" />
-  </ItemGroup>
-
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>

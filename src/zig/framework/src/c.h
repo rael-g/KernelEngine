@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_C_H_
 #define KERNEL_ENGINE_FRAMEWORK_C_H_
 
-#include <kernel_engine/common/error.h>
+#include <kernel_engine/result/result.h>
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/variant.h>

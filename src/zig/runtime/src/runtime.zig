@@ -45,7 +45,6 @@ const ExtractedQuery = queries_mod.ExtractedQuery;
 const SegBuf = queries_mod.SegBuf;
 const resolveInto = queries_mod.resolveInto;
 
-const E = @import("kerror").Errors(c);
 const R = @import("result").Result(c, .{});
 const log = std.log.scoped(.runtime);
 

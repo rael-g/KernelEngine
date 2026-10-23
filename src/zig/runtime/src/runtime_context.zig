@@ -11,7 +11,6 @@ const cFree = alloc.cFree;
 const cAllocBytes = alloc.cAllocBytes;
 const cFreeBytes = alloc.cFreeBytes;
 
-const E = @import("kerror").Errors(c);
 const R = @import("result").Result(c, .{});
 const log = std.log.scoped(.runtime);
 

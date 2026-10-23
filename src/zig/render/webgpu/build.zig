@@ -10,7 +10,6 @@ pub fn build(b: *std.Build) void {
     const ke_common  = b.option([]const u8, "ke-common-include", "Path to kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
     const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir",        "Dir containing ke_common import lib")      orelse @panic("-Dke-lib-dir required");
     const ke_render  = b.option([]const u8, "ke-render-include", "Path to kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
     const ke_window  = b.option([]const u8, "ke-window-include", "Path to kernel_engine/window include dir") orelse @panic("-Dke-window-include required");
     const ke_sched   = b.option([]const u8, "ke-scheduler-include", "Path to kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
@@ -32,9 +31,7 @@ pub fn build(b: *std.Build) void {
     mod.addIncludePath(.{ .cwd_relative = ke_sched });
     mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
     mod.addIncludePath(b.path("include"));
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
-    mod.linkSystemLibrary("ke_common", .{});
     mod.addRPathSpecial("$ORIGIN");
     mod.linkSystemLibrary("wgpu_native", .{});
     if (target.result.os.tag == .linux) {
@@ -71,9 +68,7 @@ pub fn build(b: *std.Build) void {
     test_mod.addIncludePath(.{ .cwd_relative = wgpu_inc });
     test_mod.addIncludePath(b.path("include"));
     test_mod.addCMacro("KE_GPU_WEBGPU_EXPORT", "");
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
     test_mod.addLibraryPath(.{ .cwd_relative = wgpu_lib });
-    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("wgpu_native", .{});
     if (target.result.os.tag == .linux) {
         test_mod.linkSystemLibrary("X11", .{});

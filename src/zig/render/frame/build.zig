@@ -17,7 +17,6 @@ pub fn build(b: *std.Build) void {
     const ke_spatial = b.option([]const u8, "ke-spatial-include", "kernel_engine/spatial include dir") orelse @panic("-Dke-spatial-include required");
     const ke_render  = b.option([]const u8, "ke-render-include",  "kernel_engine/render include dir")  orelse @panic("-Dke-render-include required");
     const ke_self    = b.option([]const u8, "ke-self-include",    "this plugin's include dir")         orelse @panic("-Dke-self-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir",         "dir with ke_common import lib")     orelse @panic("-Dke-lib-dir required");
 
     const zmath = b.dependency("zmath", .{});
 
@@ -32,9 +31,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_math, ke_runtime, ke_ecs, ke_spatial, ke_render, ke_self }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_FRAME_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -62,8 +58,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_math, ke_runtime, ke_ecs, ke_spatial, ke_render, ke_self }) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addCMacro("KE_RENDER_FRAME_EXPORT", "");
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
 

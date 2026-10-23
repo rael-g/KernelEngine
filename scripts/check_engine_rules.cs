@@ -20,7 +20,7 @@ if (tracked.Count == 0)
 
 var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(rootDir, p)));
 
-var cppFixture = "src/zig/common/test/cpp_static_init_probe.cpp";
+var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"std\.debug\.assert|\bassert\(|@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
@@ -61,7 +61,7 @@ var rules = new List<Rule>
     new("no InternalsVisibleTo", 0,
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(cs|csproj|props|targets)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)),
             l => l.Contains("InternalsVisibleTo", StringComparison.Ordinal))),
-    new("no assert, abort or panic in engine code; a failure is a ke_error", 0,
+    new("no assert, abort or panic in engine code; a failure is a ke_result", 0,
         Lines(zig, l => abort.IsMatch(l), outsideTests: true).Concat(Lines(native, l => abort.IsMatch(l)))),
     new("no failure turned into a crash with `catch unreachable` or `orelse unreachable`", 4,
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
@@ -72,7 +72,8 @@ var rules = new List<Rule>
             && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
             l => pinning.IsMatch(l), outsideTests: true)),
     new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
-        tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p))
+        tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)
+                && !p.StartsWith("src/zig/result/", StringComparison.Ordinal))
             .Where(p => sources[p].Any(l => l.Contains(".linkage = .dynamic", StringComparison.Ordinal)))
             .Select(p => (Build: p, Root: LibraryRoot(p, sources[p])))
             .Where(x => x.Root is not null && !(sources.TryGetValue(x.Root, out var root) && root.Any(l => l.Contains("signal_stack_size = null", StringComparison.Ordinal))))
@@ -106,7 +107,8 @@ var rules = new List<Rule>
     new("a contract header declares no plain function", 0,
         Lines(contracts, l => plainFunction.IsMatch(l))),
     new("a plugin exports only what a factory header declares", 0,
-        zig.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal))
+        zig.Where(s => !s.Key.StartsWith("src/zig/common/", StringComparison.Ordinal)
+                && !s.Key.StartsWith("src/zig/result/test/", StringComparison.Ordinal))
             .SelectMany(s => s.Value.Select((l, i) => (s.Key, Line: i + 1, Match: exportFn.Match(l))))
             .Where(x => x.Match.Success && !declaredNames.Contains(x.Match.Groups[1].Value))
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),

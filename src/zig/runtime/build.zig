@@ -14,9 +14,7 @@ pub fn build(b: *std.Build) void {
     const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
     const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
     const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
-
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common, ke_ecs_flecs and ke_scheduler_enki libraries") orelse @panic("-Dke-lib-dir required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_ecs_flecs and ke_scheduler_enki libraries") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/runtime.zig"),
@@ -28,11 +26,6 @@ pub fn build(b: *std.Build) void {
     inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
     mod.addIncludePath(b.path("include"));
     mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
 
@@ -52,7 +45,6 @@ pub fn build(b: *std.Build) void {
 
     const test_step = b.step("test", "Run unit tests");
     {
-        const lib_dir = ke_lib_dir;
         const test_mod = b.createModule(.{
             .root_source_file = b.path("src/runtime.zig"),
             .target = target,
@@ -63,16 +55,10 @@ pub fn build(b: *std.Build) void {
         inline for (.{ ke_common, ke_result, ke_math, ke_ecs, ke_scheduler, ke_runtime }) |inc| {
             test_mod.addIncludePath(.{ .cwd_relative = inc });
         }
-        test_mod.addImport("kerror", b.createModule(.{
-            .root_source_file = .{ .cwd_relative = kerror_src },
-            .target = target,
-            .optimize = optimize,
-        }));
         test_mod.addIncludePath(b.path("include"));
         test_mod.addCMacro("KE_RUNTIME_CREATE_EXPORT", "");
-        test_mod.addLibraryPath(.{ .cwd_relative = lib_dir });
-        test_mod.addRPath(.{ .cwd_relative = lib_dir });
-        test_mod.linkSystemLibrary("ke_common", .{});
+        test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
+        test_mod.addRPath(.{ .cwd_relative = ke_lib_dir });
         test_mod.linkSystemLibrary("ke_ecs_flecs", .{});
         test_mod.linkSystemLibrary("ke_scheduler_enki", .{});
 

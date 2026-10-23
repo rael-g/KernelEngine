@@ -40,14 +40,12 @@ named after the file, and the consumer imports it by that name.
 | file | option | gives |
 |---|---|---|
 | `src/zig/common/heap.zig` | "heap-src" | `gpa`, the allocator of every plugin, with `leaks` and `expectNoLeaks` |
-| `src/zig/common/kerror.zig` | "kerror-src" | `Errors`, the error helper of a plugin, and `_DllMainCRTStartup` |
 | `src/zig/common/component_fields.zig` | "component-fields-src" | `Fields`, which writes a variant into a component |
 | `src/zig/common/stubs.zig` | "stubs-src" | `Stubs`, fakes of device, target, render service, runtime, ecs and world for a plugin's tests |
 | `src/zig/render/common/handle.zig` | | `Handles`, the packing of render handles |
 
 A shared file that touches C types is a function of the importing plugin's own translated C
-namespace, as in `Errors(c)`. The error library `ke_common` is a plugin of its own
-(`src/zig/common/build.zig`) and a plugin that links it gets the generic error types from it.
+namespace, as in `Result(c, .{})`.
 
 ## What decides which directory a file goes in
 
@@ -59,6 +57,6 @@ namespace, as in `Errors(c)`. The error library `ke_common` is a plugin of its o
 ## What the parts agree on without a contract
 
 - The option names of the table above, between the root `build.zig` and each plugin's `build.zig`.
-- The `ke-lib-dir` option, the directory that holds the `ke_common` library a plugin links.
+- The `ke-lib-dir` option, the directory that holds a built library a plugin links.
 - The name of a plugin library, between its `build.zig` and the `bindings` entry of
   `scripts/api_domains.json` that names the library to load.

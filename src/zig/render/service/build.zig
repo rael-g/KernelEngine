@@ -23,8 +23,8 @@ pub fn build(b: *std.Build) void {
     const ke_text      = b.option([]const u8, "ke-text-include",      "kernel_engine/text include dir")      orelse @panic("-Dke-text-include required");
     const ke_logger    = b.option([]const u8, "ke-logger-include",    "kernel_engine/logger include dir")    orelse @panic("-Dke-logger-include required");
     const ke_self      = b.option([]const u8, "ke-self-include",      "this plugin's include dir")           orelse @panic("-Dke-self-include required");
-    const ke_lib_dir   = b.option([]const u8, "ke-lib-dir",           "dir with ke_common import lib")       orelse @panic("-Dke-lib-dir required");
     const shader_files_src = b.option([]const u8, "shader-files-src", "path to the shared Zig shader_files.zig") orelse @panic("-Dshader-files-src required");
+    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_resource_cache_default library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/render_service.zig"),
@@ -38,9 +38,8 @@ pub fn build(b: *std.Build) void {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
     mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
+    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
 
     mod.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));
@@ -72,7 +71,6 @@ pub fn build(b: *std.Build) void {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
     test_mod.addCMacro("KE_RENDER_CORE_EXPORT", "");
     test_mod.addImport("shader_files", b.createModule(.{ .root_source_file = .{ .cwd_relative = shader_files_src }, .target = target, .optimize = optimize, .link_libc = true }));

@@ -18,9 +18,7 @@ pub fn build(b: *std.Build) void {
     const miniaudio_include = b.option([]const u8, "miniaudio-include", "vcpkg miniaudio.h include dir") orelse @panic("-Dminiaudio-include required");
     const ke_resource_cache_lib_dir = b.option([]const u8, "ke-resource-cache-lib-dir", "dir with ke_resource_cache_default import lib") orelse @panic("-Dke-resource-cache-lib-dir required");
 
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/miniaudio_audio.zig"),
@@ -36,14 +34,11 @@ pub fn build(b: *std.Build) void {
     mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
     mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
     mod.linkSystemLibrary("ke_resource_cache_default", .{});
+    mod.addRPathSpecial("$ORIGIN");
     if (target.result.os.tag == .windows) {
         mod.linkSystemLibrary("winmm", .{});
     }
-    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -77,13 +72,7 @@ pub fn build(b: *std.Build) void {
     if (target.result.os.tag == .windows) {
         test_mod.linkSystemLibrary("winmm", .{});
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     test_mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));

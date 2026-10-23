@@ -13,7 +13,6 @@ pub fn build(b: *std.Build) void {
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const shader_files_src = b.option([]const u8, "shader-files-src", "path to the shared Zig shader_files.zig") orelse @panic("-Dshader-files-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
     const material_params_json = b.option([]const u8, "material-params-json", "generated reflection of the material parameter block") orelse @panic("-Dmaterial-params-json required");
 
     const roots = [_]struct { name: []const u8, tests: bool }{ .{ .name = "lib", .tests = false }, .{ .name = "test", .tests = true } };
@@ -32,9 +31,6 @@ pub fn build(b: *std.Build) void {
         if (r.tests) m.*.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
         inline for (.{ ke_common, ke_result, ke_render }) |inc| m.*.addIncludePath(.{ .cwd_relative = inc });
         m.*.addIncludePath(b.path("include"));
-        m.*.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-        m.*.linkSystemLibrary("ke_common", .{});
-        m.*.addRPathSpecial("$ORIGIN");
         m.*.addCMacro("KE_RENDER_BINDER_GROUPED_EXPORT", "");
         m.*.addAnonymousImport("material_params.json", .{ .root_source_file = .{ .cwd_relative = material_params_json } });
         m.*.addImport("c", ke_build.cImports(b, m.*, b.path("src/c.h")));

@@ -5,7 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_physics_2d_box2d").logFn };
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 const heap = @import("heap");

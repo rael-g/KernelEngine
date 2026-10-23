@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const scene_components_src = b.option([]const u8, "scene-components-src", "path to the shared Zig scene_components.zig") orelse @panic("-Dscene-components-src required");
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
     const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
     const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
@@ -24,7 +23,6 @@ pub fn build(b: *std.Build) void {
     const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
     const ke_ui = b.option([]const u8, "ke-ui-include", "ke_render_ui plugin include dir") orelse @panic("-Dke-ui-include required");
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir with ke_common import lib") orelse @panic("-Dke-lib-dir required");
 
     const includes = .{ ke_common, ke_result, ke_math, ke_ecs, ke_runtime, ke_spatial, ke_render, ke_framework, ke_text, ke_logger, ke_asset, ke_ui, ke_self };
 
@@ -35,14 +33,10 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
-    mod.addImport("kerror", b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize }));
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     inline for (includes) |inc| {
         mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
     mod.addCMacro("KE_RENDER_SCENE_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -66,14 +60,11 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     test_mod.addImport("scene_components", b.createModule(.{ .root_source_file = .{ .cwd_relative = scene_components_src }, .target = target, .optimize = optimize }));
-    test_mod.addImport("kerror", b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
     test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
     inline for (includes) |inc| {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
     test_mod.addCMacro("KE_RENDER_SCENE_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));

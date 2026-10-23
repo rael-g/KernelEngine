@@ -11,7 +11,7 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
 | native interface | `INative<Domain>`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
 | idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
-| error translation | `NativeErrors` | a native error, or a managed exception | the matching exception, or a native error |
+| result translation | `NativeResults` | a `ke_result`, or a managed exception | the matching exception, or a `ke_result` |
 | module | `IRuntimeModule` | `IRuntime` and `IServiceProvider` | components and systems registered into the runtime |
 | module loader | `RuntimeStartup.LoadModules` | the modules in the container | `RegisterModule` calls in dependency order |
 
@@ -29,9 +29,9 @@ function pointer marked `UnmanagedCallersOnly` and a context that is a `GCHandle
 side calls it on whichever worker it picked.
 
 **An exception does not cross the native frame.** A handler's exception is caught and either
-written to the native error, queued on the wrapper, or held for the call that returns to
+written to the result code, queued on the wrapper, or held for the call that returns to
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
-what was queued, or the exception `NativeErrors.FromNative` makes for the native error.
+what was queued, or the exception `NativeResults.FromCode` makes for the code.
 
 **The scheduler has its own channel.** The dispatch methods that are not generated return a
 `Task`, except `DispatchPinned`, whose failures are raised through

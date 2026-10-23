@@ -15,9 +15,7 @@ pub fn build(b: *std.Build) void {
     const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_truetype.h include dir") orelse @panic("-Dstb-include required");
 
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
 
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/stb_font.zig"),
@@ -31,11 +29,7 @@ pub fn build(b: *std.Build) void {
     }
     const implementation = b.addWriteFiles().add("stb_font_impl.c", "#define STB_TRUETYPE_IMPLEMENTATION\n#include <stb_truetype.h>\n");
     mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
-    const kerror_mod = b.createModule(.{ .root_source_file = .{ .cwd_relative = kerror_src }, .target = target, .optimize = optimize });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     mod.addCMacro("KE_TEXT_STB_TRUETYPE_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -63,13 +57,7 @@ pub fn build(b: *std.Build) void {
         test_mod.addIncludePath(.{ .cwd_relative = inc });
     }
     test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     test_mod.addCMacro("KE_TEXT_STB_TRUETYPE_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));

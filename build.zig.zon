@@ -4,7 +4,6 @@
     .fingerprint = 0x2298b4f973585c05,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_common = .{ .path = "src/zig/common" },
         .ke_logger = .{ .path = "src/zig/logger" },
         .ke_result = .{ .path = "src/zig/result" },
         .ke_ecs_flecs = .{ .path = "src/zig/ecs/flecs" },

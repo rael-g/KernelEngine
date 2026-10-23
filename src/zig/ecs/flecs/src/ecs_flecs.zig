@@ -5,17 +5,14 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_ecs_flecs").logFn };
 
-pub const _DllMainCRTStartup = @import("kerror")._DllMainCRTStartup;
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 const component_fields = @import("component_fields").Fields(c);
 const heap = @import("heap");
 
-const E = @import("kerror").Errors(c);
 const R = @import("result").Result(c, .{});
 const log = std.log.scoped(.ecs_flecs);
-
-const flecs_fatal_type: c.ke_error_type = .{ .name = "ke.ecs.flecs.fatal", .parent = null };
 
 threadlocal var last_msg_buf: [1024]u8 = undefined;
 threadlocal var last_msg_len: usize = 0;
@@ -32,19 +29,13 @@ fn flecsLogHandler(level: i32, file: [*c]const u8, line: i32, msg: [*c]const u8)
     last_msg_len = written.len;
 }
 
-/// The abort hook flecs calls on an internal failure. It passes the message this thread captured to
-/// `E.fatal`, or a fixed message when none was captured.
+/// The abort hook flecs calls on an internal failure, past which flecs cannot recover the world. It
+/// logs the message this thread captured, or a fixed one when none was captured, and ends the
+/// process with a failure status.
 fn flecsAbortHandler() callconv(.c) void {
-    last_msg_buf[last_msg_len] = 0;
-    const msg: [*:0]const u8 = if (last_msg_len > 0) @ptrCast(&last_msg_buf) else "flecs fatal (no message captured)";
-    const err = c.ke_error{
-        .type = &flecs_fatal_type,
-        .message = msg,
-        .file = null,
-        .line = 0,
-        .cause = null,
-    };
-    E.fatal(&err);
+    const msg = if (last_msg_len > 0) last_msg_buf[0..last_msg_len] else "no message captured";
+    log.err("flecs fatal: {s}", .{msg});
+    std.process.exit(1);
 }
 
 var os_api_installed: bool = false;

@@ -16,8 +16,6 @@ pub fn build(b: *std.Build) void {
     const assimp_include = b.option([]const u8, "assimp-include", "Assimp headers dir") orelse @panic("-Dassimp-include required");
     const assimp_libs = b.option([]const u8, "assimp-libs", "'|'-separated Assimp library paths") orelse @panic("-Dassimp-libs required");
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_image.h include dir") orelse @panic("-Dstb-include required");
-    const kerror_src = b.option([]const u8, "kerror-src", "path to the shared Zig kerror.zig") orelse @panic("-Dkerror-src required");
-    const ke_lib_dir = b.option([]const u8, "ke-lib-dir", "dir holding the built ke_common library") orelse @panic("-Dke-lib-dir required");
 
     const mod = b.createModule(.{
         .root_source_file = b.path("src/assimp_loader.zig"),
@@ -36,15 +34,7 @@ pub fn build(b: *std.Build) void {
         if (lib.len != 0) mod.addObjectFile(.{ .cwd_relative = lib });
     }
 
-    const kerror_mod = b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    });
-    mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    mod.linkSystemLibrary("ke_common", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    mod.addImport("kerror", kerror_mod);
+    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     mod.addCMacro("KE_ASSET_ASSIMP_EXPORT", "");
 
     mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
@@ -76,13 +66,7 @@ pub fn build(b: *std.Build) void {
     while (test_lib_it.next()) |lib_path| {
         if (lib_path.len != 0) test_mod.addObjectFile(.{ .cwd_relative = lib_path });
     }
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_lib_dir });
-    test_mod.linkSystemLibrary("ke_common", .{});
-    test_mod.addImport("kerror", b.createModule(.{
-        .root_source_file = .{ .cwd_relative = kerror_src },
-        .target = target,
-        .optimize = optimize,
-    }));
+    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
     test_mod.addCMacro("KE_ASSET_ASSIMP_EXPORT", "");
 
     test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
