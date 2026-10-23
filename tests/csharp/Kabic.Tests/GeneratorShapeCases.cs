@@ -92,6 +92,15 @@ internal static class GeneratorShapeCases
                        + " System.Runtime.InteropServices.GCHandle.FromIntPtr(instanceLocal).Target;"],
             absent: ["public void Bind(ulong entity, nint instance)", "out nint instance)"]);
 
+        Expect("a fallible unrooting slot lets go of the object only once the call succeeded",
+            Vtable("ke_probe",
+                Slot("bind", "ke_result", Param("entity", "ke_entity"),
+                     Param("instance", "void *", "rooted:entity")),
+                Slot("drop", "ke_result", "unroots:entity", Param("entity", "ke_entity"))),
+            contains: ["KernelEngine.NativeResults.ThrowIfFailed(Handle->drop(Handle, entity), \"drop\");\n"
+                       + "        if (_rooted.TryRemove(entity, out var freed)) freed.Free();"],
+            absent: []);
+
         Expect("a rooted written-back parameter that is not an opaque pointer is refused",
             Vtable("ke_probe", Slot("instance_of", "bool", "try", Param("entity", "ke_entity"),
                 Param("out_instance", "uint64_t *", "out,rooted"))),
