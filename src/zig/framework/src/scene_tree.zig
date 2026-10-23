@@ -409,25 +409,30 @@ fn vtDestroyNodeDeferred(
 
 /// Slot `destroy_all`. Destroys the root's children without unlinking each one from its
 /// neighbours; the root's first and last child fields are cleared once at the end. The root
-/// entity stays.
-fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) void {
-    const self = self_in orelse return;
-    if (self.handle == null) return;
+/// entity stays. A subtree the ecs refuses does not stop the rest; the first failure is returned.
+/// A null tree or handle fails as an invalid argument, a root without hierarchy as not found.
+fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
 
-    const rh = getHierarchy(s, s.root) orelse return;
+    const rh = getHierarchy(s, s.root) orelse return R.code(error.NotFound);
     s.hierarchy_generation +%= 1;
+    var first_failure: c.ke_result = R.ok;
     var child = rh.first_child;
     while (child != c.KE_ENTITY_INVALID) {
         const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
-        destroyEntitiesRecursive(s, child) catch |err|
+        destroyEntitiesRecursive(s, child) catch |err| {
             log.warn("destroying the subtree of node {d} failed: {t}", .{ child, err });
+            if (first_failure == R.ok) first_failure = R.code(err);
+        };
         child = next;
     }
     if (getHierarchy(s, s.root)) |h| {
         h.first_child = c.KE_ENTITY_INVALID;
         h.last_child = c.KE_ENTITY_INVALID;
     }
+    return first_failure;
 }
 
 /// An entity without a world transform stores no matrix, so its children are composed with the
@@ -1178,7 +1183,7 @@ test "clearing the tree removes every child but keeps the root" {
     _ = f.create("B", c.KE_ENTITY_INVALID);
 
     const t = f.tree();
-    t.*.destroy_all.?(t);
+    try R.check(t.*.destroy_all.?(t));
 
     try testing.expect(t.*.root.?(t) != c.KE_ENTITY_INVALID);
     try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("A"));

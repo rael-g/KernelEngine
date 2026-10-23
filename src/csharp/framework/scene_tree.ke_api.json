@@ -140,10 +140,10 @@
         },
         {
           "name": "destroy_all",
-          "returns": "void",
+          "returns": "ke_result",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
+          "doc": "Destroys every child of the root and leaves the root. Keeps going past a subtree the ecs refuses and returns the first failure.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null self, the code of the first refused destroy, or KE_RESULT_NOT_FOUND when the root has no hierarchy.",
           "params": [],
           "receiver": "struct ke_scene_tree *"
         },
