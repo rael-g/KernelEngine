@@ -174,7 +174,7 @@ public static class Extractor
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
             var declaredWith = qual.Contains("(anonymous") || qual.Contains("(unnamed") ? inline : null;
             var fieldName = f["name"]?.GetValue<string>() ?? $"unnamed_{unnamed++}";
-            var (ret, paramTypes) = SplitFnPtr(qual);
+            var (ret, paramTypes) = CTypes.FunctionPointer(qual);
             var (summaryTags, summary, pdocs, retTags, retDoc) = DocParser.Parse(f);
             order.Add(fieldName);
 
@@ -320,23 +320,5 @@ public static class Extractor
         if (b is null || e is null) return "";
         var end = Math.Min(e.Value + tokLen, bytes.Length);
         return System.Text.Encoding.UTF8.GetString(bytes, b.Value, end - b.Value);
-    }
-
-    static (string? Returns, List<string> ParamTypes) SplitFnPtr(string qual)
-    {
-        var i = qual.IndexOf("(*)", StringComparison.Ordinal);
-        if (i < 0) return (null, []);
-        var ret = qual[..i].Trim();
-        var openParen = qual.IndexOf('(', i + 3);
-        var body = qual[(openParen + 1)..qual.LastIndexOf(')')];
-        var args = new List<string>();
-        var depth = 0;
-        var cur = "";
-        foreach (var ch in body + ",")
-        {
-            if (ch == ',' && depth == 0) { if (cur.Trim().Length > 0) args.Add(cur.Trim()); cur = ""; }
-            else { depth += ch == '(' ? 1 : 0; depth -= ch == ')' ? 1 : 0; cur += ch; }
-        }
-        return (ret, args);
     }
 }
