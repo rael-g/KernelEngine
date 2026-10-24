@@ -1,0 +1,9 @@
+.{
+    .name = .ke_abi_math,
+    .version = "0.1.0",
+    .fingerprint = 0x9fe4c133ad1e4985,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+    },
+    .paths = .{"."},
+}
