@@ -14,12 +14,11 @@ public static class Extractor
     /// Extracts the declarations owned by the files named in the arguments, and returns them with
     /// the errors found on the way as messages.
     /// </summary>
-    /// <param name="headerNames">File names, without directories, whose declarations are owned in
-    /// full.</param>
+    /// <param name="headerNames">Full paths of the files whose declarations are owned in full.</param>
     /// <param name="sourceBytes">The source text of each file, keyed by its full path.</param>
-    /// <param name="auxHeaderNames">File names whose typedefs alone are extracted.</param>
-    /// <param name="composeHeaderNames">File names whose typedefs, records and enums are
-    /// extracted.</param>
+    /// <param name="auxHeaderNames">Full paths of the files whose typedefs alone are extracted.</param>
+    /// <param name="composeHeaderNames">Full paths of the files whose typedefs, records and enums
+    /// are extracted.</param>
     /// <param name="symbolPrefix">Only functions whose names start with this prefix are
     /// extracted.</param>
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
@@ -37,10 +36,9 @@ public static class Extractor
             var f = node["loc"]?.AsObject()["file"]?.GetValue<string>();
             if (f is not null) currentFile = Path.GetFullPath(f);
             if (currentFile is null) return (false, false, false, null);
-            var fileName = Path.GetFileName(currentFile);
-            var full = headerNames.Contains(fileName);
-            var compose = !full && composeHeaderNames.Contains(fileName);
-            var aux = !full && !compose && auxHeaderNames.Contains(fileName);
+            var full = headerNames.Contains(currentFile);
+            var compose = !full && composeHeaderNames.Contains(currentFile);
+            var aux = !full && !compose && auxHeaderNames.Contains(currentFile);
             return (full || aux || compose, aux, compose, currentFile);
         }
 
