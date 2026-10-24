@@ -137,25 +137,32 @@ public static class Extractor
     {
         var fields = new List<ApiField>();
         var slots = new List<ApiSlot>();
+        var order = new List<string>();
+        ApiStruct? inline = null;
+        var unnamed = 0;
 
         foreach (var c in (node["inner"] as JsonArray) ?? [])
         {
             var f = c!.AsObject();
-            if (f["kind"]?.GetValue<string>() != "FieldDecl") continue;
-            var fieldName = f["name"]?.GetValue<string>();
-            if (fieldName is null)
+            var memberKind = f["kind"]?.GetValue<string>();
+            if (memberKind == "RecordDecl" && f["name"] is null)
             {
-                Console.Error.WriteLine($"note: {name}: skipping unnamed field (anonymous union/struct) — "
-                    + "not describable, handle in the idiom layer");
+                inline = ExtractStruct(f, "", bytes, errors);
                 continue;
             }
+            if (memberKind != "FieldDecl") continue;
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
+            var declaredWith = qual.Contains("(anonymous") || qual.Contains("(unnamed") ? inline : null;
+            var fieldName = f["name"]?.GetValue<string>() ?? $"unnamed_{unnamed++}";
             var (ret, paramTypes) = SplitFnPtr(qual);
             var (summaryTags, summary, pdocs, retTags, retDoc) = DocParser.Parse(f);
+            order.Add(fieldName);
 
             if (ret is null)
             {
-                fields.Add(new ApiField(fieldName, qual, summaryTags, summary.Length > 0 ? summary : null));
+                var field = new ApiField(fieldName, declaredWith is null ? qual : "", summaryTags,
+                    summary.Length > 0 ? summary : null);
+                fields.Add(field with { Inline = declaredWith });
                 continue;
             }
 
@@ -184,7 +191,12 @@ public static class Extractor
         }
 
         var (structTags, structDoc, _, _, _) = DocParser.Parse(node);
-        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots);
+        var inDeclarationOrder = order.SequenceEqual(fields.Select(f => f.Name).Concat(slots.Select(s => s.Name)));
+        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots)
+        {
+            IsUnion = node["tagUsed"]?.GetValue<string>() == "union",
+            Order = inDeclarationOrder ? null : order,
+        };
     }
 
     /// <summary>
