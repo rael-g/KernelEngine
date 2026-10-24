@@ -1452,7 +1452,6 @@
     "ke_gpu_texture_usage": "uint32_t",
     "ke_gpu_buffer_usage": "uint32_t",
     "ke_gpu_shader_stage": "uint32_t",
-    "ke_gpu_clear_value": "union ke_gpu_clear_value",
     "ke_gpu_buffer": "uint64_t",
     "ke_gpu_texture": "uint64_t",
     "ke_gpu_texture_view": "uint64_t",
