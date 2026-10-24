@@ -43,6 +43,9 @@ public static class Extractor
         }
 
         var top = ast["inner"]!.AsArray();
+        var defined = top.OfType<JsonObject>()
+            .Where(n => n["kind"]?.GetValue<string>() == "RecordDecl" && n["completeDefinition"]?.GetValue<bool>() == true)
+            .Select(n => n["name"]?.GetValue<string>()).OfType<string>().ToHashSet();
         foreach (var nodeRaw in top)
         {
             var node = nodeRaw!.AsObject();
@@ -67,6 +70,10 @@ public static class Extractor
                     api.Structs.Add(ExtractStruct(node, name, bytes, errors) with { External = compose });
                     break;
 
+                case "RecordDecl" when name is not null && !compose:
+                    if (!api.Opaques.Contains(name)) api.Opaques.Add(name);
+                    break;
+
                 case "FunctionDecl" when name is not null && name.StartsWith(symbolPrefix, StringComparison.Ordinal) && HasSymbol(node):
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
@@ -87,6 +94,7 @@ public static class Extractor
             }
         }
 
+        api.Opaques.RemoveAll(o => defined.Contains(o));
         return (api, errors);
     }
 

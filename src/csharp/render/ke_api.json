@@ -1465,5 +1465,8 @@
     "ke_render_resource_set": "uint64_t",
     "ke_render_material_binding": "uint64_t",
     "ke_render_chain_link": "uint32_t"
-  }
+  },
+  "opaques": [
+    "ke_render_pass_ctx"
+  ]
 }

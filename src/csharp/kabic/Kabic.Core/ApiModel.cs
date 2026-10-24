@@ -186,6 +186,11 @@ public class ApiModel
     public List<ApiVariable> Variables { get; } = [];
 
     /// <summary>
+    /// The records declared and never defined: handles a caller only ever holds the address of.
+    /// </summary>
+    public List<string> Opaques { get; } = [];
+
+    /// <summary>
     /// Function-pointer typedefs, keyed by the name a parameter is declared with.
     /// <see cref="TypeAliases"/> also holds each one, spelled as a type; this holds the
     /// description a projection needs to name the lanes.
@@ -278,6 +283,8 @@ public static class ApiReader
 
         foreach (var s in root["structs"]!.AsArray()) m.Structs.Add(ReadRecord(s!.AsObject(), vtable: false));
         foreach (var v in root["vtables"]!.AsArray()) m.Structs.Add(ReadRecord(v!.AsObject(), vtable: true));
+
+        foreach (var o in root["opaques"]?.AsArray() ?? []) m.Opaques.Add(o!.GetValue<string>());
 
         if (root["type_aliases"] is System.Text.Json.Nodes.JsonObject aliases)
             foreach (var kv in aliases)
