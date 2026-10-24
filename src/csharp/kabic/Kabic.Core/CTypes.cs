@@ -57,4 +57,27 @@ public static class CTypes
         var t = cType.Trim().Replace("const ", "").Replace("struct ", "").TrimEnd();
         return t.EndsWith('*') ? t[..^1].TrimEnd() : t;
     }
+
+    /// <summary>
+    /// The return type and parameter types of a function-pointer spelling such as
+    /// <c>void (*)(int, void *)</c>, or a null return type when the spelling names no function
+    /// pointer. A parameter list of <c>(void)</c> reads as no parameters.
+    /// </summary>
+    public static (string? Returns, List<string> ParamTypes) FunctionPointer(string qual)
+    {
+        var i = qual.IndexOf("(*)", StringComparison.Ordinal);
+        if (i < 0) return (null, []);
+        var ret = qual[..i].Trim();
+        var openParen = qual.IndexOf('(', i + 3);
+        var body = qual[(openParen + 1)..qual.LastIndexOf(')')];
+        var args = new List<string>();
+        var depth = 0;
+        var cur = "";
+        foreach (var ch in body + ",")
+        {
+            if (ch == ',' && depth == 0) { if (cur.Trim().Length > 0) args.Add(cur.Trim()); cur = ""; }
+            else { depth += ch == '(' ? 1 : 0; depth -= ch == ')' ? 1 : 0; cur += ch; }
+        }
+        return (ret, args is ["void"] ? [] : args);
+    }
 }

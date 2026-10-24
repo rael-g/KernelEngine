@@ -53,15 +53,12 @@ public static class Extraction
 
         var ast = JsonNode.Parse(astJson)!.AsObject();
         var sourceBytes = all.Distinct().ToDictionary(Path.GetFullPath, File.ReadAllBytes);
-        var (api, errors) = Extractor.Extract(ast, Names(headerPaths), sourceBytes, Names(auxPaths), Names(composePaths), request.Convention.SymbolPrefix);
+        var (api, errors) = Extractor.Extract(ast, headerPaths.ToHashSet(), sourceBytes, auxPaths.ToHashSet(), composePaths.ToHashSet(), request.Convention.SymbolPrefix);
         if (errors.Count > 0)
             throw new InvalidOperationException(string.Join('\n', errors.Select(e => $"ERROR: {e}")));
 
         return api.ToJson().ToJsonString(new JsonSerializerOptions { WriteIndented = true });
     }
-
-    static HashSet<string> Names(IEnumerable<string> paths) =>
-        paths.Select(Path.GetFileName).Where(n => n is not null).Select(n => n!).ToHashSet();
 
     /// <summary>
     /// Returns the zig executable: the override when given, else the first zig on the PATH,

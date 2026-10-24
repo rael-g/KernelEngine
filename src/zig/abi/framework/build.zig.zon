@@ -1,0 +1,13 @@
+.{
+    .name = .ke_abi_framework,
+    .version = "0.1.0",
+    .fingerprint = 0x80f297ef62bb56f8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_ecs = .{ .path = "../ecs" },
+        .ke_abi_input = .{ .path = "../input" },
+        .ke_abi_result = .{ .path = "../result" },
+        .ke_abi_runtime = .{ .path = "../runtime" },
+    },
+    .paths = .{"."},
+}

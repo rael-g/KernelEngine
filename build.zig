@@ -159,6 +159,7 @@ pub fn build(b: *std.Build) void {
         .pages = true,
     }));
 
+    ctx.moduleTests("ke_abi", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
 

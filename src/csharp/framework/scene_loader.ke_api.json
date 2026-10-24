@@ -123,5 +123,8 @@
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
     "ke_script_factory_func": "ke_result (*)(void *, ke_entity, const char *)"
-  }
+  },
+  "opaques": [
+    "ke_world"
+  ]
 }

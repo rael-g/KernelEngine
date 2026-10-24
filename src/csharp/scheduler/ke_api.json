@@ -236,5 +236,8 @@
   "type_aliases": {
     "ke_task_func": "ke_result (*)(void *)",
     "ke_task_on_complete_func": "void (*)(ke_task *, void *, ke_result)"
-  }
+  },
+  "opaques": [
+    "ke_task"
+  ]
 }

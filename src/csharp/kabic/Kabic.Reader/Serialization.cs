@@ -11,7 +11,7 @@ public static class Serialization
 {
     /// <summary>
     /// Writes the model as one JSON object, with the enum, struct, vtable, function and callback
-    /// arrays and the type aliases.
+    /// arrays and the type aliases, adding the opaque records and the variables when there are any.
     /// </summary>
     public static JsonObject ToJson(this ApiModel m)
     {
@@ -25,6 +25,8 @@ public static class Serialization
             ["type_aliases"] = m.TypeAliases.Aggregate(new JsonObject(),
             (o, kv) => { o[kv.Key] = kv.Value; return o; }),
         };
+        if (m.Opaques.Count > 0)
+            json["opaques"] = new JsonArray(m.Opaques.Select(o => (JsonNode)o).ToArray());
         if (m.Variables.Count > 0)
             json["variables"] = new JsonArray(m.Variables.Select(v => (JsonNode)new JsonObject
             {
@@ -75,15 +77,21 @@ public static class Serialization
     }
 
     /// <summary>
-    /// Writes a struct field as an object with its name, type, tags and documentation.
+    /// Writes a struct field as an object with its name, type, tags and documentation, adding the
+    /// record it is declared with when it has one.
     /// </summary>
-    public static JsonObject ToJson(this ApiField f) => new()
+    public static JsonObject ToJson(this ApiField f)
     {
-        ["name"] = f.Name,
-        ["type"] = f.Type,
-        ["tags"] = new JsonArray(f.Tags.Select(t => (JsonNode)t).ToArray()),
-        ["doc"] = f.Doc,
-    };
+        var o = new JsonObject
+        {
+            ["name"] = f.Name,
+            ["type"] = f.Type,
+            ["tags"] = new JsonArray(f.Tags.Select(t => (JsonNode)t).ToArray()),
+            ["doc"] = f.Doc,
+        };
+        if (f.Inline is not null) o["inline"] = f.Inline.ToJson();
+        return o;
+    }
 
     /// <summary>
     /// Writes a vtable slot as an object with its name, return type, tags, documentation, return
@@ -107,8 +115,8 @@ public static class Serialization
     }
 
     /// <summary>
-    /// Writes a struct as an object with its name, documentation, tags and fields, adding slots and
-    /// external when they are present.
+    /// Writes a struct as an object with its name, documentation, tags and fields, adding slots,
+    /// external, union and declaration order when they are present.
     /// </summary>
     public static JsonObject ToJson(this ApiStruct s)
     {
@@ -122,6 +130,8 @@ public static class Serialization
         if (s.Slots.Count > 0)
             o["slots"] = new JsonArray(s.Slots.Select(slot => (JsonNode)slot.ToJson()).ToArray());
         if (s.External) o["external"] = true;
+        if (s.IsUnion) o["union"] = true;
+        if (s.Order is not null) o["order"] = new JsonArray(s.Order.Select(n => (JsonNode)n).ToArray());
         return o;
     }
 

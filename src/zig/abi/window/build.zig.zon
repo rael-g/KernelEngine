@@ -1,0 +1,10 @@
+.{
+    .name = .ke_abi_window,
+    .version = "0.1.0",
+    .fingerprint = 0xd156ad5980aa9d8f,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

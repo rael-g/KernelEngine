@@ -79,6 +79,13 @@ public record ApiEnum(string Name, string? Doc, IReadOnlyList<ApiEnumValue> Valu
 public record ApiField(string Name, string Type, IReadOnlyList<string> Tags, string? Doc)
 {
     /// <summary>
+    /// The record the field is declared with when its type has no name of its own: a member
+    /// union or struct written inside the declaration, or an anonymous one, whose name is then
+    /// <c>unnamed_</c> and its position among the anonymous members of the struct.
+    /// </summary>
+    public ApiStruct? Inline { get; init; }
+
+    /// <summary>
     /// Whether the field carries <paramref name="tag"/>, with or without a value.
     /// </summary>
     public bool Has(string tag) => Tags.Any(t => t == tag || t.StartsWith(tag + ":"));
@@ -109,6 +116,16 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
     /// emits nothing for it, because the owning domain already does.
     /// </summary>
     public bool External { get; init; }
+
+    /// <summary>Whether the record is a union: every member starts at offset zero.</summary>
+    public bool IsUnion { get; init; }
+
+    /// <summary>
+    /// The names of the fields and slots in declaration order, or <see langword="null"/> when
+    /// every field precedes every slot. Layout follows declaration order, which the two lists
+    /// alone do not keep.
+    /// </summary>
+    public IReadOnlyList<string>? Order { get; init; }
 
     /// <summary>
     /// Whether the struct carries <paramref name="tag"/>, with or without a value.
@@ -167,6 +184,11 @@ public class ApiModel
 
     /// <summary>Every exported global read, in the order the description lists them.</summary>
     public List<ApiVariable> Variables { get; } = [];
+
+    /// <summary>
+    /// The records declared and never defined: handles a caller only ever holds the address of.
+    /// </summary>
+    public List<string> Opaques { get; } = [];
 
     /// <summary>
     /// Function-pointer typedefs, keyed by the name a parameter is declared with.
@@ -233,7 +255,7 @@ public static class ApiReader
             });
         }
 
-        void ReadStructLike(System.Text.Json.Nodes.JsonObject o, bool vtable)
+        static ApiStruct ReadRecord(System.Text.Json.Nodes.JsonObject o, bool vtable)
         {
             var slots = vtable
                 ? o["slots"]!.AsArray().Select(s => ReadSlot(s!.AsObject())).ToList()
@@ -243,18 +265,26 @@ public static class ApiReader
                 {
                     var f = fRaw!.AsObject();
                     return new ApiField(Str(f, "name")!, Str(f, "type")!,
-                        f["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [], Str(f, "doc"));
+                        f["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [], Str(f, "doc"))
+                    {
+                        Inline = f["inline"] is System.Text.Json.Nodes.JsonObject inline
+                            ? ReadRecord(inline, inline["slots"] is not null) : null,
+                    };
                 })
                 .ToList();
             var tags = o["tags"]?.AsArray().Select(t => t!.GetValue<string>()).ToList() ?? [];
-            m.Structs.Add(new ApiStruct(Str(o, "name")!, Str(o, "doc"), tags, fields, slots)
+            return new ApiStruct(Str(o, "name")!, Str(o, "doc"), tags, fields, slots)
             {
                 External = o["external"]?.GetValue<bool>() == true,
-            });
+                IsUnion = o["union"]?.GetValue<bool>() == true,
+                Order = o["order"]?.AsArray().Select(n => n!.GetValue<string>()).ToList(),
+            };
         }
 
-        foreach (var s in root["structs"]!.AsArray()) ReadStructLike(s!.AsObject(), vtable: false);
-        foreach (var v in root["vtables"]!.AsArray()) ReadStructLike(v!.AsObject(), vtable: true);
+        foreach (var s in root["structs"]!.AsArray()) m.Structs.Add(ReadRecord(s!.AsObject(), vtable: false));
+        foreach (var v in root["vtables"]!.AsArray()) m.Structs.Add(ReadRecord(v!.AsObject(), vtable: true));
+
+        foreach (var o in root["opaques"]?.AsArray() ?? []) m.Opaques.Add(o!.GetValue<string>());
 
         if (root["type_aliases"] is System.Text.Json.Nodes.JsonObject aliases)
             foreach (var kv in aliases)

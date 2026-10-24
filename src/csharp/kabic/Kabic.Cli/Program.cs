@@ -8,6 +8,7 @@ var checks = new Dictionary<string, Func<Options, int>>
     ["api-coverage"] = ApiCoverageCheck.Execute,
     ["reconstruction"] = ReconstructionCheck.Execute,
     ["out-params"] = OutParamsCheck.Execute,
+    ["zig"] = WriteZigCommand.CheckDrift,
 };
 
 if (args is ["generate", .. var generateArgs])
@@ -20,7 +21,7 @@ if (args is ["write", "csharp", .. var csharpArgs])
     return WriteCSharpCommand.Run(csharpArgs);
 
 if (args is ["write", "zig", .. var zigArgs])
-    return WriteZigCommand.Run(zigArgs);
+    return WriteZigCommand.Run(Options.Parse(zigArgs));
 
 if (args is ["bindings", .. var bindingsArgs])
     return BindingsCommand.Generate(Options.Parse(bindingsArgs));

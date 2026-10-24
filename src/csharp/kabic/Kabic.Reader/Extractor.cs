@@ -14,12 +14,11 @@ public static class Extractor
     /// Extracts the declarations owned by the files named in the arguments, and returns them with
     /// the errors found on the way as messages.
     /// </summary>
-    /// <param name="headerNames">File names, without directories, whose declarations are owned in
-    /// full.</param>
+    /// <param name="headerNames">Full paths of the files whose declarations are owned in full.</param>
     /// <param name="sourceBytes">The source text of each file, keyed by its full path.</param>
-    /// <param name="auxHeaderNames">File names whose typedefs alone are extracted.</param>
-    /// <param name="composeHeaderNames">File names whose typedefs, records and enums are
-    /// extracted.</param>
+    /// <param name="auxHeaderNames">Full paths of the files whose typedefs alone are extracted.</param>
+    /// <param name="composeHeaderNames">Full paths of the files whose typedefs, records and enums
+    /// are extracted.</param>
     /// <param name="symbolPrefix">Only functions whose names start with this prefix are
     /// extracted.</param>
     public static (ApiModel Model, List<string> Errors) Extract(JsonObject ast, HashSet<string> headerNames,
@@ -37,14 +36,16 @@ public static class Extractor
             var f = node["loc"]?.AsObject()["file"]?.GetValue<string>();
             if (f is not null) currentFile = Path.GetFullPath(f);
             if (currentFile is null) return (false, false, false, null);
-            var fileName = Path.GetFileName(currentFile);
-            var full = headerNames.Contains(fileName);
-            var compose = !full && composeHeaderNames.Contains(fileName);
-            var aux = !full && !compose && auxHeaderNames.Contains(fileName);
+            var full = headerNames.Contains(currentFile);
+            var compose = !full && composeHeaderNames.Contains(currentFile);
+            var aux = !full && !compose && auxHeaderNames.Contains(currentFile);
             return (full || aux || compose, aux, compose, currentFile);
         }
 
         var top = ast["inner"]!.AsArray();
+        var defined = top.OfType<JsonObject>()
+            .Where(n => n["kind"]?.GetValue<string>() == "RecordDecl" && n["completeDefinition"]?.GetValue<bool>() == true)
+            .Select(n => n["name"]?.GetValue<string>()).OfType<string>().ToHashSet();
         foreach (var nodeRaw in top)
         {
             var node = nodeRaw!.AsObject();
@@ -69,6 +70,10 @@ public static class Extractor
                     api.Structs.Add(ExtractStruct(node, name, bytes, errors) with { External = compose });
                     break;
 
+                case "RecordDecl" when name is not null && !compose:
+                    if (!api.Opaques.Contains(name)) api.Opaques.Add(name);
+                    break;
+
                 case "FunctionDecl" when name is not null && name.StartsWith(symbolPrefix, StringComparison.Ordinal) && HasSymbol(node):
                     api.Functions.Add(ExtractFunction(node, name, errors));
                     break;
@@ -81,7 +86,7 @@ public static class Extractor
                 case "TypedefDecl" when name is not null:
                     {
                         var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
-                        if (!target.StartsWith("struct ") && !target.StartsWith("enum ") && target != name)
+                        if (!target.StartsWith("struct ") && !target.StartsWith("union ") && !target.StartsWith("enum ") && target != name)
                             api.TypeAliases[name] = target;
                         if (ExtractCallback(node, name) is { } callback) api.Callbacks.Add(callback);
                         break;
@@ -89,6 +94,7 @@ public static class Extractor
             }
         }
 
+        api.Opaques.RemoveAll(o => defined.Contains(o));
         return (api, errors);
     }
 
@@ -115,10 +121,7 @@ public static class Extractor
             }
             else
             {
-                var folded = ((e["inner"] as JsonArray) ?? [])
-                    .OfType<JsonObject>()
-                    .FirstOrDefault(i => i["kind"]?.GetValue<string>() == "ConstantExpr")
-                    ?["value"]?.GetValue<string>();
+                var folded = Folded(e);
 
                 if (folded is not null && long.TryParse(folded, out var foldedValue))
                     rawValue = foldedValue.ToString();
@@ -135,29 +138,51 @@ public static class Extractor
         };
     }
 
+    /// <summary>
+    /// The value clang folded an enum constant's initialiser to: a constant expression's, or the
+    /// literal's when the initialiser is one literal under implicit casts.
+    /// </summary>
+    static string? Folded(JsonObject node)
+    {
+        foreach (var child in ((node["inner"] as JsonArray) ?? []).OfType<JsonObject>())
+        {
+            var kind = child["kind"]?.GetValue<string>();
+            if (kind is "ConstantExpr" or "IntegerLiteral" && child["value"] is { } value) return value.GetValue<string>();
+            if (kind is "ImplicitCastExpr" or "ParenExpr" && Folded(child) is { } inner) return inner;
+        }
+        return null;
+    }
+
     static ApiStruct ExtractStruct(JsonObject node, string name, byte[] bytes, List<string> errors)
     {
         var fields = new List<ApiField>();
         var slots = new List<ApiSlot>();
+        var order = new List<string>();
+        ApiStruct? inline = null;
+        var unnamed = 0;
 
         foreach (var c in (node["inner"] as JsonArray) ?? [])
         {
             var f = c!.AsObject();
-            if (f["kind"]?.GetValue<string>() != "FieldDecl") continue;
-            var fieldName = f["name"]?.GetValue<string>();
-            if (fieldName is null)
+            var memberKind = f["kind"]?.GetValue<string>();
+            if (memberKind == "RecordDecl" && f["name"] is null)
             {
-                Console.Error.WriteLine($"note: {name}: skipping unnamed field (anonymous union/struct) — "
-                    + "not describable, handle in the idiom layer");
+                inline = ExtractStruct(f, "", bytes, errors);
                 continue;
             }
+            if (memberKind != "FieldDecl") continue;
             var qual = f["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
-            var (ret, paramTypes) = SplitFnPtr(qual);
+            var declaredWith = qual.Contains("(anonymous") || qual.Contains("(unnamed") ? inline : null;
+            var fieldName = f["name"]?.GetValue<string>() ?? $"unnamed_{unnamed++}";
+            var (ret, paramTypes) = CTypes.FunctionPointer(qual);
             var (summaryTags, summary, pdocs, retTags, retDoc) = DocParser.Parse(f);
+            order.Add(fieldName);
 
             if (ret is null)
             {
-                fields.Add(new ApiField(fieldName, qual, summaryTags, summary.Length > 0 ? summary : null));
+                var field = new ApiField(fieldName, declaredWith is null ? qual : "", summaryTags,
+                    summary.Length > 0 ? summary : null);
+                fields.Add(field with { Inline = declaredWith });
                 continue;
             }
 
@@ -186,7 +211,12 @@ public static class Extractor
         }
 
         var (structTags, structDoc, _, _, _) = DocParser.Parse(node);
-        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots);
+        var inDeclarationOrder = order.SequenceEqual(fields.Select(f => f.Name).Concat(slots.Select(s => s.Name)));
+        return new ApiStruct(name, structDoc.Length > 0 ? structDoc : null, structTags, fields, slots)
+        {
+            IsUnion = node["tagUsed"]?.GetValue<string>() == "union",
+            Order = inDeclarationOrder ? null : order,
+        };
     }
 
     /// <summary>
@@ -290,23 +320,5 @@ public static class Extractor
         if (b is null || e is null) return "";
         var end = Math.Min(e.Value + tokLen, bytes.Length);
         return System.Text.Encoding.UTF8.GetString(bytes, b.Value, end - b.Value);
-    }
-
-    static (string? Returns, List<string> ParamTypes) SplitFnPtr(string qual)
-    {
-        var i = qual.IndexOf("(*)", StringComparison.Ordinal);
-        if (i < 0) return (null, []);
-        var ret = qual[..i].Trim();
-        var openParen = qual.IndexOf('(', i + 3);
-        var body = qual[(openParen + 1)..qual.LastIndexOf(')')];
-        var args = new List<string>();
-        var depth = 0;
-        var cur = "";
-        foreach (var ch in body + ",")
-        {
-            if (ch == ',' && depth == 0) { if (cur.Trim().Length > 0) args.Add(cur.Trim()); cur = ""; }
-            else { depth += ch == '(' ? 1 : 0; depth -= ch == ')' ? 1 : 0; cur += ch; }
-        }
-        return (ret, args);
     }
 }
