@@ -113,10 +113,7 @@ public static class Extractor
             }
             else
             {
-                var folded = ((e["inner"] as JsonArray) ?? [])
-                    .OfType<JsonObject>()
-                    .FirstOrDefault(i => i["kind"]?.GetValue<string>() == "ConstantExpr")
-                    ?["value"]?.GetValue<string>();
+                var folded = Folded(e);
 
                 if (folded is not null && long.TryParse(folded, out var foldedValue))
                     rawValue = foldedValue.ToString();
@@ -131,6 +128,21 @@ public static class Extractor
         {
             Tags = parsed.SummaryTags,
         };
+    }
+
+    /// <summary>
+    /// The value clang folded an enum constant's initialiser to: a constant expression's, or the
+    /// literal's when the initialiser is one literal under implicit casts.
+    /// </summary>
+    static string? Folded(JsonObject node)
+    {
+        foreach (var child in ((node["inner"] as JsonArray) ?? []).OfType<JsonObject>())
+        {
+            var kind = child["kind"]?.GetValue<string>();
+            if (kind is "ConstantExpr" or "IntegerLiteral" && child["value"] is { } value) return value.GetValue<string>();
+            if (kind is "ImplicitCastExpr" or "ParenExpr" && Folded(child) is { } inner) return inner;
+        }
+        return null;
     }
 
     static ApiStruct ExtractStruct(JsonObject node, string name, byte[] bytes, List<string> errors)
