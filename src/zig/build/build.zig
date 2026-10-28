@@ -31,7 +31,15 @@ pub const Translation = struct {
     header: []const u8,
 };
 
-/// What a plugin is built from. `abi`, `common` and the shared `log`, `result` and `dll_entry`
+/// A module of a Zig package the plugin's `build.zig.zon` declares, and the name it is imported
+/// under.
+pub const Package = struct {
+    name: []const u8,
+    dependency: []const u8,
+    module: []const u8,
+};
+
+/// What a plugin is built from. `abi`, `common`, `packages` and the shared `log`, `result` and `dll_entry`
 /// modules are looked up among the dependencies the plugin's own `build.zig.zon` declares, so a
 /// plugin reaches only what it declared. `third_party` adds the include paths, libraries and
 /// options of the libraries the plugin wraps, before the translations are made.
@@ -41,6 +49,7 @@ pub const Plugin = struct {
     abi: []const []const u8 = &.{},
     common: []const []const u8 = &.{},
     translations: []const Translation = &.{},
+    packages: []const Package = &.{},
     third_party: ?*const fn (*std.Build, *std.Build.Module) void = null,
     tests: []const u8,
 };
@@ -60,6 +69,7 @@ pub fn plugin(b: *std.Build, description: Plugin) void {
     if (description.third_party) |configure| configure(b, mod);
     for (description.translations) |t| mod.addImport(t.name, cImports(b, mod, b.path(t.header)));
     for (description.abi) |name| mod.addImport(name, b.dependency(name, .{}).module("abi"));
+    for (description.packages) |p| mod.addImport(p.name, b.dependency(p.dependency, .{}).module(p.module));
     const common = b.dependency("ke_common", .{ .target = target, .optimize = optimize });
     for (description.common) |name| mod.addImport(name, common.module(name));
     mod.addImport("log", b.dependency("ke_logger", .{}).module("log"));
