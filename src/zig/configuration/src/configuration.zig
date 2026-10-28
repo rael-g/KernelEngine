@@ -7,7 +7,8 @@ const std = @import("std");
 /// set up.
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_configuration").logFn };
 
-const ke = @import("c");
+const abi_configuration = @import("abi_configuration");
+const abi_result = @import("abi_result");
 
 const heap = @import("heap");
 /// The allocator every allocation in this file goes through, taken from the heap module.
@@ -39,7 +40,7 @@ const Entry = struct {
 const Sub = struct {
     id: u32,
     section: [:0]u8,
-    cb: ke.ke_configuration_change_func,
+    cb: abi_configuration.ke_configuration_change_func,
     ctx: ?*anyopaque,
     active: bool,
 };
@@ -50,17 +51,17 @@ const Sub = struct {
 /// are never repeated. Nothing is locked: every call, and every subscriber, runs on the thread
 /// that makes the call.
 const State = struct {
-    api: ke.ke_configuration,
+    api: abi_configuration.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
     subs: std.ArrayListUnmanaged(Sub),
     next_sub_id: u32,
 };
 
-fn state(self: [*c]ke.ke_configuration) *State {
+fn state(self: [*c]abi_configuration.ke_configuration) *State {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
-const R = @import("result").Result(ke, .{});
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.configuration);
 
 /// The entry for this section and key, or null. The pointer is invalidated by the next append to
@@ -100,7 +101,7 @@ fn upsert(st: *State, section: []const u8, key: []const u8) error{OutOfMemory}!*
 }
 
 /// Stores `value` under the key through `upsert`, then runs the section's subscribers.
-fn store(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: Value) ke.ke_result {
+fn store(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: Value) abi_result.ke_result {
     const st = state(self);
     const e = upsert(st, std.mem.span(section), std.mem.span(key)) catch {
         log.warn("storing {s}.{s} failed: out of memory", .{ section, key });
@@ -125,7 +126,7 @@ fn notify(st: *State, section_c: [*c]const u8) void {
 
 /// Returns the integer stored at this section and key, or the fallback when an argument is null,
 /// the key is missing, or it holds another type.
-fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
+fn getInt(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -138,7 +139,7 @@ fn getInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u
 
 /// Returns the double stored at this section and key, or the fallback. The one getter that
 /// converts: an integer entry is returned as a double.
-fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
+fn getDouble(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -152,7 +153,7 @@ fn getDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
 
 /// Returns the boolean stored at this section and key, or the fallback when an argument is null,
 /// the key is missing, or it holds another type.
-fn getBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
+fn getBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -165,7 +166,7 @@ fn getBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
 
 /// Returns the string stored at this key, or the fallback. It is the entry's own string, not a
 /// copy, so the pointer stops being valid at the next write to its key or at `destroy`.
-fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
+fn getString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -179,19 +180,19 @@ fn getString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
 /// Fails with invalid argument when an argument is null, and out of memory when the entry cannot be
 /// created; the store is then as it was. Otherwise the new value is stored and the subscribers of
 /// the section run, seeing it, before it returns.
-fn setInt(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64) callconv(.c) ke.ke_result {
+fn setInt(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64) callconv(.c) abi_result.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .int = value });
 }
 
 /// As `setInt`, for a double.
-fn setDouble(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: f64) callconv(.c) ke.ke_result {
+fn setDouble(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: f64) callconv(.c) abi_result.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .double = value });
 }
 
 /// As `setInt`, for a boolean.
-fn setBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: bool) callconv(.c) ke.ke_result {
+fn setBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: bool) callconv(.c) abi_result.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .boolean = value });
 }
@@ -200,7 +201,7 @@ fn setBool(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const 
 /// before the entry is looked up, so a failed copy or entry creation leaves the store unchanged. A
 /// successful write frees the previous string, which makes the pointer an earlier `getString`
 /// returned for this key invalid.
-fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8) callconv(.c) ke.ke_result {
+fn setString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8) callconv(.c) abi_result.ke_result {
     if (self == null or section == null or key == null or value == null) return R.code(error.InvalidArgument);
     const copy = gpa.dupeZ(u8, std.mem.span(value)) catch {
         log.warn("storing {s}.{s} failed: out of memory", .{ section, key });
@@ -214,7 +215,7 @@ fn setString(self: [*c]ke.ke_configuration, section: [*c]const u8, key: [*c]cons
 /// Stores the subscription in the first inactive slot, or appends a slot, and returns the id taken
 /// from `next_sub_id`. A reused slot takes the new id, so the id of its previous subscription no
 /// longer matches it. On failure it returns `NONE` and changes neither `subs` nor `next_sub_id`.
-fn subscribe(self: [*c]ke.ke_configuration, section: [*c]const u8, cb: ke.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) ke.ke_configuration_subscription {
+fn subscribe(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, cb: abi_configuration.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) abi_configuration.ke_configuration_subscription {
     if (self == null or section == null or cb == null) return NONE;
     const st = state(self);
     const sec = std.mem.span(section);
@@ -244,7 +245,7 @@ fn subscribe(self: [*c]ke.ke_configuration, section: [*c]const u8, cb: ke.ke_con
 }
 
 /// Deactivates the slot with this id, if one is active, and clears its callback.
-fn unsubscribe(self: [*c]ke.ke_configuration, sub: ke.ke_configuration_subscription) callconv(.c) void {
+fn unsubscribe(self: [*c]abi_configuration.ke_configuration, sub: abi_configuration.ke_configuration_subscription) callconv(.c) void {
     if (self == null or sub == NONE) return;
     const st = state(self);
     for (st.subs.items) |*s| {
@@ -258,7 +259,7 @@ fn unsubscribe(self: [*c]ke.ke_configuration, sub: ke.ke_configuration_subscript
 
 /// After it returns, the `State`, the handle's `ref` and every pointer from `getString` are
 /// invalid.
-fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
+fn destroy(self: [*c]abi_configuration.ke_configuration) callconv(.c) void {
     if (self == null) return;
     const st = state(self);
     for (st.entries.items) |*e| {
@@ -274,7 +275,7 @@ fn destroy(self: [*c]ke.ke_configuration) callconv(.c) void {
 
 /// Allocates a store and writes a handle whose `ref` is its `api` table and whose `destroy` frees
 /// it. Fails with out of memory, leaving the handle zeroed.
-export fn ke_configuration_create(out_store: ?*ke.ke_configuration_handle) callconv(.c) ke.ke_result {
+export fn ke_configuration_create(out_store: ?*abi_configuration.ke_configuration_handle) callconv(.c) abi_result.ke_result {
     const out = out_store orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const st = gpa.create(State) catch {
@@ -314,8 +315,8 @@ fn testCb(section: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
     p.last = std.mem.span(section);
 }
 
-fn madeStore() !ke.ke_configuration_handle {
-    var h: ke.ke_configuration_handle = undefined;
+fn madeStore() !abi_configuration.ke_configuration_handle {
+    var h: abi_configuration.ke_configuration_handle = undefined;
     try R.check(ke_configuration_create(&h));
     return h;
 }
@@ -324,54 +325,54 @@ test "missing key returns caller fallback" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try std.testing.expectEqual(@as(i64, 1024), c.*.get_int.?(c, "shadow", "resolution", 1024));
-    try std.testing.expectEqual(@as(f64, 20.0), c.*.get_double.?(c, "shadow", "frustum_size", 20.0));
-    try std.testing.expectEqual(true, c.*.get_bool.?(c, "shadow", "soft", true));
-    try std.testing.expectEqualStrings("shaders/", std.mem.span(c.*.get_string.?(c, "render", "shader_path", "shaders/")));
+    try std.testing.expectEqual(@as(i64, 1024), c.?.get_int.?(c, "shadow", "resolution", 1024));
+    try std.testing.expectEqual(@as(f64, 20.0), c.?.get_double.?(c, "shadow", "frustum_size", 20.0));
+    try std.testing.expectEqual(true, c.?.get_bool.?(c, "shadow", "soft", true));
+    try std.testing.expectEqualStrings("shaders/", std.mem.span(c.?.get_string.?(c, "render", "shader_path", "shaders/").?));
 }
 
 test "set then get round trips" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 2048));
-    try R.check(c.*.set_double.?(c, "shadow", "frustum_size", 30.5));
-    try R.check(c.*.set_bool.?(c, "shadow", "soft", false));
-    try R.check(c.*.set_string.?(c, "render", "shader_path", "res/shaders"));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
+    try R.check(c.?.set_double.?(c, "shadow", "frustum_size", 30.5));
+    try R.check(c.?.set_bool.?(c, "shadow", "soft", false));
+    try R.check(c.?.set_string.?(c, "render", "shader_path", "res/shaders"));
 
-    try std.testing.expectEqual(@as(i64, 2048), c.*.get_int.?(c, "shadow", "resolution", 1024));
-    try std.testing.expectEqual(@as(f64, 30.5), c.*.get_double.?(c, "shadow", "frustum_size", 20.0));
-    try std.testing.expectEqual(false, c.*.get_bool.?(c, "shadow", "soft", true));
-    try std.testing.expectEqualStrings("res/shaders", std.mem.span(c.*.get_string.?(c, "render", "shader_path", "shaders/")));
+    try std.testing.expectEqual(@as(i64, 2048), c.?.get_int.?(c, "shadow", "resolution", 1024));
+    try std.testing.expectEqual(@as(f64, 30.5), c.?.get_double.?(c, "shadow", "frustum_size", 20.0));
+    try std.testing.expectEqual(false, c.?.get_bool.?(c, "shadow", "soft", true));
+    try std.testing.expectEqualStrings("res/shaders", std.mem.span(c.?.get_string.?(c, "render", "shader_path", "shaders/").?));
 }
 
 test "overwrite keeps latest" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 512));
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 4096));
-    try std.testing.expectEqual(@as(i64, 4096), c.*.get_int.?(c, "shadow", "resolution", 1024));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 512));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 4096));
+    try std.testing.expectEqual(@as(i64, 4096), c.?.get_int.?(c, "shadow", "resolution", 1024));
 }
 
 test "type mismatch returns fallback" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 2048));
-    try std.testing.expectEqualStrings("x", std.mem.span(c.*.get_string.?(c, "shadow", "resolution", "x")));
-    try std.testing.expectEqual(true, c.*.get_bool.?(c, "shadow", "resolution", true));
-    try R.check(c.*.set_string.?(c, "shadow", "label", "text"));
-    try std.testing.expectEqual(@as(f64, 7.0), c.*.get_double.?(c, "shadow", "label", 7.0));
-    try std.testing.expectEqual(@as(i64, 9), c.*.get_int.?(c, "shadow", "label", 9));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
+    try std.testing.expectEqualStrings("x", std.mem.span(c.?.get_string.?(c, "shadow", "resolution", "x").?));
+    try std.testing.expectEqual(true, c.?.get_bool.?(c, "shadow", "resolution", true));
+    try R.check(c.?.set_string.?(c, "shadow", "label", "text"));
+    try std.testing.expectEqual(@as(f64, 7.0), c.?.get_double.?(c, "shadow", "label", 7.0));
+    try std.testing.expectEqual(@as(i64, 9), c.?.get_int.?(c, "shadow", "label", 9));
 }
 
 test "an integer written for a float key reads as that number, not the fallback" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try R.check(c.*.set_int.?(c, "shadow", "frustum_size", 30));
-    try std.testing.expectEqual(@as(f64, 30.0), c.*.get_double.?(c, "shadow", "frustum_size", 20.0));
+    try R.check(c.?.set_int.?(c, "shadow", "frustum_size", 30));
+    try std.testing.expectEqual(@as(f64, 30.0), c.?.get_double.?(c, "shadow", "frustum_size", 20.0));
 }
 
 test "subscriber fires only on writes to its section" {
@@ -379,14 +380,14 @@ test "subscriber fires only on writes to its section" {
     defer h.destroy.?(h.ref);
     const c = h.ref;
     var probe = TestProbe{};
-    const sub = c.*.subscribe.?(c, "shadow", testCb, &probe);
+    const sub = c.?.subscribe.?(c, "shadow", testCb, &probe);
     try std.testing.expect(sub != NONE);
 
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 2048));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
     try std.testing.expectEqual(@as(u32, 1), probe.calls);
     try std.testing.expectEqualStrings("shadow", probe.last);
 
-    try R.check(c.*.set_bool.?(c, "audio", "muted", true));
+    try R.check(c.?.set_bool.?(c, "audio", "muted", true));
     try std.testing.expectEqual(@as(u32, 1), probe.calls);
 }
 
@@ -395,12 +396,12 @@ test "unsubscribe stops callbacks" {
     defer h.destroy.?(h.ref);
     const c = h.ref;
     var probe = TestProbe{};
-    const sub = c.*.subscribe.?(c, "shadow", testCb, &probe);
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 1));
+    const sub = c.?.subscribe.?(c, "shadow", testCb, &probe);
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 1));
     try std.testing.expectEqual(@as(u32, 1), probe.calls);
 
-    c.*.unsubscribe.?(c, sub);
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 2));
+    c.?.unsubscribe.?(c, sub);
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2));
     try std.testing.expectEqual(@as(u32, 1), probe.calls);
 }
 
@@ -410,10 +411,10 @@ test "multiple subscribers each fire" {
     const c = h.ref;
     var a = TestProbe{};
     var b = TestProbe{};
-    const sa = c.*.subscribe.?(c, "shadow", testCb, &a);
-    const sb = c.*.subscribe.?(c, "shadow", testCb, &b);
+    const sa = c.?.subscribe.?(c, "shadow", testCb, &a);
+    const sb = c.?.subscribe.?(c, "shadow", testCb, &b);
     try std.testing.expect(sa != sb);
-    try R.check(c.*.set_int.?(c, "shadow", "resolution", 2048));
+    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
     try std.testing.expectEqual(@as(u32, 1), a.calls);
     try std.testing.expectEqual(@as(u32, 1), b.calls);
 }
@@ -422,15 +423,15 @@ test "null args rejected on write" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
     const c = h.ref;
-    try std.testing.expectError(error.InvalidArgument, R.check(c.*.set_int.?(c, null, "k", 1)));
-    try std.testing.expectError(error.InvalidArgument, R.check(c.*.set_string.?(c, "s", "k", null)));
+    try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_int.?(c, null, "k", 1)));
+    try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_string.?(c, "s", "k", null)));
 }
 
 test "creating, filling and destroying a configuration leaves no block allocated" {
     const h = try madeStore();
     const cfg = h.ref;
-    try R.check(cfg.*.set_int.?(cfg, "shadow", "resolution", 2048));
-    try R.check(cfg.*.set_string.?(cfg, "render", "shader_path", "res/shaders"));
+    try R.check(cfg.?.set_int.?(cfg, "shadow", "resolution", 2048));
+    try R.check(cfg.?.set_string.?(cfg, "render", "shader_path", "res/shaders"));
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

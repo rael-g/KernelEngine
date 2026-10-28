@@ -9,7 +9,7 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const abi_physics = @import("abi_physics");
 const abi_result = @import("abi_result");
-const abi_factory = @import("abi_physics_2d_box2d");
+const abi_factory = @import("abi_physics_2d_box2d_factory");
 const b2 = @import("box2d");
 const heap = @import("heap");
 

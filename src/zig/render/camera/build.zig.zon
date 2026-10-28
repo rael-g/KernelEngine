@@ -4,6 +4,12 @@
     .fingerprint = 0x983226710a1589a5,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_math = .{ .path = "../../abi/math" },
+        .abi_render = .{ .path = "../../abi/render" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_view = .{ .path = "../../abi/view" },
+        .abi_render_camera_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

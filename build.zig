@@ -179,19 +179,11 @@ pub fn build(b: *std.Build) void {
     _ = ctx.member("ke_input_default", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-input-include" = b.pathJoin(&.{ src_c, "input" }),
     }, &.{}, .has_tests);
 
     const resource_cache_default = ctx.member("ke_resource_cache_default", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-resource-cache-include" = b.pathJoin(&.{ src_c, "resource_cache" }),
     }, &.{}, .has_tests);
 
     const scheduler_enki = ctx.member("ke_scheduler_enki", .{
@@ -331,10 +323,6 @@ pub fn build(b: *std.Build) void {
     _ = ctx.member("ke_configuration", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-config-include" = b.pathJoin(&.{ src_c, "configuration" }),
     }, &.{}, .has_tests);
 
     _ = ctx.member("ke_configuration_toml", .{
@@ -372,25 +360,11 @@ pub fn build(b: *std.Build) void {
     const view_space = ctx.member("ke_view_space", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
-        .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
-        .@"ke-self-include" = b.pathJoin(&.{ src_zig, "view/space/include" }),
     }, &.{}, .has_tests);
 
     const render_camera = ctx.member("ke_render_camera", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
-        .@"ke-math-include" = b.pathJoin(&.{ src_c, "math" }),
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-render-include" = b.pathJoin(&.{ src_c, "render" }),
-        .@"ke-spatial-include" = b.pathJoin(&.{ src_c, "spatial" }),
-        .@"ke-view-include" = b.pathJoin(&.{ src_c, "view" }),
     }, &.{}, .has_tests);
 
     const gpu_render_target_texture = ctx.member("ke_gpu_render_target_texture", .{
