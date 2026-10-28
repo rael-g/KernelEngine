@@ -49,7 +49,7 @@ const ExtractedQuery = queries_mod.ExtractedQuery;
 const SegBuf = queries_mod.SegBuf;
 const resolveInto = queries_mod.resolveInto;
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.runtime);
 
 /// Logs why a call fails and returns `err` for it to fail with.

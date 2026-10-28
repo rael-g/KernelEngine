@@ -11,7 +11,7 @@ const abi_text = @import("abi_text");
 const handles = @import("handle");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
 const mesh_shape = @import("mesh_shape.zig");

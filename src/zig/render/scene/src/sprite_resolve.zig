@@ -5,7 +5,7 @@ const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_scene);
 
 const std = @import("std");

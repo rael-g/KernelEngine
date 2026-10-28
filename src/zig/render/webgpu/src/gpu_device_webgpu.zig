@@ -14,7 +14,7 @@ const abi_gpu_device_webgpu_factory = @import("abi_gpu_device_webgpu_factory");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_scheduler = @import("abi_scheduler");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
 
 const GpuError = error{

@@ -6,7 +6,7 @@ const std = @import("std");
 const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_scene);
 
 fn entries(e: [*c]abi_ecs.ke_variant_table_entry, n: u32) []abi_ecs.ke_variant_table_entry {

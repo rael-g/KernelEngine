@@ -16,7 +16,7 @@ const abi_text = @import("abi_text");
 
 const libc = @import("c");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.text_stb_truetype);
 
 /// The loader: the vtable the handle refers to, whose `handle` points back at the state. It holds

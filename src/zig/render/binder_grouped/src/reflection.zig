@@ -5,7 +5,7 @@ const std = @import("std");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const gpa = @import("heap").gpa;
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.reflection);
 
 const JBinding = struct {

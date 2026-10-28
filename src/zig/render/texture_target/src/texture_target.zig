@@ -11,7 +11,7 @@ const abi_result = @import("abi_result");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.texture_target);
 
 /// The state behind a texture-target handle, allocated by `ke_gpu_render_target_texture_create`

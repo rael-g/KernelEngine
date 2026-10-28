@@ -15,7 +15,7 @@ const abi_result = @import("abi_result");
 const abi_view = @import("abi_view");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.view_space);
 
 /// The handedness a factory fixes. Only `create` stores it, and every slot switches on it.

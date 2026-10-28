@@ -14,7 +14,7 @@ const stb = @import("c");
 const abi_asset = @import("abi_asset");
 const abi_result = @import("abi_result");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 const log = std.log.scoped(.asset_stb_image);
 

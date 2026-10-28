@@ -13,7 +13,7 @@ const abi_scheduler = @import("abi_scheduler");
 const abi_scheduler_enki_factory = @import("abi_scheduler_enki_factory");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.scheduler_enki);
 
 const pinned_tag: usize = 1;

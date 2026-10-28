@@ -13,7 +13,7 @@ const cFree = alloc.cFree;
 const cAllocBytes = alloc.cAllocBytes;
 const cFreeBytes = alloc.cFreeBytes;
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.runtime);
 
 pub const DeferKind = enum(c_int) {

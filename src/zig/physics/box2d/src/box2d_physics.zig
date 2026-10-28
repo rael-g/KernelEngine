@@ -15,7 +15,7 @@ const heap = @import("heap");
 
 /// Error reporter bound to this file's C error types; every failure in this file is reported
 /// through it.
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 const sub_step_count: c_int = 4;
 

@@ -2,12 +2,12 @@
 //! conversions between it and the code at the ABI edge.
 
 const std = @import("std");
+const c = @import("abi_result");
 
-/// The error set and conversions for `c`, the C import of a plugin, which must include
-/// `kernel_engine/result/result.h`. `domain` pairs each error of the plugin's domain with the code
+/// The error set and conversions of a plugin. `domain` pairs each error of the plugin's domain with the code
 /// its header declares for it, as `.{ .{ error.ShaderCompilation, c.KE_RESULT_RENDER_SHADER_COMPILATION } }`.
 /// A general code of the header with no error here fails the build.
-pub fn Result(comptime c: type, comptime domain: anytype) type {
+pub fn Result(comptime domain: anytype) type {
     const general = .{
         .{ error.General, c.KE_RESULT_GENERAL },
         .{ error.NotFound, c.KE_RESULT_NOT_FOUND },
@@ -71,29 +71,32 @@ pub fn Result(comptime c: type, comptime domain: anytype) type {
 }
 
 const testing = std.testing;
-const test_c = @import("c");
-const R = Result(test_c, .{.{ error.ProbeOwnCode, test_c.KE_RESULT_CODE(test_c.KE_RESULT_DOMAIN_LOGGER, 1) }});
+fn codeOf(domain: c_int, n: c_int) c_int {
+    return (domain << 16) | n;
+}
+
+const R = Result(.{.{ error.ProbeOwnCode, codeOf(c.KE_RESULT_DOMAIN_LOGGER, 1) }});
 
 test "a Zig error crosses the ABI as the code of the same name and comes back as the same error" {
-    try testing.expectEqual(@as(test_c.ke_result, @intCast(test_c.KE_RESULT_NOT_FOUND)), R.code(error.NotFound));
-    try testing.expectError(error.NotFound, R.check(@intCast(test_c.KE_RESULT_NOT_FOUND)));
+    try testing.expectEqual(@as(c.ke_result, @intCast(c.KE_RESULT_NOT_FOUND)), R.code(error.NotFound));
+    try testing.expectError(error.NotFound, R.check(@intCast(c.KE_RESULT_NOT_FOUND)));
 }
 
 test "a domain's own error crosses the ABI as the code its header declares" {
-    const own: test_c.ke_result = @intCast(test_c.KE_RESULT_CODE(test_c.KE_RESULT_DOMAIN_LOGGER, 1));
+    const own: c.ke_result = @intCast(codeOf(c.KE_RESULT_DOMAIN_LOGGER, 1));
     try testing.expectEqual(own, R.code(error.ProbeOwnCode));
     try testing.expectError(error.ProbeOwnCode, R.check(own));
 }
 
 test "an error the set does not name crosses the ABI as the general code" {
-    try testing.expectEqual(@as(test_c.ke_result, @intCast(test_c.KE_RESULT_GENERAL)), R.code(error.SomethingElse));
+    try testing.expectEqual(@as(c.ke_result, @intCast(c.KE_RESULT_GENERAL)), R.code(error.SomethingElse));
 }
 
 test "a code the set does not name comes back as the general error" {
-    try testing.expectError(error.General, R.check(@intCast(test_c.KE_RESULT_CODE(test_c.KE_RESULT_DOMAIN_WINDOW, 9))));
+    try testing.expectError(error.General, R.check(@intCast(codeOf(c.KE_RESULT_DOMAIN_WINDOW, 9))));
 }
 
 test "a call that succeeded crosses the ABI as KE_OK and checks as success" {
-    try testing.expectEqual(@as(test_c.ke_result, @intCast(test_c.KE_OK)), R.of({}));
-    try R.check(@intCast(test_c.KE_OK));
+    try testing.expectEqual(@as(c.ke_result, @intCast(c.KE_OK)), R.of({}));
+    try R.check(@intCast(c.KE_OK));
 }

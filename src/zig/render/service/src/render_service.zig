@@ -13,7 +13,7 @@ const abi_resource_cache = @import("abi_resource_cache");
 const abi_resource_cache_default_factory = @import("abi_resource_cache_default_factory");
 const abi_result = @import("abi_result");
 /// The error set and code conversions every file of the service fails through.
-pub const R = @import("result").Result(abi_result, .{});
+pub const R = @import("result").Result(.{});
 
 const heap = @import("heap");
 pub const gpa = heap.gpa;

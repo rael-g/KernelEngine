@@ -9,7 +9,7 @@ const abi_window = @import("abi_window");
 const device = @import("device.zig");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 /// The backend object behind `ke_window`. Created by `create` and freed by `destroyApi`, which
 /// also destroys the owned `dev`. `input` is borrowed and may be null; `initialized` is set by

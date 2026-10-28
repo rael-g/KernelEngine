@@ -15,7 +15,7 @@ const abi_window_glfw_factory = @import("abi_window_glfw_factory");
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.window_glfw);
 
 test {

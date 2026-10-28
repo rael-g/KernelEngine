@@ -13,7 +13,7 @@ const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_text = @import("abi_text");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_ui);
 const handles = @import("handle");
 

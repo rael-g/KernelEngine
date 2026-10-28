@@ -9,7 +9,7 @@ const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
 const action_name_max = 64;
