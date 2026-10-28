@@ -129,6 +129,10 @@ pub const ke_ecs = extern struct {
     component_get: ?*const fn (?*ke_ecs, ke_entity, ke_component_id) callconv(.c) ?*anyopaque = null,
     /// Byte size of a registered component's element; 0 for a tag or unknown cid.
     component_size: ?*const fn (?*ke_ecs, ke_component_id) callconv(.c) usize = null,
+    /// Writes value into component at the place field describes, converted to the field's type: an
+    /// integer and a float convert to each other, a boolean to an integer, and a vector widens or
+    /// narrows to the field's width; a string is cut to the field's size and stays NUL-terminated.
+    component_field_write: ?*const fn (?*ke_ecs, ?*anyopaque, ?*const ke_component_field, ?*const ke_variant) callconv(.c) result.ke_result = null,
     /// Registers a query over a component tuple (entities matching ALL cids).
     query_register: ?*const fn (?*ke_ecs, ?[*]const ke_component_id, usize, ?*ke_query_id) callconv(.c) result.ke_result = null,
     /// Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave;

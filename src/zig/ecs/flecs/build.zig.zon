@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_ecs = .{ .path = "../../abi/ecs" },
+        .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_ecs_flecs_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },

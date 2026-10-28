@@ -11,7 +11,7 @@ const c = @import("c");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_flecs_factory = @import("abi_ecs_flecs_factory");
 const abi_result = @import("abi_result");
-const component_fields = @import("component_fields");
+const field_write = @import("field_write.zig");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
@@ -482,7 +482,7 @@ fn componentAdd(
         const bytes: [*]u8 = @ptrCast(slot);
         @memset(bytes[0..@intCast(ti.*.size)], 0);
         if (layoutOf(s, component)) |fields| {
-            component_fields.seedDefaults(slot, fields.ptr, @intCast(fields.len));
+            field_write.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
     }
     out.* = slot;
@@ -520,6 +520,14 @@ fn componentSize(self_in: ?*abi_ecs.ke_ecs, cid: abi_ecs.ke_component_id) callco
     const ti = c.ecs_get_type_info(s.world, @intCast(cid));
     if (ti == null) return 0;
     return @intCast(ti.*.size);
+}
+
+/// Slot `component_field_write`. Converts and writes through `field_write`, which holds no state,
+/// so the ecs only refuses a null argument or a value the conversion refuses.
+fn componentFieldWrite(self_in: ?*abi_ecs.ke_ecs, component: ?*anyopaque, place: ?*const abi_ecs.ke_component_field, value: ?*const abi_ecs.ke_variant) callconv(.c) abi_result.ke_result {
+    _ = self_in orelse return R.code(error.InvalidArgument);
+    if (!field_write.write(component, place, value)) return R.code(error.InvalidArgument);
+    return R.ok;
 }
 
 /// Slot `query_register`. Builds a flecs query with one term per component id and records the byte
@@ -757,6 +765,7 @@ fn create(params_in: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_params) R.Error!
     s.api.component_remove = componentRemove;
     s.api.component_get = componentGet;
     s.api.component_size = componentSize;
+    s.api.component_field_write = componentFieldWrite;
     s.api.query_register = queryRegister;
     s.api.query_resolve = queryResolve;
 
@@ -764,6 +773,10 @@ fn create(params_in: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_params) R.Error!
 }
 
 const testing = std.testing;
+
+test {
+    _ = field_write;
+}
 
 fn made() !abi_ecs.ke_ecs_handle {
     var h: abi_ecs.ke_ecs_handle = undefined;

@@ -5,7 +5,6 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     _ = b.addModule("heap", .{ .root_source_file = b.path("heap.zig"), .target = target, .optimize = optimize });
     module(b, "stubs", &.{ "abi_ecs", "abi_framework", "abi_render", "abi_result", "abi_runtime" });
-    module(b, "component_fields", &.{ "abi_ecs", "abi_math" });
 }
 
 fn module(b: *std.Build, name: []const u8, abi: []const []const u8) void {

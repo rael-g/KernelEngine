@@ -31,6 +31,9 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("size_t (*)(struct ke_ecs *, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, uint, nuint> component_size;
 
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, void *, const ke_component_field *, const ke_variant *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, void*, ke_component_field*, ke_variant*, KernelEngine.Result.Native.ke_result> component_field_write;
+
     [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_component_id *, size_t, ke_query_id *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, uint*, nuint, ulong*, KernelEngine.Result.Native.ke_result> query_register;
 

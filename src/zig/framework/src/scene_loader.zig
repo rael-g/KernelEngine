@@ -165,7 +165,7 @@ fn applyComponentBlock(
     if (existing == null) {
         const bytes: [*]u8 = @ptrCast(comp);
         @memset(bytes[0..meta.size], 0);
-        if (fields) |f| fields_apply.seedDefaults(comp, f, field_count);
+        if (fields) |f| fields_apply.seedDefaults(e, comp, f, field_count);
     }
 
     const entries = values.buildEntries(&s.arena, comp_tbl) orelse {
@@ -173,7 +173,7 @@ fn applyComponentBlock(
     };
 
     if (fields != null) {
-        if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields.?, field_count)) |refusing| {
+        if (fields_apply.apply(e, comp, entries.ptr, @intCast(entries.len), fields.?, field_count)) |refusing| {
             return structural("component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name.? });
         }
     }
@@ -755,6 +755,28 @@ fn fakeComponentSize(self: ?*abi_ecs.ke_ecs, cid: abi_ecs.ke_component_id) callc
     return f.components[cid - 1].size;
 }
 
+/// Writes a value whose variant type is the field's own: a float narrowed to the field's width, an
+/// integer or a boolean to its low bytes, a vector as it is, a string cut and NUL-terminated.
+fn fakeComponentFieldWrite(_: ?*abi_ecs.ke_ecs, component: ?*anyopaque, field: ?*const abi_ecs.ke_component_field, value: ?*const abi_ecs.ke_variant) callconv(.c) abi_result.ke_result {
+    const f = field.?;
+    const v = value.?;
+    if (v.type != f.type) return abi_result.KE_RESULT_INVALID_ARGUMENT;
+    const place = @as([*]u8, @ptrCast(component.?))[f.offset..][0..f.size];
+    switch (v.type) {
+        abi_ecs.KE_VARIANT_FLOAT => @memcpy(place, std.mem.asBytes(&@as(f32, @floatCast(v.unnamed_0.f)))[0..f.size]),
+        abi_ecs.KE_VARIANT_INT => @memcpy(place, std.mem.asBytes(&v.unnamed_0.i)[0..f.size]),
+        abi_ecs.KE_VARIANT_BOOL => @memcpy(place, std.mem.asBytes(&@as(u64, @intFromBool(v.unnamed_0.b)))[0..f.size]),
+        abi_ecs.KE_VARIANT_STRING => {
+            const src = std.mem.span(v.unnamed_0.s.?);
+            const n = @min(src.len, place.len - 1);
+            @memcpy(place[0..n], src[0..n]);
+            place[n] = 0;
+        },
+        else => @memcpy(place, std.mem.asBytes(&v.unnamed_0)[0..f.size]),
+    }
+    return abi_result.KE_OK;
+}
+
 fn generatedFields(table: anytype) [*c]const abi_ecs.ke_component_field {
     return @ptrCast(@alignCast(table));
 }
@@ -864,6 +886,7 @@ const Fixture = struct {
         self.ecs.vtable.component_remove = fakeComponentRemove;
         self.ecs.vtable.component_get = fakeComponentGet;
         self.ecs.vtable.component_size = fakeComponentSize;
+        self.ecs.vtable.component_field_write = fakeComponentFieldWrite;
 
         self.runtime = std.mem.zeroes(abi_runtime.ke_runtime);
 

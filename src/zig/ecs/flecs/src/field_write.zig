@@ -1,5 +1,5 @@
-//! Writes a variant into the memory of a component at the place one of its fields describes.
-//! It holds no state and allocates nothing.
+//! Converts a variant to the type of a component field and writes it at the field's place, and
+//! seeds a component's field defaults the same way. It holds no state and allocates nothing.
 
 const std = @import("std");
 const abi_ecs = @import("abi_ecs");
@@ -148,4 +148,89 @@ pub fn seedDefaults(component: ?*anyopaque, fields: ?[*]const abi_ecs.ke_compone
         if (f.default_value.type == abi_ecs.KE_VARIANT_NULL) continue;
         _ = write(component, f, &f.default_value);
     }
+}
+
+const testing = std.testing;
+
+const Probe = extern struct {
+    flag: u8,
+    count: i32,
+    amount: f32,
+    tint: abi_math.ke_vec4,
+    where: abi_math.ke_vec3,
+    label: [8]u8,
+};
+
+fn fieldOf(comptime name: [:0]const u8, kind: abi_ecs.ke_variant_type) abi_ecs.ke_component_field {
+    return .{ .name = name, .type = kind, .offset = @offsetOf(Probe, name), .size = @sizeOf(@FieldType(Probe, name)) };
+}
+
+fn vFloat(f: f64) abi_ecs.ke_variant {
+    return .{ .type = abi_ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
+}
+
+fn vInt(i: i64) abi_ecs.ke_variant {
+    return .{ .type = abi_ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
+}
+
+test "each field is written at its own offset" {
+    var p = std.mem.zeroes(Probe);
+    try testing.expect(write(&p, &fieldOf("flag", abi_ecs.KE_VARIANT_BOOL), &.{ .type = abi_ecs.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = true } }));
+    try testing.expect(write(&p, &fieldOf("count", abi_ecs.KE_VARIANT_INT), &vInt(7)));
+    try testing.expect(write(&p, &fieldOf("amount", abi_ecs.KE_VARIANT_FLOAT), &vFloat(2.5)));
+    try testing.expectEqual(@as(u8, 1), p.flag);
+    try testing.expectEqual(@as(i32, 7), p.count);
+    try testing.expectEqual(@as(f32, 2.5), p.amount);
+}
+
+test "an integer written to a float field is converted, and the reverse" {
+    var p = std.mem.zeroes(Probe);
+    try testing.expect(write(&p, &fieldOf("amount", abi_ecs.KE_VARIANT_FLOAT), &vInt(3)));
+    try testing.expect(write(&p, &fieldOf("count", abi_ecs.KE_VARIANT_INT), &vFloat(9.0)));
+    try testing.expectEqual(@as(f32, 3.0), p.amount);
+    try testing.expectEqual(@as(i32, 9), p.count);
+}
+
+test "a float that is not a number written to an integer field writes zero" {
+    var p = std.mem.zeroes(Probe);
+    p.count = 7;
+    try testing.expect(write(&p, &fieldOf("count", abi_ecs.KE_VARIANT_INT), &vFloat(std.math.nan(f64))));
+    try testing.expectEqual(@as(i32, 0), p.count);
+}
+
+test "a color written with three components is opaque, not transparent" {
+    var p = std.mem.zeroes(Probe);
+    try testing.expect(write(&p, &fieldOf("tint", abi_ecs.KE_VARIANT_VEC4), &.{ .type = abi_ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 1, .y = 0.5, .z = 0.25 } } }));
+    try testing.expectEqual(@as(f32, 1), p.tint.w);
+}
+
+test "a vec2 widens into a vec3 field, leaving z at zero" {
+    var p = std.mem.zeroes(Probe);
+    try testing.expect(write(&p, &fieldOf("where", abi_ecs.KE_VARIANT_VEC3), &.{ .type = abi_ecs.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = 4, .y = 5 } } }));
+    try testing.expectEqual(@as(f32, 4), p.where.x);
+    try testing.expectEqual(@as(f32, 0), p.where.z);
+}
+
+test "a string longer than the field still leaves it NUL-terminated" {
+    var p = std.mem.zeroes(Probe);
+    try testing.expect(write(&p, &fieldOf("label", abi_ecs.KE_VARIANT_STRING), &.{ .type = abi_ecs.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "abcdefghijkl" } }));
+    try testing.expectEqual(@as(u8, 0), p.label[7]);
+    try testing.expectEqualStrings("abcdefg", std.mem.sliceTo(&p.label, 0));
+}
+
+test "a value whose type does not convert is refused and nothing is written" {
+    var p = std.mem.zeroes(Probe);
+    p.amount = 1.5;
+    try testing.expect(!write(&p, &fieldOf("amount", abi_ecs.KE_VARIANT_FLOAT), &.{ .type = abi_ecs.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "nope" } }));
+    try testing.expectEqual(@as(f32, 1.5), p.amount);
+}
+
+test "a field with a default starts there, and one without keeps its bytes" {
+    var p = std.mem.zeroes(Probe);
+    var amount = fieldOf("amount", abi_ecs.KE_VARIANT_FLOAT);
+    amount.default_value = vFloat(1.0);
+    const table = [_]abi_ecs.ke_component_field{ amount, fieldOf("count", abi_ecs.KE_VARIANT_INT) };
+    seedDefaults(&p, &table, table.len);
+    try testing.expectEqual(@as(f32, 1.0), p.amount);
+    try testing.expectEqual(@as(i32, 0), p.count);
 }

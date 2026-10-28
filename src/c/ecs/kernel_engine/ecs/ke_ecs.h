@@ -114,6 +114,22 @@ extern "C"
         size_t (*component_size)(struct ke_ecs *self, ke_component_id cid);
 
         /**
+         * Writes @p value into @p component at the place @p field describes, converted to the
+         * field's type: an integer and a float convert to each other, a boolean to an integer, and
+         * a vector widens or narrows to the field's width; a string is cut to the field's size and
+         * stays NUL-terminated.
+         * @param component [borrowed] The component's memory.
+         * @param field     [borrowed] Where in the component, and of which type and size.
+         * @param value     [borrowed] The value to write.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does
+         *         not convert to the field's type or a size the type cannot have, writing nothing.
+         */
+        ke_result (*component_field_write)(struct ke_ecs                 *self,
+                                           void                          *component,
+                                           const ke_component_field      *field,
+                                           const ke_variant              *value);
+
+        /**
          * Registers a query over a component tuple (entities matching ALL cids).
          * @param cids [borrowed,array_of:cid_count] Component tuple to match.
          * @param cid_count Number of components in the tuple.
