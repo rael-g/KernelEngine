@@ -9,7 +9,6 @@
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_result = .{ .path = "../../abi/result" },
-        .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
     },

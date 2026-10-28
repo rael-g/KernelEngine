@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("audio_module_factory.zig") });
     abi.addImport("framework", b.dependency("ke_abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
+    abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/audio/module/audio_module.h>

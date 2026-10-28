@@ -13,8 +13,8 @@ namespace KernelEngine.Render.Webgpu.Native;
 public static unsafe partial class NativeMethods
 {
     [DllImport("ke_render_scene", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_scene_components_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_scene_component_set_handle")]
-    public static extern KernelEngine.Framework.Native.ke_scene_component_set_handle render_scene_components_create();
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.ke_result render_scene_components_create([NativeTypeName("ke_scene_component_set *")] KernelEngine.Framework.Native.ke_scene_component_set* set);
 
     [DllImport("ke_render_scene", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_scene_resolve_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

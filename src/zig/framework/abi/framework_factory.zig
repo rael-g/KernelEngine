@@ -43,6 +43,9 @@ pub extern fn ke_framework_set_log_callback(callback: logger.ke_log_callback, ct
 /// Creates an empty action map.
 pub extern fn ke_input_actions_create(out_actions: ?*framework.ke_input_actions_handle) result.ke_result;
 
+/// Creates an empty scene component set, which the plugins fill through its `add` slot.
+pub extern fn ke_scene_component_set_create(out_set: ?*framework.ke_scene_component_set_handle) result.ke_result;
+
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the
 /// names a scene_tree already registers them under, so a scene_tree must exist on this ecs

@@ -877,6 +877,7 @@
         "src/c/framework/kernel_engine/framework/input_actions.h",
         "src/c/framework/kernel_engine/framework/scene_loader.h",
         "src/c/framework/kernel_engine/framework/scene_component_set.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_component_set_create.h",
         "src/zig/framework/include/kernel_engine/framework/world_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",

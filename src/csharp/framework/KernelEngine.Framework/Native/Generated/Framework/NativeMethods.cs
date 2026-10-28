@@ -12,6 +12,10 @@ namespace KernelEngine.Framework.Native;
 
 public static unsafe partial class NativeMethods
 {
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_component_set_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.ke_result scene_component_set_create(ke_scene_component_set_handle* out_set);
+
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
     public static extern KernelEngine.Result.Native.ke_result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world_handle* out_world);

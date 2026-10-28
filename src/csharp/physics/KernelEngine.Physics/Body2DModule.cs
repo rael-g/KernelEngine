@@ -49,11 +49,12 @@ public sealed unsafe class Body2DModule : IRuntimeModule
             KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &handle), "ke_physics_body2d_module_create");
         _handle = handle;
 
-        var set = KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create();
+        KernelEngine.Framework.Native.ke_scene_component_set_handle set;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
         try
         {
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native,
-                ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create(set.@ref), "ke_physics_scene_components_create");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
         }
         finally
         {

@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) void {
         .name = "ke_audio_module",
         .root = "src/audio_module.zig",
         .abi = &.{ "abi_audio", "abi_ecs", "abi_framework", "abi_result" },
-        .common = &.{ "scene_components", "stubs" },
         .tests = "Run the audio module unit tests",
     });
 }

@@ -6,6 +6,7 @@
     .dependencies = .{
         .ke_abi_framework = .{ .path = "../../../abi/framework" },
         .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

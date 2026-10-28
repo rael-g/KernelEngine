@@ -2,10 +2,11 @@
 
 const framework = @import("framework");
 const logger = @import("logger");
+const result = @import("result");
 
-/// Returns the set of audio's scene components: the audio player, with its field table, so an
-/// [entity.components.audio_player] block applies. The set holds no state.
-pub extern fn ke_audio_scene_components_create() framework.ke_scene_component_set_handle;
+/// Adds audio's scene components to set: the audio player, with its field table, so an
+/// [entity.components.audio_player] block applies.
+pub extern fn ke_audio_scene_components_create(set: ?*framework.ke_scene_component_set) result.ke_result;
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

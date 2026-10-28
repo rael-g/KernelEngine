@@ -353,14 +353,20 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
-const Components = @import("scene_components").Set(&.{
-    .{ .name = abi_physics.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics.ke_body2d_component), .alignment = @alignOf(abi_physics.ke_body2d_component), .fields = &abi_physics.ke_body2d_component_fields },
-    .{ .name = abi_physics.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics.ke_collider2d_component), .alignment = @alignOf(abi_physics.ke_collider2d_component), .fields = &abi_physics.ke_collider2d_component_fields },
-});
+const components = [_]abi_ecs.ke_component_params{
+    .{ .name = abi_physics.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics.ke_body2d_component), .alignment = @alignOf(abi_physics.ke_body2d_component), .fields = &abi_physics.ke_body2d_component_fields, .field_count = abi_physics.ke_body2d_component_fields.len },
+    .{ .name = abi_physics.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics.ke_collider2d_component), .alignment = @alignOf(abi_physics.ke_collider2d_component), .fields = &abi_physics.ke_collider2d_component_fields, .field_count = abi_physics.ke_collider2d_component_fields.len },
+};
 
-/// The factory of the scene component set. The set holds no state, so it cannot fail.
-export fn ke_physics_scene_components_create() callconv(.c) abi_framework.ke_scene_component_set_handle {
-    return Components.handle();
+/// The factory of the scene components. Adds them in order and stops at the first one the set
+/// refuses.
+export fn ke_physics_scene_components_create(set_in: ?*abi_framework.ke_scene_component_set) callconv(.c) abi_result.ke_result {
+    const set = set_in orelse return R.code(error.InvalidArgument);
+    for (&components) |*component| {
+        const added = set.add.?(set, component, null);
+        if (added != R.ok) return added;
+    }
+    return R.ok;
 }
 
 const testing = std.testing;

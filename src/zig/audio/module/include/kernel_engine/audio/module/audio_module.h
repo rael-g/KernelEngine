@@ -22,9 +22,12 @@
 extern "C" {
 #endif
 
-/// @brief Returns the set of audio's scene components: the audio player, with its field table, so
-///        an [entity.components.audio_player] block applies. The set holds no state.
-KE_AUDIO_MODULE_API ke_scene_component_set_handle ke_audio_scene_components_create(void);
+/// @brief Adds audio's scene components to @p set: the audio player, with its field table, so an
+///        [entity.components.audio_player] block applies.
+/// @param set [borrowed] The set the components are added to.
+/// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p set, or the code of the set that refused
+///         a component, after the components added before it.
+KE_AUDIO_MODULE_API ke_result ke_audio_scene_components_create(ke_scene_component_set *set);
 
 #ifdef __cplusplus
 }

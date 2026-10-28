@@ -34,7 +34,6 @@ pub extern fn ke_physics_body2d_module_create(params: ?*const ke_physics_body2d_
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_physics_body2d_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Returns the set of physics's scene components: the 2D body and the 2D collider, with their
-/// field tables, so [entity.body2d] and [entity.collider2d] blocks apply. The set holds no
-/// state.
-pub extern fn ke_physics_scene_components_create() framework.ke_scene_component_set_handle;
+/// Adds physics's scene components to set: the 2D body and the 2D collider, with their field
+/// tables, so [entity.body2d] and [entity.collider2d] blocks apply.
+pub extern fn ke_physics_scene_components_create(set: ?*framework.ke_scene_component_set) result.ke_result;

@@ -192,13 +192,15 @@ pub const ke_world_handle = extern struct {
     destroy: ?*const fn (?*ke_world) callconv(.c) void = null,
 };
 
-/// The components a plugin makes addressable from a scene file: each one registered with an ecs
-/// under its name, size and field table, the table handed to a world, and the apply callback the
-/// plugin has for it, if any.
+/// The components the plugins make addressable from a scene file. Each plugin adds its own; the
+/// host then registers all of them with an ecs and a world: each component under its name, size
+/// and field table, the table handed to the world, with the apply callback the plugin gave.
 pub const ke_scene_component_set = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Registers every component of the set with ecs and world. Registrations made before a failure
-    /// stay.
+    /// Adds a component to the set, after those added before it.
+    add: ?*const fn (?*ke_scene_component_set, ?*const ecs.ke_component_params, ke_component_apply_fn) callconv(.c) result.ke_result = null,
+    /// Registers every component of the set with ecs and world, in the order they were added.
+    /// Registrations made before a failure stay.
     register_into: ?*const fn (?*ke_scene_component_set, ?*ecs.ke_ecs, ?*ke_world) callconv(.c) result.ke_result = null,
 };
 

@@ -23,11 +23,13 @@ extern "C"
 #endif
 
 /**
- * Returns the set of render's scene components: mesh, camera, the four lights, skybox, sprite and
+ * Adds render's scene components to @p set: mesh, camera, the four lights, skybox, sprite and
  * label, with their field tables, and the apply callbacks of the mesh, the camera and the sprite.
- * The set holds no state.
+ * @param set [borrowed] The set the components are added to.
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p set, or the code of the set that refused
+ *         a component, after the components added before it.
  */
-KE_RENDER_SCENE_API ke_scene_component_set_handle ke_render_scene_components_create(void);
+KE_RENDER_SCENE_API ke_result ke_render_scene_components_create(ke_scene_component_set *set);
 
 #ifdef __cplusplus
 }

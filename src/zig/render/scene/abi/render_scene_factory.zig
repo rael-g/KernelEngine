@@ -78,10 +78,10 @@ pub extern fn ke_render_label_resolve_create(params: ?*const ke_render_label_res
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_scene_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Returns the set of render's scene components: mesh, camera, the four lights, skybox, sprite
-/// and label, with their field tables, and the apply callbacks of the mesh, the camera and the
-/// sprite. The set holds no state.
-pub extern fn ke_render_scene_components_create() framework.ke_scene_component_set_handle;
+/// Adds render's scene components to set: mesh, camera, the four lights, skybox, sprite and
+/// label, with their field tables, and the apply callbacks of the mesh, the camera and the
+/// sprite.
+pub extern fn ke_render_scene_components_create(set: ?*framework.ke_scene_component_set) result.ke_result;
 
 /// Registers the scene's render components and the update-phase systems
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
