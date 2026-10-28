@@ -122,7 +122,7 @@ typedef struct ke_gpu_vertex_buffer_layout
     uint64_t                       stride;
     ke_gpu_vertex_step_mode        step_mode;
     uint32_t                       attribute_count;
-    const ke_gpu_vertex_attribute *attributes;
+    const ke_gpu_vertex_attribute *attributes; ///< [array_of:attribute_count]
 } ke_gpu_vertex_buffer_layout;
 
 typedef struct ke_gpu_blend_state
@@ -171,7 +171,7 @@ typedef struct ke_gpu_bind_group_layout_params
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
     uint32_t                              entry_count;
-    const ke_gpu_bind_group_layout_entry *entries;
+    const ke_gpu_bind_group_layout_entry *entries; ///< [array_of:entry_count]
 } ke_gpu_bind_group_layout_params;
 
 typedef struct ke_gpu_bind_group_entry
@@ -191,7 +191,7 @@ typedef struct ke_gpu_bind_group_params
     const char *label;
     ke_gpu_bind_group_layout      layout;
     uint32_t                      entry_count;
-    const ke_gpu_bind_group_entry *entries;
+    const ke_gpu_bind_group_entry *entries; ///< [array_of:entry_count]
 } ke_gpu_bind_group_params;
 
 typedef struct ke_gpu_render_pipeline_params
@@ -206,7 +206,7 @@ typedef struct ke_gpu_render_pipeline_params
     ke_gpu_cull_mode                 cull_mode;
     ke_gpu_front_face                front_face;
     uint32_t                         vertex_buffer_count;
-    const ke_gpu_vertex_buffer_layout *vertex_buffers;
+    const ke_gpu_vertex_buffer_layout *vertex_buffers; ///< [array_of:vertex_buffer_count]
     ke_gpu_blend_state               blend_state;
     ke_gpu_depth_stencil_state       depth_stencil;
     ke_gpu_bind_group_layout         bind_group_layouts[4];
@@ -250,7 +250,7 @@ typedef struct ke_gpu_render_pass_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
-    const ke_gpu_color_attachment         *color_attachments;
+    const ke_gpu_color_attachment         *color_attachments; ///< [array_of:color_attachment_count]
     uint32_t                               color_attachment_count;
     const ke_gpu_depth_stencil_attachment *depth_stencil_attachment;
 } ke_gpu_render_pass_params;
@@ -272,6 +272,8 @@ typedef struct ke_gpu_device
     void *handle;
 
     ke_gpu_queue (*get_default_queue)(struct ke_gpu_device *self);
+    /// Submits the command buffers to the queue, in order.
+    /// @param cmds [array_of:cmd_count]
     void (*queue_submit)(struct ke_gpu_device *self, ke_gpu_queue q,
                          ke_gpu_command_buffer *const *cmds, uint32_t cmd_count);
     /// Runs this device's event pump without blocking: delivers the callbacks of work that has

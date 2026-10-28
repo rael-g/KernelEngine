@@ -55,7 +55,7 @@ extern "C"
     typedef struct ke_variant_table
     {
         uint32_t                      count;
-        const ke_variant_table_entry *entries;
+        const ke_variant_table_entry *entries; ///< [array_of:count]
     } ke_variant_table;
 
 #ifdef __cplusplus

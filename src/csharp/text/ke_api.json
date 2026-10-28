@@ -94,8 +94,10 @@
         {
           "name": "glyphs",
           "type": "ke_glyph_metrics *",
-          "tags": [],
-          "doc": "glyph_count entries"
+          "tags": [
+            "array_of:glyph_count"
+          ],
+          "doc": null
         },
         {
           "name": "glyph_count",

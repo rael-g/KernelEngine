@@ -108,7 +108,9 @@
         {
           "name": "fields",
           "type": "const ke_component_field *",
-          "tags": [],
+          "tags": [
+            "array_of:field_count"
+          ],
           "doc": null
         },
         {

@@ -56,7 +56,7 @@ typedef struct ke_render_shader_layout_params
     const char                   *shader;
     /// Bitwise OR of the KE_GPU_SHADER_STAGE_* stages the shader is compiled for.
     uint32_t                      stages;
-    const ke_render_binding_hint *hints;
+    const ke_render_binding_hint *hints; ///< [array_of:hint_count]
     uint32_t                      hint_count;
 } ke_render_shader_layout_params;
 
