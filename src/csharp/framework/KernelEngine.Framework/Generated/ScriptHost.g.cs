@@ -57,7 +57,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
 
     /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails as already existing when it does not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint RegisterType(string name, Span<uint> components, ScriptReach reach)
+    public uint RegisterType(string name, ReadOnlySpan<uint> components, ScriptReach reach)
     {
         var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
         fixed (byte* namePtr = nameBytes)

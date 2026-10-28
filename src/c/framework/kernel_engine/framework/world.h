@@ -23,7 +23,7 @@ extern "C"
     ///
     /// @param ctx       [context] Opaque context forwarded from register_component_apply.
     /// @param component The component's memory, already added to the entity.
-    /// @param entries   The block's keys, one per key the scene declared.
+    /// @param entries   [array_of:count] The block's keys, one per key the scene declared.
     /// @param count     Number of entries.
     /// @return KE_OK, or a failure code when a key the callback owns carries a value it cannot
     /// map, which fails the load with that code.
@@ -66,7 +66,8 @@ extern "C"
          * any: the table covers every field it can describe, the callback is
          * left with what a description cannot express (a unit conversion, an
          * enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid
-         * argument for a null table or a zero count, and as out of memory. */
+         * argument for a null table or a zero count, and as out of memory.
+         * @param fields [array_of:field_count] The table. */
         ke_result (*register_component_fields)(struct ke_world          *self,
                                                ke_component_id           cid,
                                                const ke_component_field *fields,

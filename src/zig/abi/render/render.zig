@@ -801,9 +801,11 @@ pub const ke_render_lighting = extern struct {
 pub const ke_render_pass_io = extern struct {
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass begins.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    reads: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    /// The tags the pass reads.
+    reads: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
     reads_count: u32 = std.mem.zeroes(u32),
-    writes: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    /// The tags the pass writes.
+    writes: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
     writes_count: u32 = std.mem.zeroes(u32),
     /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
     chain: ke_render_chain_link = std.mem.zeroes(ke_render_chain_link),
@@ -963,15 +965,15 @@ pub const ke_render_resource_binder = extern struct {
     /// first.
     destroy_shader_layout: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout) callconv(.c) void = null,
     /// Fills the bind group layouts a pipeline running the shader of `layout` declares.
-    pipeline_layouts: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout, ?*ke_gpu_bind_group_layout, u32, ?*u32) callconv(.c) result.ke_result = null,
+    pipeline_layouts: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout, ?[*]ke_gpu_bind_group_layout, u32, ?*u32) callconv(.c) result.ke_result = null,
     /// Binds resources to one group of a shader by the names its parameters carry. A parameter left
     /// out is bound to what `provide` gave under its name.
-    create_set: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout, ?[*:0]const u8, ?[*:0]const u8, ?*const ke_render_shader_binding, u32, ?*ke_render_resource_set) callconv(.c) result.ke_result = null,
+    create_set: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout, ?[*:0]const u8, ?[*:0]const u8, ?[*]const ke_render_shader_binding, u32, ?*ke_render_resource_set) callconv(.c) result.ke_result = null,
     /// Destroys a set; the invalid one is ignored.
     destroy_set: ?*const fn (?*ke_render_resource_binder, ke_render_resource_set) callconv(.c) void = null,
     /// Makes the resources of `set` those the next draws of `pass` read, with one dynamic offset per
     /// binding hinted KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET, in the order the shader declares them.
-    bind_render_set: ?*const fn (?*ke_render_resource_binder, ?*ke_gpu_render_pass, ke_render_resource_set, ?*const u32, u32) callconv(.c) void = null,
+    bind_render_set: ?*const fn (?*ke_render_resource_binder, ?*ke_gpu_render_pass, ke_render_resource_set, ?[*]const u32, u32) callconv(.c) void = null,
     /// Makes the resources of `set` those the next dispatches of `pass` read, as bind_render_set
     /// does.
     bind_compute_set: ?*const fn (?*ke_render_resource_binder, ?*ke_gpu_compute_pass, ke_render_resource_set, ?*const u32, u32) callconv(.c) void = null,
@@ -1019,7 +1021,7 @@ pub const ke_render_camera_handle = extern struct {
 pub const ke_gpu_render_pass = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     set_pipeline: ?*const fn (?*ke_gpu_render_pass, ke_gpu_pipeline) callconv(.c) void = null,
-    set_bind_group: ?*const fn (?*ke_gpu_render_pass, u32, ke_gpu_bind_group, ?*const u32, u32) callconv(.c) void = null,
+    set_bind_group: ?*const fn (?*ke_gpu_render_pass, u32, ke_gpu_bind_group, ?[*]const u32, u32) callconv(.c) void = null,
     set_vertex_buffer: ?*const fn (?*ke_gpu_render_pass, u32, ke_gpu_buffer, usize) callconv(.c) void = null,
     set_index_buffer: ?*const fn (?*ke_gpu_render_pass, ke_gpu_buffer, ke_gpu_index_format, usize) callconv(.c) void = null,
     set_viewport: ?*const fn (?*ke_gpu_render_pass, f32, f32, f32, f32, f32, f32) callconv(.c) void = null,
@@ -1040,7 +1042,7 @@ pub const ke_gpu_render_pass = extern struct {
 pub const ke_gpu_compute_pass = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     set_pipeline: ?*const fn (?*ke_gpu_compute_pass, ke_gpu_pipeline) callconv(.c) void = null,
-    set_bind_group: ?*const fn (?*ke_gpu_compute_pass, u32, ke_gpu_bind_group, ?*const u32, u32) callconv(.c) void = null,
+    set_bind_group: ?*const fn (?*ke_gpu_compute_pass, u32, ke_gpu_bind_group, ?[*]const u32, u32) callconv(.c) void = null,
     dispatch: ?*const fn (?*ke_gpu_compute_pass, u32, u32, u32) callconv(.c) void = null,
     dispatch_indirect: ?*const fn (?*ke_gpu_compute_pass, ke_gpu_buffer, usize) callconv(.c) void = null,
     end: ?*const fn (?*ke_gpu_compute_pass) callconv(.c) void = null,
@@ -1142,7 +1144,7 @@ pub const ke_render_service = extern struct {
     /// frame began, and fails with the target's code when presenting failed.
     end_frame: ?*const fn (?*ke_render_service) callconv(.c) result.ke_result = null,
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
-    upload_mesh: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*const anyopaque, usize, ?*const u16, u32, ?*ke_mesh_handle) callconv(.c) result.ke_result = null,
+    upload_mesh: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*const anyopaque, usize, ?[*]const u16, u32, ?*ke_mesh_handle) callconv(.c) result.ke_result = null,
     /// Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never
     /// uploaded.
     mesh_buffers: ?*const fn (?*ke_render_service, ke_mesh_handle, ?*ke_gpu_buffer, ?*ke_gpu_buffer, ?*u32) callconv(.c) bool = null,
@@ -1235,4 +1237,85 @@ pub const ke_render_service = extern struct {
 pub const ke_render_service_handle = extern struct {
     ref: ?*ke_render_service = std.mem.zeroes(?*ke_render_service),
     destroy: ?*const fn (?*ke_render_service) callconv(.c) void = null,
+};
+
+pub const ke_camera_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "fov", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_camera_component, "fov"), .size = @sizeOf(@FieldType(ke_camera_component, "fov")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 60.0 } } },
+    .{ .name = "near_plane", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_camera_component, "near_plane"), .size = @sizeOf(@FieldType(ke_camera_component, "near_plane")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 0.1 } } },
+    .{ .name = "far_plane", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_camera_component, "far_plane"), .size = @sizeOf(@FieldType(ke_camera_component, "far_plane")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1000.0 } } },
+    .{ .name = "orthographic_size", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_camera_component, "orthographic_size"), .size = @sizeOf(@FieldType(ke_camera_component, "orthographic_size")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 5.0 } } },
+    .{ .name = "orthographic", .@"type" = ecs.KE_VARIANT_BOOL, .offset = @offsetOf(ke_camera_component, "orthographic"), .size = @sizeOf(@FieldType(ke_camera_component, "orthographic")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "cull_mask", .@"type" = ecs.KE_VARIANT_INT, .offset = @offsetOf(ke_camera_component, "cull_mask"), .size = @sizeOf(@FieldType(ke_camera_component, "cull_mask")), .default_value = .{ .@"type" = ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = 4294967295 } } },
+};
+
+pub const ke_directional_light_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "direction", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_directional_light_component, "direction"), .size = @sizeOf(@FieldType(ke_directional_light_component, "direction")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 0.2, .y = 1.0, .z = 0.5 } } } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_directional_light_component, "color"), .size = @sizeOf(@FieldType(ke_directional_light_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 1.0, .y = 1.0, .z = 1.0 } } } },
+    .{ .name = "intensity", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_directional_light_component, "intensity"), .size = @sizeOf(@FieldType(ke_directional_light_component, "intensity")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } } },
+    .{ .name = "ambient", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_directional_light_component, "ambient"), .size = @sizeOf(@FieldType(ke_directional_light_component, "ambient")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 0.2, .y = 0.2, .z = 0.2 } } } },
+};
+
+pub const ke_point_light_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_point_light_component, "color"), .size = @sizeOf(@FieldType(ke_point_light_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 1.0, .y = 1.0, .z = 1.0 } } } },
+    .{ .name = "intensity", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_point_light_component, "intensity"), .size = @sizeOf(@FieldType(ke_point_light_component, "intensity")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } } },
+    .{ .name = "radius", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_point_light_component, "radius"), .size = @sizeOf(@FieldType(ke_point_light_component, "radius")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 10.0 } } },
+};
+
+pub const ke_spot_light_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "direction", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_spot_light_component, "direction"), .size = @sizeOf(@FieldType(ke_spot_light_component, "direction")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 0.0, .y = -1.0, .z = 0.0 } } } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_spot_light_component, "color"), .size = @sizeOf(@FieldType(ke_spot_light_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 1.0, .y = 1.0, .z = 1.0 } } } },
+    .{ .name = "intensity", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_spot_light_component, "intensity"), .size = @sizeOf(@FieldType(ke_spot_light_component, "intensity")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } } },
+    .{ .name = "range", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_spot_light_component, "range"), .size = @sizeOf(@FieldType(ke_spot_light_component, "range")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 20.0 } } },
+    .{ .name = "inner_angle", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_spot_light_component, "inner_angle"), .size = @sizeOf(@FieldType(ke_spot_light_component, "inner_angle")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 25.0 } } },
+    .{ .name = "outer_angle", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_spot_light_component, "outer_angle"), .size = @sizeOf(@FieldType(ke_spot_light_component, "outer_angle")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 35.0 } } },
+};
+
+pub const ke_ambient_light_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC3, .offset = @offsetOf(ke_ambient_light_component, "color"), .size = @sizeOf(@FieldType(ke_ambient_light_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 0.05, .y = 0.05, .z = 0.05 } } } },
+};
+
+pub const ke_mesh_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "mesh", .@"type" = ecs.KE_VARIANT_STRING, .offset = @offsetOf(ke_mesh_component, "primitive"), .size = @sizeOf(@FieldType(ke_mesh_component, "primitive")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC4, .offset = @offsetOf(ke_mesh_component, "base_color"), .size = @sizeOf(@FieldType(ke_mesh_component, "base_color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 } } } },
+    .{ .name = "roughness", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_mesh_component, "roughness"), .size = @sizeOf(@FieldType(ke_mesh_component, "roughness")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.0 } } },
+    .{ .name = "alpha_mode", .@"type" = ecs.KE_VARIANT_INT, .offset = @offsetOf(ke_mesh_component, "alpha_mode"), .size = @sizeOf(@FieldType(ke_mesh_component, "alpha_mode")), .default_value = .{ .@"type" = ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = 0 } } },
+    .{ .name = "alpha_cutoff", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_mesh_component, "alpha_cutoff"), .size = @sizeOf(@FieldType(ke_mesh_component, "alpha_cutoff")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 0.5 } } },
+    .{ .name = "ior", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_mesh_component, "ior"), .size = @sizeOf(@FieldType(ke_mesh_component, "ior")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 1.5 } } },
+    .{ .name = "distortion_strength", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_mesh_component, "distortion_strength"), .size = @sizeOf(@FieldType(ke_mesh_component, "distortion_strength")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 0.05 } } },
+    .{ .name = "layers", .@"type" = ecs.KE_VARIANT_INT, .offset = @offsetOf(ke_mesh_component, "layers"), .size = @sizeOf(@FieldType(ke_mesh_component, "layers")), .default_value = .{ .@"type" = ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = 1 } } },
+};
+
+pub const ke_sprite2d_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "texture", .@"type" = ecs.KE_VARIANT_STRING, .offset = @offsetOf(ke_sprite2d_component, "texture"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "texture")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "region", .@"type" = ecs.KE_VARIANT_VEC4, .offset = @offsetOf(ke_sprite2d_component, "region"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "region")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 0.0, .y = 0.0, .z = 1.0, .w = 1.0 } } } },
+    .{ .name = "size", .@"type" = ecs.KE_VARIANT_VEC2, .offset = @offsetOf(ke_sprite2d_component, "size"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "size")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = 1.0, .y = 1.0 } } } },
+    .{ .name = "pivot", .@"type" = ecs.KE_VARIANT_VEC2, .offset = @offsetOf(ke_sprite2d_component, "pivot"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "pivot")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = 0.5, .y = 0.5 } } } },
+    .{ .name = "flip_h", .@"type" = ecs.KE_VARIANT_BOOL, .offset = @offsetOf(ke_sprite2d_component, "flip_h"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "flip_h")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "flip_v", .@"type" = ecs.KE_VARIANT_BOOL, .offset = @offsetOf(ke_sprite2d_component, "flip_v"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "flip_v")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC4, .offset = @offsetOf(ke_sprite2d_component, "color"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 } } } },
+    .{ .name = "alpha_mode", .@"type" = ecs.KE_VARIANT_INT, .offset = @offsetOf(ke_sprite2d_component, "alpha_mode"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "alpha_mode")), .default_value = .{ .@"type" = ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = 0 } } },
+    .{ .name = "alpha_cutoff", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_sprite2d_component, "alpha_cutoff"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "alpha_cutoff")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 0.5 } } },
+    .{ .name = "attached", .@"type" = ecs.KE_VARIANT_BOOL, .offset = @offsetOf(ke_sprite2d_component, "attached"), .size = @sizeOf(@FieldType(ke_sprite2d_component, "attached")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+};
+
+pub const ke_ui_quad_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "texture_bits", .@"type" = ecs.KE_VARIANT_INT, .offset = @offsetOf(ke_ui_quad_component, "texture_bits"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "texture_bits")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "dst_x", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "dst_x"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "dst_x")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "dst_y", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "dst_y"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "dst_y")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "dst_w", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "dst_w"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "dst_w")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "dst_h", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "dst_h"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "dst_h")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "u0", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "u0"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "u0")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "v0", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "v0"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "v0")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "u1", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "u1"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "u1")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "v1", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_ui_quad_component, "v1"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "v1")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC4, .offset = @offsetOf(ke_ui_quad_component, "color"), .size = @sizeOf(@FieldType(ke_ui_quad_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 } } } },
+};
+
+pub const ke_label_component_fields = [_]ecs.ke_component_field{
+    .{ .name = "font", .@"type" = ecs.KE_VARIANT_STRING, .offset = @offsetOf(ke_label_component, "font"), .size = @sizeOf(@FieldType(ke_label_component, "font")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "font_size", .@"type" = ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(ke_label_component, "font_size"), .size = @sizeOf(@FieldType(ke_label_component, "font_size")), .default_value = .{ .@"type" = ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 32.0 } } },
+    .{ .name = "anchor", .@"type" = ecs.KE_VARIANT_VEC2, .offset = @offsetOf(ke_label_component, "anchor"), .size = @sizeOf(@FieldType(ke_label_component, "anchor")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "offset", .@"type" = ecs.KE_VARIANT_VEC2, .offset = @offsetOf(ke_label_component, "offset"), .size = @sizeOf(@FieldType(ke_label_component, "offset")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
+    .{ .name = "color", .@"type" = ecs.KE_VARIANT_VEC4, .offset = @offsetOf(ke_label_component, "color"), .size = @sizeOf(@FieldType(ke_label_component, "color")), .default_value = .{ .@"type" = ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 } } } },
+    .{ .name = "text", .@"type" = ecs.KE_VARIANT_STRING, .offset = @offsetOf(ke_label_component, "text"), .size = @sizeOf(@FieldType(ke_label_component, "text")), .default_value = .{ .@"type" = ecs.KE_VARIANT_NULL } },
 };

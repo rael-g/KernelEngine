@@ -107,7 +107,7 @@ typedef struct ke_render_resource_binder
 
     /**
      * Fills the bind group layouts a pipeline running the shader of `layout` declares.
-     * @param out_layouts [out] Receives the layouts in the order the pipeline takes them; they stay
+     * @param out_layouts [out,array_of:capacity] Receives the layouts in the order the pipeline takes them; they stay
      * owned by the binder and live as long as `layout`.
      * @param capacity The number of entries `out_layouts` holds.
      * @param out_count [out] Receives the number of layouts written.
@@ -124,6 +124,7 @@ typedef struct ke_render_resource_binder
      * @param block [utf8,nullable] Name of a parameter block the shader declares; NULL selects its
      * parameters declared outside any block.
      * @param label [utf8,nullable] Name shown by capture and validation tools.
+     * @param bindings [array_of:binding_count] The resources bound, each to the parameter it names.
      * @param out_set [out] Receives the set; KE_RENDER_BINDING_INVALID on failure.
      * @return KE_OK; KE_RESULT_NOT_FOUND when the shader declares no such block, or
      * KE_RESULT_INVALID_ARGUMENT when a binding names no parameter of the group, a parameter is
@@ -138,6 +139,7 @@ typedef struct ke_render_resource_binder
 
     /// Makes the resources of `set` those the next draws of `pass` read, with one dynamic offset per
     /// binding hinted KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET, in the order the shader declares them.
+    /// @param dynamic_offsets [array_of:dynamic_offset_count]
     void (*bind_render_set)(struct ke_render_resource_binder *self, struct ke_gpu_render_pass *pass,
                             ke_render_resource_set set, const uint32_t *dynamic_offsets,
                             uint32_t dynamic_offset_count);

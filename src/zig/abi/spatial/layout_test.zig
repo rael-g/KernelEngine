@@ -25,6 +25,22 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.ke_world_transform_component, translated("ke_world_transform_component"));
 }
 
+fn expectSameValue(a: anytype, k: anytype) !void {
+    switch (@typeInfo(@TypeOf(a))) {
+        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
+        .@"union" => {},
+        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
+        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
+    }
+}
+
+test "every field table lists the header's entries" {
+    try std.testing.expectEqual(c.ke_transform_component_fields.len, abi.ke_transform_component_fields.len);
+    for (abi.ke_transform_component_fields, c.ke_transform_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_transform2d_component_fields.len, abi.ke_transform2d_component_fields.len);
+    for (abi.ke_transform2d_component_fields, c.ke_transform2d_component_fields) |a, k| try expectSameValue(a, k);
+}
+
 test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM, abi.KE_COMPONENT_NAME_TRANSFORM);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM2D, abi.KE_COMPONENT_NAME_TRANSFORM2D);

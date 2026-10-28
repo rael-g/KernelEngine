@@ -295,8 +295,10 @@
         {
           "name": "reads",
           "type": "const char *const *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "array_of:reads_count"
+          ],
+          "doc": "The tags the pass reads."
         },
         {
           "name": "reads_count",
@@ -307,8 +309,10 @@
         {
           "name": "writes",
           "type": "const char *const *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "array_of:writes_count"
+          ],
+          "doc": "The tags the pass writes."
         },
         {
           "name": "writes_count",
@@ -555,8 +559,10 @@
             {
               "name": "indices",
               "type": "const uint16_t *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "array_of:index_count"
+              ],
+              "doc": "Triangle list indices."
             },
             {
               "name": "index_count",

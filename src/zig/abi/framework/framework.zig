@@ -64,7 +64,7 @@ pub const ke_input_action_event_func = ?*const fn (?*anyopaque, ke_input_action_
 /// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
 /// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
 /// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?*ecs.ke_variant_table_entry, u32) callconv(.c) result.ke_result;
+pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]ecs.ke_variant_table_entry, u32) callconv(.c) result.ke_result;
 
 /// Builds and binds the script an entity's declared type names.
 pub const ke_script_factory_func = ?*const fn (?*anyopaque, ecs.ke_entity, ?[*:0]const u8) callconv(.c) result.ke_result;
@@ -168,7 +168,7 @@ pub const ke_world = extern struct {
     /// field it can describe, the callback is left with what a description cannot express (a unit
     /// conversion, an enum spelled as a string). Borrowed; must outlive the world. Fails as an
     /// invalid argument for a null table or a zero count, and as out of memory.
-    register_component_fields: ?*const fn (?*ke_world, ecs.ke_component_id, ?*const ecs.ke_component_field, u32) callconv(.c) result.ke_result = null,
+    register_component_fields: ?*const fn (?*ke_world, ecs.ke_component_id, ?[*]const ecs.ke_component_field, u32) callconv(.c) result.ke_result = null,
     /// Field table registered for `cid`, or NULL.
     get_component_fields: ?*const fn (?*ke_world, ecs.ke_component_id, ?*u32) callconv(.c) ?[*]const ecs.ke_component_field = null,
     /// Registers the callback consulted for what a field table cannot describe. Replaces any

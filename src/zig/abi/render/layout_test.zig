@@ -230,6 +230,36 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_WRITE), @as(i64, abi.KE_RENDER_DEPTH_WRITE));
 }
 
+fn expectSameValue(a: anytype, k: anytype) !void {
+    switch (@typeInfo(@TypeOf(a))) {
+        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
+        .@"union" => {},
+        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
+        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
+    }
+}
+
+test "every field table lists the header's entries" {
+    try std.testing.expectEqual(c.ke_camera_component_fields.len, abi.ke_camera_component_fields.len);
+    for (abi.ke_camera_component_fields, c.ke_camera_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_directional_light_component_fields.len, abi.ke_directional_light_component_fields.len);
+    for (abi.ke_directional_light_component_fields, c.ke_directional_light_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_point_light_component_fields.len, abi.ke_point_light_component_fields.len);
+    for (abi.ke_point_light_component_fields, c.ke_point_light_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_spot_light_component_fields.len, abi.ke_spot_light_component_fields.len);
+    for (abi.ke_spot_light_component_fields, c.ke_spot_light_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_ambient_light_component_fields.len, abi.ke_ambient_light_component_fields.len);
+    for (abi.ke_ambient_light_component_fields, c.ke_ambient_light_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_mesh_component_fields.len, abi.ke_mesh_component_fields.len);
+    for (abi.ke_mesh_component_fields, c.ke_mesh_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_sprite2d_component_fields.len, abi.ke_sprite2d_component_fields.len);
+    for (abi.ke_sprite2d_component_fields, c.ke_sprite2d_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_ui_quad_component_fields.len, abi.ke_ui_quad_component_fields.len);
+    for (abi.ke_ui_quad_component_fields, c.ke_ui_quad_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_label_component_fields.len, abi.ke_label_component_fields.len);
+    for (abi.ke_label_component_fields, c.ke_label_component_fields) |a, k| try expectSameValue(a, k);
+}
+
 test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_BINDING_INVALID), @as(i128, abi.KE_RENDER_BINDING_INVALID));
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_CAMERA, abi.KE_COMPONENT_NAME_CAMERA);

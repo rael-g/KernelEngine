@@ -96,8 +96,10 @@
             {
               "name": "fields",
               "type": "const ke_component_field *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "array_of:field_count"
+              ],
+              "doc": "The table."
             },
             {
               "name": "field_count",
@@ -300,7 +302,9 @@
         {
           "name": "entries",
           "type": "ke_variant_table_entry *",
-          "tags": [],
+          "tags": [
+            "array_of:count"
+          ],
           "doc": "The block\u0027s keys, one per key the scene declared."
         },
         {
