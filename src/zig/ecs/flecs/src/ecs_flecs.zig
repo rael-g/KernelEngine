@@ -14,7 +14,7 @@ const abi_result = @import("abi_result");
 const component_fields = @import("component_fields");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.ecs_flecs);
 
 threadlocal var last_msg_buf: [1024]u8 = undefined;

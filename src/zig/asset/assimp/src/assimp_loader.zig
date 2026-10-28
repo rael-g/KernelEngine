@@ -15,7 +15,7 @@ const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 /// Vertex count given to Assimp's large-mesh split through the import properties.
 const vertex_limit: c_int = 65534;

@@ -11,7 +11,7 @@ const abi_render = @import("abi_render");
 const abi_render_frame_factory = @import("abi_render_frame_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_frame);
 const frame_producer = @import("frame_producer.zig");
 

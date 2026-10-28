@@ -11,7 +11,7 @@ const gpa = heap.gpa;
 const abi_resource_cache = @import("abi_resource_cache");
 const abi_result = @import("abi_result");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.resource_cache_default);
 
 /// Hashes path text; a null path hashes to zero, which `keyFromPath` moves off the empty marker.

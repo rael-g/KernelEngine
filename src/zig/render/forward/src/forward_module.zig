@@ -13,7 +13,7 @@ const abi_render_forward_factory = @import("abi_render_forward_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;

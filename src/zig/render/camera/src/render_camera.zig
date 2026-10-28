@@ -11,7 +11,7 @@ const abi_result = @import("abi_result");
 const abi_view = @import("abi_view");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 /// The allocation `ke_render_camera_create` makes and `destroy` frees. The vtable is stored inside
 /// it and its `handle` points back at it, so the `ref` handed out is the address of `api`.

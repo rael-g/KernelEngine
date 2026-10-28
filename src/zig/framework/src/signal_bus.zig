@@ -9,7 +9,7 @@ const abi_framework_factory = @import("abi_framework_factory");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
 const unknown_size: u32 = abi_framework.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;

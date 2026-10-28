@@ -11,7 +11,7 @@ const gpa = heap.gpa;
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.input_default);
 
 const MAX_KEYS = abi_input.KE_INPUT_MAX_KEYS;

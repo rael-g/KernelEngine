@@ -1,5 +1,4 @@
 const std = @import("std");
-const ke_build = @import("ke_build");
 
 /// The `result` module, for a plugin build that imports this file as `ke_result`.
 pub fn result(b: *std.Build) *std.Build.Module {
@@ -15,7 +14,8 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("result", .{ .root_source_file = b.path("result.zig") });
+    const abi = b.dependency("abi_result", .{}).module("abi");
+    b.addModule("result", .{ .root_source_file = b.path("result.zig") }).addImport("abi_result", abi);
     _ = b.addModule("dll_entry", .{ .root_source_file = b.path("dll_entry.zig") });
 
     const test_mod = b.createModule(.{
@@ -23,8 +23,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    test_mod.addIncludePath(b.path("../../c/result"));
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("test/c.h")));
+    test_mod.addImport("abi_result", abi);
     const tests = b.addTest(.{ .root_module = test_mod });
     const test_step = b.step("test", "Run the result conversion tests and, on Windows, the DLL entry point test");
     test_step.dependOn(&b.addRunArtifact(tests).step);

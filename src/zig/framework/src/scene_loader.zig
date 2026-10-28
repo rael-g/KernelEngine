@@ -24,7 +24,7 @@ const NameMap = names_mod.NameMap;
 const type_name_max = names_mod.type_name_max;
 const normalizeTypeName = names_mod.normalizeTypeName;
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 
 const res_prefix = "res://";

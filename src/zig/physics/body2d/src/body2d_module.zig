@@ -53,7 +53,7 @@ fn moduleOf(user: ?*anyopaque) *Module {
 }
 
 const log = std.log.scoped(.physics_body2d);
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 /// The fixed-post-update-phase system that reconciles every body with its component and transform,
 /// in this order: a component with no body gets one at its transform's position and rotation; a

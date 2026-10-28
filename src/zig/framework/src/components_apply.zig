@@ -8,7 +8,7 @@ const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
 const abi_spatial = @import("abi_spatial");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
 const pi: f32 = 3.14159265358979323846;

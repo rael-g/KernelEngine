@@ -8,7 +8,7 @@ const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_frame);
 
 /// What the system reads besides its queries: the service it publishes to, the camera that turns

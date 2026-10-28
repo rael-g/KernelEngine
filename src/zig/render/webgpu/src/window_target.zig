@@ -10,7 +10,7 @@ const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_window = @import("abi_window");
 const gpa = dev_impl.gpa;
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
 
 /// The state of one window render target. `ke_gpu_render_target_webgpu_window_create` allocates it

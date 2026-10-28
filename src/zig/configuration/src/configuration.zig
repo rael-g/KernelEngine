@@ -61,7 +61,7 @@ fn state(self: [*c]abi_configuration.ke_configuration) *State {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.configuration);
 
 /// The entry for this section and key, or null. The pointer is invalidated by the next append to

@@ -14,7 +14,7 @@ const abi_render_gbuffer_factory = @import("abi_render_gbuffer_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_gbuffer);
 
 const heap = @import("heap");

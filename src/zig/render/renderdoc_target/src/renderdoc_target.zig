@@ -13,7 +13,7 @@ const abi_result = @import("abi_result");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 const log = std.log.scoped(.renderdoc_target);
 
 const Api = c.RENDERDOC_API_1_4_0;

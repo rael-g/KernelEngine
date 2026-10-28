@@ -16,7 +16,7 @@ const abi_resource_cache = @import("abi_resource_cache");
 const abi_resource_cache_default_factory = @import("abi_resource_cache_default_factory");
 const abi_result = @import("abi_result");
 
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 /// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
 /// it. `sound` is uninitialised only when `initialized` is set, which happens once the file has

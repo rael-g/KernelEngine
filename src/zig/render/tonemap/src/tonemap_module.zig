@@ -10,7 +10,7 @@ const abi_render = @import("abi_render");
 const abi_render_tonemap_factory = @import("abi_render_tonemap_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
-const R = @import("result").Result(abi_result, .{});
+const R = @import("result").Result(.{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;
