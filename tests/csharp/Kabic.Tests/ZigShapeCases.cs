@@ -193,6 +193,29 @@ internal static class ZigShapeCases
                        "pub const KE_PROBE_NONE: ke_probe_handle = .{ .bits = 0 };"],
             absent: ["c_ulong"]);
 
+        Register("a factory header declares each function the plugin exports as external", failures =>
+        {
+            var model = new ApiModel();
+            model.Structs.Add(new ApiStruct("ke_probe_params", null, [], [F("gravity", "float")], []));
+            model.Functions.Add(new ApiFunction("ke_probe_create", "ke_result", "Creates a probe.", null, [
+                P("params", "const ke_probe_params *"), P("out_probe", "ke_probe_handle *", "out"),
+            ]));
+            var emitted = ZigWriter.Render(model, new Dictionary<string, string> { ["ke_result"] = "result", ["ke_probe_handle"] = "probe" }, factory: true);
+            const string expected = "/// Creates a probe.\npub extern fn ke_probe_create(params: ?*const ke_probe_params, out_probe: ?*probe.ke_probe_handle) result.ke_result;";
+            if (!emitted.Contains(expected, StringComparison.Ordinal))
+                failures.Add($"a factory header: expected to find \"{expected}\"");
+        });
+
+        Expect("an opaque record another root defines is reached through its module",
+            m =>
+            {
+                m.Opaques.Add("ke_far");
+                m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("far", "struct ke_far *")], []));
+            },
+            contains: ["far: ?*far.ke_far,"],
+            absent: ["pub const ke_far = opaque {};"],
+            foreign: new Dictionary<string, string> { ["ke_far"] = "far" });
+
         Refuse("a type nothing describes is refused by value",
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("held", "ke_probe_kind")], [])),
             "ke_probe.held: ke_probe_kind is held by value and no domain describes it");
