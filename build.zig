@@ -299,10 +299,6 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"heap-src" = heap_src,
-        .@"ke-common-include" = b.pathJoin(&.{ src_zig, "common/include" }),
-        .@"ke-result-include" = b.pathJoin(&.{ src_c, "result" }),
-        .@"ke-physics-include" = b.pathJoin(&.{ src_c, "physics" }),
-        .@"ke-logger-include" = b.pathJoin(&.{ src_c, "logger" }),
         .@"box2d-include" = vcpkg_include,
         .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
     }, &.{}, .has_tests);
