@@ -2,6 +2,10 @@
 
 const math = @import("math");
 
+pub const KE_COMPONENT_NAME_TRANSFORM = "transform";
+pub const KE_COMPONENT_NAME_TRANSFORM2D = "transform2d";
+pub const KE_COMPONENT_NAME_WORLD_TRANSFORM = "world_transform";
+
 /// An entity's authored 3D pose.
 pub const ke_transform_component = extern struct {
     position: math.ke_vec3,

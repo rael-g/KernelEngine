@@ -48,3 +48,9 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_VARIANT_QUAT), @as(i64, abi.KE_VARIANT_QUAT));
     try std.testing.expectEqual(@as(i64, c.KE_VARIANT_TABLE), @as(i64, abi.KE_VARIANT_TABLE));
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqual(@as(i128, c.KE_ENTITY_INVALID), @as(i128, abi.KE_ENTITY_INVALID));
+    try std.testing.expectEqual(@as(i128, c.KE_COMPONENT_INVALID), @as(i128, abi.KE_COMPONENT_INVALID));
+    try std.testing.expectEqual(@as(i128, c.KE_QUERY_INVALID), @as(i128, abi.KE_QUERY_INVALID));
+}

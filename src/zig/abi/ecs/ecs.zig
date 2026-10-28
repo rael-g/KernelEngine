@@ -7,6 +7,10 @@ pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
 
+pub const KE_ENTITY_INVALID = 0;
+pub const KE_COMPONENT_INVALID = 0;
+pub const KE_QUERY_INVALID: ke_query_id = 0;
+
 pub const ke_variant_type = c_uint;
 pub const KE_VARIANT_NULL: ke_variant_type = 0;
 pub const KE_VARIANT_BOOL: ke_variant_type = 1;

@@ -169,3 +169,9 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_MOUSE_BUTTON_RIGHT), @as(i64, abi.KE_MOUSE_BUTTON_RIGHT));
     try std.testing.expectEqual(@as(i64, c.KE_MOUSE_BUTTON_MIDDLE), @as(i64, abi.KE_MOUSE_BUTTON_MIDDLE));
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqual(@as(i128, c.KE_INPUT_MAX_KEYS), @as(i128, abi.KE_INPUT_MAX_KEYS));
+    try std.testing.expectEqual(@as(i128, c.KE_INPUT_KEY_WORDS), @as(i128, abi.KE_INPUT_KEY_WORDS));
+    try std.testing.expectEqual(@as(i128, c.KE_INPUT_MAX_MOUSE_BUTTONS), @as(i128, abi.KE_INPUT_MAX_MOUSE_BUTTONS));
+}

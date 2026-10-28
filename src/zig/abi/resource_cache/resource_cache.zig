@@ -4,6 +4,8 @@ const result = @import("result");
 
 pub const ke_resource_handle = u32;
 
+pub const KE_RESOURCE_HANDLE_NONE = 4294967295;
+
 /// Per-cache destroy callback: called once per resource when its refcount reaches zero (or once
 /// during destroy() for every still-live resource).
 pub const ke_resource_destroy_func = ?*const fn (ke_resource_handle, ?*anyopaque) callconv(.c) void;

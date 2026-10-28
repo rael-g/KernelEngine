@@ -25,3 +25,9 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.ke_audio_handle, translated("ke_audio_handle"));
     try expectSameLayout(abi.ke_audio_sound, c.ke_audio_sound);
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqual(@as(i128, c.KE_AUDIO_SOUND_INVALID), @as(i128, abi.KE_AUDIO_SOUND_INVALID));
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_AUDIO_PLAYER, abi.KE_COMPONENT_NAME_AUDIO_PLAYER);
+    try std.testing.expectEqual(@as(i128, c.KE_AUDIO_PLAYER_MAX_PATH), @as(i128, abi.KE_AUDIO_PLAYER_MAX_PATH));
+}

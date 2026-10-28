@@ -24,3 +24,9 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.ke_transform2d_component, translated("ke_transform2d_component"));
     try expectSameLayout(abi.ke_world_transform_component, translated("ke_world_transform_component"));
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM, abi.KE_COMPONENT_NAME_TRANSFORM);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM2D, abi.KE_COMPONENT_NAME_TRANSFORM2D);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi.KE_COMPONENT_NAME_WORLD_TRANSFORM);
+}

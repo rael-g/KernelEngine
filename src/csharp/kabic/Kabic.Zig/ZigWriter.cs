@@ -54,6 +54,9 @@ public sealed class ZigWriter
         }
         if (model.TypeAliases.Count > 0) body.AppendLine();
 
+        foreach (var c in model.Constants) RenderConstant(body, c);
+        if (model.Constants.Count > 0) body.AppendLine();
+
         foreach (var e in model.Enums.Where(e => !e.External)) RenderEnum(body, e);
 
         foreach (var c in model.Callbacks)
@@ -99,6 +102,21 @@ public sealed class ZigWriter
             sb.AppendLine($"pub const {v.Name}: {e.Name} = {v.RawValue};");
         }
         sb.AppendLine();
+    }
+
+    /// <summary>
+    /// One macro constant. An integer the header types through a declared type keeps that type;
+    /// one typed by C alone is a Zig integer literal, so its width is never one platform's.
+    /// </summary>
+    void RenderConstant(StringBuilder sb, ApiConstant c)
+    {
+        Doc(sb, c.Doc, "");
+        if (c.Fields is { } fields)
+            sb.AppendLine($"pub const {c.Name}: {Spell(c.Type, null)} = .{{ {string.Join(", ", fields.Select(f => $".{Ident(f.Name)} = {f.Value}"))} }};");
+        else if (c.Type == "const char *" || Primitives.ContainsKey(Bare(c.Type)))
+            sb.AppendLine($"pub const {c.Name} = {c.Value};");
+        else
+            sb.AppendLine($"pub const {c.Name}: {Spell(c.Type, null)} = {c.Value};");
     }
 
     /// <summary>
