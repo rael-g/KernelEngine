@@ -10,7 +10,7 @@ A microkernel game engine: ABI-stable C contracts, Zig plugin backends behind th
 
 ### Native (Zig + vcpkg manifest mode)
 
-The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then builds every plugin in its own graph: each one is a path dependency in the root `build.zig.zon`, and the root installs every `.so`/`.dll` into one output directory. Each plugin still owns its own `build.zig`, callable standalone with the same options (see any `src/zig/<plugin>/build.zig` header comment for its options).
+The root `build.zig` is the only native build orchestrator: it resolves vcpkg directly (manifest mode — `vcpkg.json` + `vcpkg-configuration.json`, no toolchain file), then builds every plugin in its own graph: each one is a path dependency in the root `build.zig.zon`, and the root installs every `.so`/`.dll` into one output directory. Each plugin still owns its own `build.zig`, callable standalone with the same options: a description handed to `ke_build.plugin` (`src/zig/build/build.zig`), whose options are only those of the third-party libraries it wraps.
 
 vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no manual install, no `VCPKG_ROOT` needed. Pass `-Dvcpkg-root=<path>` (or export `VCPKG_ROOT`) only to point at an existing vcpkg checkout instead.
 
@@ -165,7 +165,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
   - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
   - A factory is `export` without `pub`, takes a params struct in which zero selects the default, and on failure frees what it took and returns the zeroed handle.
-  - C types reach a plugin through one file of imports; shared Zig source by module name.
+  - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or `ke_render_common`.
   - A test is named by a sentence stating the behaviour, uses the shared stubs, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
 
