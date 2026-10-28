@@ -1,0 +1,11 @@
+.{
+    .name = .abi_audio_module,
+    .version = "0.1.0",
+    .fingerprint = 0xe8a5d0fd0aec11ea,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_framework = .{ .path = "../../../abi/framework" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+    },
+    .paths = .{"."},
+}

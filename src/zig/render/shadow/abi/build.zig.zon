@@ -1,0 +1,15 @@
+.{
+    .name = .abi_render_shadow,
+    .version = "0.1.0",
+    .fingerprint = 0x9fc1cbc61cf007c0,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_render = .{ .path = "../../../abi/render" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .ke_abi_runtime = .{ .path = "../../../abi/runtime" },
+        .ke_abi_view = .{ .path = "../../../abi/view" },
+    },
+    .paths = .{"."},
+}

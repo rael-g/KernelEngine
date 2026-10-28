@@ -1,0 +1,12 @@
+.{
+    .name = .abi_configuration_toml,
+    .version = "0.1.0",
+    .fingerprint = 0xa0ddb46c2601545d,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_configuration = .{ .path = "../../../abi/configuration" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}
