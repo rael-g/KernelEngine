@@ -177,6 +177,22 @@ internal static class ZigShapeCases
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("u8", "uint8_t"), F("error", "int32_t")], [])),
             contains: ["@\"u8\": u8,", "@\"error\": i32,"]);
 
+        Expect("a macro constant keeps a declared type and leaves a C-typed integer a Zig literal",
+            m =>
+            {
+                m.TypeAliases["ke_probe_id"] = "uint32_t";
+                m.Structs.Add(new ApiStruct("ke_probe_handle", null, [], [F("bits", "uint32_t")], []));
+                m.Constants.Add(new ApiConstant("KE_PROBE_ID_NONE", "ke_probe_id", "0", null, "The id nothing has."));
+                m.Constants.Add(new ApiConstant("KE_PROBE_MAX", "unsigned long", "18446744073709551615", null, null));
+                m.Constants.Add(new ApiConstant("KE_PROBE_NAME", "const char *", "\"probe\"", null, null));
+                m.Constants.Add(new ApiConstant("KE_PROBE_NONE", "ke_probe_handle", null, [new ApiConstantField("bits", "0")], null));
+            },
+            contains: ["/// The id nothing has.\npub const KE_PROBE_ID_NONE: ke_probe_id = 0;",
+                       "pub const KE_PROBE_MAX = 18446744073709551615;",
+                       "pub const KE_PROBE_NAME = \"probe\";",
+                       "pub const KE_PROBE_NONE: ke_probe_handle = .{ .bits = 0 };"],
+            absent: ["c_ulong"]);
+
         Refuse("a type nothing describes is refused by value",
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("held", "ke_probe_kind")], [])),
             "ke_probe.held: ke_probe_kind is held by value and no domain describes it");

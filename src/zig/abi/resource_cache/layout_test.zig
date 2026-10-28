@@ -26,3 +26,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.ke_resource_destroy_func, c.ke_resource_destroy_func);
     try expectSameLayout(abi.ke_resource_handle, c.ke_resource_handle);
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqual(@as(i128, c.KE_RESOURCE_HANDLE_NONE), @as(i128, abi.KE_RESOURCE_HANDLE_NONE));
+}

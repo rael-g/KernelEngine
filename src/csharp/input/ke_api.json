@@ -873,7 +873,7 @@
         },
         {
           "name": "is_key_pressed",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during this tick.",
           "return_doc": null,
@@ -891,7 +891,7 @@
         },
         {
           "name": "is_key_released",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during this tick.",
           "return_doc": null,
@@ -909,7 +909,7 @@
         },
         {
           "name": "is_key_down",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true while the key is held down.",
           "return_doc": null,
@@ -945,7 +945,7 @@
         },
         {
           "name": "snapshot_is_key_down",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true while the key is held down in a snapshot.",
           "return_doc": null,
@@ -971,7 +971,7 @@
         },
         {
           "name": "snapshot_is_key_pressed",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -997,7 +997,7 @@
         },
         {
           "name": "snapshot_is_key_released",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the key transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1023,7 +1023,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_down",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true while the mouse button is held down in a snapshot.",
           "return_doc": null,
@@ -1049,7 +1049,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_pressed",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to down during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1075,7 +1075,7 @@
         },
         {
           "name": "snapshot_is_mouse_button_released",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the mouse button transitioned to up during the snapshot\u0027s frame.",
           "return_doc": null,
@@ -1276,5 +1276,25 @@
     }
   ],
   "callbacks": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_INPUT_MAX_KEYS",
+      "type": "int",
+      "value": "512",
+      "doc": "Number of distinct key codes the snapshot bitsets address."
+    },
+    {
+      "name": "KE_INPUT_KEY_WORDS",
+      "type": "int",
+      "value": "8",
+      "doc": "64-bit words needed to hold one bit per addressable key."
+    },
+    {
+      "name": "KE_INPUT_MAX_MOUSE_BUTTONS",
+      "type": "int",
+      "value": "32",
+      "doc": "Number of mouse buttons the snapshot bitmasks address."
+    }
+  ]
 }

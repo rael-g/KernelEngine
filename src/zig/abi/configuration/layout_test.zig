@@ -27,3 +27,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.ke_configuration_change_func, c.ke_configuration_change_func);
     try expectSameLayout(abi.ke_configuration_subscription, c.ke_configuration_subscription);
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.KE_CONFIGURATION_SUBSCRIPTION_NONE));
+}

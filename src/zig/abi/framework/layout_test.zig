@@ -63,3 +63,10 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_BORROW_ANCESTOR), @as(i64, abi.KE_SCRIPT_BORROW_ANCESTOR));
     try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_BORROW_ANYWHERE), @as(i64, abi.KE_SCRIPT_BORROW_ANYWHERE));
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_HIERARCHY, abi.KE_COMPONENT_NAME_HIERARCHY);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_NAME, abi.KE_COMPONENT_NAME_NAME);
+    try std.testing.expectEqual(@as(i128, c.KE_SCRIPT_TYPE_NONE), @as(i128, abi.KE_SCRIPT_TYPE_NONE));
+    try std.testing.expectEqual(@as(i128, c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN), @as(i128, abi.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN));
+}

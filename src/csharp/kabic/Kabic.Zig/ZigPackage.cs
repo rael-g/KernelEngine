@@ -63,8 +63,8 @@ public sealed record ZigPackage(string Domain, IReadOnlyList<string> Headers, IR
 
     /// <summary>
     /// The layout test of the package: one check per record and alias, comparing size,
-    /// alignment and the offset of every member, inline records included, and one per enum
-    /// value.
+    /// alignment and the offset of every member, inline records included, one per enum
+    /// value, and one per macro constant.
     /// </summary>
     public static string LayoutTest(ApiModel model)
     {
@@ -103,6 +103,18 @@ public sealed record ZigPackage(string Domain, IReadOnlyList<string> Headers, IR
             sb.AppendLine("test \"every enum value is the header's value\" {");
             foreach (var v in values)
                 sb.AppendLine($"    try std.testing.expectEqual(@as(i64, c.{v.Name}), @as(i64, abi.{v.Name}));");
+            sb.AppendLine("}");
+        }
+        if (model.Constants.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("test \"every constant is the header's value\" {");
+            foreach (var k in model.Constants)
+                sb.AppendLine(k.Fields is not null
+                    ? $"    try std.testing.expectEqual(std.mem.toBytes(c.{k.Name}), std.mem.toBytes(abi.{k.Name}));"
+                    : k.Type == "const char *"
+                        ? $"    try std.testing.expectEqualStrings(c.{k.Name}, abi.{k.Name});"
+                        : $"    try std.testing.expectEqual(@as(i128, c.{k.Name}), @as(i128, abi.{k.Name}));");
             sb.AppendLine("}");
         }
         return sb.ToString();

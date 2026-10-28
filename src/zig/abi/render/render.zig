@@ -22,6 +22,95 @@ pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
 
+/// The value no shader layout, resource set or material binding takes.
+pub const KE_RENDER_BINDING_INVALID = 0;
+pub const KE_COMPONENT_NAME_CAMERA = "camera";
+pub const KE_COMPONENT_NAME_DIRECTIONAL_LIGHT = "directional_light";
+pub const KE_COMPONENT_NAME_POINT_LIGHT = "point_light";
+pub const KE_COMPONENT_NAME_SPOT_LIGHT = "spot_light";
+pub const KE_COMPONENT_NAME_AMBIENT_LIGHT = "ambient_light";
+pub const KE_COMPONENT_NAME_SKYBOX = "skybox";
+pub const KE_COMPONENT_NAME_MESH = "mesh";
+pub const KE_COMPONENT_NAME_SPRITE2D = "sprite2d";
+pub const KE_GPU_TEXTURE_ASPECT_COLOR = 1;
+pub const KE_GPU_TEXTURE_ASPECT_DEPTH = 2;
+pub const KE_GPU_TEXTURE_ASPECT_STENCIL = 4;
+pub const KE_GPU_TEXTURE_USAGE_COPY_SRC = 1;
+pub const KE_GPU_TEXTURE_USAGE_COPY_DST = 2;
+/// Bound for sampling
+pub const KE_GPU_TEXTURE_USAGE_SAMPLED = 4;
+/// Bound as storage
+pub const KE_GPU_TEXTURE_USAGE_STORAGE = 8;
+/// Written as a color attachment
+pub const KE_GPU_TEXTURE_USAGE_COLOR_ATTACH = 16;
+/// Written as a depth attachment
+pub const KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH = 32;
+pub const KE_GPU_BUFFER_USAGE_MAP_READ = 1;
+pub const KE_GPU_BUFFER_USAGE_MAP_WRITE = 2;
+pub const KE_GPU_BUFFER_USAGE_COPY_SRC = 4;
+pub const KE_GPU_BUFFER_USAGE_COPY_DST = 8;
+pub const KE_GPU_BUFFER_USAGE_INDEX = 16;
+pub const KE_GPU_BUFFER_USAGE_VERTEX = 32;
+pub const KE_GPU_BUFFER_USAGE_UNIFORM = 64;
+pub const KE_GPU_BUFFER_USAGE_STORAGE = 128;
+pub const KE_GPU_BUFFER_USAGE_INDIRECT = 256;
+pub const KE_GPU_SHADER_STAGE_VERTEX = 1;
+pub const KE_GPU_SHADER_STAGE_FRAGMENT = 2;
+pub const KE_GPU_SHADER_STAGE_COMPUTE = 4;
+pub const KE_GPU_INVALID_HANDLE = 18446744073709551615;
+pub const KE_HANDLE_INDEX_BITS = 20;
+pub const KE_HANDLE_GENERATION_BITS = 12;
+pub const KE_HANDLE_INDEX_MASK = 1048575;
+pub const KE_HANDLE_GENERATION_MASK = 4095;
+/// Lowest generation a live handle carries; 0 is reserved.
+pub const KE_HANDLE_GENERATION_FIRST = 1;
+/// The invalid handle.
+pub const KE_HANDLE_NONE = 0;
+pub const KE_MESH_NONE: ke_mesh_handle = .{ .bits = 0 };
+pub const KE_TEXTURE_NONE: ke_texture_handle = .{ .bits = 0 };
+pub const KE_MATERIAL_NONE: ke_material_handle = .{ .bits = 0 };
+pub const KE_CUBEMAP_NONE: ke_cubemap_handle = .{ .bits = 0 };
+pub const KE_SHADOW_MAP_NONE: ke_shadow_map_handle = .{ .bits = 0 };
+pub const KE_MATERIAL_PATH_MAX = 256;
+/// The gbuffer's base color.
+pub const KE_RENDER_GBUFFER_ALBEDO = ".albedo";
+/// The gbuffer's world normal.
+pub const KE_RENDER_GBUFFER_NORMAL = ".normal";
+/// The gbuffer's emitted light.
+pub const KE_RENDER_GBUFFER_EMISSIVE = ".emissive";
+/// The buffer holding the shadow's light view-projection. The shadow map is the group itself.
+pub const KE_RENDER_SHADOW_LIGHT = ".light";
+/// The depth attachment the shadow map is drawn with.
+pub const KE_RENDER_SHADOW_DEPTH = ".depth";
+/// The clustered point lights. The group itself is the tag the cluster pass writes.
+pub const KE_RENDER_CLUSTER_POINT_LIGHTS = ".point_lights";
+/// The clustered spot lights.
+pub const KE_RENDER_CLUSTER_SPOT_LIGHTS = ".spot_lights";
+/// The point light indices of each cluster.
+pub const KE_RENDER_CLUSTER_POINT_INDICES = ".point_indices";
+/// The point light count of each cluster.
+pub const KE_RENDER_CLUSTER_POINT_COUNTS = ".point_counts";
+/// The spot light indices of each cluster.
+pub const KE_RENDER_CLUSTER_SPOT_INDICES = ".spot_indices";
+/// The spot light count of each cluster.
+pub const KE_RENDER_CLUSTER_SPOT_COUNTS = ".spot_counts";
+/// The cluster grid parameters.
+pub const KE_RENDER_CLUSTER_GRID = ".grid";
+/// The tag a pass that joined the chain writes in its access list, and that the system ending
+/// the frame reads.
+pub const KE_RENDER_FRAME_COLOR = "frame.color";
+/// The frame's depth texture, cleared when the frame begins; a pass samples it by this name.
+pub const KE_RENDER_FRAME_DEPTH = "frame.depth";
+pub const KE_RENDER_CHAIN_NONE = 0;
+pub const KE_COMPONENT_NAME_UI_QUAD = "ui_quad";
+pub const KE_COMPONENT_NAME_LABEL = "label";
+pub const KE_UI_FONT_NONE: ke_ui_font_handle = .{ .bits = 0 };
+/// A font the label asked for and the engine could not produce. Distinct from KE_UI_FONT_NONE,
+/// which means no font was asked for.
+pub const KE_UI_FONT_FAILED: ke_ui_font_handle = .{ .bits = 4294967295 };
+pub const KE_LABEL_MAX_TEXT = 256;
+pub const KE_LABEL_MAX_GLYPHS = 256;
+
 pub const ke_gpu_index_format = c_uint;
 pub const KE_GPU_INDEX_FORMAT_UINT16: ke_gpu_index_format = 0;
 pub const KE_GPU_INDEX_FORMAT_UINT32: ke_gpu_index_format = 1;

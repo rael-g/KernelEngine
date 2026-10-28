@@ -142,7 +142,7 @@ public static class Extractor
     /// The value clang folded an enum constant's initialiser to: a constant expression's, or the
     /// literal's when the initialiser is one literal under implicit casts.
     /// </summary>
-    static string? Folded(JsonObject node)
+    internal static string? Folded(JsonObject node)
     {
         foreach (var child in ((node["inner"] as JsonArray) ?? []).OfType<JsonObject>())
         {

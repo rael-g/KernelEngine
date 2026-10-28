@@ -470,5 +470,38 @@
   "vtables": [],
   "functions": [],
   "callbacks": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_UI_FONT_NONE",
+      "type": "ke_ui_font_handle",
+      "fields": [
+        {
+          "name": "bits",
+          "value": "0"
+        }
+      ]
+    },
+    {
+      "name": "KE_UI_FONT_FAILED",
+      "type": "ke_ui_font_handle",
+      "fields": [
+        {
+          "name": "bits",
+          "value": "4294967295"
+        }
+      ],
+      "doc": "A font the label asked for and the engine could not produce. Distinct from KE_UI_FONT_NONE, which means no font was asked for."
+    },
+    {
+      "name": "KE_LABEL_MAX_TEXT",
+      "type": "int",
+      "value": "256"
+    },
+    {
+      "name": "KE_LABEL_MAX_GLYPHS",
+      "type": "int",
+      "value": "256"
+    }
+  ]
 }

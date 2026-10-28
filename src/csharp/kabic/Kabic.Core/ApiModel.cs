@@ -141,6 +141,16 @@ public record ApiStruct(string Name, string? Doc, IReadOnlyList<string> Tags, IR
 /// <summary>An exported global the header declares (<c>extern const T NAME;</c>).</summary>
 public record ApiVariable(string Name, string Type, string? Doc);
 
+/// <summary>
+/// An object-like macro the header defines as a constant. <see cref="Type"/> is the C type the
+/// expression has; <see cref="Value"/> is the decimal value of an integer or the literal of a
+/// string, and is null for a record, whose members <see cref="Fields"/> lists in order.
+/// </summary>
+public record ApiConstant(string Name, string Type, string? Value, IReadOnlyList<ApiConstantField>? Fields, string? Doc);
+
+/// <summary>One member of a record constant: its name and its decimal value.</summary>
+public record ApiConstantField(string Name, string Value);
+
 /// <summary>A function the header declares, with its return type and its parameters.</summary>
 public record ApiFunction(string Name, string Returns, string? Doc, string? ReturnDoc, IReadOnlyList<ApiParam> Params)
 {
@@ -189,6 +199,9 @@ public class ApiModel
     /// The records declared and never defined: handles a caller only ever holds the address of.
     /// </summary>
     public List<string> Opaques { get; } = [];
+
+    /// <summary>The constants the headers define as macros, in the order they define them.</summary>
+    public List<ApiConstant> Constants { get; } = [];
 
     /// <summary>
     /// Function-pointer typedefs, keyed by the name a parameter is declared with.
@@ -285,6 +298,14 @@ public static class ApiReader
         foreach (var v in root["vtables"]!.AsArray()) m.Structs.Add(ReadRecord(v!.AsObject(), vtable: true));
 
         foreach (var o in root["opaques"]?.AsArray() ?? []) m.Opaques.Add(o!.GetValue<string>());
+
+        foreach (var c in root["constants"]?.AsArray() ?? [])
+        {
+            var o = c!.AsObject();
+            m.Constants.Add(new ApiConstant(Str(o, "name")!, Str(o, "type")!, Str(o, "value"),
+                o["fields"]?.AsArray().Select(f => new ApiConstantField(Str(f!.AsObject(), "name")!, Str(f.AsObject(), "value")!)).ToList(),
+                Str(o, "doc")));
+        }
 
         if (root["type_aliases"] is System.Text.Json.Nodes.JsonObject aliases)
             foreach (var kv in aliases)

@@ -98,7 +98,7 @@
         },
         {
           "name": "signal_lookup",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -160,7 +160,7 @@
         },
         {
           "name": "disconnect",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Removes a connection previously made by connect(). Returns false when no such connection exists.",
           "return_doc": null,
@@ -304,5 +304,13 @@
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN",
+      "type": "unsigned int",
+      "value": "4294967295",
+      "doc": "Payload size passed by a caller that only needs the signal\u0027s id and does not know its layout. The size stays unknown until the owner of the payload type declares it; a conflicting declaration is then an error."
+    }
+  ]
 }

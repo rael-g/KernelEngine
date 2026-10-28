@@ -4,6 +4,10 @@ const result = @import("result");
 
 pub const ke_audio_sound = u32;
 
+pub const KE_AUDIO_SOUND_INVALID: ke_audio_sound = 0;
+pub const KE_COMPONENT_NAME_AUDIO_PLAYER = "audio_player";
+pub const KE_AUDIO_PLAYER_MAX_PATH = 256;
+
 /// A single audio clip, loaded from the path the scene declares and played on demand. Each node
 /// holds its own clip: two AudioPlayer children under the same parent are two clips, told apart
 /// by node name.

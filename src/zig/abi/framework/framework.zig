@@ -9,6 +9,14 @@ pub const ke_scene_hierarchy = opaque {};
 
 pub const ke_script_type_id = u32;
 
+pub const KE_COMPONENT_NAME_HIERARCHY = "hierarchy";
+pub const KE_COMPONENT_NAME_NAME = "name";
+pub const KE_SCRIPT_TYPE_NONE = 0;
+/// Payload size passed by a caller that only needs the signal's id and does not know its layout.
+/// The size stays unknown until the owner of the payload type declares it; a conflicting
+/// declaration is then an error.
+pub const KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN = 4294967295;
+
 pub const ke_action_type = c_uint;
 pub const KE_ACTION_TYPE_BUTTON: ke_action_type = 0;
 pub const KE_ACTION_TYPE_AXIS1D: ke_action_type = 1;

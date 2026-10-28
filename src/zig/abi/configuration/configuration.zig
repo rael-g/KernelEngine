@@ -4,6 +4,8 @@ const result = @import("result");
 
 pub const ke_configuration_subscription = u32;
 
+pub const KE_CONFIGURATION_SUBSCRIPTION_NONE = 4294967295;
+
 /// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
 /// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
 /// section changed and does nothing else.

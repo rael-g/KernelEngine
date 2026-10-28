@@ -5,6 +5,10 @@ const result = @import("result");
 
 pub const ke_body_2d = u32;
 
+pub const KE_COMPONENT_NAME_BODY2D = "body2d";
+pub const KE_COMPONENT_NAME_COLLIDER2D = "collider2d";
+pub const KE_BODY_2D_INVALID: ke_body_2d = 0;
+
 pub const ke_body_type_2d = c_uint;
 /// Never moves; infinite mass. Floors, walls.
 pub const KE_BODY_TYPE_STATIC: ke_body_type_2d = 0;

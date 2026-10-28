@@ -36,3 +36,9 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_BOX), @as(i64, abi.KE_SHAPE_KIND_2D_BOX));
     try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_CIRCLE), @as(i64, abi.KE_SHAPE_KIND_2D_CIRCLE));
 }
+
+test "every constant is the header's value" {
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_BODY2D, abi.KE_COMPONENT_NAME_BODY2D);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_COLLIDER2D, abi.KE_COMPONENT_NAME_COLLIDER2D);
+    try std.testing.expectEqual(@as(i128, c.KE_BODY_2D_INVALID), @as(i128, abi.KE_BODY_2D_INVALID));
+}
