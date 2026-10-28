@@ -1,0 +1,12 @@
+.{
+    .name = .abi_scheduler_enki,
+    .version = "0.1.0",
+    .fingerprint = 0xe017583c09f7ccc5,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .ke_abi_scheduler = .{ .path = "../../../abi/scheduler" },
+    },
+    .paths = .{"."},
+}

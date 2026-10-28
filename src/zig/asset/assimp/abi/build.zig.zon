@@ -1,0 +1,12 @@
+.{
+    .name = .abi_asset_assimp,
+    .version = "0.1.0",
+    .fingerprint = 0x7c6104269e28c531,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_asset = .{ .path = "../../../abi/asset" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

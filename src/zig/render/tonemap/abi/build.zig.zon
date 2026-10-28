@@ -1,0 +1,14 @@
+.{
+    .name = .abi_render_tonemap,
+    .version = "0.1.0",
+    .fingerprint = 0x0dcda7c4e42d333d,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_render = .{ .path = "../../../abi/render" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .ke_abi_runtime = .{ .path = "../../../abi/runtime" },
+    },
+    .paths = .{"."},
+}

@@ -1,0 +1,13 @@
+.{
+    .name = .abi_render_service,
+    .version = "0.1.0",
+    .fingerprint = 0xd6af166b3f4f8292,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_render = .{ .path = "../../../abi/render" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

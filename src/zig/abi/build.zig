@@ -3,7 +3,7 @@ const std = @import("std");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const tests = b.step("test", "Check every contract domain's ABI against its headers");
+    const tests = b.step("test", "Check the ABI of every contract domain and factory header against the headers");
     inline for (.{
         "ke_abi_asset",
         "ke_abi_audio",
@@ -23,6 +23,39 @@ pub fn build(b: *std.Build) void {
         "ke_abi_text",
         "ke_abi_view",
         "ke_abi_window",
+        "abi_asset_assimp",
+        "abi_asset_stb_image",
+        "abi_audio_miniaudio",
+        "abi_audio_module",
+        "abi_configuration",
+        "abi_configuration_toml",
+        "abi_ecs_flecs",
+        "abi_framework",
+        "abi_input_default",
+        "abi_physics_body2d",
+        "abi_physics_2d_box2d",
+        "abi_render_binder_grouped",
+        "abi_render_camera",
+        "abi_render_cluster",
+        "abi_render_deferred_lighting",
+        "abi_render_forward",
+        "abi_render_frame",
+        "abi_render_gbuffer",
+        "abi_gpu_render_target_renderdoc",
+        "abi_render_scene",
+        "abi_render_service",
+        "abi_render_shadow",
+        "abi_render_skybox",
+        "abi_gpu_render_target_texture",
+        "abi_render_tonemap",
+        "abi_render_ui",
+        "abi_gpu_device_webgpu",
+        "abi_resource_cache_default",
+        "abi_runtime",
+        "abi_scheduler_enki",
+        "abi_text_stb_truetype",
+        "abi_view_space",
+        "abi_window_glfw",
     }) |name| {
         const domain = b.dependency(name, .{ .target = target, .optimize = optimize });
         tests.dependOn(&domain.builder.top_level_steps.get("test").?.step);
