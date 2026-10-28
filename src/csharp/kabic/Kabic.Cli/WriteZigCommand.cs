@@ -61,7 +61,6 @@ internal static class WriteZigCommand
             var generated = Files(scratch, [""]);
             var committed = Files(options.Root, [PackagesRoot, .. Units(options.Root).Where(u => u.Factory)
                 .Select(u => Slashed(Path.GetRelativePath(options.Root, u.PackageDir)))]);
-            committed.RemoveWhere(rel => Path.GetFileName(rel) == ZigPackage.DoublesFile);
             var drift = generated.Union(committed).Order(StringComparer.Ordinal)
                 .Where(rel => !generated.Contains(rel) || !committed.Contains(rel)
                     || !File.ReadAllBytes(Path.Combine(scratch, rel)).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(options.Root, rel))))
@@ -184,8 +183,7 @@ internal static class WriteZigCommand
                 unit.Headers.Select(h => Slashed(Path.GetRelativePath(unit.IncludeRoot, h))).ToList(),
                 imports[unit.Key].Select(k => new ZigImport(k, byKey[k].Package, Slashed(Path.GetRelativePath(unit.PackageDir, byKey[k].PackageDir)))).ToList(),
                 Reached(unit.Key, imports).Select(k => byKey[k].IncludeRoot).Concat(SharedIncludes.Select(d => Path.Combine(root, d)))
-                    .Select(d => Slashed(Path.GetRelativePath(unit.PackageDir, d))).ToList(),
-                File.Exists(Path.Combine(unit.PackageDir, ZigPackage.DoublesFile)));
+                    .Select(d => Slashed(Path.GetRelativePath(unit.PackageDir, d))).ToList());
             Directory.CreateDirectory(dir);
             File.WriteAllText(Path.Combine(dir, $"{unit.Key}.zig"), texts[unit.Key]);
             File.WriteAllText(Path.Combine(dir, "build.zig"), package.BuildZig());
