@@ -118,7 +118,7 @@ var rules = new List<Rule>
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
-    new("no identifier named after impl", 12,
+    new("no identifier named after impl", 11,
         Lines(zig.Concat(headers), l => !slashComment.IsMatch(l) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && implName.IsMatch(l))),
     new("no comment in Zig besides a doc comment", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),

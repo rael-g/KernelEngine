@@ -7,9 +7,16 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_cluster").logFn };
 
 const feature_bindings = @import("feature_bindings");
-const cluster_buffers = feature_bindings.FeatureBindings(c).cluster_buffers;
+const cluster_buffers = feature_bindings.cluster_buffers;
 const c = @import("c");
-const R = @import("result").Result(c, .{});
+const abi_ecs = @import("abi_ecs");
+const abi_render = @import("abi_render");
+const abi_render_cluster_factory = @import("abi_render_cluster_factory");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const abi_spatial = @import("abi_spatial");
+const abi_view = @import("abi_view");
+const R = @import("result").Result(abi_result, .{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -52,9 +59,9 @@ const ClusterParams = extern struct {
     depth: [4]f32,
 };
 
-const cull_layout_params = c.ke_render_shader_layout_params{
+const cull_layout_params = abi_render.ke_render_shader_layout_params{
     .shader = "cluster_cull",
-    .stages = c.KE_GPU_SHADER_STAGE_COMPUTE,
+    .stages = abi_render.KE_GPU_SHADER_STAGE_COMPUTE,
     .hints = null,
     .hint_count = 0,
 };
@@ -65,15 +72,15 @@ const cull_layout_params = c.ke_render_shader_layout_params{
 /// are undefined until it runs; the GPU fields are the invalid handle until their own creation
 /// succeeds.
 const ClusterModule = struct {
-    core: *c.ke_render_service = undefined,
-    device: *c.ke_gpu_device = undefined,
-    view_space: *c.ke_view_space = undefined,
-    camera: *c.ke_render_camera = undefined,
-    point_light_cid: c.ke_component_id = undefined,
-    spot_light_cid: c.ke_component_id = undefined,
-    world_transform_cid: c.ke_component_id = undefined,
-    camera_cid: c.ke_component_id = undefined,
-    frame_cid: c.ke_component_id = undefined,
+    core: *abi_render.ke_render_service = undefined,
+    device: *abi_render.ke_gpu_device = undefined,
+    view_space: *abi_view.ke_view_space = undefined,
+    camera: *abi_render.ke_render_camera = undefined,
+    point_light_cid: abi_ecs.ke_component_id = undefined,
+    spot_light_cid: abi_ecs.ke_component_id = undefined,
+    world_transform_cid: abi_ecs.ke_component_id = undefined,
+    camera_cid: abi_ecs.ke_component_id = undefined,
+    frame_cid: abi_ecs.ke_component_id = undefined,
 
     grid_x: u32 = undefined,
     grid_y: u32 = undefined,
@@ -81,25 +88,25 @@ const ClusterModule = struct {
     num_clusters: u32 = undefined,
     max_lights_per_cluster: u32 = undefined,
 
-    cluster_grid_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    cluster_grid_uniform: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
 
-    point_lights_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    spot_lights_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    point_indices_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    point_counts_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    spot_indices_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    spot_counts_sb: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    point_lights_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    spot_lights_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    point_indices_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    point_counts_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    spot_indices_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    spot_counts_sb: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
 
-    cull_pipeline: c.ke_gpu_pipeline = c.KE_GPU_INVALID_HANDLE,
-    cull_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    binder: *c.ke_render_resource_binder = undefined,
-    cull_layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
-    cull_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
-    cull_io: c.ke_render_pass_io = undefined,
-    cull_access: [6]c.ke_component_access = undefined,
-    cull_queries_terms: [6]c.ke_component_access = undefined,
-    cull_queries: [3]c.ke_query_decl = undefined,
-    clusters_cid: c.ke_component_id = undefined,
+    cull_pipeline: abi_render.ke_gpu_pipeline = abi_render.KE_GPU_INVALID_HANDLE,
+    cull_uniform: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    binder: *abi_render.ke_render_resource_binder = undefined,
+    cull_layout: abi_render.ke_render_shader_layout = abi_render.KE_RENDER_BINDING_INVALID,
+    cull_set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID,
+    cull_io: abi_render.ke_render_pass_io = undefined,
+    cull_access: [6]abi_runtime.ke_component_access = undefined,
+    cull_queries_terms: [6]abi_runtime.ke_component_access = undefined,
+    cull_queries: [3]abi_runtime.ke_query_decl = undefined,
+    clusters_cid: abi_ecs.ke_component_id = undefined,
 
     point_overflow_warned: bool = false,
     spot_overflow_warned: bool = false,
@@ -122,7 +129,7 @@ inline fn moduleOf(user: ?*anyopaque) *ClusterModule {
 /// overflow is reported once per kind through `logLightOverflow`. A frame without a camera uploads
 /// the lights and stops; otherwise it also uploads the cull parameters and the grid and dispatches
 /// the compute pipeline.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
     const cm = moduleOf(user);
     const core = cm.core;
     const deg2rad: f32 = std.math.pi / 180.0;
@@ -135,11 +142,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
         const segs = ctx.?.view.?(ctx, 0, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
-            const pls: [*c]const c.ke_point_light_component = @ptrCast(@alignCast(segs[s].columns[0]));
-            const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-            point_total += segs[s].count;
+            const pls: [*c]const abi_render.ke_point_light_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+            const wts: [*c]const abi_spatial.ke_world_transform_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+            point_total += segs.?[s].count;
             var i: usize = 0;
-            while (i < segs[s].count and pn < MAX_LIGHTS) : (i += 1) {
+            while (i < segs.?[s].count and pn < MAX_LIGHTS) : (i += 1) {
                 const m = wts[i].matrix.m;
                 chunk[fill] = PointLightGpu{
                     .pos_radius = .{ m[12], m[13], m[14], pls[i].radius },
@@ -169,11 +176,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
         const segs = ctx.?.view.?(ctx, 1, &segc);
         var s: usize = 0;
         while (s < segc) : (s += 1) {
-            const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs[s].columns[0]));
-            const wts: [*c]const c.ke_world_transform_component = @ptrCast(@alignCast(segs[s].columns[1]));
-            spot_total += segs[s].count;
+            const sls: [*c]const SpotLightComp = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+            const wts: [*c]const abi_spatial.ke_world_transform_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+            spot_total += segs.?[s].count;
             var i: usize = 0;
-            while (i < segs[s].count and sn < MAX_LIGHTS) : (i += 1) {
+            while (i < segs.?[s].count and sn < MAX_LIGHTS) : (i += 1) {
                 const m = wts[i].matrix.m;
                 chunk[fill] = SpotLightGpu{
                     .pos_range = .{ m[12], m[13], m[14], sls[i].range },
@@ -198,19 +205,19 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 2, &cam_segc);
-    if (cam_segc == 0 or cam_segs[0].count == 0) return R.ok;
-    const cam: *const c.ke_camera_component = @ptrCast(@alignCast(cam_segs[0].columns[0]));
+    if (cam_segc == 0 or cam_segs.?[0].count == 0) return R.ok;
+    const cam: *const abi_render.ke_camera_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[0]));
 
     const pc = core.*.begin_pass.?(core, &cm.cull_io);
     if (pc == null) return R.ok;
 
     var bw: u32 = 0;
     var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
+    pc.?.backbuffer_size.?(pc, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
     const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
-    var frustum: c.ke_camera_frustum = undefined;
+    var frustum: abi_render.ke_camera_frustum = undefined;
     cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
     var params: ClusterParams = .{
         .grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
@@ -221,11 +228,11 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     uploadGrid(cm, bw, bh, cam.near_plane, cam.far_plane);
 
-    const cp = pc.*.begin_compute.?(pc);
-    cp.*.set_pipeline.?(cp, cm.cull_pipeline);
+    const cp = pc.?.begin_compute.?(pc);
+    cp.?.set_pipeline.?(cp, cm.cull_pipeline);
     cm.binder.bind_compute_set.?(cm.binder, cp, cm.cull_set, null, 0);
-    cp.*.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
-    cp.*.end.?(cp);
+    cp.?.dispatch.?(cp, (cm.num_clusters + 63) / 64, 1, 1);
+    cp.?.end.?(cp);
     core.*.end_pass.?(core, pc);
     return R.ok;
 }
@@ -242,12 +249,12 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
 
-fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, out: *c.ke_gpu_buffer) R.Error!void {
-    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+fn makeStorageBuffer(dev: *abi_render.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_render.ke_gpu_buffer) R.Error!void {
+    try R.check(dev.create_buffer.?(dev, &abi_render.ke_gpu_buffer_params{
         .label = label,
         .initial_data = null,
         .size = size,
-        .usage = c.KE_GPU_BUFFER_USAGE_STORAGE | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_STORAGE | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, out));
 }
@@ -257,13 +264,13 @@ fn makeStorageBuffer(dev: *c.ke_gpu_device, label: [*c]const u8, size: usize, ou
 /// its group's names, and fills the access list, which writes the group's tag, and the queries. A
 /// failed step fails with its code, and the objects
 /// created before it stay set for `destroyModule` to release.
-fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params) R.Error!void {
-    const core: *c.ke_render_service = p.service;
-    const dev: *c.ke_gpu_device = p.device;
+fn setup(cm: *ClusterModule, p: *const abi_render_cluster_factory.ke_render_cluster_params) R.Error!void {
+    const core: *abi_render.ke_render_service = p.service.?;
+    const dev: *abi_render.ke_gpu_device = p.device.?;
     cm.core = core;
     cm.device = dev;
-    cm.view_space = p.view_space;
-    cm.camera = p.camera;
+    cm.view_space = p.view_space.?;
+    cm.camera = p.camera.?;
     cm.point_light_cid = p.point_light_cid;
     cm.spot_light_cid = p.spot_light_cid;
     cm.world_transform_cid = p.world_transform_cid;
@@ -287,14 +294,14 @@ fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params) R.Error!void 
     try makeStorageBuffer(dev, "cluster.spot_indices_sb", indices_bytes, &cm.spot_indices_sb);
     try makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, &cm.spot_counts_sb);
 
-    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render.ke_gpu_buffer_params{
         .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &cm.cluster_grid_uniform));
-    const published = [_]struct { buffer: c.ke_gpu_buffer, size: usize }{
+    const published = [_]struct { buffer: abi_render.ke_gpu_buffer, size: usize }{
         .{ .buffer = cm.point_lights_sb, .size = point_lights_bytes },
         .{ .buffer = cm.spot_lights_sb, .size = spot_lights_bytes },
         .{ .buffer = cm.point_indices_sb, .size = indices_bytes },
@@ -305,22 +312,22 @@ fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params) R.Error!void 
     };
     for (cluster_buffers, published) |entry, buffer| {
         var buf: [feature_bindings.name_capacity]u8 = undefined;
-        const name = feature_bindings.subName(&buf, p.output, entry.suffix) orelse return error.OutOfMemory;
-        var cid: c.ke_component_id = undefined;
+        const name = feature_bindings.subName(&buf, p.output.?, entry.suffix) orelse return error.OutOfMemory;
+        var cid: abi_ecs.ke_component_id = undefined;
         try R.check(core.*.import_buffer.?(core, name, buffer.buffer, buffer.size, &cid));
     }
 
-    cm.binder = core.*.resource_binder.?(core);
+    cm.binder = core.*.resource_binder.?(core).?;
     try R.check(cm.binder.create_shader_layout.?(cm.binder, &cull_layout_params, &cm.cull_layout));
 
-    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render.ke_gpu_buffer_params{
         .label = "cluster.cull_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &cm.cull_uniform));
-    const cull_bindings = [_]c.ke_render_shader_binding{
+    const cull_bindings = [_]abi_render.ke_render_shader_binding{
         .{ .name = "params", .buffer = cm.cull_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(ClusterParams), .texture_view = 0, .sampler = 0 },
         .{ .name = "point_lights", .buffer = cm.point_lights_sb, .buffer_offset = 0, .buffer_size = point_lights_bytes, .texture_view = 0, .sampler = 0 },
         .{ .name = "spot_lights", .buffer = cm.spot_lights_sb, .buffer_offset = 0, .buffer_size = spot_lights_bytes, .texture_view = 0, .sampler = 0 },
@@ -331,10 +338,10 @@ fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params) R.Error!void 
     };
     try R.check(cm.binder.create_set.?(cm.binder, cm.cull_layout, null, "cluster.cull_set", &cull_bindings, cull_bindings.len, &cm.cull_set));
 
-    var cs: c.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "cluster_cull", c.KE_GPU_SHADER_STAGE_COMPUTE, &cs));
+    var cs: abi_render.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "cluster_cull", abi_render.KE_GPU_SHADER_STAGE_COMPUTE, &cs));
 
-    var cull_pipeline_params = c.ke_gpu_compute_pipeline_params{
+    var cull_pipeline_params = abi_render.ke_gpu_compute_pipeline_params{
         .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
@@ -345,35 +352,35 @@ fn setup(cm: *ClusterModule, p: *const c.ke_render_cluster_params) R.Error!void 
     try R.check(dev.create_compute_pipeline.?(dev, &cull_pipeline_params, &cm.cull_pipeline));
 
     try R.check(core.*.import_tag.?(core, p.output, &cm.clusters_cid));
-    cm.cull_io = std.mem.zeroes(c.ke_render_pass_io);
+    cm.cull_io = std.mem.zeroes(abi_render.ke_render_pass_io);
     cm.cull_io.name = "render.cull";
     cm.cull_access = .{
-        .{ .cid = cm.clusters_cid, .access = c.KE_ACCESS_WRITE },
-        .{ .cid = cm.point_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = cm.spot_light_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = cm.world_transform_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = cm.camera_cid, .access = c.KE_ACCESS_READ },
-        .{ .cid = cm.frame_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = cm.clusters_cid, .access = abi_runtime.KE_ACCESS_WRITE },
+        .{ .cid = cm.point_light_cid, .access = abi_runtime.KE_ACCESS_READ },
+        .{ .cid = cm.spot_light_cid, .access = abi_runtime.KE_ACCESS_READ },
+        .{ .cid = cm.world_transform_cid, .access = abi_runtime.KE_ACCESS_READ },
+        .{ .cid = cm.camera_cid, .access = abi_runtime.KE_ACCESS_READ },
+        .{ .cid = cm.frame_cid, .access = abi_runtime.KE_ACCESS_READ },
     };
 
-    const rd = c.KE_ACCESS_READ;
+    const rd = abi_runtime.KE_ACCESS_READ;
     cm.cull_queries_terms = .{ .{ .cid = cm.point_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.spot_light_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd }, .{ .cid = cm.camera_cid, .access = rd }, .{ .cid = cm.world_transform_cid, .access = rd } };
-    cm.cull_queries = .{ .{ .terms = &cm.cull_queries_terms[0], .term_count = 2 }, .{ .terms = &cm.cull_queries_terms[2], .term_count = 2 }, .{ .terms = &cm.cull_queries_terms[4], .term_count = 2 } };
+    cm.cull_queries = .{ .{ .terms = cm.cull_queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = cm.cull_queries_terms[2..].ptr, .term_count = 2 }, .{ .terms = cm.cull_queries_terms[4..].ptr, .term_count = 2 } };
 }
 
 /// Releases every GPU object, set and layout whose handle is not the invalid one, so it is safe on a module that
 /// `setup` did not finish. The device and the borrowed pointers are not released.
 fn destroyModule(cm: *const ClusterModule) void {
     const dev = cm.device;
-    const invalid = c.KE_GPU_INVALID_HANDLE;
+    const invalid = abi_render.KE_GPU_INVALID_HANDLE;
     if (cm.cull_pipeline != invalid) dev.destroy_compute_pipeline.?(dev, cm.cull_pipeline);
-    if (cm.cull_layout != c.KE_RENDER_BINDING_INVALID) {
+    if (cm.cull_layout != abi_render.KE_RENDER_BINDING_INVALID) {
         cm.binder.destroy_set.?(cm.binder, cm.cull_set);
         cm.binder.destroy_shader_layout.?(cm.binder, cm.cull_layout);
     }
     if (cm.cull_uniform != invalid) dev.destroy_buffer.?(dev, cm.cull_uniform);
     if (cm.cluster_grid_uniform != invalid) dev.destroy_buffer.?(dev, cm.cluster_grid_uniform);
-    const storage = [_]c.ke_gpu_buffer{
+    const storage = [_]abi_render.ke_gpu_buffer{
         cm.point_lights_sb,  cm.spot_lights_sb,
         cm.point_indices_sb, cm.point_counts_sb,
         cm.spot_indices_sb,  cm.spot_counts_sb,
@@ -385,7 +392,7 @@ fn destroyModule(cm: *const ClusterModule) void {
 
 /// The `destroy` slot of the handle `ke_render_cluster_create` returns. It releases the GPU objects
 /// and frees the module, so the `ref` it was given is invalid afterwards.
-fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_cluster_factory.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
     destroyModule(cm);
     gpa.destroy(cm);
@@ -396,11 +403,11 @@ fn destroyHandle(self: ?*c.ke_render_cluster) callconv(.c) void {
 /// invalid argument and a module that cannot be allocated as out of memory. The handle's `ref` is
 /// null when `setup` fails or the runtime refuses the registration, and the objects created so far
 /// are released then.
-export fn ke_render_cluster_create(params_in: ?*const c.ke_render_cluster_params, out_cluster: [*c]c.ke_render_cluster_handle) callconv(.c) c.ke_result {
+export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory.ke_render_cluster_params, out_cluster: [*c]abi_render_cluster_factory.ke_render_cluster_handle) callconv(.c) abi_result.ke_result {
     const out = out_cluster orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    const rt: *abi_runtime.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.service == null or p.device == null or p.view_space == null or p.camera == null or p.output == null)
         return R.code(error.InvalidArgument);
 
@@ -412,9 +419,9 @@ export fn ke_render_cluster_create(params_in: ?*const c.ke_render_cluster_params
         return R.code(err);
     };
 
-    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    var params = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
     params.name = "render.cull";
-    params.phase = c.KE_PHASE_RENDER;
+    params.phase = abi_runtime.KE_PHASE_RENDER;
     params.queries = &cm.cull_queries;
     params.query_count = cm.cull_queries.len;
     params.access_list = &cm.cull_access;
@@ -422,7 +429,7 @@ export fn ke_render_cluster_create(params_in: ?*const c.ke_render_cluster_params
     params.pinned_thread = 0;
     params.user_data = cm;
     params.execute = system;
-    var system_id: c.ke_system_id = 0;
+    var system_id: abi_runtime.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &params, &system_id);
     if (registered != R.ok) {
         destroyModule(cm);
@@ -443,7 +450,7 @@ const default_max_lights_per_cluster = 64;
 
 const testing = std.testing;
 
-const Stubs = @import("stubs").Stubs(c);
+const Stubs = @import("stubs");
 
 test "creating and destroying the cluster pass leaves no block allocated and no GPU resource live" {
     var dev: Stubs.Device = undefined;
@@ -452,9 +459,9 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     core.init(dev.api());
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    var view_space = std.mem.zeroes(c.ke_view_space);
-    var h: c.ke_render_cluster_handle = undefined;
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.ke_view_space);
+    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
     try R.check(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -470,9 +477,9 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     core.shader_loads_fail = true;
     var rt: Stubs.Runtime = undefined;
     rt.init();
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    var view_space = std.mem.zeroes(c.ke_view_space);
-    var h: c.ke_render_cluster_handle = undefined;
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.ke_view_space);
+    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
     try testing.expect(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
@@ -488,9 +495,9 @@ test "a cluster pass the runtime refuses to register releases what it had create
     var rt: Stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    var camera = std.mem.zeroes(c.ke_render_camera);
-    var view_space = std.mem.zeroes(c.ke_view_space);
-    var h: c.ke_render_cluster_handle = undefined;
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.ke_view_space);
+    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
     try testing.expect(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);

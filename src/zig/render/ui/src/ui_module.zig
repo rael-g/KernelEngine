@@ -7,10 +7,15 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_ui").logFn };
 
 const zm = @import("zmath");
-const c = @import("c");
-const R = @import("result").Result(c, .{});
+const abi_ecs = @import("abi_ecs");
+const abi_render = @import("abi_render");
+const abi_render_ui_factory = @import("abi_render_ui_factory");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const abi_text = @import("abi_text");
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.render_ui);
-const handles = @import("handle").Handles(c);
+const handles = @import("handle");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -24,19 +29,19 @@ const UiVertex = extern struct {
 };
 /// A run of consecutive entries of `vertices` that share one texture, drawn by one call.
 const UiBatch = struct {
-    texture: c.ke_texture_handle,
+    texture: abi_render.ke_texture_handle,
     first_vertex: u32,
     vertex_count: u32,
 };
 
-const UiQuadComponent = c.ke_ui_quad_component;
+const UiQuadComponent = abi_render.ke_ui_quad_component;
 
 /// One entry of `fonts`. `key` and `glyphs` are copies owned by the state and freed by
 /// `destroyState`. `atlas` is stored as the caller gave it and is not owned here.
 const UiFont = struct {
     key: []u8 = &.{},
-    atlas: c.ke_texture_handle = undefined,
-    glyphs: []c.ke_glyph_metrics = &.{},
+    atlas: abi_render.ke_texture_handle = undefined,
+    glyphs: []abi_text.ke_glyph_metrics = &.{},
     line_height: f32 = 0,
     ascent: f32 = 0,
     in_use: bool = false,
@@ -48,57 +53,57 @@ const UiFont = struct {
 /// the create and passed to the registrations by address. `vertices` and `batches` are rewritten by
 /// `system` on every frame.
 const UiState = struct {
-    api: c.ke_render_ui = undefined,
+    api: abi_render_ui_factory.ke_render_ui = undefined,
 
-    core: *c.ke_render_service = undefined,
-    device: *c.ke_gpu_device = undefined,
-    ndc: c.ke_ndc_convention = undefined,
-    pipeline_params: c.ke_gpu_render_pipeline_params = undefined,
-    binder: *c.ke_render_resource_binder = undefined,
-    layout: c.ke_render_shader_layout = c.KE_RENDER_BINDING_INVALID,
-    frame_uniform: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
-    frame_set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID,
-    vbo: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE,
+    core: *abi_render.ke_render_service = undefined,
+    device: *abi_render.ke_gpu_device = undefined,
+    ndc: abi_render.ke_ndc_convention = undefined,
+    pipeline_params: abi_render.ke_gpu_render_pipeline_params = undefined,
+    binder: *abi_render.ke_render_resource_binder = undefined,
+    layout: abi_render.ke_render_shader_layout = abi_render.KE_RENDER_BINDING_INVALID,
+    frame_uniform: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    frame_set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID,
+    vbo: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
     vbo_bytes: usize = 0,
 
     vertices: std.ArrayList(UiVertex) = .empty,
     batches: std.ArrayList(UiBatch) = .empty,
-    set_cache: std.AutoHashMapUnmanaged(u32, c.ke_render_resource_set) = .empty,
+    set_cache: std.AutoHashMapUnmanaged(u32, abi_render.ke_render_resource_set) = .empty,
 
     fonts: std.ArrayList(UiFont) = .empty,
 
-    io: c.ke_render_pass_io = std.mem.zeroes(c.ke_render_pass_io),
-    access: [2]c.ke_component_access = undefined,
-    queries_terms: [2]c.ke_component_access = undefined,
-    queries: [2]c.ke_query_decl = undefined,
-    quad_cid: c.ke_component_id = 0,
-    label_cid: c.ke_component_id = 0,
-    label_shape_queries_terms: [1]c.ke_component_access = undefined,
-    label_shape_queries: [1]c.ke_query_decl = undefined,
+    io: abi_render.ke_render_pass_io = std.mem.zeroes(abi_render.ke_render_pass_io),
+    access: [2]abi_runtime.ke_component_access = undefined,
+    queries_terms: [2]abi_runtime.ke_component_access = undefined,
+    queries: [2]abi_runtime.ke_query_decl = undefined,
+    quad_cid: abi_ecs.ke_component_id = 0,
+    label_cid: abi_ecs.ke_component_id = 0,
+    label_shape_queries_terms: [1]abi_runtime.ke_component_access = undefined,
+    label_shape_queries: [1]abi_runtime.ke_query_decl = undefined,
 };
 
 /// Recovers the state from the `handle` of its `api` field, which points back at it.
-fn stateOf(self: [*c]c.ke_render_ui) *UiState {
+fn stateOf(self: [*c]abi_render_ui_factory.ke_render_ui) *UiState {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
 /// Called through the `load_font` slot. A key already in use writes that font's handle, and the
 /// glyph table given with the call is not copied again. The copies made here are released by
 /// `destroyState`. A table, key or glyphs that cannot be kept fail as out of memory.
-fn uiLoadFont(self: [*c]c.ke_render_ui, key: [*c]const u8, atlas: c.ke_texture_handle,
-              glyphs: [*c]const c.ke_glyph_metrics, glyph_count: u32,
-              line_height: f32, ascent: f32, out_font: [*c]c.ke_ui_font_handle) callconv(.c) c.ke_result {
+fn uiLoadFont(self: [*c]abi_render_ui_factory.ke_render_ui, key: [*c]const u8, atlas: abi_render.ke_texture_handle,
+              glyphs: [*c]const abi_text.ke_glyph_metrics, glyph_count: u32,
+              line_height: f32, ascent: f32, out_font: [*c]abi_render.ke_ui_font_handle) callconv(.c) abi_result.ke_result {
     const out = out_font orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_UI_FONT_NONE;
+    out.* = abi_render.KE_UI_FONT_NONE;
     if (self == null or key == null or (glyph_count != 0 and glyphs == null)) return R.code(error.InvalidArgument);
     out.* = .{ .bits = loadFont(stateOf(self), std.mem.span(key), atlas, glyphs, glyph_count, line_height, ascent) catch |err| return R.code(err) };
     return R.ok;
 }
 
-fn loadFont(ui: *UiState, key_slice: []const u8, atlas: c.ke_texture_handle, glyphs: [*c]const c.ke_glyph_metrics, glyph_count: u32, line_height: f32, ascent: f32) R.Error!u32 {
+fn loadFont(ui: *UiState, key_slice: []const u8, atlas: abi_render.ke_texture_handle, glyphs: [*c]const abi_text.ke_glyph_metrics, glyph_count: u32, line_height: f32, ascent: f32) R.Error!u32 {
     for (ui.fonts.items, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
-            return handles.make(@intCast(i), c.KE_HANDLE_GENERATION_FIRST);
+            return handles.make(@intCast(i), abi_render.KE_HANDLE_GENERATION_FIRST);
     }
 
     var slot: ?usize = null;
@@ -112,7 +117,7 @@ fn loadFont(ui: *UiState, key_slice: []const u8, atlas: c.ke_texture_handle, gly
 
     const owned_key = try gpa.dupe(u8, key_slice);
     errdefer gpa.free(owned_key);
-    const owned_glyphs = try gpa.dupe(c.ke_glyph_metrics, if (glyph_count == 0) &.{} else glyphs[0..glyph_count]);
+    const owned_glyphs = try gpa.dupe(abi_text.ke_glyph_metrics, if (glyph_count == 0) &.{} else glyphs[0..glyph_count]);
 
     ui.fonts.items[idx] = .{
         .key = owned_key,
@@ -122,10 +127,10 @@ fn loadFont(ui: *UiState, key_slice: []const u8, atlas: c.ke_texture_handle, gly
         .ascent = ascent,
         .in_use = true,
     };
-    return handles.make(@intCast(idx), c.KE_HANDLE_GENERATION_FIRST);
+    return handles.make(@intCast(idx), abi_render.KE_HANDLE_GENERATION_FIRST);
 }
 
-fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_metrics {
+fn findGlyph(glyphs: []const abi_text.ke_glyph_metrics, codepoint: u32) ?abi_text.ke_glyph_metrics {
     for (glyphs) |g| {
         if (g.codepoint == codepoint) return g;
     }
@@ -134,12 +139,12 @@ fn findGlyph(glyphs: []const c.ke_glyph_metrics, codepoint: u32) ?c.ke_glyph_met
 
 /// Called by `labelShapeSystem` for each label. It writes the glyph quads into the label component
 /// itself: when it returns, `glyph_count` is the number of those quads that `system` will draw.
-fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u32) void {
-    const l: *c.ke_label_component = @ptrCast(l_ptr);
+fn shapeLabel(ui: *UiState, l_ptr: [*c]abi_render.ke_label_component, bb_w: u32, bb_h: u32) void {
+    const l: *abi_render.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
 
     const font_idx = handles.index(l.font_handle.bits);
-    if (l.font_handle.bits == c.KE_HANDLE_NONE or font_idx >= ui.fonts.items.len or !ui.fonts.items[font_idx].in_use)
+    if (l.font_handle.bits == abi_render.KE_HANDLE_NONE or font_idx >= ui.fonts.items.len or !ui.fonts.items[font_idx].in_use)
         return;
     const font = &ui.fonts.items[font_idx];
 
@@ -161,7 +166,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     var pen = origin_x;
     var slot: u32 = 0;
     for (text) |ch| {
-        if (slot >= c.KE_LABEL_MAX_GLYPHS) break;
+        if (slot >= abi_render.KE_LABEL_MAX_GLYPHS) break;
         const g = findGlyph(font.glyphs, ch) orelse {
             pen += font.line_height * 0.25;
             continue;
@@ -179,9 +184,9 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]c.ke_label_component, bb_w: u32, bb_h: u3
     l.glyph_count = slot;
 }
 
-const shader_layout = c.ke_render_shader_layout_params{
+const shader_layout = abi_render.ke_render_shader_layout_params{
     .shader = "ui",
-    .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = null,
     .hint_count = 0,
 };
@@ -189,18 +194,18 @@ const shader_layout = c.ke_render_shader_layout_params{
 /// Called by `system` for each batch, with the set of a texture built on first use and cached by
 /// the texture's index. A set that cannot be created is not kept, and the next draw of that slot
 /// creates it again.
-fn uiSetFor(ui: *UiState, tex: c.ke_texture_handle) c.ke_render_resource_set {
+fn uiSetFor(ui: *UiState, tex: abi_render.ke_texture_handle) abi_render.ke_render_resource_set {
     if (ui.set_cache.get(tex.bits)) |cached| return cached;
 
     const view = ui.core.*.texture_view.?(ui.core, tex);
-    const bindings = [_]c.ke_render_shader_binding{
+    const bindings = [_]abi_render.ke_render_shader_binding{
         .{ .name = "t_tex", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = view, .sampler = 0 },
     };
-    var set: c.ke_render_resource_set = c.KE_RENDER_BINDING_INVALID;
-    if (ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, &set) != R.ok) return c.KE_RENDER_BINDING_INVALID;
+    var set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID;
+    if (ui.binder.create_set.?(ui.binder, ui.layout, "tex", "ui.tex_set", &bindings, bindings.len, &set) != R.ok) return abi_render.KE_RENDER_BINDING_INVALID;
     ui.set_cache.put(gpa, tex.bits, set) catch {
         ui.binder.destroy_set.?(ui.binder, set);
-        return c.KE_RENDER_BINDING_INVALID;
+        return abi_render.KE_RENDER_BINDING_INVALID;
     };
     return set;
 }
@@ -212,9 +217,9 @@ inline fn moduleOf(user: ?*anyopaque) *UiState {
 
 /// Called by `system` for each quad and each glyph. A null texture is drawn with the white texture.
 /// Returns false when the vertex or batch list cannot grow.
-fn emitQuad(ui: *UiState, tex_in: c.ke_texture_handle,
+fn emitQuad(ui: *UiState, tex_in: abi_render.ke_texture_handle,
             x0: f32, y0: f32, x1: f32, y1: f32, tu0: f32, tv0: f32, tu1: f32, tv1: f32, color: [4]f32) bool {
-    const tex = if (tex_in.bits == c.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else tex_in;
+    const tex = if (tex_in.bits == abi_render.KE_HANDLE_NONE) ui.core.*.white_texture.?(ui.core) else tex_in;
     const first: u32 = @intCast(ui.vertices.items.len);
     const need_new_batch = ui.batches.items.len == 0 or ui.batches.items[ui.batches.items.len - 1].texture.bits != tex.bits;
     if (need_new_batch) {
@@ -238,15 +243,15 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
     if (bytes <= ui.vbo_bytes) return;
     const size = std.math.ceilPowerOfTwoAssert(usize, bytes);
     const dev = ui.device;
-    var vbo: c.ke_gpu_buffer = undefined;
-    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    var vbo: abi_render.ke_gpu_buffer = undefined;
+    try R.check(dev.create_buffer.?(dev, &abi_render.ke_gpu_buffer_params{
         .label = "ui.vbo",
         .initial_data = null,
         .size = size,
-        .usage = c.KE_GPU_BUFFER_USAGE_VERTEX | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_VERTEX | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &vbo));
-    if (ui.vbo != c.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, ui.vbo);
+    if (ui.vbo != abi_render.KE_GPU_INVALID_HANDLE) dev.destroy_buffer.?(dev, ui.vbo);
     ui.vbo = vbo;
     ui.vbo_bytes = size;
 }
@@ -254,7 +259,7 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
 /// Registered by `ke_render_ui_create` for the update phase, with write access to the label
 /// component only. Shapes every label against the current backbuffer size, so a resize is picked
 /// up on the next frame. It succeeds on every path, including when the view is empty.
-fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+fn labelShapeSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
     const ui = moduleOf(user);
 
     var segc: usize = 0;
@@ -267,9 +272,9 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const labels: [*c]c.ke_label_component = @ptrCast(@alignCast(segs[s].columns[0]));
+        const labels: [*c]abi_render.ke_label_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
-        while (i < segs[s].count) : (i += 1) {
+        while (i < segs.?[s].count) : (i += 1) {
             shapeLabel(ui, labels + i, bw, bh);
         }
     }
@@ -282,7 +287,7 @@ fn labelShapeSystem(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 /// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
 /// succeeds when the render service yields no pass to draw into, and fails as out of memory when
 /// the vertex list cannot grow and with the device's code when the vertex buffer cannot.
-fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -301,9 +306,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     var s: usize = 0;
     while (emitted and s < quad_segc) : (s += 1) {
-        const quads: [*c]const UiQuadComponent = @ptrCast(@alignCast(quad_segs[s].columns[0]));
+        const quads: [*c]const UiQuadComponent = @ptrCast(@alignCast(quad_segs.?[s].columns.?[0]));
         var i: usize = 0;
-        while (i < quad_segs[s].count) : (i += 1) {
+        while (i < quad_segs.?[s].count) : (i += 1) {
             const q = quads[i];
             if (q.dst_w <= 0 or q.dst_h <= 0) continue;
             emitted = emitQuad(ui, .{ .bits = q.texture_bits },
@@ -315,9 +320,9 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     s = 0;
     while (emitted and s < label_segc) : (s += 1) {
-        const labels: [*c]const c.ke_label_component = @ptrCast(@alignCast(label_segs[s].columns[0]));
+        const labels: [*c]const abi_render.ke_label_component = @ptrCast(@alignCast(label_segs.?[s].columns.?[0]));
         var i: usize = 0;
-        while (i < label_segs[s].count) : (i += 1) {
+        while (i < label_segs.?[s].count) : (i += 1) {
             const l = labels[i];
             if (l.glyph_count == 0) continue;
 
@@ -353,7 +358,7 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     var bw: u32 = 0;
     var bh: u32 = 0;
-    pc.*.backbuffer_size.?(pc, &bw, &bh);
+    pc.?.backbuffer_size.?(pc, &bw, &bh);
     var proj = zm.orthographicOffCenterLh(0.0, @floatFromInt(bw), 0.0, @floatFromInt(bh), 0.0, 1.0);
     if (ui.ndc.y_flip) proj[1][1] = -proj[1][1];
     var proj_arr: [16]f32 = undefined;
@@ -362,16 +367,16 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 
     core.*.upload.?(core, ui.vbo, 0, bytes.ptr, bytes.len);
 
-    const rp = pc.*.begin_render.?(pc);
-    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
+    const rp = pc.?.begin_render.?(pc);
+    rp.?.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
     ui.binder.bind_render_set.?(ui.binder, rp, ui.frame_set, null, 0);
-    rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
+    rp.?.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
 
     for (ui.batches.items) |batch| {
         ui.binder.bind_render_set.?(ui.binder, rp, uiSetFor(ui, batch.texture), null, 0);
-        rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
+        rp.?.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
     }
-    rp.*.end.?(rp);
+    rp.?.end.?(rp);
     core.*.end_pass.?(core, pc);
     return R.ok;
 }
@@ -383,79 +388,79 @@ fn system(ctx: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_r
 /// makes.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(ui: *UiState, p: *const c.ke_render_ui_params) R.Error!void {
-    const core: *c.ke_render_service = p.service;
-    const dev: *c.ke_gpu_device = p.device;
+fn setup(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params) R.Error!void {
+    const core: *abi_render.ke_render_service = p.service.?;
+    const dev: *abi_render.ke_gpu_device = p.device.?;
     ui.core = core;
     ui.device = dev;
     ui.ndc = p.ndc;
 
     ui.io.name = "render.ui";
-    try R.check(core.*.join_chain.?(core, c.KE_RENDER_STAGE_OVERLAY, c.KE_RENDER_CHAIN_DRAW_OVER, &ui.io.chain));
-    try R.check(p.runtime.*.declare_self_ordered.?(p.runtime, core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR)));
-    const format = core.*.chain_format.?(core, c.KE_RENDER_STAGE_OVERLAY);
+    try R.check(core.*.join_chain.?(core, abi_render.KE_RENDER_STAGE_OVERLAY, abi_render.KE_RENDER_CHAIN_DRAW_OVER, &ui.io.chain));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR)));
+    const format = core.*.chain_format.?(core, abi_render.KE_RENDER_STAGE_OVERLAY);
 
-    var vs: c.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: c.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "ui", c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
+    var vs: abi_render.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "ui", abi_render.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+    var fs: abi_render.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "ui", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
-    ui.binder = core.*.resource_binder.?(core);
+    ui.binder = core.*.resource_binder.?(core).?;
     try R.check(ui.binder.create_shader_layout.?(ui.binder, &shader_layout, &ui.layout));
 
-    const attrs = [_]c.ke_gpu_vertex_attribute{
-        .{ .shader_location = 0, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "position") },
-        .{ .shader_location = 1, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "uv") },
-        .{ .shader_location = 2, .format = c.KE_GPU_VERTEX_FORMAT_FLOAT32X4, .offset = @offsetOf(UiVertex, "color") },
+    const attrs = [_]abi_render.ke_gpu_vertex_attribute{
+        .{ .shader_location = 0, .format = abi_render.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "position") },
+        .{ .shader_location = 1, .format = abi_render.KE_GPU_VERTEX_FORMAT_FLOAT32X2, .offset = @offsetOf(UiVertex, "uv") },
+        .{ .shader_location = 2, .format = abi_render.KE_GPU_VERTEX_FORMAT_FLOAT32X4, .offset = @offsetOf(UiVertex, "color") },
     };
-    const vbl = c.ke_gpu_vertex_buffer_layout{
+    const vbl = abi_render.ke_gpu_vertex_buffer_layout{
         .stride = @sizeOf(UiVertex),
-        .step_mode = c.KE_GPU_VERTEX_STEP_MODE_VERTEX,
+        .step_mode = abi_render.KE_GPU_VERTEX_STEP_MODE_VERTEX,
         .attribute_count = 3,
         .attributes = &attrs,
     };
 
-    var pp = std.mem.zeroes(c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
     pp.label = "ui.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
-    pp.primitive_topology = c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pp.cull_mode = c.KE_GPU_CULL_MODE_NONE;
-    pp.front_face = c.KE_GPU_FRONT_FACE_CCW;
+    pp.primitive_topology = abi_render.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pp.cull_mode = abi_render.KE_GPU_CULL_MODE_NONE;
+    pp.front_face = abi_render.KE_GPU_FRONT_FACE_CCW;
     pp.vertex_buffer_count = 1;
-    pp.vertex_buffers = &vbl;
+    pp.vertex_buffers = (&vbl)[0..1];
     try R.check(ui.binder.pipeline_layouts.?(ui.binder, ui.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count));
     pp.blend_state.blend_enabled = true;
-    pp.blend_state.src_color = c.KE_GPU_BLEND_FACTOR_ONE;
-    pp.blend_state.dst_color = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    pp.blend_state.color_op = c.KE_GPU_BLEND_OP_ADD;
-    pp.blend_state.src_alpha = c.KE_GPU_BLEND_FACTOR_ONE;
-    pp.blend_state.dst_alpha = c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
-    pp.blend_state.alpha_op = c.KE_GPU_BLEND_OP_ADD;
+    pp.blend_state.src_color = abi_render.KE_GPU_BLEND_FACTOR_ONE;
+    pp.blend_state.dst_color = abi_render.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    pp.blend_state.color_op = abi_render.KE_GPU_BLEND_OP_ADD;
+    pp.blend_state.src_alpha = abi_render.KE_GPU_BLEND_FACTOR_ONE;
+    pp.blend_state.dst_alpha = abi_render.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    pp.blend_state.alpha_op = abi_render.KE_GPU_BLEND_OP_ADD;
     pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = false;
     pp.depth_stencil.depth_write_enabled = false;
-    pp.depth_stencil.depth_compare = c.KE_GPU_COMPARE_ALWAYS;
+    pp.depth_stencil.depth_compare = abi_render.KE_GPU_COMPARE_ALWAYS;
     pp.color_target_formats[0] = format;
     pp.color_target_count = 1;
 
     ui.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &ui.pipeline_params) == c.KE_GPU_INVALID_HANDLE) {
+    if (core.*.get_or_create_pipeline.?(core, &ui.pipeline_params) == abi_render.KE_GPU_INVALID_HANDLE) {
         log.warn("ui pass: render pipeline creation failed", .{});
         return error.NotInitialized;
     }
 
-    try R.check(dev.create_buffer.?(dev, &c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render.ke_gpu_buffer_params{
         .label = "ui.frame_uniform",
         .initial_data = null,
         .size = 64,
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &ui.frame_uniform));
 
-    const frame_binding = [_]c.ke_render_shader_binding{
+    const frame_binding = [_]abi_render.ke_render_shader_binding{
         .{ .name = "frame", .buffer = ui.frame_uniform, .buffer_offset = 0, .buffer_size = 64, .texture_view = 0, .sampler = 0 },
     };
     try R.check(ui.binder.create_set.?(ui.binder, ui.layout, null, "ui.frame_set", &frame_binding, frame_binding.len, &ui.frame_set));
@@ -463,20 +468,20 @@ fn setup(ui: *UiState, p: *const c.ke_render_ui_params) R.Error!void {
     try ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex));
 
     ui.access = .{
-        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = c.KE_ACCESS_WRITE },
-        .{ .cid = p.frame_cid, .access = c.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR), .access = abi_runtime.KE_ACCESS_WRITE },
+        .{ .cid = p.frame_cid, .access = abi_runtime.KE_ACCESS_READ },
     };
 }
 
 /// Safe on a partly built state: each GPU object, set and layout is released only if `setup` had
 /// created it.
 fn destroyState(ui: *UiState) void {
-    if (ui.io.chain != c.KE_RENDER_CHAIN_NONE) ui.core.*.leave_chain.?(ui.core, ui.io.chain);
+    if (ui.io.chain != abi_render.KE_RENDER_CHAIN_NONE) ui.core.*.leave_chain.?(ui.core, ui.io.chain);
     const dev = ui.device;
-    const invalid = c.KE_GPU_INVALID_HANDLE;
+    const invalid = abi_render.KE_GPU_INVALID_HANDLE;
     if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
     if (ui.vbo != invalid) dev.destroy_buffer.?(dev, ui.vbo);
-    if (ui.layout != c.KE_RENDER_BINDING_INVALID) {
+    if (ui.layout != abi_render.KE_RENDER_BINDING_INVALID) {
         ui.binder.destroy_set.?(ui.binder, ui.frame_set);
         var cached = ui.set_cache.valueIterator();
         while (cached.next()) |set| ui.binder.destroy_set.?(ui.binder, set.*);
@@ -495,7 +500,7 @@ fn destroyState(ui: *UiState) void {
 }
 
 /// The destroy slot of the handle that `ke_render_ui_create` returns.
-fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_ui_factory.ke_render_ui) callconv(.c) void {
     const ui = stateOf(self orelse return);
     destroyState(ui);
     gpa.destroy(ui);
@@ -507,12 +512,12 @@ fn destroyHandle(self: ?*c.ke_render_ui) callconv(.c) void {
 /// `system` in the render phase. A failing `setup`, component or system registration fails with its
 /// code and leaves the handle zeroed, and a refused second system takes the first back. On success
 /// the returned handle owns the state until its destroy slot runs.
-export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_ui: [*c]c.ke_render_ui_handle) callconv(.c) c.ke_result {
+export fn ke_render_ui_create(params_in: ?*const abi_render_ui_factory.ke_render_ui_params, out_ui: [*c]abi_render_ui_factory.ke_render_ui_handle) callconv(.c) abi_result.ke_result {
     const out = out_ui orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    const e: *c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
+    const rt: *abi_runtime.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    const e: *abi_ecs.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
     if (p.service == null or p.device == null) return R.code(error.InvalidArgument);
 
     const ui = gpa.create(UiState) catch |err| return R.code(err);
@@ -527,20 +532,20 @@ export fn ke_render_ui_create(params_in: ?*const c.ke_render_ui_params, out_ui: 
     return R.ok;
 }
 
-fn register(ui: *UiState, p: *const c.ke_render_ui_params, rt: *c.ke_runtime, e: *c.ke_ecs) R.Error!void {
+fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs) R.Error!void {
     try setup(ui, p);
 
-    ui.quad_cid = c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &c.ke_ui_quad_component_fields, .field_count = c.ke_ui_quad_component_fields.len }, &ui.quad_cid));
+    ui.quad_cid = abi_ecs.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = abi_render.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render.ke_ui_quad_component_fields, .field_count = abi_render.ke_ui_quad_component_fields.len }, &ui.quad_cid));
 
-    ui.label_cid = c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(c.ke_label_component), .alignment = @alignOf(c.ke_label_component), .fields = &c.ke_label_component_fields, .field_count = c.ke_label_component_fields.len }, &ui.label_cid));
-    ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = c.KE_ACCESS_READ } };
-    ui.queries = .{ .{ .terms = &ui.queries_terms[0], .term_count = 1 }, .{ .terms = &ui.queries_terms[1], .term_count = 1 } };
+    ui.label_cid = abi_ecs.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = abi_render.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_render.ke_label_component), .alignment = @alignOf(abi_render.ke_label_component), .fields = &abi_render.ke_label_component_fields, .field_count = abi_render.ke_label_component_fields.len }, &ui.label_cid));
+    ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = abi_runtime.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = abi_runtime.KE_ACCESS_READ } };
+    ui.queries = .{ .{ .terms = ui.queries_terms[0..].ptr, .term_count = 1 }, .{ .terms = ui.queries_terms[1..].ptr, .term_count = 1 } };
 
-    var params = std.mem.zeroes(c.ke_runtime_system_params);
+    var params = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
     params.name = "render.ui";
-    params.phase = c.KE_PHASE_RENDER;
+    params.phase = abi_runtime.KE_PHASE_RENDER;
     params.queries = &ui.queries;
     params.query_count = ui.queries.len;
     params.access_list = &ui.access;
@@ -548,28 +553,28 @@ fn register(ui: *UiState, p: *const c.ke_render_ui_params, rt: *c.ke_runtime, e:
     params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
-    var first_system: c.ke_system_id = 0;
+    var first_system: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &params, &first_system));
     errdefer _ = rt.unregister_system.?(rt, first_system);
 
-    ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = c.KE_ACCESS_WRITE } };
-    ui.label_shape_queries = .{ .{ .terms = &ui.label_shape_queries_terms[0], .term_count = 1 } };
+    ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = abi_runtime.KE_ACCESS_WRITE } };
+    ui.label_shape_queries = .{ .{ .terms = ui.label_shape_queries_terms[0..].ptr, .term_count = 1 } };
 
-    var shape_params = std.mem.zeroes(c.ke_runtime_system_params);
+    var shape_params = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
     shape_params.name = "render.ui.labels";
-    shape_params.phase = c.KE_PHASE_UPDATE;
+    shape_params.phase = abi_runtime.KE_PHASE_UPDATE;
     shape_params.queries = &ui.label_shape_queries;
     shape_params.query_count = ui.label_shape_queries.len;
     shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
-    var system_id: c.ke_system_id = 0;
+    var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &shape_params, &system_id));
 }
 
 const testing = std.testing;
 
-const Stubs = @import("stubs").Stubs(c);
+const Stubs = @import("stubs");
 
 test "creating and destroying the ui pass leaves no block allocated and no GPU resource live" {
     var dev: Stubs.Device = undefined;
@@ -580,8 +585,8 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    var h: c.ke_render_ui_handle = undefined;
-    try R.check(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h));
+    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    try R.check(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h));
     h.destroy.?(h.ref);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -597,8 +602,8 @@ test "a ui pass whose shader fails to load releases what it had created" {
     rt.init();
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    var h: c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -614,8 +619,8 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     rt.limit = 0;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    var h: c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(i64, 0), dev.live);
     try heap.expectNoLeaks();
@@ -631,8 +636,8 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     rt.limit = 1;
     var ecs: Stubs.Ecs = undefined;
     ecs.init();
-    var h: c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try testing.expectEqual(@as(u32, 0), rt.live_count);
     try testing.expectEqual(@as(i64, 0), dev.live);

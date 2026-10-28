@@ -3,17 +3,23 @@
 
 const std = @import("std");
 
-const c = @import("c");
+const abi_ecs = @import("abi_ecs");
+const abi_framework = @import("abi_framework");
+const abi_framework_factory = @import("abi_framework_factory");
+const abi_math = @import("abi_math");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 
-const R = @import("result").Result(c, .{});
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.framework);
 
 const mat4 = @import("mat4.zig");
 
 /// Capacity of the name buffer of the name component; a stored name keeps one byte for its
 /// terminator.
-const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
+const name_max = @typeInfo(@FieldType(abi_framework.ke_name_component, "name")).array.len;
 
 /// The state behind a tree handle, allocated by `ke_scene_tree_create` and freed by `vtDestroy`.
 /// The tree stores no nodes of its own: a node is an entity of `ecs` carrying the hierarchy, name
@@ -24,48 +30,48 @@ const name_max = @typeInfo(@FieldType(c.ke_name_component, "name")).array.len;
 /// `hierarchy` is owned and stays null unless the tree was created with a runtime.
 /// `hierarchy_generation` moves with every link and unlink of a node.
 const State = struct {
-    api: c.ke_scene_tree,
-    ecs: *c.ke_ecs,
-    root: c.ke_entity,
-    transform_cid: c.ke_component_id,
-    transform2d_cid: c.ke_component_id,
-    world_transform_cid: c.ke_component_id,
-    hierarchy_cid: c.ke_component_id,
-    name_cid: c.ke_component_id,
+    api: abi_framework.ke_scene_tree,
+    ecs: *abi_ecs.ke_ecs,
+    root: abi_ecs.ke_entity,
+    transform_cid: abi_ecs.ke_component_id,
+    transform2d_cid: abi_ecs.ke_component_id,
+    world_transform_cid: abi_ecs.ke_component_id,
+    hierarchy_cid: abi_ecs.ke_component_id,
+    name_cid: abi_ecs.ke_component_id,
     hierarchy_generation: u64 = 0,
-    hierarchy: c.ke_scene_hierarchy_handle,
+    hierarchy: abi_framework.ke_scene_hierarchy_handle,
 };
 
-fn stateOf(self: *c.ke_scene_tree) *State {
+fn stateOf(self: *abi_framework.ke_scene_tree) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-fn getHierarchy(s: *State, e: c.ke_entity) ?*c.ke_hierarchy_component {
+fn getHierarchy(s: *State, e: abi_ecs.ke_entity) ?*abi_framework.ke_hierarchy_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.hierarchy_cid)));
 }
 
-fn getName(s: *State, e: c.ke_entity) ?*const c.ke_name_component {
+fn getName(s: *State, e: abi_ecs.ke_entity) ?*const abi_framework.ke_name_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.name_cid)));
 }
 
-fn getTransform(s: *State, e: c.ke_entity) ?*c.ke_transform_component {
+fn getTransform(s: *State, e: abi_ecs.ke_entity) ?*abi_spatial.ke_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform_cid)));
 }
 
-fn getTransform2d(s: *State, e: c.ke_entity) ?*const c.ke_transform2d_component {
+fn getTransform2d(s: *State, e: abi_ecs.ke_entity) ?*const abi_spatial.ke_transform2d_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.transform2d_cid)));
 }
 
-fn getWorldTransform(s: *State, e: c.ke_entity) ?*c.ke_world_transform_component {
+fn getWorldTransform(s: *State, e: abi_ecs.ke_entity) ?*abi_spatial.ke_world_transform_component {
     return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, e, s.world_transform_cid)));
 }
 
 /// Registers a component the tree writes with the field table its header generates, or none when
 /// no field of it is written by a scene. A component the ecs already knows keeps its id, so trees
 /// created on one ecs share their ids, and its table is checked against the one registered first.
-fn registerComponent(ecs: *c.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const c.ke_component_field) R.Error!c.ke_component_id {
-    var cid: c.ke_component_id = 0;
-    try R.check(ecs.component_register.?(ecs, &c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, &cid));
+fn registerComponent(ecs: *abi_ecs.ke_ecs, name: [*c]const u8, comptime T: type, fields: []const abi_ecs.ke_component_field) R.Error!abi_ecs.ke_component_id {
+    var cid: abi_ecs.ke_component_id = 0;
+    try R.check(ecs.component_register.?(ecs, &abi_ecs.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = if (fields.len > 0) fields.ptr else null, .field_count = @intCast(fields.len) }, &cid));
     return cid;
 }
 
@@ -80,43 +86,43 @@ fn writeName(dst: []u8, src: [*c]const u8) void {
     dst[n] = 0;
 }
 
-fn identityMatrix() c.ke_mat4 {
-    var m: c.ke_mat4 = undefined;
+fn identityMatrix() abi_math.ke_mat4 {
+    var m: abi_math.ke_mat4 = undefined;
     for (&m.m, 0..) |*cell, i| cell.* = if (i % 5 == 0) 1.0 else 0.0;
     return m;
 }
 
 /// Slot `root`. Returns the root entity, or the invalid entity for a null tree.
-fn vtRoot(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_entity {
-    const self = self_in orelse return c.KE_ENTITY_INVALID;
-    if (self.handle == null) return c.KE_ENTITY_INVALID;
+fn vtRoot(self_in: ?*abi_framework.ke_scene_tree) callconv(.c) abi_ecs.ke_entity {
+    const self = self_in orelse return abi_ecs.KE_ENTITY_INVALID;
+    if (self.handle == null) return abi_ecs.KE_ENTITY_INVALID;
     return stateOf(self).root;
 }
 
 /// Slot `parent`. Returns the parent of the entity, or the invalid entity for the root, for an
 /// entity without a hierarchy component and for a null tree.
-fn vtParent(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
-    const self = self_in orelse return c.KE_ENTITY_INVALID;
-    if (self.handle == null) return c.KE_ENTITY_INVALID;
-    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+fn vtParent(self_in: ?*abi_framework.ke_scene_tree, entity: abi_ecs.ke_entity) callconv(.c) abi_ecs.ke_entity {
+    const self = self_in orelse return abi_ecs.KE_ENTITY_INVALID;
+    if (self.handle == null) return abi_ecs.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return abi_ecs.KE_ENTITY_INVALID;
     return h.parent;
 }
 
 /// Slot `first_child`. Returns the first child of the entity, or the invalid entity when it has
 /// none, has no hierarchy component, or the tree is null.
-fn vtFirstChild(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
-    const self = self_in orelse return c.KE_ENTITY_INVALID;
-    if (self.handle == null) return c.KE_ENTITY_INVALID;
-    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+fn vtFirstChild(self_in: ?*abi_framework.ke_scene_tree, entity: abi_ecs.ke_entity) callconv(.c) abi_ecs.ke_entity {
+    const self = self_in orelse return abi_ecs.KE_ENTITY_INVALID;
+    if (self.handle == null) return abi_ecs.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return abi_ecs.KE_ENTITY_INVALID;
     return h.first_child;
 }
 
 /// Slot `next_sibling`. Returns the sibling created right after the entity under the same parent,
 /// or the invalid entity when it is the last, has no hierarchy component, or the tree is null.
-fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c.ke_entity {
-    const self = self_in orelse return c.KE_ENTITY_INVALID;
-    if (self.handle == null) return c.KE_ENTITY_INVALID;
-    const h = getHierarchy(stateOf(self), entity) orelse return c.KE_ENTITY_INVALID;
+fn vtNextSibling(self_in: ?*abi_framework.ke_scene_tree, entity: abi_ecs.ke_entity) callconv(.c) abi_ecs.ke_entity {
+    const self = self_in orelse return abi_ecs.KE_ENTITY_INVALID;
+    if (self.handle == null) return abi_ecs.KE_ENTITY_INVALID;
+    const h = getHierarchy(stateOf(self), entity) orelse return abi_ecs.KE_ENTITY_INVALID;
     return h.next_sibling;
 }
 
@@ -125,9 +131,9 @@ fn vtNextSibling(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) callconv(.c) c
 /// parent, so children are visited in creation order; a parent without a hierarchy component
 /// leaves the node unlinked. If one of the three components cannot be added, the entity is
 /// destroyed and the ecs's failure comes back before anything is linked.
-fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke_entity) R.Error!void {
+fn populateNode(s: *State, entity: abi_ecs.ke_entity, name: [*c]const u8, parent: abi_ecs.ke_entity) R.Error!void {
     errdefer _ = s.ecs.entity_destroy.?(s.ecs, entity);
-    for ([_]c.ke_component_id{ s.world_transform_cid, s.hierarchy_cid, s.name_cid }) |cid| {
+    for ([_]abi_ecs.ke_component_id{ s.world_transform_cid, s.hierarchy_cid, s.name_cid }) |cid| {
         var data: ?*anyopaque = null;
         try R.check(s.ecs.component_add.?(s.ecs, entity, cid, &data));
         if (data == null) return error.General;
@@ -139,13 +145,13 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
 
     if (getHierarchy(s, entity)) |h| {
         h.parent = parent;
-        h.first_child = c.KE_ENTITY_INVALID;
-        h.last_child = c.KE_ENTITY_INVALID;
-        h.next_sibling = c.KE_ENTITY_INVALID;
-        h.prev_sibling = c.KE_ENTITY_INVALID;
+        h.first_child = abi_ecs.KE_ENTITY_INVALID;
+        h.last_child = abi_ecs.KE_ENTITY_INVALID;
+        h.next_sibling = abi_ecs.KE_ENTITY_INVALID;
+        h.prev_sibling = abi_ecs.KE_ENTITY_INVALID;
     }
 
-    if (@as(?*c.ke_name_component, @ptrCast(@alignCast(
+    if (@as(?*abi_framework.ke_name_component, @ptrCast(@alignCast(
         s.ecs.component_get.?(s.ecs, entity, s.name_cid),
     )))) |n| {
         writeName(&n.name, name);
@@ -156,7 +162,7 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
     const ph = getHierarchy(s, parent);
     if (ph != null and h != null) {
         h.?.prev_sibling = ph.?.last_child;
-        if (ph.?.last_child != c.KE_ENTITY_INVALID) {
+        if (ph.?.last_child != abi_ecs.KE_ENTITY_INVALID) {
             if (getHierarchy(s, ph.?.last_child)) |sib| sib.next_sibling = entity;
         } else {
             ph.?.first_child = entity;
@@ -169,14 +175,14 @@ fn populateNode(s: *State, entity: c.ke_entity, name: [*c]const u8, parent: c.ke
 /// caller's string is not read again when the commands apply.
 const PendingCreate = extern struct {
     s: *State,
-    entity: c.ke_entity,
-    parent: c.ke_entity,
+    entity: abi_ecs.ke_entity,
+    parent: abi_ecs.ke_entity,
     name: [name_max]u8,
 };
 
 /// Runs when the commands apply. A node that populateNode cannot finish is destroyed, and the
 /// failure is returned to the flush.
-fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
+fn cbCreateNode(ecs: ?*abi_ecs.ke_ecs, user: ?*anyopaque) callconv(.c) abi_result.ke_result {
     _ = ecs;
     const p: *PendingCreate = @ptrCast(@alignCast(user));
     populateNode(p.s, p.entity, @ptrCast(&p.name), p.parent) catch |err| {
@@ -190,21 +196,21 @@ fn cbCreateNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
 /// stands for the root. A null tree or out-parameter fails as an invalid argument, and an entity or
 /// a component the ecs refuses fails as general, writing the invalid entity.
 fn vtCreateNode(
-    self_in: ?*c.ke_scene_tree,
+    self_in: ?*abi_framework.ke_scene_tree,
     name: [*c]const u8,
-    parent_in: c.ke_entity,
-    out_node: ?*c.ke_entity,
-) callconv(.c) c.ke_result {
+    parent_in: abi_ecs.ke_entity,
+    out_node: ?*abi_ecs.ke_entity,
+) callconv(.c) abi_result.ke_result {
     const out = out_node orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_ENTITY_INVALID;
+    out.* = abi_ecs.KE_ENTITY_INVALID;
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
+    const parent = if (parent_in == abi_ecs.KE_ENTITY_INVALID) s.root else parent_in;
 
-    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    var entity: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
     const created = s.ecs.entity_create.?(s.ecs, &entity);
-    if (created != c.KE_OK) return created;
+    if (created != abi_result.KE_OK) return created;
     populateNode(s, entity, name, parent) catch |err| return R.code(err);
     out.* = entity;
     return R.ok;
@@ -216,23 +222,23 @@ fn vtCreateNode(
 /// invalid argument, and a failed reservation or recording with the queue's code; each writes the
 /// invalid entity.
 fn vtCreateNodeDeferred(
-    self_in: ?*c.ke_scene_tree,
+    self_in: ?*abi_framework.ke_scene_tree,
     name: [*c]const u8,
-    parent_in: c.ke_entity,
-    commands: ?*c.ke_ecs_commands,
-    out_node: ?*c.ke_entity,
-) callconv(.c) c.ke_result {
+    parent_in: abi_ecs.ke_entity,
+    commands: ?*abi_ecs.ke_ecs_commands,
+    out_node: ?*abi_ecs.ke_entity,
+) callconv(.c) abi_result.ke_result {
     const out = out_node orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_ENTITY_INVALID;
+    out.* = abi_ecs.KE_ENTITY_INVALID;
     const self = self_in orelse return R.code(error.InvalidArgument);
     const cmds = commands orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    const parent = if (parent_in == c.KE_ENTITY_INVALID) s.root else parent_in;
+    const parent = if (parent_in == abi_ecs.KE_ENTITY_INVALID) s.root else parent_in;
 
-    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    var entity: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
     const spawned = cmds.spawn.?(cmds, &entity);
-    if (spawned != c.KE_OK) return spawned;
+    if (spawned != abi_result.KE_OK) return spawned;
     var pc: PendingCreate = .{
         .s = s,
         .entity = entity,
@@ -241,40 +247,40 @@ fn vtCreateNodeDeferred(
     };
     writeName(&pc.name, name);
     const recorded = cmds.@"defer".?(cmds, cbCreateNode, &pc, @sizeOf(PendingCreate));
-    if (recorded != c.KE_OK) return recorded;
+    if (recorded != abi_result.KE_OK) return recorded;
     out.* = entity;
     return R.ok;
 }
 
 /// Compares against the stored name, which may be a cut-short copy of the name the node was made
 /// with.
-fn nameEqualsSegment(name: ?*const c.ke_name_component, seg: []const u8) bool {
+fn nameEqualsSegment(name: ?*const abi_framework.ke_name_component, seg: []const u8) bool {
     const n = name orelse return false;
     const stored = std.mem.sliceTo(&n.name, 0);
     return std.mem.eql(u8, stored, seg);
 }
 
 /// The name search of `vtFindNode`. The parent's own name is never compared, only its descendants'.
-fn findByName(s: *State, parent: c.ke_entity, target: []const u8) c.ke_entity {
-    const h = getHierarchy(s, parent) orelse return c.KE_ENTITY_INVALID;
+fn findByName(s: *State, parent: abi_ecs.ke_entity, target: []const u8) abi_ecs.ke_entity {
+    const h = getHierarchy(s, parent) orelse return abi_ecs.KE_ENTITY_INVALID;
     var child = h.first_child;
-    while (child != c.KE_ENTITY_INVALID) {
+    while (child != abi_ecs.KE_ENTITY_INVALID) {
         if (nameEqualsSegment(getName(s, child), target)) return child;
         const found = findByName(s, child, target);
-        if (found != c.KE_ENTITY_INVALID) return found;
-        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+        if (found != abi_ecs.KE_ENTITY_INVALID) return found;
+        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
     }
-    return c.KE_ENTITY_INVALID;
+    return abi_ecs.KE_ENTITY_INVALID;
 }
 
-fn childBySegment(s: *State, parent: c.ke_entity, seg: []const u8) c.ke_entity {
-    const h = getHierarchy(s, parent) orelse return c.KE_ENTITY_INVALID;
+fn childBySegment(s: *State, parent: abi_ecs.ke_entity, seg: []const u8) abi_ecs.ke_entity {
+    const h = getHierarchy(s, parent) orelse return abi_ecs.KE_ENTITY_INVALID;
     var child = h.first_child;
-    while (child != c.KE_ENTITY_INVALID) {
+    while (child != abi_ecs.KE_ENTITY_INVALID) {
         if (nameEqualsSegment(getName(s, child), seg)) return child;
-        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
     }
-    return c.KE_ENTITY_INVALID;
+    return abi_ecs.KE_ENTITY_INVALID;
 }
 
 /// Slot `find_node`. A string without a slash goes to `findByName`, which returns the first match
@@ -282,12 +288,12 @@ fn childBySegment(s: *State, parent: c.ke_entity, seg: []const u8) c.ke_entity {
 /// ignoring leading dots and slashes and empty segments. An empty or null string, or a name that
 /// matches nothing, returns the invalid entity.
 fn vtFindNode(
-    self_in: ?*c.ke_scene_tree,
+    self_in: ?*abi_framework.ke_scene_tree,
     name_or_path: [*c]const u8,
-) callconv(.c) c.ke_entity {
-    const self = self_in orelse return c.KE_ENTITY_INVALID;
+) callconv(.c) abi_ecs.ke_entity {
+    const self = self_in orelse return abi_ecs.KE_ENTITY_INVALID;
     if (self.handle == null or name_or_path == null or name_or_path[0] == 0)
-        return c.KE_ENTITY_INVALID;
+        return abi_ecs.KE_ENTITY_INVALID;
     const s = stateOf(self);
 
     const path = std.mem.span(name_or_path);
@@ -301,7 +307,7 @@ fn vtFindNode(
     var current = s.root;
     var it = std.mem.splitScalar(u8, rest, '/');
     while (it.next()) |seg| {
-        if (current == c.KE_ENTITY_INVALID) break;
+        if (current == abi_ecs.KE_ENTITY_INVALID) break;
         if (seg.len == 0) continue;
         current = childBySegment(s, current, seg);
     }
@@ -310,12 +316,12 @@ fn vtFindNode(
 
 /// Destroys the entity and its subtree, children first. A destroy the ecs refuses does not stop
 /// the others; the first refusal is returned once all were tried.
-fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) R.Error!void {
+fn destroyEntitiesRecursive(s: *State, e: abi_ecs.ke_entity) R.Error!void {
     var first: R.Error!void = {};
     if (getHierarchy(s, e)) |h| {
         var child = h.first_child;
-        while (child != c.KE_ENTITY_INVALID) {
-            const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+        while (child != abi_ecs.KE_ENTITY_INVALID) {
+            const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
             destroyEntitiesRecursive(s, child) catch |err| {
                 if (first) |_| first = err else |_| {}
             };
@@ -331,22 +337,22 @@ fn destroyEntitiesRecursive(s: *State, e: c.ke_entity) R.Error!void {
 /// Unlinks the entity from its neighbours and its parent, then destroys its subtree. The recorded
 /// destroy calls it when the commands apply, and an entity already gone by then has no hierarchy
 /// component, so it is skipped.
-fn destroySubtree(s: *State, entity: c.ke_entity) R.Error!void {
+fn destroySubtree(s: *State, entity: abi_ecs.ke_entity) R.Error!void {
     const h = getHierarchy(s, entity) orelse return;
     const h_prev = h.prev_sibling;
     const h_next = h.next_sibling;
     const h_parent = h.parent;
     s.hierarchy_generation +%= 1;
 
-    if (h_parent != c.KE_ENTITY_INVALID) {
+    if (h_parent != abi_ecs.KE_ENTITY_INVALID) {
         if (getHierarchy(s, h_parent)) |ph| {
             if (ph.first_child == entity) ph.first_child = h_next;
             if (ph.last_child == entity) ph.last_child = h_prev;
         }
-        if (h_prev != c.KE_ENTITY_INVALID) {
+        if (h_prev != abi_ecs.KE_ENTITY_INVALID) {
             if (getHierarchy(s, h_prev)) |prev| prev.next_sibling = h_next;
         }
-        if (h_next != c.KE_ENTITY_INVALID) {
+        if (h_next != abi_ecs.KE_ENTITY_INVALID) {
             if (getHierarchy(s, h_next)) |next| next.prev_sibling = h_prev;
         }
     }
@@ -357,11 +363,11 @@ fn destroySubtree(s: *State, entity: c.ke_entity) R.Error!void {
 /// Payload of a deferred destroy, read by `cbDestroyNode` when the commands apply.
 const PendingDestroy = extern struct {
     s: *State,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
 };
 
 /// Runs when the commands apply, and does not repeat the checks made when the call was recorded.
-fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
+fn cbDestroyNode(ecs: ?*abi_ecs.ke_ecs, user: ?*anyopaque) callconv(.c) abi_result.ke_result {
     _ = ecs;
     const p: *PendingDestroy = @ptrCast(@alignCast(user));
     destroySubtree(p.s, p.entity) catch |err| {
@@ -374,9 +380,9 @@ fn cbDestroyNode(ecs: ?*c.ke_ecs, user: ?*anyopaque) callconv(.c) c.ke_result {
 /// Shared by the immediate and the deferred destroy. Fails as an invalid argument for a null tree,
 /// a null handle or an invalid entity, and as not found for an entity that has no hierarchy
 /// component.
-fn checkDestroyable(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) R.Error!*State {
+fn checkDestroyable(self_in: ?*abi_framework.ke_scene_tree, entity: abi_ecs.ke_entity) R.Error!*State {
     const self = self_in orelse return error.InvalidArgument;
-    if (self.handle == null or entity == c.KE_ENTITY_INVALID) return error.InvalidArgument;
+    if (self.handle == null or entity == abi_ecs.KE_ENTITY_INVALID) return error.InvalidArgument;
     const s = stateOf(self);
     if (getHierarchy(s, entity) == null) return error.NotFound;
     return s;
@@ -385,9 +391,9 @@ fn checkDestroyable(self_in: ?*c.ke_scene_tree, entity: c.ke_entity) R.Error!*St
 /// Slot `destroy_node`. Unlinks the entity and destroys it with its whole subtree, children
 /// first. Fails as `checkDestroyable` does.
 fn vtDestroyNode(
-    self_in: ?*c.ke_scene_tree,
-    entity: c.ke_entity,
-) callconv(.c) c.ke_result {
+    self_in: ?*abi_framework.ke_scene_tree,
+    entity: abi_ecs.ke_entity,
+) callconv(.c) abi_result.ke_result {
     const s = checkDestroyable(self_in, entity) catch |err| return R.code(err);
     return R.of(destroySubtree(s, entity));
 }
@@ -397,10 +403,10 @@ fn vtDestroyNode(
 /// checked; the other failures are those of `vtDestroyNode`, plus the queue's code when recording
 /// fails.
 fn vtDestroyNodeDeferred(
-    self_in: ?*c.ke_scene_tree,
-    entity: c.ke_entity,
-    commands: ?*c.ke_ecs_commands,
-) callconv(.c) c.ke_result {
+    self_in: ?*abi_framework.ke_scene_tree,
+    entity: abi_ecs.ke_entity,
+    commands: ?*abi_ecs.ke_ecs_commands,
+) callconv(.c) abi_result.ke_result {
     const cmds = commands orelse return R.code(error.InvalidArgument);
     const s = checkDestroyable(self_in, entity) catch |err| return R.code(err);
     var pd: PendingDestroy = .{ .s = s, .entity = entity };
@@ -411,17 +417,17 @@ fn vtDestroyNodeDeferred(
 /// neighbours; the root's first and last child fields are cleared once at the end. The root
 /// entity stays. A subtree the ecs refuses does not stop the rest; the first failure is returned.
 /// A null tree or handle fails as an invalid argument, a root without hierarchy as not found.
-fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_result {
+fn vtDestroyAll(self_in: ?*abi_framework.ke_scene_tree) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
 
     const rh = getHierarchy(s, s.root) orelse return R.code(error.NotFound);
     s.hierarchy_generation +%= 1;
-    var first_failure: c.ke_result = R.ok;
+    var first_failure: abi_result.ke_result = R.ok;
     var child = rh.first_child;
-    while (child != c.KE_ENTITY_INVALID) {
-        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+    while (child != abi_ecs.KE_ENTITY_INVALID) {
+        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
         destroyEntitiesRecursive(s, child) catch |err| {
             log.warn("destroying the subtree of node {d} failed: {t}", .{ child, err });
             if (first_failure == R.ok) first_failure = R.code(err);
@@ -429,15 +435,15 @@ fn vtDestroyAll(self_in: ?*c.ke_scene_tree) callconv(.c) c.ke_result {
         child = next;
     }
     if (getHierarchy(s, s.root)) |h| {
-        h.first_child = c.KE_ENTITY_INVALID;
-        h.last_child = c.KE_ENTITY_INVALID;
+        h.first_child = abi_ecs.KE_ENTITY_INVALID;
+        h.last_child = abi_ecs.KE_ENTITY_INVALID;
     }
     return first_failure;
 }
 
 /// An entity without a world transform stores no matrix, so its children are composed with the
 /// matrix of its nearest ancestor that has one.
-fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_mat4) void {
+fn propagateRecursive(s: *State, entity: abi_ecs.ke_entity, parent_world: *const abi_math.ke_mat4) void {
     var child_parent = parent_world;
     if (getWorldTransform(s, entity)) |w| {
         var local = identityMatrix();
@@ -452,8 +458,8 @@ fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_
 
     const h = getHierarchy(s, entity) orelse return;
     var child = h.first_child;
-    while (child != c.KE_ENTITY_INVALID) {
-        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+    while (child != abi_ecs.KE_ENTITY_INVALID) {
+        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
         propagateRecursive(s, child, child_parent);
         child = next;
     }
@@ -463,13 +469,13 @@ fn propagateRecursive(s: *State, entity: c.ke_entity, parent_world: *const c.ke_
 /// root has no world transform, so the walk starts from the identity matrix at its children.
 /// Slot `hierarchy_generation`. Returns the count `populateNode`, `destroySubtree` and
 /// `vtDestroyAll` move, or 0 for a null tree.
-fn vtHierarchyGeneration(self_in: ?*c.ke_scene_tree) callconv(.c) u64 {
+fn vtHierarchyGeneration(self_in: ?*abi_framework.ke_scene_tree) callconv(.c) u64 {
     const self = self_in orelse return 0;
     if (self.handle == null) return 0;
     return stateOf(self).hierarchy_generation;
 }
 
-fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
+fn vtPropagateTransforms(self_in: ?*abi_framework.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -477,8 +483,8 @@ fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
     const rh = getHierarchy(s, s.root) orelse return;
     s.hierarchy_generation +%= 1;
     var child = rh.first_child;
-    while (child != c.KE_ENTITY_INVALID) {
-        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else c.KE_ENTITY_INVALID;
+    while (child != abi_ecs.KE_ENTITY_INVALID) {
+        const next = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.KE_ENTITY_INVALID;
         propagateRecursive(s, child, &identity);
         child = next;
     }
@@ -486,7 +492,7 @@ fn vtPropagateTransforms(self_in: ?*c.ke_scene_tree) callconv(.c) void {
 
 /// The handle's destroy. Releases the scene hierarchy first. After it returns the State, the root
 /// and every node under it are gone; the ecs itself is not destroyed.
-fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
+fn vtDestroy(self_in: ?*abi_framework.ke_scene_tree) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -504,48 +510,48 @@ fn vtDestroy(self_in: ?*c.ke_scene_tree) callconv(.c) void {
 /// or root component as general. Each leaves the handle zeroed and releases whatever this call
 /// created, so no entity or allocation is left.
 export fn ke_scene_tree_create(
-    ecs_in: ?*c.ke_ecs,
-    runtime: ?*c.ke_runtime,
-    out_tree: ?*c.ke_scene_tree_handle,
-) callconv(.c) c.ke_result {
+    ecs_in: ?*abi_ecs.ke_ecs,
+    runtime: ?*abi_runtime.ke_runtime,
+    out_tree: ?*abi_framework.ke_scene_tree_handle,
+) callconv(.c) abi_result.ke_result {
     const out = out_tree orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(c.ke_scene_tree_handle);
+    out.* = std.mem.zeroes(abi_framework.ke_scene_tree_handle);
     const ecs = ecs_in orelse return R.code(error.InvalidArgument);
     out.* = create(ecs, runtime) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn create(ecs: *c.ke_ecs, runtime: ?*c.ke_runtime) R.Error!c.ke_scene_tree_handle {
+fn create(ecs: *abi_ecs.ke_ecs, runtime: ?*abi_runtime.ke_runtime) R.Error!abi_framework.ke_scene_tree_handle {
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
     s.* = .{
-        .api = std.mem.zeroes(c.ke_scene_tree),
+        .api = std.mem.zeroes(abi_framework.ke_scene_tree),
         .ecs = ecs,
-        .root = c.KE_ENTITY_INVALID,
-        .transform_cid = try registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM, c.ke_transform_component, &c.ke_transform_component_fields),
-        .transform2d_cid = try registerComponent(ecs, c.KE_COMPONENT_NAME_TRANSFORM2D, c.ke_transform2d_component, &c.ke_transform2d_component_fields),
-        .world_transform_cid = try registerComponent(ecs, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, c.ke_world_transform_component, &.{}),
-        .hierarchy_cid = try registerComponent(ecs, c.KE_COMPONENT_NAME_HIERARCHY, c.ke_hierarchy_component, &.{}),
-        .name_cid = try registerComponent(ecs, c.KE_COMPONENT_NAME_NAME, c.ke_name_component, &.{}),
-        .hierarchy = std.mem.zeroes(c.ke_scene_hierarchy_handle),
+        .root = abi_ecs.KE_ENTITY_INVALID,
+        .transform_cid = try registerComponent(ecs, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.ke_transform_component, &abi_spatial.ke_transform_component_fields),
+        .transform2d_cid = try registerComponent(ecs, abi_spatial.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.ke_transform2d_component, &abi_spatial.ke_transform2d_component_fields),
+        .world_transform_cid = try registerComponent(ecs, abi_spatial.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.ke_world_transform_component, &.{}),
+        .hierarchy_cid = try registerComponent(ecs, abi_framework.KE_COMPONENT_NAME_HIERARCHY, abi_framework.ke_hierarchy_component, &.{}),
+        .name_cid = try registerComponent(ecs, abi_framework.KE_COMPONENT_NAME_NAME, abi_framework.ke_name_component, &.{}),
+        .hierarchy = std.mem.zeroes(abi_framework.ke_scene_hierarchy_handle),
     };
 
     try R.check(ecs.entity_create.?(ecs, &s.root));
     errdefer _ = ecs.entity_destroy.?(ecs, s.root);
-    for ([_]c.ke_component_id{ s.hierarchy_cid, s.name_cid }) |cid| {
+    for ([_]abi_ecs.ke_component_id{ s.hierarchy_cid, s.name_cid }) |cid| {
         var data: ?*anyopaque = null;
         try R.check(ecs.component_add.?(ecs, s.root, cid, &data));
         if (data == null) return error.General;
     }
 
     if (getHierarchy(s, s.root)) |h| {
-        h.parent = c.KE_ENTITY_INVALID;
-        h.first_child = c.KE_ENTITY_INVALID;
-        h.last_child = c.KE_ENTITY_INVALID;
-        h.next_sibling = c.KE_ENTITY_INVALID;
-        h.prev_sibling = c.KE_ENTITY_INVALID;
+        h.parent = abi_ecs.KE_ENTITY_INVALID;
+        h.first_child = abi_ecs.KE_ENTITY_INVALID;
+        h.last_child = abi_ecs.KE_ENTITY_INVALID;
+        h.next_sibling = abi_ecs.KE_ENTITY_INVALID;
+        h.prev_sibling = abi_ecs.KE_ENTITY_INVALID;
     }
-    if (@as(?*c.ke_name_component, @ptrCast(@alignCast(
+    if (@as(?*abi_framework.ke_name_component, @ptrCast(@alignCast(
         ecs.component_get.?(ecs, s.root, s.name_cid),
     )))) |n| {
         writeName(&n.name, "Root");
@@ -565,7 +571,7 @@ fn create(ecs: *c.ke_ecs, runtime: ?*c.ke_runtime) R.Error!c.ke_scene_tree_handl
     s.api.propagate_transforms = vtPropagateTransforms;
     s.api.hierarchy_generation = vtHierarchyGeneration;
 
-    if (runtime) |rt| try R.check(c.ke_scene_hierarchy_create(rt, ecs, &s.hierarchy));
+    if (runtime) |rt| try R.check(abi_framework_factory.ke_scene_hierarchy_create(rt, ecs, &s.hierarchy));
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
@@ -580,35 +586,35 @@ const fake_max_entities = 128;
 const FakeComponent = struct {
     name: []const u8,
     size: usize,
-    fields: [*c]const c.ke_component_field,
+    fields: [*c]const abi_ecs.ke_component_field,
 };
 
 pub const FakeEcs = struct {
-    vtable: c.ke_ecs,
+    vtable: abi_ecs.ke_ecs,
     arena: std.heap.ArenaAllocator,
     components: [fake_max_components]FakeComponent,
     component_count: usize,
     alive: [fake_max_entities]bool,
     storage: [fake_max_entities][fake_max_components]?[*]u8,
-    next_entity: c.ke_entity,
+    next_entity: abi_ecs.ke_entity,
     refused: ?[]const u8,
 };
 
-fn fakeEcsOf(self: ?*c.ke_ecs) *FakeEcs {
+fn fakeEcsOf(self: ?*abi_ecs.ke_ecs) *FakeEcs {
     return @ptrCast(@alignCast(self.?.handle));
 }
 
-fn fakeSlot(f: *FakeEcs, entity: c.ke_entity, cid: c.ke_component_id) ?*?[*]u8 {
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return null;
+fn fakeSlot(f: *FakeEcs, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_component_id) ?*?[*]u8 {
+    if (entity == abi_ecs.KE_ENTITY_INVALID or entity > fake_max_entities) return null;
     const row = entity - 1;
     if (!f.alive[row]) return null;
     if (cid == 0 or cid > f.component_count) return null;
     return &f.storage[row][cid - 1];
 }
 
-fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
+fn fakeEntityCreate(self: ?*abi_ecs.ke_ecs, out_entity: [*c]abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    out_entity.* = c.KE_ENTITY_INVALID;
+    out_entity.* = abi_ecs.KE_ENTITY_INVALID;
     if (f.next_entity >= fake_max_entities) return R.code(error.OutOfMemory);
     f.next_entity += 1;
     f.alive[f.next_entity - 1] = true;
@@ -616,13 +622,13 @@ fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) 
     return R.ok;
 }
 
-fn fakeEntityReserve(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
+fn fakeEntityReserve(self: ?*abi_ecs.ke_ecs, out_entity: [*c]abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
     return fakeEntityCreate(self, out_entity);
 }
 
-fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
+fn fakeEntityDestroy(self: ?*abi_ecs.ke_ecs, entity: abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
+    if (entity == abi_ecs.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
     const row = entity - 1;
     f.alive[row] = false;
     for (&f.storage[row]) |*cell| cell.* = null;
@@ -630,12 +636,12 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_re
 }
 
 fn fakeComponentRegister(
-    self: ?*c.ke_ecs,
-    params: [*c]const c.ke_component_params,
-    out_cid: [*c]c.ke_component_id,
-) callconv(.c) c.ke_result {
+    self: ?*abi_ecs.ke_ecs,
+    params: [*c]const abi_ecs.ke_component_params,
+    out_cid: [*c]abi_ecs.ke_component_id,
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    const wanted = std.mem.span(params.*.name);
+    const wanted = std.mem.span(params.*.name.?);
     if (f.refused) |r| if (std.mem.eql(u8, r, wanted)) {
         return answer(out_cid, 0);
     };
@@ -648,15 +654,15 @@ fn fakeComponentRegister(
     return answer(out_cid, @intCast(f.component_count));
 }
 
-fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+fn answer(out_cid: [*c]abi_ecs.ke_component_id, cid: abi_ecs.ke_component_id) abi_result.ke_result {
     out_cid.* = cid;
     return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn fakeComponentLookup(
-    self: ?*c.ke_ecs,
+    self: ?*abi_ecs.ke_ecs,
     name: [*c]const u8,
-    out_meta: [*c]c.ke_component_meta,
+    out_meta: [*c]abi_ecs.ke_component_meta,
 ) callconv(.c) bool {
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
@@ -676,11 +682,11 @@ fn fakeComponentLookup(
 }
 
 fn fakeComponentAdd(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
     out_data: [*c]?*anyopaque,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
     out_data.* = null;
     const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
@@ -697,10 +703,10 @@ fn fakeComponentAdd(
 }
 
 fn fakeComponentRemove(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
-) callconv(.c) c.ke_result {
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
     const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
     slot.* = null;
@@ -708,16 +714,16 @@ fn fakeComponentRemove(
 }
 
 fn fakeComponentGet(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
 ) callconv(.c) ?*anyopaque {
     const f = fakeEcsOf(self);
     const slot = fakeSlot(f, entity, component) orelse return null;
     return slot.*;
 }
 
-fn fakeComponentSize(self: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize {
+fn fakeComponentSize(self: ?*abi_ecs.ke_ecs, cid: abi_ecs.ke_component_id) callconv(.c) usize {
     const f = fakeEcsOf(self);
     if (cid == 0 or cid > f.component_count) return 0;
     return f.components[cid - 1].size;
@@ -725,7 +731,7 @@ fn fakeComponentSize(self: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usiz
 
 pub const Fixture = struct {
     ecs: FakeEcs,
-    handle: c.ke_scene_tree_handle,
+    handle: abi_framework.ke_scene_tree_handle,
 
     pub fn init(self: *Fixture) !void {
         self.ecs.arena = std.heap.ArenaAllocator.init(testing.allocator);
@@ -734,7 +740,7 @@ pub const Fixture = struct {
         self.ecs.refused = null;
         @memset(&self.ecs.alive, false);
         for (&self.ecs.storage) |*row| @memset(row, null);
-        self.ecs.vtable = std.mem.zeroes(c.ke_ecs);
+        self.ecs.vtable = std.mem.zeroes(abi_ecs.ke_ecs);
         self.ecs.vtable.handle = &self.ecs;
         self.ecs.vtable.entity_create = fakeEntityCreate;
         self.ecs.vtable.entity_reserve = fakeEntityReserve;
@@ -755,37 +761,37 @@ pub const Fixture = struct {
         self.ecs.arena.deinit();
     }
 
-    pub fn tree(self: *Fixture) [*c]c.ke_scene_tree {
+    pub fn tree(self: *Fixture) [*c]abi_framework.ke_scene_tree {
         return self.handle.ref;
     }
 
-    pub fn create(self: *Fixture, name: [*c]const u8, parent: c.ke_entity) c.ke_entity {
+    pub fn create(self: *Fixture, name: [*c]const u8, parent: abi_ecs.ke_entity) abi_ecs.ke_entity {
         const t = self.tree();
-        var node: c.ke_entity = c.KE_ENTITY_INVALID;
+        var node: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
         _ = t.*.create_node.?(t, name, parent, &node);
         return node;
     }
 
-    fn find(self: *Fixture, path: [*c]const u8) c.ke_entity {
+    fn find(self: *Fixture, path: [*c]const u8) abi_ecs.ke_entity {
         const t = self.tree();
         return t.*.find_node.?(t, path);
     }
 
-    fn hierarchyOf(self: *Fixture, e: c.ke_entity) ?*c.ke_hierarchy_component {
-        var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_HIERARCHY, &meta)) return null;
+    fn hierarchyOf(self: *Fixture, e: abi_ecs.ke_entity) ?*abi_framework.ke_hierarchy_component {
+        var meta: abi_ecs.ke_component_meta = undefined;
+        if (!fakeComponentLookup(&self.ecs.vtable, abi_framework.KE_COMPONENT_NAME_HIERARCHY, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, e, meta.cid)));
     }
 
-    fn transformOf(self: *Fixture, e: c.ke_entity) ?*c.ke_transform_component {
-        var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_TRANSFORM, &meta)) return null;
+    fn transformOf(self: *Fixture, e: abi_ecs.ke_entity) ?*abi_spatial.ke_transform_component {
+        var meta: abi_ecs.ke_component_meta = undefined;
+        if (!fakeComponentLookup(&self.ecs.vtable, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, &meta)) return null;
         if (fakeComponentGet(&self.ecs.vtable, e, meta.cid)) |existing| {
             return @ptrCast(@alignCast(existing));
         }
         var data: ?*anyopaque = null;
         if (fakeComponentAdd(&self.ecs.vtable, e, meta.cid, &data) != R.ok) return null;
-        const added: ?*c.ke_transform_component = @ptrCast(@alignCast(data));
+        const added: ?*abi_spatial.ke_transform_component = @ptrCast(@alignCast(data));
         if (added) |t| {
             t.position = .{ .x = 0, .y = 0, .z = 0 };
             t.rotation = .{ .x = 0, .y = 0, .z = 0, .w = 1 };
@@ -794,9 +800,9 @@ pub const Fixture = struct {
         return added;
     }
 
-    fn worldOf(self: *Fixture, e: c.ke_entity) ?*c.ke_world_transform_component {
-        var meta: c.ke_component_meta = undefined;
-        if (!fakeComponentLookup(&self.ecs.vtable, c.KE_COMPONENT_NAME_WORLD_TRANSFORM, &meta)) return null;
+    fn worldOf(self: *Fixture, e: abi_ecs.ke_entity) ?*abi_spatial.ke_world_transform_component {
+        var meta: abi_ecs.ke_component_meta = undefined;
+        if (!fakeComponentLookup(&self.ecs.vtable, abi_spatial.KE_COMPONENT_NAME_WORLD_TRANSFORM, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, e, meta.cid)));
     }
 };
@@ -808,7 +814,7 @@ test "a fresh tree has one stable root" {
 
     const t = f.tree();
     const r = t.*.root.?(t);
-    try testing.expect(r != c.KE_ENTITY_INVALID);
+    try testing.expect(r != abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(r, t.*.root.?(t));
 }
 
@@ -817,8 +823,8 @@ test "a node created without a parent lands under the root" {
     try f.init();
     defer f.deinit();
 
-    const child = f.create("X", c.KE_ENTITY_INVALID);
-    try testing.expect(child != c.KE_ENTITY_INVALID);
+    const child = f.create("X", abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(child != abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(child, f.find("X"));
 }
 
@@ -827,9 +833,9 @@ test "a node created with an explicit parent is reachable through it" {
     try f.init();
     defer f.deinit();
 
-    const parent = f.create("Parent", c.KE_ENTITY_INVALID);
+    const parent = f.create("Parent", abi_ecs.KE_ENTITY_INVALID);
     const child = f.create("Child", parent);
-    try testing.expect(child != c.KE_ENTITY_INVALID);
+    try testing.expect(child != abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(child, f.find("Parent/Child"));
 }
 
@@ -838,13 +844,13 @@ test "every sibling under one parent stays reachable and points back at it" {
     try f.init();
     defer f.deinit();
 
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const a = f.create("A", parent);
     const b = f.create("B", parent);
     const d = f.create("C", parent);
-    try testing.expect(a != c.KE_ENTITY_INVALID);
-    try testing.expect(b != c.KE_ENTITY_INVALID);
-    try testing.expect(d != c.KE_ENTITY_INVALID);
+    try testing.expect(a != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(b != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(d != abi_ecs.KE_ENTITY_INVALID);
 
     try testing.expectEqual(a, f.find("P/A"));
     try testing.expectEqual(b, f.find("P/B"));
@@ -853,7 +859,7 @@ test "every sibling under one parent stays reachable and points back at it" {
     const ph = f.hierarchyOf(parent) orelse return error.MissingHierarchy;
     var walked: usize = 0;
     var cur = ph.first_child;
-    while (cur != c.KE_ENTITY_INVALID and walked < fake_max_entities) : (walked += 1) {
+    while (cur != abi_ecs.KE_ENTITY_INVALID and walked < fake_max_entities) : (walked += 1) {
         const ch = f.hierarchyOf(cur) orelse return error.MissingHierarchy;
         try testing.expectEqual(parent, ch.parent);
         cur = ch.next_sibling;
@@ -866,16 +872,16 @@ test "siblings link in the order they were created" {
     try f.init();
     defer f.deinit();
 
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const a = f.create("A", parent);
     const b = f.create("B", parent);
     const d = f.create("C", parent);
 
     const ph = f.hierarchyOf(parent) orelse return error.MissingHierarchy;
-    var order: [3]c.ke_entity = .{ 0, 0, 0 };
+    var order: [3]abi_ecs.ke_entity = .{ 0, 0, 0 };
     var walked: usize = 0;
     var cur = ph.first_child;
-    while (cur != c.KE_ENTITY_INVALID and walked < order.len) : (walked += 1) {
+    while (cur != abi_ecs.KE_ENTITY_INVALID and walked < order.len) : (walked += 1) {
         order[walked] = cur;
         const ch = f.hierarchyOf(cur) orelse return error.MissingHierarchy;
         cur = ch.next_sibling;
@@ -891,16 +897,16 @@ test "the tree walks a child list without anyone reading the hierarchy component
     try f.init();
     defer f.deinit();
 
-    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const tree: *abi_framework.ke_scene_tree = @ptrCast(f.handle.ref);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const a = f.create("A", parent);
     const b = f.create("B", parent);
     const d = f.create("C", parent);
 
-    var order: [3]c.ke_entity = .{ 0, 0, 0 };
+    var order: [3]abi_ecs.ke_entity = .{ 0, 0, 0 };
     var walked: usize = 0;
     var cur = tree.first_child.?(tree, parent);
-    while (cur != c.KE_ENTITY_INVALID and walked < order.len) : (walked += 1) {
+    while (cur != abi_ecs.KE_ENTITY_INVALID and walked < order.len) : (walked += 1) {
         order[walked] = cur;
         cur = tree.next_sibling.?(tree, cur);
     }
@@ -909,7 +915,7 @@ test "the tree walks a child list without anyone reading the hierarchy component
     try testing.expectEqual(a, order[0]);
     try testing.expectEqual(b, order[1]);
     try testing.expectEqual(d, order[2]);
-    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.next_sibling.?(tree, d));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, tree.next_sibling.?(tree, d));
 }
 
 test "a child points back at its parent and a root points at nothing" {
@@ -917,13 +923,13 @@ test "a child points back at its parent and a root points at nothing" {
     try f.init();
     defer f.deinit();
 
-    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const tree: *abi_framework.ke_scene_tree = @ptrCast(f.handle.ref);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const child = f.create("A", parent);
 
     try testing.expectEqual(parent, tree.parent.?(tree, child));
     try testing.expectEqual(tree.root.?(tree), tree.parent.?(tree, parent));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.first_child.?(tree, child));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, tree.first_child.?(tree, child));
 }
 
 test "walking an entity the tree never made answers nothing rather than guessing" {
@@ -931,13 +937,13 @@ test "walking an entity the tree never made answers nothing rather than guessing
     try f.init();
     defer f.deinit();
 
-    const tree: *c.ke_scene_tree = @ptrCast(f.handle.ref);
-    var stranger: c.ke_entity = c.KE_ENTITY_INVALID;
+    const tree: *abi_framework.ke_scene_tree = @ptrCast(f.handle.ref);
+    var stranger: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
     try R.check(f.ecs.vtable.entity_create.?(&f.ecs.vtable, &stranger));
 
-    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.parent.?(tree, stranger));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.first_child.?(tree, stranger));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, tree.next_sibling.?(tree, stranger));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, tree.parent.?(tree, stranger));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, tree.first_child.?(tree, stranger));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, tree.next_sibling.?(tree, stranger));
 }
 
 test "an empty or absent path finds nothing" {
@@ -945,8 +951,8 @@ test "an empty or absent path finds nothing" {
     try f.init();
     defer f.deinit();
 
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find(""));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find(null));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find(""));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find(null));
 }
 
 test "a name nobody registered finds nothing" {
@@ -954,8 +960,8 @@ test "a name nobody registered finds nothing" {
     try f.init();
     defer f.deinit();
 
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Unknown"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("/Unknown"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Unknown"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("/Unknown"));
 }
 
 test "a bare name finds a direct child of the root" {
@@ -963,7 +969,7 @@ test "a bare name finds a direct child of the root" {
     try f.init();
     defer f.deinit();
 
-    const child = f.create("Player", c.KE_ENTITY_INVALID);
+    const child = f.create("Player", abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(child, f.find("Player"));
 }
 
@@ -972,7 +978,7 @@ test "a bare name searches the whole subtree, not just the root's children" {
     try f.init();
     defer f.deinit();
 
-    const inter = f.create("Intermediate", c.KE_ENTITY_INVALID);
+    const inter = f.create("Intermediate", abi_ecs.KE_ENTITY_INVALID);
     const target = f.create("Target", inter);
     try testing.expectEqual(target, f.find("Target"));
 }
@@ -982,7 +988,7 @@ test "a path walks segment by segment however it is anchored" {
     try f.init();
     defer f.deinit();
 
-    const world = f.create("World", c.KE_ENTITY_INVALID);
+    const world = f.create("World", abi_ecs.KE_ENTITY_INVALID);
     const player = f.create("Player", world);
     try testing.expectEqual(player, f.find("/World/Player"));
     try testing.expectEqual(player, f.find("World/Player"));
@@ -994,8 +1000,8 @@ test "a path whose last segment does not exist finds nothing" {
     try f.init();
     defer f.deinit();
 
-    _ = f.create("World", c.KE_ENTITY_INVALID);
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("/World/Missing"));
+    _ = f.create("World", abi_ecs.KE_ENTITY_INVALID);
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("/World/Missing"));
 }
 
 test "a leading dot anchors the path at the root" {
@@ -1003,7 +1009,7 @@ test "a leading dot anchors the path at the root" {
     try f.init();
     defer f.deinit();
 
-    const world = f.create("World", c.KE_ENTITY_INVALID);
+    const world = f.create("World", abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(world, f.find("./World"));
 }
 
@@ -1012,7 +1018,7 @@ test "a trailing slash does not change what a path names" {
     try f.init();
     defer f.deinit();
 
-    const world = f.create("World", c.KE_ENTITY_INVALID);
+    const world = f.create("World", abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(world, f.find("/World/"));
 }
 
@@ -1021,7 +1027,7 @@ test "a deep relative path reaches a grandchild" {
     try f.init();
     defer f.deinit();
 
-    const a = f.create("A", c.KE_ENTITY_INVALID);
+    const a = f.create("A", abi_ecs.KE_ENTITY_INVALID);
     const b = f.create("B", a);
     const d = f.create("C", b);
     try testing.expectEqual(d, f.find("A/B/C"));
@@ -1032,27 +1038,27 @@ test "repeated slashes collapse instead of failing the walk" {
     try f.init();
     defer f.deinit();
 
-    const a = f.create("A", c.KE_ENTITY_INVALID);
+    const a = f.create("A", abi_ecs.KE_ENTITY_INVALID);
     try testing.expectEqual(a, f.find("//A///"));
 }
 
 pub const RecordingCommands = struct {
-    vtable: c.ke_ecs_commands,
-    ecs: *c.ke_ecs,
-    fns: [8]c.ke_defer_fn = undefined,
+    vtable: abi_ecs.ke_ecs_commands,
+    ecs: *abi_ecs.ke_ecs,
+    fns: [8]abi_ecs.ke_defer_fn = undefined,
     payloads: [8][128]u8 = undefined,
     count: usize = 0,
 
-    fn of(self: ?*c.ke_ecs_commands) *RecordingCommands {
+    fn of(self: ?*abi_ecs.ke_ecs_commands) *RecordingCommands {
         return @ptrCast(@alignCast(self.?.handle));
     }
 
-    fn spawn(self: ?*c.ke_ecs_commands, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
+    fn spawn(self: ?*abi_ecs.ke_ecs_commands, out_entity: [*c]abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
         const r = of(self);
         return r.ecs.entity_reserve.?(r.ecs, out_entity);
     }
 
-    fn defer_(self: ?*c.ke_ecs_commands, func: c.ke_defer_fn, user: ?*const anyopaque, size: usize) callconv(.c) c.ke_result {
+    fn defer_(self: ?*abi_ecs.ke_ecs_commands, func: abi_ecs.ke_defer_fn, user: ?*const anyopaque, size: usize) callconv(.c) abi_result.ke_result {
         const r = of(self);
         if (r.count == r.fns.len) return R.code(error.OutOfMemory);
         r.fns[r.count] = func;
@@ -1061,14 +1067,14 @@ pub const RecordingCommands = struct {
         return R.ok;
     }
 
-    pub fn init(ecs: *c.ke_ecs) RecordingCommands {
-        var r: RecordingCommands = .{ .vtable = std.mem.zeroes(c.ke_ecs_commands), .ecs = ecs };
+    pub fn init(ecs: *abi_ecs.ke_ecs) RecordingCommands {
+        var r: RecordingCommands = .{ .vtable = std.mem.zeroes(abi_ecs.ke_ecs_commands), .ecs = ecs };
         r.vtable.spawn = spawn;
         r.vtable.@"defer" = defer_;
         return r;
     }
 
-    pub fn bind(self: *RecordingCommands) *c.ke_ecs_commands {
+    pub fn bind(self: *RecordingCommands) *abi_ecs.ke_ecs_commands {
         self.vtable.handle = self;
         return &self.vtable;
     }
@@ -1086,10 +1092,10 @@ test "a deferred create exists only once the recorded commands are applied" {
 
     var rec = RecordingCommands.init(&f.ecs.vtable);
     const t = f.tree();
-    var e: c.ke_entity = c.KE_ENTITY_INVALID;
-    try testing.expectEqual(R.ok, t.*.create_node_deferred.?(t, "Later", c.KE_ENTITY_INVALID, rec.bind(), &e));
-    try testing.expect(e != c.KE_ENTITY_INVALID);
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Later"));
+    var e: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
+    try testing.expectEqual(R.ok, t.*.create_node_deferred.?(t, "Later", abi_ecs.KE_ENTITY_INVALID, rec.bind(), &e));
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Later"));
 
     rec.apply();
     try testing.expectEqual(e, f.find("Later"));
@@ -1100,14 +1106,14 @@ test "a deferred destroy removes the node only once the recorded commands are ap
     try f.init();
     defer f.deinit();
 
-    const node = f.create("Doomed", c.KE_ENTITY_INVALID);
+    const node = f.create("Doomed", abi_ecs.KE_ENTITY_INVALID);
     var rec = RecordingCommands.init(&f.ecs.vtable);
     const t = f.tree();
     try testing.expectEqual(R.ok, t.*.destroy_node_deferred.?(t, node, rec.bind()));
     try testing.expectEqual(node, f.find("Doomed"));
 
     rec.apply();
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Doomed"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Doomed"));
 }
 
 test "a deferred create without a command queue is refused" {
@@ -1116,9 +1122,9 @@ test "a deferred create without a command queue is refused" {
     defer f.deinit();
 
     const t = f.tree();
-    var e: c.ke_entity = 7;
-    try testing.expectEqual(R.code(error.InvalidArgument), t.*.create_node_deferred.?(t, "X", c.KE_ENTITY_INVALID, null, &e));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, e);
+    var e: abi_ecs.ke_entity = 7;
+    try testing.expectEqual(R.code(error.InvalidArgument), t.*.create_node_deferred.?(t, "X", abi_ecs.KE_ENTITY_INVALID, null, &e));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, e);
 }
 
 test "destroying the invalid entity is refused" {
@@ -1127,7 +1133,7 @@ test "destroying the invalid entity is refused" {
     defer f.deinit();
 
     const t = f.tree();
-    try testing.expectEqual(R.code(error.InvalidArgument), t.*.destroy_node.?(t, c.KE_ENTITY_INVALID));
+    try testing.expectEqual(R.code(error.InvalidArgument), t.*.destroy_node.?(t, abi_ecs.KE_ENTITY_INVALID));
 }
 
 test "destroying a node takes its whole subtree with it" {
@@ -1135,15 +1141,15 @@ test "destroying a node takes its whole subtree with it" {
     try f.init();
     defer f.deinit();
 
-    const world = f.create("World", c.KE_ENTITY_INVALID);
+    const world = f.create("World", abi_ecs.KE_ENTITY_INVALID);
     _ = f.create("Player", world);
     _ = f.create("Enemy", world);
 
     const t = f.tree();
     try testing.expectEqual(R.ok, t.*.destroy_node.?(t, world));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("World"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Player"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Enemy"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("World"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Player"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Enemy"));
 }
 
 test "a destroyed node is unlinked from its parent" {
@@ -1151,10 +1157,10 @@ test "a destroyed node is unlinked from its parent" {
     try f.init();
     defer f.deinit();
 
-    const child = f.create("X", c.KE_ENTITY_INVALID);
+    const child = f.create("X", abi_ecs.KE_ENTITY_INVALID);
     const t = f.tree();
     try testing.expectEqual(R.ok, t.*.destroy_node.?(t, child));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("X"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("X"));
 }
 
 test "destroying a middle sibling leaves the chain walkable on both sides" {
@@ -1162,16 +1168,16 @@ test "destroying a middle sibling leaves the chain walkable on both sides" {
     try f.init();
     defer f.deinit();
 
-    _ = f.create("1", c.KE_ENTITY_INVALID);
-    const c2 = f.create("2", c.KE_ENTITY_INVALID);
-    _ = f.create("3", c.KE_ENTITY_INVALID);
+    _ = f.create("1", abi_ecs.KE_ENTITY_INVALID);
+    const c2 = f.create("2", abi_ecs.KE_ENTITY_INVALID);
+    _ = f.create("3", abi_ecs.KE_ENTITY_INVALID);
 
     const t = f.tree();
     try testing.expectEqual(R.ok, t.*.destroy_node.?(t, c2));
 
-    try testing.expect(f.find("1") != c.KE_ENTITY_INVALID);
-    try testing.expect(f.find("3") != c.KE_ENTITY_INVALID);
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("2"));
+    try testing.expect(f.find("1") != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(f.find("3") != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("2"));
 }
 
 test "clearing the tree removes every child but keeps the root" {
@@ -1179,15 +1185,15 @@ test "clearing the tree removes every child but keeps the root" {
     try f.init();
     defer f.deinit();
 
-    _ = f.create("A", c.KE_ENTITY_INVALID);
-    _ = f.create("B", c.KE_ENTITY_INVALID);
+    _ = f.create("A", abi_ecs.KE_ENTITY_INVALID);
+    _ = f.create("B", abi_ecs.KE_ENTITY_INVALID);
 
     const t = f.tree();
     try R.check(t.*.destroy_all.?(t));
 
-    try testing.expect(t.*.root.?(t) != c.KE_ENTITY_INVALID);
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("A"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("B"));
+    try testing.expect(t.*.root.?(t) != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("A"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("B"));
 }
 
 test "a node with no local transform propagates to identity" {
@@ -1195,8 +1201,8 @@ test "a node with no local transform propagates to identity" {
     try f.init();
     defer f.deinit();
 
-    const n = f.create("N", c.KE_ENTITY_INVALID);
-    try testing.expect(n != c.KE_ENTITY_INVALID);
+    const n = f.create("N", abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(n != abi_ecs.KE_ENTITY_INVALID);
     const t = f.tree();
     t.*.propagate_transforms.?(t);
 
@@ -1212,10 +1218,10 @@ test "a child's translation composes with its parent's" {
     try f.init();
     defer f.deinit();
 
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const child = f.create("C", parent);
-    try testing.expect(parent != c.KE_ENTITY_INVALID);
-    try testing.expect(child != c.KE_ENTITY_INVALID);
+    try testing.expect(parent != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(child != abi_ecs.KE_ENTITY_INVALID);
 
     (f.transformOf(parent) orelse return error.MissingTransform).position = .{ .x = 10, .y = 0, .z = 0 };
     (f.transformOf(child) orelse return error.MissingTransform).position = .{ .x = 1, .y = 2, .z = 3 };
@@ -1237,7 +1243,7 @@ test "a parent's scale stretches the offset its child sits at" {
     try f.init();
     defer f.deinit();
 
-    const parent = f.create("P", c.KE_ENTITY_INVALID);
+    const parent = f.create("P", abi_ecs.KE_ENTITY_INVALID);
     const child = f.create("C", parent);
 
     (f.transformOf(parent) orelse return error.MissingTransform).scale = .{ .x = 2, .y = 2, .z = 2 };
@@ -1256,7 +1262,7 @@ test "a quarter turn about y sends the x axis to minus z" {
     try f.init();
     defer f.deinit();
 
-    const n = f.create("N", c.KE_ENTITY_INVALID);
+    const n = f.create("N", abi_ecs.KE_ENTITY_INVALID);
     const s: f32 = 0.70710678;
     (f.transformOf(n) orelse return error.MissingTransform).rotation = .{ .x = 0, .y = s, .z = 0, .w = s };
 
@@ -1274,7 +1280,7 @@ test "a grandchild accumulates every translation on its chain" {
     try f.init();
     defer f.deinit();
 
-    const a = f.create("A", c.KE_ENTITY_INVALID);
+    const a = f.create("A", abi_ecs.KE_ENTITY_INVALID);
     const b = f.create("B", a);
     const d = f.create("D", b);
 
@@ -1292,7 +1298,7 @@ test "a grandchild accumulates every translation on its chain" {
 }
 
 test "a tree without an ecs is refused as an invalid argument and leaves the handle zeroed" {
-    var h: c.ke_scene_tree_handle = undefined;
+    var h: abi_framework.ke_scene_tree_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, &h));
     try testing.expect(h.ref == null);
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, null));
@@ -1304,10 +1310,10 @@ test "a tree registers each transform with the field table its header generates"
     defer f.deinit();
 
     for (f.ecs.components[0..f.ecs.component_count]) |comp| {
-        if (std.mem.eql(u8, comp.name, c.KE_COMPONENT_NAME_TRANSFORM))
-            try testing.expectEqual(@as([*c]const c.ke_component_field, &c.ke_transform_component_fields), comp.fields);
-        if (std.mem.eql(u8, comp.name, c.KE_COMPONENT_NAME_TRANSFORM2D))
-            try testing.expectEqual(@as([*c]const c.ke_component_field, &c.ke_transform2d_component_fields), comp.fields);
+        if (std.mem.eql(u8, comp.name, abi_spatial.KE_COMPONENT_NAME_TRANSFORM))
+            try testing.expectEqual(@as([*c]const abi_ecs.ke_component_field, &abi_spatial.ke_transform_component_fields), comp.fields);
+        if (std.mem.eql(u8, comp.name, abi_spatial.KE_COMPONENT_NAME_TRANSFORM2D))
+            try testing.expectEqual(@as([*c]const abi_ecs.ke_component_field, &abi_spatial.ke_transform2d_component_fields), comp.fields);
     }
 }
 
@@ -1316,8 +1322,8 @@ test "a tree whose component the ecs refuses is not created and fails with the e
     try f.init();
     defer f.deinit();
 
-    f.ecs.refused = c.KE_COMPONENT_NAME_NAME;
-    var h: c.ke_scene_tree_handle = undefined;
+    f.ecs.refused = abi_framework.KE_COMPONENT_NAME_NAME;
+    var h: abi_framework.ke_scene_tree_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(&f.ecs.vtable, null, &h));
     try testing.expect(h.ref == null);
 }
@@ -1330,7 +1336,7 @@ test "linking and unlinking a node each move the hierarchy generation" {
     const t = f.tree();
     const before = t.*.hierarchy_generation.?(t);
     try testing.expectEqual(before, t.*.hierarchy_generation.?(t));
-    const n = f.create("Node", c.KE_ENTITY_INVALID);
+    const n = f.create("Node", abi_ecs.KE_ENTITY_INVALID);
     const linked = t.*.hierarchy_generation.?(t);
     try testing.expect(linked != before);
     try testing.expectEqual(R.ok, t.*.destroy_node.?(t, n));
@@ -1340,7 +1346,7 @@ test "linking and unlinking a node each move the hierarchy generation" {
 test "creating nodes and destroying the tree leaves no block allocated" {
     var f: Fixture = undefined;
     try f.init();
-    const world = f.create("World", c.KE_ENTITY_INVALID);
+    const world = f.create("World", abi_ecs.KE_ENTITY_INVALID);
     _ = f.create("Player", world);
     f.deinit();
     try heap.expectNoLeaks();

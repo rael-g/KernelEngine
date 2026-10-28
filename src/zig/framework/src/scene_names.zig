@@ -3,7 +3,7 @@
 
 const std = @import("std");
 
-const c = @import("c");
+const abi_ecs = @import("abi_ecs");
 const heap = @import("heap");
 const values = @import("scene_values.zig");
 
@@ -53,7 +53,7 @@ pub fn normalizeTypeName(name: [*c]const u8, out: *[type_name_max]u8) ?[*:0]cons
 /// parent and a connection can name one as its target. The name copies live in the arena; the item
 /// array is heap memory that `deinit` frees. A map belongs to one file's load.
 pub const NameMap = struct {
-    const Entry = struct { name: [*:0]u8, entity: c.ke_entity };
+    const Entry = struct { name: [*:0]u8, entity: abi_ecs.ke_entity };
 
     items: ?[*]Entry = null,
     count: u32 = 0,
@@ -63,12 +63,12 @@ pub const NameMap = struct {
     const initial_capacity: u32 = 16;
 
     /// What a name refers to: nothing, one entity, or more than one, which a reference cannot use.
-    pub const Found = union(enum) { none, one: c.ke_entity, ambiguous };
+    pub const Found = union(enum) { none, one: abi_ecs.ke_entity, ambiguous };
 
     /// Records a name and its entity, growing the item array when it is full. A name may be
     /// recorded more than once; only a reference to it is refused. Fails as out of memory when the
     /// array cannot grow or the name cannot be copied.
-    pub fn put(self: *NameMap, name: [*c]const u8, entity: c.ke_entity) error{OutOfMemory}!void {
+    pub fn put(self: *NameMap, name: [*c]const u8, entity: abi_ecs.ke_entity) error{OutOfMemory}!void {
         if (self.count == self.capacity) {
             const cap = if (self.capacity != 0) self.capacity * 2 else initial_capacity;
             const buf = try heap.gpa.alloc(Entry, cap);

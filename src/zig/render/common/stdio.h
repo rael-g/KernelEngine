@@ -1,0 +1,6 @@
+#ifndef KERNEL_ENGINE_RENDER_COMMON_STDIO_H_
+#define KERNEL_ENGINE_RENDER_COMMON_STDIO_H_
+
+#include <stdio.h>
+
+#endif

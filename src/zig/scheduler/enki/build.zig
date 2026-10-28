@@ -2,7 +2,7 @@ const std = @import("std");
 const ke_build = @import("ke_build");
 
 pub fn build(b: *std.Build) void {
-    ke_build.plugin(b, .{
+    _ = ke_build.plugin(b, .{
         .name = "ke_scheduler_enki",
         .root = "src/enki_scheduler.zig",
         .abi = &.{ "abi_result", "abi_scheduler", "abi_scheduler_enki_factory" },
@@ -13,12 +13,14 @@ pub fn build(b: *std.Build) void {
     });
 }
 
-fn thirdParty(b: *std.Build, mod: *std.Build.Module) void {
+fn thirdParty(b: *std.Build, modules: ke_build.Modules) void {
     const enki_include = b.option([]const u8, "enki-include", "enkiTS headers dir") orelse @panic("-Denki-include required");
     const enki_lib = b.option([]const u8, "enki-lib", "dir holding the enkiTS library") orelse @panic("-Denki-lib required");
-    mod.addIncludePath(.{ .cwd_relative = enki_include });
+    for (modules.all(b)) |mod| {
+        mod.addIncludePath(.{ .cwd_relative = enki_include });
 
-    mod.link_libcpp = true;
-    mod.addLibraryPath(.{ .cwd_relative = enki_lib });
-    mod.linkSystemLibrary("enkiTS", .{});
+        mod.link_libcpp = true;
+        mod.addLibraryPath(.{ .cwd_relative = enki_lib });
+        mod.linkSystemLibrary("enkiTS", .{});
+    }
 }

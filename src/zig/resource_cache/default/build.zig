@@ -2,10 +2,10 @@ const std = @import("std");
 const ke_build = @import("ke_build");
 
 pub fn build(b: *std.Build) void {
-    ke_build.plugin(b, .{
+    _ = ke_build.plugin(b, .{
         .name = "ke_resource_cache_default",
         .root = "src/resource_cache.zig",
-        .abi = &.{ "abi_resource_cache", "abi_resource_cache_default_factory", "abi_result" },
+        .abi = &.{ "abi_resource_cache", "abi_result" },
         .common = &.{"heap"},
         .tests = "Run the default resource cache unit tests",
     });

@@ -1,95 +1,27 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
-const ke_logger_build = @import("ke_logger");
-const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
-    const optimize = b.standardOptimizeOption(.{});
-
-    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
-
-    const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
-    const component_fields_src = b.option([]const u8, "component-fields-src", "path to the shared Zig component_fields.zig") orelse @panic("-Dcomponent-fields-src required");
-    const handle_src = b.option([]const u8, "handle-src", "path to the shared Zig handle.zig") orelse @panic("-Dhandle-src required");
-    const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
-    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const ke_framework = b.option([]const u8, "ke-framework-include", "kernel_engine/framework include dir") orelse @panic("-Dke-framework-include required");
-    const ke_ecs = b.option([]const u8, "ke-ecs-include", "kernel_engine/ecs include dir") orelse @panic("-Dke-ecs-include required");
-    const ke_spatial = b.option([]const u8, "ke-spatial-include", "kernel_engine/spatial include dir") orelse @panic("-Dke-spatial-include required");
-    const ke_input = b.option([]const u8, "ke-input-include", "kernel_engine/input include dir") orelse @panic("-Dke-input-include required");
-    const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
-    const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
-    const ke_text = b.option([]const u8, "ke-text-include", "kernel_engine/text include dir") orelse @panic("-Dke-text-include required");
-    const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
-    const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
-    const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
-    const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir, read by the tests for its generated field table");
-    const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir, read by the tests for its generated field table");
-
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/framework_root.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
-    mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
-    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    mod.addIncludePath(b.path("include"));
-    addTomlc99(b, mod, tomlc99_dir);
-    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-
-    mod.addCMacro("KE_FRAMEWORK_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("log", ke_logger_build.log(b));
-    mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
+    _ = ke_build.plugin(b, .{
         .name = "ke_framework",
-        .root_module = mod,
-        .linkage = .dynamic,
+        .root = "src/framework_root.zig",
+        .abi = &.{ "abi_asset", "abi_audio", "abi_ecs", "abi_framework", "abi_framework_factory", "abi_input", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
+        .common = &.{ "component_fields", "heap" },
+        .render_common = &.{"handle"},
+        .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .third_party = thirdParty,
+        .tests = "Run unit tests",
     });
+}
 
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_step = b.step("test", "Run unit tests");
-    {
-        const test_mod = b.createModule(.{
-            .root_source_file = b.path("src/framework_root.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-        test_mod.addImport("component_fields", b.createModule(.{ .root_source_file = .{ .cwd_relative = component_fields_src }, .target = target, .optimize = optimize }));
-        test_mod.addImport("handle", b.createModule(.{ .root_source_file = .{ .cwd_relative = handle_src }, .target = target, .optimize = optimize }));
-        test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-        inline for (.{ ke_common, ke_result, ke_math, ke_framework, ke_ecs, ke_spatial, ke_input, ke_render, ke_asset, ke_text, ke_runtime, ke_scheduler, ke_logger }) |inc| {
-            test_mod.addIncludePath(.{ .cwd_relative = inc });
-        }
-        if (ke_audio) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
-        if (ke_physics) |inc| test_mod.addIncludePath(.{ .cwd_relative = inc });
-        test_mod.addIncludePath(b.path("include"));
-        addTomlc99(b, test_mod, tomlc99_dir);
-        test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-
-        test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-        test_mod.addImport("test_c", ke_build.cImports(b, test_mod, b.path("src/test_c.h")));
-        test_mod.addImport("log", ke_logger_build.log(b));
-        test_mod.addImport("result", ke_result_build.result(b));
-        const unit_tests = b.addTest(.{ .root_module = test_mod });
-        test_step.dependOn(&b.addRunArtifact(unit_tests).step);
+fn thirdParty(b: *std.Build, modules: ke_build.Modules) void {
+    const tomlc99_dir = b.option([]const u8, "tomlc99-dir", "dir holding toml.c and toml.h, fetched by the root build.zig.zon") orelse @panic("-Dtomlc99-dir required");
+    for (modules.all(b)) |mod| {
+        addTomlc99(b, mod, tomlc99_dir);
     }
 }
 
-pub fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
+fn addTomlc99(b: *std.Build, mod: *std.Build.Module, dir: []const u8) void {
     mod.addIncludePath(.{ .cwd_relative = dir });
     mod.addCSourceFile(.{
         .file = .{ .cwd_relative = b.pathJoin(&.{ dir, "toml.c" }) },

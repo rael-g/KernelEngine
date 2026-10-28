@@ -1,84 +1,31 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
-const ke_logger_build = @import("ke_logger");
-const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
-    const optimize = b.standardOptimizeOption(.{});
+    _ = ke_build.plugin(b, .{
+        .name = "ke_audio_miniaudio",
+        .root = "src/miniaudio_audio.zig",
+        .abi = &.{ "abi_audio", "abi_resource_cache", "abi_resource_cache_default_factory", "abi_result" },
+        .common = &.{"heap"},
+        .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .third_party = thirdParty,
+        .tests = "Run the miniaudio audio unit tests",
+    });
+}
 
-    const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
-    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
-    const ke_audio = b.option([]const u8, "ke-audio-include", "kernel_engine/audio include dir") orelse @panic("-Dke-audio-include required");
-    const ke_resource_cache = b.option([]const u8, "ke-resource-cache-include", "kernel_engine/resource_cache include dir") orelse @panic("-Dke-resource-cache-include required");
-    const ke_resource_cache_default = b.option([]const u8, "ke-resource-cache-default-include", "ke_resource_cache_default factory include dir") orelse @panic("-Dke-resource-cache-default-include required");
-    const ke_self = b.option([]const u8, "ke-self-include", "this plugin's include dir") orelse @panic("-Dke-self-include required");
+fn thirdParty(b: *std.Build, modules: ke_build.Modules) void {
     const miniaudio_include = b.option([]const u8, "miniaudio-include", "vcpkg miniaudio.h include dir") orelse @panic("-Dminiaudio-include required");
     const ke_resource_cache_lib_dir = b.option([]const u8, "ke-resource-cache-lib-dir", "dir with ke_resource_cache_default import lib") orelse @panic("-Dke-resource-cache-lib-dir required");
-
-
-
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/miniaudio_audio.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
+    for (modules.all(b)) |mod| {
+        mod.addIncludePath(.{ .cwd_relative = miniaudio_include });
+        const implementation = b.addWriteFiles().add("miniaudio_impl.c", "#define MINIAUDIO_IMPLEMENTATION\n#include <miniaudio.h>\n");
+        mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
+        mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
+        mod.linkSystemLibrary("ke_resource_cache_default", .{});
+        mod.addRPathSpecial("$ORIGIN");
+        if (mod.resolved_target.?.result.os.tag == .windows) {
+            mod.linkSystemLibrary("winmm", .{});
+        }
     }
-    const implementation = b.addWriteFiles().add("miniaudio_impl.c", "#define MINIAUDIO_IMPLEMENTATION\n#include <miniaudio.h>\n");
-    mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
-    mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
-    mod.linkSystemLibrary("ke_resource_cache_default", .{});
-    mod.addRPathSpecial("$ORIGIN");
-    if (target.result.os.tag == .windows) {
-        mod.linkSystemLibrary("winmm", .{});
-    }
-    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("log", ke_logger_build.log(b));
-    mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
-        .name = "ke_audio_miniaudio",
-        .root_module = mod,
-        .linkage = .dynamic,
-    });
-
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/miniaudio_audio.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_logger, ke_audio, ke_resource_cache, ke_resource_cache_default, ke_self, miniaudio_include }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    test_mod.addCSourceFile(.{ .file = implementation, .flags = &.{ "-fno-sanitize=undefined", "-Werror", "-Wno-unused-command-line-argument" } });
-    test_mod.addLibraryPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
-    test_mod.addRPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
-    test_mod.linkSystemLibrary("ke_resource_cache_default", .{});
-    if (target.result.os.tag == .windows) {
-        test_mod.linkSystemLibrary("winmm", .{});
-    }
-    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    test_mod.addCMacro("KE_AUDIO_MINIAUDIO_EXPORT", "");
-
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("log", ke_logger_build.log(b));
-    test_mod.addImport("result", ke_result_build.result(b));
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
-    b.step("test", "Run the miniaudio audio unit tests").dependOn(&run_tests.step);
+    for (modules.tests) |mod| mod.addRPath(.{ .cwd_relative = ke_resource_cache_lib_dir });
 }

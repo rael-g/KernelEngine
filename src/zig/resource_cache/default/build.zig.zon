@@ -6,7 +6,6 @@
     .dependencies = .{
         .abi_resource_cache = .{ .path = "../../abi/resource_cache" },
         .abi_result = .{ .path = "../../abi/result" },
-        .abi_resource_cache_default_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },

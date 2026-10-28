@@ -8,7 +8,6 @@
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_view = .{ .path = "../../abi/view" },
-        .abi_view_space_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },

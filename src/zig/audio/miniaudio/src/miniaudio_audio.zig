@@ -11,10 +11,12 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 const ma = @import("c");
+const abi_audio = @import("abi_audio");
+const abi_resource_cache = @import("abi_resource_cache");
+const abi_resource_cache_default_factory = @import("abi_resource_cache_default_factory");
+const abi_result = @import("abi_result");
 
-const c = @import("c");
-
-const R = @import("result").Result(c, .{});
+const R = @import("result").Result(abi_result, .{});
 
 /// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
 /// it. `sound` is uninitialised only when `initialized` is set, which happens once the file has
@@ -33,17 +35,17 @@ const LoadedSound = struct {
 const State = struct {
     engine: ma.ma_engine,
     engine_ready: bool,
-    sounds: std.AutoHashMap(c.ke_audio_sound, *LoadedSound),
-    next_id: c.ke_audio_sound,
-    cache: *c.ke_resource_cache,
-    cache_destroy: *const fn (?*c.ke_resource_cache) callconv(.c) void,
+    sounds: std.AutoHashMap(abi_audio.ke_audio_sound, *LoadedSound),
+    next_id: abi_audio.ke_audio_sound,
+    cache: *abi_resource_cache.ke_resource_cache,
+    cache_destroy: *const fn (?*abi_resource_cache.ke_resource_cache) callconv(.c) void,
 };
 
 const log = std.log.scoped(.audio_miniaudio);
 
 /// Destroy callback the cache calls when the last reference to an id goes. It removes the slot from
 /// `sounds` before freeing it, so the id stops resolving.
-fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
+fn destroySoundResource(handle: abi_resource_cache.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(ctx.?));
     const slot: ?*LoadedSound = if (state.sounds.fetchRemove(handle)) |kv| kv.value else null;
     if (slot) |s| {
@@ -55,7 +57,7 @@ fn destroySoundResource(handle: c.ke_resource_handle, ctx: ?*anyopaque) callconv
 /// Tears the backend down in the order the cache callback requires: the cache first, which frees
 /// every sound still held, then the engine if it was initialised, then the map, the state and the
 /// struct. A null backend is ignored.
-fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
+fn audioDestroy(self: ?*abi_audio.ke_audio) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
     state.cache_destroy(state.cache);
@@ -71,9 +73,9 @@ fn audioDestroy(self: ?*c.ke_audio) callconv(.c) void {
 /// On failure the id is the invalid one and no slot is left in the map: invalid argument for a
 /// null backend, path or out-parameter, out of memory for the slot or the map entry, and not found
 /// when miniaudio cannot open the file.
-fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_sound: ?*c.ke_audio_sound) callconv(.c) c.ke_result {
+fn audioLoadSound(self: ?*abi_audio.ke_audio, path: [*c]const u8, out_sound: ?*abi_audio.ke_audio_sound) callconv(.c) abi_result.ke_result {
     const out = out_sound orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_AUDIO_SOUND_INVALID;
+    out.* = abi_audio.KE_AUDIO_SOUND_INVALID;
     if (self == null or path == null) return R.code(error.InvalidArgument);
     const state: *State = @ptrCast(@alignCast(self.?.handle));
     out.* = loadSound(state, path) catch |err| {
@@ -83,8 +85,8 @@ fn audioLoadSound(self: ?*c.ke_audio, path: [*c]const u8, out_sound: ?*c.ke_audi
     return R.ok;
 }
 
-fn loadSound(state: *State, path: [*c]const u8) R.Error!c.ke_audio_sound {
-    var cached: c.ke_resource_handle = undefined;
+fn loadSound(state: *State, path: [*c]const u8) R.Error!abi_audio.ke_audio_sound {
+    var cached: abi_resource_cache.ke_resource_handle = undefined;
     if (state.cache.try_get_cached.?(state.cache, path, &cached))
         return @intCast(cached);
 
@@ -113,14 +115,14 @@ fn loadSound(state: *State, path: [*c]const u8) R.Error!c.ke_audio_sound {
 /// Gives back one reference on the id to the cache, which frees the sound when none remain; an id
 /// whose last reference went stops resolving. A null
 /// backend or the invalid id is ignored.
-fn audioUnloadSound(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
-    if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;
+fn audioUnloadSound(self: ?*abi_audio.ke_audio, id: abi_audio.ke_audio_sound) callconv(.c) void {
+    if (self == null or id == abi_audio.KE_AUDIO_SOUND_INVALID) return;
     const state: *State = @ptrCast(@alignCast(self.?.handle));
     _ = state.cache.release.?(state.cache, id);
 }
 
 /// Resolves an id to its slot, or null when it was never loaded or has been released.
-fn findSound(state: *State, id: c.ke_audio_sound) ?*LoadedSound {
+fn findSound(state: *State, id: abi_audio.ke_audio_sound) ?*LoadedSound {
     return state.sounds.get(id);
 }
 
@@ -128,8 +130,8 @@ fn findSound(state: *State, id: c.ke_audio_sound) ?*LoadedSound {
 /// flag. When the start fails, the sound is left stopped. Fails with an invalid-argument error for
 /// a null backend or the invalid id, with a not-found error for an id that is not loaded, and with
 /// a general error when miniaudio cannot start the sound.
-fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: bool) callconv(.c) c.ke_result {
-    if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return R.code(error.InvalidArgument);
+fn audioPlay(self: ?*abi_audio.ke_audio, id: abi_audio.ke_audio_sound, volume: f32, loop: bool) callconv(.c) abi_result.ke_result {
+    if (self == null or id == abi_audio.KE_AUDIO_SOUND_INVALID) return R.code(error.InvalidArgument);
     const state: *State = @ptrCast(@alignCast(self.?.handle));
 
     const slot = findSound(state, id);
@@ -150,8 +152,8 @@ fn audioPlay(self: ?*c.ke_audio, id: c.ke_audio_sound, volume: f32, loop: bool) 
 
 /// Stops the sound without releasing it. A null backend, the invalid id or an unknown id is
 /// ignored.
-fn audioStop(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
-    if (self == null or id == c.KE_AUDIO_SOUND_INVALID) return;
+fn audioStop(self: ?*abi_audio.ke_audio, id: abi_audio.ke_audio_sound) callconv(.c) void {
+    if (self == null or id == abi_audio.KE_AUDIO_SOUND_INVALID) return;
     const state: *State = @ptrCast(@alignCast(self.?.handle));
     if (findSound(state, id)) |s| {
         if (s.initialized) _ = ma.ma_sound_stop(&s.sound);
@@ -159,7 +161,7 @@ fn audioStop(self: ?*c.ke_audio, id: c.ke_audio_sound) callconv(.c) void {
 }
 
 /// Sets the volume of the engine, which scales every sound. A null backend is ignored.
-fn audioSetMasterVolume(self: ?*c.ke_audio, volume: f32) callconv(.c) void {
+fn audioSetMasterVolume(self: ?*abi_audio.ke_audio, volume: f32) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
     _ = ma.ma_engine_set_volume(&state.engine, volume);
@@ -169,7 +171,7 @@ fn audioSetMasterVolume(self: ?*c.ke_audio, volume: f32) callconv(.c) void {
 /// the backend initialised. Each failure releases the steps before it, so a failed call leaves no
 /// engine, cache or state behind and the handle zeroed. Fails with out of memory on the state or the
 /// struct, general when the engine cannot start, and whatever the cache creation returns.
-export fn ke_audio_miniaudio_create(out_audio: ?*c.ke_audio_handle) callconv(.c) c.ke_result {
+export fn ke_audio_miniaudio_create(out_audio: ?*abi_audio.ke_audio_handle) callconv(.c) abi_result.ke_result {
     const out = out_audio orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     out.* = create() catch |err| {
@@ -180,13 +182,13 @@ export fn ke_audio_miniaudio_create(out_audio: ?*c.ke_audio_handle) callconv(.c)
     return R.ok;
 }
 
-fn create() R.Error!c.ke_audio_handle {
+fn create() R.Error!abi_audio.ke_audio_handle {
     const state = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(state);
     state.* = .{
         .engine = undefined,
         .engine_ready = false,
-        .sounds = std.AutoHashMap(c.ke_audio_sound, *LoadedSound).init(gpa),
+        .sounds = std.AutoHashMap(abi_audio.ke_audio_sound, *LoadedSound).init(gpa),
         .next_id = 1,
         .cache = undefined,
         .cache_destroy = undefined,
@@ -202,15 +204,15 @@ fn create() R.Error!c.ke_audio_handle {
     state.engine_ready = true;
     errdefer ma.ma_engine_uninit(&state.engine);
 
-    var cache_params = c.ke_resource_cache_params{ .destroy_fn = &destroySoundResource, .destroy_ctx = state };
-    var cache_h: c.ke_resource_cache_handle = undefined;
-    try R.check(c.ke_resource_cache_create(&cache_params, &cache_h));
+    var cache_params = abi_resource_cache.ke_resource_cache_params{ .destroy_fn = &destroySoundResource, .destroy_ctx = state };
+    var cache_h: abi_resource_cache.ke_resource_cache_handle = undefined;
+    try R.check(abi_resource_cache_default_factory.ke_resource_cache_create(&cache_params, &cache_h));
     state.cache = cache_h.ref.?;
     state.cache_destroy = cache_h.destroy.?;
     errdefer state.cache_destroy(state.cache);
 
-    const api = gpa.create(c.ke_audio) catch return error.OutOfMemory;
-    api.* = std.mem.zeroes(c.ke_audio);
+    const api = gpa.create(abi_audio.ke_audio) catch return error.OutOfMemory;
+    api.* = std.mem.zeroes(abi_audio.ke_audio);
     api.handle = state;
     api.load_sound = &audioLoadSound;
     api.unload_sound = &audioUnloadSound;
@@ -223,8 +225,8 @@ fn create() R.Error!c.ke_audio_handle {
 
 const testing = std.testing;
 
-fn createAudio() c.ke_audio_handle {
-    var h: c.ke_audio_handle = undefined;
+fn createAudio() abi_audio.ke_audio_handle {
+    var h: abi_audio.ke_audio_handle = undefined;
     R.check(ke_audio_miniaudio_create(&h)) catch return .{ .ref = null, .destroy = null };
     return h;
 }
@@ -242,9 +244,9 @@ test "loading a sound with a null path returns the invalid sound id" {
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    var id: c.ke_audio_sound = 1;
-    try testing.expectError(error.InvalidArgument, R.check(h.ref.*.load_sound.?(h.ref, null, &id)));
-    try testing.expectEqual(@as(c.ke_audio_sound, c.KE_AUDIO_SOUND_INVALID), id);
+    var id: abi_audio.ke_audio_sound = 1;
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_sound.?(h.ref, null, &id)));
+    try testing.expectEqual(@as(abi_audio.ke_audio_sound, abi_audio.KE_AUDIO_SOUND_INVALID), id);
 }
 
 test "loading a sound from a path that does not exist returns the invalid sound id" {
@@ -252,9 +254,9 @@ test "loading a sound from a path that does not exist returns the invalid sound 
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    var id: c.ke_audio_sound = 1;
-    try testing.expectError(error.NotFound, R.check(h.ref.*.load_sound.?(h.ref, "nonexistent.wav", &id)));
-    try testing.expectEqual(@as(c.ke_audio_sound, c.KE_AUDIO_SOUND_INVALID), id);
+    var id: abi_audio.ke_audio_sound = 1;
+    try testing.expectError(error.NotFound, R.check(h.ref.?.load_sound.?(h.ref, "nonexistent.wav", &id)));
+    try testing.expectEqual(@as(abi_audio.ke_audio_sound, abi_audio.KE_AUDIO_SOUND_INVALID), id);
 }
 
 test "unloading the invalid sound id is a no-op" {
@@ -262,11 +264,11 @@ test "unloading the invalid sound id is a no-op" {
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    h.ref.*.unload_sound.?(h.ref, c.KE_AUDIO_SOUND_INVALID);
+    h.ref.?.unload_sound.?(h.ref, abi_audio.KE_AUDIO_SOUND_INVALID);
 }
 
 test "stopping through a null backend is a no-op" {
-    audioStop(null, c.KE_AUDIO_SOUND_INVALID);
+    audioStop(null, abi_audio.KE_AUDIO_SOUND_INVALID);
 }
 
 test "setting the master volume through a null backend is a no-op" {
@@ -282,7 +284,7 @@ test "playing a sound that was never loaded fails" {
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    try testing.expectError(error.NotFound, R.check(h.ref.*.play.?(h.ref, 12345, 1.0, false)));
+    try testing.expectError(error.NotFound, R.check(h.ref.?.play.?(h.ref, 12345, 1.0, false)));
 }
 
 test "the master volume accepts the full unit range" {
@@ -290,13 +292,13 @@ test "the master volume accepts the full unit range" {
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    h.ref.*.set_master_volume.?(h.ref, 0.5);
-    h.ref.*.set_master_volume.?(h.ref, 0.0);
-    h.ref.*.set_master_volume.?(h.ref, 1.0);
+    h.ref.?.set_master_volume.?(h.ref, 0.5);
+    h.ref.?.set_master_volume.?(h.ref, 0.0);
+    h.ref.?.set_master_volume.?(h.ref, 1.0);
 }
 
 test "playing through a null backend is an invalid argument" {
-    try testing.expectError(error.InvalidArgument, R.check(audioPlay(null, c.KE_AUDIO_SOUND_INVALID, 1.0, false)));
+    try testing.expectError(error.InvalidArgument, R.check(audioPlay(null, abi_audio.KE_AUDIO_SOUND_INVALID, 1.0, false)));
 }
 
 test "creating and destroying the audio backend leaves no block allocated" {

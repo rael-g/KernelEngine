@@ -6,7 +6,6 @@
     .dependencies = .{
         .abi_result = .{ .path = "../../abi/result" },
         .abi_text = .{ .path = "../../abi/text" },
-        .abi_text_stb_truetype_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },

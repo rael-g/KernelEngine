@@ -5,7 +5,9 @@
 const std = @import("std");
 const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
-const c = rc.c;
+const abi_ecs = @import("abi_ecs");
+const abi_render = @import("abi_render");
+const abi_result = @import("abi_result");
 const R = rc.R;
 const gpa = rc.gpa;
 
@@ -19,17 +21,17 @@ const color_names = [2][2][*:0]const u8{
 /// over the current color in the format it already has. `recorded` is set when the link's pass
 /// begins, from whichever worker runs it.
 pub const Link = struct {
-    id: c.ke_render_chain_link,
-    stage: c.ke_render_stage,
-    mode: c.ke_render_chain_mode,
-    source: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE,
-    target: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE,
-    target_format: c.ke_gpu_texture_format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+    id: abi_render.ke_render_chain_link,
+    stage: abi_render.ke_render_stage,
+    mode: abi_render.ke_render_chain_mode,
+    source: abi_render.ke_gpu_texture_view = abi_render.KE_GPU_INVALID_HANDLE,
+    target: abi_render.ke_gpu_texture_view = abi_render.KE_GPU_INVALID_HANDLE,
+    target_format: abi_render.ke_gpu_texture_format = abi_render.KE_GPU_TEXTURE_FORMAT_INVALID,
     recorded: std.atomic.Value(bool) = .init(false),
 
     /// True when the link's target starts as a copy of its source.
     pub fn startsAsSource(self: *const Link) bool {
-        return self.source != c.KE_GPU_INVALID_HANDLE and self.mode != c.KE_RENDER_CHAIN_REPLACE;
+        return self.source != abi_render.KE_GPU_INVALID_HANDLE and self.mode != abi_render.KE_RENDER_CHAIN_REPLACE;
     }
 };
 
@@ -40,51 +42,51 @@ pub const Link = struct {
 /// outside a frame.
 pub const Chain = struct {
     links: std.ArrayList(Link) = .empty,
-    next_id: c.ke_render_chain_link = 1,
-    color_format: c.ke_gpu_texture_format = c.KE_GPU_TEXTURE_FORMAT_INVALID,
+    next_id: abi_render.ke_render_chain_link = 1,
+    color_format: abi_render.ke_gpu_texture_format = abi_render.KE_GPU_TEXTURE_FORMAT_INVALID,
     colors: [2][2]usize = undefined,
     depth: usize = 0,
-    final: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE,
+    final: abi_render.ke_gpu_texture_view = abi_render.KE_GPU_INVALID_HANDLE,
 
     pub fn deinit(self: *Chain) void {
         self.links.deinit(gpa);
     }
 
     /// The link of that id; null for an unknown one.
-    pub fn find(self: *Chain, id: c.ke_render_chain_link) ?*Link {
+    pub fn find(self: *Chain, id: abi_render.ke_render_chain_link) ?*Link {
         for (self.links.items) |*l| if (l.id == id) return l;
         return null;
     }
 };
 
-fn isLdr(stage: c.ke_render_stage) usize {
-    return if (stage >= c.KE_RENDER_STAGE_TONEMAP) 1 else 0;
+fn isLdr(stage: abi_render.ke_render_stage) usize {
+    return if (stage >= abi_render.KE_RENDER_STAGE_TONEMAP) 1 else 0;
 }
 
 /// Declares the two color textures of each format, the frame's depth and the color tag, all the
 /// size of the backbuffer. Called once by the factory, through the service's own `declare`.
-pub fn prepare(st: *rc.CoreState, core: [*c]c.ke_render_service, color_format: c.ke_gpu_texture_format, depth_format: c.ke_gpu_texture_format) R.Error!void {
+pub fn prepare(st: *rc.CoreState, core: [*c]abi_render.ke_render_service, color_format: abi_render.ke_gpu_texture_format, depth_format: abi_render.ke_gpu_texture_format) R.Error!void {
     st.chain.color_format = color_format;
-    const formats = [2]c.ke_gpu_texture_format{ color_format, st.target.format.?(st.target) };
+    const formats = [2]abi_render.ke_gpu_texture_format{ color_format, st.target.format.?(st.target) };
     for (color_names, formats, 0..) |pair, format, f| {
         for (pair, 0..) |name, i| {
             try declareTarget(core, name, format);
             st.chain.colors[f][i] = st.resources.items.len - 1;
         }
     }
-    try declareTarget(core, c.KE_RENDER_FRAME_DEPTH, depth_format);
+    try declareTarget(core, abi_render.KE_RENDER_FRAME_DEPTH, depth_format);
     st.chain.depth = st.resources.items.len - 1;
-    var color: c.ke_component_id = undefined;
-    try R.check(resource_table.importTag(core, c.KE_RENDER_FRAME_COLOR, &color));
+    var color: abi_ecs.ke_component_id = undefined;
+    try R.check(resource_table.importTag(core, abi_render.KE_RENDER_FRAME_COLOR, &color));
 }
 
-fn declareTarget(core: [*c]c.ke_render_service, name: [*:0]const u8, format: c.ke_gpu_texture_format) R.Error!void {
-    var cid: c.ke_component_id = undefined;
-    try R.check(resource_table.declare(core, &c.ke_render_resource_params{
+fn declareTarget(core: [*c]abi_render.ke_render_service, name: [*:0]const u8, format: abi_render.ke_gpu_texture_format) R.Error!void {
+    var cid: abi_ecs.ke_component_id = undefined;
+    try R.check(resource_table.declare(core, &abi_render.ke_render_resource_params{
         .name = name,
-        .type = c.KE_RENDER_RESOURCE_TEXTURE,
+        .type = abi_render.KE_RENDER_RESOURCE_TEXTURE,
         .format = format,
-        .size_mode = c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
+        .size_mode = abi_render.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
         .width = 0,
         .height = 0,
         .scale_x = 1.0,
@@ -94,11 +96,11 @@ fn declareTarget(core: [*c]c.ke_render_service, name: [*:0]const u8, format: c.k
 }
 
 /// The service's `join_chain` slot. The new link goes after every link of a stage up to its own.
-pub fn joinChain(self: [*c]c.ke_render_service, stage: c.ke_render_stage, mode: c.ke_render_chain_mode, out_link: [*c]c.ke_render_chain_link) callconv(.c) c.ke_result {
+pub fn joinChain(self: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_stage, mode: abi_render.ke_render_chain_mode, out_link: [*c]abi_render.ke_render_chain_link) callconv(.c) abi_result.ke_result {
     const out = out_link orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_RENDER_CHAIN_NONE;
+    out.* = abi_render.KE_RENDER_CHAIN_NONE;
     if (self == null) return R.code(error.InvalidArgument);
-    if (stage < 0 or stage >= c.KE_RENDER_STAGE_COUNT or mode < 0 or mode > c.KE_RENDER_CHAIN_REPLACE) return R.code(error.InvalidArgument);
+    if (stage < 0 or stage >= abi_render.KE_RENDER_STAGE_COUNT or mode < 0 or mode > abi_render.KE_RENDER_CHAIN_REPLACE) return R.code(error.InvalidArgument);
     const chain = &rc.coreOf(self).chain;
     var at: usize = 0;
     while (at < chain.links.items.len and chain.links.items[at].stage <= stage) at += 1;
@@ -109,7 +111,7 @@ pub fn joinChain(self: [*c]c.ke_render_service, stage: c.ke_render_stage, mode: 
 }
 
 /// The service's `leave_chain` slot.
-pub fn leaveChain(self: [*c]c.ke_render_service, link: c.ke_render_chain_link) callconv(.c) void {
+pub fn leaveChain(self: [*c]abi_render.ke_render_service, link: abi_render.ke_render_chain_link) callconv(.c) void {
     if (self == null) return;
     const chain = &rc.coreOf(self).chain;
     for (chain.links.items, 0..) |l, i| {
@@ -120,8 +122,8 @@ pub fn leaveChain(self: [*c]c.ke_render_service, link: c.ke_render_chain_link) c
 }
 
 /// The service's `chain_format` slot.
-pub fn chainFormat(self: [*c]c.ke_render_service, stage: c.ke_render_stage) callconv(.c) c.ke_gpu_texture_format {
-    if (self == null) return c.KE_GPU_TEXTURE_FORMAT_INVALID;
+pub fn chainFormat(self: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_stage) callconv(.c) abi_render.ke_gpu_texture_format {
+    if (self == null) return abi_render.KE_GPU_TEXTURE_FORMAT_INVALID;
     const st = rc.coreOf(self);
     return st.resources.items[st.chain.colors[isLdr(stage)][0]].format;
 }
@@ -136,8 +138,8 @@ pub fn assign(st: *rc.CoreState) void {
     for (st.chain.links.items) |*l| {
         l.recorded.store(false, .monotonic);
         const want = isLdr(l.stage);
-        if (l.mode == c.KE_RENDER_CHAIN_DRAW_OVER and want == f) {
-            l.source = c.KE_GPU_INVALID_HANDLE;
+        if (l.mode == abi_render.KE_RENDER_CHAIN_DRAW_OVER and want == f) {
+            l.source = abi_render.KE_GPU_INVALID_HANDLE;
         } else {
             l.source = st.resources.items[st.chain.colors[f][i]].view;
             i = if (want == f) 1 - i else 0;
@@ -152,41 +154,41 @@ pub fn assign(st: *rc.CoreState) void {
 
 /// Records on a new encoder the clear of the first color texture to the service's clear color and
 /// of the frame's depth to the far plane. Null when the device gives no encoder.
-pub fn recordClear(st: *rc.CoreState) ?c.ke_gpu_command_encoder_handle {
-    var enc: c.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
+pub fn recordClear(st: *rc.CoreState) ?abi_render.ke_gpu_command_encoder_handle {
+    var enc: abi_render.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
     if (st.device.create_command_encoder.?(st.device, null, &enc) != R.ok) return null;
     const e = enc.ref orelse return null;
-    const color = [1]c.ke_gpu_color_attachment{.{
+    const color = [1]abi_render.ke_gpu_color_attachment{.{
         .view = st.resources.items[st.chain.colors[0][0]].view,
-        .load_op = c.KE_GPU_LOAD_OP_CLEAR,
-        .store_op = c.KE_GPU_STORE_OP_STORE,
+        .load_op = abi_render.KE_GPU_LOAD_OP_CLEAR,
+        .store_op = abi_render.KE_GPU_STORE_OP_STORE,
         .clear_value = .{ .color = st.clear_color },
     }};
-    const depth = c.ke_gpu_depth_stencil_attachment{
+    const depth = abi_render.ke_gpu_depth_stencil_attachment{
         .view = st.resources.items[st.chain.depth].view,
-        .depth_load_op = c.KE_GPU_LOAD_OP_CLEAR,
-        .depth_store_op = c.KE_GPU_STORE_OP_STORE,
-        .stencil_store_op = c.KE_GPU_STORE_OP_DONT_CARE,
+        .depth_load_op = abi_render.KE_GPU_LOAD_OP_CLEAR,
+        .depth_store_op = abi_render.KE_GPU_STORE_OP_STORE,
+        .stencil_store_op = abi_render.KE_GPU_STORE_OP_DONT_CARE,
         .clear_depth = 1.0,
         .clear_stencil = 0,
         .depth_read_only = false,
         .stencil_read_only = false,
     };
-    const params = c.ke_gpu_render_pass_params{
+    const params = abi_render.ke_gpu_render_pass_params{
         .label = "render.frame.clear",
         .color_attachments = &color,
         .color_attachment_count = 1,
         .depth_stencil_attachment = &depth,
     };
     const rp = e.*.begin_render_pass.?(e, &params);
-    rp.*.end.?(rp);
+    rp.?.end.?(rp);
     return enc;
 }
 
 /// Records on a new encoder the draw of `src` over the whole of `dst`. Null when the device gives
 /// no encoder or the draw cannot be recorded.
-pub fn recordBlit(st: *rc.CoreState, src: c.ke_gpu_texture_view, dst: c.ke_gpu_texture_view, dst_format: c.ke_gpu_texture_format) ?c.ke_gpu_command_encoder_handle {
-    var enc: c.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
+pub fn recordBlit(st: *rc.CoreState, src: abi_render.ke_gpu_texture_view, dst: abi_render.ke_gpu_texture_view, dst_format: abi_render.ke_gpu_texture_format) ?abi_render.ke_gpu_command_encoder_handle {
+    var enc: abi_render.ke_gpu_command_encoder_handle = .{ .ref = null, .destroy = null };
     if (st.device.create_command_encoder.?(st.device, null, &enc) != R.ok) return null;
     const e = enc.ref orelse return null;
     if (!st.blit.draw(st.api, st.binder, e, src, dst, dst_format)) {
@@ -197,6 +199,6 @@ pub fn recordBlit(st: *rc.CoreState, src: c.ke_gpu_texture_view, dst: c.ke_gpu_t
 }
 
 /// The frame's depth view.
-pub fn depthView(st: *rc.CoreState) c.ke_gpu_texture_view {
+pub fn depthView(st: *rc.CoreState) abi_render.ke_gpu_texture_view {
     return st.resources.items[st.chain.depth].view;
 }

@@ -7,7 +7,6 @@
     .dependencies = .{
         .abi_configuration = .{ .path = "../abi/configuration" },
         .abi_result = .{ .path = "../abi/result" },
-        .abi_configuration_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../common" },
         .ke_build = .{ .path = "../build" },
         .ke_logger = .{ .path = "../logger" },
