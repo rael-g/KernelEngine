@@ -9,6 +9,12 @@ pub fn build(b: *std.Build) void {
     abi.addImport("math", b.dependency("ke_abi_math", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("ke_abi_spatial", .{}).module("abi"));
+    const stubs = b.addModule("stubs", .{ .root_source_file = b.path("stubs.zig") });
+    stubs.addImport("abi", abi);
+    stubs.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
+    stubs.addImport("math", b.dependency("ke_abi_math", .{}).module("abi"));
+    stubs.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
+    stubs.addImport("spatial", b.dependency("ke_abi_spatial", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/binding/resource_binder.h>

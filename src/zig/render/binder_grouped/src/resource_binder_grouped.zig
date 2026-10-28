@@ -468,7 +468,7 @@ fn newBinder(params: abi_render_binder_grouped_factory.ke_render_resource_binder
 }
 
 const testing = std.testing;
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
 
 test {
     _ = reflection;
@@ -515,7 +515,7 @@ const PassProbe = struct {
 };
 
 const Rig = struct {
-    dev: Stubs.Device,
+    dev: render_stubs.Device,
     dir: std.testing.TmpDir,
     path: [std.fs.max_path_bytes]u8,
 

@@ -128,14 +128,14 @@ export fn ke_gpu_render_target_texture_create(
 }
 
 const testing = std.testing;
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
 
 fn validParams() abi_gpu_render_target_texture_factory.ke_gpu_render_target_texture_params {
     return .{ .texture = 7, .width = 64, .height = 32, .format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM };
 }
 
 test "a texture target hands out one view per frame, reports the texture's size and format, and releases its view" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
     const p = validParams();
     var h: abi_render.ke_gpu_render_target_handle = undefined;
@@ -164,7 +164,7 @@ test "a texture target hands out one view per frame, reports the texture's size 
 }
 
 test "a texture target refuses a second acquire and a present without a frame" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
     const p = validParams();
     var h: abi_render.ke_gpu_render_target_handle = undefined;
@@ -181,7 +181,7 @@ test "a texture target refuses a second acquire and a present without a frame" {
 }
 
 test "a texture target without a device, params, texture, format or size is refused and leaves nothing behind" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
     const valid = validParams();
     var cases = [_]abi_gpu_render_target_texture_factory.ke_gpu_render_target_texture_params{ valid, valid, valid, valid };

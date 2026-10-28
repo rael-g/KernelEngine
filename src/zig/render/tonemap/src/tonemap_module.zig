@@ -180,18 +180,19 @@ fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_t
 
 const testing = std.testing;
 
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
+const runtime_stubs = @import("runtime_stubs");
 
-fn testParams(rt: *Stubs.Runtime, core: *Stubs.Core, dev: *Stubs.Device) abi_render_tonemap_factory.ke_render_tonemap_params {
+fn testParams(rt: *runtime_stubs.Runtime, core: *render_stubs.Core, dev: *render_stubs.Device) abi_render_tonemap_factory.ke_render_tonemap_params {
     return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .frame_cid = 1 };
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
     try R.check(ke_render_tonemap_create(&testParams(&rt, &core, &dev), &h));
@@ -202,12 +203,12 @@ test "creating and destroying the tonemap pass leaves no block allocated and no 
 }
 
 test "a tonemap pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
     try testing.expect(ke_render_tonemap_create(&testParams(&rt, &core, &dev), &h) != R.ok);
@@ -217,11 +218,11 @@ test "a tonemap pass whose shader fails to load releases what it had created" {
 }
 
 test "a tonemap pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
@@ -232,11 +233,11 @@ test "a tonemap pass the runtime refuses to register releases what it had create
 }
 
 test "a tonemap pass missing its device is refused as an invalid argument" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var p = testParams(&rt, &core, &dev);
     p.device = null;

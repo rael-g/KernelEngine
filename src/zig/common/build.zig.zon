@@ -3,13 +3,6 @@
     .version = "0.1.0",
     .fingerprint = 0x2187eda45fa7ecd6,
     .minimum_zig_version = "0.16.0",
-    .dependencies = .{
-        .abi_ecs = .{ .path = "../abi/ecs" },
-        .abi_framework = .{ .path = "../abi/framework" },
-        .abi_math = .{ .path = "../abi/math" },
-        .abi_render = .{ .path = "../abi/render" },
-        .abi_result = .{ .path = "../abi/result" },
-        .abi_runtime = .{ .path = "../abi/runtime" },
-    },
+    .dependencies = .{},
     .paths = .{"."},
 }

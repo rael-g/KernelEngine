@@ -6,7 +6,8 @@ pub fn build(b: *std.Build) void {
         .name = "ke_render_skybox",
         .root = "src/skybox_module.zig",
         .abi = &.{ "abi_ecs", "abi_math", "abi_render", "abi_render_skybox_factory", "abi_result", "abi_runtime", "abi_spatial" },
-        .common = &.{ "heap", "stubs" },
+        .common = &.{"heap"},
+        .stubs = &.{ "render", "runtime" },
         .packages = &.{.{ .name = "zmath", .dependency = "zmath", .module = "root" }},
         .tests = "Run the skybox pass unit tests",
     });

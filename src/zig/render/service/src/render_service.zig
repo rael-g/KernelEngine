@@ -550,7 +550,60 @@ test "a frame that never began ends without submitting or presenting anything" {
     try testing.expectEqual(R.ok, frame_lifecycle.endFrame(&core));
 }
 
-const Stubs = @import("stubs");
+const ecs_stubs = @import("ecs_stubs");
+const render_stubs = @import("render_stubs");
+
+/// Fake render target. `acquired` is a flag set by `acquire`, not a count, and
+/// `presented` is the only tally kept.
+const Target = struct {
+    vtable: abi_render.ke_gpu_render_target,
+    acquired: bool,
+    presented: u32,
+    width: u32,
+    height: u32,
+
+    pub fn init(self: *Target) void {
+        self.* = .{ .vtable = std.mem.zeroes(abi_render.ke_gpu_render_target), .acquired = false, .presented = 0, .width = 1, .height = 1 };
+        self.vtable.handle = self;
+        self.vtable.acquire = &acquire;
+        self.vtable.present = &present;
+        self.vtable.size = &size;
+        self.vtable.format = &format;
+    }
+
+    pub fn api(self: *Target) *abi_render.ke_gpu_render_target {
+        return &self.vtable;
+    }
+
+    fn of(self: ?*abi_render.ke_gpu_render_target) *Target {
+        return @ptrCast(@alignCast(self.?.handle));
+    }
+
+    /// Repeated acquires are not counted: `acquired` is a flag.
+    fn acquire(self: ?*abi_render.ke_gpu_render_target, out: [*c]abi_render.ke_gpu_texture_view) callconv(.c) abi_result.ke_result {
+        of(self).acquired = true;
+        out.* = 1;
+        return abi_result.KE_OK;
+    }
+
+    /// Fails as an invalid argument and leaves `presented` alone unless an acquire came first.
+    fn present(self: ?*abi_render.ke_gpu_render_target) callconv(.c) abi_result.ke_result {
+        const t = of(self);
+        if (!t.acquired) return abi_result.KE_RESULT_INVALID_ARGUMENT;
+        t.acquired = false;
+        t.presented += 1;
+        return abi_result.KE_OK;
+    }
+
+    fn size(self: ?*abi_render.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+        if (out_w != null) out_w.* = of(self).width;
+        if (out_h != null) out_h.* = of(self).height;
+    }
+
+    fn format(_: ?*abi_render.ke_gpu_render_target) callconv(.c) abi_render.ke_gpu_texture_format {
+        return abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    }
+};
 
 fn serviceOf(params: abi_render_service_factory.ke_render_service_params) abi_render.ke_render_service_handle {
     var h: abi_render.ke_render_service_handle = .{ .ref = null, .destroy = null };
@@ -595,13 +648,13 @@ test "creating and destroying the render service leaves no block allocated and n
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
@@ -615,11 +668,11 @@ test "a render service created without a render target is refused and leaves not
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
     var h: abi_render.ke_render_service_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
@@ -632,13 +685,13 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -656,13 +709,13 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -697,13 +750,13 @@ test "uploads beyond the first frame's records and arena are all written, and th
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -733,13 +786,13 @@ test "a frame with more passes than the first frame's log submits every one, and
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -772,13 +825,13 @@ test "a declared resource's texture and view carry the name it was declared unde
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -800,13 +853,13 @@ test "a render pass is opened under the name its pass declared" {
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -831,10 +884,10 @@ test "a render pass is opened under the name its pass declared" {
 /// begins a frame, which `deinit` ends.
 const PassHarness = struct {
     sd: ShaderDir,
-    dev: Stubs.Device,
-    ecs: Stubs.Ecs,
-    binder: Stubs.Binder,
-    target: Stubs.Target,
+    dev: render_stubs.Device,
+    ecs: ecs_stubs.Ecs,
+    binder: render_stubs.Binder,
+    target: Target,
     h: abi_render.ke_render_service_handle,
 
     fn init(self: *PassHarness) !void {
@@ -1036,13 +1089,13 @@ test "a compute pass replays at the end of the frame under its name and with the
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
@@ -1069,13 +1122,13 @@ test "a compute pass replays at the end of the frame under its name and with the
 }
 
 test "a render service created without a shader directory is refused and leaves nothing behind" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = null, .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref == null);
@@ -1102,13 +1155,13 @@ test "pipelines requested from several threads at once settle on one answer per 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
@@ -1141,13 +1194,13 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
@@ -1172,13 +1225,13 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
-    var binder: Stubs.Binder = undefined;
+    var binder: render_stubs.Binder = undefined;
     binder.init();
-    var target: Stubs.Target = undefined;
+    var target: Target = undefined;
     target.init();
     const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);

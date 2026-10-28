@@ -304,14 +304,15 @@ fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
 
 const testing = std.testing;
 
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
+const runtime_stubs = @import("runtime_stubs");
 
 test "creating and destroying the deferred lighting pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
     try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
@@ -321,12 +322,12 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
 }
 
 test "a deferred lighting pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
     try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
@@ -336,11 +337,11 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
 }
 
 test "a deferred lighting pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;

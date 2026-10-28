@@ -77,7 +77,7 @@ export fn ke_scene_component_set_create(out_set: ?*abi_framework.ke_scene_compon
 }
 
 const testing = std.testing;
-const Stubs = @import("stubs");
+const ecs_stubs = @import("ecs_stubs");
 
 const FakeWorld = struct {
     api: abi_framework.ke_world,
@@ -122,7 +122,7 @@ fn componentParams(name: [*:0]const u8, with_fields: bool) abi_ecs.ke_component_
 }
 
 test "added components are registered in order, their fields and apply callbacks handed to the world" {
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
     var world: FakeWorld = undefined;
     world.init(true);
@@ -141,7 +141,7 @@ test "added components are registered in order, their fields and apply callbacks
 }
 
 test "a world that refuses the fields fails the registration with its code" {
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
     var world: FakeWorld = undefined;
     world.init(false);
@@ -154,7 +154,7 @@ test "a world that refuses the fields fails the registration with its code" {
 }
 
 test "a missing set, component, name, ecs, world or out handle is an invalid argument" {
-    var ecs: Stubs.Ecs = undefined;
+    var ecs: ecs_stubs.Ecs = undefined;
     ecs.init();
     var world: FakeWorld = undefined;
     world.init(true);

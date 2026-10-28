@@ -626,14 +626,15 @@ test "meshes are gathered across every segment the query returned" {
     try testing.expectEqual(@as(u32, 2), n);
 }
 
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
+const runtime_stubs = @import("runtime_stubs");
 
 test "creating and destroying the forward pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
     try R.check(ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h));
@@ -643,12 +644,12 @@ test "creating and destroying the forward pass leaves no block allocated and no 
 }
 
 test "a forward pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
     try testing.expect(ke_render_forward_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
@@ -658,11 +659,11 @@ test "a forward pass whose shader fails to load releases what it had created" {
 }
 
 test "a forward pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var h: abi_render_forward_factory.ke_render_forward_handle = undefined;

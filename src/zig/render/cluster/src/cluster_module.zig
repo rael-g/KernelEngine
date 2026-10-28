@@ -450,14 +450,15 @@ const default_max_lights_per_cluster = 64;
 
 const testing = std.testing;
 
-const Stubs = @import("stubs");
+const render_stubs = @import("render_stubs");
+const runtime_stubs = @import("runtime_stubs");
 
 test "creating and destroying the cluster pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
@@ -470,12 +471,12 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
 }
 
 test "a cluster pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
@@ -488,11 +489,11 @@ test "a cluster pass whose shader fails to load releases what it had created" {
 }
 
 test "a cluster pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
+    var dev: render_stubs.Device = undefined;
     dev.init();
-    var core: Stubs.Core = undefined;
+    var core: render_stubs.Core = undefined;
     core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
+    var rt: runtime_stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var camera = std.mem.zeroes(abi_render.ke_render_camera);

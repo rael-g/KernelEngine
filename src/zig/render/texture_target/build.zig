@@ -6,7 +6,8 @@ pub fn build(b: *std.Build) void {
         .name = "ke_gpu_render_target_texture",
         .root = "src/texture_target.zig",
         .abi = &.{ "abi_gpu_render_target_texture_factory", "abi_render", "abi_result" },
-        .common = &.{ "heap", "stubs" },
+        .common = &.{"heap"},
+        .stubs = &.{"render"},
         .tests = "Run the texture render target unit tests",
     });
 }
