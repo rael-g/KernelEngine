@@ -17,9 +17,15 @@ using Kabic;
 /// <param name="IncludeDirs">The include directories the headers are translated with, relative
 /// to the package.</param>
 /// <param name="Package">The package name its dependents declare.</param>
+/// <param name="Doubles">Whether the package directory holds the hand-written test doubles of its
+/// contracts, <see cref="DoublesFile"/>, which the package then exports as the module
+/// <c>stubs</c>.</param>
 public sealed record ZigPackage(string Key, string Package, IReadOnlyList<string> Headers, IReadOnlyList<ZigImport> Imports,
-    IReadOnlyList<string> IncludeDirs)
+    IReadOnlyList<string> IncludeDirs, bool Doubles = false)
 {
+    /// <summary>The file of a package's hand-written test doubles, which no generation writes.</summary>
+    public const string DoublesFile = "stubs.zig";
+
     /// <summary>The package name of the package of the contract domain <paramref name="domain"/>.</summary>
     public static string DomainPackage(string domain) => $"ke_abi_{domain}";
 
@@ -36,6 +42,13 @@ public sealed record ZigPackage(string Key, string Package, IReadOnlyList<string
         sb.AppendLine($"    const abi = b.addModule(\"abi\", .{{ .root_source_file = b.path(\"{Key}.zig\") }});");
         foreach (var i in Imports)
             sb.AppendLine($"    abi.addImport(\"{i.Key}\", b.dependency(\"{i.Package}\", .{{}}).module(\"abi\"));");
+        if (Doubles)
+        {
+            sb.AppendLine($"    const stubs = b.addModule(\"stubs\", .{{ .root_source_file = b.path(\"{DoublesFile}\") }});");
+            sb.AppendLine("    stubs.addImport(\"abi\", abi);");
+            foreach (var i in Imports)
+                sb.AppendLine($"    stubs.addImport(\"{i.Key}\", b.dependency(\"{i.Package}\", .{{}}).module(\"abi\"));");
+        }
         sb.AppendLine();
         sb.AppendLine("    const headers = b.addWriteFiles().add(\"layout.h\",");
         foreach (var h in Headers)
