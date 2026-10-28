@@ -20,13 +20,15 @@ public sealed class ZigWriter
     readonly SortedSet<string> imported = [];
     readonly HashSet<string> local;
     readonly bool factory;
+    readonly FieldTableContext? tables;
     bool usesStd;
 
-    ZigWriter(ApiModel model, IReadOnlyDictionary<string, string> foreign, bool factory)
+    ZigWriter(ApiModel model, IReadOnlyDictionary<string, string> foreign, bool factory, FieldTableContext? tables)
     {
         this.model = model;
         this.foreign = foreign;
         this.factory = factory;
+        this.tables = tables;
         local = [
             .. model.Structs.Where(s => !s.External).Select(s => s.Name),
             .. model.Enums.Where(e => !e.External).Select(e => e.Name),
@@ -42,8 +44,25 @@ public sealed class ZigWriter
     /// headers of a plugin, when <paramref name="factory"/> is set, declare each function the
     /// plugin exports, which the module declares as external.
     /// </summary>
-    public static string Render(ApiModel model, IReadOnlyDictionary<string, string> foreign, bool factory = false) =>
-        new ZigWriter(model, foreign, factory).Render();
+    public static string Render(ApiModel model, IReadOnlyDictionary<string, string> foreign, bool factory = false,
+        FieldTableContext? tables = null) =>
+        new ZigWriter(model, foreign, factory, tables).Render();
+
+    /// <summary>
+    /// What the writer needs to lay out the field tables a header defines: the convention that
+    /// names their entry and variant types and describes each field, the record of every name
+    /// any root declares, and the root's model composed with the declarations of every other
+    /// root, external, which the convention reads a field's shape from.
+    /// </summary>
+    public sealed record FieldTableContext(Convention Convention, IReadOnlyDictionary<string, ApiStruct> Records, ApiModel Composed);
+
+    /// <summary>
+    /// The components whose field table the headers of <paramref name="model"/> define, each
+    /// with the name of its table.
+    /// </summary>
+    public static IEnumerable<(ApiStruct Component, string Table)> TablesOf(ApiModel model, Convention convention) =>
+        convention.FieldTable is null ? [] : FieldTables.Describable(model, convention)
+            .Select(s => (s, s.Name + "_fields")).Where(t => model.Statics.Contains(t.Item2));
 
     string Render()
     {
@@ -79,6 +98,9 @@ public sealed class ZigWriter
             body.AppendLine();
         }
 
+        if (tables is not null)
+            foreach (var (component, table) in TablesOf(tables.Composed, tables.Convention)) RenderTable(body, component, table);
+
         var refused = model.Functions.Where(_ => !factory).Select(f => f.Name).Concat(model.Variables.Select(v => v.Name)).ToList();
         if (refused.Count > 0)
             throw new NotSupportedException(
@@ -100,6 +122,51 @@ public sealed class ZigWriter
         if (usesStd || imported.Count > 0) head.AppendLine();
         return head.Append(body).ToString().TrimEnd('\n').ReplaceLineEndings("\n") + "\n";
     }
+
+    /// <summary>
+    /// The field table of one component, entry by entry as the C table lists them: the key a
+    /// scene writes, the variant kind, the member's offset and size, and its default.
+    /// </summary>
+    void RenderTable(StringBuilder sb, ApiStruct component, string table)
+    {
+        var convention = tables!.Convention;
+        var t = convention.FieldTable!;
+        var entry = tables.Records[t.EntryType].Fields.Select(f => Ident(f.Name)).ToList();
+        sb.AppendLine($"pub const {table} = [_]{Named(t.EntryType, byValue: true)}{{");
+        foreach (var f in FieldTables.Fields(tables.Composed, component, convention))
+            sb.AppendLine($"    .{{ .{entry[0]} = \"{FieldTables.KeyOf(f)}\", .{entry[1]} = {Value(t.Variants[FieldTables.KindOf(tables.Composed, f, convention)!].Constant)}, "
+                + $".{entry[2]} = @offsetOf({component.Name}, \"{f.Name}\"), .{entry[3]} = @sizeOf(@FieldType({component.Name}, \"{f.Name}\")), "
+                + $".{entry[4]} = {Variant(f)} }},");
+        sb.AppendLine("};");
+        sb.AppendLine();
+    }
+
+    string Variant(ApiField f)
+    {
+        var convention = tables!.Convention;
+        var t = convention.FieldTable!;
+        var variant = tables.Records[t.VariantType].Fields;
+        var kind = Ident(variant[0].Name);
+        if (FieldTables.DefaultOf(tables.Composed, f, convention) is not { } d) return $".{{ .{kind} = {Value(t.Variants["null"].Constant)} }}";
+        var member = t.Variants[d.Kind].Member.TrimStart('.');
+        var payload = variant[1].Inline!.Fields.First(m => m.Name == member);
+        var value = d.Kind switch
+        {
+            "string" => $"\"{d.Raw}\"",
+            "bool" => d.Raw is "1" or "true" ? "true" : "false",
+            "int" => d.Raw,
+            "float" => ZigFloat(d.Lanes[0]),
+            _ => ".{ " + string.Join(", ", tables.Records[Bare(payload.Type)].Fields.Zip(d.Lanes, (l, v) => $".{Ident(l.Name)} = {ZigFloat(v)}")) + " }",
+        };
+        return $".{{ .{kind} = {Value(t.Variants[d.Kind].Constant)}, .{Ident(variant[1].Name)} = .{{ .{Ident(member)} = {value} }} }}";
+    }
+
+    static string ZigFloat(string raw) => raw.Contains('.') ? raw : raw + ".0";
+
+    /// <summary>A value an enum or a macro of this root or of another defines, reached as a type is.</summary>
+    string Value(string name) =>
+        model.Enums.Any(e => !e.External && e.Values.Any(v => v.Name == name)) || model.Constants.Any(c => c.Name == name)
+            ? name : Named(name, byValue: true);
 
     /// <summary>
     /// One C enum as the integer type C gives it and a constant per value. A value is a

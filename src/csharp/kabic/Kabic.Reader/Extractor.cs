@@ -83,6 +83,10 @@ public static class Extractor
                         DocParser.Parse(node).Summary is { Length: > 0 } doc ? doc : null));
                     break;
 
+                case "VarDecl" when name is not null && !compose && node["storageClass"]?.GetValue<string>() == "static":
+                    api.Statics.Add(name);
+                    break;
+
                 case "TypedefDecl" when name is not null:
                     {
                         var target = node["type"]?.AsObject()["qualType"]?.GetValue<string>() ?? "";
