@@ -1,9 +1,9 @@
-//! A fake of the runtime contract, for unit tests that register systems with no scheduler.
+//! Doubles of the contracts this plugin's tests run against, with only the slots they reach.
 
 const std = @import("std");
-const abi_ecs = @import("ecs");
-const abi_result = @import("result");
-const abi_runtime = @import("abi");
+const abi_ecs = @import("abi_ecs");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
 
 /// Fake runtime. `live` holds the registered system ids in registration order, valid up to
 /// `live_count`. `registered` only grows, so a system id is never handed out twice.
@@ -19,12 +19,6 @@ pub const Runtime = struct {
         self.vtable.handle = self;
         self.vtable.register_system = &registerSystem;
         self.vtable.unregister_system = &unregisterSystem;
-        self.vtable.last_system = &lastSystem;
-        self.vtable.declare_self_ordered = &declareSelfOrdered;
-    }
-
-    fn declareSelfOrdered(_: ?*abi_runtime.ke_runtime, _: abi_ecs.ke_component_id) callconv(.c) abi_result.ke_result {
-        return @intCast(abi_result.KE_OK);
     }
 
     pub fn api(self: *Runtime) *abi_runtime.ke_runtime {
@@ -57,9 +51,32 @@ pub const Runtime = struct {
         }
         return @intCast(abi_result.KE_RESULT_NOT_FOUND);
     }
+};
 
-    fn lastSystem(self: ?*abi_runtime.ke_runtime) callconv(.c) abi_runtime.ke_system_id {
-        const rt: *Runtime = @ptrCast(@alignCast(self.?.handle));
-        return if (rt.live_count == 0) 0 else rt.live[rt.live_count - 1];
+/// Fake ecs. Component ids are drawn from `next`.
+pub const Ecs = struct {
+    vtable: abi_ecs.ke_ecs,
+    next: u32,
+
+    pub fn init(self: *Ecs) void {
+        self.* = .{ .vtable = std.mem.zeroes(abi_ecs.ke_ecs), .next = 1 };
+        self.vtable.handle = self;
+        self.vtable.component_register = &componentRegister;
+    }
+
+    pub fn api(self: *Ecs) *abi_ecs.ke_ecs {
+        return &self.vtable;
+    }
+
+    fn mint(self: ?*abi_ecs.ke_ecs) u32 {
+        const e: *Ecs = @ptrCast(@alignCast(self.?.handle));
+        const id = e.next;
+        e.next += 1;
+        return id;
+    }
+
+    fn componentRegister(self: ?*abi_ecs.ke_ecs, _: [*c]const abi_ecs.ke_component_params, out_cid: [*c]abi_ecs.ke_component_id) callconv(.c) abi_result.ke_result {
+        out_cid.* = mint(self);
+        return @intCast(abi_result.KE_OK);
     }
 };

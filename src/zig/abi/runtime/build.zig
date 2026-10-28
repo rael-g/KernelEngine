@@ -7,10 +7,6 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("runtime.zig") });
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
-    const stubs = b.addModule("stubs", .{ .root_source_file = b.path("stubs.zig") });
-    stubs.addImport("abi", abi);
-    stubs.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
-    stubs.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/runtime/runtime.h>

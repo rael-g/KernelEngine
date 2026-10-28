@@ -480,15 +480,14 @@ test "meshes are gathered across every segment the query returned" {
     try testing.expectEqual(@as(usize, 2), out.items.len);
 }
 
-const render_stubs = @import("render_stubs");
-const runtime_stubs = @import("runtime_stubs");
+const stubs = @import("stubs.zig");
 
 test "creating and destroying the gbuffer pass leaves no block allocated and no GPU resource live" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
     try R.check(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
@@ -498,12 +497,12 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
 }
 
 test "a gbuffer pass whose shader fails to load releases what it had created" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
     try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
@@ -513,11 +512,11 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
 }
 
 test "a gbuffer pass the runtime refuses to register releases what it had created" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;

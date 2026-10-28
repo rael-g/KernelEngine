@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
         .root = "src/gbuffer_module.zig",
         .abi = &.{ "abi_ecs", "abi_render", "abi_render_gbuffer_factory", "abi_result", "abi_runtime", "abi_spatial" },
         .common = &.{"heap"},
-        .stubs = &.{ "render", "runtime" },
         .render_common = &.{ "material_pass_groups", "object_uniforms" },
         .packages = &.{.{ .name = "zmath", .dependency = "zmath", .module = "root" }},
         .tests = "Run the gbuffer pass unit tests",

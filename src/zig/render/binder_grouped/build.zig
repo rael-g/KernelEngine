@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
         .root = "src/resource_binder_grouped.zig",
         .abi = &.{ "abi_render", "abi_render_binder_grouped_factory", "abi_result" },
         .common = &.{"heap"},
-        .stubs = &.{"render"},
         .render_common = &.{"shader_files"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = materialParams,

@@ -377,8 +377,7 @@ fn made(params: ?*const abi_physics_body2d_factory.ke_physics_body2d_module_para
     return h;
 }
 
-const ecs_stubs = @import("ecs_stubs");
-const runtime_stubs = @import("runtime_stubs");
+const stubs = @import("stubs.zig");
 
 /// Fake scene tree. Answers `generation` as its hierarchy generation, which a test moves by
 /// hand.
@@ -403,9 +402,9 @@ const Tree = struct {
 };
 
 test "creating and destroying the body2d module leaves no block allocated and no system registered" {
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
 
@@ -425,9 +424,9 @@ test "creating and destroying the body2d module leaves no block allocated and no
 }
 
 test "a body2d module missing its runtime, ecs, physics or scene tree is refused" {
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
 
@@ -449,12 +448,12 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
 }
 
 test "a body2d module the runtime refuses a system of fails the create and leaves no system registered" {
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
     var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
 
     for ([_]u32{ 0, 1 }) |limit| {
-        var rt: runtime_stubs.Runtime = undefined;
+        var rt: stubs.Runtime = undefined;
         rt.init();
         rt.limit = limit;
         var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
@@ -539,7 +538,7 @@ const BodyView = struct {
 test "a body whose entity no longer holds it is destroyed on the next update" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     const m = try gpa.create(Module);
     var tree: Tree = undefined;
@@ -596,7 +595,7 @@ const OrphanView = struct {
 
 test "a collider with no body above it is retried only once the hierarchy has moved" {
     var physics = FakeWorld.api();
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     var tree: Tree = undefined;
     tree.init();
@@ -625,7 +624,7 @@ test "a collider with no body above it is retried only once the hierarchy has mo
 test "destroying the module destroys the bodies it created" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     const m = try gpa.create(Module);
     var tree: Tree = undefined;

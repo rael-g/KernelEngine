@@ -574,18 +574,16 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, r
 
 const testing = std.testing;
 
-const ecs_stubs = @import("ecs_stubs");
-const render_stubs = @import("render_stubs");
-const runtime_stubs = @import("runtime_stubs");
+const stubs = @import("stubs.zig");
 
 test "creating and destroying the ui pass leaves no block allocated and no GPU resource live" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
     try R.check(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h));
@@ -595,14 +593,14 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
 }
 
 test "a ui pass whose shader fails to load releases what it had created" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
     core.shader_loads_fail = true;
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
@@ -612,14 +610,14 @@ test "a ui pass whose shader fails to load releases what it had created" {
 }
 
 test "a ui pass the runtime refuses to register releases what it had created" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     rt.limit = 0;
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
@@ -629,14 +627,14 @@ test "a ui pass the runtime refuses to register releases what it had created" {
 }
 
 test "a ui pass the runtime refuses its second system takes the first one back" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var core: render_stubs.Core = undefined;
+    var core: stubs.Core = undefined;
     core.init(dev.api());
-    var rt: runtime_stubs.Runtime = undefined;
+    var rt: stubs.Runtime = undefined;
     rt.init();
     rt.limit = 1;
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);

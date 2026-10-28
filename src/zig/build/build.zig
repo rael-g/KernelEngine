@@ -39,11 +39,9 @@ pub const Package = struct {
     module: []const u8,
 };
 
-/// What a plugin is built from. `abi`, `stubs`, `common`, `render_common`, `packages` and the
-/// shared `log`, `result` and `dll_entry` modules are looked up among the dependencies the plugin's
-/// own `build.zig.zon` declares, so a plugin reaches only what it declared. `stubs` names the
-/// domains whose test doubles the tests use; each reaches the tests' modules alone, as
-/// `<domain>_stubs`. `third_party` declares the options of the libraries the
+/// What a plugin is built from. `abi`, `common`, `render_common`, `packages` and the shared
+/// `log`, `result` and `dll_entry` modules are looked up among the dependencies the plugin's own
+/// `build.zig.zon` declares, so a plugin reaches only what it declared. `third_party` declares the options of the libraries the
 /// plugin wraps and adds their include paths and libraries to the library's module and the
 /// tests' module, before the translations are made; what only the tests link goes to the tests'
 /// module alone.
@@ -51,7 +49,6 @@ pub const Plugin = struct {
     name: []const u8,
     root: []const u8,
     abi: []const []const u8 = &.{},
-    stubs: []const []const u8 = &.{},
     common: []const []const u8 = &.{},
     render_common: []const []const u8 = &.{},
     translations: []const Translation = &.{},
@@ -110,9 +107,6 @@ pub fn plugin(b: *std.Build, description: Plugin) Built {
         const result = b.dependency("ke_result", .{});
         mod.addImport("result", result.module("result"));
         mod.addImport("dll_entry", result.module("dll_entry"));
-    }
-    for (tests) |mod| {
-        for (description.stubs) |domain| mod.addImport(b.fmt("{s}_stubs", .{domain}), b.dependency(b.fmt("abi_{s}", .{domain}), .{}).module("stubs"));
     }
 
     const lib = b.addLibrary(.{ .name = description.name, .root_module = modules.lib, .linkage = .dynamic });

@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
         .root = "src/texture_target.zig",
         .abi = &.{ "abi_gpu_render_target_texture_factory", "abi_render", "abi_result" },
         .common = &.{"heap"},
-        .stubs = &.{"render"},
         .tests = "Run the texture render target unit tests",
     });
 }

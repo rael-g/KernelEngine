@@ -1,10 +1,10 @@
-//! A fake of the ecs contract, for unit tests that register components and queries with no world.
+//! Doubles of the contracts this plugin's tests run against, with only the slots they reach.
 
 const std = @import("std");
-const abi_ecs = @import("abi");
-const abi_result = @import("result");
+const abi_ecs = @import("abi_ecs");
+const abi_result = @import("abi_result");
 
-/// Fake ecs. Component and query ids are both drawn from `next`, so they never collide.
+/// Fake ecs. Component ids are drawn from `next`.
 pub const Ecs = struct {
     vtable: abi_ecs.ke_ecs,
     next: u32,
@@ -13,7 +13,6 @@ pub const Ecs = struct {
         self.* = .{ .vtable = std.mem.zeroes(abi_ecs.ke_ecs), .next = 1 };
         self.vtable.handle = self;
         self.vtable.component_register = &componentRegister;
-        self.vtable.query_register = &queryRegister;
     }
 
     pub fn api(self: *Ecs) *abi_ecs.ke_ecs {
@@ -29,11 +28,6 @@ pub const Ecs = struct {
 
     fn componentRegister(self: ?*abi_ecs.ke_ecs, _: [*c]const abi_ecs.ke_component_params, out_cid: [*c]abi_ecs.ke_component_id) callconv(.c) abi_result.ke_result {
         out_cid.* = mint(self);
-        return @intCast(abi_result.KE_OK);
-    }
-
-    fn queryRegister(self: ?*abi_ecs.ke_ecs, _: [*c]const abi_ecs.ke_component_id, _: usize, out_query: [*c]abi_ecs.ke_query_id) callconv(.c) abi_result.ke_result {
-        out_query.* = mint(self);
         return @intCast(abi_result.KE_OK);
     }
 };

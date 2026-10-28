@@ -220,15 +220,13 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
 
 const testing = std.testing;
 
-const ecs_stubs = @import("ecs_stubs");
-const render_stubs = @import("render_stubs");
-const runtime_stubs = @import("runtime_stubs");
+const stubs = @import("stubs.zig");
 
 const Rig = struct {
-    dev: render_stubs.Device,
-    core: render_stubs.Core,
-    rt: runtime_stubs.Runtime,
-    ecs: ecs_stubs.Ecs,
+    dev: stubs.Device,
+    core: stubs.Core,
+    rt: stubs.Runtime,
+    ecs: stubs.Ecs,
 
     fn init(self: *Rig) void {
         self.dev.init();

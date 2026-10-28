@@ -550,8 +550,7 @@ test "a frame that never began ends without submitting or presenting anything" {
     try testing.expectEqual(R.ok, frame_lifecycle.endFrame(&core));
 }
 
-const ecs_stubs = @import("ecs_stubs");
-const render_stubs = @import("render_stubs");
+const stubs = @import("stubs.zig");
 
 /// Fake render target. `acquired` is a flag set by `acquire`, not a count, and
 /// `presented` is the only tally kept.
@@ -648,11 +647,11 @@ test "creating and destroying the render service leaves no block allocated and n
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -668,11 +667,11 @@ test "a render service created without a render target is refused and leaves not
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var h: abi_render.ke_render_service_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
@@ -685,11 +684,11 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -709,11 +708,11 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -750,11 +749,11 @@ test "uploads beyond the first frame's records and arena are all written, and th
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -786,11 +785,11 @@ test "a frame with more passes than the first frame's log submits every one, and
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -825,11 +824,11 @@ test "a declared resource's texture and view carry the name it was declared unde
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -853,11 +852,11 @@ test "a render pass is opened under the name its pass declared" {
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -884,9 +883,9 @@ test "a render pass is opened under the name its pass declared" {
 /// begins a frame, which `deinit` ends.
 const PassHarness = struct {
     sd: ShaderDir,
-    dev: render_stubs.Device,
-    ecs: ecs_stubs.Ecs,
-    binder: render_stubs.Binder,
+    dev: stubs.Device,
+    ecs: stubs.Ecs,
+    binder: stubs.Binder,
     target: Target,
     h: abi_render.ke_render_service_handle,
 
@@ -1089,11 +1088,11 @@ test "a compute pass replays at the end of the frame under its name and with the
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -1122,11 +1121,11 @@ test "a compute pass replays at the end of the frame under its name and with the
 }
 
 test "a render service created without a shader directory is refused and leaves nothing behind" {
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -1155,11 +1154,11 @@ test "pipelines requested from several threads at once settle on one answer per 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -1194,11 +1193,11 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();
@@ -1225,11 +1224,11 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: render_stubs.Device = undefined;
+    var dev: stubs.Device = undefined;
     dev.init();
-    var ecs: ecs_stubs.Ecs = undefined;
+    var ecs: stubs.Ecs = undefined;
     ecs.init();
-    var binder: render_stubs.Binder = undefined;
+    var binder: stubs.Binder = undefined;
     binder.init();
     var target: Target = undefined;
     target.init();

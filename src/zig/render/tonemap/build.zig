@@ -5,9 +5,8 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_render_tonemap",
         .root = "src/tonemap_module.zig",
-        .abi = &.{ "abi_render", "abi_render_tonemap_factory", "abi_result", "abi_runtime" },
+        .abi = &.{ "abi_ecs", "abi_render", "abi_render_tonemap_factory", "abi_result", "abi_runtime" },
         .common = &.{"heap"},
-        .stubs = &.{ "render", "runtime" },
         .tests = "Run the tonemap pass unit tests",
     });
 }

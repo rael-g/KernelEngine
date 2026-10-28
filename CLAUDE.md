@@ -166,7 +166,7 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
   - A factory is `export` without `pub`, takes a params struct in which zero selects the default, and on failure frees what it took and returns the zeroed handle.
   - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or `ke_render_common`.
-  - A test is named by a sentence stating the behaviour, uses the shared stubs, and the last test of a plugin checks that nothing leaked.
+  - A test is named by a sentence stating the behaviour, takes its doubles from `src/stubs.zig` beside it, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
 
 ### C#

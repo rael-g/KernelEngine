@@ -129,9 +129,7 @@ fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_
 
 const testing = std.testing;
 
-const ecs_stubs = @import("ecs_stubs");
-const render_stubs = @import("render_stubs");
-const runtime_stubs = @import("runtime_stubs");
+const stubs = @import("stubs.zig");
 
 fn testFrame(params: *const abi_render_frame_factory.ke_render_frame_params) abi_render_frame_factory.ke_render_frame_handle {
     var h: abi_render_frame_factory.ke_render_frame_handle = .{ .ref = null, .destroy = null };
@@ -139,15 +137,15 @@ fn testFrame(params: *const abi_render_frame_factory.ke_render_frame_params) abi
     return h;
 }
 
-fn testParams(rt: *runtime_stubs.Runtime, ecs: *ecs_stubs.Ecs, core: *render_stubs.Core, camera: *abi_render.ke_render_camera) abi_render_frame_factory.ke_render_frame_params {
+fn testParams(rt: *stubs.Runtime, ecs: *stubs.Ecs, core: *stubs.Core, camera: *abi_render.ke_render_camera) abi_render_frame_factory.ke_render_frame_params {
     return .{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .camera = camera, .camera_cid = 1, .world_transform_cid = 2, .directional_light_cid = 3, .ambient_light_cid = 4 };
 }
 
 const Rig = struct {
-    dev: render_stubs.Device,
-    core: render_stubs.Core,
-    rt: runtime_stubs.Runtime,
-    ecs: ecs_stubs.Ecs,
+    dev: stubs.Device,
+    core: stubs.Core,
+    rt: stubs.Runtime,
+    ecs: stubs.Ecs,
     camera: abi_render.ke_render_camera,
 
     fn init(self: *Rig) void {
