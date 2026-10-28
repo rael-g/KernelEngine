@@ -5,6 +5,12 @@
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
+        .abi_render = .{ .path = "../../abi/render" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_window = .{ .path = "../../abi/window" },
+        .abi_gpu_device_webgpu_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

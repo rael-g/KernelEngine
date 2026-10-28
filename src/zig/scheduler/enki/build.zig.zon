@@ -4,6 +4,10 @@
     .fingerprint = 0x80ee4f68c195a0ee,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_scheduler_enki_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
