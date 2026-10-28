@@ -203,6 +203,9 @@ public class ApiModel
     /// <summary>The constants the headers define as macros, in the order they define them.</summary>
     public List<ApiConstant> Constants { get; } = [];
 
+    /// <summary>The names of the static constants the headers define, such as field tables.</summary>
+    public List<string> Statics { get; } = [];
+
     /// <summary>
     /// Function-pointer typedefs, keyed by the name a parameter is declared with.
     /// <see cref="TypeAliases"/> also holds each one, spelled as a type; this holds the
@@ -298,6 +301,8 @@ public static class ApiReader
         foreach (var v in root["vtables"]!.AsArray()) m.Structs.Add(ReadRecord(v!.AsObject(), vtable: true));
 
         foreach (var o in root["opaques"]?.AsArray() ?? []) m.Opaques.Add(o!.GetValue<string>());
+
+        foreach (var n in root["statics"]?.AsArray() ?? []) m.Statics.Add(n!.GetValue<string>());
 
         foreach (var c in root["constants"]?.AsArray() ?? [])
         {

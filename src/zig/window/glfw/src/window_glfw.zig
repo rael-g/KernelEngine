@@ -8,12 +8,14 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
-const c = @import("c");
+const abi_result = @import("abi_result");
+const abi_window = @import("abi_window");
+const abi_window_glfw_factory = @import("abi_window_glfw_factory");
 
 const core_mod = @import("core.zig");
 const glfw = @import("glfw_device.zig");
 const heap = @import("heap");
-const R = @import("result").Result(c, .{});
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.window_glfw);
 
 test {
@@ -28,11 +30,11 @@ test {
 /// and its device. The title falls back to "KernelEngine" when absent, and a negative size becomes
 /// zero. The input in the params is handed to the core, which borrows it.
 export fn ke_window_glfw_create(
-    params_in: ?*const c.ke_window_glfw_params,
-    out_window: ?*c.ke_window_handle,
-) callconv(.c) c.ke_result {
+    params_in: ?*const abi_window_glfw_factory.ke_window_glfw_params,
+    out_window: ?*abi_window.ke_window_handle,
+) callconv(.c) abi_result.ke_result {
     const out = out_window orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(c.ke_window_handle);
+    out.* = std.mem.zeroes(abi_window.ke_window_handle);
     const params = params_in orelse return R.code(error.InvalidArgument);
     out.* = create(params) catch |err| {
         log.warn("creating the window failed: {t}", .{err});
@@ -41,7 +43,7 @@ export fn ke_window_glfw_create(
     return R.ok;
 }
 
-fn create(params: *const c.ke_window_glfw_params) R.Error!c.ke_window_handle {
+fn create(params: *const abi_window_glfw_factory.ke_window_glfw_params) R.Error!abi_window.ke_window_handle {
     const dev = glfw.GlfwDevice.create() orelse return error.OutOfMemory;
 
     const core = core_mod.Core.create(dev.asDevice(), params.input) orelse {
@@ -50,7 +52,7 @@ fn create(params: *const c.ke_window_glfw_params) R.Error!c.ke_window_handle {
     };
 
     const config: @import("device.zig").Config = .{
-        .title = if (params.title != null) params.title else "KernelEngine",
+        .title = if (params.title != null) params.title.? else "KernelEngine",
         .width = @intCast(@max(params.width, 0)),
         .height = @intCast(@max(params.height, 0)),
         .fullscreen = params.fullscreen,

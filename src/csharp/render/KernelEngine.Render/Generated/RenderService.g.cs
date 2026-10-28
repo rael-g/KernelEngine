@@ -121,16 +121,20 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="indices">Triangle list indices.</param>
     /// <returns>Receives the handle of the uploaded mesh.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ushort* indices, uint indexCount)
+    public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ReadOnlySpan<ushort> indices)
     {
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_mesh_handle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_mesh(Handle, (sbyte*)keyPtr, vertices, verticesSize, indices, indexCount, &resultOut), "upload_mesh");
-            return resultOut;
+            fixed (ushort* indicesPtr = indices)
+            {
+                ke_mesh_handle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_mesh(Handle, (sbyte*)keyPtr, vertices, verticesSize, indicesPtr, (uint)indices.Length, &resultOut), "upload_mesh");
+                return resultOut;
+            }
         }
     }
 

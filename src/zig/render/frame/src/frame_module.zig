@@ -6,8 +6,12 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_frame").logFn };
 
-const c = @import("c");
-const R = @import("result").Result(c, .{});
+const abi_ecs = @import("abi_ecs");
+const abi_render = @import("abi_render");
+const abi_render_frame_factory = @import("abi_render_frame_factory");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.render_frame);
 const frame_producer = @import("frame_producer.zig");
 
@@ -19,35 +23,35 @@ const gpa = heap.gpa;
 /// the end system, and the systems' queries and access lists point into it, so it is not moved
 /// after creation.
 const FrameModule = struct {
-    api: c.ke_render_frame,
-    frame_cid: c.ke_component_id,
+    api: abi_render_frame_factory.ke_render_frame,
+    frame_cid: abi_ecs.ke_component_id,
     producer: frame_producer.State,
-    begin_access: [1]c.ke_component_access,
-    end_access: [2]c.ke_component_access,
-    query_terms: [4]c.ke_component_access,
-    queries: [3]c.ke_query_decl,
+    begin_access: [1]abi_runtime.ke_component_access,
+    end_access: [2]abi_runtime.ke_component_access,
+    query_terms: [4]abi_runtime.ke_component_access,
+    queries: [3]abi_runtime.ke_query_decl,
 };
 
-fn stateOf(self: ?*c.ke_render_frame) ?*FrameModule {
+fn stateOf(self: ?*abi_render_frame_factory.ke_render_frame) ?*FrameModule {
     const f = self orelse return null;
     return @ptrCast(@alignCast(f.handle));
 }
 
 /// The `frame_cid` slot.
-fn frameCid(self: [*c]c.ke_render_frame) callconv(.c) c.ke_component_id {
-    const st = stateOf(self) orelse return c.KE_COMPONENT_INVALID;
+fn frameCid(self: [*c]abi_render_frame_factory.ke_render_frame) callconv(.c) abi_ecs.ke_component_id {
+    const st = stateOf(self) orelse return abi_ecs.KE_COMPONENT_INVALID;
     return st.frame_cid;
 }
 
 /// The end system: ends the frame on the service, failing with the service's code when it cannot.
-fn endSystem(_: ?*c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) c.ke_result {
+fn endSystem(_: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
     const st: *FrameModule = @ptrCast(@alignCast(user.?));
     const core = st.producer.core;
     return core.*.end_frame.?(core);
 }
 
 /// The `destroy` slot of the handle `ke_render_frame_create` returns; a null argument is ignored.
-fn destroyHandle(self: ?*c.ke_render_frame) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_frame_factory.ke_render_frame) callconv(.c) void {
     const st = stateOf(self) orelse return;
     gpa.destroy(st);
 }
@@ -56,7 +60,7 @@ fn destroyHandle(self: ?*c.ke_render_frame) callconv(.c) void {
 /// invalid argument and a failed allocation as out of memory. The runtime refusing either system
 /// fails with the runtime's code, after removing the begin system when it was the end system that
 /// was refused. Each failure leaves the handle zeroed.
-export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, out_frame: ?*c.ke_render_frame_handle) callconv(.c) c.ke_result {
+export fn ke_render_frame_create(params_in: ?*const abi_render_frame_factory.ke_render_frame_params, out_frame: ?*abi_render_frame_factory.ke_render_frame_handle) callconv(.c) abi_result.ke_result {
     const out = out_frame orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return refused();
@@ -64,23 +68,23 @@ export fn ke_render_frame_create(params_in: ?*const c.ke_render_frame_params, ou
     return R.ok;
 }
 
-fn refused() c.ke_result {
+fn refused() abi_result.ke_result {
     log.warn("render frame: runtime, ecs, service and camera are required", .{});
     return R.code(error.InvalidArgument);
 }
 
-fn create(rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service, camera: *c.ke_render_camera, p: *const c.ke_render_frame_params) R.Error!c.ke_render_frame_handle {
+fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_render_service, camera: *abi_render.ke_render_camera, p: *const abi_render_frame_factory.ke_render_frame_params) R.Error!abi_render_frame_factory.ke_render_frame_handle {
     const st = try gpa.create(FrameModule);
     errdefer gpa.destroy(st);
     st.api = .{ .handle = st, .frame_cid = frameCid };
-    st.frame_cid = c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
+    st.frame_cid = abi_ecs.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
     st.producer = .{ .core = core, .camera = camera };
 
-    const rd = c.KE_ACCESS_READ;
-    st.begin_access = .{.{ .cid = st.frame_cid, .access = c.KE_ACCESS_WRITE }};
+    const rd = abi_runtime.KE_ACCESS_READ;
+    st.begin_access = .{.{ .cid = st.frame_cid, .access = abi_runtime.KE_ACCESS_WRITE }};
     st.end_access = .{
-        .{ .cid = core.*.cid.?(core, c.KE_RENDER_FRAME_COLOR), .access = rd },
+        .{ .cid = core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR), .access = rd },
         .{ .cid = st.frame_cid, .access = rd },
     };
     st.query_terms = .{
@@ -90,14 +94,14 @@ fn create(rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service, camera: *
         .{ .cid = p.ambient_light_cid, .access = rd },
     };
     st.queries = .{
-        .{ .terms = &st.query_terms[0], .term_count = 2 },
-        .{ .terms = &st.query_terms[2], .term_count = 1 },
-        .{ .terms = &st.query_terms[3], .term_count = 1 },
+        .{ .terms = st.query_terms[0..].ptr, .term_count = 2 },
+        .{ .terms = st.query_terms[2..].ptr, .term_count = 1 },
+        .{ .terms = st.query_terms[3..].ptr, .term_count = 1 },
     };
 
-    var begin = std.mem.zeroes(c.ke_runtime_system_params);
+    var begin = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
     begin.name = "render.begin_frame";
-    begin.phase = c.KE_PHASE_RENDER;
+    begin.phase = abi_runtime.KE_PHASE_RENDER;
     begin.access_list = &st.begin_access;
     begin.access_count = st.begin_access.len;
     begin.queries = &st.queries;
@@ -105,19 +109,19 @@ fn create(rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service, camera: *
     begin.pinned_thread = 0;
     begin.user_data = &st.producer;
     begin.execute = frame_producer.system;
-    var begin_id: c.ke_system_id = 0;
+    var begin_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &begin, &begin_id));
     errdefer _ = rt.unregister_system.?(rt, begin_id);
 
-    var end = std.mem.zeroes(c.ke_runtime_system_params);
+    var end = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
     end.name = "render.end_frame";
-    end.phase = c.KE_PHASE_RENDER;
+    end.phase = abi_runtime.KE_PHASE_RENDER;
     end.access_list = &st.end_access;
     end.access_count = st.end_access.len;
     end.pinned_thread = 0;
     end.user_data = st;
     end.execute = endSystem;
-    var system_id: c.ke_system_id = 0;
+    var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &end, &system_id));
 
     return .{ .ref = &st.api, .destroy = destroyHandle };
@@ -125,15 +129,15 @@ fn create(rt: *c.ke_runtime, e: *c.ke_ecs, core: *c.ke_render_service, camera: *
 
 const testing = std.testing;
 
-const Stubs = @import("stubs").Stubs(c);
+const Stubs = @import("stubs");
 
-fn testFrame(params: *const c.ke_render_frame_params) c.ke_render_frame_handle {
-    var h: c.ke_render_frame_handle = .{ .ref = null, .destroy = null };
+fn testFrame(params: *const abi_render_frame_factory.ke_render_frame_params) abi_render_frame_factory.ke_render_frame_handle {
+    var h: abi_render_frame_factory.ke_render_frame_handle = .{ .ref = null, .destroy = null };
     _ = ke_render_frame_create(params, &h);
     return h;
 }
 
-fn testParams(rt: *Stubs.Runtime, ecs: *Stubs.Ecs, core: *Stubs.Core, camera: *c.ke_render_camera) c.ke_render_frame_params {
+fn testParams(rt: *Stubs.Runtime, ecs: *Stubs.Ecs, core: *Stubs.Core, camera: *abi_render.ke_render_camera) abi_render_frame_factory.ke_render_frame_params {
     return .{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .camera = camera, .camera_cid = 1, .world_transform_cid = 2, .directional_light_cid = 3, .ambient_light_cid = 4 };
 }
 
@@ -142,17 +146,17 @@ const Rig = struct {
     core: Stubs.Core,
     rt: Stubs.Runtime,
     ecs: Stubs.Ecs,
-    camera: c.ke_render_camera,
+    camera: abi_render.ke_render_camera,
 
     fn init(self: *Rig) void {
         self.dev.init();
         self.core.init(self.dev.api());
         self.rt.init();
         self.ecs.init();
-        self.camera = std.mem.zeroes(c.ke_render_camera);
+        self.camera = std.mem.zeroes(abi_render.ke_render_camera);
     }
 
-    fn params(self: *Rig) c.ke_render_frame_params {
+    fn params(self: *Rig) abi_render_frame_factory.ke_render_frame_params {
         return testParams(&self.rt, &self.ecs, &self.core, &self.camera);
     }
 };
@@ -163,7 +167,7 @@ test "the frame registers its begin and end systems and hands out the tag they s
     const h = testFrame(&rig.params());
     try testing.expect(h.ref != null);
     try testing.expectEqual(@as(u32, 2), rig.rt.live_count);
-    try testing.expect(h.ref.*.frame_cid.?(h.ref) != c.KE_COMPONENT_INVALID);
+    try testing.expect(h.ref.?.frame_cid.?(h.ref) != abi_ecs.KE_COMPONENT_INVALID);
     h.destroy.?(h.ref);
 }
 
@@ -190,20 +194,20 @@ test "a frame missing its camera is refused as an invalid argument" {
     rig.init();
     var p = rig.params();
     p.camera = null;
-    var h: c.ke_render_frame_handle = undefined;
+    var h: abi_render_frame_factory.ke_render_frame_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(&p, &h));
     try testing.expect(h.ref == null);
 }
 
-fn failingFrame(_: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+fn failingFrame(_: [*c]abi_render.ke_render_service) callconv(.c) abi_result.ke_result {
     return R.code(error.NotInitialized);
 }
 
 test "a frame the service cannot begin or end fails the render phase with the service's own code" {
-    var svc = std.mem.zeroes(c.ke_render_service);
+    var svc = std.mem.zeroes(abi_render.ke_render_service);
     svc.begin_frame = failingFrame;
     svc.end_frame = failingFrame;
-    var camera = std.mem.zeroes(c.ke_render_camera);
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var st: FrameModule = undefined;
     st.producer = .{ .core = &svc, .camera = &camera };
 

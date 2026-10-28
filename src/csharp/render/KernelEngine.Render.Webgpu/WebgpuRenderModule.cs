@@ -389,9 +389,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         ArgumentException.ThrowIfNullOrEmpty(key);
 
         fixed (MeshVertex* v = vertices)
-        fixed (ushort* i = indices)
         {
-            var h = _renderService.UploadMesh(key, v, (nuint)(vertices.Length * sizeof(MeshVertex)), i, (uint)indices.Length);
+            var h = _renderService.UploadMesh(key, v, (nuint)(vertices.Length * sizeof(MeshVertex)), indices);
             return new MeshHandle(h.bits);
         }
     }

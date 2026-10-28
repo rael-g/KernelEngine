@@ -1,63 +1,21 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
-const ke_logger_build = @import("ke_logger");
-const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{ .default_target = .{ .abi = .gnu } });
-    const optimize = b.standardOptimizeOption(.{});
-
-    const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
-    const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
-    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const renderdoc_include = b.option([]const u8, "renderdoc-include", "directory holding renderdoc_app.h") orelse @panic("-Drenderdoc-include required");
-
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/renderdoc_target.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    inline for (.{ ke_common, ke_result, ke_render, renderdoc_include }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    mod.addIncludePath(b.path("include"));
-    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    mod.addCMacro("KE_GPU_RENDER_TARGET_RENDERDOC_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("log", ke_logger_build.log(b));
-    mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
+    _ = ke_build.plugin(b, .{
         .name = "ke_gpu_render_target_renderdoc",
-        .root_module = mod,
-        .linkage = .dynamic,
+        .root = "src/renderdoc_target.zig",
+        .abi = &.{ "abi_gpu_render_target_renderdoc_factory", "abi_render", "abi_result" },
+        .common = &.{"heap"},
+        .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .third_party = thirdParty,
+        .tests = "Run the renderdoc render target unit tests",
     });
+}
 
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/renderdoc_target.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    inline for (.{ ke_common, ke_result, ke_render, renderdoc_include }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
+fn thirdParty(b: *std.Build, modules: ke_build.Modules) void {
+    const renderdoc_include = b.option([]const u8, "renderdoc-include", "directory holding renderdoc_app.h") orelse @panic("-Drenderdoc-include required");
+    for (modules.all(b)) |mod| {
+        mod.addIncludePath(.{ .cwd_relative = renderdoc_include });
     }
-    test_mod.addIncludePath(b.path("include"));
-    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    test_mod.addCMacro("KE_GPU_RENDER_TARGET_RENDERDOC_EXPORT", "");
-
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("log", ke_logger_build.log(b));
-    test_mod.addImport("result", ke_result_build.result(b));
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run the renderdoc render target unit tests");
-    test_step.dependOn(&run_tests.step);
 }

@@ -124,7 +124,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <param name="cids">Component tuple to match.</param>
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong QueryRegister(Span<uint> cids)
+    public ulong QueryRegister(ReadOnlySpan<uint> cids)
     {
         fixed (uint* cidsPtr = cids)
         {

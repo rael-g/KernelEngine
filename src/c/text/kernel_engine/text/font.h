@@ -27,7 +27,7 @@ extern "C"
         uint8_t          *atlas_rgba;     ///< width * height * 4 bytes
         uint32_t          atlas_width;
         uint32_t          atlas_height;
-        ke_glyph_metrics *glyphs;          ///< glyph_count entries
+        ke_glyph_metrics *glyphs;          ///< [array_of:glyph_count]
         uint32_t          glyph_count;
         float             line_height;     ///< Recommended line spacing in pixels
         float             ascent;          ///< Pixels above baseline to top of tallest glyph

@@ -1,78 +1,30 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
-const ke_logger_build = @import("ke_logger");
-const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
-    const target = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
+    _ = ke_build.plugin(b, .{
+        .name = "ke_asset_assimp",
+        .root = "src/assimp_loader.zig",
+        .abi = &.{ "abi_asset", "abi_render", "abi_result", "abi_scheduler" },
+        .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .third_party = thirdParty,
+        .tests = "Run the assimp conversion unit tests",
+    });
+}
 
-    const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
-    const ke_asset = b.option([]const u8, "ke-asset-include", "kernel_engine/asset include dir") orelse @panic("-Dke-asset-include required");
-    const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
-    const ke_render = b.option([]const u8, "ke-render-include", "kernel_engine/render include dir") orelse @panic("-Dke-render-include required");
-    const ke_scheduler = b.option([]const u8, "ke-scheduler-include", "kernel_engine/scheduler include dir") orelse @panic("-Dke-scheduler-include required");
+fn thirdParty(b: *std.Build, modules: ke_build.Modules) void {
     const assimp_include = b.option([]const u8, "assimp-include", "Assimp headers dir") orelse @panic("-Dassimp-include required");
     const assimp_libs = b.option([]const u8, "assimp-libs", "'|'-separated Assimp library paths") orelse @panic("-Dassimp-libs required");
     const stb_include = b.option([]const u8, "stb-include", "vcpkg stb_image.h include dir") orelse @panic("-Dstb-include required");
+    for (modules.all(b)) |mod| {
+        mod.link_libcpp = true;
+        inline for (.{ assimp_include, stb_include }) |inc| {
+            mod.addIncludePath(.{ .cwd_relative = inc });
+        }
 
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/assimp_loader.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-        .link_libcpp = true,
-    });
-    inline for (.{ ke_common, ke_result, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
+        var lib_it = std.mem.splitScalar(u8, assimp_libs, '|');
+        while (lib_it.next()) |path| {
+            if (path.len != 0) mod.addObjectFile(.{ .cwd_relative = path });
+        }
     }
-    mod.addIncludePath(b.path("include"));
-
-    var lib_it = std.mem.splitScalar(u8, assimp_libs, '|');
-    while (lib_it.next()) |lib| {
-        if (lib.len != 0) mod.addObjectFile(.{ .cwd_relative = lib });
-    }
-
-    mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    mod.addCMacro("KE_ASSET_ASSIMP_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("log", ke_logger_build.log(b));
-    mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
-        .name = "ke_asset_assimp",
-        .root_module = mod,
-        .linkage = .dynamic,
-    });
-
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/assimp_loader.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-        .link_libcpp = true,
-    });
-    inline for (.{ ke_common, ke_result, ke_asset, ke_logger, ke_render, ke_scheduler, assimp_include, stb_include }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    test_mod.addIncludePath(b.path("include"));
-    var test_lib_it = std.mem.splitScalar(u8, assimp_libs, '|');
-    while (test_lib_it.next()) |lib_path| {
-        if (lib_path.len != 0) test_mod.addObjectFile(.{ .cwd_relative = lib_path });
-    }
-    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    test_mod.addCMacro("KE_ASSET_ASSIMP_EXPORT", "");
-
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("log", ke_logger_build.log(b));
-    test_mod.addImport("result", ke_result_build.result(b));
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
-    b.step("test", "Run the assimp conversion unit tests").dependOn(&run_tests.step);
 }

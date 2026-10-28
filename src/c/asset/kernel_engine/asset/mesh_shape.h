@@ -19,9 +19,9 @@ extern "C"
 
     typedef struct ke_mesh_shape_data
     {
-        ke_vertex *vertices;
+        ke_vertex *vertices; ///< [array_of:vertex_count]
         uint32_t   vertex_count;
-        uint16_t  *indices;
+        uint16_t  *indices; ///< [array_of:index_count]
         uint32_t   index_count;
     } ke_mesh_shape_data;
 

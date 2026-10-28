@@ -79,7 +79,7 @@ public static class Generation
             && !convention.IsParamsType(s.Name)
             && !CSharpWriter.IsView(s)
             && !CSharpWriter.IsBorrowed(s)
-            && s.Fields.Any(f => f.Has("array_of"))))
+            && CSharpWriter.SpannedFields(model, s, convention).Any()))
             File.WriteAllText(Path.Combine(outDir, $"{counted.Name}.Spans.g.cs"),
                 CSharpWriter.RenderStructSpans(model, counted, nativeNs, convention));
 

@@ -37,6 +37,22 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_CIRCLE), @as(i64, abi.KE_SHAPE_KIND_2D_CIRCLE));
 }
 
+fn expectSameValue(a: anytype, k: anytype) !void {
+    switch (@typeInfo(@TypeOf(a))) {
+        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
+        .@"union" => {},
+        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
+        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
+    }
+}
+
+test "every field table lists the header's entries" {
+    try std.testing.expectEqual(c.ke_body2d_component_fields.len, abi.ke_body2d_component_fields.len);
+    for (abi.ke_body2d_component_fields, c.ke_body2d_component_fields) |a, k| try expectSameValue(a, k);
+    try std.testing.expectEqual(c.ke_collider2d_component_fields.len, abi.ke_collider2d_component_fields.len);
+    for (abi.ke_collider2d_component_fields, c.ke_collider2d_component_fields) |a, k| try expectSameValue(a, k);
+}
+
 test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_BODY2D, abi.KE_COMPONENT_NAME_BODY2D);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_COLLIDER2D, abi.KE_COMPONENT_NAME_COLLIDER2D);

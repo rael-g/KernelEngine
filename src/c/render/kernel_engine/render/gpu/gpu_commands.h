@@ -13,6 +13,7 @@ struct ke_gpu_render_pass
     void *handle;
 
     void (*set_pipeline)(struct ke_gpu_render_pass *self, ke_gpu_pipeline pipe);
+    /// @param dynamic_offsets [array_of:dyn_count]
     void (*set_bind_group)(struct ke_gpu_render_pass *self, uint32_t group_index,
                            ke_gpu_bind_group bg, const uint32_t *dynamic_offsets,
                            uint32_t dyn_count);
@@ -47,6 +48,7 @@ struct ke_gpu_compute_pass
     void *handle;
 
     void (*set_pipeline)(struct ke_gpu_compute_pass *self, ke_gpu_pipeline pipe);
+    /// @param dynamic_offsets [array_of:dyn_count]
     void (*set_bind_group)(struct ke_gpu_compute_pass *self, uint32_t group_index,
                            ke_gpu_bind_group bg, const uint32_t *dynamic_offsets,
                            uint32_t dyn_count);

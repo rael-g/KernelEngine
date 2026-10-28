@@ -5,13 +5,15 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_binder_grouped").logFn };
 
-const c = @import("c");
-const R = @import("result").Result(c, .{});
+const abi_render = @import("abi_render");
+const abi_render_binder_grouped_factory = @import("abi_render_binder_grouped_factory");
+const abi_result = @import("abi_result");
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.binder_grouped);
 const heap = @import("heap");
 const gpa = heap.gpa;
 const reflection = @import("reflection.zig");
-const shader_files = @import("shader_files").ShaderFiles(c);
+const shader_files = @import("shader_files");
 
 const material_block = "mat";
 const material_sampler = "tex_sampler";
@@ -29,21 +31,21 @@ const MaterialUniform = extern struct {
 };
 
 const stage_suffixes = [_]struct { bit: u32, suffix: []const u8 }{
-    .{ .bit = c.KE_GPU_SHADER_STAGE_VERTEX, .suffix = "vs" },
-    .{ .bit = c.KE_GPU_SHADER_STAGE_FRAGMENT, .suffix = "fs" },
-    .{ .bit = c.KE_GPU_SHADER_STAGE_COMPUTE, .suffix = "cs" },
+    .{ .bit = abi_render.KE_GPU_SHADER_STAGE_VERTEX, .suffix = "vs" },
+    .{ .bit = abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .suffix = "fs" },
+    .{ .bit = abi_render.KE_GPU_SHADER_STAGE_COMPUTE, .suffix = "cs" },
 };
 
 /// The state behind a binder vtable. `provided` holds the resources `provide` was given, each name
 /// owned by the state; `material_group` and `material_layout` describe the `mat` block every
 /// material shader shares, read from the reflection the build embedded.
 const State = struct {
-    api: c.ke_render_resource_binder,
-    device: *c.ke_gpu_device,
+    api: abi_render.ke_render_resource_binder,
+    device: *abi_render.ke_gpu_device,
     shader_dir: []u8,
     provided: std.ArrayList(reflection.Provided),
     material_group: reflection.Group,
-    material_layout: c.ke_gpu_bind_group_layout,
+    material_layout: abi_render.ke_gpu_bind_group_layout,
 };
 
 /// One group of a shader layout: the block it holds, null for the loose parameters, the bindings
@@ -52,7 +54,7 @@ const State = struct {
 const GroupLayout = struct {
     block: ?[]u8,
     group: reflection.Group,
-    layout: c.ke_gpu_bind_group_layout,
+    layout: abi_render.ke_gpu_bind_group_layout,
     owned: bool,
 };
 
@@ -66,16 +68,16 @@ const ShaderLayout = struct {
 /// What a `ke_render_resource_set` points at.
 const Set = struct {
     index: u32,
-    bind_group: c.ke_gpu_bind_group,
+    bind_group: abi_render.ke_gpu_bind_group,
 };
 
 /// What a `ke_render_material_binding` points at.
 const Material = struct {
-    uniform: c.ke_gpu_buffer,
-    bind_group: c.ke_gpu_bind_group,
+    uniform: abi_render.ke_gpu_buffer,
+    bind_group: abi_render.ke_gpu_bind_group,
 };
 
-fn stateOf(self: [*c]c.ke_render_resource_binder) *State {
+fn stateOf(self: [*c]abi_render.ke_render_resource_binder) *State {
     return @alignCast(@ptrCast(self.*.handle));
 }
 
@@ -84,7 +86,7 @@ fn handleOf(ptr: anytype) u64 {
 }
 
 fn pointed(comptime T: type, h: u64) ?*T {
-    if (h == c.KE_RENDER_BINDING_INVALID) return null;
+    if (h == abi_render.KE_RENDER_BINDING_INVALID) return null;
     return @ptrFromInt(h);
 }
 
@@ -100,9 +102,9 @@ fn findGroup(sl: *ShaderLayout, block: ?[]const u8) ?*GroupLayout {
     return null;
 }
 
-fn releaseShaderLayout(dev: *c.ke_gpu_device, sl: *ShaderLayout) void {
+fn releaseShaderLayout(dev: *abi_render.ke_gpu_device, sl: *ShaderLayout) void {
     for (sl.groups.items) |*g| {
-        if (g.owned and g.layout != c.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, g.layout);
+        if (g.owned and g.layout != abi_render.KE_GPU_INVALID_HANDLE) dev.destroy_bind_group_layout.?(dev, g.layout);
         if (g.block) |b| gpa.free(b);
         g.group.deinit();
     }
@@ -111,13 +113,13 @@ fn releaseShaderLayout(dev: *c.ke_gpu_device, sl: *ShaderLayout) void {
 }
 
 /// The binder's `provide` slot: a binding under a name given before replaces the earlier one.
-fn provide(self: [*c]c.ke_render_resource_binder, binding: [*c]const c.ke_render_shader_binding) callconv(.c) c.ke_result {
+fn provide(self: [*c]abi_render.ke_render_resource_binder, binding: [*c]const abi_render.ke_render_shader_binding) callconv(.c) abi_result.ke_result {
     if (self == null or binding == null or binding.*.name == null) return R.code(error.InvalidArgument);
     return R.of(keep(stateOf(self), binding.*));
 }
 
-fn keep(st: *State, binding: c.ke_render_shader_binding) R.Error!void {
-    const name = std.mem.span(binding.name);
+fn keep(st: *State, binding: abi_render.ke_render_shader_binding) R.Error!void {
+    const name = std.mem.span(binding.name.?);
     for (st.provided.items) |*p| {
         if (std.mem.eql(u8, p.name, name)) {
             p.binding = binding;
@@ -150,7 +152,7 @@ fn collectStage(sl: *ShaderLayout, json: []const u8, stage: u32) R.Error!void {
 fn addGroup(sl: *ShaderLayout, block: ?[]const u8) R.Error!void {
     const owned: ?[]u8 = if (block) |b| try gpa.dupe(u8, b) else null;
     errdefer if (owned) |o| gpa.free(o);
-    try sl.groups.append(gpa, .{ .block = owned, .group = reflection.Group.init(gpa), .layout = c.KE_GPU_INVALID_HANDLE, .owned = false });
+    try sl.groups.append(gpa, .{ .block = owned, .group = reflection.Group.init(gpa), .layout = abi_render.KE_GPU_INVALID_HANDLE, .owned = false });
 }
 
 fn readFailed(err: reflection.ReadError) R.Error {
@@ -166,7 +168,7 @@ fn readFailed(err: reflection.ReadError) R.Error {
 
 /// Drops the loose group when the shader declares no loose parameter, applies the hints, and
 /// builds each group's layout, the material block taking the binder's.
-fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader_layout_params) R.Error!void {
+fn finishLayout(st: *State, sl: *ShaderLayout, params: *const abi_render.ke_render_shader_layout_params) R.Error!void {
     var i: usize = 0;
     while (i < sl.groups.items.len) {
         const g = &sl.groups.items[i];
@@ -178,16 +180,16 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader
         i += 1;
     }
     for (0..params.hint_count) |h| {
-        const hint = params.hints[h];
+        const hint = params.hints.?[h];
         var found = false;
         for (sl.groups.items) |*g| {
-            const b = g.group.find(std.mem.span(hint.name)) orelse continue;
-            if (hint.flags & c.KE_RENDER_BINDING_HINT_DEPTH != 0) b.type = c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE;
-            if (hint.flags & c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET != 0) b.has_dynamic_offset = true;
+            const b = g.group.find(std.mem.span(hint.name.?)) orelse continue;
+            if (hint.flags & abi_render.KE_RENDER_BINDING_HINT_DEPTH != 0) b.type = abi_render.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE;
+            if (hint.flags & abi_render.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET != 0) b.has_dynamic_offset = true;
             found = true;
         }
         if (!found) {
-            log.warn("create_shader_layout: the hint {s} names no parameter of the shader {s}", .{ std.mem.span(hint.name), std.mem.span(params.shader) });
+            log.warn("create_shader_layout: the hint {s} names no parameter of the shader {s}", .{ std.mem.span(hint.name.?), std.mem.span(params.shader.?) });
             return error.InvalidArgument;
         }
     }
@@ -195,7 +197,7 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader
         const index = g.group.index orelse 0;
         for (sl.groups.items[0..gi]) |earlier| {
             if ((earlier.group.index orelse 0) == index) {
-                log.warn("create_shader_layout: two groups of the shader {s} share the index {d}", .{ std.mem.span(params.shader), index });
+                log.warn("create_shader_layout: two groups of the shader {s} share the index {d}", .{ std.mem.span(params.shader.?), index });
                 return error.InvalidArgument;
             }
         }
@@ -211,24 +213,24 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const c.ke_render_shader
 
 /// The binder's `create_shader_layout` slot: reads "<shader dir>/<shader>.<vs|fs|cs>.json" for
 /// each stage of the params.
-fn createShaderLayout(self: [*c]c.ke_render_resource_binder, params: [*c]const c.ke_render_shader_layout_params, out_layout: [*c]c.ke_render_shader_layout) callconv(.c) c.ke_result {
+fn createShaderLayout(self: [*c]abi_render.ke_render_resource_binder, params: [*c]const abi_render.ke_render_shader_layout_params, out_layout: [*c]abi_render.ke_render_shader_layout) callconv(.c) abi_result.ke_result {
     const out = out_layout orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_RENDER_BINDING_INVALID;
+    out.* = abi_render.KE_RENDER_BINDING_INVALID;
     if (self == null or params == null or params.*.shader == null or params.*.stages == 0) return R.code(error.InvalidArgument);
     const sl = shaderLayout(stateOf(self), params) catch |err| return R.code(err);
     out.* = handleOf(sl);
     return R.ok;
 }
 
-fn shaderLayout(st: *State, params: *const c.ke_render_shader_layout_params) R.Error!*ShaderLayout {
+fn shaderLayout(st: *State, params: *const abi_render.ke_render_shader_layout_params) R.Error!*ShaderLayout {
     const sl = try gpa.create(ShaderLayout);
     sl.* = .{ .groups = .empty, .material_index = null };
     errdefer releaseShaderLayout(st.device, sl);
     for (stage_suffixes) |s| {
         if (params.stages & s.bit == 0) continue;
         var path_buf: [std.fs.max_path_bytes]u8 = undefined;
-        const path = std.fmt.bufPrintZ(&path_buf, "{s}/{s}.{s}.json", .{ st.shader_dir, std.mem.span(params.shader), s.suffix }) catch {
-            log.warn("create_shader_layout: the reflection path of {s} is too long", .{std.mem.span(params.shader)});
+        const path = std.fmt.bufPrintZ(&path_buf, "{s}/{s}.{s}.json", .{ st.shader_dir, std.mem.span(params.shader.?), s.suffix }) catch {
+            log.warn("create_shader_layout: the reflection path of {s} is too long", .{std.mem.span(params.shader.?)});
             return error.InvalidArgument;
         };
         const json = try shader_files.read(gpa, path);
@@ -240,7 +242,7 @@ fn shaderLayout(st: *State, params: *const c.ke_render_shader_layout_params) R.E
 }
 
 /// The binder's `destroy_shader_layout` slot.
-fn destroyShaderLayout(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout) callconv(.c) void {
+fn destroyShaderLayout(self: [*c]abi_render.ke_render_resource_binder, layout: abi_render.ke_render_shader_layout) callconv(.c) void {
     if (self == null) return;
     const sl = pointed(ShaderLayout, layout) orelse return;
     releaseShaderLayout(stateOf(self).device, sl);
@@ -248,7 +250,7 @@ fn destroyShaderLayout(self: [*c]c.ke_render_resource_binder, layout: c.ke_rende
 
 /// The binder's `pipeline_layouts` slot: each group's layout at the index the shader gives it. A
 /// shader whose groups leave an index empty below the highest is refused.
-fn pipelineLayouts(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, out_layouts: [*c]c.ke_gpu_bind_group_layout, capacity: u32, out_count: [*c]u32) callconv(.c) c.ke_result {
+fn pipelineLayouts(self: [*c]abi_render.ke_render_resource_binder, layout: abi_render.ke_render_shader_layout, out_layouts: [*c]abi_render.ke_gpu_bind_group_layout, capacity: u32, out_count: [*c]u32) callconv(.c) abi_result.ke_result {
     const sl = pointed(ShaderLayout, layout) orelse return R.code(error.InvalidArgument);
     if (self == null or out_layouts == null or out_count == null) return R.code(error.InvalidArgument);
     out_count.* = 0;
@@ -257,7 +259,7 @@ fn pipelineLayouts(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_sh
         log.warn("pipeline_layouts: the shader needs {d} layouts, more than the capacity of {d}", .{ count, capacity });
         return R.code(error.InvalidArgument);
     }
-    for (0..count) |i| out_layouts[i] = c.KE_GPU_INVALID_HANDLE;
+    for (0..count) |i| out_layouts[i] = abi_render.KE_GPU_INVALID_HANDLE;
     for (sl.groups.items) |g| {
         const index = g.group.index orelse 0;
         if (index >= count) {
@@ -271,18 +273,18 @@ fn pipelineLayouts(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_sh
 }
 
 /// The binder's `create_set` slot.
-fn createSet(self: [*c]c.ke_render_resource_binder, layout: c.ke_render_shader_layout, block: [*c]const u8, label: [*c]const u8, bindings: [*c]const c.ke_render_shader_binding, binding_count: u32, out_set: [*c]c.ke_render_resource_set) callconv(.c) c.ke_result {
+fn createSet(self: [*c]abi_render.ke_render_resource_binder, layout: abi_render.ke_render_shader_layout, block: [*c]const u8, label: [*c]const u8, bindings: [*c]const abi_render.ke_render_shader_binding, binding_count: u32, out_set: [*c]abi_render.ke_render_resource_set) callconv(.c) abi_result.ke_result {
     const out = out_set orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_RENDER_BINDING_INVALID;
+    out.* = abi_render.KE_RENDER_BINDING_INVALID;
     const sl = pointed(ShaderLayout, layout) orelse return R.code(error.InvalidArgument);
     if (self == null or (binding_count != 0 and bindings == null)) return R.code(error.InvalidArgument);
-    const given: []const c.ke_render_shader_binding = if (binding_count == 0) &.{} else bindings[0..binding_count];
-    const set = resourceSet(stateOf(self), sl, if (block != null) std.mem.span(block) else null, label, given) catch |err| return R.code(err);
+    const given: []const abi_render.ke_render_shader_binding = if (binding_count == 0) &.{} else bindings[0..binding_count];
+    const set = resourceSet(stateOf(self), sl, if (block != null) std.mem.span(block.?) else null, label, given) catch |err| return R.code(err);
     out.* = handleOf(set);
     return R.ok;
 }
 
-fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]const u8, given: []const c.ke_render_shader_binding) R.Error!*Set {
+fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]const u8, given: []const abi_render.ke_render_shader_binding) R.Error!*Set {
     const g = findGroup(sl, block) orelse {
         log.warn("create_set: the shader declares no group {s}", .{block orelse "(loose)"});
         return error.NotFound;
@@ -291,8 +293,8 @@ fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]con
     defer gpa.free(entries);
     const set = try gpa.create(Set);
     errdefer gpa.destroy(set);
-    set.* = .{ .index = g.group.index orelse 0, .bind_group = c.KE_GPU_INVALID_HANDLE };
-    try R.check(st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+    set.* = .{ .index = g.group.index orelse 0, .bind_group = abi_render.KE_GPU_INVALID_HANDLE };
+    try R.check(st.device.create_bind_group.?(st.device, &abi_render.ke_gpu_bind_group_params{
         .label = label,
         .layout = g.layout,
         .entry_count = @intCast(entries.len),
@@ -302,7 +304,7 @@ fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]con
 }
 
 /// The binder's `destroy_set` slot.
-fn destroySet(self: [*c]c.ke_render_resource_binder, set: c.ke_render_resource_set) callconv(.c) void {
+fn destroySet(self: [*c]abi_render.ke_render_resource_binder, set: abi_render.ke_render_resource_set) callconv(.c) void {
     if (self == null) return;
     const s = pointed(Set, set) orelse return;
     const dev = stateOf(self).device;
@@ -311,14 +313,14 @@ fn destroySet(self: [*c]c.ke_render_resource_binder, set: c.ke_render_resource_s
 }
 
 /// The binder's `bind_render_set` slot.
-fn bindRenderSet(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_render_pass, set: c.ke_render_resource_set, offsets: [*c]const u32, offset_count: u32) callconv(.c) void {
+fn bindRenderSet(self: [*c]abi_render.ke_render_resource_binder, pass: [*c]abi_render.ke_gpu_render_pass, set: abi_render.ke_render_resource_set, offsets: [*c]const u32, offset_count: u32) callconv(.c) void {
     if (self == null or pass == null) return;
     const s = pointed(Set, set) orelse return;
     pass.*.set_bind_group.?(pass, s.index, s.bind_group, offsets, offset_count);
 }
 
 /// The binder's `bind_compute_set` slot.
-fn bindComputeSet(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_compute_pass, set: c.ke_render_resource_set, offsets: [*c]const u32, offset_count: u32) callconv(.c) void {
+fn bindComputeSet(self: [*c]abi_render.ke_render_resource_binder, pass: [*c]abi_render.ke_gpu_compute_pass, set: abi_render.ke_render_resource_set, offsets: [*c]const u32, offset_count: u32) callconv(.c) void {
     if (self == null or pass == null) return;
     const s = pointed(Set, set) orelse return;
     pass.*.set_bind_group.?(pass, s.index, s.bind_group, offsets, offset_count);
@@ -326,16 +328,16 @@ fn bindComputeSet(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_comp
 
 /// The binder's `create_material` slot: the material's uniform buffer and one bind group against
 /// the material layout, its sampler the one provided as `ke_samp_linear`.
-fn createMaterial(self: [*c]c.ke_render_resource_binder, data: [*c]const c.ke_render_material_data, out_material: [*c]c.ke_render_material_binding) callconv(.c) c.ke_result {
+fn createMaterial(self: [*c]abi_render.ke_render_resource_binder, data: [*c]const abi_render.ke_render_material_data, out_material: [*c]abi_render.ke_render_material_binding) callconv(.c) abi_result.ke_result {
     const out = out_material orelse return R.code(error.InvalidArgument);
-    out.* = c.KE_RENDER_BINDING_INVALID;
+    out.* = abi_render.KE_RENDER_BINDING_INVALID;
     if (self == null or data == null) return R.code(error.InvalidArgument);
     const m = newMaterial(stateOf(self), data.*) catch |err| return R.code(err);
     out.* = handleOf(m);
     return R.ok;
 }
 
-fn newMaterial(st: *State, d: c.ke_render_material_data) R.Error!*Material {
+fn newMaterial(st: *State, d: abi_render.ke_render_material_data) R.Error!*Material {
     const uniform = MaterialUniform{
         .base_color = d.base_color,
         .metallic = d.metallic,
@@ -344,21 +346,21 @@ fn newMaterial(st: *State, d: c.ke_render_material_data) R.Error!*Material {
         .ior = d.ior,
         .distortion_strength = d.distortion_strength,
     };
-    var buffer: c.ke_gpu_buffer = c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_buffer.?(st.device, &c.ke_gpu_buffer_params{
+    var buffer: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_buffer.?(st.device, &abi_render.ke_gpu_buffer_params{
         .label = "material.uniform",
         .initial_data = &uniform,
         .size = @sizeOf(MaterialUniform),
-        .usage = c.KE_GPU_BUFFER_USAGE_UNIFORM | c.KE_GPU_BUFFER_USAGE_COPY_DST,
+        .usage = abi_render.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &buffer));
     errdefer st.device.destroy_buffer.?(st.device, buffer);
-    var sampler: c.ke_gpu_sampler = c.KE_GPU_INVALID_HANDLE;
+    var sampler: abi_render.ke_gpu_sampler = abi_render.KE_GPU_INVALID_HANDLE;
     for (st.provided.items) |p| {
         if (std.mem.eql(u8, p.name, material_sampler_source)) sampler = p.binding.sampler;
     }
-    const zero = std.mem.zeroes(c.ke_render_shader_binding);
-    var bindings = [_]c.ke_render_shader_binding{ zero, zero, zero, zero };
+    const zero = std.mem.zeroes(abi_render.ke_render_shader_binding);
+    var bindings = [_]abi_render.ke_render_shader_binding{ zero, zero, zero, zero };
     bindings[0].name = material_block;
     bindings[0].buffer = buffer;
     bindings[0].buffer_size = @sizeOf(MaterialUniform);
@@ -370,8 +372,8 @@ fn newMaterial(st: *State, d: c.ke_render_material_data) R.Error!*Material {
     bindings[3].texture_view = d.normal_map;
     const entries = try reflection.matchBindings(&st.material_group, &bindings, st.provided.items);
     defer gpa.free(entries);
-    var bind_group: c.ke_gpu_bind_group = c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_bind_group.?(st.device, &c.ke_gpu_bind_group_params{
+    var bind_group: abi_render.ke_gpu_bind_group = abi_render.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_bind_group.?(st.device, &abi_render.ke_gpu_bind_group_params{
         .label = "material.bind_group",
         .layout = st.material_layout,
         .entry_count = @intCast(entries.len),
@@ -384,7 +386,7 @@ fn newMaterial(st: *State, d: c.ke_render_material_data) R.Error!*Material {
 }
 
 /// The binder's `destroy_material` slot.
-fn destroyMaterial(self: [*c]c.ke_render_resource_binder, material: c.ke_render_material_binding) callconv(.c) void {
+fn destroyMaterial(self: [*c]abi_render.ke_render_resource_binder, material: abi_render.ke_render_material_binding) callconv(.c) void {
     if (self == null) return;
     const m = pointed(Material, material) orelse return;
     const dev = stateOf(self).device;
@@ -394,7 +396,7 @@ fn destroyMaterial(self: [*c]c.ke_render_resource_binder, material: c.ke_render_
 }
 
 /// The binder's `bind_material` slot: the material's bind group at the shader's material group.
-fn bindMaterial(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_render_pass, layout: c.ke_render_shader_layout, material: c.ke_render_material_binding) callconv(.c) void {
+fn bindMaterial(self: [*c]abi_render.ke_render_resource_binder, pass: [*c]abi_render.ke_gpu_render_pass, layout: abi_render.ke_render_shader_layout, material: abi_render.ke_render_material_binding) callconv(.c) void {
     if (self == null or pass == null) return;
     const sl = pointed(ShaderLayout, layout) orelse return;
     const m = pointed(Material, material) orelse return;
@@ -404,10 +406,10 @@ fn bindMaterial(self: [*c]c.ke_render_resource_binder, pass: [*c]c.ke_gpu_render
 
 /// The `destroy` of the handle the factory returns: the material layout, the provided names and
 /// the state. Layouts, sets and materials still alive are the caller's leak.
-fn destroyBinder(self: [*c]c.ke_render_resource_binder) callconv(.c) void {
+fn destroyBinder(self: [*c]abi_render.ke_render_resource_binder) callconv(.c) void {
     if (self == null) return;
     const st = stateOf(self);
-    if (st.material_layout != c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_layout);
+    if (st.material_layout != abi_render.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_layout);
     st.material_group.deinit();
     for (st.provided.items) |p| gpa.free(p.name);
     st.provided.deinit(gpa);
@@ -417,7 +419,7 @@ fn destroyBinder(self: [*c]c.ke_render_resource_binder) callconv(.c) void {
 
 /// The factory: copies the shader directory, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(params: [*c]const c.ke_render_resource_binder_grouped_params, out_binder: [*c]c.ke_render_resource_binder_handle) callconv(.c) c.ke_result {
+export fn ke_render_resource_binder_grouped_create(params: [*c]const abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params, out_binder: [*c]abi_render.ke_render_resource_binder_handle) callconv(.c) abi_result.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     if (params == null or params.*.device == null or params.*.shader_dir == null) return R.code(error.InvalidArgument);
@@ -426,9 +428,9 @@ export fn ke_render_resource_binder_grouped_create(params: [*c]const c.ke_render
     return R.ok;
 }
 
-fn newBinder(params: c.ke_render_resource_binder_grouped_params) R.Error!*State {
+fn newBinder(params: abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params) R.Error!*State {
     const st = try gpa.create(State);
-    const dir = gpa.dupe(u8, std.mem.span(params.shader_dir)) catch |err| {
+    const dir = gpa.dupe(u8, std.mem.span(params.shader_dir.?)) catch |err| {
         gpa.destroy(st);
         return err;
     };
@@ -447,16 +449,16 @@ fn newBinder(params: c.ke_render_resource_binder_grouped_params) R.Error!*State 
             .destroy_material = destroyMaterial,
             .bind_material = bindMaterial,
         },
-        .device = params.device,
+        .device = params.device.?,
         .shader_dir = dir,
         .provided = .empty,
         .material_group = reflection.Group.init(gpa),
-        .material_layout = c.KE_GPU_INVALID_HANDLE,
+        .material_layout = abi_render.KE_GPU_INVALID_HANDLE,
     };
     errdefer destroyBinder(&st.api);
     const material_json = @embedFile("material_params.json");
-    const read_vs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_VERTEX) catch false;
-    const read_fs = st.material_group.collect(material_json, material_block, c.KE_GPU_SHADER_STAGE_FRAGMENT) catch false;
+    const read_vs = st.material_group.collect(material_json, material_block, abi_render.KE_GPU_SHADER_STAGE_VERTEX) catch false;
+    const read_fs = st.material_group.collect(material_json, material_block, abi_render.KE_GPU_SHADER_STAGE_FRAGMENT) catch false;
     if (!read_vs or !read_fs) {
         log.warn("ke_render_resource_binder_grouped_create: the material parameter block could not be read", .{});
         return error.NotInitialized;
@@ -466,7 +468,7 @@ fn newBinder(params: c.ke_render_resource_binder_grouped_params) R.Error!*State 
 }
 
 const testing = std.testing;
-const Stubs = @import("stubs").Stubs(c);
+const Stubs = @import("stubs");
 
 test {
     _ = reflection;
@@ -496,17 +498,17 @@ const gap_fs =
 
 /// What the binder records into: the groups set on a render pass, by index.
 const PassProbe = struct {
-    pass: c.ke_gpu_render_pass,
-    groups: [4]c.ke_gpu_bind_group = .{ 0, 0, 0, 0 },
+    pass: abi_render.ke_gpu_render_pass,
+    groups: [4]abi_render.ke_gpu_bind_group = .{ 0, 0, 0, 0 },
     offsets: [4]u32 = .{ 0, 0, 0, 0 },
 
     fn init(self: *PassProbe) void {
-        self.* = .{ .pass = std.mem.zeroes(c.ke_gpu_render_pass) };
+        self.* = .{ .pass = std.mem.zeroes(abi_render.ke_gpu_render_pass) };
         self.pass.set_bind_group = setBindGroup;
     }
 
-    fn setBindGroup(pass: [*c]c.ke_gpu_render_pass, index: u32, bg: c.ke_gpu_bind_group, offsets: [*c]const u32, count: u32) callconv(.c) void {
-        const self: *PassProbe = @fieldParentPtr("pass", @as(*c.ke_gpu_render_pass, pass));
+    fn setBindGroup(pass: [*c]abi_render.ke_gpu_render_pass, index: u32, bg: abi_render.ke_gpu_bind_group, offsets: [*c]const u32, count: u32) callconv(.c) void {
+        const self: *PassProbe = @fieldParentPtr("pass", @as(*abi_render.ke_gpu_render_pass, pass));
         self.groups[index] = bg;
         if (count != 0) self.offsets[index] = offsets[0];
     }
@@ -528,9 +530,9 @@ const Rig = struct {
         self.path[p.len] = 0;
     }
 
-    fn binder(self: *Rig) !c.ke_render_resource_binder_handle {
-        const params = c.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = @ptrCast(&self.path) };
-        var h: c.ke_render_resource_binder_handle = undefined;
+    fn binder(self: *Rig) !abi_render.ke_render_resource_binder_handle {
+        const params = abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = @ptrCast(&self.path) };
+        var h: abi_render.ke_render_resource_binder_handle = undefined;
         try R.check(ke_render_resource_binder_grouped_create(&params, &h));
         return h;
     }
@@ -540,8 +542,8 @@ const Rig = struct {
     }
 };
 
-fn named(name: [*:0]const u8) c.ke_render_shader_binding {
-    var b = std.mem.zeroes(c.ke_render_shader_binding);
+fn named(name: [*:0]const u8) abi_render.ke_render_shader_binding {
+    var b = std.mem.zeroes(abi_render.ke_render_shader_binding);
     b.name = name;
     return b;
 }
@@ -554,16 +556,16 @@ test "a shader's groups are placed in a pipeline at the indices the shader gives
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    var layout: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
-    defer b.*.destroy_shader_layout.?(b, layout);
+    var layout: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
+    defer b.?.destroy_shader_layout.?(b, layout);
 
-    var layouts: [4]c.ke_gpu_bind_group_layout = undefined;
+    var layouts: [4]abi_render.ke_gpu_bind_group_layout = undefined;
     var count: u32 = 0;
-    try R.check(b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count));
+    try R.check(b.?.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count));
     try testing.expectEqual(@as(u32, 3), count);
     try testing.expectEqual(stateOf(b).material_layout, layouts[1]);
-    try testing.expect(layouts[0] != c.KE_GPU_INVALID_HANDLE and layouts[2] != c.KE_GPU_INVALID_HANDLE);
+    try testing.expect(layouts[0] != abi_render.KE_GPU_INVALID_HANDLE and layouts[2] != abi_render.KE_GPU_INVALID_HANDLE);
 }
 
 test "a set binds what the pass names and what the binder was given for the rest, at its group's index" {
@@ -576,32 +578,32 @@ test "a set binds what the pass names and what the binder was given for the rest
 
     var frame = named("ke_frame");
     frame.buffer = 9;
-    try R.check(b.*.provide.?(b, &frame));
-    const hints = [_]c.ke_render_binding_hint{.{ .name = "object", .flags = c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
-    var layout: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout));
-    defer b.*.destroy_shader_layout.?(b, layout);
+    try R.check(b.?.provide.?(b, &frame));
+    const hints = [_]abi_render.ke_render_binding_hint{.{ .name = "object", .flags = abi_render.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
+    var layout: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout));
+    defer b.?.destroy_shader_layout.?(b, layout);
 
-    const own = [_]c.ke_render_shader_binding{named("shadow_map")};
-    var loose: c.ke_render_resource_set = undefined;
-    try R.check(b.*.create_set.?(b, layout, null, "loose", &own, own.len, &loose));
-    defer b.*.destroy_set.?(b, loose);
-    var object: c.ke_render_resource_set = undefined;
-    try R.check(b.*.create_set.?(b, layout, "object", "object", &[_]c.ke_render_shader_binding{named("object")}, 1, &object));
-    defer b.*.destroy_set.?(b, object);
+    const own = [_]abi_render.ke_render_shader_binding{named("shadow_map")};
+    var loose: abi_render.ke_render_resource_set = undefined;
+    try R.check(b.?.create_set.?(b, layout, null, "loose", &own, own.len, &loose));
+    defer b.?.destroy_set.?(b, loose);
+    var object: abi_render.ke_render_resource_set = undefined;
+    try R.check(b.?.create_set.?(b, layout, "object", "object", &[_]abi_render.ke_render_shader_binding{named("object")}, 1, &object));
+    defer b.?.destroy_set.?(b, object);
 
     var probe: PassProbe = undefined;
     probe.init();
-    b.*.bind_render_set.?(b, &probe.pass, loose, null, 0);
+    b.?.bind_render_set.?(b, &probe.pass, loose, null, 0);
     const offset = [_]u32{256};
-    b.*.bind_render_set.?(b, &probe.pass, object, &offset, 1);
+    b.?.bind_render_set.?(b, &probe.pass, object, &offset, 1);
     try testing.expectEqual(pointed(Set, loose).?.bind_group, probe.groups[0]);
     try testing.expectEqual(pointed(Set, object).?.bind_group, probe.groups[2]);
     try testing.expectEqual(@as(u32, 256), probe.offsets[2]);
 
-    var absent: c.ke_render_resource_set = undefined;
-    try testing.expectError(error.NotFound, R.check(b.*.create_set.?(b, layout, "absent", null, null, 0, &absent)));
-    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), absent);
+    var absent: abi_render.ke_render_resource_set = undefined;
+    try testing.expectError(error.NotFound, R.check(b.?.create_set.?(b, layout, "absent", null, null, 0, &absent)));
+    try testing.expectEqual(@as(u64, abi_render.KE_RENDER_BINDING_INVALID), absent);
 }
 
 test "a material is bound at the material group of the shader drawing it, and not at all by a shader without one" {
@@ -612,28 +614,28 @@ test "a material is bound at the material group of the shader drawing it, and no
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    var data = std.mem.zeroes(c.ke_render_material_data);
+    var data = std.mem.zeroes(abi_render.ke_render_material_data);
     data.albedo = 3;
     data.normal_map = 4;
-    var material: c.ke_render_material_binding = undefined;
-    try R.check(b.*.create_material.?(b, &data, &material));
-    defer b.*.destroy_material.?(b, material);
+    var material: abi_render.ke_render_material_binding = undefined;
+    try R.check(b.?.create_material.?(b, &data, &material));
+    defer b.?.destroy_material.?(b, material);
 
-    var lit: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &lit));
-    defer b.*.destroy_shader_layout.?(b, lit);
+    var lit: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &lit));
+    defer b.?.destroy_shader_layout.?(b, lit);
     var probe: PassProbe = undefined;
     probe.init();
-    b.*.bind_material.?(b, &probe.pass, lit, material);
+    b.?.bind_material.?(b, &probe.pass, lit, material);
     try testing.expectEqual(pointed(Material, material).?.bind_group, probe.groups[1]);
 
-    var plain: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX, .hints = null, .hint_count = 0 }, &plain));
-    defer b.*.destroy_shader_layout.?(b, plain);
+    var plain: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX, .hints = null, .hint_count = 0 }, &plain));
+    defer b.?.destroy_shader_layout.?(b, plain);
     var untouched: PassProbe = undefined;
     untouched.init();
-    b.*.bind_material.?(b, &untouched.pass, plain, material);
-    try testing.expectEqual([_]c.ke_gpu_bind_group{ 0, 0, 0, 0 }, untouched.groups);
+    b.?.bind_material.?(b, &untouched.pass, plain, material);
+    try testing.expectEqual([_]abi_render.ke_gpu_bind_group{ 0, 0, 0, 0 }, untouched.groups);
 }
 
 test "a shader that leaves a group index empty below its highest is refused a pipeline layout" {
@@ -644,12 +646,12 @@ test "a shader that leaves a group index empty below its highest is refused a pi
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    var layout: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "gap", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
-    defer b.*.destroy_shader_layout.?(b, layout);
-    var layouts: [4]c.ke_gpu_bind_group_layout = undefined;
+    var layout: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "gap", .stages = abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
+    defer b.?.destroy_shader_layout.?(b, layout);
+    var layouts: [4]abi_render.ke_gpu_bind_group_layout = undefined;
     var count: u32 = 0;
-    try testing.expectError(error.InvalidArgument, R.check(b.*.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count)));
+    try testing.expectError(error.InvalidArgument, R.check(b.?.pipeline_layouts.?(b, layout, &layouts, layouts.len, &count)));
 }
 
 test "a hint naming no parameter of the shader is refused" {
@@ -660,10 +662,10 @@ test "a hint naming no parameter of the shader is refused" {
     defer h.destroy.?(h.ref);
     const b = h.ref;
 
-    const hints = [_]c.ke_render_binding_hint{.{ .name = "nothing", .flags = c.KE_RENDER_BINDING_HINT_DEPTH }};
-    var layout: c.ke_render_shader_layout = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout)));
-    try testing.expectEqual(@as(u64, c.KE_RENDER_BINDING_INVALID), layout);
+    const hints = [_]abi_render.ke_render_binding_hint{.{ .name = "nothing", .flags = abi_render.KE_RENDER_BINDING_HINT_DEPTH }};
+    var layout: abi_render.ke_render_shader_layout = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = &hints, .hint_count = hints.len }, &layout)));
+    try testing.expectEqual(@as(u64, abi_render.KE_RENDER_BINDING_INVALID), layout);
 }
 
 test "creating a binder and everything it hands out, then destroying them, leaves no block allocated and no GPU resource live" {
@@ -673,17 +675,17 @@ test "creating a binder and everything it hands out, then destroying them, leave
     const h = try rig.binder();
     const b = h.ref;
     var frame = named("ke_frame");
-    try R.check(b.*.provide.?(b, &frame));
-    var layout: c.ke_render_shader_layout = undefined;
-    try R.check(b.*.create_shader_layout.?(b, &.{ .shader = "lit", .stages = c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
-    var set: c.ke_render_resource_set = undefined;
-    try R.check(b.*.create_set.?(b, layout, null, null, &[_]c.ke_render_shader_binding{named("shadow_map")}, 1, &set));
-    var data = std.mem.zeroes(c.ke_render_material_data);
-    var material: c.ke_render_material_binding = undefined;
-    try R.check(b.*.create_material.?(b, &data, &material));
-    b.*.destroy_material.?(b, material);
-    b.*.destroy_set.?(b, set);
-    b.*.destroy_shader_layout.?(b, layout);
+    try R.check(b.?.provide.?(b, &frame));
+    var layout: abi_render.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "lit", .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
+    var set: abi_render.ke_render_resource_set = undefined;
+    try R.check(b.?.create_set.?(b, layout, null, null, &[_]abi_render.ke_render_shader_binding{named("shadow_map")}, 1, &set));
+    var data = std.mem.zeroes(abi_render.ke_render_material_data);
+    var material: abi_render.ke_render_material_binding = undefined;
+    try R.check(b.?.create_material.?(b, &data, &material));
+    b.?.destroy_material.?(b, material);
+    b.?.destroy_set.?(b, set);
+    b.?.destroy_shader_layout.?(b, layout);
     h.destroy.?(b);
     try testing.expectEqual(@as(i64, 0), rig.dev.live);
     try heap.expectNoLeaks();

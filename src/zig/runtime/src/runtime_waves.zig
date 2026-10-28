@@ -6,19 +6,20 @@
 
 const std = @import("std");
 
-const c = @import("c");
+const abi_ecs = @import("abi_ecs");
+const abi_runtime = @import("abi_runtime");
 const heap = @import("heap");
 const QueryDecl = @import("runtime_queries.zig").QueryDecl;
 
-const ACCESS_WRITE: c_uint = @intCast(c.KE_ACCESS_WRITE);
+const ACCESS_WRITE: c_uint = @intCast(abi_runtime.KE_ACCESS_WRITE);
 
-pub fn termWrites(a: c.ke_component_access) bool {
+pub fn termWrites(a: abi_runtime.ke_component_access) bool {
     return (@as(c_uint, @intCast(a.access)) & ACCESS_WRITE) != 0;
 }
 
 /// Whether the access list of `p` names `cid`, with `out_writes` set when one of its entries
 /// writes it.
-pub fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_id, out_writes: *bool) bool {
+pub fn paramsAccesses(p: *const abi_runtime.ke_runtime_system_params, cid: abi_ecs.ke_component_id, out_writes: *bool) bool {
     var any = false;
     var writes = false;
     if (p.access_list) |list| {
@@ -33,19 +34,19 @@ pub fn paramsAccesses(p: *const c.ke_runtime_system_params, cid: c.ke_component_
 }
 
 /// A member of an exclusive group, as `declare_exclusive` stored it.
-pub const Exclusive = struct { group: c.ke_component_id, member: c.ke_component_id };
+pub const Exclusive = struct { group: abi_ecs.ke_component_id, member: abi_ecs.ke_component_id };
 
 /// What the runtime was told beyond the systems: the exclusive groups and the components whose
 /// writers their owner orders.
 pub const Rules = struct {
     exclusive: []const Exclusive = &.{},
-    self_ordered: []const c.ke_component_id = &.{},
+    self_ordered: []const abi_ecs.ke_component_id = &.{},
 
-    fn selfOrdered(self: Rules, cid: c.ke_component_id) bool {
-        return std.mem.indexOfScalar(c.ke_component_id, self.self_ordered, cid) != null;
+    fn selfOrdered(self: Rules, cid: abi_ecs.ke_component_id) bool {
+        return std.mem.indexOfScalar(abi_ecs.ke_component_id, self.self_ordered, cid) != null;
     }
 
-    fn memberOf(self: Rules, cid: c.ke_component_id) ?Exclusive {
+    fn memberOf(self: Rules, cid: abi_ecs.ke_component_id) ?Exclusive {
         for (self.exclusive) |e| if (e.member == cid) return e;
         return null;
     }
@@ -55,8 +56,8 @@ pub const Rules = struct {
 /// that already holds its query terms; `explicit` is the access list it declared beside its
 /// queries, and `queries` the queries themselves.
 pub const Node = struct {
-    params: *const c.ke_runtime_system_params,
-    explicit: []const c.ke_component_access = &.{},
+    params: *const abi_runtime.ke_runtime_system_params,
+    explicit: []const abi_runtime.ke_component_access = &.{},
     queries: []const QueryDecl = &.{},
 };
 
@@ -66,7 +67,7 @@ pub const Problem = union(enum) {
     out_of_memory,
     unknown_name: struct { system: [*c]const u8, name: [*c]const u8 },
     cycle: struct { system: [*c]const u8 },
-    ambiguity: struct { first: [*c]const u8, second: [*c]const u8, cid: c.ke_component_id },
+    ambiguity: struct { first: [*c]const u8, second: [*c]const u8, cid: abi_ecs.ke_component_id },
 };
 
 /// The result of `order`: the number of waves, the first problem that stops the order, and the
@@ -109,12 +110,12 @@ fn confinement(n: Node, rules: Rules) ?Exclusive {
     return found;
 }
 
-fn inExplicit(n: Node, cid: c.ke_component_id) bool {
+fn inExplicit(n: Node, cid: abi_ecs.ke_component_id) bool {
     for (n.explicit) |a| if (a.cid == cid) return true;
     return false;
 }
 
-const Relation = struct { forward: bool = false, backward: bool = false, ambiguous: ?c.ke_component_id = null };
+const Relation = struct { forward: bool = false, backward: bool = false, ambiguous: ?abi_ecs.ke_component_id = null };
 
 /// How the data of `a`, registered before `b`, orders the two.
 fn relate(a: Node, b: Node, rules: Rules) Relation {

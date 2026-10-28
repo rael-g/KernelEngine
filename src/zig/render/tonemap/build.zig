@@ -1,66 +1,12 @@
 const std = @import("std");
 const ke_build = @import("ke_build");
-const ke_logger_build = @import("ke_logger");
-const ke_result_build = @import("ke_result");
 
 pub fn build(b: *std.Build) void {
-    const target   = b.standardTargetOptions(.{});
-    const optimize = b.standardOptimizeOption(.{});
-
-    const ke_common    = b.option([]const u8, "ke-common-include",    "kernel_engine/common include dir")    orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
-    const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const stubs_src = b.option([]const u8, "stubs-src", "path to the shared Zig stubs.zig") orelse @panic("-Dstubs-src required");
-    const ke_math = b.option([]const u8, "ke-math-include", "kernel_engine/math include dir") orelse @panic("-Dke-math-include required");
-    const ke_logger  = b.option([]const u8, "ke-logger-include",  "kernel_engine/logger include dir")  orelse @panic("-Dke-logger-include required");
-    const ke_runtime = b.option([]const u8, "ke-runtime-include", "kernel_engine/runtime include dir") orelse @panic("-Dke-runtime-include required");
-    const ke_ecs     = b.option([]const u8, "ke-ecs-include",     "kernel_engine/ecs include dir")     orelse @panic("-Dke-ecs-include required");
-    const ke_render  = b.option([]const u8, "ke-render-include",  "kernel_engine/render include dir")  orelse @panic("-Dke-render-include required");
-    const ke_self    = b.option([]const u8, "ke-self-include",    "this plugin's include dir")         orelse @panic("-Dke-self-include required");
-
-    const mod = b.createModule(.{
-        .root_source_file = b.path("src/tonemap_module.zig"),
-        .target    = target,
-        .optimize  = optimize,
-        .link_libc = true,
-    });
-    mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_math, ke_logger, ke_runtime, ke_ecs, ke_render, ke_self }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    mod.addCMacro("KE_RENDER_TONEMAP_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
-    mod.addImport("log", ke_logger_build.log(b));
-    mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
+    _ = ke_build.plugin(b, .{
         .name = "ke_render_tonemap",
-        .root_module = mod,
-        .linkage = .dynamic,
+        .root = "src/tonemap_module.zig",
+        .abi = &.{ "abi_render", "abi_render_tonemap_factory", "abi_result", "abi_runtime" },
+        .common = &.{ "heap", "stubs" },
+        .tests = "Run the tonemap pass unit tests",
     });
-
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/tonemap_module.zig"),
-        .target    = target,
-        .optimize  = optimize,
-        .link_libc = true,
-    });
-    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_math, ke_logger, ke_runtime, ke_ecs, ke_render, ke_self }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    test_mod.addCMacro("KE_RENDER_TONEMAP_EXPORT", "");
-    test_mod.addImport("stubs", b.createModule(.{ .root_source_file = .{ .cwd_relative = stubs_src }, .target = target, .optimize = optimize }));
-
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("log", ke_logger_build.log(b));
-    test_mod.addImport("result", ke_result_build.result(b));
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
-    b.step("test", "Run the tonemap pass unit tests").dependOn(&run_tests.step);
 }

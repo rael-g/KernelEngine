@@ -132,9 +132,9 @@ typedef struct ke_render_pass_io
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass
     /// begins.
     const char        *name;
-    const char *const *reads;
+    const char *const *reads;  ///< [array_of:reads_count] The tags the pass reads.
     uint32_t           reads_count;
-    const char *const *writes;
+    const char *const *writes; ///< [array_of:writes_count] The tags the pass writes.
     uint32_t           writes_count;
     /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
     ke_render_chain_link chain;
@@ -186,6 +186,7 @@ struct ke_render_service
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
     /** @param key [utf8] Dedup cache key; required.
+     *  @param indices [array_of:index_count] Triangle list indices.
      *  @param out_mesh [out] Receives the handle of the uploaded mesh. */
     ke_result (*upload_mesh)(struct ke_render_service *self, const char *key,
                              const void *vertices, size_t vertices_size,

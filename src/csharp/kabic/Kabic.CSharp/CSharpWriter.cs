@@ -826,6 +826,14 @@ public static class CSharpWriter
     }
 
     /// <summary>
+    /// The counted pointers of <paramref name="s"/> a span can read: one whose elements are a
+    /// C# pointer type has no span, so it stays raw.
+    /// </summary>
+    public static IEnumerable<ApiField> SpannedFields(ApiModel model, ApiStruct s, Convention convention) =>
+        s.Fields.Where(f => f.Has("array_of")
+            && !(CTypes.IsPointer(f.Type) && ValueTypeName(model, StripQualifiers(CTypes.Deref(f.Type)), convention).EndsWith('*')));
+
+    /// <summary>
     /// Emits the span each <c>[array_of:]</c> field of a struct reads as, onto the struct the
     /// ABI declares rather than a second type beside it. A pointer and the count bounding it
     /// are one value wherever they sit: a slot answering with the pair already hands out a
@@ -842,7 +850,7 @@ public static class CSharpWriter
         o.Add("{");
 
         var first = true;
-        foreach (var f in s.Fields.Where(x => x.Has("array_of")))
+        foreach (var f in SpannedFields(model, s, convention))
         {
             if (!first) o.Add("");
             first = false;
@@ -2407,7 +2415,7 @@ public static class CSharpWriter
                         ? $"{cb.Delegate}? {Idioms.Ident(p.Name!)}"
                     : cs.Sequences.FirstOrDefault(s => s.Seq == p) is { } asSpan
                         ? (p.Has("utf8") ? $"ReadOnlySpan<string> {Idioms.Ident(p.Name!)}"
-                            : $"Span<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}")
+                            : $"{(p.Type.TrimStart().StartsWith("const ", StringComparison.Ordinal) ? "ReadOnlySpan" : "Span")}<{SequenceElement(model, asSpan, convention)}> {Idioms.Ident(p.Name!)}")
                     : cs.Blobs.Any(b => b.Blob == p)
                         ? $"in {BlobTypeParam(p)} {Idioms.Ident(p.Name!)}"
                     : cs.TrailingOuts.Contains(p)

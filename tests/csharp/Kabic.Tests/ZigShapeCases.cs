@@ -72,7 +72,7 @@ internal static class ZigShapeCases
                 F("m", "float[16]"),
                 F("columns", "void *[8]"),
             ], [])),
-            contains: ["path: [256]u8,", "m: [16]f32,", "columns: [8]?*anyopaque,"],
+            contains: ["path: [256]u8 = std.mem.zeroes([256]u8),", "m: [16]f32 = std.mem.zeroes([16]f32),", "columns: [8]?*anyopaque = std.mem.zeroes([8]?*anyopaque),"],
             absent: ["char[256]", "float[16]"]);
 
         Expect("an enum is its C integer type and a constant per value, an alias included",
@@ -97,14 +97,14 @@ internal static class ZigShapeCases
                 F("ecs", "ke_far_ecs *"),
                 F("kind", "ke_far_kind"),
             ], [])),
-            contains: ["const far = @import(\"far\");", "ecs: ?*far.ke_far_ecs,", "kind: far.ke_far_kind,"],
+            contains: ["const far = @import(\"far\");", "ecs: ?*far.ke_far_ecs = std.mem.zeroes(?*far.ke_far_ecs),", "kind: far.ke_far_kind = std.mem.zeroes(far.ke_far_kind),"],
             absent: ["?*ke_far_ecs,"],
             foreign: new Dictionary<string, string> { ["ke_far_ecs"] = "far", ["ke_far_kind"] = "far" });
 
         Expect("a domain naming nothing foreign imports nothing",
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("n", "uint32_t")], [])),
-            contains: ["n: u32,"],
-            absent: ["@import("],
+            contains: ["n: u32 = std.mem.zeroes(u32),"],
+            absent: ["@import(\"far\")"],
             foreign: new Dictionary<string, string> { ["ke_far_ecs"] = "far" });
 
         Expect("every pointer is nullable, and a counted one reaches many",
@@ -118,9 +118,9 @@ internal static class ZigShapeCases
                 F("user", "void *"),
                 F("seen", "const void *"),
             ], [])),
-            contains: ["one: ?*ke_probe,", "many: ?[*]const u32,", "name: ?[*:0]const u8,",
-                       "names: ?[*]const ?[*:0]const u8,", "bytes: ?[*]const u8,", "user: ?*anyopaque,",
-                       "seen: ?*const anyopaque,"]);
+            contains: ["one: ?*ke_probe = std.mem.zeroes(?*ke_probe),", "many: ?[*]const u32 = std.mem.zeroes(?[*]const u32),", "name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),",
+                       "names: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),", "bytes: ?[*]const u8 = std.mem.zeroes(?[*]const u8),", "user: ?*anyopaque = std.mem.zeroes(?*anyopaque),",
+                       "seen: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),"]);
 
         Expect("a slot is a nullable C function pointer that takes its receiver first",
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("handle", "void *")], [
@@ -128,9 +128,9 @@ internal static class ZigShapeCases
                 Slot("fill", "ke_result", "struct ke_probe *", P("out_items", "ke_item *", "out", "array_of:capacity"),
                     P("capacity", "uint32_t")),
             ])),
-            contains: ["handle: ?*anyopaque,",
-                       "count: ?*const fn (?*ke_probe) callconv(.c) u32,",
-                       "fill: ?*const fn (?*ke_probe, ?[*]far.ke_item, u32) callconv(.c) result.ke_result,"],
+            contains: ["handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),",
+                       "count: ?*const fn (?*ke_probe) callconv(.c) u32 = null,",
+                       "fill: ?*const fn (?*ke_probe, ?[*]far.ke_item, u32) callconv(.c) result.ke_result = null,"],
             absent: ["self:"],
             foreign: new Dictionary<string, string> { ["ke_item"] = "far", ["ke_result"] = "result" });
 
@@ -139,7 +139,7 @@ internal static class ZigShapeCases
                 Slot("write", "void", "struct ke_probe *"),
             ])
             { Order = ["write", "handle"] }),
-            contains: ["write: ?*const fn (?*ke_probe) callconv(.c) void,\n    handle: ?*anyopaque,"]);
+            contains: ["write: ?*const fn (?*ke_probe) callconv(.c) void = null,\n    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),"]);
 
         Expect("an anonymous union is an inline extern union",
             m => m.Structs.Add(new ApiStruct("ke_probe_variant", null, [], [
@@ -149,7 +149,7 @@ internal static class ZigShapeCases
                     Inline = new ApiStruct("", null, [], [F("i", "int64_t"), F("f", "double")], []) { IsUnion = true },
                 },
             ], [])),
-            contains: ["@\"type\": u32,", "unnamed_0: extern union {\n        i: i64,\n        f: f64,\n    },"]);
+            contains: ["@\"type\": u32 = std.mem.zeroes(u32),", "unnamed_0: extern union {\n        i: i64,\n        f: f64,\n    } = .{ .i = std.mem.zeroes(i64) },"]);
 
         Expect("a function-pointer typedef is a nullable C function pointer",
             m => m.Callbacks.Add(new ApiCallback("ke_probe_done_fn", "void", null, [
@@ -163,7 +163,7 @@ internal static class ZigShapeCases
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [], [
                 Slot("compile", "void", "struct ke_probe *", P("on_ready", "void (*)(uint64_t, void *)")),
             ])),
-            contains: ["compile: ?*const fn (?*ke_probe, ?*const fn (u64, ?*anyopaque) callconv(.c) void) callconv(.c) void,"]);
+            contains: ["compile: ?*const fn (?*ke_probe, ?*const fn (u64, ?*anyopaque) callconv(.c) void) callconv(.c) void = null,"]);
 
         Expect("a record declared and never defined is opaque",
             m =>
@@ -171,11 +171,11 @@ internal static class ZigShapeCases
                 m.Opaques.Add("ke_task");
                 m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("task", "ke_task *")], []));
             },
-            contains: ["pub const ke_task = opaque {};", "task: ?*ke_task,"]);
+            contains: ["pub const ke_task = opaque {};", "task: ?*ke_task = std.mem.zeroes(?*ke_task),"]);
 
         Expect("a field named after a Zig primitive is quoted",
             m => m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("u8", "uint8_t"), F("error", "int32_t")], [])),
-            contains: ["@\"u8\": u8,", "@\"error\": i32,"]);
+            contains: ["@\"u8\": u8 = std.mem.zeroes(u8),", "@\"error\": i32 = std.mem.zeroes(i32),"]);
 
         Expect("a macro constant keeps a declared type and leaves a C-typed integer a Zig literal",
             m =>
@@ -212,7 +212,7 @@ internal static class ZigShapeCases
                 m.Opaques.Add("ke_far");
                 m.Structs.Add(new ApiStruct("ke_probe", null, [], [F("far", "struct ke_far *")], []));
             },
-            contains: ["far: ?*far.ke_far,"],
+            contains: ["far: ?*far.ke_far = std.mem.zeroes(?*far.ke_far),"],
             absent: ["pub const ke_far = opaque {};"],
             foreign: new Dictionary<string, string> { ["ke_far"] = "far" });
 

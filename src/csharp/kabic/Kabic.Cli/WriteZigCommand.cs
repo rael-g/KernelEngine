@@ -141,13 +141,33 @@ internal static class WriteZigCommand
         foreach (var unit in units)
             foreach (var name in models[unit.Key].Opaques)
                 owner.TryAdd(name, unit.Key);
+        foreach (var unit in units)
+            foreach (var name in models[unit.Key].Enums.Where(e => !e.External).SelectMany(e => e.Values).Select(v => v.Name)
+                         .Concat(models[unit.Key].Constants.Select(c => c.Name)))
+                owner.TryAdd(name, unit.Key);
+        var records = new Dictionary<string, ApiStruct>();
+        foreach (var s in units.SelectMany(u => models[u.Key].Structs).Where(s => !s.External)) records.TryAdd(s.Name, s);
+        ApiModel Composed(string key)
+        {
+            var composed = new ApiModel();
+            foreach (var u in units)
+            {
+                var m = models[u.Key];
+                var own = u.Key == key;
+                composed.Structs.AddRange(m.Structs.Where(s => !s.External).Select(s => own ? s : s with { External = true }));
+                composed.Enums.AddRange(m.Enums.Where(e => !e.External).Select(e => own ? e : e with { External = true }));
+                foreach (var (alias, target) in m.TypeAliases) composed.TypeAliases.TryAdd(alias, target);
+                if (own) composed.Statics.AddRange(m.Statics);
+            }
+            return composed;
+        }
 
         var texts = new Dictionary<string, string>();
         var imports = new Dictionary<string, List<string>>();
         foreach (var unit in units)
         {
             var foreign = owner.Where(kv => kv.Value != unit.Key).ToDictionary();
-            try { texts[unit.Key] = ZigWriter.Render(models[unit.Key], foreign, unit.Factory); }
+            try { texts[unit.Key] = ZigWriter.Render(models[unit.Key], foreign, unit.Factory, new ZigWriter.FieldTableContext(convention, records, Composed(unit.Key))); }
             catch (NotSupportedException e) { failures[unit.Key] = e.Message; continue; }
             imports[unit.Key] = foreign.Values.Distinct().Where(k => texts[unit.Key].Contains($"@import(\"{k}\")"))
                 .Concat(Included(unit, units)).Where(k => k != unit.Key)
@@ -168,7 +188,7 @@ internal static class WriteZigCommand
             File.WriteAllText(Path.Combine(dir, $"{unit.Key}.zig"), texts[unit.Key]);
             File.WriteAllText(Path.Combine(dir, "build.zig"), package.BuildZig());
             File.WriteAllText(Path.Combine(dir, "build.zig.zon"), package.BuildZon());
-            File.WriteAllText(Path.Combine(dir, "layout_test.zig"), ZigPackage.LayoutTest(models[unit.Key]));
+            File.WriteAllText(Path.Combine(dir, "layout_test.zig"), ZigPackage.LayoutTest(models[unit.Key], ZigWriter.TablesOf(Composed(unit.Key), convention).Select(t => t.Table).ToList()));
         }
         var all = Path.Combine(root, PackagesRoot);
         var gathered = units.Select(u => new ZigImport(u.Key, u.Package, Slashed(Path.GetRelativePath(all, u.PackageDir)))).ToList();

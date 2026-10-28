@@ -5,6 +5,9 @@
     .minimum_zig_version = "0.14.0",
 
     .dependencies = .{
+        .abi_configuration = .{ .path = "../../abi/configuration" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

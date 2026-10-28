@@ -3,7 +3,8 @@
 
 const std = @import("std");
 
-const c = @import("c");
+const abi_asset = @import("abi_asset");
+const abi_render = @import("abi_render");
 const heap = @import("heap");
 
 const pi: f32 = 3.14159265358979323846;
@@ -17,7 +18,7 @@ fn allocArray(comptime T: type, count: u32) ?[*]T {
 }
 
 fn setVertex(
-    v: *c.ke_vertex,
+    v: *abi_render.ke_vertex,
     x: f32,
     y: f32,
     z: f32,
@@ -50,7 +51,7 @@ const Vec3 = [3]f32;
 /// Writes the four corners in the order given, with one shared normal and tangent, as the two
 /// triangles over corners 0, 1, 2 and 0, 2, 3.
 fn bakeQuadLike(
-    vtx: [*]c.ke_vertex,
+    vtx: [*]abi_render.ke_vertex,
     idx: [*]u16,
     n: Vec3,
     t: Vec3,
@@ -87,7 +88,7 @@ const cube_faces = [6]CubeFace{
     .{ .n = .{ 0, 0, -1 }, .t = .{ -1, 0, 0 }, .p = .{ .{ 0.5, -0.5, -0.5 }, .{ -0.5, -0.5, -0.5 }, .{ -0.5, 0.5, -0.5 }, .{ 0.5, 0.5, -0.5 } } },
 };
 
-fn bakeCube(vtx: [*]c.ke_vertex, idx: [*]u16) void {
+fn bakeCube(vtx: [*]abi_render.ke_vertex, idx: [*]u16) void {
     for (cube_faces, 0..) |face, f| {
         const base: u16 = @intCast(f * 4);
         const uv = [4][2]f32{ .{ 0, 0 }, .{ 1, 0 }, .{ 1, 1 }, .{ 0, 1 } };
@@ -131,7 +132,7 @@ fn sphereIndexCount(segments: u32, rings: u32) u32 {
 
 /// Indices are typed u16, so every vertex index of the grid must fit in u16; the baker does not
 /// check this.
-fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void {
+fn bakeSphere(vtx: [*]abi_render.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void {
     var v: usize = 0;
     var r: u32 = 0;
     while (r <= rings) : (r += 1) {
@@ -195,12 +196,12 @@ fn bakeSphere(vtx: [*]c.ke_vertex, idx: [*]u16, segments: u32, rings: u32) void 
 /// and report no error. On success the caller owns both buffers and releases them with
 /// `ke_mesh_shape_free_internal`; on false the record is empty and nothing is owned.
 pub fn ke_mesh_shape_bake_internal(
-    prim: c.ke_mesh_primitive,
+    prim: abi_asset.ke_mesh_primitive,
     segments_in: u32,
-    out_data: ?*c.ke_mesh_shape_data,
+    out_data: ?*abi_asset.ke_mesh_shape_data,
 ) callconv(.c) bool {
     const out = out_data orelse return false;
-    out.* = std.mem.zeroes(c.ke_mesh_shape_data);
+    out.* = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
 
     var segments = segments_in;
     var rings: u32 = 0;
@@ -208,15 +209,15 @@ pub fn ke_mesh_shape_bake_internal(
     var icount: u32 = 0;
 
     switch (prim) {
-        c.KE_MESH_PRIMITIVE_QUAD, c.KE_MESH_PRIMITIVE_PLANE => {
+        abi_asset.KE_MESH_PRIMITIVE_QUAD, abi_asset.KE_MESH_PRIMITIVE_PLANE => {
             vcount = 4;
             icount = 6;
         },
-        c.KE_MESH_PRIMITIVE_CUBE => {
+        abi_asset.KE_MESH_PRIMITIVE_CUBE => {
             vcount = 24;
             icount = 36;
         },
-        c.KE_MESH_PRIMITIVE_SPHERE => {
+        abi_asset.KE_MESH_PRIMITIVE_SPHERE => {
             if (segments == 0) segments = 32;
             if (segments < 3) segments = 3;
             rings = segments / 2;
@@ -227,14 +228,14 @@ pub fn ke_mesh_shape_bake_internal(
         else => return false,
     }
 
-    const vbuf = allocArray(c.ke_vertex, vcount) orelse return false;
+    const vbuf = allocArray(abi_render.ke_vertex, vcount) orelse return false;
     const ibuf = allocArray(u16, icount) orelse {
         heap.gpa.free(vbuf[0..vcount]);
         return false;
     };
 
     switch (prim) {
-        c.KE_MESH_PRIMITIVE_QUAD => bakeQuadLike(
+        abi_asset.KE_MESH_PRIMITIVE_QUAD => bakeQuadLike(
             vbuf,
             ibuf,
             .{ 0, 0, 1 },
@@ -244,7 +245,7 @@ pub fn ke_mesh_shape_bake_internal(
             .{ 0.5, 0.5, 0 },
             .{ -0.5, 0.5, 0 },
         ),
-        c.KE_MESH_PRIMITIVE_PLANE => bakeQuadLike(
+        abi_asset.KE_MESH_PRIMITIVE_PLANE => bakeQuadLike(
             vbuf,
             ibuf,
             .{ 0, 1, 0 },
@@ -254,8 +255,8 @@ pub fn ke_mesh_shape_bake_internal(
             .{ 0.5, 0, -0.5 },
             .{ -0.5, 0, -0.5 },
         ),
-        c.KE_MESH_PRIMITIVE_CUBE => bakeCube(vbuf, ibuf),
-        c.KE_MESH_PRIMITIVE_SPHERE => bakeSphere(vbuf, ibuf, segments, rings),
+        abi_asset.KE_MESH_PRIMITIVE_CUBE => bakeCube(vbuf, ibuf),
+        abi_asset.KE_MESH_PRIMITIVE_SPHERE => bakeSphere(vbuf, ibuf, segments, rings),
         else => {
             heap.gpa.free(vbuf[0..vcount]);
             heap.gpa.free(ibuf[0..icount]);
@@ -273,9 +274,9 @@ pub fn ke_mesh_shape_bake_internal(
 /// Releases both buffers and leaves the record empty, so a repeat does nothing. The counts in the
 /// data are the lengths the buffers were allocated with, so they must not be altered between the
 /// bake and the free.
-pub fn ke_mesh_shape_free_internal(data_in: ?*c.ke_mesh_shape_data) callconv(.c) void {
+pub fn ke_mesh_shape_free_internal(data_in: ?*abi_asset.ke_mesh_shape_data) callconv(.c) void {
     const data = data_in orelse return;
-    if (data.vertices) |v| heap.gpa.free(@as([*]c.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
+    if (data.vertices) |v| heap.gpa.free(@as([*]abi_render.ke_vertex, @ptrCast(v))[0..data.vertex_count]);
     if (data.indices) |i| heap.gpa.free(@as([*]u16, @ptrCast(i))[0..data.index_count]);
     data.vertices = null;
     data.indices = null;
@@ -287,37 +288,37 @@ const testing = std.testing;
 
 const tolerance: f32 = 1e-5;
 
-fn bake(prim: c.ke_mesh_primitive, segments: u32) !c.ke_mesh_shape_data {
-    var data = std.mem.zeroes(c.ke_mesh_shape_data);
+fn bake(prim: abi_asset.ke_mesh_primitive, segments: u32) !abi_asset.ke_mesh_shape_data {
+    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
     try testing.expect(ke_mesh_shape_bake_internal(prim, segments, &data));
     return data;
 }
 
 test "a baked quad carries four corners and two triangles" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_QUAD, 0);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_QUAD, 0);
 
     try testing.expectEqual(@as(u32, 4), data.vertex_count);
     try testing.expectEqual(@as(u32, 6), data.index_count);
-    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices[0].x, tolerance);
-    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices[0].y, tolerance);
-    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].z, tolerance);
-    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices[0].nz, tolerance);
-    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].u, tolerance);
-    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices[0].v, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices.?[0].x, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, -0.5), data.vertices.?[0].y, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices.?[0].z, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices.?[0].nz, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices.?[0].u, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 0.0), data.vertices.?[0].v, tolerance);
 
     ke_mesh_shape_free_internal(&data);
     try testing.expect(data.vertices == null);
 }
 
 test "a plane faces up while a quad faces the camera" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_PLANE, 0);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_PLANE, 0);
     defer ke_mesh_shape_free_internal(&data);
 
-    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices[0].ny, tolerance);
+    try testing.expectApproxEqAbs(@as(f32, 1.0), data.vertices.?[0].ny, tolerance);
 }
 
 test "a baked cube gives every face its own corners rather than sharing them" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_CUBE, 0);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_CUBE, 0);
     defer ke_mesh_shape_free_internal(&data);
 
     try testing.expectEqual(@as(u32, 24), data.vertex_count);
@@ -325,7 +326,7 @@ test "a baked cube gives every face its own corners rather than sharing them" {
 }
 
 test "a sphere asked for no segments falls back to the default grid" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 0);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_SPHERE, 0);
     defer ke_mesh_shape_free_internal(&data);
 
     try testing.expectEqual(@as(u32, (16 + 1) * (32 + 1)), data.vertex_count);
@@ -333,30 +334,30 @@ test "a sphere asked for no segments falls back to the default grid" {
 }
 
 test "every vertex of a baked sphere sits on a half-unit radius" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 0);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_SPHERE, 0);
     defer ke_mesh_shape_free_internal(&data);
 
-    for (data.vertices[0..data.vertex_count]) |v| {
+    for (data.vertices.?[0..data.vertex_count]) |v| {
         const r = @sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
         try testing.expectApproxEqAbs(@as(f32, 0.5), r, tolerance);
     }
 }
 
 test "a sphere asked for one segment is clamped to something bakeable" {
-    var data = try bake(c.KE_MESH_PRIMITIVE_SPHERE, 1);
+    var data = try bake(abi_asset.KE_MESH_PRIMITIVE_SPHERE, 1);
     defer ke_mesh_shape_free_internal(&data);
 
     try testing.expect(data.vertex_count > 0);
 }
 
 test "baking into nowhere fails instead of writing through a null pointer" {
-    try testing.expect(!ke_mesh_shape_bake_internal(c.KE_MESH_PRIMITIVE_QUAD, 0, null));
+    try testing.expect(!ke_mesh_shape_bake_internal(abi_asset.KE_MESH_PRIMITIVE_QUAD, 0, null));
 }
 
 test "freeing a null or already empty shape is harmless" {
     ke_mesh_shape_free_internal(null);
 
-    var data = std.mem.zeroes(c.ke_mesh_shape_data);
+    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
     ke_mesh_shape_free_internal(&data);
 
     try testing.expect(data.vertices == null);

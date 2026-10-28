@@ -67,10 +67,12 @@ public sealed record ZigPackage(string Key, string Package, IReadOnlyList<string
     /// <summary>
     /// The layout test of the package: one check per record and alias, comparing size,
     /// alignment and the offset of every member, inline records included, one per enum
-    /// value, and one per macro constant.
+    /// value, one per macro constant, and one per field table among <paramref name="tables"/>,
+    /// whose entries it compares member by member, a union's payload aside.
     /// </summary>
-    public static string LayoutTest(ApiModel model)
+    public static string LayoutTest(ApiModel model, IReadOnlyList<string>? tables = null)
     {
+        tables ??= [];
         var sb = new StringBuilder();
         sb.AppendLine("const std = @import(\"std\");");
         sb.AppendLine("const abi = @import(\"abi\");");
@@ -106,6 +108,26 @@ public sealed record ZigPackage(string Key, string Package, IReadOnlyList<string
             sb.AppendLine("test \"every enum value is the header's value\" {");
             foreach (var v in values)
                 sb.AppendLine($"    try std.testing.expectEqual(@as(i64, c.{v.Name}), @as(i64, abi.{v.Name}));");
+            sb.AppendLine("}");
+        }
+        if (tables.Count > 0)
+        {
+            sb.AppendLine();
+            sb.AppendLine("fn expectSameValue(a: anytype, k: anytype) !void {");
+            sb.AppendLine("    switch (@typeInfo(@TypeOf(a))) {");
+            sb.AppendLine("        .@\"struct\" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),");
+            sb.AppendLine("        .@\"union\" => {},");
+            sb.AppendLine("        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),");
+            sb.AppendLine("        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),");
+            sb.AppendLine("    }");
+            sb.AppendLine("}");
+            sb.AppendLine();
+            sb.AppendLine("test \"every field table lists the header's entries\" {");
+            foreach (var t in tables)
+            {
+                sb.AppendLine($"    try std.testing.expectEqual(c.{t}.len, abi.{t}.len);");
+                sb.AppendLine($"    for (abi.{t}, c.{t}) |a, k| try expectSameValue(a, k);");
+            }
             sb.AppendLine("}");
         }
         if (model.Constants.Count > 0)

@@ -4,6 +4,16 @@
 const std = @import("std");
 
 const c = @import("c");
+const abi_audio = @import("abi_audio");
+const abi_physics = @import("abi_physics");
+const abi_render = @import("abi_render");
+const abi_asset = @import("abi_asset");
+const abi_ecs = @import("abi_ecs");
+const abi_framework = @import("abi_framework");
+const abi_framework_factory = @import("abi_framework_factory");
+const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
@@ -14,7 +24,7 @@ const NameMap = names_mod.NameMap;
 const type_name_max = names_mod.type_name_max;
 const normalizeTypeName = names_mod.normalizeTypeName;
 
-const R = @import("result").Result(c, .{});
+const R = @import("result").Result(abi_result, .{});
 
 
 const res_prefix = "res://";
@@ -30,27 +40,27 @@ const res_prefix = "res://";
 /// reference. Every failure is logged and returned as an error; faults in what a scene says go
 /// through `structural`. A load runs on its caller's thread.
 const State = struct {
-    api: c.ke_scene_loader,
-    world: *c.ke_world,
-    assets: *c.ke_asset_resolver,
+    api: abi_framework.ke_scene_loader,
+    world: *abi_framework.ke_world,
+    assets: *abi_asset.ke_asset_resolver,
 
-    script_factory: c.ke_script_factory_func,
+    script_factory: abi_framework.ke_script_factory_func,
     script_ctx: ?*anyopaque,
 
     arena: Arena,
-    created: std.ArrayList(c.ke_entity),
+    created: std.ArrayList(abi_ecs.ke_entity),
 };
 
-fn stateOf(self: *c.ke_scene_loader) *State {
+fn stateOf(self: *abi_framework.ke_scene_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-fn ecsOf(world: *c.ke_world) ?*c.ke_ecs {
+fn ecsOf(world: *abi_framework.ke_world) ?*abi_ecs.ke_ecs {
     const e = world.ecs.?(world);
     return if (e == null) null else e;
 }
 
-fn treeOf(world: *c.ke_world) ?*c.ke_scene_tree {
+fn treeOf(world: *abi_framework.ke_world) ?*abi_framework.ke_scene_tree {
     const t = world.scene_tree.?(world);
     return if (t == null) null else t;
 }
@@ -85,7 +95,7 @@ fn resolvePath(s: *const State, base_dir: []const u8, ref: [*:0]const u8, out: [
 /// before the factory is called. A factory's refusal fails with the factory's code.
 fn dispatchScript(
     s: *State,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     type_name: [*c]const u8,
 ) R.Error!void {
     const factory = s.script_factory orelse return;
@@ -123,7 +133,7 @@ fn refuse(err: R.Error, comptime msg: []const u8) R.Error {
 /// the load. Every refusal is reported through `structural`.
 fn applyComponentBlock(
     s: *State,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     comp_name: [*c]const u8,
     comp_tbl: *c.toml_table_t,
 ) R.Error!void {
@@ -132,7 +142,7 @@ fn applyComponentBlock(
         return structural("world has no ecs", .{});
     };
 
-    var meta: c.ke_component_meta = undefined;
+    var meta: abi_ecs.ke_component_meta = undefined;
     R.check(world.resolve_component.?(world, comp_name, &meta)) catch
         return structural("scene names component '{s}', which the world cannot resolve", .{comp_name});
 
@@ -163,8 +173,8 @@ fn applyComponentBlock(
     };
 
     if (fields != null) {
-        if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields, field_count)) |refusing| {
-            return structural("component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name });
+        if (fields_apply.apply(comp, entries.ptr, @intCast(entries.len), fields.?, field_count)) |refusing| {
+            return structural("component '{s}' field '{s}' cannot hold the value authored for it", .{ comp_name, refusing.name.? });
         }
     }
     if (apply_fn) |f| {
@@ -176,7 +186,7 @@ fn applyComponentBlock(
 
     for (entries) |*entry| {
         if (entry.consumed) continue;
-        return structural("component '{s}' has no field '{s}'", .{ comp_name, entry.key });
+        return structural("component '{s}' has no field '{s}'", .{ comp_name, entry.key.? });
     }
 }
 
@@ -193,8 +203,8 @@ fn retiredBlock(key: [*c]const u8) ?[]const u8 {
 
 fn internalComponent(key: [*c]const u8) bool {
     const k = std.mem.span(key);
-    return std.mem.eql(u8, k, c.KE_COMPONENT_NAME_NAME) or
-        std.mem.eql(u8, k, c.KE_COMPONENT_NAME_HIERARCHY);
+    return std.mem.eql(u8, k, abi_framework.KE_COMPONENT_NAME_NAME) or
+        std.mem.eql(u8, k, abi_framework.KE_COMPONENT_NAME_HIERARCHY);
 }
 
 /// Walks the component tables of one entity table in file order and stops at the first one refused,
@@ -233,7 +243,7 @@ fn checkHeader(root: *c.toml_table_t) R.Error!void {
 
 fn applyComponentBlocks(
     s: *State,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     tbl: *c.toml_table_t,
 ) R.Error!void {
     var i: c_int = 0;
@@ -261,7 +271,7 @@ fn applyComponentBlocks(
 /// first connection that fails stops the rest, and connections made before it are not undone.
 fn applyConnections(
     s: *State,
-    source: c.ke_entity,
+    source: abi_ecs.ke_entity,
     entity_tbl: *c.toml_table_t,
     names: *const NameMap,
 ) R.Error!void {
@@ -323,7 +333,7 @@ const ProcessArgs = struct {
     base_dir: []const u8,
     entity_tbl: *c.toml_table_t,
     names: *NameMap,
-    attach_parent_override: c.ke_entity,
+    attach_parent_override: abi_ecs.ke_entity,
     override_name: ?[*:0]const u8,
     override_outer: ?*c.toml_table_t,
 };
@@ -341,7 +351,7 @@ const ProcessArgs = struct {
 fn processEntity(
     s: *State,
     args: ProcessArgs,
-    out_entity: *c.ke_entity,
+    out_entity: *abi_ecs.ke_entity,
 ) R.Error!void {
     const name_d = c.toml_string_in(args.entity_tbl, "name");
     defer if (name_d.ok != 0) std.c.free(name_d.u.s);
@@ -355,7 +365,7 @@ fn processEntity(
     const tree = treeOf(world) orelse {
         return refuse(error.NotInitialized, "world has no scene tree");
     };
-    var parent = if (args.attach_parent_override != c.KE_ENTITY_INVALID)
+    var parent = if (args.attach_parent_override != abi_ecs.KE_ENTITY_INVALID)
         args.attach_parent_override
     else
         tree.root.?(tree);
@@ -381,7 +391,7 @@ fn processEntity(
         try resolvePath(s, args.base_dir, scene_ref.u.s, &resolved_buf);
         const resolved_path: [*:0]const u8 = @ptrCast(&resolved_buf);
 
-        var nested_root: c.ke_entity = c.KE_ENTITY_INVALID;
+        var nested_root: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
         try loadSceneRecursive(
             s,
             resolved_path,
@@ -396,7 +406,7 @@ fn processEntity(
         return;
     }
 
-    var entity: c.ke_entity = c.KE_ENTITY_INVALID;
+    var entity: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
     R.check(tree.create_node.?(tree, effective_name, parent, &entity)) catch |err| {
         log.warn("the scene tree refused the node '{s}'", .{effective_name});
         return err;
@@ -438,10 +448,10 @@ fn processEntity(
 fn loadSceneRecursive(
     s: *State,
     path: [*:0]const u8,
-    attach_parent: c.ke_entity,
+    attach_parent: abi_ecs.ke_entity,
     override_name: ?[*:0]const u8,
     override_outer: ?*c.toml_table_t,
-    out_root: ?*c.ke_entity,
+    out_root: ?*abi_ecs.ke_entity,
 ) R.Error!void {
     const fp = std.c.fopen(path, "rb") orelse {
         return refuse(error.NotFound, "scene file not found");
@@ -459,23 +469,23 @@ fn loadSceneRecursive(
     const base_dir = pathDirname(std.mem.span(path));
 
     const entities = c.toml_array_in(root, "entity") orelse {
-        if (out_root) |r| r.* = c.KE_ENTITY_INVALID;
+        if (out_root) |r| r.* = abi_ecs.KE_ENTITY_INVALID;
         return;
     };
 
     var names: NameMap = .{ .arena = &s.arena };
     defer names.deinit();
 
-    var first_root: c.ke_entity = c.KE_ENTITY_INVALID;
+    var first_root: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
     const n = c.toml_array_nelem(entities);
 
-    const created = s.arena.allocArray(c.ke_entity, @intCast(n));
+    const created = s.arena.allocArray(abi_ecs.ke_entity, @intCast(n));
 
     var is_first = true;
     var i: c_int = 0;
     while (i < n) : (i += 1) {
         const et = c.toml_table_at(entities, i) orelse continue;
-        var ent: c.ke_entity = c.KE_ENTITY_INVALID;
+        var ent: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
 
         const args: ProcessArgs = if (is_first) .{
             .base_dir = base_dir,
@@ -488,7 +498,7 @@ fn loadSceneRecursive(
             .base_dir = base_dir,
             .entity_tbl = et,
             .names = &names,
-            .attach_parent_override = c.KE_ENTITY_INVALID,
+            .attach_parent_override = abi_ecs.KE_ENTITY_INVALID,
             .override_name = null,
             .override_outer = null,
         };
@@ -517,14 +527,14 @@ fn loadSceneRecursive(
 /// `discardCreated` before it returns, so a load leaves either all of its nodes or none. The arena
 /// is not reset, so what a failed load read stays allocated until `vtDestroy`.
 fn vtLoad(
-    self_in: ?*c.ke_scene_loader,
+    self_in: ?*abi_framework.ke_scene_loader,
     path: [*c]const u8,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or path == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     s.created.clearRetainingCapacity();
-    loadSceneRecursive(s, path, c.KE_ENTITY_INVALID, null, null, null) catch |err| {
+    loadSceneRecursive(s, path, abi_ecs.KE_ENTITY_INVALID, null, null, null) catch |err| {
         discardCreated(s);
         return R.code(err);
     };
@@ -546,10 +556,10 @@ fn discardCreated(s: *State) void {
 /// Slot `register_script_factory`. Replaces the factory and its context for later loads; without
 /// one, a "type" key is ignored. Fails as an invalid argument on a null loader or factory.
 fn vtRegisterScriptFactory(
-    self_in: ?*c.ke_scene_loader,
-    factory: c.ke_script_factory_func,
+    self_in: ?*abi_framework.ke_scene_loader,
+    factory: abi_framework.ke_script_factory_func,
     ctx: ?*anyopaque,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or factory == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -560,7 +570,7 @@ fn vtRegisterScriptFactory(
 
 /// The handle's destroy. Releases the arena, so every pointer a load read is invalid afterwards.
 /// `api` is embedded in `State`, so freeing the state releases the vtable too.
-fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
+fn vtDestroy(self_in: ?*abi_framework.ke_scene_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -573,18 +583,18 @@ fn vtDestroy(self_in: ?*c.ke_scene_loader) callconv(.c) void {
 /// asset resolver. A null world, resolver or out-parameter fails as an invalid argument and a
 /// failed allocation as out of memory; each leaves the handle zeroed.
 export fn ke_scene_loader_create(
-    world_in: ?*c.ke_world,
-    assets_in: ?*c.ke_asset_resolver,
-    out_loader: ?*c.ke_scene_loader_handle,
-) callconv(.c) c.ke_result {
+    world_in: ?*abi_framework.ke_world,
+    assets_in: ?*abi_asset.ke_asset_resolver,
+    out_loader: ?*abi_framework.ke_scene_loader_handle,
+) callconv(.c) abi_result.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(c.ke_scene_loader_handle);
+    out.* = std.mem.zeroes(abi_framework.ke_scene_loader_handle);
     const world = world_in orelse return R.code(error.InvalidArgument);
     const assets = assets_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{
-        .api = std.mem.zeroes(c.ke_scene_loader),
+        .api = std.mem.zeroes(abi_framework.ke_scene_loader),
         .world = world,
         .assets = assets,
         .script_factory = null,
@@ -605,8 +615,6 @@ const testing = std.testing;
 
 const signal_bus_impl = @import("signal_bus.zig");
 
-const rc = @import("test_c");
-
 const fake_max_components = 32;
 const fake_max_entities = 128;
 
@@ -616,30 +624,30 @@ const FakeComponent = struct {
 };
 
 const FakeEcs = struct {
-    vtable: c.ke_ecs,
+    vtable: abi_ecs.ke_ecs,
     arena: std.heap.ArenaAllocator,
     components: [fake_max_components]FakeComponent,
     component_count: usize,
     alive: [fake_max_entities]bool,
     storage: [fake_max_entities][fake_max_components]?[*]u8,
-    next_entity: c.ke_entity,
+    next_entity: abi_ecs.ke_entity,
 };
 
-fn fakeEcsOf(self: ?*c.ke_ecs) *FakeEcs {
+fn fakeEcsOf(self: ?*abi_ecs.ke_ecs) *FakeEcs {
     return @ptrCast(@alignCast(self.?.handle));
 }
 
-fn fakeSlot(f: *FakeEcs, entity: c.ke_entity, cid: c.ke_component_id) ?*?[*]u8 {
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return null;
+fn fakeSlot(f: *FakeEcs, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_component_id) ?*?[*]u8 {
+    if (entity == abi_ecs.KE_ENTITY_INVALID or entity > fake_max_entities) return null;
     const row = entity - 1;
     if (!f.alive[row]) return null;
     if (cid == 0 or cid > f.component_count) return null;
     return &f.storage[row][cid - 1];
 }
 
-fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) c.ke_result {
+fn fakeEntityCreate(self: ?*abi_ecs.ke_ecs, out_entity: [*c]abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    out_entity.* = c.KE_ENTITY_INVALID;
+    out_entity.* = abi_ecs.KE_ENTITY_INVALID;
     if (f.next_entity >= fake_max_entities) return R.code(error.OutOfMemory);
     f.next_entity += 1;
     f.alive[f.next_entity - 1] = true;
@@ -647,9 +655,9 @@ fn fakeEntityCreate(self: ?*c.ke_ecs, out_entity: [*c]c.ke_entity) callconv(.c) 
     return R.ok;
 }
 
-fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_result {
+fn fakeEntityDestroy(self: ?*abi_ecs.ke_ecs, entity: abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    if (entity == c.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
+    if (entity == abi_ecs.KE_ENTITY_INVALID or entity > fake_max_entities) return R.code(error.InvalidArgument);
     const row = entity - 1;
     f.alive[row] = false;
     for (&f.storage[row]) |*cell| cell.* = null;
@@ -657,12 +665,12 @@ fn fakeEntityDestroy(self: ?*c.ke_ecs, entity: c.ke_entity) callconv(.c) c.ke_re
 }
 
 fn fakeComponentRegister(
-    self: ?*c.ke_ecs,
-    params: [*c]const c.ke_component_params,
-    out_cid: [*c]c.ke_component_id,
-) callconv(.c) c.ke_result {
+    self: ?*abi_ecs.ke_ecs,
+    params: [*c]const abi_ecs.ke_component_params,
+    out_cid: [*c]abi_ecs.ke_component_id,
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
-    const wanted = std.mem.span(params.*.name);
+    const wanted = std.mem.span(params.*.name.?);
     for (f.components[0..f.component_count], 0..) |comp, i| {
         if (std.mem.eql(u8, comp.name, wanted)) return answer(out_cid, @intCast(i + 1));
     }
@@ -672,15 +680,15 @@ fn fakeComponentRegister(
     return answer(out_cid, @intCast(f.component_count));
 }
 
-fn answer(out_cid: [*c]c.ke_component_id, cid: c.ke_component_id) c.ke_result {
+fn answer(out_cid: [*c]abi_ecs.ke_component_id, cid: abi_ecs.ke_component_id) abi_result.ke_result {
     out_cid.* = cid;
     return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
 fn fakeComponentLookup(
-    self: ?*c.ke_ecs,
+    self: ?*abi_ecs.ke_ecs,
     name: [*c]const u8,
-    out_meta: [*c]c.ke_component_meta,
+    out_meta: [*c]abi_ecs.ke_component_meta,
 ) callconv(.c) bool {
     const f = fakeEcsOf(self);
     const wanted = std.mem.span(name);
@@ -700,11 +708,11 @@ fn fakeComponentLookup(
 }
 
 fn fakeComponentAdd(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
     out_data: [*c]?*anyopaque,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
     out_data.* = null;
     const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
@@ -721,10 +729,10 @@ fn fakeComponentAdd(
 }
 
 fn fakeComponentRemove(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
-) callconv(.c) c.ke_result {
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
+) callconv(.c) abi_result.ke_result {
     const f = fakeEcsOf(self);
     const slot = fakeSlot(f, entity, component) orelse return R.code(error.InvalidArgument);
     slot.* = null;
@@ -732,22 +740,22 @@ fn fakeComponentRemove(
 }
 
 fn fakeComponentGet(
-    self: ?*c.ke_ecs,
-    entity: c.ke_entity,
-    component: c.ke_component_id,
+    self: ?*abi_ecs.ke_ecs,
+    entity: abi_ecs.ke_entity,
+    component: abi_ecs.ke_component_id,
 ) callconv(.c) ?*anyopaque {
     const f = fakeEcsOf(self);
     const slot = fakeSlot(f, entity, component) orelse return null;
     return slot.*;
 }
 
-fn fakeComponentSize(self: ?*c.ke_ecs, cid: c.ke_component_id) callconv(.c) usize {
+fn fakeComponentSize(self: ?*abi_ecs.ke_ecs, cid: abi_ecs.ke_component_id) callconv(.c) usize {
     const f = fakeEcsOf(self);
     if (cid == 0 or cid > f.component_count) return 0;
     return f.components[cid - 1].size;
 }
 
-fn generatedFields(table: anytype) [*c]const c.ke_component_field {
+fn generatedFields(table: anytype) [*c]const abi_ecs.ke_component_field {
     return @ptrCast(@alignCast(table));
 }
 
@@ -759,23 +767,23 @@ const DemoComponent = extern struct {
 fn demoApply(
     ctx: ?*anyopaque,
     ptr: ?*anyopaque,
-    e: [*c]c.ke_variant_table_entry,
+    e: [*c]abi_ecs.ke_variant_table_entry,
     n: u32,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     if (ctx) |seen| @as(*bool, @ptrCast(seen)).* = true;
     const d: *DemoComponent = @ptrCast(@alignCast(ptr));
     if (n == 0) return R.ok;
     for (e[0..n]) |*entry| {
         if (entry.key == null) continue;
-        const key = std.mem.span(entry.key);
+        const key = std.mem.span(entry.key.?);
         if (std.mem.eql(u8, key, "fov")) {
-            if (entry.value.type == c.KE_VARIANT_FLOAT) {
+            if (entry.value.type == abi_ecs.KE_VARIANT_FLOAT) {
                 d.fov = @floatCast(entry.value.unnamed_0.f);
-            } else if (entry.value.type == c.KE_VARIANT_INT) {
+            } else if (entry.value.type == abi_ecs.KE_VARIANT_INT) {
                 d.fov = @floatFromInt(entry.value.unnamed_0.i);
             }
             entry.consumed = true;
-        } else if (std.mem.eql(u8, key, "mode") and entry.value.type == c.KE_VARIANT_INT) {
+        } else if (std.mem.eql(u8, key, "mode") and entry.value.type == abi_ecs.KE_VARIANT_INT) {
             d.mode = @intCast(entry.value.unnamed_0.i);
             entry.consumed = true;
         }
@@ -786,14 +794,14 @@ fn demoApply(
 const ScriptSpy = struct {
     calls: i32 = 0,
     last_type: [64]u8 = [_]u8{0} ** 64,
-    last_entity: c.ke_entity = c.KE_ENTITY_INVALID,
+    last_entity: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID,
 };
 
 fn spyFactory(
     ctx: ?*anyopaque,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     type_name: [*c]const u8,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
     spy.calls += 1;
     spy.last_entity = entity;
@@ -829,12 +837,12 @@ const TempScene = struct {
 
 const Fixture = struct {
     ecs: FakeEcs,
-    runtime: c.ke_runtime,
-    tree_h: c.ke_scene_tree_handle,
-    bus_h: c.ke_signal_bus_handle,
-    world_h: c.ke_world_handle,
-    assets_h: c.ke_asset_resolver_handle,
-    loader_h: c.ke_scene_loader_handle,
+    runtime: abi_runtime.ke_runtime,
+    tree_h: abi_framework.ke_scene_tree_handle,
+    bus_h: abi_framework.ke_signal_bus_handle,
+    world_h: abi_framework.ke_world_handle,
+    assets_h: abi_asset.ke_asset_resolver_handle,
+    loader_h: abi_framework.ke_scene_loader_handle,
 
     fn init(self: *Fixture) !void {
         return self.initEx(true);
@@ -846,7 +854,7 @@ const Fixture = struct {
         self.ecs.next_entity = 0;
         @memset(&self.ecs.alive, false);
         for (&self.ecs.storage) |*row| @memset(row, null);
-        self.ecs.vtable = std.mem.zeroes(c.ke_ecs);
+        self.ecs.vtable = std.mem.zeroes(abi_ecs.ke_ecs);
         self.ecs.vtable.handle = &self.ecs;
         self.ecs.vtable.entity_create = fakeEntityCreate;
         self.ecs.vtable.entity_destroy = fakeEntityDestroy;
@@ -857,41 +865,41 @@ const Fixture = struct {
         self.ecs.vtable.component_get = fakeComponentGet;
         self.ecs.vtable.component_size = fakeComponentSize;
 
-        self.runtime = std.mem.zeroes(c.ke_runtime);
+        self.runtime = std.mem.zeroes(abi_runtime.ke_runtime);
 
-        try testing.expectEqual(R.ok, c.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
 
-        self.bus_h = std.mem.zeroes(c.ke_signal_bus_handle);
+        self.bus_h = std.mem.zeroes(abi_framework.ke_signal_bus_handle);
         if (with_signal_bus) {
             try testing.expectEqual(R.ok, signal_bus_impl.ke_signal_bus_create(null, &self.bus_h));
         }
 
-        var params = std.mem.zeroes(c.ke_world_params);
+        var params = std.mem.zeroes(abi_framework.ke_world_params);
         params.ecs = &self.ecs.vtable;
         params.runtime = &self.runtime;
         params.scene_tree = self.tree_h.ref;
         params.signal_bus = self.bus_h.ref;
-        try testing.expectEqual(R.ok, c.ke_world_create(&params, &self.world_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.ke_world_create(&params, &self.world_h));
 
-        self.describe(rc.KE_COMPONENT_NAME_CAMERA, @sizeOf(rc.ke_camera_component), generatedFields(&rc.ke_camera_component_fields), rc.ke_camera_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(rc.ke_directional_light_component), generatedFields(&rc.ke_directional_light_component_fields), rc.ke_directional_light_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(rc.ke_point_light_component), generatedFields(&rc.ke_point_light_component_fields), rc.ke_point_light_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(rc.ke_spot_light_component), generatedFields(&rc.ke_spot_light_component_fields), rc.ke_spot_light_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_MESH, @sizeOf(rc.ke_mesh_component), generatedFields(&rc.ke_mesh_component_fields), rc.ke_mesh_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(rc.ke_sprite2d_component), generatedFields(&rc.ke_sprite2d_component_fields), rc.ke_sprite2d_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_LABEL, @sizeOf(rc.ke_label_component), generatedFields(&rc.ke_label_component_fields), rc.ke_label_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(rc.ke_audio_player_component), generatedFields(&rc.ke_audio_player_component_fields), rc.ke_audio_player_component_fields.len);
-        self.describe(rc.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(rc.ke_collider2d_component), generatedFields(&rc.ke_collider2d_component_fields), rc.ke_collider2d_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_CAMERA, @sizeOf(abi_render.ke_camera_component), generatedFields(&abi_render.ke_camera_component_fields), abi_render.ke_camera_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(abi_render.ke_directional_light_component), generatedFields(&abi_render.ke_directional_light_component_fields), abi_render.ke_directional_light_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_POINT_LIGHT, @sizeOf(abi_render.ke_point_light_component), generatedFields(&abi_render.ke_point_light_component_fields), abi_render.ke_point_light_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_SPOT_LIGHT, @sizeOf(abi_render.ke_spot_light_component), generatedFields(&abi_render.ke_spot_light_component_fields), abi_render.ke_spot_light_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_MESH, @sizeOf(abi_render.ke_mesh_component), generatedFields(&abi_render.ke_mesh_component_fields), abi_render.ke_mesh_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(abi_render.ke_sprite2d_component), generatedFields(&abi_render.ke_sprite2d_component_fields), abi_render.ke_sprite2d_component_fields.len);
+        self.describe(abi_render.KE_COMPONENT_NAME_LABEL, @sizeOf(abi_render.ke_label_component), generatedFields(&abi_render.ke_label_component_fields), abi_render.ke_label_component_fields.len);
+        self.describe(abi_audio.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(abi_audio.ke_audio_player_component), generatedFields(&abi_audio.ke_audio_player_component_fields), abi_audio.ke_audio_player_component_fields.len);
+        self.describe(abi_physics.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(abi_physics.ke_collider2d_component), generatedFields(&abi_physics.ke_collider2d_component_fields), abi_physics.ke_collider2d_component_fields.len);
 
-        self.assets_h = std.mem.zeroes(c.ke_asset_resolver_handle);
-        self.loader_h = std.mem.zeroes(c.ke_scene_loader_handle);
+        self.assets_h = std.mem.zeroes(abi_asset.ke_asset_resolver_handle);
+        self.loader_h = std.mem.zeroes(abi_framework.ke_scene_loader_handle);
         try self.rootAt(null);
     }
 
     fn rootAt(self: *Fixture, root: [*c]const u8) !void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        try testing.expectEqual(R.ok, c.ke_asset_resolver_create(null, null, root, &self.assets_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, &self.assets_h));
         try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, &self.loader_h));
     }
 
@@ -899,12 +907,12 @@ const Fixture = struct {
         self: *Fixture,
         name: [*c]const u8,
         size: usize,
-        fields: [*c]const c.ke_component_field,
+        fields: [*c]const abi_ecs.ke_component_field,
         field_count: usize,
     ) void {
         const e = &self.ecs.vtable;
-        var cid: c.ke_component_id = 0;
-        _ = e.component_register.?(e, &c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, &cid);
+        var cid: abi_ecs.ke_component_id = 0;
+        _ = e.component_register.?(e, &abi_ecs.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, &cid);
         const w = self.world_h.ref.?;
         _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count));
     }
@@ -918,7 +926,7 @@ const Fixture = struct {
         self.ecs.arena.deinit();
     }
 
-    fn loader(self: *Fixture) *c.ke_scene_loader {
+    fn loader(self: *Fixture) *abi_framework.ke_scene_loader {
         return self.loader_h.ref.?;
     }
 
@@ -926,23 +934,23 @@ const Fixture = struct {
         return self.loadCode(path) == R.ok;
     }
 
-    fn loadCode(self: *Fixture, path: [*:0]const u8) c.ke_result {
+    fn loadCode(self: *Fixture, path: [*:0]const u8) abi_result.ke_result {
         const l = self.loader();
         return l.load.?(l, path);
     }
 
-    fn find(self: *Fixture, path: [*c]const u8) c.ke_entity {
+    fn find(self: *Fixture, path: [*c]const u8) abi_ecs.ke_entity {
         const t = self.tree_h.ref.?;
         return t.*.find_node.?(t, path);
     }
 
-    fn comp(self: *Fixture, comptime T: type, name: [*c]const u8, entity: c.ke_entity) ?*T {
-        var meta: c.ke_component_meta = undefined;
+    fn comp(self: *Fixture, comptime T: type, name: [*c]const u8, entity: abi_ecs.ke_entity) ?*T {
+        var meta: abi_ecs.ke_component_meta = undefined;
         if (!fakeComponentLookup(&self.ecs.vtable, name, &meta)) return null;
         return @ptrCast(@alignCast(fakeComponentGet(&self.ecs.vtable, entity, meta.cid)));
     }
 
-    fn bus(self: *Fixture) *c.ke_signal_bus {
+    fn bus(self: *Fixture) *abi_framework.ke_signal_bus {
         return self.bus_h.ref.?;
     }
 
@@ -953,17 +961,17 @@ const Fixture = struct {
         return id;
     }
 
-    fn emitFrom(self: *Fixture, source: c.ke_entity, signal: u32) !void {
+    fn emitFrom(self: *Fixture, source: abi_ecs.ke_entity, signal: u32) !void {
         const b = self.bus();
         try testing.expectEqual(R.ok, b.emit.?(b, source, signal, null, 0));
     }
 
-    fn delivered(self: *Fixture) []const c.ke_signal_delivery {
+    fn delivered(self: *Fixture) []const abi_framework.ke_signal_delivery {
         const b = self.bus();
         var count: u32 = 0;
         const list = b.deliveries.?(b, &count);
         if (count == 0) return &.{};
-        return list[0..count];
+        return list.?[0..count];
     }
 };
 
@@ -1016,7 +1024,7 @@ test "a named entity reaches the tree" {
     );
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-    try testing.expect(f.find("Player") != c.KE_ENTITY_INVALID);
+    try testing.expect(f.find("Player") != abi_ecs.KE_ENTITY_INVALID);
 }
 
 test "parent names an entity declared earlier in the same file" {
@@ -1037,7 +1045,7 @@ test "parent names an entity declared earlier in the same file" {
     );
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-    try testing.expect(f.find("World/Child") != c.KE_ENTITY_INVALID);
+    try testing.expect(f.find("World/Child") != abi_ecs.KE_ENTITY_INVALID);
 }
 
 test "a transform position reaches the component" {
@@ -1057,9 +1065,9 @@ test "a transform position reaches the component" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("X");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const t = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
+    const t = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, 1.0), t.position.x);
     try testing.expectEqual(@as(f32, 2.0), t.position.y);
     try testing.expectEqual(@as(f32, 3.0), t.position.z);
@@ -1085,9 +1093,9 @@ test "a two dimensional rotation authored in degrees reaches the component as ra
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Flat");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const t = f.comp(c.ke_transform2d_component, c.KE_COMPONENT_NAME_TRANSFORM2D, e) orelse return error.MissingComponent;
+    const t = f.comp(abi_spatial.ke_transform2d_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM2D, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, 1.0), t.position.x);
     try testing.expectEqual(@as(f32, 2.0), t.position.y);
     try testing.expectApproxEqAbs(@as(f32, 1.57079633), t.rotation, 1e-5);
@@ -1113,9 +1121,9 @@ test "a rotation authored as euler degrees reaches the component as a quaternion
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Turned");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const t = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
+    const t = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.x, 1e-5);
     try testing.expectApproxEqAbs(@as(f32, 0.70710678), t.rotation.y, 1e-5);
     try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.z, 1e-5);
@@ -1181,9 +1189,9 @@ test "every sprite2d field the table describes reaches the component" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Coin");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const sp = f.comp(rc.ke_sprite2d_component, rc.KE_COMPONENT_NAME_SPRITE2D, e) orelse return error.MissingComponent;
+    const sp = f.comp(abi_render.ke_sprite2d_component, abi_render.KE_COMPONENT_NAME_SPRITE2D, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("res://atlas.png", std.mem.sliceTo(&sp.texture, 0));
     try testing.expectEqual(@as(f32, 0.25), sp.region.x);
     try testing.expectEqual(@as(f32, 0.5), sp.region.w);
@@ -1192,7 +1200,7 @@ test "every sprite2d field the table describes reaches the component" {
     try testing.expect(sp.flip_h != 0);
     try testing.expect(sp.flip_v == 0);
     try testing.expectEqual(@as(f32, 0.8), sp.color.w);
-    try testing.expectEqual(@as(u32, rc.KE_ALPHA_MODE_BLEND), sp.alpha_mode);
+    try testing.expectEqual(@as(u32, abi_render.KE_ALPHA_MODE_BLEND), sp.alpha_mode);
     try testing.expect(sp.attached == 0);
 }
 
@@ -1213,9 +1221,9 @@ test "a partial block leaves the header declared default standing" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Partial");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const m = f.comp(rc.ke_mesh_component, rc.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
+    const m = f.comp(abi_render.ke_mesh_component, abi_render.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, 1.0), m.base_color.x);
     try testing.expectEqual(@as(f32, 1.0), m.roughness);
     try testing.expectEqual(@as(f32, 1.5), m.ior);
@@ -1239,9 +1247,9 @@ test "a mesh is chosen by the name of its shape" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Crate");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const m = f.comp(rc.ke_mesh_component, rc.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
+    const m = f.comp(abi_render.ke_mesh_component, abi_render.KE_COMPONENT_NAME_MESH, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("cube", std.mem.sliceTo(&m.primitive, 0));
 }
 
@@ -1263,9 +1271,9 @@ test "a camera keeps the planes it was authored with and the field table default
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Cam");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const cam = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, e) orelse return error.MissingComponent;
+    const cam = f.comp(abi_render.ke_camera_component, abi_render.KE_COMPONENT_NAME_CAMERA, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, 0.1), cam.near_plane);
     try testing.expectEqual(@as(f32, 100.0), cam.far_plane);
     try testing.expectEqual(@as(f32, 60.0), cam.fov);
@@ -1292,9 +1300,9 @@ test "every directional light field the table describes reaches the component" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("SunVec");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const l = f.comp(rc.ke_directional_light_component, rc.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, e) orelse return error.MissingComponent;
+    const l = f.comp(abi_render.ke_directional_light_component, abi_render.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, e) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, -0.4), l.direction.x, 1e-6);
     try testing.expectEqual(@as(f32, -1.0), l.direction.y);
     try testing.expectApproxEqAbs(@as(f32, -0.3), l.direction.z, 1e-6);
@@ -1325,9 +1333,9 @@ test "every point light field the table describes reaches the component" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Bulb");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const l = f.comp(rc.ke_point_light_component, rc.KE_COMPONENT_NAME_POINT_LIGHT, e) orelse return error.MissingComponent;
+    const l = f.comp(abi_render.ke_point_light_component, abi_render.KE_COMPONENT_NAME_POINT_LIGHT, e) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, 0.2), l.color.x, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.4), l.color.y, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.6), l.color.z, 1e-6);
@@ -1357,9 +1365,9 @@ test "every spot light field the table describes reaches the component" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Lamp");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const l = f.comp(rc.ke_spot_light_component, rc.KE_COMPONENT_NAME_SPOT_LIGHT, e) orelse return error.MissingComponent;
+    const l = f.comp(abi_render.ke_spot_light_component, abi_render.KE_COMPONENT_NAME_SPOT_LIGHT, e) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, -1.0), l.direction.y);
     try testing.expectEqual(@as(f32, 1.0), l.color.x);
     try testing.expectEqual(@as(f32, 0.5), l.color.y);
@@ -1389,9 +1397,9 @@ test "a label names its font by path" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Title");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const l = f.comp(rc.ke_label_component, rc.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
+    const l = f.comp(abi_render.ke_label_component, abi_render.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("res://fonts/title.ttf", std.mem.sliceTo(&l.font, 0));
     try testing.expectEqual(@as(f32, 72.0), l.font_size);
     try testing.expectEqual(@as(u32, 0), l.font_handle.bits);
@@ -1417,9 +1425,9 @@ test "every label field the table describes reaches the component and its output
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Score");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const l = f.comp(rc.ke_label_component, rc.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
+    const l = f.comp(abi_render.ke_label_component, abi_render.KE_COMPONENT_NAME_LABEL, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("0", std.mem.sliceTo(&l.text, 0));
     try testing.expectApproxEqAbs(@as(f32, 0.3), l.anchor[0], 1e-6);
     try testing.expectEqual(@as(f32, 60.0), l.offset[1]);
@@ -1460,17 +1468,17 @@ test "a referenced scene is spliced under the name that referenced it" {
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const paddle = f.find("PaddleLeft");
-    try testing.expect(paddle != c.KE_ENTITY_INVALID);
+    try testing.expect(paddle != abi_ecs.KE_ENTITY_INVALID);
     const visual = f.find("Visual");
-    try testing.expect(visual != c.KE_ENTITY_INVALID);
+    try testing.expect(visual != abi_ecs.KE_ENTITY_INVALID);
 
-    const vh = f.comp(c.ke_hierarchy_component, c.KE_COMPONENT_NAME_HIERARCHY, visual) orelse return error.MissingComponent;
+    const vh = f.comp(abi_framework.ke_hierarchy_component, abi_framework.KE_COMPONENT_NAME_HIERARCHY, visual) orelse return error.MissingComponent;
     try testing.expectEqual(paddle, vh.parent);
 
-    const pt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, paddle) orelse return error.MissingComponent;
+    const pt = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, paddle) orelse return error.MissingComponent;
     try testing.expectEqual(@as(f32, -7.5), pt.position.x);
 
-    const vt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, visual) orelse return error.MissingComponent;
+    const vt = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, visual) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, 0.3), vt.scale.x, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 1.8), vt.scale.y, 1e-6);
 }
@@ -1502,7 +1510,7 @@ test "a res:// subscene is found under the root its asset resolver was given" {
     try f.rootAt(root.ptr);
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-    try testing.expect(f.find("Inner") != c.KE_ENTITY_INVALID);
+    try testing.expect(f.find("Inner") != abi_ecs.KE_ENTITY_INVALID);
 }
 
 test "two instances of one subscene keep their own outer transform and overrides" {
@@ -1543,13 +1551,13 @@ test "two instances of one subscene keep their own outer transform and overrides
 
     const left = f.find("Left");
     const right = f.find("Right");
-    try testing.expect(left != c.KE_ENTITY_INVALID);
-    try testing.expect(right != c.KE_ENTITY_INVALID);
+    try testing.expect(left != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(right != abi_ecs.KE_ENTITY_INVALID);
 
-    const lt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, left) orelse return error.MissingComponent;
-    const lc = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, left) orelse return error.MissingComponent;
-    const rt = f.comp(c.ke_transform_component, c.KE_COMPONENT_NAME_TRANSFORM, right) orelse return error.MissingComponent;
-    const rcam = f.comp(rc.ke_camera_component, rc.KE_COMPONENT_NAME_CAMERA, right) orelse return error.MissingComponent;
+    const lt = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, left) orelse return error.MissingComponent;
+    const lc = f.comp(abi_render.ke_camera_component, abi_render.KE_COMPONENT_NAME_CAMERA, left) orelse return error.MissingComponent;
+    const rt = f.comp(abi_spatial.ke_transform_component, abi_spatial.KE_COMPONENT_NAME_TRANSFORM, right) orelse return error.MissingComponent;
+    const rcam = f.comp(abi_render.ke_camera_component, abi_render.KE_COMPONENT_NAME_CAMERA, right) orelse return error.MissingComponent;
 
     try testing.expectEqual(@as(f32, -7.5), lt.position.x);
     try testing.expectEqual(@as(f32, 111.0), lc.far_plane);
@@ -1660,9 +1668,9 @@ test "the script factory receives the entity and the normalized type name" {
 
 fn rejectingFactory(
     ctx: ?*anyopaque,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     type_name: [*c]const u8,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     _ = entity;
     _ = type_name;
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
@@ -1672,9 +1680,9 @@ fn rejectingFactory(
 
 fn reportingFactory(
     ctx: ?*anyopaque,
-    entity: c.ke_entity,
+    entity: abi_ecs.ke_entity,
     type_name: [*c]const u8,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     _ = entity;
     _ = type_name;
     const spy: *ScriptSpy = @ptrCast(@alignCast(ctx.?));
@@ -1762,7 +1770,7 @@ test "an entity naming a type is still created when no script factory is registe
     );
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-    try testing.expect(f.find("Lone") != c.KE_ENTITY_INVALID);
+    try testing.expect(f.find("Lone") != abi_ecs.KE_ENTITY_INVALID);
 }
 
 test "a user component is applied through the callback its owner registered" {
@@ -1771,8 +1779,8 @@ test "a user component is applied through the callback its owner registered" {
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    var demo_cid: c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
+    var demo_cid: abi_ecs.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     var saw_ctx = false;
@@ -1791,7 +1799,7 @@ test "a user component is applied through the callback its owner registered" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const entity = f.find("Test");
-    try testing.expect(entity != c.KE_ENTITY_INVALID);
+    try testing.expect(entity != abi_ecs.KE_ENTITY_INVALID);
 
     const d: *DemoComponent = @ptrCast(@alignCast(fakeComponentGet(e, entity, demo_cid).?));
     try testing.expectEqual(@as(f32, 1.5), d.fov);
@@ -1802,9 +1810,9 @@ test "a user component is applied through the callback its owner registered" {
 fn rejectingApply(
     _: ?*anyopaque,
     _: ?*anyopaque,
-    e: [*c]c.ke_variant_table_entry,
+    e: [*c]abi_ecs.ke_variant_table_entry,
     n: u32,
-) callconv(.c) c.ke_result {
+) callconv(.c) abi_result.ke_result {
     for (e[0..n]) |*entry| entry.consumed = true;
     return R.code(error.NotSupported);
 }
@@ -1815,8 +1823,8 @@ test "the code an apply callback rejects a value with reaches the caller instead
     defer f.deinit();
 
     const e = &f.ecs.vtable;
-    var demo_cid: c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
+    var demo_cid: abi_ecs.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
     const w = f.world_h.ref.?;
     try testing.expectEqual(R.ok, w.*.register_component_apply.?(w, demo_cid, rejectingApply, null));
@@ -1873,13 +1881,13 @@ test "a scene that fails to load leaves none of the entities it had already crea
     );
 
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("First"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("First/Second"));
-    try testing.expectEqual(c.KE_ENTITY_INVALID, f.find("Third"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("First"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("First/Second"));
+    try testing.expectEqual(abi_ecs.KE_ENTITY_INVALID, f.find("Third"));
 }
 
 test "a loader is never created without a world or an asset resolver" {
-    var h: c.ke_scene_loader_handle = undefined;
+    var h: abi_framework.ke_scene_loader_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, &h));
     try testing.expect(h.ref == null);
     var f: Fixture = undefined;
@@ -1915,9 +1923,9 @@ test "an audio player keeps the path and volume the scene authored" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Hit");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const a = f.comp(rc.ke_audio_player_component, rc.KE_COMPONENT_NAME_AUDIO_PLAYER, e) orelse return error.MissingComponent;
+    const a = f.comp(abi_audio.ke_audio_player_component, abi_audio.KE_COMPONENT_NAME_AUDIO_PLAYER, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("assets/sounds/hit.wav", std.mem.sliceTo(&a.path, 0));
     try testing.expectApproxEqAbs(@as(f32, 0.5), a.volume, 1e-6);
 }
@@ -1941,9 +1949,9 @@ test "a collider keeps the extents and surface the scene authored" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     const e = f.find("Shape");
-    try testing.expect(e != c.KE_ENTITY_INVALID);
+    try testing.expect(e != abi_ecs.KE_ENTITY_INVALID);
 
-    const col = f.comp(rc.ke_collider2d_component, rc.KE_COMPONENT_NAME_COLLIDER2D, e) orelse return error.MissingComponent;
+    const col = f.comp(abi_physics.ke_collider2d_component, abi_physics.KE_COMPONENT_NAME_COLLIDER2D, e) orelse return error.MissingComponent;
     try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.x, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.18), col.half_extents.y, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 1.0), col.restitution, 1e-6);
@@ -1975,8 +1983,8 @@ test "a connection between two entities in the same scene reaches the bus" {
 
     const emitter = f.find("Emitter");
     const listener = f.find("Listener");
-    try testing.expect(emitter != c.KE_ENTITY_INVALID);
-    try testing.expect(listener != c.KE_ENTITY_INVALID);
+    try testing.expect(emitter != abi_ecs.KE_ENTITY_INVALID);
+    try testing.expect(listener != abi_ecs.KE_ENTITY_INVALID);
 
     const sig = try f.declaredSignal("GoalScored");
     try f.emitFrom(emitter, sig);
@@ -2367,7 +2375,7 @@ test "a connection declared inside a subscene wires that instance's own entities
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const left_child = f.find("Left/Child");
-    try testing.expect(left_child != c.KE_ENTITY_INVALID);
+    try testing.expect(left_child != abi_ecs.KE_ENTITY_INVALID);
 
     const sig = try f.declaredSignal("Poke");
     try f.emitFrom(left_child, sig);
@@ -2439,7 +2447,7 @@ test "an entity that splices a subscene connects from the subscene's root" {
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
 
     const left = f.find("Left");
-    try testing.expect(left != c.KE_ENTITY_INVALID);
+    try testing.expect(left != abi_ecs.KE_ENTITY_INVALID);
 
     const sig = try f.declaredSignal("Poke");
     try f.emitFrom(left, sig);

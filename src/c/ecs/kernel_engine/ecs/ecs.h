@@ -31,7 +31,7 @@ extern "C"
         ke_component_id           cid;
         size_t                    size;
         size_t                    alignment;
-        const ke_component_field *fields;
+        const ke_component_field *fields; ///< [array_of:field_count]
         uint32_t                  field_count;
     } ke_component_meta;
 

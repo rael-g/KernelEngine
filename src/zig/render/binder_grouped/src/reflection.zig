@@ -2,9 +2,10 @@
 //! as bind group layout entries and as bind group entries matched by name.
 
 const std = @import("std");
-const c = @import("c");
+const abi_render = @import("abi_render");
+const abi_result = @import("abi_result");
 const gpa = @import("heap").gpa;
-const R = @import("result").Result(c, .{});
+const R = @import("result").Result(abi_result, .{});
 const log = std.log.scoped(.reflection);
 
 const JBinding = struct {
@@ -46,8 +47,8 @@ const JReflection = struct {
 pub const Binding = struct {
     name: []const u8,
     binding: u32,
-    type: c.ke_gpu_binding_type,
-    view_dimension: c.ke_gpu_texture_dimension,
+    type: abi_render.ke_gpu_binding_type,
+    view_dimension: abi_render.ke_gpu_texture_dimension,
     stages: u32,
     has_dynamic_offset: bool = false,
 };
@@ -99,7 +100,7 @@ pub const Group = struct {
                 for ([_][]const JBinding{ container.bindings, &single }) |list| {
                     for (list) |cb| {
                         if (std.mem.eql(u8, cb.kind, "descriptorTableSlot")) {
-                            try self.add(.{ .name = name, .binding = cb.index, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage });
+                            try self.add(.{ .name = name, .binding = cb.index, .type = abi_render.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage });
                         }
                     }
                 }
@@ -143,26 +144,26 @@ pub const Group = struct {
 };
 
 fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Binding {
-    var b = Binding{ .name = name, .binding = index, .type = c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage };
+    var b = Binding{ .name = name, .binding = index, .type = abi_render.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage };
     const read_write = if (t.access) |acc| std.mem.eql(u8, acc, "readWrite") else false;
     if (std.mem.eql(u8, t.kind, "constantBuffer")) return b;
     if (std.mem.eql(u8, t.kind, "samplerState")) {
-        b.type = c.KE_GPU_BINDING_TYPE_SAMPLER;
+        b.type = abi_render.KE_GPU_BINDING_TYPE_SAMPLER;
         return b;
     }
     if (!std.mem.eql(u8, t.kind, "resource")) return error.Malformed;
     const shape = t.baseShape orelse return error.Malformed;
     if (std.mem.eql(u8, shape, "structuredBuffer") or std.mem.eql(u8, shape, "byteAddressBuffer")) {
-        b.type = if (read_write) c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER else c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
+        b.type = if (read_write) abi_render.KE_GPU_BINDING_TYPE_STORAGE_BUFFER else abi_render.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
         return b;
     }
     if (std.mem.eql(u8, shape, "texture2D")) {
-        b.type = if (read_write) c.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE else c.KE_GPU_BINDING_TYPE_TEXTURE;
+        b.type = if (read_write) abi_render.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE else abi_render.KE_GPU_BINDING_TYPE_TEXTURE;
         return b;
     }
     if (std.mem.eql(u8, shape, "textureCube")) {
-        b.type = c.KE_GPU_BINDING_TYPE_TEXTURE;
-        b.view_dimension = c.KE_GPU_TEXTURE_DIM_CUBE;
+        b.type = abi_render.KE_GPU_BINDING_TYPE_TEXTURE;
+        b.view_dimension = abi_render.KE_GPU_TEXTURE_DIM_CUBE;
         return b;
     }
     return error.Malformed;
@@ -171,7 +172,7 @@ fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Bindi
 /// A resource a binder was given for every parameter of `name` a set leaves out.
 pub const Provided = struct {
     name: [:0]const u8,
-    binding: c.ke_render_shader_binding,
+    binding: abi_render.ke_render_shader_binding,
 };
 
 /// The names of the parameter blocks the reflection `json` declares, allocated in `a`.
@@ -189,8 +190,8 @@ pub fn blockNames(a: std.mem.Allocator, json: []const u8) ReadError![]const []co
 
 /// A layout with one entry per binding of `group`, each visible to the stages that declare it.
 /// Fails when the entries cannot be allocated or the device refuses the layout.
-pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const u8) R.Error!c.ke_gpu_bind_group_layout {
-    const entries = try gpa.alloc(c.ke_gpu_bind_group_layout_entry, group.bindings.items.len);
+pub fn createLayout(dev: *abi_render.ke_gpu_device, group: *const Group, label: [*c]const u8) R.Error!abi_render.ke_gpu_bind_group_layout {
+    const entries = try gpa.alloc(abi_render.ke_gpu_bind_group_layout_entry, group.bindings.items.len);
     defer gpa.free(entries);
     for (group.bindings.items, entries) |b, *e| {
         e.* = .{
@@ -201,8 +202,8 @@ pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const
             .view_dimension = b.view_dimension,
         };
     }
-    var layout: c.ke_gpu_bind_group_layout = c.KE_GPU_INVALID_HANDLE;
-    try R.check(dev.create_bind_group_layout.?(dev, &c.ke_gpu_bind_group_layout_params{
+    var layout: abi_render.ke_gpu_bind_group_layout = abi_render.KE_GPU_INVALID_HANDLE;
+    try R.check(dev.create_bind_group_layout.?(dev, &abi_render.ke_gpu_bind_group_layout_params{
         .label = label,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,
@@ -213,16 +214,16 @@ pub fn createLayout(dev: *c.ke_gpu_device, group: *const Group, label: [*c]const
 /// The bind group entries for `bindings` in the group's numbering, plus one for each parameter of
 /// the group they leave out that `provided` names, owned by the caller. Fails as an invalid
 /// argument when a binding names no parameter, a parameter is bound twice, or one is left unbound.
-pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding, provided: []const Provided) R.Error![]c.ke_gpu_bind_group_entry {
-    const entries = try gpa.alloc(c.ke_gpu_bind_group_entry, group.bindings.items.len);
+pub fn matchBindings(group: *Group, bindings: []const abi_render.ke_render_shader_binding, provided: []const Provided) R.Error![]abi_render.ke_gpu_bind_group_entry {
+    const entries = try gpa.alloc(abi_render.ke_gpu_bind_group_entry, group.bindings.items.len);
     errdefer gpa.free(entries);
     const bound = try gpa.alloc(bool, group.bindings.items.len);
     defer gpa.free(bound);
     @memset(bound, false);
     for (bindings) |src| {
-        const slot = if (src.name != null) indexOf(group, std.mem.span(src.name)) else null;
+        const slot = if (src.name != null) indexOf(group, std.mem.span(src.name.?)) else null;
         const i = slot orelse {
-            log.warn("create_set: the binding {s} names no parameter of the group", .{if (src.name != null) std.mem.span(src.name) else "(unnamed)"});
+            log.warn("create_set: the binding {s} names no parameter of the group", .{if (src.name != null) std.mem.span(src.name.?) else "(unnamed)"});
             return error.InvalidArgument;
         };
         if (bound[i]) {
@@ -243,7 +244,7 @@ pub fn matchBindings(group: *Group, bindings: []const c.ke_render_shader_binding
     return entries;
 }
 
-fn providedFor(provided: []const Provided, name: []const u8) ?c.ke_render_shader_binding {
+fn providedFor(provided: []const Provided, name: []const u8) ?abi_render.ke_render_shader_binding {
     for (provided) |p| {
         if (std.mem.eql(u8, p.name, name)) return p.binding;
     }
@@ -257,7 +258,7 @@ fn indexOf(group: *Group, name: []const u8) ?usize {
     return null;
 }
 
-fn entryOf(b: Binding, src: c.ke_render_shader_binding) c.ke_gpu_bind_group_entry {
+fn entryOf(b: Binding, src: abi_render.ke_render_shader_binding) abi_render.ke_gpu_bind_group_entry {
     return .{
         .binding = b.binding,
         .type = b.type,
@@ -287,23 +288,23 @@ const forward_like_json =
 test "the loose parameters of a shader are its group zero, numbered and typed as the reflection declares" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
-    try std.testing.expect(try group.collect(forward_like_json, null, c.KE_GPU_SHADER_STAGE_FRAGMENT));
+    try std.testing.expect(try group.collect(forward_like_json, null, abi_render.KE_GPU_SHADER_STAGE_FRAGMENT));
     try std.testing.expectEqual(@as(?u32, 0), group.index);
     try std.testing.expectEqual(@as(usize, 4), group.bindings.items.len);
     try std.testing.expectEqual(@as(u32, 3), group.find("ibl_env").?.binding);
-    try std.testing.expectEqual(@as(c.ke_gpu_texture_dimension, c.KE_GPU_TEXTURE_DIM_CUBE), group.find("ibl_env").?.view_dimension);
-    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER), group.find("lights").?.type);
-    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER), group.find("counts").?.type);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_texture_dimension, abi_render.KE_GPU_TEXTURE_DIM_CUBE), group.find("ibl_env").?.view_dimension);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_binding_type, abi_render.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER), group.find("lights").?.type);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_binding_type, abi_render.KE_GPU_BINDING_TYPE_STORAGE_BUFFER), group.find("counts").?.type);
 }
 
 test "a parameter block is its own group, its uniform data bound under the block's name" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
-    try std.testing.expect(try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_FRAGMENT));
+    try std.testing.expect(try group.collect(forward_like_json, "mat", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT));
     try std.testing.expectEqual(@as(?u32, 1), group.index);
     try std.testing.expectEqual(@as(u32, 0), group.find("mat").?.binding);
     try std.testing.expectEqual(@as(u32, 1), group.find("albedo").?.binding);
-    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_SAMPLER), group.find("smp").?.type);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_binding_type, abi_render.KE_GPU_BINDING_TYPE_SAMPLER), group.find("smp").?.type);
     try std.testing.expect(group.find("shadow_map") == null);
 }
 
@@ -316,7 +317,7 @@ test "a block holding only uniform data is one buffer named after the block" {
         \\  {"name":"mvp","type":{"kind":"matrix"},"binding":{"kind":"uniform","offset":0,"size":64}}]},
         \\  "containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}]}
     ;
-    try std.testing.expect(try group.collect(json, "object", c.KE_GPU_SHADER_STAGE_VERTEX));
+    try std.testing.expect(try group.collect(json, "object", abi_render.KE_GPU_SHADER_STAGE_VERTEX));
     try std.testing.expectEqual(@as(?u32, 2), group.index);
     try std.testing.expectEqual(@as(usize, 1), group.bindings.items.len);
     try std.testing.expectEqual(@as(u32, 0), group.find("object").?.binding);
@@ -325,16 +326,16 @@ test "a block holding only uniform data is one buffer named after the block" {
 test "a block no stage declares is reported as absent" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
-    try std.testing.expect(!try group.collect(forward_like_json, "object", c.KE_GPU_SHADER_STAGE_VERTEX));
+    try std.testing.expect(!try group.collect(forward_like_json, "object", abi_render.KE_GPU_SHADER_STAGE_VERTEX));
 }
 
 test "a binding declared by two stages is one entry visible to both" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
-    _ = try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_VERTEX);
-    _ = try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_FRAGMENT);
+    _ = try group.collect(forward_like_json, "mat", abi_render.KE_GPU_SHADER_STAGE_VERTEX);
+    _ = try group.collect(forward_like_json, "mat", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT);
     try std.testing.expectEqual(@as(usize, 3), group.bindings.items.len);
-    try std.testing.expectEqual(@as(u32, c.KE_GPU_SHADER_STAGE_VERTEX | c.KE_GPU_SHADER_STAGE_FRAGMENT), group.find("albedo").?.stages);
+    try std.testing.expectEqual(@as(u32, abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT), group.find("albedo").?.stages);
 }
 
 test "a parameter bound explicitly to another space is not part of the loose group" {
@@ -345,7 +346,7 @@ test "a parameter bound explicitly to another space is not part of the loose gro
         \\ {"name":"frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
         \\ {"name":"obj","binding":{"kind":"descriptorTableSlot","index":0,"space":2},"type":{"kind":"constantBuffer"}}]}
     ;
-    try std.testing.expect(try group.collect(json, null, c.KE_GPU_SHADER_STAGE_VERTEX));
+    try std.testing.expect(try group.collect(json, null, abi_render.KE_GPU_SHADER_STAGE_VERTEX));
     try std.testing.expectEqual(@as(usize, 1), group.bindings.items.len);
     try std.testing.expect(group.find("obj") == null);
 }
@@ -356,7 +357,7 @@ test "a loose uniform outside any buffer or block is refused" {
     const json =
         \\{"parameters":[{"name":"tint","binding":{"kind":"uniform","offset":0,"size":16},"type":{"kind":"vector"}}]}
     ;
-    try std.testing.expectError(error.LooseUniform, group.collect(json, null, c.KE_GPU_SHADER_STAGE_FRAGMENT));
+    try std.testing.expectError(error.LooseUniform, group.collect(json, null, abi_render.KE_GPU_SHADER_STAGE_FRAGMENT));
 }
 
 test "a parameter the binder was given is bound to it when the set leaves it out" {
@@ -368,26 +369,26 @@ test "a parameter the binder was given is bound to it when the set leaves it out
         \\ {"name":"ke_samp_linear","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"samplerState"}},
         \\ {"name":"own","binding":{"kind":"descriptorTableSlot","index":2},"type":{"kind":"constantBuffer"}}]}
     ;
-    _ = try group.collect(json, null, c.KE_GPU_SHADER_STAGE_FRAGMENT);
-    const zero = std.mem.zeroes(c.ke_render_shader_binding);
+    _ = try group.collect(json, null, abi_render.KE_GPU_SHADER_STAGE_FRAGMENT);
+    const zero = std.mem.zeroes(abi_render.ke_render_shader_binding);
     var frame = zero;
     frame.buffer = 11;
     var linear = zero;
     linear.sampler = 12;
     const globals = [_]Provided{ .{ .name = "ke_frame", .binding = frame }, .{ .name = "ke_samp_linear", .binding = linear } };
-    const own = [_]c.ke_render_shader_binding{.{ .name = "own", .buffer = 13, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 }};
+    const own = [_]abi_render.ke_render_shader_binding{.{ .name = "own", .buffer = 13, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 }};
     const entries = try matchBindings(&group, &own, &globals);
     defer gpa.free(entries);
-    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 11), entries[0].buffer);
-    try std.testing.expectEqual(@as(c.ke_gpu_sampler, 12), entries[1].sampler);
-    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 13), entries[2].buffer);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_buffer, 11), entries[0].buffer);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_sampler, 12), entries[1].sampler);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_buffer, 13), entries[2].buffer);
 }
 
 test "bindings are placed at their parameters' numbers, and a name the group lacks is refused" {
     var group = Group.init(std.testing.allocator);
     defer group.deinit();
-    _ = try group.collect(forward_like_json, "mat", c.KE_GPU_SHADER_STAGE_FRAGMENT);
-    const ok = [_]c.ke_render_shader_binding{
+    _ = try group.collect(forward_like_json, "mat", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT);
+    const ok = [_]abi_render.ke_render_shader_binding{
         .{ .name = "smp", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = 7 },
         .{ .name = "mat", .buffer = 3, .buffer_offset = 0, .buffer_size = 16, .texture_view = 0, .sampler = 0 },
         .{ .name = "albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 5, .sampler = 0 },
@@ -395,10 +396,10 @@ test "bindings are placed at their parameters' numbers, and a name the group lac
     const globals = [_]Provided{};
     const entries = try matchBindings(&group, &ok, &globals);
     defer gpa.free(entries);
-    try std.testing.expectEqual(@as(c.ke_gpu_buffer, 3), entries[0].buffer);
-    try std.testing.expectEqual(@as(c.ke_gpu_binding_type, c.KE_GPU_BINDING_TYPE_TEXTURE), entries[1].type);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_buffer, 3), entries[0].buffer);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_binding_type, abi_render.KE_GPU_BINDING_TYPE_TEXTURE), entries[1].type);
     try std.testing.expectEqual(@as(u32, 2), entries[2].binding);
-    try std.testing.expectEqual(@as(c.ke_gpu_sampler, 7), entries[2].sampler);
+    try std.testing.expectEqual(@as(abi_render.ke_gpu_sampler, 7), entries[2].sampler);
 
     var wrong = ok;
     wrong[2].name = "albedo_map";

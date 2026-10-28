@@ -5,7 +5,8 @@ const heap = @import("heap");
 const rc = @import("render_service.zig");
 const resource_table = @import("resource_table.zig");
 const frame_chain = @import("frame_chain.zig");
-const c = rc.c;
+const abi_render = @import("abi_render");
+const abi_result = @import("abi_result");
 const R = rc.R;
 const log = std.log.scoped(.render_service);
 
@@ -15,7 +16,7 @@ const log = std.log.scoped(.render_service);
 /// and a target with nothing to draw into leaves it closed and succeeds. Once it has a view, the
 /// backbuffer size is read from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
 /// their textures, the clear of the frame's color and depth is recorded and the frame is live.
-pub fn beginFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+pub fn beginFrame(self: [*c]abi_render.ke_render_service) callconv(.c) abi_result.ke_result {
     if (self == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
     st.frame_live = false;
@@ -30,9 +31,9 @@ pub fn beginFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
     }
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
-    var view: c.ke_gpu_texture_view = c.KE_GPU_INVALID_HANDLE;
+    var view: abi_render.ke_gpu_texture_view = abi_render.KE_GPU_INVALID_HANDLE;
     const acquired = st.target.acquire.?(st.target, &view);
-    if (acquired != R.ok or view == c.KE_GPU_INVALID_HANDLE) return acquired;
+    if (acquired != R.ok or view == abi_render.KE_GPU_INVALID_HANDLE) return acquired;
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
     resource_table.resizeRelative(st);
     if (st.find("backbuffer")) |bb| bb.view = view;
@@ -51,20 +52,20 @@ fn dropClear(st: *rc.CoreState) void {
 /// The encoders of one frame in the order they are submitted, in arrays sized for the frame. An
 /// encoder added here is finished and destroyed by `submit`, whether its finish succeeds or not.
 const Submission = struct {
-    encoders: []c.ke_gpu_command_encoder_handle,
+    encoders: []abi_render.ke_gpu_command_encoder_handle,
     records: []?*rc.ComputeRecord,
-    finished: []c.ke_gpu_command_buffer_handle,
-    cmds: [][*c]c.ke_gpu_command_buffer,
+    finished: []abi_render.ke_gpu_command_buffer_handle,
+    cmds: [][*c]abi_render.ke_gpu_command_buffer,
     count: usize = 0,
 
     fn init(capacity: usize) error{OutOfMemory}!Submission {
-        const encoders = try heap.gpa.alloc(c.ke_gpu_command_encoder_handle, capacity);
+        const encoders = try heap.gpa.alloc(abi_render.ke_gpu_command_encoder_handle, capacity);
         errdefer heap.gpa.free(encoders);
         const records = try heap.gpa.alloc(?*rc.ComputeRecord, capacity);
         errdefer heap.gpa.free(records);
-        const finished = try heap.gpa.alloc(c.ke_gpu_command_buffer_handle, capacity);
+        const finished = try heap.gpa.alloc(abi_render.ke_gpu_command_buffer_handle, capacity);
         errdefer heap.gpa.free(finished);
-        const cmds = try heap.gpa.alloc([*c]c.ke_gpu_command_buffer, capacity);
+        const cmds = try heap.gpa.alloc([*c]abi_render.ke_gpu_command_buffer, capacity);
         return .{ .encoders = encoders, .records = records, .finished = finished, .cmds = cmds };
     }
 
@@ -75,7 +76,7 @@ const Submission = struct {
         heap.gpa.free(self.encoders);
     }
 
-    fn add(self: *Submission, enc: ?c.ke_gpu_command_encoder_handle, rec: ?*rc.ComputeRecord) void {
+    fn add(self: *Submission, enc: ?abi_render.ke_gpu_command_encoder_handle, rec: ?*rc.ComputeRecord) void {
         const e = enc orelse return;
         self.encoders[self.count] = e;
         self.records[self.count] = rec;
@@ -85,9 +86,9 @@ const Submission = struct {
     fn submit(self: *Submission, st: *rc.CoreState) void {
         var n: u32 = 0;
         for (self.encoders[0..self.count], self.records[0..self.count]) |enc, rec| {
-            if (rec) |r| replay(enc.ref, r);
-            var cmd: c.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
-            if (enc.ref.*.finish.?(enc.ref, &cmd) != R.ok) continue;
+            if (rec) |r| replay(enc.ref.?, r);
+            var cmd: abi_render.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
+            if (enc.ref.?.finish.?(enc.ref, &cmd) != R.ok) continue;
             self.finished[n] = cmd;
             self.cmds[n] = cmd.ref;
             n += 1;
@@ -109,7 +110,7 @@ const Submission = struct {
 /// it returned. When the submission cannot be allocated the frame's encoders are destroyed
 /// unsubmitted, nothing is presented and it fails as out of memory. Succeeds doing nothing when
 /// no frame is live.
-pub fn endFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
+pub fn endFrame(self: [*c]abi_render.ke_render_service) callconv(.c) abi_result.ke_result {
     if (self == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
     if (!st.frame_live) return R.ok;
@@ -130,7 +131,7 @@ pub fn endFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
     st.clear_pass = null;
     it = st.ended.iterator();
     while (it.next()) |pass| {
-        if (pass.chain == c.KE_RENDER_CHAIN_NONE) sub.add(pass.encoder, pass.record);
+        if (pass.chain == abi_render.KE_RENDER_CHAIN_NONE) sub.add(pass.encoder, pass.record);
     }
     for (st.chain.links.items) |*link| {
         var any = false;
@@ -140,18 +141,18 @@ pub fn endFrame(self: [*c]c.ke_render_service) callconv(.c) c.ke_result {
             sub.add(pass.encoder, pass.record);
             any = true;
         }
-        if (!any and link.source != c.KE_GPU_INVALID_HANDLE)
+        if (!any and link.source != abi_render.KE_GPU_INVALID_HANDLE)
             sub.add(frame_chain.recordBlit(st, link.source, link.target, link.target_format), null);
     }
     it = st.ended.iterator();
     while (it.next()) |pass| {
-        if (pass.chain != c.KE_RENDER_CHAIN_NONE and st.chain.find(pass.chain) == null) sub.add(pass.encoder, pass.record);
+        if (pass.chain != abi_render.KE_RENDER_CHAIN_NONE and st.chain.find(pass.chain) == null) sub.add(pass.encoder, pass.record);
     }
     if (st.find("backbuffer")) |bb| sub.add(frame_chain.recordBlit(st, st.chain.final, bb.view, bb.format), null);
     sub.submit(st);
 
     st.frame_live = false;
-    if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
+    if (st.find("backbuffer")) |bb| bb.view = abi_render.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target);
     st.device.queue_poll.?(st.device, st.queue);
     return presented;
@@ -163,28 +164,28 @@ fn dropFrame(st: *rc.CoreState) void {
     var it = st.ended.iterator();
     while (it.next()) |pass| pass.encoder.destroy.?(pass.encoder.ref);
     st.frame_live = false;
-    if (st.find("backbuffer")) |bb| bb.view = c.KE_GPU_INVALID_HANDLE;
+    if (st.find("backbuffer")) |bb| bb.view = abi_render.KE_GPU_INVALID_HANDLE;
 }
 
-fn replay(enc: *c.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {
-    const cp = enc.*.begin_compute_pass.?(enc, &c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
+fn replay(enc: *abi_render.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {
+    const cp = enc.*.begin_compute_pass.?(enc, &abi_render.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
     for (rec.cmds.items) |cmd| {
         switch (cmd) {
-            .set_pipeline => |p| cp.*.set_pipeline.?(cp, p),
+            .set_pipeline => |p| cp.?.set_pipeline.?(cp, p),
             .set_bind_group => |b| {
                 if (b.count > 0)
-                    cp.*.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
+                    cp.?.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
                 else
-                    cp.*.set_bind_group.?(cp, b.index, b.bg, null, 0);
+                    cp.?.set_bind_group.?(cp, b.index, b.bg, null, 0);
             },
-            .dispatch => |d| cp.*.dispatch.?(cp, d.x, d.y, d.z),
-            .dispatch_indirect => |d| cp.*.dispatch_indirect.?(cp, d.buf, d.offset),
-            .push_debug_group => |l| cp.*.push_debug_group.?(cp, rec.label(l)),
-            .pop_debug_group => cp.*.pop_debug_group.?(cp),
-            .insert_debug_marker => |l| cp.*.insert_debug_marker.?(cp, rec.label(l)),
+            .dispatch => |d| cp.?.dispatch.?(cp, d.x, d.y, d.z),
+            .dispatch_indirect => |d| cp.?.dispatch_indirect.?(cp, d.buf, d.offset),
+            .push_debug_group => |l| cp.?.push_debug_group.?(cp, rec.label(l)),
+            .pop_debug_group => cp.?.pop_debug_group.?(cp),
+            .insert_debug_marker => |l| cp.?.insert_debug_marker.?(cp, rec.label(l)),
         }
     }
-    cp.*.end.?(cp);
+    cp.?.end.?(cp);
 }
 
 /// Writes the frame's uploads in the order they were reserved, the arena's first and then the
@@ -226,7 +227,7 @@ fn flushUploads(st: *rc.CoreState) void {
 /// the arena range are reserved with atomic counters before the copy. An upload that finds either
 /// full is copied into a block of its own and pushed onto the spill list instead; it is lost only
 /// when that block cannot be allocated. A zero size or null data does nothing.
-pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
+pub fn uploadBuffer(self: [*c]abi_render.ke_render_service, buffer: abi_render.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) callconv(.c) void {
     if (size == 0 or data == null) return;
     const st = rc.coreOf(self);
     const src: [*]const u8 = @ptrCast(data);
@@ -243,7 +244,7 @@ pub fn uploadBuffer(self: [*c]c.ke_render_service, buffer: c.ke_gpu_buffer, offs
     spill(st, buffer, offset, src[0..size]);
 }
 
-fn spill(st: *rc.CoreState, buffer: c.ke_gpu_buffer, offset: u64, bytes: []const u8) void {
+fn spill(st: *rc.CoreState, buffer: abi_render.ke_gpu_buffer, offset: u64, bytes: []const u8) void {
     const data = heap.gpa.dupe(u8, bytes) catch return;
     const node = heap.gpa.create(rc.SpilledUpload) catch {
         heap.gpa.free(data);

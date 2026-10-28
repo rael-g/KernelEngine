@@ -3,7 +3,5 @@
 
 #include <stdio.h>
 #include <toml.h>
-#include <kernel_engine/result/result.h>
-#include <kernel_engine/configuration/configuration_source.h>
 
 #endif

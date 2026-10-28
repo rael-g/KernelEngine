@@ -43,7 +43,7 @@ public interface IRuntime : IDisposable
     /// <param name="exclusive">The body runs alone at the start of its phase, before every system of the phase that is not exclusive, and what it records is applied before they run. Two exclusive systems are ordered like two writers of one component. Neither its access nor per_entity orders or splits it.</param>
     /// <returns>Receives the system's id; 0 on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, Span<QueryDecl> queries = default, Span<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default, bool exclusive = false);
+    ulong RegisterSystem(string name, RuntimePhase phase, SystemExecute? execute, ReadOnlySpan<QueryDecl> queries = default, ReadOnlySpan<ComponentAccess> accessList = default, uint pinnedThread = 0, bool perEntity = false, ReadOnlySpan<string> after = default, ReadOnlySpan<string> before = default, bool exclusive = false);
     /// <summary>Removes a system registered earlier. Called from a body, the removal takes effect with the next tick.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void UnregisterSystem(ulong id);
