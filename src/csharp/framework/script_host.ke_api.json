@@ -125,7 +125,7 @@
         },
         {
           "name": "type_lookup",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -335,7 +335,7 @@
         },
         {
           "name": "instance_of",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -493,5 +493,12 @@
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
     "ke_script_type_id": "uint32_t"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_SCRIPT_TYPE_NONE",
+      "type": "unsigned int",
+      "value": "0"
+    }
+  ]
 }

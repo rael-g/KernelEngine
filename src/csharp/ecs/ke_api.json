@@ -231,7 +231,7 @@
         },
         {
           "name": "component_lookup",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -657,5 +657,22 @@
     "ke_component_id": "uint32_t",
     "ke_query_id": "uint64_t",
     "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_QUERY_INVALID",
+      "type": "ke_query_id",
+      "value": "0"
+    },
+    {
+      "name": "KE_ENTITY_INVALID",
+      "type": "int",
+      "value": "0"
+    },
+    {
+      "name": "KE_COMPONENT_INVALID",
+      "type": "int",
+      "value": "0"
+    }
+  ]
 }

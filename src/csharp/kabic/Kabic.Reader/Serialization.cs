@@ -11,7 +11,7 @@ public static class Serialization
 {
     /// <summary>
     /// Writes the model as one JSON object, with the enum, struct, vtable, function and callback
-    /// arrays and the type aliases, adding the opaque records and the variables when there are any.
+    /// arrays and the type aliases, adding the opaque records, the constants and the variables when there are any.
     /// </summary>
     public static JsonObject ToJson(this ApiModel m)
     {
@@ -27,6 +27,16 @@ public static class Serialization
         };
         if (m.Opaques.Count > 0)
             json["opaques"] = new JsonArray(m.Opaques.Select(o => (JsonNode)o).ToArray());
+        if (m.Constants.Count > 0)
+            json["constants"] = new JsonArray(m.Constants.Select(c =>
+            {
+                var o = new JsonObject { ["name"] = c.Name, ["type"] = c.Type };
+                if (c.Value is not null) o["value"] = c.Value;
+                if (c.Fields is not null)
+                    o["fields"] = new JsonArray(c.Fields.Select(f => (JsonNode)new JsonObject { ["name"] = f.Name, ["value"] = f.Value }).ToArray());
+                if (c.Doc is not null) o["doc"] = c.Doc;
+                return (JsonNode)o;
+            }).ToArray());
         if (m.Variables.Count > 0)
             json["variables"] = new JsonArray(m.Variables.Select(v => (JsonNode)new JsonObject
             {

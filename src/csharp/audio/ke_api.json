@@ -79,7 +79,7 @@
             },
             {
               "name": "loop",
-              "type": "_Bool",
+              "type": "bool",
               "tags": [],
               "doc": "Non-zero to restart the sound when it ends."
             }
@@ -149,5 +149,12 @@
   "callbacks": [],
   "type_aliases": {
     "ke_audio_sound": "uint32_t"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_AUDIO_SOUND_INVALID",
+      "type": "ke_audio_sound",
+      "value": "0"
+    }
+  ]
 }

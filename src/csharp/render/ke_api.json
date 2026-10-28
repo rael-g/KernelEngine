@@ -577,7 +577,7 @@
         },
         {
           "name": "mesh_buffers",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -1140,7 +1140,7 @@
         },
         {
           "name": "try_get_mesh",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -1168,7 +1168,7 @@
         },
         {
           "name": "try_get_texture",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -1196,7 +1196,7 @@
         },
         {
           "name": "try_get_material",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [
             "try"
           ],
@@ -1468,5 +1468,24 @@
   },
   "opaques": [
     "ke_render_pass_ctx"
+  ],
+  "constants": [
+    {
+      "name": "KE_RENDER_FRAME_COLOR",
+      "type": "const char *",
+      "value": "\u0022frame.color\u0022",
+      "doc": "The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads."
+    },
+    {
+      "name": "KE_RENDER_FRAME_DEPTH",
+      "type": "const char *",
+      "value": "\u0022frame.depth\u0022",
+      "doc": "The frame\u0027s depth texture, cleared when the frame begins; a pass samples it by this name."
+    },
+    {
+      "name": "KE_RENDER_CHAIN_NONE",
+      "type": "unsigned int",
+      "value": "0"
+    }
   ]
 }

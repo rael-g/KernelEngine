@@ -278,5 +278,12 @@
   "vtables": [],
   "functions": [],
   "callbacks": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_AUDIO_PLAYER_MAX_PATH",
+      "type": "int",
+      "value": "256"
+    }
+  ]
 }
