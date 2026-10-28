@@ -298,7 +298,6 @@ pub fn build(b: *std.Build) void {
     const physics_2d_box2d = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
         .optimize = optimize,
-        .@"heap-src" = heap_src,
         .@"box2d-include" = vcpkg_include,
         .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
     }, &.{}, .has_tests);
