@@ -7,6 +7,9 @@
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
+        .abi_physics = .{ .path = "../../abi/physics" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_physics_2d_box2d = .{ .path = "abi" },
     },
     .paths = .{"."},
 }

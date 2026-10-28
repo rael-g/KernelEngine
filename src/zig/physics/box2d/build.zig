@@ -7,14 +7,32 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const ke_common = b.option([]const u8, "ke-common-include", "kernel_engine/common include dir") orelse @panic("-Dke-common-include required");
-    const ke_result = b.option([]const u8, "ke-result-include", "kernel_engine/result include dir") orelse @panic("-Dke-result-include required");
     const heap_src = b.option([]const u8, "heap-src", "path to the shared Zig heap.zig") orelse @panic("-Dheap-src required");
-    const ke_physics = b.option([]const u8, "ke-physics-include", "kernel_engine/physics include dir") orelse @panic("-Dke-physics-include required");
-    const ke_logger = b.option([]const u8, "ke-logger-include", "kernel_engine/logger include dir") orelse @panic("-Dke-logger-include required");
     const box2d_include = b.option([]const u8, "box2d-include", "Box2D headers dir") orelse @panic("-Dbox2d-include required");
     const box2d_lib = b.option([]const u8, "box2d-lib", "absolute path to the Box2D library") orelse @panic("-Dbox2d-lib required");
 
+    const lib = b.addLibrary(.{
+        .name = "ke_physics_2d_box2d",
+        .root_module = module(b, target, optimize, heap_src, box2d_include, box2d_lib),
+        .linkage = .dynamic,
+    });
+    const install = b.addInstallArtifact(lib, .{
+        .dest_dir = .{ .override = .{ .custom = "lib" } },
+    });
+    b.getInstallStep().dependOn(&install.step);
+
+    const unit_tests = b.addTest(.{ .root_module = module(b, target, optimize, heap_src, box2d_include, box2d_lib) });
+    b.step("test", "Run the Box2D physics unit tests").dependOn(&b.addRunArtifact(unit_tests).step);
+}
+
+fn module(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    heap_src: []const u8,
+    box2d_include: []const u8,
+    box2d_lib: []const u8,
+) *std.Build.Module {
     const mod = b.createModule(.{
         .root_source_file = b.path("src/box2d_physics.zig"),
         .target = target,
@@ -22,49 +40,14 @@ pub fn build(b: *std.Build) void {
         .link_libc = true,
     });
     mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_physics, ke_logger, box2d_include }) |inc| {
-        mod.addIncludePath(.{ .cwd_relative = inc });
-    }
-    mod.addIncludePath(b.path("include"));
-
+    mod.addIncludePath(.{ .cwd_relative = box2d_include });
     mod.addObjectFile(.{ .cwd_relative = box2d_lib });
-
     mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
-
-    mod.addImport("c", ke_build.cImports(b, mod, b.path("src/c.h")));
+    mod.addImport("box2d", ke_build.cImports(b, mod, b.path("src/box2d.h")));
     mod.addImport("log", ke_logger_build.log(b));
     mod.addImport("result", ke_result_build.result(b));
-    const lib = b.addLibrary(.{
-        .name = "ke_physics_2d_box2d",
-        .root_module = mod,
-        .linkage = .dynamic,
-    });
-
-    const install = b.addInstallArtifact(lib, .{
-        .dest_dir = .{ .override = .{ .custom = "lib" } },
-    });
-    b.getInstallStep().dependOn(&install.step);
-
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/box2d_physics.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
-    test_mod.addImport("heap", b.createModule(.{ .root_source_file = .{ .cwd_relative = heap_src }, .target = target, .optimize = optimize }));
-    inline for (.{ ke_common, ke_result, ke_physics, ke_logger, box2d_include }) |inc| {
-        test_mod.addIncludePath(.{ .cwd_relative = inc });
+    inline for (.{ "abi_physics", "abi_result", "abi_physics_2d_box2d" }) |name| {
+        mod.addImport(name, b.dependency(name, .{}).module("abi"));
     }
-    test_mod.addIncludePath(b.path("include"));
-    test_mod.addObjectFile(.{ .cwd_relative = box2d_lib });
-    test_mod.addImport("dll_entry", ke_result_build.dllEntry(b));
-    test_mod.addCMacro("KE_PHYSICS_BOX2D_EXPORT", "");
-
-    test_mod.addImport("c", ke_build.cImports(b, test_mod, b.path("src/c.h")));
-    test_mod.addImport("log", ke_logger_build.log(b));
-    test_mod.addImport("result", ke_result_build.result(b));
-    const unit_tests = b.addTest(.{ .root_module = test_mod });
-    const run_tests = b.addRunArtifact(unit_tests);
-    b.step("test", "Run the Box2D physics unit tests").dependOn(&run_tests.step);
+    return mod;
 }
