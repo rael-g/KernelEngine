@@ -1,0 +1,10 @@
+.{
+    .name = .ke_render_feature_bindings,
+    .version = "0.1.0",
+    .fingerprint = 0x4fb6df61e7a1a63e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_render = .{ .path = "../../abi/render" },
+    },
+    .paths = .{"."},
+}

@@ -57,8 +57,8 @@ A resource is named by a number, and the number that means "none" differs per ki
 
 A render handle is a one-member struct, one struct type per kind, so a mesh passed where a texture
 belongs does not compile in C. Its bits pack an index and a generation, sized by
-`KE_HANDLE_INDEX_BITS` and `KE_HANDLE_GENERATION_BITS`; the plugins that pack and unpack share
-`Handles` in `src/zig/render/common/handle.zig`.
+`KE_HANDLE_INDEX_BITS` and `KE_HANDLE_GENERATION_BITS`. Only the producers pack and unpack them:
+the render service's `src/zig/render/service/src/slot_map.zig` and the ui pass's font table.
 
 ## What the parts agree on without a contract
 

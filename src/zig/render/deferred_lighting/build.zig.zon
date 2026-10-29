@@ -10,7 +10,7 @@
         .abi_runtime = .{ .path = "../../abi/runtime" },
         .abi_render_deferred_lighting_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
-        .ke_render_common = .{ .path = "../common" },
+        .ke_render_feature_bindings = .{ .path = "../feature_bindings" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

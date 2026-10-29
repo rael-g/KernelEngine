@@ -1,7 +1,7 @@
 .{
-    .name = .ke_render_common,
+    .name = .ke_render_material_pass_groups,
     .version = "0.1.0",
-    .fingerprint = 0x46c2b825faccd585,
+    .fingerprint = 0x5ae7599717e603b1,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_render = .{ .path = "../../abi/render" },

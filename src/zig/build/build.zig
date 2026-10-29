@@ -39,7 +39,7 @@ pub const Package = struct {
     module: []const u8,
 };
 
-/// What a plugin is built from. `abi`, `common`, `render_common`, `packages` and the shared
+/// What a plugin is built from. `abi`, `common`, `packages` and the shared
 /// `log`, `result` and `dll_entry` modules are looked up among the dependencies the plugin's own
 /// `build.zig.zon` declares, so a plugin reaches only what it declared. `third_party` declares the options of the libraries the
 /// plugin wraps and adds their include paths and libraries to the library's module and the
@@ -50,7 +50,6 @@ pub const Plugin = struct {
     root: []const u8,
     abi: []const []const u8 = &.{},
     common: []const []const u8 = &.{},
-    render_common: []const []const u8 = &.{},
     translations: []const Translation = &.{},
     packages: []const Package = &.{},
     third_party: ?*const fn (b: *std.Build, modules: Modules) void = null,
@@ -97,7 +96,7 @@ pub fn plugin(b: *std.Build, description: Plugin) Built {
         for (description.translations) |t| mod.addImport(t.name, cImports(b, mod, b.path(t.header)));
         for (description.abi) |name| mod.addImport(name, b.dependency(name, .{}).module("abi"));
         for (description.packages) |p| mod.addImport(p.name, b.dependency(p.dependency, .{}).module(p.module));
-        inline for (.{ .{ "ke_common", description.common }, .{ "ke_render_common", description.render_common } }) |shared| {
+        inline for (.{.{ "ke_common", description.common }}) |shared| {
             if (shared[1].len > 0) {
                 const package = b.dependency(shared[0], .{ .target = target, .optimize = optimize });
                 for (shared[1]) |name| mod.addImport(name, package.module(name));

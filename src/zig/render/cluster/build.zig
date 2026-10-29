@@ -7,8 +7,7 @@ pub fn build(b: *std.Build) void {
         .root = "src/cluster_module.zig",
         .abi = &.{ "abi_ecs", "abi_render", "abi_render_cluster_factory", "abi_result", "abi_runtime", "abi_spatial", "abi_view" },
         .common = &.{"heap"},
-        .render_common = &.{"feature_bindings"},
-        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
+        .packages = &.{ .{ .name = "feature_bindings", .dependency = "ke_render_feature_bindings", .module = "feature_bindings" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" } },
         .tests = "Run the cluster pass unit tests",
     });
 }

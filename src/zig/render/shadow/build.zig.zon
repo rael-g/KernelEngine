@@ -13,7 +13,7 @@
         .abi_view = .{ .path = "../../abi/view" },
         .abi_render_shadow_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
-        .ke_render_common = .{ .path = "../common" },
+        .ke_render_object_uniforms = .{ .path = "../object_uniforms" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

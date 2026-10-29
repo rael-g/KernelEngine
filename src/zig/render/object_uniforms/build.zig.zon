@@ -1,0 +1,11 @@
+.{
+    .name = .ke_render_object_uniforms,
+    .version = "0.1.0",
+    .fingerprint = 0x9c2dc7efd3bf4d7a,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_render = .{ .path = "../../abi/render" },
+        .abi_result = .{ .path = "../../abi/result" },
+    },
+    .paths = .{"."},
+}
