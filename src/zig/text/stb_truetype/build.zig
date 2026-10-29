@@ -5,8 +5,9 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_text_stb_truetype",
         .root = "src/stb_font.zig",
-        .abi = &.{ "abi_result", "abi_text" },
+        .abi = &.{ "abi_io", "abi_result", "abi_text", "abi_text_stb_truetype_factory" },
         .common = &.{"heap"},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,
         .tests = "Run the stb_truetype font loader unit tests",

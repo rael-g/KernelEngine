@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("text_stb_truetype_factory.zig") });
+    abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
     abi.addImport("text", b.dependency("ke_abi_text", .{}).module("abi"));
@@ -14,6 +15,8 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/text/stb_truetype/text_stb_truetype_log.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
+    translated.addIncludePath(b.path("../../../../c/file_system"));
+    translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/text"));
