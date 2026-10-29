@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
         .abi = &.{ "abi_ecs", "abi_render", "abi_render_forward_factory", "abi_result", "abi_runtime", "abi_spatial" },
         .common = &.{"heap"},
         .render_common = &.{ "feature_bindings", "material_pass_groups", "object_uniforms" },
-        .packages = &.{.{ .name = "zmath", .dependency = "zmath", .module = "root" }},
+        .packages = &.{ .{ .name = "zmath", .dependency = "zmath", .module = "root" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" } },
         .tests = "Run the forward pass unit tests",
     });
 }
