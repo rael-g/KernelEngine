@@ -9,7 +9,7 @@ namespace KernelEngine.Runtime.Tests;
 
 public unsafe class ComponentLayoutTests : IDisposable
 {
-    private readonly FlecsEcs _ecs = new();
+    private readonly FlecsEcsRegistry _ecs = new();
     private readonly EcsRegistry _registry;
 
     public ComponentLayoutTests() => _registry = EcsRegistry.Borrow(((INativeEcs)_ecs).Native);

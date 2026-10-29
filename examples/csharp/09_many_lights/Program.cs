@@ -27,7 +27,7 @@ const float CorridorLength = 300f;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
+    .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
     .AddPoolIo()

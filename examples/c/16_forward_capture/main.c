@@ -234,9 +234,8 @@ int main(int argc, char **argv)
     }
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
-    ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(NULL, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
     ke_task_pool_handle pool = { 0 };

@@ -11,7 +11,7 @@ namespace KernelEngine.Runtime.Tests;
 public class ModulePatternTests : IDisposable
 {
     private readonly EnkiTaskPool _taskPool = new();
-    private readonly FlecsEcs _ecs = new();
+    private readonly FlecsEcsRegistry _ecs = new();
 
     public void Dispose()
     {

@@ -5,7 +5,7 @@ const ecs = @import("ecs");
 const logger = @import("logger");
 const result = @import("result");
 
-pub const ke_ecs_flecs_params = extern struct {
+pub const ke_ecs_flecs_config = extern struct {
     /// First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws
     /// from, so this doubles as that pool's capacity — the world's own side is unbounded. 0 takes
     /// the default. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of
@@ -21,4 +21,4 @@ pub extern fn ke_ecs_flecs_set_log_callback(callback: logger.ke_log_callback, ct
 /// and abort handlers: a check flecs fails makes the slot that called it return
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
-pub extern fn ke_ecs_flecs_create(params: ?*const ke_ecs_flecs_params, out_ecs: ?*ecs.ke_ecs_handle) result.ke_result;
+pub extern fn ke_ecs_flecs_create(config: ?*const ke_ecs_flecs_config, out_ecs: ?*ecs.ke_ecs_handle) result.ke_result;

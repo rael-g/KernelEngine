@@ -23,7 +23,7 @@ var coupled = new List<Coupled>();
 using var pool = new EnkiTaskPool(workers);
 
 var services = new ServiceCollection()
-    .Add<INativeEcs, FlecsEcs>()
+    .AddFlecsEcsRegistry()
     .Add<ITaskPool>(pool)
     .Add<INativeTaskPool>(pool)
     .Add<IRuntime, Runtime>()

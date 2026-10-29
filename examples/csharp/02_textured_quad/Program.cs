@@ -19,7 +19,7 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
+    .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
     .AddPoolIo()

@@ -25,7 +25,7 @@ const float metal3 = 0.2f; const float rough3 = 0.6f;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
+    .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
     .AddPoolIo()

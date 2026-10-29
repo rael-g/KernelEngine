@@ -20,5 +20,5 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_ecs_flecs_params, translated("ke_ecs_flecs_params"));
+    try expectSameLayout(abi.ke_ecs_flecs_config, translated("ke_ecs_flecs_config"));
 }

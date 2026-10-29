@@ -27,7 +27,7 @@ var services = new ServiceCollection()
 #region loader
     .AddAssimpAssetLoader()
 #endregion
-    .Add<INativeEcs, FlecsEcs>()
+    .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
     .AddPoolIo()

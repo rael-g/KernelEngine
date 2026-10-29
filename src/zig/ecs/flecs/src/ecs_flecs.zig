@@ -108,7 +108,7 @@ const default_world_id_base: u32 = 1 << 20;
 
 /// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
 /// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
-/// `ke_ecs_flecs_params.world_id_base` and serving `entityCreate`, and the pool of ids from
+/// `ke_ecs_flecs_config.world_id_base` and serving `entityCreate`, and the pool of ids from
 /// `reserve_low` up to `reserve_end`, below that split, handed out by `entityReserve` with the
 /// atomic counter `reserve_next`. A reserved id is only a number until `materializeReserved`
 /// makes it alive, once; the `materialized` bitmap, one bit per pool slot, is what keeps a
@@ -694,25 +694,25 @@ fn destroy(self_in: ?*abi_ecs.ke_ecs) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// The factory the plugin exports. A null params, or a zero `world_id_base` in it, takes
+/// The factory the plugin exports. A null config, or a zero `world_id_base` in it, takes
 /// `default_world_id_base`. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
 export fn ke_ecs_flecs_create(
-    params_in: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_params,
+    config: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_config,
     out_ecs: ?*abi_ecs.ke_ecs_handle,
 ) callconv(.c) abi_result.ke_result {
     const out = out_ecs orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_ecs.ke_ecs_handle);
-    out.* = create(params_in) catch |err| {
+    out.* = create(config) catch |err| {
         log.warn("creating the ECS failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(params_in: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_params) R.Error!abi_ecs.ke_ecs_handle {
+fn create(config: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_config) R.Error!abi_ecs.ke_ecs_handle {
     const world_id_base: u32 = blk: {
-        const p = params_in orelse break :blk default_world_id_base;
+        const p = config orelse break :blk default_world_id_base;
         break :blk if (p.*.world_id_base == 0) default_world_id_base else p.*.world_id_base;
     };
 
@@ -1037,15 +1037,15 @@ test "a reserved id can never be one the world's own allocator will issue" {
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var params = abi_ecs_flecs_factory.ke_ecs_flecs_params{ .world_id_base = 0 };
+    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 0 };
     var probe: abi_ecs.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&params, &probe));
+    try R.check(ke_ecs_flecs_create(&config, &probe));
     const low = stateOf(probe.ref.?).reserve_low;
     probe.destroy.?(probe.ref);
 
-    params.world_id_base = low + 4;
+    config.world_id_base = low + 4;
     var handle: abi_ecs.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&params, &handle));
+    try R.check(ke_ecs_flecs_create(&config, &handle));
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
@@ -1162,16 +1162,16 @@ test "materializing an id the world already owns leaves it alone" {
 }
 
 test "a split that leaves no room for the reserve pool is refused" {
-    var params = abi_ecs_flecs_factory.ke_ecs_flecs_params{ .world_id_base = 1 };
+    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 1 };
     var handle: abi_ecs.ke_ecs_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_ecs_flecs_create(&params, &handle)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_ecs_flecs_create(&config, &handle)));
     try testing.expect(handle.ref == null);
 }
 
 test "a caller may move the split between the two id allocators" {
-    var params = abi_ecs_flecs_factory.ke_ecs_flecs_params{ .world_id_base = 1_000_000 };
+    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 1_000_000 };
     var handle: abi_ecs.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&params, &handle));
+    try R.check(ke_ecs_flecs_create(&config, &handle));
     defer handle.destroy.?(handle.ref);
 
     try testing.expect(try reserve(handle) < 1_000_000);

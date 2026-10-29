@@ -9,7 +9,7 @@ namespace KernelEngine.Runtime.Tests;
 public class RuntimeTests : IDisposable
 {
     private readonly EnkiTaskPool _taskPool = new();
-    private readonly FlecsEcs _ecs = new();
+    private readonly FlecsEcsRegistry _ecs = new();
 
     public void Dispose()
     {
