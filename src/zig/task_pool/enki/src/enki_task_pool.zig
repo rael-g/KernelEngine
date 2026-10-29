@@ -94,8 +94,8 @@ fn dispatch(
 
 /// Slot `dispatch_on_complete`. Queues a task set that runs the body and returns the `Task` as
 /// the `ke_task`. The body may already be running when this returns. A null task pool, a null body, a
-/// destroyed pool or an allocation failure returns null with nothing queued and nothing left
-/// allocated; no error is reported.
+/// destroyed pool, a calling thread enkiTS does not know or an allocation failure returns null with
+/// nothing queued and nothing left allocated.
 fn dispatchOnComplete(
     self_in: ?*abi_task_pool.ke_task_pool,
     func: abi_task_pool.ke_task_func,
@@ -107,6 +107,10 @@ fn dispatchOnComplete(
     if (self.handle == null or func == null) return null;
     const s = stateOf(self);
     const ets = s.ets orelse return null;
+    if (c.enkiGetThreadNum(ets) == c.ENKI_NO_THREAD_NUM) {
+        log.warn("dispatch refused: the calling thread is neither a worker nor the thread that created the pool", .{});
+        return null;
+    }
 
     const task = allocTask(func, data, on_complete, user_data) orelse return null;
     const set = c.enkiCreateTaskSet(ets, taskSetExecute) orelse {
@@ -121,13 +125,18 @@ fn dispatchOnComplete(
 
 /// Slot `wait`. Blocks until enkiTS reports the task finished, then frees the `Task` and returns
 /// what its body returned. Afterwards the task refers to freed memory, so a task is waited
-/// on once. A null or destroyed task pool and a null task are an invalid argument.
+/// on once. A null or destroyed task pool and a null task are an invalid argument; a calling thread
+/// enkiTS does not know is not supported and leaves the task to be waited on again.
 fn wait(self_in: ?*abi_task_pool.ke_task_pool, task_in: ?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const task_c = task_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const ets = s.ets orelse return R.code(error.InvalidArgument);
+    if (c.enkiGetThreadNum(ets) == c.ENKI_NO_THREAD_NUM) {
+        log.warn("wait refused: the calling thread is neither a worker nor the thread that created the pool", .{});
+        return R.code(error.NotSupported);
+    }
 
     const task: *Task = @ptrCast(@alignCast(task_c));
     const set: ?*c.enkiTaskSet = @ptrCast(@alignCast(task.handle));
@@ -356,6 +365,39 @@ test "ten dispatched tasks all execute" {
     }
 
     try testing.expectEqual(@as(i32, 10), counter.load(.acquire));
+}
+
+fn dispatchFromOutside(pool: *abi_task_pool.ke_task_pool, out: *?*abi_task_pool.ke_task) void {
+    out.* = pool.dispatch.?(pool, failWithNotFound, null);
+}
+
+fn waitFromOutside(pool: *abi_task_pool.ke_task_pool, task: ?*abi_task_pool.ke_task, out: *abi_result.ke_result) void {
+    out.* = pool.wait.?(pool, task);
+}
+
+test "a thread outside the pool cannot dispatch" {
+    const h = try created(null);
+    defer h.destroy.?(h.ref);
+
+    var task: ?*abi_task_pool.ke_task = undefined;
+    const thread = try std.Thread.spawn(.{}, dispatchFromOutside, .{ h.ref.?, &task });
+    thread.join();
+    try testing.expect(task == null);
+}
+
+test "a thread outside the pool cannot wait, and the task stays waitable from the pool's threads" {
+    const h = try created(null);
+    defer h.destroy.?(h.ref);
+
+    const task = h.ref.?.dispatch.?(h.ref, failWithNotFound, null);
+    try testing.expect(task != null);
+
+    var code: abi_result.ke_result = R.ok;
+    const thread = try std.Thread.spawn(.{}, waitFromOutside, .{ h.ref.?, task, &code });
+    thread.join();
+    try testing.expectError(error.NotSupported, R.check(code));
+
+    try testing.expectError(error.NotFound, R.check(h.ref.?.wait.?(h.ref, task)));
 }
 
 test "dispatch refuses a null task pool or a null task function" {

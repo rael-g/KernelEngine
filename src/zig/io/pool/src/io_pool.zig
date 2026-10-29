@@ -205,14 +205,21 @@ fn isCompleted(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request) call
 }
 
 /// Slot `wait`. Waits on the request's task, which leaves the request finished, then copies its
-/// result out and frees it.
+/// result out and frees it. When the task pool refuses the calling thread as not supported, that
+/// code is returned and the request is left to be waited on again.
 fn wait(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request, out_result: ?*abi_io.ke_io_result) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (out_result) |out| out.* = std.mem.zeroes(abi_io.ke_io_result);
     const request = requestOf(request_in orelse return R.code(error.InvalidArgument));
     const s = stateOf(self);
 
-    _ = s.task_pool.wait.?(s.task_pool, request.task);
+    R.check(s.task_pool.wait.?(s.task_pool, request.task)) catch |err| switch (err) {
+        error.NotSupported => {
+            log.warn("wait refused: the task pool does not accept the calling thread", .{});
+            return R.code(err);
+        },
+        else => {},
+    };
     const code = request.code;
     if (out_result) |out| out.* = request.result;
     request.free();
@@ -402,6 +409,31 @@ test "stat reports what the path names" {
     try R.check(rig.io().wait.?(rig.io(), rig.io().stat.?(rig.io(), "fox.txt").?, &result));
     try testing.expectEqual(abi_file_system.KE_FILE_KIND_FILE, result.stat.kind);
     try testing.expectEqual(@as(u64, contents.len), result.stat.size);
+}
+
+var pool_refuses_wait = false;
+
+fn waitUnlessRefused(_: TaskPoolSub.Args(.wait)) abi_result.ke_result {
+    return if (pool_refuses_wait) R.code(error.NotSupported) else R.ok;
+}
+
+test "a wait the task pool refuses for its calling thread fails and leaves the request waitable" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.pool.when(.wait).does(waitUnlessRefused);
+
+    const request = rig.io().read_file.?(rig.io(), "fox.txt");
+    try testing.expect(request != null);
+
+    var result: abi_io.ke_io_result = undefined;
+    pool_refuses_wait = true;
+    try testing.expectError(error.NotSupported, R.check(rig.io().wait.?(rig.io(), request, &result)));
+
+    pool_refuses_wait = false;
+    try R.check(rig.io().wait.?(rig.io(), request, &result));
+    defer rig.io().free_bytes.?(rig.io(), result.bytes);
+    try testing.expectEqual(@as(u64, contents.len), result.size);
 }
 
 test "a request the task pool refuses is not returned" {

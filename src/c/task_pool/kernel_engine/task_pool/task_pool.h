@@ -28,10 +28,7 @@ extern "C"
      */
     typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data, ke_result result);
 
-    /**
-     * [interface] Dispatches work to a native thread pool. Every slot is called from one of the
-     * pool's workers or from the thread that created the pool, never from another thread.
-     */
+    /** [interface] Dispatches work to a native thread pool. */
     typedef struct ke_task_pool
     {
         void *handle;

@@ -12,8 +12,7 @@ pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) result.ke_result;
 /// Run once the task body has returned, on the same worker thread.
 pub const ke_task_on_complete_func = ?*const fn (?*ke_task, ?*anyopaque, result.ke_result) callconv(.c) void;
 
-/// Dispatches work to a native thread pool. Every slot is called from one of the pool's workers
-/// or from the thread that created the pool, never from another thread.
+/// Dispatches work to a native thread pool.
 pub const ke_task_pool = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Schedules a task, which the caller releases by waiting on it.
