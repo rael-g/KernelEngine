@@ -1,1 +1,1 @@
-return Kabic.Cli.KabicCli.Run(args, [new Kabic.Factories.FactoriesExtension()]);
+return Kabic.Cli.KabicCli.Run(args, [new Kabic.Factories.FactoriesExtension(), new KernelEngine.Kabic.KernelEngineExtension()]);
