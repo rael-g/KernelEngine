@@ -71,7 +71,10 @@ const cull_layout_params = abi_render.ke_render_shader_layout_params{
 /// releases them. The component ids, grid fields and access data are assigned by `setup`, so they
 /// are undefined until it runs; the GPU fields are the invalid handle until their own creation
 /// succeeds.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const ClusterModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
     view_space: *abi_view.ke_view_space = undefined,
@@ -394,6 +397,7 @@ fn destroyModule(cm: *const ClusterModule) void {
 /// and frees the module, so the `ref` it was given is invalid afterwards.
 fn destroyHandle(self: ?*abi_render_cluster_factory.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
+    _ = cm.runtime.unregister_system.?(cm.runtime, cm.system);
     destroyModule(cm);
     gpa.destroy(cm);
 }
@@ -436,6 +440,8 @@ export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory
         gpa.destroy(cm);
         return registered;
     }
+    cm.runtime = rt;
+    cm.system = system_id;
 
     out.* = .{ .ref = @ptrCast(cm), .destroy = destroyHandle };
     return R.ok;
@@ -506,6 +512,20 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the cluster pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.ke_view_space);
+    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
+    try R.check(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a cluster pass whose shader fails to load releases what it had created" {
