@@ -304,48 +304,84 @@ fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render.ke_gpu_device),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.resource_view).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
+        _ = self.core.when(.resource_buffer).returnsFresh();
+        _ = self.core.when(.resource_buffer_size).returns(256);
+        _ = self.core.when(.join_chain).writesFresh(3);
+        _ = self.core.when(.chain_format).does(chainFormat);
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
+    }
+};
+
+fn chainFormat(args: zsub.For(abi_render.ke_render_service).Args(.chain_format)) abi_render.ke_gpu_texture_format {
+    return if (args[1] >= abi_render.KE_RENDER_STAGE_TONEMAP) abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+}
 
 test "creating and destroying the deferred lighting pass leaves no block allocated and no GPU resource live" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a deferred lighting pass whose shader fails to load releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.KE_RESULT_GENERAL);
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a deferred lighting pass the runtime refuses to register releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }

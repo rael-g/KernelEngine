@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
         .abi = &.{ "abi_ecs", "abi_render", "abi_render_deferred_lighting_factory", "abi_result", "abi_runtime" },
         .common = &.{"heap"},
         .render_common = &.{"feature_bindings"},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the deferred_lighting pass unit tests",
     });
 }
