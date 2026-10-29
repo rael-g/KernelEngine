@@ -450,57 +450,88 @@ const default_max_lights_per_cluster = 64;
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render.ke_gpu_device),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        _ = self.dev.when(.create_buffer).writesFresh(2);
+        _ = self.dev.when(.create_compute_pipeline).writesFresh(2);
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.import_buffer).writesFresh(4);
+        _ = self.core.when(.import_tag).writesFresh(2);
+        _ = self.core.when(.resource_view).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
+        _ = self.core.when(.resource_buffer).returnsFresh();
+        _ = self.core.when(.resource_buffer_size).returns(256);
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
+        try self.dev.received(.destroy_compute_pipeline).where(zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_compute_pipeline));
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+    }
+};
 
 test "creating and destroying the cluster pass leaves no block allocated and no GPU resource live" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
-    try R.check(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
+    try R.check(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
-    try testing.expectEqual(@as(i64, 0), dev.compute_live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a cluster pass whose shader fails to load releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.KE_RESULT_GENERAL);
     var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
-    try testing.expect(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
+    try testing.expect(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
-    try testing.expectEqual(@as(i64, 0), dev.compute_live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a cluster pass the runtime refuses to register releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     var camera = std.mem.zeroes(abi_render.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
-    try testing.expect(ke_render_cluster_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
+    try testing.expect(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
-    try testing.expectEqual(@as(i64, 0), dev.compute_live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
