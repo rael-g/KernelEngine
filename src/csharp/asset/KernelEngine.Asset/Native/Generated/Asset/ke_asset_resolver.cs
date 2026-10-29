@@ -15,8 +15,8 @@ public unsafe partial struct ke_asset_resolver
     [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_texture_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, ke_texture_data*, void> free_texture;
 
-    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, const char *, ke_mesh_shape_data *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, ke_mesh_shape_data*, KernelEngine.Result.Native.ke_result> resolve_mesh;
+    [NativeTypeName("ke_result (*)(struct ke_asset_resolver *, const char *, ke_mesh_shape_data **)")]
+    public delegate* unmanaged[Cdecl]<ke_asset_resolver*, sbyte*, ke_mesh_shape_data**, KernelEngine.Result.Native.ke_result> resolve_mesh;
 
     [NativeTypeName("void (*)(struct ke_asset_resolver *, ke_mesh_shape_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_resolver*, ke_mesh_shape_data*, void> free_mesh;

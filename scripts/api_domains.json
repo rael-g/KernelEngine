@@ -425,7 +425,8 @@
       "_comment": "The data a loader answers with, described where it is declared rather than in one plugin's binding project, so every plugin answering with it reads one projection instead of one per binding.",
       "name": "mesh_data",
       "headers": [
-        "src/c/asset/kernel_engine/asset/mesh_data.h"
+        "src/c/asset/kernel_engine/asset/mesh_data.h",
+        "src/c/asset/kernel_engine/asset/mesh_shape.h"
       ],
       "includeDirs": [
         "src/c/asset",
@@ -477,6 +478,11 @@
         "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
+      "composeHeaders": [
+        "src/c/asset/kernel_engine/asset/mesh_data.h",
+        "src/c/asset/kernel_engine/asset/mesh_shape.h",
+        "src/c/text/kernel_engine/text/font.h"
+      ],
       "includeDirs": [
         "src/c/asset",
         "src/c/render",
@@ -492,7 +498,9 @@
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
       "usings": [
+        "KernelEngine.Asset",
         "KernelEngine.Asset.Native",
+        "KernelEngine.Text",
         "KernelEngine.Text.Native",
         "KernelEngine.Render.Native"
       ]

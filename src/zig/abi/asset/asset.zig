@@ -74,6 +74,7 @@ pub const ke_model_data = extern struct {
     texture_count: u32 = std.mem.zeroes(u32),
 };
 
+/// The vertices and indices of a baked mesh shape.
 pub const ke_mesh_shape_data = extern struct {
     vertices: ?[*]render.ke_vertex = std.mem.zeroes(?[*]render.ke_vertex),
     vertex_count: u32 = std.mem.zeroes(u32),
@@ -120,11 +121,13 @@ pub const ke_asset_resolver = extern struct {
     /// Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the result; release
     /// with free_texture.
     resolve_texture: ?*const fn (?*ke_asset_resolver, ?[*:0]const u8, ?*?*ke_texture_data) callconv(.c) result.ke_result = null,
+    /// Frees a ke_texture_data resolve_texture returned. A null data is ignored.
     free_texture: ?*const fn (?*ke_asset_resolver, ?*ke_texture_data) callconv(.c) void = null,
     /// Resolves a mesh path. "res://primitives/{quad|plane|cube|sphere}" names a baked primitive,
     /// built via ke_mesh_shape_bake; a path that names none fails. Caller owns the result; release
     /// with free_mesh.
-    resolve_mesh: ?*const fn (?*ke_asset_resolver, ?[*:0]const u8, ?*ke_mesh_shape_data) callconv(.c) result.ke_result = null,
+    resolve_mesh: ?*const fn (?*ke_asset_resolver, ?[*:0]const u8, ?*?*ke_mesh_shape_data) callconv(.c) result.ke_result = null,
+    /// Frees a ke_mesh_shape_data resolve_mesh returned. A null data is ignored.
     free_mesh: ?*const fn (?*ke_asset_resolver, ?*ke_mesh_shape_data) callconv(.c) void = null,
     /// Parses a `.material` TOML file into ke_material_spec. Texture fields stay as path strings —
     /// feed them back through resolve_texture to materialise.
@@ -132,6 +135,7 @@ pub const ke_asset_resolver = extern struct {
     /// Resolves a font file path into a freshly-baked ke_font_data (atlas RGBA8 + glyph metrics).
     /// Caller owns the result; release with free_font.
     resolve_font: ?*const fn (?*ke_asset_resolver, ?[*:0]const u8, f32, u32, u32, u32, ?*?*text.ke_font_data) callconv(.c) result.ke_result = null,
+    /// Frees a ke_font_data resolve_font returned. A null data is ignored.
     free_font: ?*const fn (?*ke_asset_resolver, ?*text.ke_font_data) callconv(.c) void = null,
     /// Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded.
     resolve_texture_into: ?*const fn (?*ke_asset_resolver, ?*render.ke_render_service, ?[*:0]const u8, ?*render.ke_texture_handle) callconv(.c) result.ke_result = null,

@@ -17,6 +17,7 @@ extern "C"
         KE_MESH_PRIMITIVE_SPHERE = 3, ///< UV sphere of unit diameter
     } ke_mesh_primitive;
 
+    /// [view] The vertices and indices of a baked mesh shape.
     typedef struct ke_mesh_shape_data
     {
         ke_vertex *vertices; ///< [array_of:vertex_count]

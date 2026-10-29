@@ -1,5 +1,32 @@
 {
-  "enums": [],
+  "enums": [
+    {
+      "name": "ke_mesh_primitive",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_MESH_PRIMITIVE_QUAD",
+          "value": 0,
+          "doc": "1x1 quad in XY plane (normal \u002BZ)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_PLANE",
+          "value": 1,
+          "doc": "1x1 plane in XZ plane (normal \u002BY)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_CUBE",
+          "value": 2,
+          "doc": "Unit cube, 24 vertices (per-face normals)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_SPHERE",
+          "value": 3,
+          "doc": "UV sphere of unit diameter"
+        }
+      ]
+    }
+  ],
   "structs": [
     {
       "name": "ke_vertex",
@@ -281,6 +308,43 @@
         },
         {
           "name": "texture_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_mesh_shape_data",
+      "doc": "The vertices and indices of a baked mesh shape.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "vertices",
+          "type": "ke_vertex *",
+          "tags": [
+            "array_of:vertex_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "vertex_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "indices",
+          "type": "uint16_t *",
+          "tags": [
+            "array_of:index_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "index_count",
           "type": "uint32_t",
           "tags": [],
           "doc": null

@@ -205,12 +205,19 @@ fn vtFreeTexture(self_in: ?*abi_asset.ke_asset_resolver, data: ?*abi_asset.ke_te
 
 /// Slot `resolve_mesh`, and the bake step of `vtResolveMeshInto` on a cache miss. A mesh has no
 /// file: only a path under "res://primitives/" naming "quad", "plane", "cube" or "sphere" is
-/// accepted, and any other path or name is not found. The shape it fills belongs to the caller
-/// until `vtFreeMesh` releases it.
-fn vtResolveMesh(self_in: ?*abi_asset.ke_asset_resolver, path: [*c]const u8, out: ?*abi_asset.ke_mesh_shape_data) callconv(.c) abi_result.ke_result {
+/// accepted, and any other path or name is not found. The shape it writes belongs to the caller
+/// until `vtFreeMesh` releases it; on failure it writes null.
+fn vtResolveMesh(self_in: ?*abi_asset.ke_asset_resolver, path: [*c]const u8, out_in: ?*?*abi_asset.ke_mesh_shape_data) callconv(.c) abi_result.ke_result {
+    const out = out_in orelse return R.code(error.InvalidArgument);
+    out.* = null;
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
-    bakePrimitive(path, out.?) catch |err| return R.code(err);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
+    const shape = heap.gpa.create(abi_asset.ke_mesh_shape_data) catch |err| return R.code(err);
+    bakePrimitive(path, shape) catch |err| {
+        heap.gpa.destroy(shape);
+        return R.code(err);
+    };
+    out.* = shape;
     return R.ok;
 }
 
@@ -236,11 +243,13 @@ fn bakePrimitive(path: [*:0]const u8, out: *abi_asset.ke_mesh_shape_data) R.Erro
     if (!mesh_shape.ke_mesh_shape_bake_internal(kind, 0, out)) return error.OutOfMemory;
 }
 
-/// Slot `free_mesh`. Releases the shape filled by `vtResolveMesh`.
+/// Slot `free_mesh`. Releases the shape `vtResolveMesh` wrote, and its arrays.
 fn vtFreeMesh(self_in: ?*abi_asset.ke_asset_resolver, data: ?*abi_asset.ke_mesh_shape_data) callconv(.c) void {
     const self = self_in orelse return;
-    if (self.handle == null or data == null) return;
-    mesh_shape.ke_mesh_shape_free_internal(data);
+    if (self.handle == null) return;
+    const shape = data orelse return;
+    mesh_shape.ke_mesh_shape_free_internal(shape);
+    heap.gpa.destroy(shape);
 }
 
 /// Slot `resolve_material`, and the first step of `vtResolveMaterialInto` on a cache miss. The
@@ -694,11 +703,11 @@ const Resolver = struct {
     }
 };
 
-fn resolveMesh(r: *const Resolver, path: [*:0]const u8) !abi_asset.ke_mesh_shape_data {
-    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
+fn resolveMesh(r: *const Resolver, path: [*:0]const u8) !*abi_asset.ke_mesh_shape_data {
+    var data: ?*abi_asset.ke_mesh_shape_data = null;
     const a = r.api();
     try testing.expect(a.resolve_mesh.?(a, path, &data) == R.ok);
-    return data;
+    return data.?;
 }
 
 fn resolveMaterial(path: [*:0]const u8) !abi_render.ke_material_spec {
@@ -776,8 +785,8 @@ test "every built in primitive resolves to a mesh" {
         "res://primitives/sphere",
     };
     for (names) |name| {
-        var data = try resolveMesh(&r, name);
-        r.api().free_mesh.?(r.api(), &data);
+        const data = try resolveMesh(&r, name);
+        r.api().free_mesh.?(r.api(), data);
     }
 }
 
@@ -785,8 +794,8 @@ test "each cube face is flat and carries the four corner uvs" {
     var r = try Resolver.init(null, null);
     defer r.deinit();
 
-    var data = try resolveMesh(&r, "res://primitives/cube");
-    defer r.api().free_mesh.?(r.api(), &data);
+    const data = try resolveMesh(&r, "res://primitives/cube");
+    defer r.api().free_mesh.?(r.api(), data);
 
     try testing.expectEqual(@as(u32, 24), data.vertex_count);
     try testing.expectEqual(@as(u32, 36), data.index_count);
@@ -830,8 +839,8 @@ test "every sphere vertex sits on a half unit radius with a unit normal" {
     var r = try Resolver.init(null, null);
     defer r.deinit();
 
-    var data = try resolveMesh(&r, "res://primitives/sphere");
-    defer r.api().free_mesh.?(r.api(), &data);
+    const data = try resolveMesh(&r, "res://primitives/sphere");
+    defer r.api().free_mesh.?(r.api(), data);
 
     try testing.expect(data.vertex_count > 0);
     for (data.vertices.?[0..data.vertex_count]) |v| {
@@ -849,10 +858,10 @@ test "a resolved quad faces the camera while a resolved plane faces up" {
     var r = try Resolver.init(null, null);
     defer r.deinit();
 
-    var quad = try resolveMesh(&r, "res://primitives/quad");
-    defer r.api().free_mesh.?(r.api(), &quad);
-    var plane = try resolveMesh(&r, "res://primitives/plane");
-    defer r.api().free_mesh.?(r.api(), &plane);
+    const quad = try resolveMesh(&r, "res://primitives/quad");
+    defer r.api().free_mesh.?(r.api(), quad);
+    const plane = try resolveMesh(&r, "res://primitives/plane");
+    defer r.api().free_mesh.?(r.api(), plane);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), quad.vertices.?[0].nz, geometry_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 1.0), plane.vertices.?[0].ny, geometry_tolerance);
@@ -865,8 +874,9 @@ test "a primitive name the baker does not know is not found" {
     defer r.deinit();
 
     const a = r.api();
-    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
+    var data: ?*abi_asset.ke_mesh_shape_data = null;
     try testing.expect(a.resolve_mesh.?(a, "res://primitives/teapot", &data) != R.ok);
+    try testing.expect(data == null);
 }
 
 test "a mesh reference outside the primitive namespace is not found" {
@@ -874,7 +884,7 @@ test "a mesh reference outside the primitive namespace is not found" {
     defer r.deinit();
 
     const a = r.api();
-    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
+    var data: ?*abi_asset.ke_mesh_shape_data = null;
     try testing.expect(a.resolve_mesh.?(a, "external.gltf", &data) != R.ok);
 }
 
@@ -994,7 +1004,7 @@ test "resolving a mesh through a null self, path or output is rejected" {
     defer r.deinit();
 
     const a = r.api();
-    var data = std.mem.zeroes(abi_asset.ke_mesh_shape_data);
+    var data: ?*abi_asset.ke_mesh_shape_data = null;
     try testing.expect(a.resolve_mesh.?(null, "res://primitives/cube", &data) != R.ok);
     try testing.expect(a.resolve_mesh.?(a, null, &data) != R.ok);
     try testing.expect(a.resolve_mesh.?(a, "res://primitives/cube", null) != R.ok);

@@ -445,6 +445,11 @@ ke_model_data size=48 align=8
   material_count 24
   textures 32
   texture_count 40
+ke_mesh_shape_data size=32 align=8
+  vertices 0
+  vertex_count 8
+  indices 16
+  index_count 24
 
 [image_loader]
 ke_image_loader size=24 align=8

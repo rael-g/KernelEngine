@@ -1,7 +1,525 @@
 {
-  "enums": [],
-  "structs": [],
+  "enums": [
+    {
+      "name": "ke_mesh_primitive",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_MESH_PRIMITIVE_QUAD",
+          "value": 0,
+          "doc": "1x1 quad in XY plane (normal \u002BZ)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_PLANE",
+          "value": 1,
+          "doc": "1x1 plane in XZ plane (normal \u002BY)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_CUBE",
+          "value": 2,
+          "doc": "Unit cube, 24 vertices (per-face normals)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_SPHERE",
+          "value": 3,
+          "doc": "UV sphere of unit diameter"
+        }
+      ],
+      "external": true
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_mesh_shape_data",
+      "doc": "The vertices and indices of a baked mesh shape.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "vertices",
+          "type": "ke_vertex *",
+          "tags": [
+            "array_of:vertex_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "vertex_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "indices",
+          "type": "uint16_t *",
+          "tags": [
+            "array_of:index_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "index_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_data",
+      "doc": "Raw CPU-side mesh data returned by ke_asset_loader::load_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "vertices",
+          "type": "ke_vertex *",
+          "tags": [
+            "array_of:vertex_count"
+          ],
+          "doc": "Vertices with pos, normal, UV, tangent"
+        },
+        {
+          "name": "vertex_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "indices",
+          "type": "uint16_t *",
+          "tags": [
+            "array_of:index_count"
+          ],
+          "doc": "Triangle list indices (max 65535 vertices per mesh)"
+        },
+        {
+          "name": "index_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "material_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::materials; -1 = none"
+        },
+        {
+          "name": "name",
+          "type": "char[64]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_data",
+      "doc": "Raw CPU-side material data returned by ke_asset_loader::load_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "base_color_r",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_g",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_b",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_color_a",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo_texture_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::textures; -1 = none"
+        },
+        {
+          "name": "normal_map_texture_index",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Index into ke_model_data::textures; -1 = none"
+        },
+        {
+          "name": "name",
+          "type": "char[64]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_data",
+      "doc": "Decoded RGBA8 texture data returned by ke_asset_loader::load_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "pixels",
+          "type": "uint8_t *",
+          "tags": [
+            "array_of:byte_count"
+          ],
+          "doc": "RGBA8 samples, row-major"
+        },
+        {
+          "name": "byte_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bytes pixels reaches: width * height * 4"
+        },
+        {
+          "name": "width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": "Source path; empty for embedded textures"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_model_data",
+      "doc": "Complete model data returned by ke_asset_loader::load_model. Owned by the loader; free with ke_asset_loader::free_model.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "meshes",
+          "type": "ke_mesh_data *",
+          "tags": [
+            "array_of:mesh_count"
+          ],
+          "doc": "Meshes the model is drawn from"
+        },
+        {
+          "name": "mesh_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "materials",
+          "type": "ke_material_data *",
+          "tags": [
+            "array_of:material_count"
+          ],
+          "doc": "Materials the meshes index into"
+        },
+        {
+          "name": "material_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "textures",
+          "type": "ke_texture_data *",
+          "tags": [
+            "array_of:texture_count"
+          ],
+          "doc": "Textures the materials index into"
+        },
+        {
+          "name": "texture_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_glyph_metrics",
+      "doc": "Per-glyph layout \u002B atlas-sampling info, in pixels at the baked size. \u0060bearing_x\u0060 shifts the quad right of the pen; \u0060bearing_y\u0060 shifts up from the baseline. \u0060width\u0060/\u0060height\u0060 is the quad size; \u0060u0,v0,u1,v1\u0060 is the source rect in the atlas.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "codepoint",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "bearing_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "bearing_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "width",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "height",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "advance_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_font_data",
+      "doc": "CPU-side font data produced by a loader. Caller owns; release via the loader\u0027s free_font. Atlas is RGBA8 (white RGB \u002B alpha from coverage).",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "atlas_rgba",
+          "type": "uint8_t *",
+          "tags": [
+            "array_of:atlas_byte_count"
+          ],
+          "doc": "RGBA8 samples, row-major"
+        },
+        {
+          "name": "atlas_byte_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bytes atlas_rgba reaches: atlas_width * atlas_height * 4"
+        },
+        {
+          "name": "atlas_width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "atlas_height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "glyphs",
+          "type": "ke_glyph_metrics *",
+          "tags": [
+            "array_of:glyph_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "glyph_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "line_height",
+          "type": "float",
+          "tags": [],
+          "doc": "Recommended line spacing in pixels"
+        },
+        {
+          "name": "ascent",
+          "type": "float",
+          "tags": [],
+          "doc": "Pixels above baseline to top of tallest glyph"
+        }
+      ],
+      "external": true
+    }
+  ],
   "vtables": [
+    {
+      "name": "ke_font_loader",
+      "doc": "Decodes font files (TTF/OTF/\u2026) on the CPU. Async dispatch is the caller\u0027s concern.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_font",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive size, or a zero atlas size or codepoint count; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be packed.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "TTF/OTF file path to decode."
+            },
+            {
+              "name": "pixel_size",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_codepoint",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "codepoint_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "atlas_size",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_font",
+              "type": "ke_font_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives a ke_font_data (atlas RGBA8 \u002B metrics) the caller releases via free_font; left NULL on failure."
+            }
+          ],
+          "receiver": "struct ke_font_loader *"
+        },
+        {
+          "name": "free_font",
+          "returns": "void",
+          "tags": [
+            "releases:BakedFont"
+          ],
+          "doc": "Frees a ke_font_data previously returned by load_font. A null data is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_font_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_font_loader *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_font_loader_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_font_loader *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_font_loader *"
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_asset_resolver",
       "doc": null,
@@ -44,8 +562,10 @@
         {
           "name": "free_texture",
           "returns": "void",
-          "tags": [],
-          "doc": null,
+          "tags": [
+            "releases:ResolvedTexture"
+          ],
+          "doc": "Frees a ke_texture_data resolve_texture returned. A null data is ignored.",
           "return_doc": null,
           "params": [
             {
@@ -74,11 +594,11 @@
             },
             {
               "name": "out",
-              "type": "ke_mesh_shape_data *",
+              "type": "ke_mesh_shape_data **",
               "tags": [
                 "out"
               ],
-              "doc": "Receives the baked mesh vertex/index data on success."
+              "doc": "Receives the baked mesh vertex/index data on success; NULL on failure."
             }
           ],
           "receiver": "struct ke_asset_resolver *"
@@ -86,8 +606,10 @@
         {
           "name": "free_mesh",
           "returns": "void",
-          "tags": [],
-          "doc": null,
+          "tags": [
+            "releases:ResolvedMesh"
+          ],
+          "doc": "Frees a ke_mesh_shape_data resolve_mesh returned. A null data is ignored.",
           "return_doc": null,
           "params": [
             {
@@ -178,8 +700,10 @@
         {
           "name": "free_font",
           "returns": "void",
-          "tags": [],
-          "doc": null,
+          "tags": [
+            "releases:ResolvedFont"
+          ],
+          "doc": "Frees a ke_font_data resolve_font returned. A null data is ignored.",
           "return_doc": null,
           "params": [
             {

@@ -8,7 +8,9 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Framework.Native;
+using KernelEngine.Asset;
 using KernelEngine.Asset.Native;
+using KernelEngine.Text;
 using KernelEngine.Text.Native;
 using KernelEngine.Render.Native;
 
@@ -18,6 +20,99 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeAssetResolver
 {
     ke_asset_resolver* Native { get; }
+}
+
+/// <summary>
+/// Keeps the <see cref="NativeAssetResolver"/>-owned memory behind one TextureData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class ResolvedTexture : IDisposable
+{
+    private readonly NativeAssetResolver _owner;
+    private TextureData* _native;
+
+    internal ResolvedTexture(NativeAssetResolver owner, TextureData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public TextureData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(ResolvedTexture))
+        : *_native;
+
+    /// <summary>Gives the memory back to the nativeassetresolver that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeTexture(native);
+    }
+}
+
+/// <summary>
+/// Keeps the <see cref="NativeAssetResolver"/>-owned memory behind one MeshShapeData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class ResolvedMesh : IDisposable
+{
+    private readonly NativeAssetResolver _owner;
+    private MeshShapeData* _native;
+
+    internal ResolvedMesh(NativeAssetResolver owner, MeshShapeData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public MeshShapeData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(ResolvedMesh))
+        : *_native;
+
+    /// <summary>Gives the memory back to the nativeassetresolver that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeMesh(native);
+    }
+}
+
+/// <summary>
+/// Keeps the <see cref="NativeAssetResolver"/>-owned memory behind one FontData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class ResolvedFont : IDisposable
+{
+    private readonly NativeAssetResolver _owner;
+    private FontData* _native;
+
+    internal ResolvedFont(NativeAssetResolver owner, FontData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public FontData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(ResolvedFont))
+        : *_native;
+
+    /// <summary>Gives the memory back to the nativeassetresolver that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeFont(native);
+    }
 }
 
 
@@ -53,41 +148,41 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     /// <summary>Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the result; release with free_texture.</summary>
     /// <returns>Receives the decoded texture data on success.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_texture_data* ResolveTexture(string path)
+    public ResolvedTexture ResolveTexture(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_texture_data* resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_texture(Handle, (sbyte*)pathPtr, &resultOut), "resolve_texture");
-            return resultOut;
+            return new ResolvedTexture(this, (TextureData*)resultOut);
         }
     }
 
-
-    public void FreeTexture(ke_texture_data* data)
+    /// <summary>Frees a ke_texture_data resolve_texture returned. A null data is ignored.</summary>
+    internal void FreeTexture(TextureData* data)
     {
-        Handle->free_texture(Handle, data);
+        Handle->free_texture(Handle, (ke_texture_data*)data);
     }
 
     /// <summary>Resolves a mesh path. "res://primitives/{quad|plane|cube|sphere}" names a baked primitive, built via ke_mesh_shape_bake; a path that names none fails. Caller owns the result; release with free_mesh.</summary>
-    /// <returns>Receives the baked mesh vertex/index data on success.</returns>
+    /// <returns>Receives the baked mesh vertex/index data on success; NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_mesh_shape_data ResolveMesh(string path)
+    public ResolvedMesh ResolveMesh(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
-            ke_mesh_shape_data resultOut = default;
+            ke_mesh_shape_data* resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_mesh(Handle, (sbyte*)pathPtr, &resultOut), "resolve_mesh");
-            return resultOut;
+            return new ResolvedMesh(this, (MeshShapeData*)resultOut);
         }
     }
 
-
-    public void FreeMesh(ke_mesh_shape_data* data)
+    /// <summary>Frees a ke_mesh_shape_data resolve_mesh returned. A null data is ignored.</summary>
+    internal void FreeMesh(MeshShapeData* data)
     {
-        Handle->free_mesh(Handle, data);
+        Handle->free_mesh(Handle, (ke_mesh_shape_data*)data);
     }
 
     /// <summary>Parses a `.material` TOML file into ke_material_spec. Texture fields stay as path strings — feed them back through resolve_texture to materialise.</summary>
@@ -107,21 +202,21 @@ public unsafe partial class NativeAssetResolver : IDisposable, INativeAssetResol
     /// <summary>Resolves a font file path into a freshly-baked ke_font_data (atlas RGBA8 + glyph metrics). Caller owns the result; release with free_font.</summary>
     /// <returns>Receives the baked font atlas + glyph metrics on success.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_font_data* ResolveFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
+    public ResolvedFont ResolveFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_font_data* resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &resultOut), "resolve_font");
-            return resultOut;
+            return new ResolvedFont(this, (FontData*)resultOut);
         }
     }
 
-
-    public void FreeFont(ke_font_data* data)
+    /// <summary>Frees a ke_font_data resolve_font returned. A null data is ignored.</summary>
+    internal void FreeFont(FontData* data)
     {
-        Handle->free_font(Handle, data);
+        Handle->free_font(Handle, (ke_font_data*)data);
     }
 
     /// <summary>Resolves and uploads a texture, deduped by `path`. On a cache hit, nothing is decoded.</summary>
