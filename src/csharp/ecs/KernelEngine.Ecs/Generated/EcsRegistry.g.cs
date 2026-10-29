@@ -120,6 +120,16 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
         return Handle->component_size(Handle, cid);
     }
 
+    /// <summary>Writes value into component at the place field describes, converted to the field's type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field's width; a string is cut to the field's size and stays NUL-terminated.</summary>
+    /// <param name="component">The component's memory.</param>
+    /// <param name="field">Where in the component, and of which type and size.</param>
+    /// <param name="@value">The value to write.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void ComponentFieldWrite(nint component, ke_component_field* field, ke_variant* @value)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_field_write(Handle, (void*)component, field, @value), "component_field_write");
+    }
+
     /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>
     /// <param name="cids">Component tuple to match.</param>
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>

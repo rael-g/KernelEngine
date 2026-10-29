@@ -351,6 +351,40 @@
           "receiver": "struct ke_ecs *"
         },
         {
+          "name": "component_field_write",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Writes value into component at the place field describes, converted to the field\u0027s type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field\u0027s width; a string is cut to the field\u0027s size and stays NUL-terminated.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does not convert to the field\u0027s type or a size the type cannot have, writing nothing.",
+          "params": [
+            {
+              "name": "component",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The component\u0027s memory."
+            },
+            {
+              "name": "field",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Where in the component, and of which type and size."
+            },
+            {
+              "name": "value",
+              "type": "const ke_variant *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The value to write."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
           "name": "query_register",
           "returns": "ke_result",
           "tags": [],
