@@ -224,7 +224,8 @@ fn createShaderLayout(self: [*c]abi_render.ke_render_resource_binder, params: [*
 }
 
 fn readFile(io: *abi_io.ke_io, path: [:0]const u8) R.Error![]u8 {
-    const request = io.read_file.?(io, path.ptr) orelse return error.OutOfMemory;
+    var request: ?*abi_io.ke_io_request = null;
+    try R.check(io.read_file.?(io, path.ptr, &request));
     var result: abi_io.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &result)) catch |err| {
         log.warn("create_shader_layout: reading {s} failed: {t}", .{ path, err });
@@ -544,10 +545,14 @@ const reflections = [_]Reflection{
     .{ .name = "shaders/gap.fs.json", .data = gap_fs },
 };
 
-fn readReflection(args: IoSub.Args(.read_file)) ?*abi_io.ke_io_request {
+fn readReflection(args: IoSub.Args(.read_file)) abi_result.ke_result {
     const path = std.mem.span(args[1].?);
-    for (&reflections) |*r| if (std.mem.eql(u8, r.name, path)) return @ptrCast(@constCast(r));
-    return null;
+    for (&reflections) |*r| if (std.mem.eql(u8, r.name, path)) {
+        args[2].?.* = @ptrCast(@constCast(r));
+        return R.ok;
+    };
+    args[2].?.* = null;
+    return R.code(error.NotFound);
 }
 
 fn waitReflection(args: IoSub.Args(.wait)) abi_result.ke_result {

@@ -49,10 +49,10 @@
       "slots": [
         {
           "name": "read_file",
-          "returns": "ke_io_request *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Submits a read of a whole file.",
-          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
           "params": [
             {
               "name": "path",
@@ -61,16 +61,24 @@
                 "borrowed"
               ],
               "doc": "The file to read; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
             }
           ],
           "receiver": "struct ke_io *"
         },
         {
           "name": "open",
-          "returns": "ke_io_request *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Submits the opening of a file for read_at.",
-          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
           "params": [
             {
               "name": "path",
@@ -79,16 +87,24 @@
                 "borrowed"
               ],
               "doc": "The file to open; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
             }
           ],
           "receiver": "struct ke_io *"
         },
         {
           "name": "read_at",
-          "returns": "ke_io_request *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Submits a read from an open file at an offset; it reads fewer than len bytes only at the end of the file.",
-          "return_doc": "The request, or null for a null file, a null dst with a non-zero len, or when it cannot be allocated.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null file, a null dst with a non-zero len or a null out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
           "params": [
             {
               "name": "file",
@@ -117,16 +133,24 @@
               "type": "size_t",
               "tags": [],
               "doc": "The number of bytes dst holds."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
             }
           ],
           "receiver": "struct ke_io *"
         },
         {
           "name": "stat",
-          "returns": "ke_io_request *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Submits an inspection of what a path names.",
-          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
           "params": [
             {
               "name": "path",
@@ -135,6 +159,14 @@
                 "borrowed"
               ],
               "doc": "The path to inspect; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
             }
           ],
           "receiver": "struct ke_io *"
@@ -162,7 +194,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Blocks until the request finishes, releases it, and reports what it read.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null request, or the failure of the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null request, the code the task pool refused the wait with, the request then still to be waited on, or the failure of the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.",
           "params": [
             {
               "name": "request",

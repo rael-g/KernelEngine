@@ -37,8 +37,13 @@ extern "C"
          * Schedules a task, which the caller releases by waiting on it.
          * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
+         * @param out_task [out] Receives the task; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p func or @p out_task,
+         *         KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does
+         *         not accept the calling thread.
          */
-        ke_task *(*dispatch)(struct ke_task_pool *self, ke_task_func func, void *data);
+        ke_result (*dispatch)(struct ke_task_pool *self, ke_task_func func, void *data,
+                              ke_task **out_task);
 
         /**
          * Schedules a task and a completion callback run once it finishes.
@@ -46,11 +51,15 @@ extern "C"
          * @param data [borrowed] Opaque context passed to func unchanged.
          * @param on_complete [raw_callback] [closure:user_data] Invoked after func returns.
          * @param user_data [borrowed] Opaque context passed to on_complete unchanged.
+         * @param out_task [out] Receives the task; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p func or @p out_task,
+         *         KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does
+         *         not accept the calling thread.
          */
-        ke_task *(*dispatch_on_complete)(struct ke_task_pool *self,
+        ke_result (*dispatch_on_complete)(struct ke_task_pool *self,
                                           ke_task_func func, void *data,
                                           ke_task_on_complete_func on_complete,
-                                          void *user_data);
+                                          void *user_data, ke_task **out_task);
 
         /**
          * Blocks the calling thread until the task completes, releases the task, and returns

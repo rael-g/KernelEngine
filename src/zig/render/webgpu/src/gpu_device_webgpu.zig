@@ -1113,7 +1113,12 @@ fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi
     if (job.fragment_entry) |e| job.build.frag_state.entryPoint.data = e.ptr;
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
-    const task = pool.dispatch.?(pool, runAsyncCompileJob, job);
+    var task: ?*abi_task_pool.ke_task = null;
+    R.check(pool.dispatch.?(pool, runAsyncCompileJob, job, &task)) catch |err| {
+        log.warn("compiling a render pipeline off the caller's thread was refused: {t}; it compiles inline", .{err});
+        _ = runAsyncCompileJob(job);
+        return;
+    };
     s.pending_compiles[s.pending_compiles_count] = task;
     s.pending_compiles_count += 1;
 }

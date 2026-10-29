@@ -137,11 +137,11 @@ fn taskRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 
 /// Allocates a request, copies `path` into it, and dispatches it on the task pool. Returns null
 /// with nothing left allocated when an allocation or the dispatch fails.
-fn submit(self: *abi_io.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?[*]u8, len: usize) ?*abi_io.ke_io_request {
+fn submit(self: *abi_io.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?[*]u8, len: usize, out: *?*abi_io.ke_io_request) abi_result.ke_result {
     const s = stateOf(self);
     const request = heap.gpa.create(Request) catch {
         log.warn("submitting a {t} request failed: out of memory", .{kind});
-        return null;
+        return R.code(error.OutOfMemory);
     };
     request.* = .{
         .state = s,
@@ -159,42 +159,51 @@ fn submit(self: *abi_io.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_fil
     if (path) |p| request.path = heap.gpa.dupeZ(u8, std.mem.span(p)) catch {
         log.warn("submitting a {t} request failed: out of memory", .{kind});
         request.free();
-        return null;
+        return R.code(error.OutOfMemory);
     };
-    request.task = s.task_pool.dispatch.?(s.task_pool, taskRun, request) orelse {
-        log.warn("submitting a {t} request failed: the task pool refused it", .{kind});
+    R.check(s.task_pool.dispatch.?(s.task_pool, taskRun, request, &request.task)) catch |err| {
+        log.warn("submitting a {t} request failed: the task pool refused it: {t}", .{ kind, err });
         request.free();
-        return null;
+        return R.code(err);
     };
-    return @ptrCast(request);
+    out.* = @ptrCast(request);
+    return R.ok;
 }
 
 /// Slot `read_file`. The bytes are allocated by the task once the size is known.
-fn readFile(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
-    const self = self_in orelse return null;
-    if (path == null) return null;
-    return submit(self, .read_file, path, null, 0, null, 0);
+fn readFile(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (path == null) return R.code(error.InvalidArgument);
+    return submit(self, .read_file, path, null, 0, null, 0, out);
 }
 
 /// Slot `open`.
-fn open(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
-    const self = self_in orelse return null;
-    if (path == null) return null;
-    return submit(self, .open, path, null, 0, null, 0);
+fn open(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (path == null) return R.code(error.InvalidArgument);
+    return submit(self, .open, path, null, 0, null, 0, out);
 }
 
 /// Slot `read_at`.
-fn readAt(self_in: ?*abi_io.ke_io, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?*anyopaque, len: usize) callconv(.c) ?*abi_io.ke_io_request {
-    const self = self_in orelse return null;
-    if (file == null or (dst == null and len != 0)) return null;
-    return submit(self, .read_at, null, file, offset, @ptrCast(dst), len);
+fn readAt(self_in: ?*abi_io.ke_io, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?*anyopaque, len: usize, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (file == null or (dst == null and len != 0)) return R.code(error.InvalidArgument);
+    return submit(self, .read_at, null, file, offset, @ptrCast(dst), len, out);
 }
 
 /// Slot `stat`.
-fn stat(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
-    const self = self_in orelse return null;
-    if (path == null) return null;
-    return submit(self, .stat, path, null, 0, null, 0);
+fn stat(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (path == null) return R.code(error.InvalidArgument);
+    return submit(self, .stat, path, null, 0, null, 0, out);
 }
 
 /// Slot `is_completed`. A null request reports true.
@@ -294,9 +303,15 @@ const contents = "the quick brown fox jumps over the lazy dog";
 var open_token: u8 = 0;
 var task_token: u8 = 0;
 
-fn runInline(args: TaskPoolSub.Args(.dispatch)) ?*abi_task_pool.ke_task {
+fn runInline(args: TaskPoolSub.Args(.dispatch)) abi_result.ke_result {
     _ = args[1].?(args[2]);
-    return @ptrCast(&task_token);
+    args[3].?.* = @ptrCast(&task_token);
+    return R.ok;
+}
+
+fn refuseDispatch(args: TaskPoolSub.Args(.dispatch)) abi_result.ke_result {
+    args[3].?.* = null;
+    return R.code(error.NotSupported);
 }
 
 fn openFox(args: FileSystemSub.Args(.open)) abi_result.ke_result {
@@ -347,6 +362,30 @@ const Rig = struct {
         return self.handle.ref.?;
     }
 
+    fn readFile(self: *Rig, path: [*:0]const u8) !*abi_io.ke_io_request {
+        var request: ?*abi_io.ke_io_request = null;
+        try R.check(self.io().read_file.?(self.io(), path, &request));
+        return request.?;
+    }
+
+    fn open(self: *Rig, path: [*:0]const u8) !*abi_io.ke_io_request {
+        var request: ?*abi_io.ke_io_request = null;
+        try R.check(self.io().open.?(self.io(), path, &request));
+        return request.?;
+    }
+
+    fn readAt(self: *Rig, file: ?*abi_file_system.ke_open_file, offset: u64, dst: []u8) !*abi_io.ke_io_request {
+        var request: ?*abi_io.ke_io_request = null;
+        try R.check(self.io().read_at.?(self.io(), file, offset, dst.ptr, dst.len, &request));
+        return request.?;
+    }
+
+    fn stat(self: *Rig, path: [*:0]const u8) !*abi_io.ke_io_request {
+        var request: ?*abi_io.ke_io_request = null;
+        try R.check(self.io().stat.?(self.io(), path, &request));
+        return request.?;
+    }
+
     fn deinit(self: *Rig) void {
         self.handle.destroy.?(self.handle.ref);
         self.fs.deinit();
@@ -359,7 +398,7 @@ test "a whole-file read runs on the task pool and hands the bytes to the caller"
     try rig.init();
     defer rig.deinit();
 
-    const request = rig.io().read_file.?(rig.io(), "fox.txt").?;
+    const request = try rig.readFile("fox.txt");
     try testing.expect(rig.io().is_completed.?(rig.io(), request));
     var result: abi_io.ke_io_result = undefined;
     try R.check(rig.io().wait.?(rig.io(), request, &result));
@@ -376,7 +415,7 @@ test "a whole-file read of a missing file fails as not found with a zeroed resul
     try rig.init();
     defer rig.deinit();
 
-    const request = rig.io().read_file.?(rig.io(), "missing.txt").?;
+    const request = try rig.readFile("missing.txt");
     var result: abi_io.ke_io_result = undefined;
     try testing.expectError(error.NotFound, R.check(rig.io().wait.?(rig.io(), request, &result)));
     try testing.expect(result.bytes == null and result.size == 0);
@@ -389,11 +428,11 @@ test "an opened file is read at an offset into the caller's buffer and closed" {
     defer rig.deinit();
 
     var result: abi_io.ke_io_result = undefined;
-    try R.check(rig.io().wait.?(rig.io(), rig.io().open.?(rig.io(), "fox.txt").?, &result));
+    try R.check(rig.io().wait.?(rig.io(), try rig.open("fox.txt"), &result));
     const file = result.file.?;
 
     var buf: [16]u8 = undefined;
-    try R.check(rig.io().wait.?(rig.io(), rig.io().read_at.?(rig.io(), file, contents.len - 3, &buf, buf.len).?, &result));
+    try R.check(rig.io().wait.?(rig.io(), try rig.readAt(file, contents.len - 3, &buf), &result));
     try testing.expectEqualStrings("dog", buf[0..result.size]);
 
     rig.io().close.?(rig.io(), file);
@@ -406,7 +445,7 @@ test "stat reports what the path names" {
     defer rig.deinit();
 
     var result: abi_io.ke_io_result = undefined;
-    try R.check(rig.io().wait.?(rig.io(), rig.io().stat.?(rig.io(), "fox.txt").?, &result));
+    try R.check(rig.io().wait.?(rig.io(), try rig.stat("fox.txt"), &result));
     try testing.expectEqual(abi_file_system.KE_FILE_KIND_FILE, result.stat.kind);
     try testing.expectEqual(@as(u64, contents.len), result.stat.size);
 }
@@ -423,8 +462,7 @@ test "a wait the task pool refuses for its calling thread fails and leaves the r
     defer rig.deinit();
     _ = rig.pool.when(.wait).does(waitUnlessRefused);
 
-    const request = rig.io().read_file.?(rig.io(), "fox.txt");
-    try testing.expect(request != null);
+    const request = try rig.readFile("fox.txt");
 
     var result: abi_io.ke_io_result = undefined;
     pool_refuses_wait = true;
@@ -436,27 +474,32 @@ test "a wait the task pool refuses for its calling thread fails and leaves the r
     try testing.expectEqual(@as(u64, contents.len), result.size);
 }
 
-test "a request the task pool refuses is not returned" {
+test "a request the task pool refuses fails with the pool's code and returns no request" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    _ = rig.pool.when(.dispatch).returns(null);
+    _ = rig.pool.when(.dispatch).does(refuseDispatch);
 
-    try testing.expect(rig.io().read_file.?(rig.io(), "fox.txt") == null);
+    var request: ?*abi_io.ke_io_request = null;
+    try testing.expectError(error.NotSupported, R.check(rig.io().read_file.?(rig.io(), "fox.txt", &request)));
+    try testing.expect(request == null);
 }
 
-test "submits with missing arguments return no request and a null request is refused by wait" {
+test "submits with missing arguments are an invalid argument and a null request is refused by wait" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
 
     var buf: [4]u8 = undefined;
-    try testing.expect(rig.io().read_file.?(rig.io(), null) == null);
-    try testing.expect(rig.io().open.?(rig.io(), null) == null);
-    try testing.expect(rig.io().stat.?(rig.io(), null) == null);
-    try testing.expect(rig.io().read_at.?(rig.io(), null, 0, &buf, buf.len) == null);
-    try testing.expect(rig.io().read_at.?(rig.io(), @ptrCast(&open_token), 0, null, 4) == null);
-    try testing.expect(readFile(null, "fox.txt") == null);
+    var request: ?*abi_io.ke_io_request = null;
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().read_file.?(rig.io(), null, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().open.?(rig.io(), null, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().stat.?(rig.io(), null, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().read_at.?(rig.io(), null, 0, &buf, buf.len, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().read_at.?(rig.io(), @ptrCast(&open_token), 0, null, 4, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().read_file.?(rig.io(), "fox.txt", null)));
+    try testing.expect(request == null);
+    try testing.expectError(error.InvalidArgument, R.check(readFile(null, "fox.txt", &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().wait.?(rig.io(), null, null)));
     rig.io().close.?(rig.io(), null);
     rig.io().free_bytes.?(rig.io(), null);
@@ -480,7 +523,7 @@ test "reading, waiting, freeing and destroying leaves no block allocated" {
     var rig: Rig = undefined;
     try rig.init();
     var result: abi_io.ke_io_result = undefined;
-    try R.check(rig.io().wait.?(rig.io(), rig.io().read_file.?(rig.io(), "fox.txt").?, &result));
+    try R.check(rig.io().wait.?(rig.io(), try rig.readFile("fox.txt"), &result));
     rig.io().free_bytes.?(rig.io(), result.bytes);
     rig.deinit();
     try heap.expectNoLeaks();

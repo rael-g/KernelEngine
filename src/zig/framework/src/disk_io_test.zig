@@ -46,18 +46,19 @@ fn statOf(path: [*:0]const u8) R.Error!abi_io.ke_io_result {
     return result;
 }
 
-fn submit(outcome: R.Error!abi_io.ke_io_result) ?*abi_io.ke_io_request {
-    const request = heap.gpa.create(Request) catch return null;
+fn submit(outcome: R.Error!abi_io.ke_io_result, out: *?*abi_io.ke_io_request) abi_result.ke_result {
+    const request = heap.gpa.create(Request) catch return R.code(error.OutOfMemory);
     request.* = .{ .outcome = outcome };
-    return @ptrCast(request);
+    out.* = @ptrCast(request);
+    return R.ok;
 }
 
-fn readFile(args: Io.Args(.read_file)) ?*abi_io.ke_io_request {
-    return submit(readWhole(args[1].?));
+fn readFile(args: Io.Args(.read_file)) abi_result.ke_result {
+    return submit(readWhole(args[1].?), args[2].?);
 }
 
-fn stat(args: Io.Args(.stat)) ?*abi_io.ke_io_request {
-    return submit(statOf(args[1].?));
+fn stat(args: Io.Args(.stat)) abi_result.ke_result {
+    return submit(statOf(args[1].?), args[2].?);
 }
 
 fn wait(args: Io.Args(.wait)) abi_result.ke_result {

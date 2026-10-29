@@ -40,16 +40,20 @@ extern "C"
         /**
          * Submits a read of a whole file.
          * @param path [borrowed] The file to read; copied before the slot returns.
-         * @return The request, or null for a null @p path or when it cannot be allocated.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
          */
-        ke_io_request *(*read_file)(struct ke_io *self, const char *path);
+        ke_result (*read_file)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
         /**
          * Submits the opening of a file for read_at.
          * @param path [borrowed] The file to open; copied before the slot returns.
-         * @return The request, or null for a null @p path or when it cannot be allocated.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
          */
-        ke_io_request *(*open)(struct ke_io *self, const char *path);
+        ke_result (*open)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
         /**
          * Submits a read from an open file at an offset; it reads fewer than @p len bytes only at
@@ -58,18 +62,22 @@ extern "C"
          * @param offset Where the read starts, in bytes from the start of the file.
          * @param dst [borrowed] Receives the bytes; the caller's until wait returns.
          * @param len The number of bytes @p dst holds.
-         * @return The request, or null for a null @p file, a null @p dst with a non-zero @p len,
-         *         or when it cannot be allocated.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p file, a null @p dst with a
+         *         non-zero @p len or a null @p out_request, KE_RESULT_OUT_OF_MEMORY, or the code
+         *         the task pool refused the request with.
          */
-        ke_io_request *(*read_at)(struct ke_io *self, ke_open_file *file, uint64_t offset,
-                                  void *dst, size_t len);
+        ke_result (*read_at)(struct ke_io *self, ke_open_file *file, uint64_t offset,
+                             void *dst, size_t len, ke_io_request **out_request);
 
         /**
          * Submits an inspection of what a path names.
          * @param path [borrowed] The path to inspect; copied before the slot returns.
-         * @return The request, or null for a null @p path or when it cannot be allocated.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
          */
-        ke_io_request *(*stat)(struct ke_io *self, const char *path);
+        ke_result (*stat)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
         /**
          * Reports whether a request has finished, without releasing it. Valid only before the
@@ -83,8 +91,9 @@ extern "C"
          * @param request [borrowed] A request a submit slot returned; invalid afterwards.
          * @param out_result [out,optional] Receives what the request read; left zeroed when it
          *        failed.
-         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p request, or the failure of the
-         *         read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p request, the code the task pool
+         *         refused the wait with, the request then still to be waited on, or the failure of
+         *         the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.
          */
         ke_result (*wait)(struct ke_io *self, ke_io_request *request, ke_io_result *out_result);
 

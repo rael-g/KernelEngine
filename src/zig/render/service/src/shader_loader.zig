@@ -9,7 +9,8 @@ const R = rc.R;
 const log = std.log.scoped(.render_service);
 
 fn readFile(io: *rc.abi_io.ke_io, path: [:0]const u8) R.Error![]u8 {
-    const request = io.read_file.?(io, path.ptr) orelse return error.OutOfMemory;
+    var request: ?*rc.abi_io.ke_io_request = null;
+    try R.check(io.read_file.?(io, path.ptr, &request));
     var result: rc.abi_io.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &result)) catch |err| {
         log.warn("load_shader: reading {s} failed: {t}", .{ path, err });

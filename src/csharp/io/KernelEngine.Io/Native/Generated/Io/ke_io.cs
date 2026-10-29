@@ -7,17 +7,17 @@ public unsafe partial struct ke_io
 {
     public void* handle;
 
-    [NativeTypeName("ke_io_request *(*)(struct ke_io *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request*> read_file;
+    [NativeTypeName("ke_result (*)(struct ke_io *, const char *, ke_io_request **)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request**, KernelEngine.Result.Native.ke_result> read_file;
 
-    [NativeTypeName("ke_io_request *(*)(struct ke_io *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request*> open;
+    [NativeTypeName("ke_result (*)(struct ke_io *, const char *, ke_io_request **)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request**, KernelEngine.Result.Native.ke_result> open;
 
-    [NativeTypeName("ke_io_request *(*)(struct ke_io *, ke_open_file *, uint64_t, void *, size_t)")]
-    public delegate* unmanaged[Cdecl]<ke_io*, KernelEngine.FileSystem.Native.ke_open_file*, ulong, void*, nuint, ke_io_request*> read_at;
+    [NativeTypeName("ke_result (*)(struct ke_io *, ke_open_file *, uint64_t, void *, size_t, ke_io_request **)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, KernelEngine.FileSystem.Native.ke_open_file*, ulong, void*, nuint, ke_io_request**, KernelEngine.Result.Native.ke_result> read_at;
 
-    [NativeTypeName("ke_io_request *(*)(struct ke_io *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request*> stat;
+    [NativeTypeName("ke_result (*)(struct ke_io *, const char *, ke_io_request **)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request**, KernelEngine.Result.Native.ke_result> stat;
 
     [NativeTypeName("bool (*)(struct ke_io *, ke_io_request *)")]
     public delegate* unmanaged[Cdecl]<ke_io*, ke_io_request*, bool> is_completed;

@@ -16,9 +16,9 @@ pub const ke_task_on_complete_func = ?*const fn (?*ke_task, ?*anyopaque, result.
 pub const ke_task_pool = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Schedules a task, which the caller releases by waiting on it.
-    dispatch: ?*const fn (?*ke_task_pool, ke_task_func, ?*anyopaque) callconv(.c) ?*ke_task = null,
+    dispatch: ?*const fn (?*ke_task_pool, ke_task_func, ?*anyopaque, ?*?*ke_task) callconv(.c) result.ke_result = null,
     /// Schedules a task and a completion callback run once it finishes.
-    dispatch_on_complete: ?*const fn (?*ke_task_pool, ke_task_func, ?*anyopaque, ke_task_on_complete_func, ?*anyopaque) callconv(.c) ?*ke_task = null,
+    dispatch_on_complete: ?*const fn (?*ke_task_pool, ke_task_func, ?*anyopaque, ke_task_on_complete_func, ?*anyopaque, ?*?*ke_task) callconv(.c) result.ke_result = null,
     /// Blocks the calling thread until the task completes, releases the task, and returns what its
     /// body returned. Every task a dispatch slot returns is waited on exactly once: afterwards the
     /// pointer is invalid for wait and is_completed alike, and a task never waited on is never

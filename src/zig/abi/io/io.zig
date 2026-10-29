@@ -24,14 +24,14 @@ pub const ke_io_result = extern struct {
 pub const ke_io = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Submits a read of a whole file.
-    read_file: ?*const fn (?*ke_io, ?[*:0]const u8) callconv(.c) ?*ke_io_request = null,
+    read_file: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Submits the opening of a file for read_at.
-    open: ?*const fn (?*ke_io, ?[*:0]const u8) callconv(.c) ?*ke_io_request = null,
+    open: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Submits a read from an open file at an offset; it reads fewer than len bytes only at the end
     /// of the file.
-    read_at: ?*const fn (?*ke_io, ?*file_system.ke_open_file, u64, ?*anyopaque, usize) callconv(.c) ?*ke_io_request = null,
+    read_at: ?*const fn (?*ke_io, ?*file_system.ke_open_file, u64, ?*anyopaque, usize, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Submits an inspection of what a path names.
-    stat: ?*const fn (?*ke_io, ?[*:0]const u8) callconv(.c) ?*ke_io_request = null,
+    stat: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Reports whether a request has finished, without releasing it. Valid only before the request
     /// is waited on.
     is_completed: ?*const fn (?*ke_io, ?*ke_io_request) callconv(.c) bool = null,

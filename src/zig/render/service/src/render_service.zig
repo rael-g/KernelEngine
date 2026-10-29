@@ -770,9 +770,9 @@ fn chainLink(svc: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_
 var empty_shader: [1]u8 = .{0};
 var shader_request: u8 = 0;
 
-fn readEmpty(args: zsub.For(abi_io.ke_io).Args(.read_file)) ?*abi_io.ke_io_request {
-    _ = args;
-    return @ptrCast(&shader_request);
+fn readEmpty(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&shader_request);
+    return R.ok;
 }
 
 fn waitEmpty(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {

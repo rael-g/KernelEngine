@@ -51,7 +51,8 @@ fn loadImage(self: ?*abi_asset.ke_image_loader, path: [*c]const u8, out_image: ?
 }
 
 fn decode(io: *abi_io.ke_io, path: [*c]const u8) R.Error!*abi_asset.ke_texture_data {
-    const request = io.read_file.?(io, path) orelse return error.OutOfMemory;
+    var request: ?*abi_io.ke_io_request = null;
+    try R.check(io.read_file.?(io, path, &request));
     var file: abi_io.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &file)) catch |err| switch (err) {
         error.OutOfMemory => return err,
@@ -130,8 +131,9 @@ const zsub = @import("zsub");
 var served: ?[]const u8 = null;
 var request_token: u8 = 0;
 
-fn readServed(_: zsub.For(abi_io.ke_io).Args(.read_file)) ?*abi_io.ke_io_request {
-    return @ptrCast(&request_token);
+fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&request_token);
+    return R.ok;
 }
 
 fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {

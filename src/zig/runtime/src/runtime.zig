@@ -635,14 +635,20 @@ const WaveRunCtx = struct {
 /// the first in package order, with the name of its system.
 fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     const pool = wc.h.state.task_pool;
+    var failure = PhaseFailure{};
     var t: u32 = 0;
     while (t < wc.wave_size) : (t += 1) {
-        wc.tasks[t] = pool.dispatch.?(pool, taskPkgRun, &wc.pkgs[t]);
+        const code = pool.dispatch.?(pool, taskPkgRun, &wc.pkgs[t], &wc.tasks[t]);
+        if (code == R.ok or failure.failed()) continue;
+        failure = .{
+            .code = code,
+            .system = wc.pkgs[t].state.system_name,
+        };
     }
-    var failure = PhaseFailure{};
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        const code = pool.wait.?(pool, wc.tasks[t]);
+        const task = wc.tasks[t] orelse continue;
+        const code = pool.wait.?(pool, task);
         if (code == R.ok or failure.failed()) continue;
         failure = .{
             .code = code,
@@ -1098,7 +1104,11 @@ fn runtimeTickBody(self: ?*abi_runtime.ke_runtime, dt: f32) abi_result.ke_result
         job.h = h;
         job.dt = dt;
         job.failure = .{};
-        h.state.pending_render_task = h.state.task_pool.dispatch.?(h.state.task_pool, renderJobRun, job);
+        const code = h.state.task_pool.dispatch.?(h.state.task_pool, renderJobRun, job, &h.state.pending_render_task);
+        if (code != R.ok) {
+            log.warn("dispatching the render phase failed", .{});
+            return code;
+        }
     } else {
         failure = runtimeRunPhase(h, abi_runtime.KE_PHASE_RENDER, dt);
         if (failure.failed()) return reported(failure, "a system body");
@@ -1755,9 +1765,10 @@ test "a query declaring no terms is refused" {
 var inline_result: abi_result.ke_result = R.ok;
 var inline_token: u8 = 0;
 
-fn inlineDispatch(_: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_task_pool.ke_task {
+fn inlineDispatch(_: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
     inline_result = func.?(data);
-    return @ptrCast(&inline_token);
+    out_task.* = @ptrCast(&inline_token);
+    return R.ok;
 }
 
 fn inlineWait(_: [*c]abi_task_pool.ke_task_pool, _: ?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {

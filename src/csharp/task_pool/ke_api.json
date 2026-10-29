@@ -19,10 +19,10 @@
       "slots": [
         {
           "name": "dispatch",
-          "returns": "ke_task *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Schedules a task, which the caller releases by waiting on it.",
-          "return_doc": null,
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null func or out_task, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does not accept the calling thread.",
           "params": [
             {
               "name": "func",
@@ -40,16 +40,24 @@
                 "borrowed"
               ],
               "doc": "Opaque context passed to func unchanged."
+            },
+            {
+              "name": "out_task",
+              "type": "ke_task **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the task; null on failure."
             }
           ],
           "receiver": "struct ke_task_pool *"
         },
         {
           "name": "dispatch_on_complete",
-          "returns": "ke_task *",
+          "returns": "ke_result",
           "tags": [],
           "doc": "Schedules a task and a completion callback run once it finishes.",
-          "return_doc": null,
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null func or out_task, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does not accept the calling thread.",
           "params": [
             {
               "name": "func",
@@ -84,6 +92,14 @@
                 "borrowed"
               ],
               "doc": "Opaque context passed to on_complete unchanged."
+            },
+            {
+              "name": "out_task",
+              "type": "ke_task **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the task; null on failure."
             }
           ],
           "receiver": "struct ke_task_pool *"

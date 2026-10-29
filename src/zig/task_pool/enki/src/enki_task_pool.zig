@@ -82,19 +82,20 @@ fn allocTask(
 }
 
 /// Slot `dispatch`. Queues the body with no completion callback, exactly as `dispatchOnComplete`
-/// does, and returns null in the same cases.
+/// does, and fails in the same cases.
 fn dispatch(
     self_in: ?*abi_task_pool.ke_task_pool,
     func: abi_task_pool.ke_task_func,
     data: ?*anyopaque,
-) callconv(.c) ?*abi_task_pool.ke_task {
-    const self = self_in orelse return null;
-    return dispatchOnComplete(self, func, data, null, null);
+    out_task: ?*?*abi_task_pool.ke_task,
+) callconv(.c) abi_result.ke_result {
+    return dispatchOnComplete(self_in, func, data, null, null, out_task);
 }
 
-/// Slot `dispatch_on_complete`. Queues a task set that runs the body and returns the `Task` as
-/// the `ke_task`. The body may already be running when this returns. A null task pool, a null body, a
-/// destroyed pool, a calling thread enkiTS does not know or an allocation failure returns null with
+/// Slot `dispatch_on_complete`. Queues a task set that runs the body and writes the `Task` as the
+/// `ke_task`. The body may already be running when this returns. A null task pool, body or
+/// out-parameter and a destroyed pool are an invalid argument, a calling thread enkiTS does not
+/// know is not supported, and an allocation failure is out of memory; each writes a null task with
 /// nothing queued and nothing left allocated.
 fn dispatchOnComplete(
     self_in: ?*abi_task_pool.ke_task_pool,
@@ -102,25 +103,29 @@ fn dispatchOnComplete(
     data: ?*anyopaque,
     on_complete: abi_task_pool.ke_task_on_complete_func,
     user_data: ?*anyopaque,
-) callconv(.c) ?*abi_task_pool.ke_task {
-    const self = self_in orelse return null;
-    if (self.handle == null or func == null) return null;
+    out_task: ?*?*abi_task_pool.ke_task,
+) callconv(.c) abi_result.ke_result {
+    const out = out_task orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or func == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    const ets = s.ets orelse return null;
+    const ets = s.ets orelse return R.code(error.InvalidArgument);
     if (c.enkiGetThreadNum(ets) == c.ENKI_NO_THREAD_NUM) {
         log.warn("dispatch refused: the calling thread is neither a worker nor the thread that created the pool", .{});
-        return null;
+        return R.code(error.NotSupported);
     }
 
-    const task = allocTask(func, data, on_complete, user_data) orelse return null;
+    const task = allocTask(func, data, on_complete, user_data) orelse return R.code(error.OutOfMemory);
     const set = c.enkiCreateTaskSet(ets, taskSetExecute) orelse {
         heap.gpa.destroy(task);
-        return null;
+        return R.code(error.OutOfMemory);
     };
     task.handle = set;
 
     c.enkiAddTaskSetArgs(ets, set, task, 1);
-    return @ptrCast(task);
+    out.* = @ptrCast(task);
+    return R.ok;
 }
 
 /// Slot `wait`. Blocks until enkiTS reports the task finished, then frees the `Task` and returns
@@ -271,8 +276,8 @@ test "a task that fails hands its code to the thread that waits on it" {
     const h = try created(null);
     defer h.destroy.?(h.ref);
 
-    const task = h.ref.?.dispatch.?(h.ref, failWithNotFound, null);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, failWithNotFound, null, &task));
 
     try testing.expectError(error.NotFound, R.check(h.ref.?.wait.?(h.ref, task)));
 }
@@ -282,8 +287,8 @@ test "a task that succeeds hands OK to the thread that waits on it" {
     defer h.destroy.?(h.ref);
 
     var ran = Flag.init(false);
-    const task = h.ref.?.dispatch.?(h.ref, setFlag, &ran);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, setFlag, &ran, &task));
 
     try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
 }
@@ -293,8 +298,8 @@ test "a completion callback is handed the code the body returned" {
     defer h.destroy.?(h.ref);
 
     var seen: abi_result.ke_result = R.ok;
-    const task = h.ref.?.dispatch_on_complete.?(h.ref, failWithNotFound, null, recordCompletionFailure, @ptrCast(&seen));
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch_on_complete.?(h.ref, failWithNotFound, null, recordCompletionFailure, @ptrCast(&seen), &task));
 
     try testing.expectError(error.NotFound, R.check(h.ref.?.wait.?(h.ref, task)));
     try testing.expectError(error.NotFound, R.check(seen));
@@ -305,8 +310,8 @@ test "a dispatched task runs and reports completion" {
     defer h.destroy.?(h.ref);
 
     var ran = Flag.init(false);
-    const task = h.ref.?.dispatch.?(h.ref, setFlag, &ran);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, setFlag, &ran, &task));
 
     try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
     try testing.expect(ran.load(.acquire));
@@ -319,8 +324,8 @@ test "a completion callback fires after the task body" {
     var ran = Flag.init(false);
     var completed = Flag.init(false);
 
-    const task = h.ref.?.dispatch_on_complete.?(h.ref, setFlag, &ran, setFlagOnComplete, &completed);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch_on_complete.?(h.ref, setFlag, &ran, setFlagOnComplete, &completed, &task));
 
     try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
     try testing.expect(ran.load(.acquire));
@@ -332,8 +337,8 @@ test "a task flips to completed while it is still waited on" {
     defer h.destroy.?(h.ref);
 
     var can_finish = Flag.init(false);
-    const task = h.ref.?.dispatch.?(h.ref, spinUntilFlag, &can_finish);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, spinUntilFlag, &can_finish, &task));
 
     can_finish.store(true, .release);
     while (!h.ref.?.is_completed.?(h.ref, task)) std.atomic.spinLoopHint();
@@ -345,8 +350,8 @@ test "user data reaches the task body unchanged" {
     defer h.destroy.?(h.ref);
 
     var value: i32 = 0;
-    const task = h.ref.?.dispatch.?(h.ref, writeAnswer, &value);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, writeAnswer, &value, &task));
 
     try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
     try testing.expectEqual(@as(i32, 42), value);
@@ -359,16 +364,16 @@ test "ten dispatched tasks all execute" {
     var counter = Counter.init(0);
     var i: usize = 0;
     while (i < 10) : (i += 1) {
-        const task = h.ref.?.dispatch.?(h.ref, incrementCounter, &counter);
-        try testing.expect(task != null);
+        var task: ?*abi_task_pool.ke_task = null;
+        try R.check(h.ref.?.dispatch.?(h.ref, incrementCounter, &counter, &task));
         try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
     }
 
     try testing.expectEqual(@as(i32, 10), counter.load(.acquire));
 }
 
-fn dispatchFromOutside(pool: *abi_task_pool.ke_task_pool, out: *?*abi_task_pool.ke_task) void {
-    out.* = pool.dispatch.?(pool, failWithNotFound, null);
+fn dispatchFromOutside(pool: *abi_task_pool.ke_task_pool, task: *?*abi_task_pool.ke_task, code: *abi_result.ke_result) void {
+    code.* = pool.dispatch.?(pool, failWithNotFound, null, task);
 }
 
 fn waitFromOutside(pool: *abi_task_pool.ke_task_pool, task: ?*abi_task_pool.ke_task, out: *abi_result.ke_result) void {
@@ -380,8 +385,10 @@ test "a thread outside the pool cannot dispatch" {
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.ke_task = undefined;
-    const thread = try std.Thread.spawn(.{}, dispatchFromOutside, .{ h.ref.?, &task });
+    var code: abi_result.ke_result = R.ok;
+    const thread = try std.Thread.spawn(.{}, dispatchFromOutside, .{ h.ref.?, &task, &code });
     thread.join();
+    try testing.expectError(error.NotSupported, R.check(code));
     try testing.expect(task == null);
 }
 
@@ -389,8 +396,8 @@ test "a thread outside the pool cannot wait, and the task stays waitable from th
     const h = try created(null);
     defer h.destroy.?(h.ref);
 
-    const task = h.ref.?.dispatch.?(h.ref, failWithNotFound, null);
-    try testing.expect(task != null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try R.check(h.ref.?.dispatch.?(h.ref, failWithNotFound, null, &task));
 
     var code: abi_result.ke_result = R.ok;
     const thread = try std.Thread.spawn(.{}, waitFromOutside, .{ h.ref.?, task, &code });
@@ -400,20 +407,25 @@ test "a thread outside the pool cannot wait, and the task stays waitable from th
     try testing.expectError(error.NotFound, R.check(h.ref.?.wait.?(h.ref, task)));
 }
 
-test "dispatch refuses a null task pool or a null task function" {
+test "dispatch refuses a null task pool, task function or out-parameter as an invalid argument" {
     const h = try created(null);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.?.dispatch.?(null, null, null) == null);
-    try testing.expect(h.ref.?.dispatch.?(h.ref, null, null) == null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.dispatch.?(null, null, null, &task)));
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.dispatch.?(h.ref, null, null, &task)));
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.dispatch.?(h.ref, setFlag, null, null)));
+    try testing.expect(task == null);
 }
 
-test "dispatch on complete refuses a null task pool or a null task function" {
+test "dispatch on complete refuses a null task pool or task function as an invalid argument" {
     const h = try created(null);
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.?.dispatch_on_complete.?(null, null, null, null, null) == null);
-    try testing.expect(h.ref.?.dispatch_on_complete.?(h.ref, null, null, null, null) == null);
+    var task: ?*abi_task_pool.ke_task = null;
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.dispatch_on_complete.?(null, null, null, null, null, &task)));
+    try testing.expectError(error.InvalidArgument, R.check(h.ref.?.dispatch_on_complete.?(h.ref, null, null, null, null, &task)));
+    try testing.expect(task == null);
 }
 
 test "wait refuses a null task pool and a null task as an invalid argument" {

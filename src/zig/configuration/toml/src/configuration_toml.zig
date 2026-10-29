@@ -70,7 +70,8 @@ const State = struct {
 /// The whole file at `path` with a terminating zero, owned by the caller; null when the file does
 /// not exist.
 fn readText(io: *abi_io.ke_io, path: [*c]const u8) R.Error!?[:0]u8 {
-    const request = io.read_file.?(io, path) orelse return error.OutOfMemory;
+    var request: ?*abi_io.ke_io_request = null;
+    try R.check(io.read_file.?(io, path, &request));
     var result: abi_io.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &result)) catch |err| switch (err) {
         error.NotFound => return null,
@@ -178,8 +179,9 @@ const zsub = @import("zsub");
 var served: ?[]const u8 = null;
 var request_token: u8 = 0;
 
-fn readServed(_: zsub.For(abi_io.ke_io).Args(.read_file)) ?*abi_io.ke_io_request {
-    return @ptrCast(&request_token);
+fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&request_token);
+    return R.ok;
 }
 
 fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {

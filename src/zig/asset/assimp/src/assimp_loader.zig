@@ -360,7 +360,15 @@ fn vtLoadModelAsync(
         .user_data = user_data,
     };
 
-    return task_pool.dispatch.?(task_pool, asyncBody, ctx);
+    var task: ?*abi_task_pool.ke_task = null;
+    R.check(task_pool.dispatch.?(task_pool, asyncBody, ctx, &task)) catch |err| {
+        log.warn("loading {s} asynchronously failed: the task pool refused it: {t}", .{ path, err });
+        gpa.free(path_copy);
+        gpa.destroy(ctx);
+        on_complete.?(R.code(err), null, user_data);
+        return null;
+    };
+    return task;
 }
 
 /// The `destroy` slot. It frees the State, and logs a warning, not an error, when the leak check
@@ -433,10 +441,11 @@ fn boxGltfPath() ?[:0]const u8 {
     return null;
 }
 
-fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_task_pool.ke_task {
+fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
     _ = self;
     if (func) |f| _ = f(data);
-    return @ptrFromInt(1);
+    out_task.* = @ptrFromInt(1);
+    return R.ok;
 }
 
 const AsyncResult = struct {

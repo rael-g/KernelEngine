@@ -50,18 +50,24 @@ public unsafe partial class Io : IDisposable, INativeIo
 
     /// <summary>Submits a read of a whole file.</summary>
     /// <param name="path">The file to read; copied before the slot returns.</param>
-    /// <returns>The request, or null for a null path or when it cannot be allocated.</returns>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_io_request* ReadFile(sbyte* path)
     {
-        return Handle->read_file(Handle, path);
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_file(Handle, path, &resultOut), "read_file");
+        return resultOut;
     }
 
     /// <summary>Submits the opening of a file for read_at.</summary>
     /// <param name="path">The file to open; copied before the slot returns.</param>
-    /// <returns>The request, or null for a null path or when it cannot be allocated.</returns>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_io_request* Open(sbyte* path)
     {
-        return Handle->open(Handle, path);
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, path, &resultOut), "open");
+        return resultOut;
     }
 
     /// <summary>Submits a read from an open file at an offset; it reads fewer than len bytes only at the end of the file.</summary>
@@ -69,18 +75,24 @@ public unsafe partial class Io : IDisposable, INativeIo
     /// <param name="offset">Where the read starts, in bytes from the start of the file.</param>
     /// <param name="dst">Receives the bytes; the caller's until wait returns.</param>
     /// <param name="len">The number of bytes dst holds.</param>
-    /// <returns>The request, or null for a null file, a null dst with a non-zero len, or when it cannot be allocated.</returns>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_io_request* ReadAt(ke_open_file* file, ulong offset, nint dst, nuint len)
     {
-        return Handle->read_at(Handle, file, offset, (void*)dst, len);
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, file, offset, (void*)dst, len, &resultOut), "read_at");
+        return resultOut;
     }
 
     /// <summary>Submits an inspection of what a path names.</summary>
     /// <param name="path">The path to inspect; copied before the slot returns.</param>
-    /// <returns>The request, or null for a null path or when it cannot be allocated.</returns>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
     public ke_io_request* Stat(sbyte* path)
     {
-        return Handle->stat(Handle, path);
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, path, &resultOut), "stat");
+        return resultOut;
     }
 
     /// <summary>Reports whether a request has finished, without releasing it. Valid only before the request is waited on.</summary>
