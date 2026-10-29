@@ -5,12 +5,12 @@
 
 namespace KernelEngine.Io.Pool;
 
-/// <summary>Creates a ke_io that runs each request as one task of params' task pool, reading through its file system.</summary>
+/// <summary>Creates a ke_io that runs each request as one task of task_pool, reading through file_system.</summary>
 public sealed unsafe partial class PoolIo : KernelEngine.Io.Io
 {
-    /// <summary>Creates a ke_io that runs each request as one task of params' task pool, reading through its file system.</summary>
-    /// <param name="taskPool">The pool each request runs on; required, borrowed for the lifetime of the ke_io.</param>
-    /// <param name="fileSystem">The file system each request reads through; required, borrowed for the lifetime of the ke_io.</param>
+    /// <summary>Creates a ke_io that runs each request as one task of task_pool, reading through file_system.</summary>
+    /// <param name="taskPool">The pool each request runs on; borrowed for the lifetime of the ke_io.</param>
+    /// <param name="fileSystem">The file system each request reads through; borrowed for the lifetime of the ke_io.</param>
     public PoolIo(KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(Create(taskPool, fileSystem))
     {
     }
@@ -19,11 +19,8 @@ public sealed unsafe partial class PoolIo : KernelEngine.Io.Io
     {
         ArgumentNullException.ThrowIfNull(taskPool);
         ArgumentNullException.ThrowIfNull(fileSystem);
-        KernelEngine.Io.Pool.Native.ke_io_pool_params config = default;
-        config.task_pool = taskPool.Native;
-        config.file_system = fileSystem.Native;
         KernelEngine.Io.Native.ke_io_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Io.Pool.Native.NativeMethods.io_pool_create(&config, &handle), "ke_io_pool_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Io.Pool.Native.NativeMethods.io_pool_create(taskPool.Native, fileSystem.Native, &handle), "ke_io_pool_create");
         return handle;
     }
 }

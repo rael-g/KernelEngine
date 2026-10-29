@@ -9,8 +9,8 @@ public sealed unsafe partial class PoolIo
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
-    /// <param name="taskPool">The pool each request runs on; required, borrowed for the lifetime of the ke_io.</param>
-    /// <param name="fileSystem">The file system each request reads through; required, borrowed for the lifetime of the ke_io.</param>
+    /// <param name="taskPool">The pool each request runs on; borrowed for the lifetime of the ke_io.</param>
+    /// <param name="fileSystem">The file system each request reads through; borrowed for the lifetime of the ke_io.</param>
     public PoolIo(KernelEngine.Logger.ILogger logger, KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(CreateLogged(logger, taskPool, fileSystem))
     {
     }

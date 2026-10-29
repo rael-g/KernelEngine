@@ -252,7 +252,7 @@ int main(int argc, char **argv)
     ke_file_system_handle files = { 0 };
     check("file system", ke_file_system_std_create(NULL, &files));
     ke_io_handle file_io = { 0 };
-    check("io", ke_io_pool_create(&(ke_io_pool_params){ .task_pool = pool.ref, .file_system = files.ref }, &file_io));
+    check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);
     ke_render_service *core = render.service.ref;
 

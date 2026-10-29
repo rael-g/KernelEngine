@@ -81,7 +81,7 @@ int main(void)
     ke_file_system_handle files = { 0 };
     check("file system", ke_file_system_std_create(NULL, &files));
     ke_io_handle file_io = { 0 };
-    check("io", ke_io_pool_create(&(ke_io_pool_params){ .task_pool = pool.ref, .file_system = files.ref }, &file_io));
+    check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     ke_render_resource_binder_handle binder = { 0 };
     check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
     ke_render_service_handle service = { 0 };

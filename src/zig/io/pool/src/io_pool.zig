@@ -22,7 +22,7 @@ const bytes_alignment: std.mem.Alignment = .@"16";
 
 /// The allocation behind one handle. `api` is the vtable the handle's `ref` points at, and its
 /// `handle` slot points back at this block. `task_pool` and `file_system` are borrowed from the
-/// factory params and never released here.
+/// factory's arguments and never released here.
 const State = struct {
     api: abi_io.ke_io,
     task_pool: *abi_task_pool.ke_task_pool,
@@ -315,27 +315,26 @@ fn destroy(self_in: ?*abi_io.ke_io) callconv(.c) void {
     heap.gpa.destroy(stateOf(self));
 }
 
-/// The factory. Both the task pool and the file system are required; either missing, or no params,
-/// is an invalid argument. Fails with out of memory when the `State` cannot be allocated, leaving
+/// The factory. Both the task pool and the file system are required; either missing is an invalid
+/// argument. Fails with out of memory when the `State` cannot be allocated, leaving
 /// the handle zeroed.
-export fn ke_io_pool_create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params, out_io: ?*abi_io.ke_io_handle) callconv(.c) abi_result.ke_result {
+export fn ke_io_pool_create(task_pool: ?*abi_task_pool.ke_task_pool, file_system: ?*abi_file_system.ke_file_system, out_io: ?*abi_io.ke_io_handle) callconv(.c) abi_result.ke_result {
     const out = out_io orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_io.ke_io_handle);
-    out.* = create(params_in) catch |err| {
+    out.* = create(task_pool, file_system) catch |err| {
         log.warn("creating the io failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params) R.Error!abi_io.ke_io_handle {
-    const params = params_in orelse return error.InvalidArgument;
+fn create(task_pool: ?*abi_task_pool.ke_task_pool, file_system: ?*abi_file_system.ke_file_system) R.Error!abi_io.ke_io_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
         .api = std.mem.zeroes(abi_io.ke_io),
-        .task_pool = params.task_pool orelse return error.InvalidArgument,
-        .file_system = params.file_system orelse return error.InvalidArgument,
+        .task_pool = task_pool orelse return error.InvalidArgument,
+        .file_system = file_system orelse return error.InvalidArgument,
     };
 
     s.api.handle = s;
@@ -420,8 +419,7 @@ const Rig = struct {
         _ = self.fs.when(.size).does(foxSize);
         _ = self.fs.when(.read_at).does(readFox);
         _ = self.fs.when(.stat).does(statFox);
-        const params = abi_io_pool_factory.ke_io_pool_params{ .task_pool = self.pool.api(), .file_system = self.fs.api() };
-        try R.check(ke_io_pool_create(&params, &self.handle));
+        try R.check(ke_io_pool_create(self.pool.api(), self.fs.api(), &self.handle));
     }
 
     fn io(self: *Rig) *abi_io.ke_io {
@@ -614,11 +612,10 @@ test "creating without a task pool or a file system is refused and leaves the ha
     defer fs.deinit();
 
     var h: abi_io.ke_io_handle = undefined;
-    const params = abi_io_pool_factory.ke_io_pool_params{ .task_pool = null, .file_system = fs.api() };
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(&params, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, fs.api(), &h)));
     try testing.expect(h.ref == null and h.destroy == null);
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(&params, null)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, null, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, fs.api(), null)));
 }
 
 test "reading, waiting, freeing and destroying leaves no block allocated" {
