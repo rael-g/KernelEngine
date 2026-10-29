@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
         .common = &.{"heap"},
         .render_common = &.{"handle"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,
         .tests = "Run unit tests",
     });

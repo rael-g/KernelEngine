@@ -77,7 +77,14 @@ export fn ke_scene_component_set_create(out_set: ?*abi_framework.ke_scene_compon
 }
 
 const testing = std.testing;
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const EcsSub = zsub.For(abi_ecs.ke_ecs);
+
+fn substituteEcs(ecs: *EcsSub) !void {
+    try ecs.init();
+    _ = ecs.when(.component_register).writesFresh(2);
+}
 
 const FakeWorld = struct {
     api: abi_framework.ke_world,
@@ -122,8 +129,9 @@ fn componentParams(name: [*:0]const u8, with_fields: bool) abi_ecs.ke_component_
 }
 
 test "added components are registered in order, their fields and apply callbacks handed to the world" {
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
     var world: FakeWorld = undefined;
     world.init(true);
     var h: abi_framework.ke_scene_component_set_handle = undefined;
@@ -138,11 +146,13 @@ test "added components are registered in order, their fields and apply callbacks
     try testing.expectEqual(@as(usize, 2), world.described_count);
     try testing.expect(world.described[0] < world.described[1]);
     try testing.expectEqual(@as(usize, 2), world.applied);
+    try ecs.received(.component_register).times(3);
 }
 
 test "a world that refuses the fields fails the registration with its code" {
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
     var world: FakeWorld = undefined;
     world.init(false);
     var h: abi_framework.ke_scene_component_set_handle = undefined;
@@ -154,8 +164,9 @@ test "a world that refuses the fields fails the registration with its code" {
 }
 
 test "a missing set, component, name, ecs, world or out handle is an invalid argument" {
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
     var world: FakeWorld = undefined;
     world.init(true);
     var h: abi_framework.ke_scene_component_set_handle = undefined;
