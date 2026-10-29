@@ -353,14 +353,23 @@ public static class CSharpWriter
     }
 
     /// <summary>
-    /// The one owned projection a vtable declares, read off the slot tagged
-    /// <c>[releases:&lt;name&gt;]</c>.
+    /// The owned projections a vtable declares, one per slot tagged
+    /// <c>[releases:&lt;name&gt;]</c>. Two that take back the same pointee would leave a slot
+    /// answering with it unable to say which owner it hands out, so that fails.
     /// </summary>
-    static OwnedProjection? OwnedOf(ApiModel model, ApiStruct vtable, Convention convention)
+    static IReadOnlyList<OwnedProjection> OwnedOf(ApiModel model, ApiStruct vtable, Convention convention)
     {
-        var release = vtable.Slots.FirstOrDefault(s => s.Has("releases"));
-        if (release is null) return null;
+        var all = vtable.Slots.Where(s => s.Has("releases")).Select(s => OwnedBy(model, s, convention)).ToList();
+        var twice = all.GroupBy(x => x.Element).FirstOrDefault(g => g.Count() > 1);
+        if (twice is not null)
+            throw new InvalidOperationException(
+                $"{vtable.Name}: {string.Join(" and ", twice.Select(x => x.Release.Name))} both release {twice.Key},"
+                + " so a slot answering with it cannot say which owner it hands out");
+        return all;
+    }
 
+    static OwnedProjection OwnedBy(ApiModel model, ApiSlot release, Convention convention)
+    {
         var typeName = release.TagValue("releases")
             ?? throw new InvalidOperationException(
                 $"{release.Name}: [releases] must name the projection that owns what this slot takes"
@@ -1387,8 +1396,8 @@ public static class CSharpWriter
             RenderClosureDelegate(model, contract ?? o, cb, domainIface ?? typeName, convention);
 
         var owned = OwnedOf(model, vtable, convention);
-        if (owned is not null)
-            RenderOwned(o, owned, typeName, SlotName(owned.Release));
+        foreach (var each in owned)
+            RenderOwned(o, each, typeName, SlotName(each.Release));
 
         o.Add(XmlDoc("", vtable.Doc, convention).TrimEnd());
         o.Add($"public unsafe partial class {typeName} : IDisposable, {nativeIface}"
@@ -1885,7 +1894,7 @@ public static class CSharpWriter
     /// <c>[completion:&lt;context&gt;]</c>.
     /// </summary>
     static Completion? CompletionOf(ApiModel model, ClassifiedSlot cs, Convention convention,
-        OwnedProjection? owned)
+        IReadOnlyList<OwnedProjection>? owned)
     {
         var slot = cs.Slot;
         var fn = slot.Params.FirstOrDefault(p => p.Has("completion"));
@@ -1943,10 +1952,10 @@ public static class CSharpWriter
         OwnedProjection? resultOwned = null;
         if (result is not null)
         {
-            if (owned is not null && owned.Answers(result.Type))
+            if (owned?.FirstOrDefault(x => x.Answers(result.Type)) is { } answering)
             {
-                resultOwned = owned;
-                resultType = owned.TypeName;
+                resultOwned = answering;
+                resultType = answering.TypeName;
             }
             else
             {
@@ -2360,14 +2369,13 @@ public static class CSharpWriter
 
     static void RenderSlotMethod(ApiModel model, List<string> o, List<MemberDecl>? decls,
         ClassifiedSlot cs, Convention convention, string owner, bool ownerDrains,
-        OwnedProjection? owned = null)
+        IReadOnlyList<OwnedProjection>? owned = null)
     {
         var slot = cs.Slot;
         var name = SlotName(slot);
-        var access = owned is not null && owned.Release == slot ? "internal" : "public";
-        var ownedReturn = owned is not null
-            && (owned.Answers(slot.Returns) || (cs.ResultOut is { } ro && owned.Answers(CTypes.Deref(ro.Type))))
-            ? owned : null;
+        var access = owned is not null && owned.Any(x => x.Release == slot) ? "internal" : "public";
+        var ownedReturn = owned?.FirstOrDefault(x =>
+            x.Answers(slot.Returns) || (cs.ResultOut is { } ro && x.Answers(CTypes.Deref(ro.Type))));
         var lanes = GroupedLanes(slot.Params, convention);
         var callbacks = CallbackPairs(model, cs, convention);
         var groups = ClosureGroups(model, cs, callbacks, owner, ownerDrains, convention);
