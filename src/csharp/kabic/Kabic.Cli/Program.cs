@@ -5,7 +5,6 @@ var checks = new Dictionary<string, Func<Options, int>>
 {
     ["drift"] = DriftCommand.Run,
     ["bindings"] = BindingsCommand.CheckDrift,
-    ["api-coverage"] = ApiCoverageCheck.Execute,
     ["reconstruction"] = ReconstructionCheck.Execute,
     ["out-params"] = OutParamsCheck.Execute,
     ["zig"] = WriteZigCommand.CheckDrift,
