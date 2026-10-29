@@ -5,8 +5,9 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_asset_stb_image",
         .root = "src/stb_image_loader.zig",
-        .abi = &.{ "abi_asset", "abi_result" },
+        .abi = &.{ "abi_asset", "abi_asset_stb_image_factory", "abi_io", "abi_result" },
         .common = &.{"heap"},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,
         .tests = "Run the stb_image loader unit tests",

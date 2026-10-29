@@ -8,7 +8,8 @@ public static class ServiceCollectionExtensions
 {
     /// <summary>
     /// Registers an stb_image-backed <see cref="IImageLoader"/> singleton, and the
-    /// same loader as <see cref="INativeImageLoader"/>. The library logs to the registered
+    /// same loader as <see cref="INativeImageLoader"/>, reading through the registered
+    /// <see cref="KernelEngine.Io.INativeIo"/>. The library logs to the registered
     /// <see cref="ILogger"/>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddStbImageLoader(this IServiceCollection services)
@@ -20,7 +21,8 @@ public static class ServiceCollectionExtensions
                 if (sp.GetService<ILogger>() is { } logger)
                     Native.NativeMethods.asset_stb_image_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
                 KernelEngine.Asset.Native.ke_image_loader_handle handle;
-                KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&handle), "ke_image_loader_stb_create");
+                var parameters = new Native.ke_image_loader_stb_params { io = sp.GetRequiredService<KernelEngine.Io.INativeIo>().Native };
+                KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.image_loader_stb_create(&parameters, &handle), "ke_image_loader_stb_create");
                 return new ImageLoader(handle);
             }
         });
