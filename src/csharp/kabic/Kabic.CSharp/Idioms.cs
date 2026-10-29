@@ -94,6 +94,10 @@ public static class Idioms
     /// The C# type name for an ABI symbol: strips the ABI's own symbol prefix
     /// (which carries no meaning in a namespaced language) and PascalCases the rest.
     /// </summary>
+    /// <summary>The name of the interface exposing the native pointer of the vtable <paramref name="vtable"/>.</summary>
+    public static string NativeInterface(string vtable, Convention convention) =>
+        "INative" + Pascal(convention.StripPrefix(vtable));
+
     public static string TypeName(string name, Convention convention) =>
         convention.TypeNameOverrides.TryGetValue(name, out var overridden)
             ? overridden

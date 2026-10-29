@@ -136,7 +136,7 @@ public sealed class FactoriesExtension : IKabicExtension
         var domain = context.Domains.FirstOrDefault(d => d.Model.Structs.Any(s => s.Name == target && !s.External && s.IsVtable));
         if (domain is null) return null;
         var name = Idioms.Ident(param.Name ?? target);
-        return new FactoryArgument(param.Doc, null, name, $"{domain.Spec.Namespace}.INative{Idioms.TypeName(target, context.Convention)}", $"{name}.Native", false);
+        return new FactoryArgument(param.Doc, null, name, $"{domain.Spec.Namespace}.{Idioms.NativeInterface(target, context.Convention)}", $"{name}.Native", false);
     }
 
     private static FactoryArgument? Argument(ExtensionContext context, ApiField field)
@@ -148,7 +148,7 @@ public sealed class FactoriesExtension : IKabicExtension
             var target = type.TrimEnd('*', ' ');
             var domain = context.Domains.FirstOrDefault(d => d.Model.Structs.Any(s => s.Name == target && !s.External));
             if (domain is null) return null;
-            var iface = $"{domain.Spec.Namespace}.INative{Idioms.TypeName(target, context.Convention)}";
+            var iface = $"{domain.Spec.Namespace}.{Idioms.NativeInterface(target, context.Convention)}";
             return new FactoryArgument(field.Doc, field.Name, name, iface, $"{name}.Native", false);
         }
         if (field.Has("utf8") && type == "char *")

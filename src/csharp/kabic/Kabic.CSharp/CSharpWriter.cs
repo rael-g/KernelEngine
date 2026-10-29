@@ -534,7 +534,7 @@ public static class CSharpWriter
             throw new InvalidOperationException(
                 $"{p.Name}: [provider] names another domain's vtable, which reaches this one as a"
                 + $" pointer, and this parameter is {p.Type.Trim()}");
-        return "INative" + Idioms.TypeName(StripQualifiers(CTypes.Deref(p.Type)).Trim(), convention);
+        return Idioms.NativeInterface(StripQualifiers(CTypes.Deref(p.Type)).Trim(), convention);
     }
 
     static string CsParamType(ApiModel model, ApiParam p, Convention convention)
@@ -1364,7 +1364,7 @@ public static class CSharpWriter
         o.Add($"namespace {ns};");
         o.Add("");
 
-        var nativeIface = "INative" + Idioms.Pascal(convention.StripPrefix(vtable.Name));
+        var nativeIface = Idioms.NativeInterface(vtable.Name, convention);
         o.Add($"/// <summary>Exposes the raw native {typeName.ToLowerInvariant()} pointer for cross-domain composition wiring.</summary>");
         o.Add($"public unsafe interface {nativeIface}");
         o.Add("{");

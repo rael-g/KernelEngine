@@ -1,6 +1,7 @@
 using System.Text;
 
 using Kabic;
+using Kabic.CSharp;
 using Kabic.Factories;
 using Kabic.Pipeline;
 
@@ -60,8 +61,8 @@ public sealed class KernelEngineExtension : IKabicExtension
     private static string Registration(Factory f, Convention convention)
     {
         var contractName = f.ContractClass[(f.ContractClass.LastIndexOf('.') + 1)..];
-        var contractInterface = $"{f.Contract.Spec.Namespace}.INative{contractName}";
         var vtable = f.HandleType[..^convention.HandleSuffix.Length];
+        var contractInterface = $"{f.Contract.Spec.Namespace}.{Idioms.NativeInterface(vtable, convention)}";
         var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface")
             ? $"{f.Contract.Spec.Namespace}.I{contractName}"
             : null;
