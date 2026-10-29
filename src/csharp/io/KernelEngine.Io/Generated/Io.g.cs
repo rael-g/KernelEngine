@@ -18,7 +18,7 @@ public unsafe interface INativeIo
     ke_io* Native { get; }
 }
 
-/// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
+/// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once, each a worker of the task pool the implementation runs on or the thread that created that pool.</summary>
 public unsafe partial class Io : IDisposable, INativeIo
 {
     private ke_io* _native;

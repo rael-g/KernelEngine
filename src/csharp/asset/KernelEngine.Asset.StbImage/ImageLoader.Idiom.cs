@@ -13,8 +13,4 @@ public unsafe partial class ImageLoader : IImageLoader
         var native = ((INativeImageLoader)this).Native;
         return new ImageData(native, data);
     }
-
-    /// <inheritdoc/>
-    public Task<IImageData> LoadImageAsync(string path)
-        => Task.Run<IImageData>(() => ((IImageLoader)this).LoadImage(path));
 }

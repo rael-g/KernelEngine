@@ -71,7 +71,7 @@ public class FontLoaderTests
     }
 
     [Fact]
-    public async Task LoadFontAsync_CallsNative()
+    public void LoadFont_CallsNative()
     {
         ke_font_loader_handle h;
         unsafe { h = CreateMockHandle(); }
@@ -83,7 +83,7 @@ public class FontLoaderTests
         FreeFontCalled = false;
         LastResult = true;
 
-        var data = await loader.LoadFontAsync("test.ttf", 16);
+        var data = ((IFontLoader)loader).LoadFont("test.ttf", 16);
 
         Assert.Equal("test.ttf", LastPath);
         Assert.Equal(10u, data.AtlasWidth);
@@ -93,7 +93,7 @@ public class FontLoaderTests
     }
 
     [Fact]
-    public async Task LoadFontAsync_Throws_WhenNativeFails()
+    public void LoadFont_Throws_WhenNativeFails()
     {
         ke_font_loader_handle h;
         unsafe { h = CreateMockHandle(); }
@@ -103,7 +103,7 @@ public class FontLoaderTests
 
         LastResult = false;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => loader.LoadFontAsync("test.ttf", 16));
+        Assert.Throws<InvalidOperationException>(() => ((IFontLoader)loader).LoadFont("test.ttf", 16));
 
         LastResult = true;
         unsafe { NativeMemory.Free(h.@ref); }

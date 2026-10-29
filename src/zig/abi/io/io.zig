@@ -20,7 +20,8 @@ pub const ke_io_result = extern struct {
 
 /// Reads files without blocking the caller: each slot that reads submits a request, which runs
 /// elsewhere and is waited on exactly once. A request never waited on is never released. Paths
-/// follow ke_file_system. Every slot may be called from several threads at once.
+/// follow ke_file_system. Every slot may be called from several threads at once, each a worker
+/// of the task pool the implementation runs on or the thread that created that pool.
 pub const ke_io = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Submits a read of a whole file.

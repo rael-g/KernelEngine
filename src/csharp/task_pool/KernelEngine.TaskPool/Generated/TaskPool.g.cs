@@ -17,7 +17,7 @@ public unsafe interface INativeTaskPool
     ke_task_pool* Native { get; }
 }
 
-/// <summary>Dispatches work to a native thread pool.</summary>
+/// <summary>Dispatches work to a native thread pool. Every slot is called from one of the pool's workers or from the thread that created the pool, never from another thread.</summary>
 public unsafe partial class TaskPool : IDisposable, INativeTaskPool, ITaskPool
 {
     private ke_task_pool* _native;
