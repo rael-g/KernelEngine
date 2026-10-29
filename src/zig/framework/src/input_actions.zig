@@ -794,23 +794,23 @@ export fn ke_input_actions_create(io_in: ?*abi_io.ke_io, out_actions: ?*abi_fram
 }
 
 const testing = std.testing;
-const disk_io = @import("disk_io_test.zig");
+const served_files = @import("served_files_test.zig");
 
 const TempInput = struct {
-    tmp: std.testing.TmpDir,
+    tmp: served_files.Dir,
     path_buf: [std.fs.max_path_bytes]u8,
 
     fn init(contents: []const u8) !TempInput {
         var self = TempInput{
-            .tmp = std.testing.tmpDir(.{}),
+            .tmp = served_files.Dir.init(),
             .path_buf = undefined,
         };
         errdefer self.tmp.cleanup();
 
         const name = "bindings.input";
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = name, .data = contents });
+        try self.tmp.writeFile(name, contents);
 
-        const full = try std.fmt.bufPrint(&self.path_buf, ".zig-cache/tmp/{s}/{s}", .{ self.tmp.sub_path, name });
+        const full = try std.fmt.bufPrint(&self.path_buf, "{s}/{s}", .{ self.tmp.path(), name });
         self.path_buf[full.len] = 0;
         return self;
     }
@@ -829,7 +829,7 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_framework.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(disk_io.io(), &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(served_files.io(), &h));
         return .{ .handle = h };
     }
 

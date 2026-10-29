@@ -622,7 +622,7 @@ export fn ke_scene_loader_create(
 const testing = std.testing;
 
 const signal_bus_impl = @import("signal_bus.zig");
-const disk_io = @import("disk_io_test.zig");
+const served_files = @import("served_files_test.zig");
 
 const fake_max_components = 32;
 const fake_max_entities = 128;
@@ -844,19 +844,19 @@ fn spyFactory(
 }
 
 const TempScene = struct {
-    tmp: std.testing.TmpDir,
+    tmp: served_files.Dir,
     path_buf: [std.fs.max_path_bytes]u8,
 
     fn init() TempScene {
-        return .{ .tmp = std.testing.tmpDir(.{}), .path_buf = undefined };
+        return .{ .tmp = served_files.Dir.init(), .path_buf = undefined };
     }
 
     fn put(self: *TempScene, name: []const u8, contents: []const u8) !void {
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = name, .data = contents });
+        try self.tmp.writeFile(name, contents);
     }
 
     fn cPath(self: *TempScene, name: []const u8) ![*:0]const u8 {
-        const full = try std.fmt.bufPrint(&self.path_buf, ".zig-cache/tmp/{s}/{s}", .{ self.tmp.sub_path, name });
+        const full = try std.fmt.bufPrint(&self.path_buf, "{s}/{s}", .{ self.tmp.path(), name });
         self.path_buf[full.len] = 0;
         return @ptrCast(&self.path_buf);
     }
@@ -931,8 +931,8 @@ const Fixture = struct {
     fn rootAt(self: *Fixture, root: [*c]const u8) !void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, disk_io.io(), &self.assets_h));
-        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, disk_io.io(), &self.loader_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, served_files.io(), &self.assets_h));
+        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, served_files.io(), &self.loader_h));
     }
 
     fn describe(
@@ -1538,7 +1538,7 @@ test "a res:// subscene is found under the root its asset resolver was given" {
         \\
     );
     var root_buf: [std.fs.max_path_bytes]u8 = undefined;
-    const root = try std.fmt.bufPrintZ(&root_buf, ".zig-cache/tmp/{s}", .{scene.tmp.sub_path});
+    const root = try std.fmt.bufPrintZ(&root_buf, "{s}", .{scene.tmp.path()});
     try f.rootAt(root.ptr);
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
@@ -1920,12 +1920,12 @@ test "a scene that fails to load leaves none of the entities it had already crea
 
 test "a loader is never created without a world or an asset resolver" {
     var h: abi_framework.ke_scene_loader_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, disk_io.io(), &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, served_files.io(), &h));
     try testing.expect(h.ref == null);
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, disk_io.io(), &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, served_files.io(), &h));
     try testing.expect(h.ref == null);
 }
 

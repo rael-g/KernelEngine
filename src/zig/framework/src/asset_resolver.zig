@@ -496,28 +496,28 @@ const testing = std.testing;
 
 fn testResolver(image_loader: ?*abi_asset.ke_image_loader, project_root: [*c]const u8) abi_asset.ke_asset_resolver_handle {
     var h = std.mem.zeroes(abi_asset.ke_asset_resolver_handle);
-    _ = ke_asset_resolver_create(image_loader, null, project_root, disk_io.io(), &h);
+    _ = ke_asset_resolver_create(image_loader, null, project_root, served_files.io(), &h);
     return h;
 }
 
-const disk_io = @import("disk_io_test.zig");
+const served_files = @import("served_files_test.zig");
 
 const material_tolerance: f32 = 1e-6;
 
 const MaterialFile = struct {
-    tmp: std.testing.TmpDir,
+    tmp: served_files.Dir,
     path: [std.fs.max_path_bytes]u8,
 
     fn init(contents: []const u8) !MaterialFile {
-        var self = MaterialFile{ .tmp = std.testing.tmpDir(.{}), .path = undefined };
+        var self = MaterialFile{ .tmp = served_files.Dir.init(), .path = undefined };
         errdefer self.tmp.cleanup();
 
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "probe.material", .data = contents });
+        try self.tmp.writeFile("probe.material", contents);
 
         const joined = try std.fmt.bufPrint(
             &self.path,
-            ".zig-cache/tmp/{s}/probe.material",
-            .{self.tmp.sub_path},
+            "{s}/probe.material",
+            .{self.tmp.path()},
         );
         self.path[joined.len] = 0;
         return self;
@@ -534,7 +534,7 @@ const MaterialFile = struct {
 
 test "a material file that is not there fails instead of yielding a blank material" {
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try testing.expectError(error.NotFound, parseMaterialFile(disk_io.io().?, "/this/does/not/exist.material", &spec));
+    try testing.expectError(error.NotFound, parseMaterialFile(served_files.io().?, "/this/does/not/exist.material", &spec));
 }
 
 test "a file without a material section is not a material" {
@@ -542,7 +542,7 @@ test "a file without a material section is not a material" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try testing.expectError(error.Malformed, parseMaterialFile(disk_io.io().?, file.cPath(), &spec));
+    try testing.expectError(error.Malformed, parseMaterialFile(served_files.io().?, file.cPath(), &spec));
 }
 
 test "every authored key reaches the spec it was written for" {
@@ -558,7 +558,7 @@ test "every authored key reaches the spec it was written for" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try parseMaterialFile(disk_io.io().?, file.cPath(), &spec);
+    try parseMaterialFile(served_files.io().?, file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 0.8), spec.base_color[0], material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 0.2), spec.base_color[1], material_tolerance);
@@ -575,7 +575,7 @@ test "a key the author left out falls back to the default rather than to zero" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try parseMaterialFile(disk_io.io().?, file.cPath(), &spec);
+    try parseMaterialFile(served_files.io().?, file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.metallic, material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[0], material_tolerance);
@@ -639,7 +639,7 @@ fn fakeLoaderLastPath() []const u8 {
 }
 
 const TempAsset = struct {
-    tmp: std.testing.TmpDir,
+    tmp: served_files.Dir,
     dir_buf: [std.fs.max_path_bytes]u8,
     dir_len: usize,
     path_buf: [std.fs.max_path_bytes]u8,
@@ -647,7 +647,7 @@ const TempAsset = struct {
 
     fn init(name: []const u8, contents: []const u8) !TempAsset {
         var self = TempAsset{
-            .tmp = std.testing.tmpDir(.{}),
+            .tmp = served_files.Dir.init(),
             .dir_buf = undefined,
             .dir_len = 0,
             .path_buf = undefined,
@@ -655,9 +655,9 @@ const TempAsset = struct {
         };
         errdefer self.tmp.cleanup();
 
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = name, .data = contents });
+        try self.tmp.writeFile(name, contents);
 
-        const dir = try std.fmt.bufPrint(&self.dir_buf, ".zig-cache/tmp/{s}", .{self.tmp.sub_path});
+        const dir = try std.fmt.bufPrint(&self.dir_buf, "{s}", .{self.tmp.path()});
         self.dir_len = dir.len;
         self.dir_buf[dir.len] = 0;
 
