@@ -5,12 +5,17 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_asset = .{ .path = "../../abi/asset" },
+        .abi_io = .{ .path = "../../abi/io" },
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_task_pool = .{ .path = "../../abi/task_pool" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
     },
     .paths = .{"."},
 }

@@ -9,11 +9,13 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
 const abi_asset = @import("abi_asset");
+const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
 const abi_task_pool = @import("abi_task_pool");
 const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
+const io_files = @import("io_files.zig");
 
 const R = @import("result").Result(.{});
 
@@ -40,9 +42,11 @@ const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 /// The loader that `ke_asset_loader_assimp_create` allocates and `vtDestroy` frees. The field
 /// `handle` of `api` points back at the State, which is how each slot reaches its loader. `gpa` is
 /// the allocator every record comes from: the leak-tracking `heap` in a Debug build, and a
-/// thread-safe standard allocator otherwise.
+/// thread-safe standard allocator otherwise. `io` is borrowed from the factory's caller, and every
+/// file an import opens is read through it.
 const State = struct {
     api: abi_asset.ke_asset_loader,
+    io: *abi_io.ke_io,
     heap: if (debug_heap) TrackingHeap else void,
     gpa: std.mem.Allocator,
 };
@@ -157,7 +161,8 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
     defer c.aiReleasePropertyStore(props);
     c.aiSetImportPropertyInteger(props, c.AI_CONFIG_PP_SLM_VERTEX_LIMIT, vertex_limit);
 
-    const scene_c = c.aiImportFileExWithProperties(path, import_flags, null, props);
+    var file_io = io_files.of(s.io);
+    const scene_c = c.aiImportFileExWithProperties(path, import_flags, &file_io, props);
     if (scene_c == null or scene_c.*.mRootNode == null or
         (scene_c.*.mFlags & c.AI_SCENE_FLAGS_INCOMPLETE) != 0)
     {
@@ -214,10 +219,10 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
             if (ref.embedded) |et| {
                 _ = textures.decodeEmbedded(gpa, et, &texs[ti]);
             } else {
-                _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), &texs[ti]);
+                _ = textures.decodeExternal(gpa, s.io, @ptrCast(&ref.resolved_path), &texs[ti]);
             }
         } else {
-            _ = textures.decodeExternal(gpa, @ptrCast(&ref.resolved_path), &texs[ti]);
+            _ = textures.decodeExternal(gpa, s.io, @ptrCast(&ref.resolved_path), &texs[ti]);
         }
     }
 
@@ -386,9 +391,10 @@ fn vtDestroy(self_in: ?*abi_asset.ke_asset_loader) callconv(.c) void {
 /// Factory for the Assimp loader. It writes a handle whose ref is the vtable, or fails with out of
 /// memory, the handle zeroed, when the State cannot be allocated. Each call builds its own State, so
 /// each loader has its own leak tracking in a Debug build.
-export fn ke_asset_loader_assimp_create(out_loader: ?*abi_asset.ke_asset_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_asset.ke_asset_loader_handle) callconv(.c) abi_result.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+    const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = state_heap.create(State) catch {
         log.warn("creating the model loader failed: out of memory", .{});
@@ -396,6 +402,7 @@ export fn ke_asset_loader_assimp_create(out_loader: ?*abi_asset.ke_asset_loader_
     };
     s.* = .{
         .api = std.mem.zeroes(abi_asset.ke_asset_loader),
+        .io = io,
         .heap = if (debug_heap) .init else {},
         .gpa = undefined,
     };
@@ -412,9 +419,11 @@ export fn ke_asset_loader_assimp_create(out_loader: ?*abi_asset.ke_asset_loader_
 
 const testing = std.testing;
 
+const disk_io = @import("disk_io_test.zig");
+
 fn makeLoader() abi_asset.ke_asset_loader_handle {
     var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
-    _ = ke_asset_loader_assimp_create(&h);
+    _ = ke_asset_loader_assimp_create(disk_io.io(), &h);
     return h;
 }
 
@@ -468,6 +477,12 @@ test "creating a loader yields a usable vtable" {
     const h = makeLoader();
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
+}
+
+test "creating without an io is refused and leaves the handle zeroed" {
+    var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+    try testing.expectError(error.InvalidArgument, R.check(ke_asset_loader_assimp_create(null, &h)));
+    try testing.expect(h.ref == null and h.destroy == null);
 }
 
 test "loading a null path yields no model" {

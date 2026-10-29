@@ -5,6 +5,8 @@ const std = @import("std");
 
 const c = @import("c");
 const abi_asset = @import("abi_asset");
+const abi_io = @import("abi_io");
+const io_files = @import("io_files.zig");
 const strings = @import("strings.zig");
 
 const log = std.log.scoped(.asset_assimp);
@@ -46,17 +48,24 @@ fn copyToOwnStorage(gpa: std.mem.Allocator, raw: [*]const u8, w: c_int, h: c_int
     return true;
 }
 
-/// Called by `loadModel` for each texture that names a file, and for an embedded name whose index
-/// did not resolve: that call passes an empty path, and the decode falls back. A decode that
+/// Called by `loadModel` for each texture that names a file, which it reads through `io`, and for an
+/// embedded name whose index did not resolve: that call passes an empty path, and the decode falls
+/// back. A decode that
 /// fails is absorbed by `fallbackWhite`, so a bad texture does not fail the model. The record's
 /// path is
 /// set before the pixels are allocated, so an allocation failure leaves a path with no pixels.
 /// Returns false only when that allocation fails.
-pub fn decodeExternal(gpa: std.mem.Allocator, path: [*:0]const u8, out: *abi_asset.ke_texture_data) bool {
+pub fn decodeExternal(gpa: std.mem.Allocator, io: *abi_io.ke_io, path: [*:0]const u8, out: *abi_asset.ke_texture_data) bool {
+    if (path[0] == 0) return fallbackWhite(gpa, out);
+    const file = io_files.readWhole(io, path) catch |err| {
+        log.warn("reading {s} failed: {t}", .{ path, err });
+        return fallbackWhite(gpa, out);
+    };
+    defer io.free_bytes.?(io, file.bytes);
     var w: c_int = 0;
     var h: c_int = 0;
     var ch: c_int = 0;
-    const raw = c.stbi_load(path, &w, &h, &ch, 4) orelse return fallbackWhite(gpa, out);
+    const raw = c.stbi_load_from_memory(@ptrCast(file.bytes), @intCast(file.size), &w, &h, &ch, 4) orelse return fallbackWhite(gpa, out);
     strings.copyString(&out.path, path);
     const ok = copyToOwnStorage(gpa, raw, w, h, out);
     c.stbi_image_free(raw);

@@ -783,7 +783,7 @@
     }
   ],
   "extensions": {
-    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
+    "factories": { "bindings": ["Assimp", "Enki", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [
     {
