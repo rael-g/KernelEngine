@@ -110,11 +110,10 @@ fn freeImage(self: ?*abi_asset.ke_image_loader, data: [*c]abi_asset.ke_texture_d
 /// The exported factory. On success the handle's `ref` is the loader with both slots wired and
 /// its `destroy` releases it; when the loader cannot be allocated it fails with out of memory and
 /// the handle stays zeroed.
-export fn ke_image_loader_stb_create(params: ?*const abi_stb.ke_image_loader_stb_params, out_loader: ?*abi_asset.ke_image_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_image_loader_stb_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_asset.ke_image_loader_handle) callconv(.c) abi_result.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params orelse return R.code(error.InvalidArgument);
-    const io = p.io orelse return R.code(error.InvalidArgument);
+    const io = io_in orelse return R.code(error.InvalidArgument);
     const state = gpa.create(State) catch {
         log.warn("creating the image loader failed: out of memory", .{});
         return R.code(error.OutOfMemory);
@@ -166,7 +165,7 @@ const ServedIo = struct {
 
     fn loader(self: *ServedIo) abi_asset.ke_image_loader_handle {
         var h: abi_asset.ke_image_loader_handle = .{ .ref = null, .destroy = null };
-        _ = ke_image_loader_stb_create(&.{ .io = self.sub.api() }, &h);
+        _ = ke_image_loader_stb_create(self.sub.api(), &h);
         return h;
     }
 };
@@ -236,7 +235,6 @@ test "loading a one pixel targa yields its dimensions and pixels" {
 test "creating without an io is refused and leaves the handle zeroed" {
     var h: abi_asset.ke_image_loader_handle = .{ .ref = null, .destroy = null };
     try testing.expectError(error.InvalidArgument, R.check(ke_image_loader_stb_create(null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_image_loader_stb_create(&.{}, &h)));
     try testing.expect(h.ref == null);
 }
 

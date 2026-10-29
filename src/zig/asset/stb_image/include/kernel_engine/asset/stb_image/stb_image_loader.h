@@ -20,22 +20,13 @@
 extern "C" {
 #endif
 
-/** Construction parameters for ke_image_loader_stb_create. */
-typedef struct ke_image_loader_stb_params
-{
-    /// [provider] The io each load reads its file through; required, borrowed for the lifetime of
-    /// the loader.
-    ke_io *io;
-} ke_image_loader_stb_params;
-
-/// @brief Creates a ke_image_loader that reads a file through @p params' io, decodes it with
+/// @brief Creates a ke_image_loader that reads a file through @p io, decodes it with
 ///        stb_image and logs a failed decode's reason.
-/// @param params [borrowed] The io.
+/// @param io [borrowed] The io it reads through; borrowed for the lifetime of the loader.
 /// @param out_loader [out] Receives the loader; left zeroed on failure.
-/// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p params, io or @p out_loader, or
+/// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p io or @p out_loader, or
 ///         KE_RESULT_OUT_OF_MEMORY.
-KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(const ke_image_loader_stb_params *params,
-                                                            ke_image_loader_handle *out_loader);
+KE_ASSET_STB_IMAGE_API ke_result ke_image_loader_stb_create(ke_io *io, ke_image_loader_handle *out_loader);
 
 #ifdef __cplusplus
 }

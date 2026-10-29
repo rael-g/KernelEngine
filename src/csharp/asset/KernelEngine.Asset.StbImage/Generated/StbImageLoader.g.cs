@@ -5,11 +5,11 @@
 
 namespace KernelEngine.Asset.StbImage;
 
-/// <summary>Creates a ke_image_loader that reads a file through params' io, decodes it with stb_image and logs a failed decode's reason.</summary>
+/// <summary>Creates a ke_image_loader that reads a file through io, decodes it with stb_image and logs a failed decode's reason.</summary>
 public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoader
 {
-    /// <summary>Creates a ke_image_loader that reads a file through params' io, decodes it with stb_image and logs a failed decode's reason.</summary>
-    /// <param name="io">The io each load reads its file through; required, borrowed for the lifetime of the loader.</param>
+    /// <summary>Creates a ke_image_loader that reads a file through io, decodes it with stb_image and logs a failed decode's reason.</summary>
+    /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbImageLoader(KernelEngine.Io.INativeIo io) : base(Create(io))
     {
     }
@@ -17,10 +17,8 @@ public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoad
     private static KernelEngine.Asset.Native.ke_image_loader_handle Create(KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(io);
-        KernelEngine.Asset.StbImage.Native.ke_image_loader_stb_params config = default;
-        config.io = io.Native;
         KernelEngine.Asset.Native.ke_image_loader_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(&config, &handle), "ke_image_loader_stb_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(io.Native, &handle), "ke_image_loader_stb_create");
         return handle;
     }
 }
