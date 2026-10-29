@@ -26,6 +26,8 @@
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/task_pool/task_pool.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/file_system/std/file_system_std_create.h>
+#include <kernel_engine/io/pool/io_pool_create.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/runtime_create.h>
 
@@ -148,11 +150,11 @@ typedef struct renderer
     ke_render_tonemap_handle tonemap;
 } renderer;
 
-static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target)
+static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders" }, &r->binder));
+    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders", .io = io }, &r->binder));
     check("render service", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .binder = r->binder.ref }, &r->service));
+        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .io = io, .binder = r->binder.ref }, &r->service));
     ke_render_service *core = r->service.ref;
 
     ke_ndc_convention ndc = gpu->get_ndc_convention(gpu);
@@ -247,7 +249,11 @@ int main(int argc, char **argv)
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
-    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target);
+    ke_file_system_handle files = { 0 };
+    check("file system", ke_file_system_std_create(NULL, &files));
+    ke_io_handle file_io = { 0 };
+    check("io", ke_io_pool_create(&(ke_io_pool_params){ .task_pool = pool.ref, .file_system = files.ref }, &file_io));
+    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);
     ke_render_service *core = render.service.ref;
 
     ke_mesh_handle cube_h = { 0 };
@@ -334,6 +340,8 @@ int main(int argc, char **argv)
 
     renderer_destroy(&render);
     rt.destroy(rt.ref);
+    file_io.destroy(file_io.ref);
+    files.destroy(files.ref);
     pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     if (captured.ref) captured.destroy(captured.ref);

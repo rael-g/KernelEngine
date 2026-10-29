@@ -2,8 +2,10 @@
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Physics;
 using KernelEngine.Physics.Box2D;
@@ -28,6 +30,8 @@ var services = new ServiceCollection()
     .AddBox2D()
     .Add<INativeEcs, FlecsEcs>()
     .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 16 Physics Test (Space drops cube, R resets)"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.08f, 0.08f, 0.12f, 1.0f)))

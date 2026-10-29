@@ -8,7 +8,15 @@ const abi_result = @import("abi_result");
 const R = rc.R;
 const log = std.log.scoped(.render_service);
 
-const shader_files = @import("shader_files");
+fn readFile(io: *rc.abi_io.ke_io, path: [:0]const u8) R.Error![]u8 {
+    const request = io.read_file.?(io, path.ptr) orelse return error.OutOfMemory;
+    var result: rc.abi_io.ke_io_result = undefined;
+    R.check(io.wait.?(io, request, &result)) catch |err| {
+        log.warn("load_shader: reading {s} failed: {t}", .{ path, err });
+        return err;
+    };
+    return @as([*]u8, @ptrCast(result.bytes.?))[0..@intCast(result.size)];
+}
 
 /// Any language the file does not list falls back to the WGSL extension.
 fn extForLanguage(lang: abi_render.ke_gpu_shader_language) []const u8 {
@@ -65,8 +73,8 @@ fn load(st: *rc.CoreState, name: [*c]const u8, stage: abi_render.ke_gpu_shader_s
         return st.shader_store.get(cached).?.*;
     }
 
-    const bytes = try shader_files.read(rc.gpa, path);
-    defer rc.gpa.free(bytes);
+    const bytes = try readFile(st.io, path);
+    defer st.io.free_bytes.?(st.io, bytes.ptr);
 
     var module: abi_render.ke_gpu_shader_module = abi_render.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_shader_module.?(st.device, &abi_render.ke_gpu_shader_module_params{

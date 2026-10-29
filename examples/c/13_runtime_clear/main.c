@@ -14,6 +14,8 @@
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
 #include <kernel_engine/task_pool/task_pool.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/file_system/std/file_system_std_create.h>
+#include <kernel_engine/io/pool/io_pool_create.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/runtime_create.h>
 
@@ -76,11 +78,15 @@ int main(void)
     ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &rp, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
+    ke_file_system_handle files = { 0 };
+    check("file system", ke_file_system_std_create(NULL, &files));
+    ke_io_handle file_io = { 0 };
+    check("io", ke_io_pool_create(&(ke_io_pool_params){ .task_pool = pool.ref, .file_system = files.ref }, &file_io));
     ke_render_resource_binder_handle binder = { 0 };
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &binder));
+    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
     ke_render_service_handle service = { 0 };
     check("render service", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &service));
+        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &service));
 
     ke_ndc_convention ndc = gpu.ref->get_ndc_convention(gpu.ref);
     ke_view_space_handle view_space = { 0 };
@@ -118,6 +124,8 @@ int main(void)
     binder.destroy(binder.ref);
     view_space.destroy(view_space.ref);
     rt.destroy(rt.ref);
+    file_io.destroy(file_io.ref);
+    files.destroy(files.ref);
     pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);

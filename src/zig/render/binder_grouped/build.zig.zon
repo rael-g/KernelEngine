@@ -6,9 +6,9 @@
     .dependencies = .{
         .abi_result = .{ .path = "../../abi/result" },
         .abi_render_binder_grouped_factory = .{ .path = "abi" },
+        .abi_io = .{ .path = "../../abi/io" },
         .abi_render = .{ .path = "../../abi/render" },
         .ke_common = .{ .path = "../../common" },
-        .ke_render_common = .{ .path = "../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },

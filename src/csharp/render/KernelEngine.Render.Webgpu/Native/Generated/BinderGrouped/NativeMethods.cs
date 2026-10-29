@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 
+using KernelEngine.Io.Native;
 using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;

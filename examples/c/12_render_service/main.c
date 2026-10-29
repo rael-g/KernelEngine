@@ -12,6 +12,9 @@
 #include <kernel_engine/render/gpu/gpu_commands.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/file_system/std/file_system_std_create.h>
+#include <kernel_engine/io/pool/io_pool_create.h>
 
 static const char triangle_wgsl[] = {
 #embed "triangle.wgsl"
@@ -63,13 +66,20 @@ int main(void)
     ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
+    ke_task_pool_handle pool = { 0 };
+    check("task pool", ke_task_pool_enki_create(NULL, &pool));
+    ke_file_system_handle files = { 0 };
+    check("file system", ke_file_system_std_create(NULL, &files));
+    ke_io_handle file_io = { 0 };
+    check("io", ke_io_pool_create(&(ke_io_pool_params){ .task_pool = pool.ref, .file_system = files.ref }, &file_io));
+
     ke_render_resource_binder_handle binder = { 0 };
     check("resource binder", ke_render_resource_binder_grouped_create(
-        &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &binder));
+        &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
 
     ke_render_service_handle core = { 0 };
     check("render core", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &core));
+        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &core));
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend");
 
@@ -122,6 +132,9 @@ int main(void)
     core.ref->leave_chain(core.ref, link);
     core.destroy(core.ref);
     binder.destroy(binder.ref);
+    file_io.destroy(file_io.ref);
+    files.destroy(files.ref);
+    pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);

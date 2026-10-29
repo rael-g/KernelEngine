@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_service_factory.zig") });
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
+    abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("ke_abi_render", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
@@ -16,6 +17,8 @@ pub fn build(b: *std.Build) void {
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/ecs"));
+    translated.addIncludePath(b.path("../../../../c/file_system"));
+    translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));

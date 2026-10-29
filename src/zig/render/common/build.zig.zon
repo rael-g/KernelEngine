@@ -4,7 +4,6 @@
     .fingerprint = 0x46c2b825faccd585,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_build = .{ .path = "../../build" },
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
     },

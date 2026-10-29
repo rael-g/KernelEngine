@@ -7,6 +7,7 @@ const FrameLog = @import("frame_log.zig").FrameLog;
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_service").logFn };
 
 pub const abi_ecs = @import("abi_ecs");
+pub const abi_io = @import("abi_io");
 const abi_render = @import("abi_render");
 const abi_render_service_factory = @import("abi_render_service_factory");
 const abi_resource_cache = @import("abi_resource_cache");
@@ -193,6 +194,7 @@ pub const CoreState = struct {
     shader_cache: *abi_resource_cache.ke_resource_cache,
     shader_cache_destroy: *const fn (*abi_resource_cache.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
+    io: *abi_io.ke_io,
 
     globals: frame_globals.Globals,
     default_normal: abi_render.ke_texture_handle,
@@ -319,7 +321,7 @@ fn destroyCore(self: [*c]abi_render.ke_render_service) callconv(.c) void {
 /// Builds the state and the vtable whole, or frees in reverse what it took and fails. The vtable's
 /// handle is the state; the shared globals, the default resources, the blit shaders and the frame's
 /// color and depth are not made yet.
-fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_target, e: *abi_ecs.ke_ecs, bnd: *abi_render.ke_render_resource_binder, shader_dir_span: []const u8) R.Error!*abi_render.ke_render_service {
+fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_target, e: *abi_ecs.ke_ecs, bnd: *abi_render.ke_render_resource_binder, shader_dir_span: []const u8, io: *abi_io.ke_io) R.Error!*abi_render.ke_render_service {
     const st = try gpa.create(CoreState);
     errdefer gpa.destroy(st);
     const upload_arena = try gpa.alloc(u8, first_upload_arena);
@@ -371,6 +373,7 @@ fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_targe
         .shader_cache = undefined,
         .shader_cache_destroy = undefined,
         .shader_dir = shader_dir_owned,
+        .io = io,
         .globals = .{},
         .default_normal = .{ .bits = abi_render.KE_HANDLE_NONE },
         .default_cubemap = .{ .bits = abi_render.KE_HANDLE_NONE },
@@ -479,7 +482,7 @@ fn resourceCache(destroy_fn: abi_resource_cache.ke_resource_destroy_func, st: *C
 /// then the shared globals, which it gives the binder. The default resources, the "blit" shaders and
 /// the frame's color and depth come last because they go through the functions of the vtable just
 /// built. `destroyCore` undoes this in reverse and frees the vtable last. Missing params, or a null
-/// device, target, ecs, shader directory or binder in them, fail as an invalid argument; a step
+/// device, target, ecs, shader directory, io or binder in them, fail as an invalid argument; a step
 /// that fails fails the factory with its code. On success the ref is the new vtable and `destroy`
 /// is `destroyCore`.
 export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke_render_service_params, out_service: [*c]abi_render.ke_render_service_handle) callconv(.c) abi_result.ke_result {
@@ -490,11 +493,12 @@ export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke
     const tgt: *abi_render.ke_gpu_render_target = p.target orelse return R.code(error.InvalidArgument);
     const e: *abi_ecs.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
     if (p.shader_dir == null) return R.code(error.InvalidArgument);
+    const io: *abi_io.ke_io = p.io orelse return R.code(error.InvalidArgument);
     const bnd: *abi_render.ke_render_resource_binder = p.binder orelse return R.code(error.InvalidArgument);
     const color_format = if (p.color_format != abi_render.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
     const depth_format = if (p.depth_format != abi_render.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else abi_render.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
-    const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir.?)) catch |err| return R.code(err);
+    const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir.?), io) catch |err| return R.code(err);
     prepare(core, color_format, depth_format) catch |err| {
         destroyCore(core);
         return R.code(err);
@@ -763,24 +767,42 @@ fn chainLink(svc: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_
     return link;
 }
 
-/// A temporary shader directory holding the two "blit" files the service loads when created.
+var empty_shader: [1]u8 = .{0};
+var shader_request: u8 = 0;
+
+fn readEmpty(args: zsub.For(abi_io.ke_io).Args(.read_file)) ?*abi_io.ke_io_request {
+    _ = args;
+    return @ptrCast(&shader_request);
+}
+
+fn waitEmpty(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+    if (args[2]) |out| {
+        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.bytes = &empty_shader;
+    }
+    return R.ok;
+}
+
+/// A substitute io under a shader directory, giving every shader the service reads as empty.
 const ShaderDir = struct {
-    tmp: std.testing.TmpDir,
-    buf: [std.fs.max_path_bytes]u8,
+    io: zsub.For(abi_io.ke_io),
 
     fn init(self: *ShaderDir) !void {
-        self.tmp = std.testing.tmpDir(.{});
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "blit.vs.wgsl", .data = "" });
-        try self.tmp.dir.writeFile(testing.io, .{ .sub_path = "blit.fs.wgsl", .data = "" });
-        _ = try std.fmt.bufPrintZ(&self.buf, ".zig-cache/tmp/{s}", .{self.tmp.sub_path});
+        try self.io.init();
+        _ = self.io.when(.read_file).does(readEmpty);
+        _ = self.io.when(.wait).does(waitEmpty);
     }
 
-    fn path(self: *ShaderDir) [*:0]const u8 {
-        return @ptrCast(&self.buf);
+    fn path(_: *ShaderDir) [*:0]const u8 {
+        return "shaders";
+    }
+
+    fn api(self: *ShaderDir) *abi_io.ke_io {
+        return self.io.api();
     }
 
     fn deinit(self: *ShaderDir) void {
-        self.tmp.cleanup();
+        self.io.deinit();
     }
 };
 
@@ -793,7 +815,7 @@ test "creating and destroying the render service leaves no block allocated and n
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try gpu.expectReleased();
@@ -808,7 +830,7 @@ test "a render service created without a render target is refused and leaves not
     try gpu.init();
     defer gpu.deinit();
     var h: abi_render.ke_render_service_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = gpu.dev.api(), .target = null, .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = gpu.dev.api(), .target = null, .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
     try testing.expect(h.ref == null);
     try gpu.expectReleased();
     try heap.expectNoLeaks();
@@ -823,7 +845,7 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(abi_render.ke_gpu_texture_format, abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
@@ -844,7 +866,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
@@ -882,7 +904,7 @@ test "uploads beyond the first frame's records and arena are all written, and th
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
@@ -915,7 +937,7 @@ test "a frame with more passes than the first frame's log submits every one, and
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const pass_count = first_passes + 36;
@@ -951,7 +973,7 @@ test "a declared resource's texture and view carry the name it was declared unde
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -976,7 +998,7 @@ test "a render pass is opened under the name its pass declared" {
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -1007,7 +1029,7 @@ const PassHarness = struct {
         try self.sd.init();
         try self.gpu.init();
         self.target.init();
-        self.h = serviceOf(.{ .device = self.gpu.dev.api(), .target = self.target.api(), .ecs = self.gpu.ecs.api(), .shader_dir = self.sd.path(), .binder = self.gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+        self.h = serviceOf(.{ .device = self.gpu.dev.api(), .target = self.target.api(), .ecs = self.gpu.ecs.api(), .shader_dir = self.sd.path(), .io = self.sd.api(), .binder = self.gpu.binder.api(), .color_format = 0, .depth_format = 0 });
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
         for ([_][*:0]const u8{ "src", "dst" }) |name| {
             var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
@@ -1206,7 +1228,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -1266,7 +1288,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]abi_render.ke_gpu_render_pipeline_params = undefined;
@@ -1302,7 +1324,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
@@ -1330,7 +1352,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     const attrs = [_]abi_render.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};

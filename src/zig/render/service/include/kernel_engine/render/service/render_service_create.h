@@ -3,6 +3,7 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/io/io.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -32,6 +33,8 @@ typedef struct ke_render_service_params
     ke_ecs                    *ecs;    ///< Borrowed, must outlive the service.
     /// [utf8] Directory the shaders are loaded from; copied.
     const char                *shader_dir;
+    /// [provider] Borrowed, must outlive the service; the shaders are read through it.
+    ke_io                     *io;
     /// Borrowed, must outlive the service; it holds the service's materials and is given the
     /// parameters every shader shares.
     ke_render_resource_binder *binder;
@@ -44,7 +47,7 @@ typedef struct ke_render_service_params
 /**
  * @brief Creates a render service whose frames draw into the params' target.
  * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p params, its
- *         device, target, ecs, shader_dir or binder is NULL.
+ *         device, target, ecs, shader_dir, io or binder is NULL.
  * @param out_service [out] Receives the handle; left zeroed on failure.
  */
 KE_RENDER_CORE_API ke_result

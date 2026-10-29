@@ -5,9 +5,8 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_render_binder_grouped",
         .root = "src/resource_binder_grouped.zig",
-        .abi = &.{ "abi_render", "abi_render_binder_grouped_factory", "abi_result" },
+        .abi = &.{ "abi_io", "abi_render", "abi_render_binder_grouped_factory", "abi_result" },
         .common = &.{"heap"},
-        .render_common = &.{"shader_files"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = materialParams,
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},

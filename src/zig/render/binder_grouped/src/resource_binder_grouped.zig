@@ -5,6 +5,7 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_binder_grouped").logFn };
 
+const abi_io = @import("abi_io");
 const abi_render = @import("abi_render");
 const abi_render_binder_grouped_factory = @import("abi_render_binder_grouped_factory");
 const abi_result = @import("abi_result");
@@ -13,7 +14,6 @@ const log = std.log.scoped(.binder_grouped);
 const heap = @import("heap");
 const gpa = heap.gpa;
 const reflection = @import("reflection.zig");
-const shader_files = @import("shader_files");
 
 const material_block = "mat";
 const material_sampler = "tex_sampler";
@@ -43,6 +43,7 @@ const State = struct {
     api: abi_render.ke_render_resource_binder,
     device: *abi_render.ke_gpu_device,
     shader_dir: []u8,
+    io: *abi_io.ke_io,
     provided: std.ArrayList(reflection.Provided),
     material_group: reflection.Group,
     material_layout: abi_render.ke_gpu_bind_group_layout,
@@ -222,6 +223,16 @@ fn createShaderLayout(self: [*c]abi_render.ke_render_resource_binder, params: [*
     return R.ok;
 }
 
+fn readFile(io: *abi_io.ke_io, path: [:0]const u8) R.Error![]u8 {
+    const request = io.read_file.?(io, path.ptr) orelse return error.OutOfMemory;
+    var result: abi_io.ke_io_result = undefined;
+    R.check(io.wait.?(io, request, &result)) catch |err| {
+        log.warn("create_shader_layout: reading {s} failed: {t}", .{ path, err });
+        return err;
+    };
+    return @as([*]u8, @ptrCast(result.bytes.?))[0..@intCast(result.size)];
+}
+
 fn shaderLayout(st: *State, params: *const abi_render.ke_render_shader_layout_params) R.Error!*ShaderLayout {
     const sl = try gpa.create(ShaderLayout);
     sl.* = .{ .groups = .empty, .material_index = null };
@@ -233,8 +244,8 @@ fn shaderLayout(st: *State, params: *const abi_render.ke_render_shader_layout_pa
             log.warn("create_shader_layout: the reflection path of {s} is too long", .{std.mem.span(params.shader.?)});
             return error.InvalidArgument;
         };
-        const json = try shader_files.read(gpa, path);
-        defer gpa.free(json);
+        const json = try readFile(st.io, path);
+        defer st.io.free_bytes.?(st.io, json.ptr);
         try collectStage(sl, json, s.bit);
     }
     try finishLayout(st, sl, params);
@@ -417,12 +428,12 @@ fn destroyBinder(self: [*c]abi_render.ke_render_resource_binder) callconv(.c) vo
     gpa.destroy(st);
 }
 
-/// The factory: copies the shader directory, reads the material block from the embedded
+/// The factory: copies the shader directory, keeps the borrowed io, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
 export fn ke_render_resource_binder_grouped_create(params: [*c]const abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params, out_binder: [*c]abi_render.ke_render_resource_binder_handle) callconv(.c) abi_result.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    if (params == null or params.*.device == null or params.*.shader_dir == null) return R.code(error.InvalidArgument);
+    if (params == null or params.*.device == null or params.*.shader_dir == null or params.*.io == null) return R.code(error.InvalidArgument);
     const st = newBinder(params.*) catch |err| return R.code(err);
     out.* = .{ .ref = &st.api, .destroy = destroyBinder };
     return R.ok;
@@ -451,6 +462,7 @@ fn newBinder(params: abi_render_binder_grouped_factory.ke_render_resource_binder
         },
         .device = params.device.?,
         .shader_dir = dir,
+        .io = params.io.?,
         .provided = .empty,
         .material_group = reflection.Group.init(gpa),
         .material_layout = abi_render.KE_GPU_INVALID_HANDLE,
@@ -522,10 +534,34 @@ const PassProbe = struct {
     }
 };
 
+const IoSub = zsub.For(abi_io.ke_io);
+
+const Reflection = struct { name: []const u8, data: []const u8 };
+
+const reflections = [_]Reflection{
+    .{ .name = "shaders/lit.vs.json", .data = lit_vs },
+    .{ .name = "shaders/lit.fs.json", .data = lit_fs },
+    .{ .name = "shaders/gap.fs.json", .data = gap_fs },
+};
+
+fn readReflection(args: IoSub.Args(.read_file)) ?*abi_io.ke_io_request {
+    const path = std.mem.span(args[1].?);
+    for (&reflections) |*r| if (std.mem.eql(u8, r.name, path)) return @ptrCast(@constCast(r));
+    return null;
+}
+
+fn waitReflection(args: IoSub.Args(.wait)) abi_result.ke_result {
+    const r: *const Reflection = @ptrCast(@alignCast(args[1].?));
+    const out = args[2].?;
+    out.* = std.mem.zeroes(abi_io.ke_io_result);
+    out.bytes = @constCast(r.data.ptr);
+    out.size = r.data.len;
+    return R.ok;
+}
+
 const Rig = struct {
     dev: DeviceSub,
-    dir: std.testing.TmpDir,
-    path: [std.fs.max_path_bytes]u8,
+    io: IoSub,
 
     fn init(self: *Rig) !void {
         try self.dev.init();
@@ -533,24 +569,20 @@ const Rig = struct {
         _ = self.dev.when(.create_buffer).writesFresh(2);
         _ = self.dev.when(.create_bind_group_layout).writesFresh(2);
         _ = self.dev.when(.create_bind_group).writesFresh(2);
-        self.dir = std.testing.tmpDir(.{});
-        errdefer self.dir.cleanup();
-        try self.dir.dir.writeFile(testing.io, .{ .sub_path = "lit.vs.json", .data = lit_vs });
-        try self.dir.dir.writeFile(testing.io, .{ .sub_path = "lit.fs.json", .data = lit_fs });
-        try self.dir.dir.writeFile(testing.io, .{ .sub_path = "gap.fs.json", .data = gap_fs });
-        const p = try std.fmt.bufPrint(&self.path, ".zig-cache/tmp/{s}", .{self.dir.sub_path});
-        self.path[p.len] = 0;
+        try self.io.init();
+        _ = self.io.when(.read_file).does(readReflection);
+        _ = self.io.when(.wait).does(waitReflection);
     }
 
     fn binder(self: *Rig) !abi_render.ke_render_resource_binder_handle {
-        const params = abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = @ptrCast(&self.path) };
+        const params = abi_render_binder_grouped_factory.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = "shaders", .io = self.io.api() };
         var h: abi_render.ke_render_resource_binder_handle = undefined;
         try R.check(ke_render_resource_binder_grouped_create(&params, &h));
         return h;
     }
 
     fn deinit(self: *Rig) void {
-        self.dir.cleanup();
+        self.io.deinit();
         self.dev.deinit();
     }
 };

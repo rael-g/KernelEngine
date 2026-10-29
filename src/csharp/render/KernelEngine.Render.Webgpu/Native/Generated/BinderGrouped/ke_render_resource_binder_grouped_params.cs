@@ -1,3 +1,4 @@
+using KernelEngine.Io.Native;
 using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
@@ -11,4 +12,7 @@ public unsafe partial struct ke_render_resource_binder_grouped_params
 
     [NativeTypeName("const char *")]
     public sbyte* shader_dir;
+
+    [NativeTypeName("ke_io *")]
+    public KernelEngine.Io.Native.ke_io* io;
 }

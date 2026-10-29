@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const ecs = @import("ecs");
+const io = @import("io");
 const logger = @import("logger");
 const render = @import("render");
 const result = @import("result");
@@ -15,6 +16,8 @@ pub const ke_render_service_params = extern struct {
     ecs: ?*ecs.ke_ecs = std.mem.zeroes(?*ecs.ke_ecs),
     /// Directory the shaders are loaded from; copied.
     shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// Borrowed, must outlive the service; the shaders are read through it.
+    io: ?*io.ke_io = std.mem.zeroes(?*io.ke_io),
     /// Borrowed, must outlive the service; it holds the service's materials and is given the
     /// parameters every shader shares.
     binder: ?*render.ke_render_resource_binder = std.mem.zeroes(?*render.ke_render_resource_binder),

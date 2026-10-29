@@ -115,6 +115,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var window = services.GetRequiredService<IWindow>();
         var ecs = services.GetRequiredService<INativeEcs>();
         var taskPool = services.GetRequiredService<INativeTaskPool>();
+        var io = services.GetRequiredService<KernelEngine.Io.INativeIo>();
         var world = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
@@ -145,7 +146,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
             : null;
-        Compose(rt, ec, wd, ar, config);
+        Compose(rt, ec, wd, ar, io.Native, config);
 
         _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
@@ -184,16 +185,16 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     private void Compose(KernelEngine.Runtime.Native.ke_runtime* rt, KernelEngine.Ecs.Native.ke_ecs* ec,
         KernelEngine.Framework.Native.ke_world* wd,
-        KernelEngine.Asset.Native.ke_asset_resolver* ar, IConfiguration? config)
+        KernelEngine.Asset.Native.ke_asset_resolver* ar, KernelEngine.Io.Native.ke_io* io, IConfiguration? config)
     {
         var dev = _device.@ref;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
         fixed (byte* sd = shaderDirBytes)
         {
-            var bp = new ke_render_resource_binder_grouped_params { device = dev, shader_dir = (sbyte*)sd };
+            var bp = new ke_render_resource_binder_grouped_params { device = dev, shader_dir = (sbyte*)sd, io = io };
             fixed (KernelEngine.Render.Native.ke_render_resource_binder_handle* made = &_binder)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(&bp, made), "resource binder create");
-            var sp = new ke_render_service_params { device = dev, target = _target.@ref, ecs = ec, shader_dir = (sbyte*)sd, binder = _binder.@ref };
+            var sp = new ke_render_service_params { device = dev, target = _target.@ref, ecs = ec, shader_dir = (sbyte*)sd, io = io, binder = _binder.@ref };
             fixed (KernelEngine.Render.Native.ke_render_service_handle* made = &_service)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(&sp, made), "render service create");
         }
