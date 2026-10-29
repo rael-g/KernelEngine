@@ -30,7 +30,10 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
 /// `destroyHandle`. A handle field stays invalid until `setup` or `system` creates it, and
 /// `system` replaces `gbuffer_set` each tick. `queries`, `access` and `io`
 /// are handed to the runtime and to `begin_pass` by address, so the block is never copied.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const DeferredLightingModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
     ibl_enabled: bool = true,
@@ -250,6 +253,7 @@ fn destroyModule(dl: *const DeferredLightingModule) void {
 /// the GPU objects and then frees the block.
 fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
+    _ = dl.runtime.unregister_system.?(dl.runtime, dl.system);
     destroyModule(dl);
     gpa.destroy(dl);
 }
@@ -291,6 +295,8 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_defer
         gpa.destroy(dl);
         return registered;
     }
+    dl.runtime = rt;
+    dl.system = system_id;
 
     out.* = .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
     return R.ok;
@@ -360,6 +366,18 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the deferred lighting pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
+    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a deferred lighting pass whose shader fails to load releases what it had created" {
