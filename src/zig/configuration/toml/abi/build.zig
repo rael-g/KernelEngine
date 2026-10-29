@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("configuration_toml_factory.zig") });
     abi.addImport("configuration", b.dependency("ke_abi_configuration", .{}).module("abi"));
+    abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
 
@@ -16,6 +17,8 @@ pub fn build(b: *std.Build) void {
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../include"));
+    translated.addIncludePath(b.path("../../../../c/file_system"));
+    translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../common/include"));

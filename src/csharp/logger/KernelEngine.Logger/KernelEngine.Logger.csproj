@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
   </ItemGroup>
 
   <ItemGroup>

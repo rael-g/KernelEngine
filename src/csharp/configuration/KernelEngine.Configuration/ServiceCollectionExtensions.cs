@@ -8,7 +8,8 @@ public static class ServiceCollectionExtensions
     /// <summary>
     /// Registers an <see cref="IConfiguration"/> singleton backed by the native
     /// <c>ke_configuration</c> store. With no arguments, looks for a <c>Project</c>
-    /// file next to the executable (<see cref="AppContext.BaseDirectory"/>). Safe
+    /// file next to the executable (<see cref="AppContext.BaseDirectory"/>), read through the
+    /// registered <see cref="KernelEngine.Io.INativeIo"/>. Safe
     /// to call when the file does not exist — every reader's fallback then applies.
     /// </summary>
     /// <param name="path">
@@ -18,7 +19,7 @@ public static class ServiceCollectionExtensions
     /// </param>
     public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
-        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(_ => Load(path)));
+        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path)));
         return services;
     }
 
@@ -29,13 +30,13 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static void TryAddConfigurationSingleton(this IServiceCollection services, string? path = null)
     {
-        services.TryAddSingleton<IConfiguration>(_ => Load(path));
+        services.TryAddSingleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path));
     }
 
-    private static Configuration Load(string? path)
+    private static Configuration Load(KernelEngine.Io.INativeIo io, string? path)
     {
         var cfg = new Configuration();
-        cfg.LoadToml(ResolvePath(path ?? "Project")!);
+        cfg.LoadToml(io, ResolvePath(path ?? "Project")!);
         return cfg;
     }
 

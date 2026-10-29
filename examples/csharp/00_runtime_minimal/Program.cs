@@ -2,6 +2,8 @@
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Runtime;
 using KernelEngine.TaskPool;
@@ -17,6 +19,8 @@ var services = new ServiceCollection()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
     .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
 #endregion

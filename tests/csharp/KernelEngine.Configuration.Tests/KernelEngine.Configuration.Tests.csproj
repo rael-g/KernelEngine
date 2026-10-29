@@ -24,6 +24,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\task_pool\KernelEngine.TaskPool.Enki\KernelEngine.TaskPool.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
   </ItemGroup>
 
 </Project>

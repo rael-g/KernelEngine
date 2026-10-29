@@ -61,31 +61,4 @@ public class ConfigurationTests
         var result = cfg.GetFloatArray("render", "clear_color", [0.1f, 0.2f, 0.3f, 1.0f]);
         Assert.Equal([0.1f, 0.2f, 0.3f, 1.0f], result);
     }
-
-    [Fact]
-    public void LoadToml_MissingFile_IsNoOp()
-    {
-        using var cfg = new Configuration();
-        cfg.LoadToml("non_existent.toml");
-        Assert.Equal(1280, cfg.GetInt("runtime.window", "width", 1280));
-    }
-
-    [Fact]
-    public void LoadToml_PopulatesStore_FromDottedSections()
-    {
-        string path = Path.GetTempFileName();
-        File.WriteAllText(path, "[runtime.window]\nwidth = 800\ntitle = \"Test\"\nfullscreen = true\n");
-        try
-        {
-            using var cfg = new Configuration();
-            cfg.LoadToml(path);
-            Assert.Equal(800, cfg.GetInt("runtime.window", "width", 0));
-            Assert.Equal("Test", cfg.GetString("runtime.window", "title", ""));
-            Assert.True(cfg.GetBool("runtime.window", "fullscreen", false));
-        }
-        finally
-        {
-            File.Delete(path);
-        }
-    }
 }

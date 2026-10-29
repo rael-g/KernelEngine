@@ -1,4 +1,7 @@
 using KernelEngine.Configuration;
+using KernelEngine.FileSystem.Std;
+using KernelEngine.Io.Pool;
+using KernelEngine.TaskPool.Enki;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -8,12 +11,15 @@ namespace KernelEngine.Configuration.Tests;
 
 public class ServiceCollectionExtensionsTests
 {
+    private static IServiceCollection WithIo() =>
+        new ServiceCollection().AddEnkiTaskPool().AddStdFileSystem().AddPoolIo();
+
     [Fact]
     public void AddProjectConfig_RegistersSingleton()
     {
-        var services = new ServiceCollection();
+        var services = WithIo();
         services.AddProjectConfig();
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var config = provider.GetService<IConfiguration>();
         Assert.NotNull(config);
     }
@@ -21,9 +27,9 @@ public class ServiceCollectionExtensionsTests
     [Fact]
     public void AddProjectConfig_MissingFile_FallsBackToDefaults()
     {
-        var services = new ServiceCollection();
+        var services = WithIo();
         services.AddProjectConfig("non_existent.toml");
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var config = provider.GetRequiredService<IConfiguration>();
         Assert.Equal(1280, config.GetInt("runtime.window", "width", 1280));
     }
@@ -45,7 +51,7 @@ public class ServiceCollectionExtensionsTests
         File.WriteAllText(file, "[runtime.window]\nwidth = 640\n");
         try
         {
-            var services = new ServiceCollection();
+            var services = WithIo();
             services.TryAddConfigurationSingleton();
             services.AddProjectConfig(file);
 

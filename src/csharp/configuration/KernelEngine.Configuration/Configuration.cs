@@ -23,11 +23,12 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
         _destroy = handle.destroy;
     }
 
-    /// <summary>Reads <paramref name="path"/> into the store. A missing file is a no-op.</summary>
-    public void LoadToml(string path)
+    /// <summary>Reads <paramref name="path"/> into the store through <paramref name="io"/>. A missing file is a no-op.</summary>
+    public void LoadToml(KernelEngine.Io.INativeIo io, string path)
     {
         KernelEngine.Configuration.Native.ke_configuration_source_handle source;
-        NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(&source), "ke_configuration_toml_create");
+        var parameters = new KernelEngine.Configuration.Native.ke_configuration_toml_params { io = io.Native };
+        NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(&parameters, &source), "ke_configuration_toml_create");
         try
         {
             var bytes = Encoding.UTF8.GetBytes(path + '\0');
