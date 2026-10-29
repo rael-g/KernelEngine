@@ -71,7 +71,10 @@ fn collectDraws(
 /// lets `destroyModule` release a module whose setup stopped partway. `io` is handed to the render
 /// service on every `begin_pass`, and its `writes` points into this module, so the module must not
 /// move.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const GBufferModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
 
@@ -320,6 +323,7 @@ fn destroyModule(gb: *GBufferModule) void {
 /// objects and frees the module. A null ref does nothing.
 fn destroyHandle(self: ?*abi_render_gbuffer_factory.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
+    _ = gb.runtime.unregister_system.?(gb.runtime, gb.system);
     destroyModule(gb);
     gpa.destroy(gb);
 }
@@ -361,6 +365,8 @@ export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory
         gpa.destroy(gb);
         return registered;
     }
+    gb.runtime = rt;
+    gb.system = system_id;
 
     out.* = .{ .ref = @ptrCast(gb), .destroy = destroyHandle };
     return R.ok;
@@ -544,6 +550,18 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the gbuffer pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
+    try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a gbuffer pass whose shader fails to load releases what it had created" {
