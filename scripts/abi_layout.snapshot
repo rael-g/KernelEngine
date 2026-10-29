@@ -70,6 +70,41 @@ ke_task_pool_handle size=16 align=8
   ref 0
   destroy 8
 
+[file_system]
+ke_file_stat size=16 align=8
+  kind 0
+  size 8
+ke_file_system size=48 align=8
+  handle 0
+  open 8
+  size 16
+  read_at 24
+  close 32
+  stat 40
+ke_file_system_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[io]
+ke_io_result size=40 align=8
+  file 0
+  bytes 8
+  size 16
+  stat 24
+ke_io size=72 align=8
+  handle 0
+  read_file 8
+  open 16
+  read_at 24
+  stat 32
+  is_completed 40
+  wait 48
+  close 56
+  free_bytes 64
+ke_io_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [runtime]
 ke_component_access size=8 align=4
   cid 0

@@ -1,0 +1,235 @@
+{
+  "enums": [
+    {
+      "name": "ke_file_kind",
+      "doc": "What a path names.",
+      "values": [
+        {
+          "name": "KE_FILE_KIND_FILE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_FILE_KIND_DIRECTORY",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_FILE_KIND_OTHER",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_file_stat",
+      "doc": "What ke_file_system.stat reports about a path.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "ke_file_kind",
+          "tags": [],
+          "doc": "What the path names."
+        },
+        {
+          "name": "size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": "Its size in bytes; meaningful for a file only."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_file_system",
+      "doc": "Read-only access to the files of one platform. Paths are UTF-8 with \u0027/\u0027 as the separator; a relative path is resolved against the root the implementation was created with. Every slot may be called from several threads at once, read_at on one open file included.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "open",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Opens a file for reading.",
+          "return_doc": "KE_OK, KE_RESULT_NOT_FOUND for a path that names nothing, KE_RESULT_INVALID_ARGUMENT for a null path or out_file, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_IO.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The file to open."
+            },
+            {
+              "name": "out_file",
+              "type": "ke_open_file **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the open file, released by close; left null on failure."
+            }
+          ],
+          "receiver": "struct ke_file_system *"
+        },
+        {
+          "name": "size",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reports the size of an open file.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null file or out_size, or KE_RESULT_IO.",
+          "params": [
+            {
+              "name": "file",
+              "type": "ke_open_file *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A file open was given."
+            },
+            {
+              "name": "out_size",
+              "type": "uint64_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the size in bytes."
+            }
+          ],
+          "receiver": "struct ke_file_system *"
+        },
+        {
+          "name": "read_at",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads from an open file at an offset, leaving no position behind, so reads of one file from several threads do not interfere.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null file, out_read, or dst with a non-zero len, or KE_RESULT_IO.",
+          "params": [
+            {
+              "name": "file",
+              "type": "ke_open_file *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A file open was given."
+            },
+            {
+              "name": "offset",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": "Where the read starts, in bytes from the start of the file."
+            },
+            {
+              "name": "dst",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Receives the bytes."
+            },
+            {
+              "name": "len",
+              "type": "size_t",
+              "tags": [],
+              "doc": "The number of bytes dst holds."
+            },
+            {
+              "name": "out_read",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of bytes read, fewer than len only at the end of the file."
+            }
+          ],
+          "receiver": "struct ke_file_system *"
+        },
+        {
+          "name": "close",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases an open file; it is invalid afterwards. A null file is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "file",
+              "type": "ke_open_file *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A file open was given."
+            }
+          ],
+          "receiver": "struct ke_file_system *"
+        },
+        {
+          "name": "stat",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reports what a path names without opening it.",
+          "return_doc": "KE_OK, KE_RESULT_NOT_FOUND for a path that names nothing, KE_RESULT_INVALID_ARGUMENT for a null path or out_stat, or KE_RESULT_IO.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The path to inspect."
+            },
+            {
+              "name": "out_stat",
+              "type": "ke_file_stat *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives what the path names."
+            }
+          ],
+          "receiver": "struct ke_file_system *"
+        }
+      ]
+    },
+    {
+      "name": "ke_file_system_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_file_system *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_file_system *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {},
+  "opaques": [
+    "ke_open_file"
+  ]
+}

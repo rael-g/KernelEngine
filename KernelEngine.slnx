@@ -61,6 +61,10 @@
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/task_pool/KernelEngine.TaskPool/KernelEngine.TaskPool.csproj" />
     <Project Path="src/csharp/task_pool/KernelEngine.TaskPool.Enki/KernelEngine.TaskPool.Enki.csproj" />
+    <Project Path="src/csharp/file_system/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
+    <Project Path="src/csharp/file_system/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.Io/KernelEngine.Io.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.Io.Pool/KernelEngine.Io.Pool.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />

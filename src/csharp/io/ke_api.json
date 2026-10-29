@@ -1,0 +1,256 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_io_result",
+      "doc": "What ke_io.wait reports of a request; each field is filled by the requests named on it.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "file",
+          "type": "ke_open_file *",
+          "tags": [],
+          "doc": "open: the file, released with ke_io.close."
+        },
+        {
+          "name": "bytes",
+          "type": "void *",
+          "tags": [],
+          "doc": "read_file: the file\u0027s bytes, owned by the caller and released with ke_io.free_bytes."
+        },
+        {
+          "name": "size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": "read_file: the number of bytes; read_at: the number of bytes read."
+        },
+        {
+          "name": "stat",
+          "type": "ke_file_stat",
+          "tags": [],
+          "doc": "stat: what the path names."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_io",
+      "doc": "Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "read_file",
+          "returns": "ke_io_request *",
+          "tags": [],
+          "doc": "Submits a read of a whole file.",
+          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The file to read; copied before the slot returns."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "open",
+          "returns": "ke_io_request *",
+          "tags": [],
+          "doc": "Submits the opening of a file for read_at.",
+          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The file to open; copied before the slot returns."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "read_at",
+          "returns": "ke_io_request *",
+          "tags": [],
+          "doc": "Submits a read from an open file at an offset; it reads fewer than len bytes only at the end of the file.",
+          "return_doc": "The request, or null for a null file, a null dst with a non-zero len, or when it cannot be allocated.",
+          "params": [
+            {
+              "name": "file",
+              "type": "ke_open_file *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A file an open request reported."
+            },
+            {
+              "name": "offset",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": "Where the read starts, in bytes from the start of the file."
+            },
+            {
+              "name": "dst",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Receives the bytes; the caller\u0027s until wait returns."
+            },
+            {
+              "name": "len",
+              "type": "size_t",
+              "tags": [],
+              "doc": "The number of bytes dst holds."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "stat",
+          "returns": "ke_io_request *",
+          "tags": [],
+          "doc": "Submits an inspection of what a path names.",
+          "return_doc": "The request, or null for a null path or when it cannot be allocated.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The path to inspect; copied before the slot returns."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "is_completed",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Reports whether a request has finished, without releasing it. Valid only before the request is waited on.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "request",
+              "type": "ke_io_request *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A request a submit slot returned."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "wait",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Blocks until the request finishes, releases it, and reports what it read.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null request, or the failure of the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.",
+          "params": [
+            {
+              "name": "request",
+              "type": "ke_io_request *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A request a submit slot returned; invalid afterwards."
+            },
+            {
+              "name": "out_result",
+              "type": "ke_io_result *",
+              "tags": [
+                "out",
+                "optional"
+              ],
+              "doc": "Receives what the request read; left zeroed when it failed."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "close",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a file an open request reported; it is invalid afterwards. A null file is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "file",
+              "type": "ke_open_file *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The file to release."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "free_bytes",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases the bytes a read_file request reported. Null bytes are ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "bytes",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The bytes to release."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        }
+      ]
+    },
+    {
+      "name": "ke_io_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_io *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_io *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "type_aliases": {},
+  "opaques": [
+    "ke_io_request"
+  ]
+}

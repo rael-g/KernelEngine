@@ -152,6 +152,46 @@
       "usings": []
     },
     {
+      "name": "file_system",
+      "headers": [
+        "src/c/file_system/kernel_engine/file_system/file_system.h"
+      ],
+      "includeDirs": [
+        "src/c/file_system",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/file_system/ke_api.json",
+      "namespace": "KernelEngine.FileSystem",
+      "nativeNamespace": "KernelEngine.FileSystem.Native",
+      "outDir": "src/csharp/file_system/KernelEngine.FileSystem/Generated",
+      "usings": []
+    },
+    {
+      "name": "io",
+      "headers": [
+        "src/c/io/kernel_engine/io/io.h"
+      ],
+      "auxHeaders": [
+        "src/c/file_system/kernel_engine/file_system/file_system.h"
+      ],
+      "includeDirs": [
+        "src/c/io",
+        "src/c/file_system",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/io/ke_api.json",
+      "namespace": "KernelEngine.Io",
+      "nativeNamespace": "KernelEngine.Io.Native",
+      "outDir": "src/csharp/io/KernelEngine.Io/Generated",
+      "usings": [
+        "KernelEngine.FileSystem.Native"
+      ]
+    },
+    {
       "_comment": "The scheduler contract. register_system's params carry queries + access_list, which the wave builder orders on; a hand-written IRuntime had omitted them, so every C#-registered system declared zero access and the wave builder saw zero conflicts. Generating the surface from the header is what keeps that from drifting again. system_ctx.h rides along because the execute callback's first parameter is a ke_system_ctx*.",
       "name": "runtime",
       "providers": [
@@ -1174,6 +1214,48 @@
       ],
       "library": "ke_task_pool_enki",
       "output": "Generated/TaskPool/"
+    },
+    {
+      "name": "FileSystem",
+      "project": "src/csharp/file_system/KernelEngine.FileSystem",
+      "namespace": "KernelEngine.FileSystem.Native",
+      "headers": [
+        "src/c/file_system/kernel_engine/file_system/file_system.h"
+      ],
+      "library": "ke_file_system_std",
+      "output": "Generated/FileSystem/"
+    },
+    {
+      "name": "FileSystemStd",
+      "project": "src/csharp/file_system/KernelEngine.FileSystem.Std",
+      "namespace": "KernelEngine.FileSystem.Std.Native",
+      "headers": [
+        "src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_create.h",
+        "src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_log.h"
+      ],
+      "library": "ke_file_system_std",
+      "output": "Generated/"
+    },
+    {
+      "name": "Io",
+      "project": "src/csharp/io/KernelEngine.Io",
+      "namespace": "KernelEngine.Io.Native",
+      "headers": [
+        "src/c/io/kernel_engine/io/io.h"
+      ],
+      "library": "ke_io_pool",
+      "output": "Generated/Io/"
+    },
+    {
+      "name": "IoPool",
+      "project": "src/csharp/io/KernelEngine.Io.Pool",
+      "namespace": "KernelEngine.Io.Pool.Native",
+      "headers": [
+        "src/zig/io/pool/include/kernel_engine/io/pool/io_pool_create.h",
+        "src/zig/io/pool/include/kernel_engine/io/pool/io_pool_log.h"
+      ],
+      "library": "ke_io_pool",
+      "output": "Generated/"
     },
     {
       "name": "StbTrueType",
