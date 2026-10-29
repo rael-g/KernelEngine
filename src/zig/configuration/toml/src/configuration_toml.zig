@@ -7,7 +7,6 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const toml = @import("c");
 const abi_configuration = @import("abi_configuration");
-const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
 const abi_toml = @import("abi_configuration_toml_factory");
 const abi_result = @import("abi_result");
@@ -68,17 +67,12 @@ const State = struct {
     io: *abi_io.ke_io,
 };
 
-/// Whether `path` names a regular file; a path that names nothing is no, and any other failure to
-/// inspect it is returned.
 fn isFile(io: *abi_io.ke_io, path: [*c]const u8) R.Error!bool {
     var request: ?*abi_io.ke_io_request = null;
-    try R.check(io.stat.?(io, path, &request));
+    try R.check(io.file_exists.?(io, path, &request));
     var result: abi_io.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &result)) catch |err| switch (err) {
-        error.NotFound => return false,
-        else => return err,
-    };
-    return result.stat.kind == abi_file_system.KE_FILE_KIND_FILE;
+    try R.check(io.wait.?(io, request, &result));
+    return result.exists;
 }
 
 /// The whole file at `path` with a terminating zero, owned by the caller; null when there is no
@@ -196,18 +190,23 @@ fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_resul
     return R.ok;
 }
 
-fn statServed(args: zsub.For(abi_io.ke_io).Args(.stat)) abi_result.ke_result {
-    args[2].?.* = @ptrCast(&request_token);
+var exists_token: u8 = 0;
+
+fn existsServed(args: zsub.For(abi_io.ke_io).Args(.file_exists)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&exists_token);
     return R.ok;
 }
 
 fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+    if (args[2]) |out| out.* = std.mem.zeroes(abi_io.ke_io_result);
+    if (args[1] == @as(?*abi_io.ke_io_request, @ptrCast(&exists_token))) {
+        if (args[2]) |out| out.exists = served != null;
+        return R.ok;
+    }
     const text = served orelse return R.code(error.NotFound);
     if (args[2]) |out| {
-        out.* = std.mem.zeroes(abi_io.ke_io_result);
         out.bytes = @constCast(text.ptr);
         out.size = text.len;
-        out.stat.kind = abi_file_system.KE_FILE_KIND_FILE;
     }
     return R.ok;
 }
@@ -219,7 +218,7 @@ fn servingIo(sub: *zsub.For(abi_io.ke_io), text: ?[]const u8) !*abi_io.ke_io {
     served = text;
     try sub.init();
     _ = sub.when(.read_file).does(readServed);
-    _ = sub.when(.stat).does(statServed);
+    _ = sub.when(.file_exists).does(existsServed);
     _ = sub.when(.wait).does(waitServed);
     _ = sub.when(.free_bytes).does(freeServed);
     return sub.api();

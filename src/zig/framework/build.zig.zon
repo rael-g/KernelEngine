@@ -8,7 +8,6 @@
         .abi_audio = .{ .path = "../abi/audio" },
         .abi_asset = .{ .path = "../abi/asset" },
         .abi_ecs = .{ .path = "../abi/ecs" },
-        .abi_file_system = .{ .path = "../abi/file_system" },
         .abi_framework = .{ .path = "../abi/framework" },
         .abi_input = .{ .path = "../abi/input" },
         .abi_io = .{ .path = "../abi/io" },

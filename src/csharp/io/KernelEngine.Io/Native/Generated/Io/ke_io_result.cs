@@ -15,4 +15,6 @@ public unsafe partial struct ke_io_result
 
     [NativeTypeName("ke_file_stat")]
     public KernelEngine.FileSystem.Native.ke_file_stat stat;
+
+    public bool exists;
 }

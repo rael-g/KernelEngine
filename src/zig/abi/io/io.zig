@@ -16,6 +16,8 @@ pub const ke_io_result = extern struct {
     size: u64 = std.mem.zeroes(u64),
     /// stat: what the path names.
     stat: file_system.ke_file_stat = std.mem.zeroes(file_system.ke_file_stat),
+    /// file_exists: whether the path names a regular file.
+    exists: bool = std.mem.zeroes(bool),
 };
 
 /// Reads files without blocking the caller: each slot that reads submits a request, which runs
@@ -32,6 +34,9 @@ pub const ke_io = extern struct {
     read_at: ?*const fn (?*ke_io, ?*file_system.ke_open_file, u64, ?*anyopaque, usize, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Submits an inspection of what a path names.
     stat: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the question whether a path names a regular file; a path that names nothing, or
+    /// something else, is reported as no, not as a failure.
+    file_exists: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Reports whether a request has finished, without releasing it. Valid only before the request
     /// is waited on.
     is_completed: ?*const fn (?*ke_io, ?*ke_io_request) callconv(.c) bool = null,

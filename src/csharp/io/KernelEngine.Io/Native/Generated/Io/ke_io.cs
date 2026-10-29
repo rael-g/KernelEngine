@@ -19,6 +19,9 @@ public unsafe partial struct ke_io
     [NativeTypeName("ke_result (*)(struct ke_io *, const char *, ke_io_request **)")]
     public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request**, KernelEngine.Result.Native.ke_result> stat;
 
+    [NativeTypeName("ke_result (*)(struct ke_io *, const char *, ke_io_request **)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, sbyte*, ke_io_request**, KernelEngine.Result.Native.ke_result> file_exists;
+
     [NativeTypeName("bool (*)(struct ke_io *, ke_io_request *)")]
     public delegate* unmanaged[Cdecl]<ke_io*, ke_io_request*, bool> is_completed;
 

@@ -29,7 +29,7 @@ const State = struct {
     file_system: *abi_file_system.ke_file_system,
 };
 
-const Kind = enum { read_file, open, read_at, stat };
+const Kind = enum { read_file, open, read_at, stat, file_exists };
 
 /// One submitted request, allocated by `submit` and freed by `wait`; the `ke_io_request` pointer is
 /// its address. The task writes `code` and `result` and then stores `completed`, so a thread that
@@ -53,6 +53,7 @@ const Request = struct {
             .open => self.openFile(),
             .read_at => self.readAt(),
             .stat => self.statPath(),
+            .file_exists => self.askExists(),
         };
         if (self.code != R.ok) self.result = std.mem.zeroes(abi_io.ke_io_result);
         self.completed.store(true, .release);
@@ -98,6 +99,17 @@ const Request = struct {
     fn statPath(self: *Request) abi_result.ke_result {
         const fs = self.state.file_system;
         return fs.stat.?(fs, self.path.?.ptr, &self.result.stat);
+    }
+
+    fn askExists(self: *Request) abi_result.ke_result {
+        const fs = self.state.file_system;
+        var st: abi_file_system.ke_file_stat = undefined;
+        R.check(fs.stat.?(fs, self.path.?.ptr, &st)) catch |err| switch (err) {
+            error.NotFound => return R.ok,
+            else => return R.code(err),
+        };
+        self.result.exists = st.kind == abi_file_system.KE_FILE_KIND_FILE;
+        return R.ok;
     }
 
     fn free(self: *Request) void {
@@ -206,6 +218,15 @@ fn stat(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.k
     return submit(self, .stat, path, null, 0, null, 0, out);
 }
 
+/// Slot `file_exists`.
+fn fileExists(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (path == null) return R.code(error.InvalidArgument);
+    return submit(self, .file_exists, path, null, 0, null, 0, out);
+}
+
 /// Slot `is_completed`. A null request reports true.
 fn isCompleted(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request) callconv(.c) bool {
     _ = self_in;
@@ -285,6 +306,7 @@ fn create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params) R.Error!abi_
     s.api.open = open;
     s.api.read_at = readAt;
     s.api.stat = stat;
+    s.api.file_exists = fileExists;
     s.api.is_completed = isCompleted;
     s.api.wait = wait;
     s.api.close = close;
@@ -377,6 +399,12 @@ const Rig = struct {
     fn readAt(self: *Rig, file: ?*abi_file_system.ke_open_file, offset: u64, dst: []u8) !*abi_io.ke_io_request {
         var request: ?*abi_io.ke_io_request = null;
         try R.check(self.io().read_at.?(self.io(), file, offset, dst.ptr, dst.len, &request));
+        return request.?;
+    }
+
+    fn fileExists(self: *Rig, path: [*:0]const u8) !*abi_io.ke_io_request {
+        var request: ?*abi_io.ke_io_request = null;
+        try R.check(self.io().file_exists.?(self.io(), path, &request));
         return request.?;
     }
 
@@ -474,6 +502,18 @@ test "a wait the task pool refuses for its calling thread fails and leaves the r
     try testing.expectEqual(@as(u64, contents.len), result.size);
 }
 
+test "a file that exists is reported as existing and a missing one as not, without a failure" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    var result: abi_io.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), try rig.fileExists("fox.txt"), &result));
+    try testing.expect(result.exists);
+    try R.check(rig.io().wait.?(rig.io(), try rig.fileExists("missing.txt"), &result));
+    try testing.expect(!result.exists);
+}
+
 test "a request the task pool refuses fails with the pool's code and returns no request" {
     var rig: Rig = undefined;
     try rig.init();
@@ -495,6 +535,7 @@ test "submits with missing arguments are an invalid argument and a null request 
     try testing.expectError(error.InvalidArgument, R.check(rig.io().read_file.?(rig.io(), null, &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().open.?(rig.io(), null, &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().stat.?(rig.io(), null, &request)));
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().file_exists.?(rig.io(), null, &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().read_at.?(rig.io(), null, 0, &buf, buf.len, &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().read_at.?(rig.io(), @ptrCast(&open_token), 0, null, 4, &request)));
     try testing.expectError(error.InvalidArgument, R.check(rig.io().read_file.?(rig.io(), "fox.txt", null)));

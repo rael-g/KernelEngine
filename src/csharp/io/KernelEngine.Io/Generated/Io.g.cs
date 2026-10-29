@@ -95,6 +95,17 @@ public unsafe partial class Io : IDisposable, INativeIo
         return resultOut;
     }
 
+    /// <summary>Submits the question whether a path names a regular file; a path that names nothing, or something else, is reported as no, not as a failure.</summary>
+    /// <param name="path">The path to ask about; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* FileExists(sbyte* path)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->file_exists(Handle, path, &resultOut), "file_exists");
+        return resultOut;
+    }
+
     /// <summary>Reports whether a request has finished, without releasing it. Valid only before the request is waited on.</summary>
     /// <param name="request">A request a submit slot returned.</param>
     public bool IsCompleted(ke_io_request* request)

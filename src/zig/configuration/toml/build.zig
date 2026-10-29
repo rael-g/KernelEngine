@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_configuration_toml",
         .root = "src/configuration_toml.zig",
-        .abi = &.{ "abi_configuration", "abi_configuration_toml_factory", "abi_file_system", "abi_io", "abi_result" },
+        .abi = &.{ "abi_configuration", "abi_configuration_toml_factory", "abi_io", "abi_result" },
         .common = &.{"heap"},
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},

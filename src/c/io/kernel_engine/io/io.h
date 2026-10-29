@@ -26,6 +26,8 @@ extern "C"
         uint64_t size;
         /** stat: what the path names. */
         ke_file_stat stat;
+        /** file_exists: whether the path names a regular file. */
+        bool exists;
     } ke_io_result;
 
     /**
@@ -78,6 +80,16 @@ extern "C"
          *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
          */
         ke_result (*stat)(struct ke_io *self, const char *path, ke_io_request **out_request);
+
+        /**
+         * Submits the question whether a path names a regular file; a path that names nothing,
+         * or something else, is reported as no, not as a failure.
+         * @param path [borrowed] The path to ask about; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
+         */
+        ke_result (*file_exists)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
         /**
          * Reports whether a request has finished, without releasing it. Valid only before the

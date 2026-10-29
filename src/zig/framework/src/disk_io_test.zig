@@ -3,7 +3,6 @@
 
 const std = @import("std");
 const zsub = @import("zsub");
-const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
@@ -38,11 +37,11 @@ fn readWhole(path: [*:0]const u8) R.Error!abi_io.ke_io_result {
     return result;
 }
 
-fn statOf(path: [*:0]const u8) R.Error!abi_io.ke_io_result {
-    const fp = std.c.fopen(path, "rb") orelse return error.NotFound;
-    _ = std.c.fclose(fp);
+fn existsOf(path: [*:0]const u8) R.Error!abi_io.ke_io_result {
     var result = std.mem.zeroes(abi_io.ke_io_result);
-    result.stat.kind = abi_file_system.KE_FILE_KIND_FILE;
+    const fp = std.c.fopen(path, "rb") orelse return result;
+    _ = std.c.fclose(fp);
+    result.exists = true;
     return result;
 }
 
@@ -57,8 +56,8 @@ fn readFile(args: Io.Args(.read_file)) abi_result.ke_result {
     return submit(readWhole(args[1].?), args[2].?);
 }
 
-fn stat(args: Io.Args(.stat)) abi_result.ke_result {
-    return submit(statOf(args[1].?), args[2].?);
+fn fileExists(args: Io.Args(.file_exists)) abi_result.ke_result {
+    return submit(existsOf(args[1].?), args[2].?);
 }
 
 fn wait(args: Io.Args(.wait)) abi_result.ke_result {
@@ -84,7 +83,7 @@ pub fn io() ?*abi_io.ke_io {
     if (!configured) {
         substitute.init() catch return null;
         _ = substitute.when(.read_file).does(readFile);
-        _ = substitute.when(.stat).does(stat);
+        _ = substitute.when(.file_exists).does(fileExists);
         _ = substitute.when(.wait).does(wait);
         _ = substitute.when(.free_bytes).does(freeBytes);
         configured = true;

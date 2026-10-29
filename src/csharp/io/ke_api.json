@@ -29,6 +29,12 @@
           "type": "ke_file_stat",
           "tags": [],
           "doc": "stat: what the path names."
+        },
+        {
+          "name": "exists",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "file_exists: whether the path names a regular file."
         }
       ]
     }
@@ -159,6 +165,32 @@
                 "borrowed"
               ],
               "doc": "The path to inspect; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "file_exists",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the question whether a path names a regular file; a path that names nothing, or something else, is reported as no, not as a failure.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The path to ask about; copied before the slot returns."
             },
             {
               "name": "out_request",
