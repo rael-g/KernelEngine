@@ -13,8 +13,8 @@
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
         .zsub = .{
-            .url = "https://github.com/rael-g/zsub/archive/155f32f849d7d3eed56cc0df8e73331cfc812b36.tar.gz",
-            .hash = "zsub-0.0.0-c8a1Qn29AADs_6m2PIvvEWKNkieBP7i9KwiW5rAiYuE9",
+            .url = "https://github.com/rael-g/zsub/archive/5e3414397c5e17a7677e3ac1699a95d9843db5cc.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QvW_AAAa2cxobKy4cjJJoj2Nw7V2U6ot6cmqcDt3",
         },
     },
     .paths = .{"."},
