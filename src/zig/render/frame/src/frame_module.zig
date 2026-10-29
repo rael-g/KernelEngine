@@ -129,7 +129,7 @@ fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
 
 fn testFrame(params: *const abi_render_frame_factory.ke_render_frame_params) abi_render_frame_factory.ke_render_frame_handle {
     var h: abi_render_frame_factory.ke_render_frame_handle = .{ .ref = null, .destroy = null };
@@ -137,61 +137,70 @@ fn testFrame(params: *const abi_render_frame_factory.ke_render_frame_params) abi
     return h;
 }
 
-fn testParams(rt: *stubs.Runtime, ecs: *stubs.Ecs, core: *stubs.Core, camera: *abi_render.ke_render_camera) abi_render_frame_factory.ke_render_frame_params {
-    return .{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .camera = camera, .camera_cid = 1, .world_transform_cid = 2, .directional_light_cid = 3, .ambient_light_cid = 4 };
-}
-
 const Rig = struct {
-    dev: stubs.Device,
-    core: stubs.Core,
-    rt: stubs.Runtime,
-    ecs: stubs.Ecs,
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+    ecs: zsub.For(abi_ecs.ke_ecs),
     camera: abi_render.ke_render_camera,
 
-    fn init(self: *Rig) void {
-        self.dev.init();
-        self.core.init(self.dev.api());
-        self.rt.init();
-        self.ecs.init();
+    fn init(self: *Rig) !void {
+        try self.core.init();
+        _ = self.core.when(.cid).returnsFresh();
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+        try self.ecs.init();
+        _ = self.ecs.when(.component_register).writesFresh(2);
         self.camera = std.mem.zeroes(abi_render.ke_render_camera);
     }
 
+    fn deinit(self: *Rig) void {
+        self.ecs.deinit();
+        self.rt.deinit();
+        self.core.deinit();
+    }
+
     fn params(self: *Rig) abi_render_frame_factory.ke_render_frame_params {
-        return testParams(&self.rt, &self.ecs, &self.core, &self.camera);
+        return .{ .runtime = self.rt.api(), .ecs = self.ecs.api(), .service = self.core.api(), .camera = &self.camera, .camera_cid = 1, .world_transform_cid = 2, .directional_light_cid = 3, .ambient_light_cid = 4 };
     }
 };
 
 test "the frame registers its begin and end systems and hands out the tag they share" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     const h = testFrame(&rig.params());
     try testing.expect(h.ref != null);
-    try testing.expectEqual(@as(u32, 2), rig.rt.live_count);
+    try rig.rt.received(.register_system).times(2);
+    try rig.rt.received(.unregister_system).never();
     try testing.expect(h.ref.?.frame_cid.?(h.ref) != abi_ecs.KE_COMPONENT_INVALID);
     h.destroy.?(h.ref);
 }
 
 test "a frame whose end system the runtime refuses removes its begin system and fails" {
     var rig: Rig = undefined;
-    rig.init();
-    rig.rt.limit = 1;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.KE_OK, abi_result.KE_RESULT_OUT_OF_MEMORY });
     const h = testFrame(&rig.params());
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
+    try rig.rt.received(.unregister_system).times(1);
 }
 
 test "a frame the runtime refuses at once fails without registering anything" {
     var rig: Rig = undefined;
-    rig.init();
-    rig.rt.limit = 0;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     const h = testFrame(&rig.params());
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
+    try rig.rt.received(.register_system).times(1);
+    try rig.rt.received(.unregister_system).never();
 }
 
 test "a frame missing its camera is refused as an invalid argument" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     var p = rig.params();
     p.camera = null;
     var h: abi_render_frame_factory.ke_render_frame_handle = undefined;
