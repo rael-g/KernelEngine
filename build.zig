@@ -171,7 +171,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const scheduler_enki = ctx.member("ke_scheduler_enki", .{
+    const task_pool_enki = ctx.member("ke_task_pool_enki", .{
         .target = target,
         .optimize = optimize,
         .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
@@ -650,7 +650,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),
@@ -672,7 +672,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/ui/include" }),
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
@@ -689,12 +689,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
     }, &.{
         &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step,
-        &ecs_flecs.step,   &scheduler_enki.step,    &runtime.step,
+        &ecs_flecs.step,   &task_pool_enki.step,    &runtime.step,
     });
 
     const demo14 = ctx.example("c_demo_14", .{
@@ -704,7 +704,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),
@@ -727,7 +727,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
@@ -749,13 +749,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
         &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,   &scheduler_enki.step,    &runtime.step,
+        &ecs_flecs.step,   &task_pool_enki.step,    &runtime.step,
     });
 
     const demo16 = ctx.example("c_demo_16", .{
@@ -765,7 +765,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),
@@ -789,7 +789,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "scheduler/enki/include" }),
+            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
@@ -813,13 +813,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
         }),
         .@"link-m" = true,
     }, &.{
         &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,                 &scheduler_enki.step,              &runtime.step,
+        &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step,
     });
 
     const all_examples = [_]*std.Build.Step.InstallArtifact{

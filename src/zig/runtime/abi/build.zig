@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
     abi.addImport("runtime", b.dependency("ke_abi_runtime", .{}).module("abi"));
-    abi.addImport("scheduler", b.dependency("ke_abi_scheduler", .{}).module("abi"));
+    abi.addImport("task_pool", b.dependency("ke_abi_task_pool", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/runtime/runtime_create.h>
@@ -22,7 +22,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/runtime"));
     translated.addIncludePath(b.path("../include"));
-    translated.addIncludePath(b.path("../../../c/scheduler"));
+    translated.addIncludePath(b.path("../../../c/task_pool"));
     translated.addIncludePath(b.path("../../common/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),

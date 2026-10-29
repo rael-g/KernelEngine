@@ -33,7 +33,7 @@ written to the result code, queued on the wrapper, or held for the call that ret
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
 what was queued, or the exception `NativeResults.FromCode` makes for the code.
 
-**The scheduler has its own channel.** The dispatch methods that are not generated return a
+**The task pool has its own channel.** The dispatch methods that are not generated return a
 `Task`, which the body's failure faults.
 
 **A module is the unit a game is loaded in.** `LoadModules` sorts the `IRuntimeModule` services

@@ -2,8 +2,8 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -22,7 +22,7 @@ var coupled = new List<Coupled>();
 
 var services = new ServiceCollection()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler>(new EnkiScheduler(workers))
+    .Add<ITaskPool>(new EnkiTaskPool(workers))
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new FrameworkModule(new SignalBusCapacities(
         MaxConnections: (uint)instances + 64,
@@ -50,7 +50,7 @@ var services = new ServiceCollection()
 
 using var sp = services.BuildServiceProvider();
 var runtime = sp.GetRequiredService<IRuntime>();
-var scheduler = sp.GetRequiredService<IScheduler>();
+var taskPool = sp.GetRequiredService<ITaskPool>();
 
 runtime.LoadModules(sp);
 
@@ -81,7 +81,7 @@ static void RunChurn(ScriptHost world, int count)
 }
 
 var spawned = instances * (kind == "both" ? 2 : 1);
-Console.WriteLine($"[19_node_stress] type={kind}, {spawned} instances, {ticks} ticks, {scheduler.NumWorkers} workers");
+Console.WriteLine($"[19_node_stress] type={kind}, {spawned} instances, {ticks} ticks, {taskPool.NumWorkers} workers");
 Console.WriteLine("[19_node_stress] Mover reaches only itself; Anchored borrows, so only Mover may be sliced");
 
 const float dt = 1f / 60f;

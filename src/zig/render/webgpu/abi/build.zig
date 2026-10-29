@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("ke_abi_render", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
-    abi.addImport("scheduler", b.dependency("ke_abi_scheduler", .{}).module("abi"));
+    abi.addImport("task_pool", b.dependency("ke_abi_task_pool", .{}).module("abi"));
     abi.addImport("window", b.dependency("ke_abi_window", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
@@ -23,8 +23,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
+    translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/window"));
     translated.addIncludePath(b.path("../../../common/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{

@@ -12,8 +12,8 @@
 #include <kernel_engine/render/frame/frame_create.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/scheduler/scheduler.h>
-#include <kernel_engine/scheduler/enki/enki_scheduler.h>
+#include <kernel_engine/task_pool/task_pool.h>
+#include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/runtime_create.h>
 
@@ -67,13 +67,13 @@ int main(void)
     ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
-    ke_scheduler_handle sched = { 0 };
-    ke_result made = ke_scheduler_enki_create(NULL, &sched);
-    if (made != KE_OK) die_result("scheduler", made);
+    ke_task_pool_handle pool = { 0 };
+    ke_result made = ke_task_pool_enki_create(NULL, &pool);
+    if (made != KE_OK) die_result("task pool", made);
 
     ke_runtime_params rp = { 0 };
     ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, sched.ref, &rp, &rt);
+    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &rp, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     ke_render_resource_binder_handle binder = { 0 };
@@ -118,7 +118,7 @@ int main(void)
     binder.destroy(binder.ref);
     view_space.destroy(view_space.ref);
     rt.destroy(rt.ref);
-    sched.destroy(sched.ref);
+    pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);

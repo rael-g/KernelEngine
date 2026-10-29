@@ -13,7 +13,7 @@ pub const wgpu = @import("c");
 const abi_gpu_device_webgpu_factory = @import("abi_gpu_device_webgpu_factory");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
-const abi_scheduler = @import("abi_scheduler");
+const abi_task_pool = @import("abi_task_pool");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
 
@@ -24,15 +24,15 @@ const GpuError = error{
 };
 
 /// Created by `createDeviceState`, reached from the vtable through its handle, and freed by
-/// `deviceDestroy`. `scheduler` is borrowed and never freed here. Only the first
+/// `deviceDestroy`. `task_pool` is borrowed and never freed here. Only the first
 /// `pending_compiles_count` entries of `pending_compiles` are live.
 pub const DeviceState = struct {
     instance: wgpu.WGPUInstance,
     adapter: wgpu.WGPUAdapter,
     device: wgpu.WGPUDevice,
     queue: wgpu.WGPUQueue,
-    scheduler: ?*abi_scheduler.ke_scheduler,
-    pending_compiles: [MAX_PENDING_COMPILES]?*abi_scheduler.ke_task,
+    task_pool: ?*abi_task_pool.ke_task_pool,
+    pending_compiles: [MAX_PENDING_COMPILES]?*abi_task_pool.ke_task,
     pending_compiles_count: u32,
 };
 
@@ -260,8 +260,8 @@ pub const gpa = heap.gpa;
 fn createDeviceState(instance_flags: wgpu.WGPUInstanceFlag) GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
-    s.scheduler = null;
-    s.pending_compiles = [_]?*abi_scheduler.ke_task{null} ** MAX_PENDING_COMPILES;
+    s.task_pool = null;
+    s.pending_compiles = [_]?*abi_task_pool.ke_task{null} ** MAX_PENDING_COMPILES;
     s.pending_compiles_count = 0;
 
     var extras = std.mem.zeroes(wgpu.WGPUInstanceExtras);
@@ -348,7 +348,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render.ke_gpu_device {
     return dev;
 }
 
-/// Reads the params once; the `scheduler` they carry is borrowed, kept by the state and never
+/// Reads the params once; the `task_pool` they carry is borrowed, kept by the state and never
 /// freed here. Creates the wgpu instance, adapter, device and queue, then the vtable whose handle
 /// is the `DeviceState`. A failed creation fails as not initialised or out of memory, logging
 /// why, and leaves the handle zeroed, with every object created on the way already released. The
@@ -369,7 +369,7 @@ pub export fn ke_gpu_device_webgpu_create(
         log.warn("webgpu: device initialisation failed: {s}", .{@errorName(err)});
         return codeOf(err);
     };
-    s.scheduler = if (params) |p| p.scheduler else null;
+    s.task_pool = if (params) |p| p.task_pool else null;
 
     const dev = createDeviceVtable(s) catch |err| {
         wgpu.wgpuQueueRelease(s.queue);
@@ -446,12 +446,12 @@ fn queueSubmit(
 /// completed task is waited on and removed; removal moves the last pending entry into the freed
 /// slot, so pending tasks are not kept in dispatch order.
 fn reapCompletedCompiles(s: *DeviceState) void {
-    const sched = s.scheduler orelse return;
+    const pool = s.task_pool orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) {
         const task = s.pending_compiles[i].?;
-        if (sched.is_completed.?(sched, task)) {
-            _ = sched.wait.?(sched, task);
+        if (pool.is_completed.?(pool, task)) {
+            _ = pool.wait.?(pool, task);
             s.pending_compiles_count -= 1;
             s.pending_compiles[i] = s.pending_compiles[s.pending_compiles_count];
             continue;
@@ -976,7 +976,7 @@ fn colorTargetsDeclared(p: [*c]const abi_render.ke_gpu_render_pipeline_params) b
     return true;
 }
 
-/// Compiles on the calling thread and never touches the scheduler. A fragment target with no
+/// Compiles on the calling thread and never touches the task pool. A fragment target with no
 /// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
 /// `createBuffer`.
 fn createRenderPipeline(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi_render.ke_gpu_render_pipeline_params, out: ?*abi_render.ke_gpu_pipeline) callconv(.c) abi_result.ke_result {
@@ -1046,7 +1046,7 @@ fn debugSleepMs(ms: u64) void {
     }
 }
 
-/// Runs on a scheduler worker as the task body. It calls `on_ready` once, then frees the job and
+/// Runs on a task pool worker as the task body. It calls `on_ready` once, then frees the job and
 /// its copies.
 fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
@@ -1064,10 +1064,10 @@ fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 }
 
 /// Compiles a render pipeline off the caller's thread and reports it through `on_ready`, which
-/// receives the pipeline or the invalid handle when it did not compile. With a scheduler and room
+/// receives the pipeline or the invalid handle when it did not compile. With a task pool and room
 /// in `pending_compiles`, the parameters are copied into an `AsyncCompileJob`, dispatched to the
-/// scheduler and listed, and the callback comes later from the worker that compiled. With no
-/// scheduler, with the list full, or when a fragment target has no mappable format, the compile
+/// task pool and listed, and the callback comes later from the worker that compiled. With no
+/// task pool, with the list full, or when a fragment target has no mappable format, the compile
 /// runs inline or fails inline and the callback has fired before this returns. A job that cannot
 /// be allocated calls back at once with the invalid handle. A null `on_ready` does nothing.
 fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi_render.ke_gpu_render_pipeline_params, on_ready: ?*const fn (abi_render.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
@@ -1078,7 +1078,7 @@ fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi
         return;
     }
 
-    const sched = s.scheduler orelse {
+    const pool = s.task_pool orelse {
         var build: RenderPipelineDescBuild = undefined;
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1113,7 +1113,7 @@ fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi
     if (job.fragment_entry) |e| job.build.frag_state.entryPoint.data = e.ptr;
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
-    const task = sched.dispatch.?(sched, runAsyncCompileJob, job);
+    const task = pool.dispatch.?(pool, runAsyncCompileJob, job);
     s.pending_compiles[s.pending_compiles_count] = task;
     s.pending_compiles_count += 1;
 }
@@ -1122,10 +1122,10 @@ fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi
 /// returns, and then empties the list.
 fn flushPipelineCompiles(dev: [*c]abi_render.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
-    const sched = s.scheduler orelse return;
+    const pool = s.task_pool orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) : (i += 1) {
-        _ = sched.wait.?(sched, s.pending_compiles[i].?);
+        _ = pool.wait.?(pool, s.pending_compiles[i].?);
     }
     s.pending_compiles_count = 0;
 }

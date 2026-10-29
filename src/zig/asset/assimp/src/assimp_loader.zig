@@ -1,5 +1,5 @@
 //! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file into a
-//! `ke_model_data` of records that own their memory, synchronously or on the scheduler.
+//! `ke_model_data` of records that own their memory, synchronously or on the task pool.
 
 const std = @import("std");
 
@@ -10,7 +10,7 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const c = @import("c");
 const abi_asset = @import("abi_asset");
 const abi_result = @import("abi_result");
-const abi_scheduler = @import("abi_scheduler");
+const abi_task_pool = @import("abi_task_pool");
 const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
@@ -331,13 +331,13 @@ fn asyncBody(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 /// the callback is called at once on the calling thread and the result is null.
 fn vtLoadModelAsync(
     self_in: ?*abi_asset.ke_asset_loader,
-    scheduler_in: ?*abi_scheduler.ke_scheduler,
+    task_pool_in: ?*abi_task_pool.ke_task_pool,
     path: [*c]const u8,
     on_complete: abi_asset.ke_load_model_complete_func,
     user_data: ?*anyopaque,
-) callconv(.c) ?*abi_scheduler.ke_task {
+) callconv(.c) ?*abi_task_pool.ke_task {
     const self = self_in orelse return null;
-    const scheduler = scheduler_in orelse return null;
+    const task_pool = task_pool_in orelse return null;
     if (self.handle == null or path == null or on_complete == null) return null;
 
     const s = stateOf(self);
@@ -360,7 +360,7 @@ fn vtLoadModelAsync(
         .user_data = user_data,
     };
 
-    return scheduler.dispatch.?(scheduler, asyncBody, ctx);
+    return task_pool.dispatch.?(task_pool, asyncBody, ctx);
 }
 
 /// The `destroy` slot. It frees the State, and logs a warning, not an error, when the leak check
@@ -433,7 +433,7 @@ fn boxGltfPath() ?[:0]const u8 {
     return null;
 }
 
-fn immediateDispatch(self: [*c]abi_scheduler.ke_scheduler, func: abi_scheduler.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_scheduler.ke_task {
+fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_task_pool.ke_task {
     _ = self;
     if (func) |f| _ = f(data);
     return @ptrFromInt(1);
@@ -514,43 +514,43 @@ test "the box fixture carries a material alongside its meshes" {
     try testing.expect(model.?.material_count > 0);
 }
 
-test "an async load runs to completion on the scheduler it was given" {
+test "an async load runs to completion on the task pool it was given" {
     const path = boxGltfPath() orelse return error.SkipZigTest;
 
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    var scheduler = std.mem.zeroes(abi_scheduler.ke_scheduler);
-    scheduler.dispatch = &immediateDispatch;
+    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    task_pool.dispatch = &immediateDispatch;
 
     var result = AsyncResult{ .loader = h.ref };
-    const task = h.ref.?.load_model_async.?(h.ref, &scheduler, path.ptr, &asyncComplete, &result);
+    const task = h.ref.?.load_model_async.?(h.ref, &task_pool, path.ptr, &asyncComplete, &result);
 
     try testing.expect(task != null);
     try testing.expect(result.done);
     try testing.expect(!result.failed);
 }
 
-test "an async load rejects a missing loader scheduler or path" {
+test "an async load rejects a missing loader task pool or path" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    var scheduler = std.mem.zeroes(abi_scheduler.ke_scheduler);
-    scheduler.dispatch = &immediateDispatch;
+    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    task_pool.dispatch = &immediateDispatch;
 
-    try testing.expect(h.ref.?.load_model_async.?(null, &scheduler, "test.obj", &asyncComplete, null) == null);
+    try testing.expect(h.ref.?.load_model_async.?(null, &task_pool, "test.obj", &asyncComplete, null) == null);
     try testing.expect(h.ref.?.load_model_async.?(h.ref, null, "test.obj", &asyncComplete, null) == null);
-    try testing.expect(h.ref.?.load_model_async.?(h.ref, &scheduler, null, &asyncComplete, null) == null);
+    try testing.expect(h.ref.?.load_model_async.?(h.ref, &task_pool, null, &asyncComplete, null) == null);
 }
 
 test "an async load rejects a missing completion callback" {
     const h = makeLoader();
     defer h.destroy.?(h.ref);
 
-    var scheduler = std.mem.zeroes(abi_scheduler.ke_scheduler);
-    scheduler.dispatch = &immediateDispatch;
+    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    task_pool.dispatch = &immediateDispatch;
 
-    try testing.expect(h.ref.?.load_model_async.?(h.ref, &scheduler, "test.obj", null, null) == null);
+    try testing.expect(h.ref.?.load_model_async.?(h.ref, &task_pool, "test.obj", null, null) == null);
 }
 
 test "a malformed model file yields a model carrying no meshes" {

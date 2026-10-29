@@ -579,8 +579,8 @@
     {
       "name": "ke_runtime_create",
       "returns": "ke_result",
-      "doc": "Creates a runtime over ecs and scheduler, both borrowed for its lifetime.",
-      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, scheduler or out_runtime; KE_RESULT_OUT_OF_MEMORY.",
+      "doc": "Creates a runtime over ecs and task_pool, both borrowed for its lifetime.",
+      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, task_pool or out_runtime; KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
           "name": "ecs",
@@ -589,8 +589,8 @@
           "doc": null
         },
         {
-          "name": "scheduler",
-          "type": "ke_scheduler *",
+          "name": "task_pool",
+          "type": "ke_task_pool *",
           "tags": [],
           "doc": null
         },

@@ -8,7 +8,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Asset.Native;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 namespace KernelEngine.Asset;
 
@@ -100,11 +100,11 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         Handle->free_model(Handle, (ke_model_data*)data);
     }
 
-    /// <summary>Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.</summary>
-    /// <param name="scheduler">Non-null task scheduler.</param>
+    /// <summary>Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has finished or failed.</summary>
+    /// <param name="taskPool">Non-null task pool.</param>
     /// <param name="path">File path (copied internally; caller may free after return).</param>
     /// <returns>The loaded model; NULL when the load failed.</returns>
-    public Task<Model> LoadModelAsync(INativeScheduler scheduler, string path)
+    public Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path)
     {
         var source = new TaskCompletionSource<Model>(TaskCreationOptions.RunContinuationsAsynchronously);
         var completion = GCHandle.Alloc(new LoadModelAsyncCompletion { Owner = this, Source = source });
@@ -113,7 +113,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         {
             try
             {
-                Handle->load_model_async(Handle, scheduler.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
+                Handle->load_model_async(Handle, taskPool.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
             }
             catch
             {

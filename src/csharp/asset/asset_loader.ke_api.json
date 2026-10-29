@@ -274,16 +274,16 @@
           "name": "load_model_async",
           "returns": "ke_task *",
           "tags": [],
-          "doc": "Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has finished or failed.",
+          "doc": "Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has finished or failed.",
           "return_doc": "A ke_task* that can be waited on.",
           "params": [
             {
-              "name": "scheduler",
-              "type": "ke_scheduler *",
+              "name": "task_pool",
+              "type": "ke_task_pool *",
               "tags": [
                 "provider"
               ],
-              "doc": "Non-null task scheduler."
+              "doc": "Non-null task pool."
             },
             {
               "name": "path",

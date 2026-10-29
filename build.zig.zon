@@ -10,7 +10,7 @@
         .ke_ecs_flecs = .{ .path = "src/zig/ecs/flecs" },
         .ke_input_default = .{ .path = "src/zig/input/default" },
         .ke_resource_cache_default = .{ .path = "src/zig/resource_cache/default" },
-        .ke_scheduler_enki = .{ .path = "src/zig/scheduler/enki" },
+        .ke_task_pool_enki = .{ .path = "src/zig/task_pool/enki" },
         .ke_runtime = .{ .path = "src/zig/runtime" },
         .ke_framework = .{ .path = "src/zig/framework" },
         .ke_window_glfw = .{ .path = "src/zig/window/glfw" },

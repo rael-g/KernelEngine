@@ -64,7 +64,7 @@ var rules = new List<Rule>
         Lines(zig, l => abort.IsMatch(l), outsideTests: true).Concat(Lines(native, l => abort.IsMatch(l)))),
     new("no failure turned into a crash with `catch unreachable` or `orelse unreachable`", 4,
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
-    new("no mutex, condition variable or raw thread in a plugin; the scheduler synchronises", 0,
+    new("no mutex, condition variable or raw thread in a plugin; the task pool synchronises", 0,
         Lines(zig, l => threading.IsMatch(l), outsideTests: true)),
     new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
         tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)

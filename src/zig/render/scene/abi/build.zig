@@ -32,8 +32,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../ui/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/runtime"));
-    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
+    translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/text"));
     translated.addIncludePath(b.path("../../../common/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{

@@ -1,5 +1,5 @@
 //! The `ke_runtime` plugin: it registers systems and modules and runs the phase loop of a tick
-//! over an ecs and a scheduler it borrows. It holds no component data.
+//! over an ecs and a task pool it borrows. It holds no component data.
 
 const std = @import("std");
 
@@ -9,7 +9,7 @@ const abi_ecs = @import("abi_ecs");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_runtime_factory = @import("abi_runtime_factory");
-const abi_scheduler = @import("abi_scheduler");
+const abi_task_pool = @import("abi_task_pool");
 const alloc = @import("runtime_alloc.zig");
 const wave_mod = @import("runtime_waves.zig");
 const context = @import("runtime_context.zig");
@@ -185,7 +185,7 @@ const PendingRemoval = struct {
 /// the render phase in flight, if any.
 const RuntimeState = struct {
     ecs: *abi_ecs.ke_ecs,
-    scheduler: *abi_scheduler.ke_scheduler,
+    task_pool: *abi_task_pool.ke_task_pool,
     systems: ?[*]?*RegisteredSystem,
     system_count: usize,
     system_capacity: usize,
@@ -208,9 +208,9 @@ const RuntimeState = struct {
     phase_params: ?[*]abi_runtime.ke_runtime_system_params,
     wave_assignments: ?[*]u32,
     phase_pkgs: ?[*]TaskPkg,
-    phase_tasks: ?[*]?*abi_scheduler.ke_task,
+    phase_tasks: ?[*]?*abi_task_pool.ke_task,
     systems_prepared: usize,
-    pending_render_task: ?*abi_scheduler.ke_task,
+    pending_render_task: ?*abi_task_pool.ke_task,
     render_job: ?*RenderJob,
     exclusive: std.ArrayList(wave_mod.Exclusive),
     self_ordered: std.ArrayList(abi_ecs.ke_component_id),
@@ -583,8 +583,8 @@ fn runtimeLastSystem(self: ?*abi_runtime.ke_runtime) callconv(.c) abi_runtime.ke
     return systems[h.state.system_count - 1].?.id;
 }
 
-/// The work one scheduler task runs: one slice of one system, with its own context, commands and
-/// queue. `ctx` refers to `commands` and `state`, and its address is handed to the scheduler, so
+/// The work one task pool task runs: one slice of one system, with its own context, commands and
+/// queue. `ctx` refers to `commands` and `state`, and its address is handed to the task pool, so
 /// the package stays in its slot until the wave has been waited for.
 const TaskPkg = struct {
     state: CtxState,
@@ -614,7 +614,7 @@ const PhaseFailure = struct {
     }
 };
 
-/// The scheduler task body for one package, run on a worker. The body's code is what crosses to
+/// The task pool task body for one package, run on a worker. The body's code is what crosses to
 /// the waiting thread.
 fn taskPkgRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
     const pkg: *TaskPkg = @ptrCast(@alignCast(data.?));
@@ -627,22 +627,22 @@ fn taskPkgRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 const WaveRunCtx = struct {
     h: *RuntimeHandle,
     pkgs: [*]TaskPkg,
-    tasks: [*]?*abi_scheduler.ke_task,
+    tasks: [*]?*abi_task_pool.ke_task,
     wave_size: u32,
 };
 
 /// Dispatches every package of the wave, then waits for all of them, including after one has failed. The failure it returns is
 /// the first in package order, with the name of its system.
 fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
-    const sched = wc.h.state.scheduler;
+    const pool = wc.h.state.task_pool;
     var t: u32 = 0;
     while (t < wc.wave_size) : (t += 1) {
-        wc.tasks[t] = sched.dispatch.?(sched, taskPkgRun, &wc.pkgs[t]);
+        wc.tasks[t] = pool.dispatch.?(pool, taskPkgRun, &wc.pkgs[t]);
     }
     var failure = PhaseFailure{};
     t = 0;
     while (t < wc.wave_size) : (t += 1) {
-        const code = sched.wait.?(sched, wc.tasks[t]);
+        const code = pool.wait.?(pool, wc.tasks[t]);
         if (code == R.ok or failure.failed()) continue;
         failure = .{
             .code = code,
@@ -662,7 +662,7 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     cFree(abi_runtime.ke_runtime_system_params, h.state.phase_params, n);
     cFree(u32, h.state.wave_assignments, n);
     cFree(TaskPkg, h.state.phase_pkgs, n);
-    cFree(?*abi_scheduler.ke_task, h.state.phase_tasks, n);
+    cFree(?*abi_task_pool.ke_task, h.state.phase_tasks, n);
     h.state.phase_indices = null;
     h.state.phase_params = null;
     h.state.wave_assignments = null;
@@ -885,13 +885,13 @@ fn spanOr(text: [*c]const u8) []const u8 {
 }
 
 /// Returns how many packages a system gets in the wave being built, never more than the room left
-/// in it. A system is split only when it declared per-entity work and the scheduler reports more
+/// in it. A system is split only when it declared per-entity work and the task pool reports more
 /// than one worker, which is read here.
 fn sliceCountFor(h: *RuntimeHandle, p: *const abi_runtime.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
     if (!p.per_entity or p.exclusive) return 1;
-    const sched = h.state.scheduler;
-    const workers: u32 = if (sched.get_num_workers) |f| f(sched) else 0;
+    const pool = h.state.task_pool;
+    const workers: u32 = if (pool.get_num_workers) |f| f(pool) else 0;
     if (workers <= 1) return 1;
     return @min(workers, room);
 }
@@ -1014,8 +1014,8 @@ fn runtimeExtractRenderState(h: *RuntimeHandle) PhaseFailure {
     return .{};
 }
 
-/// The scheduler task body for the render phase, run on a worker. The failure stays in the job for
-/// `runtimeJoinPendingRender` to read, and its code is also handed back to the scheduler.
+/// The task pool task body for the render phase, run on a worker. The failure stays in the job for
+/// `runtimeJoinPendingRender` to read, and its code is also handed back to the task pool.
 fn renderJobRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
     const job: *RenderJob = @ptrCast(@alignCast(data.?));
     job.failure = runtimeRunPhase(job.h, abi_runtime.KE_PHASE_RENDER, job.dt);
@@ -1026,7 +1026,7 @@ fn renderJobRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 /// cleared when read, so a failure is returned once.
 fn runtimeJoinPendingRender(h: *RuntimeHandle) PhaseFailure {
     const task = h.state.pending_render_task orelse return .{};
-    _ = h.state.scheduler.wait.?(h.state.scheduler, task);
+    _ = h.state.task_pool.wait.?(h.state.task_pool, task);
     h.state.pending_render_task = null;
     const job = h.state.render_job orelse return .{};
     const failure = job.failure;
@@ -1098,7 +1098,7 @@ fn runtimeTickBody(self: ?*abi_runtime.ke_runtime, dt: f32) abi_result.ke_result
         job.h = h;
         job.dt = dt;
         job.failure = .{};
-        h.state.pending_render_task = h.state.scheduler.dispatch.?(h.state.scheduler, renderJobRun, job);
+        h.state.pending_render_task = h.state.task_pool.dispatch.?(h.state.task_pool, renderJobRun, job);
     } else {
         failure = runtimeRunPhase(h, abi_runtime.KE_PHASE_RENDER, dt);
         if (failure.failed()) return reported(failure, "a system body");
@@ -1128,7 +1128,7 @@ fn runtimeFlushRender(self: ?*abi_runtime.ke_runtime) callconv(.c) abi_result.ke
 
 /// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
 /// ever started, unloads the modules in reverse order of registration, and releases the pending and
-/// registered systems and the scratch. The ecs and the scheduler are not touched.
+/// registered systems and the scratch. The ecs and the task pool are not touched.
 fn runtimeDestroy(self: ?*abi_runtime.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
@@ -1172,17 +1172,17 @@ fn runtimeDestroy(self: ?*abi_runtime.ke_runtime) callconv(.c) void {
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
-/// The factory. Creates a runtime over an ecs and a scheduler that it does not own: it keeps the
-/// pointers and never frees them. A null ecs or scheduler fails with `invalid_argument`, and an
+/// The factory. Creates a runtime over an ecs and a task pool that it does not own: it keeps the
+/// pointers and never frees them. A null ecs or task pool fails with `invalid_argument`, and an
 /// allocation failure with `out_of_memory`. The params pointer may be null, and a zero in
 /// `fixed_dt`, `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
-export fn ke_runtime_create(ecs: ?*abi_ecs.ke_ecs, scheduler: ?*abi_scheduler.ke_scheduler, params: [*c]const abi_runtime_factory.ke_runtime_params, out_runtime: ?*abi_runtime.ke_runtime_handle) callconv(.c) abi_result.ke_result {
+export fn ke_runtime_create(ecs: ?*abi_ecs.ke_ecs, task_pool: ?*abi_task_pool.ke_task_pool, params: [*c]const abi_runtime_factory.ke_runtime_params, out_runtime: ?*abi_runtime.ke_runtime_handle) callconv(.c) abi_result.ke_result {
     const out = out_runtime orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    if (ecs == null or scheduler == null) {
-        return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a scheduler"));
+    if (ecs == null or task_pool == null) {
+        return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
     }
 
     const h_mem = cAlloc(RuntimeHandle, 1) orelse {
@@ -1192,7 +1192,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.ke_ecs, scheduler: ?*abi_scheduler.ke
     @memset(std.mem.asBytes(h), 0);
 
     h.state.ecs = ecs.?;
-    h.state.scheduler = scheduler.?;
+    h.state.task_pool = task_pool.?;
     h.state.exclusive = .empty;
     h.state.self_ordered = .empty;
 
@@ -1207,7 +1207,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.ke_ecs, scheduler: ?*abi_scheduler.ke
     h.state.phase_params = cAlloc(abi_runtime.ke_runtime_system_params, n);
     h.state.wave_assignments = cAlloc(u32, n);
     h.state.phase_pkgs = cAlloc(TaskPkg, n);
-    h.state.phase_tasks = cAlloc(?*abi_scheduler.ke_task, n);
+    h.state.phase_tasks = cAlloc(?*abi_task_pool.ke_task, n);
     if (h.state.phase_indices == null or h.state.phase_params == null or h.state.wave_assignments == null or
         h.state.phase_pkgs == null or h.state.phase_tasks == null)
     {
@@ -1255,14 +1255,14 @@ fn spawned(commands: [*c]abi_ecs.ke_ecs_commands) abi_ecs.ke_entity {
     return entity;
 }
 
-fn createdRuntime(ecs: ?*abi_ecs.ke_ecs, scheduler: ?*abi_scheduler.ke_scheduler, params: [*c]const abi_runtime_factory.ke_runtime_params) abi_runtime.ke_runtime_handle {
+fn createdRuntime(ecs: ?*abi_ecs.ke_ecs, task_pool: ?*abi_task_pool.ke_task_pool, params: [*c]const abi_runtime_factory.ke_runtime_params) abi_runtime.ke_runtime_handle {
     var h: abi_runtime.ke_runtime_handle = .{ .ref = null, .destroy = null };
-    _ = ke_runtime_create(ecs, scheduler, params, &h);
+    _ = ke_runtime_create(ecs, task_pool, params, &h);
     return h;
 }
 
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *abi_ecs.ke_ecs_handle) callconv(.c) abi_result.ke_result;
-extern fn ke_scheduler_enki_create(params: ?*const anyopaque, out_scheduler: *abi_scheduler.ke_scheduler_handle) callconv(.c) abi_result.ke_result;
+extern fn ke_task_pool_enki_create(params: ?*const anyopaque, out_task_pool: *abi_task_pool.ke_task_pool_handle) callconv(.c) abi_result.ke_result;
 
 fn ecsSpawn(ecs: *abi_ecs.ke_ecs) R.Error!abi_ecs.ke_entity {
     var entity: abi_ecs.ke_entity = 0;
@@ -1277,13 +1277,13 @@ fn ecsAttach(ecs: *abi_ecs.ke_ecs, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_co
 }
 
 const Fixture = struct {
-    scheduler_h: abi_scheduler.ke_scheduler_handle,
+    task_pool_h: abi_task_pool.ke_task_pool_handle,
     ecs_h: abi_ecs.ke_ecs_handle,
     runtime_h: abi_runtime.ke_runtime_handle,
 
     fn init() !Fixture {
-        var sh: abi_scheduler.ke_scheduler_handle = undefined;
-        try R.check(ke_scheduler_enki_create(null, &sh));
+        var sh: abi_task_pool.ke_task_pool_handle = undefined;
+        try R.check(ke_task_pool_enki_create(null, &sh));
 
         var eh: abi_ecs.ke_ecs_handle = undefined;
         try R.check(ke_ecs_flecs_create(null, &eh));
@@ -1292,13 +1292,13 @@ const Fixture = struct {
         const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
-        return .{ .scheduler_h = sh, .ecs_h = eh, .runtime_h = rh };
+        return .{ .task_pool_h = sh, .ecs_h = eh, .runtime_h = rh };
     }
 
     fn deinit(self: *Fixture) void {
         if (self.runtime_h.ref) |r| self.runtime_h.destroy.?(r);
         if (self.ecs_h.ref) |r| self.ecs_h.destroy.?(r);
-        if (self.scheduler_h.ref) |r| self.scheduler_h.destroy.?(r);
+        if (self.task_pool_h.ref) |r| self.task_pool_h.destroy.?(r);
     }
 
     fn rt(self: *Fixture) *abi_runtime.ke_runtime {
@@ -1601,12 +1601,12 @@ test "registering a system with no execute body is refused" {
 
 const BareRuntime = struct {
     ecs: abi_ecs.ke_ecs = std.mem.zeroes(abi_ecs.ke_ecs),
-    scheduler: abi_scheduler.ke_scheduler = std.mem.zeroes(abi_scheduler.ke_scheduler),
+    task_pool: abi_task_pool.ke_task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool),
     runtime_h: abi_runtime.ke_runtime_handle = undefined,
 
     fn init(self: *BareRuntime) !void {
         var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
-        self.runtime_h = createdRuntime(&self.ecs, &self.scheduler, &rp);
+        self.runtime_h = createdRuntime(&self.ecs, &self.task_pool, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
 
@@ -1755,12 +1755,12 @@ test "a query declaring no terms is refused" {
 var inline_result: abi_result.ke_result = R.ok;
 var inline_token: u8 = 0;
 
-fn inlineDispatch(_: [*c]abi_scheduler.ke_scheduler, func: abi_scheduler.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_scheduler.ke_task {
+fn inlineDispatch(_: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_task_pool.ke_task {
     inline_result = func.?(data);
     return @ptrCast(&inline_token);
 }
 
-fn inlineWait(_: [*c]abi_scheduler.ke_scheduler, _: ?*abi_scheduler.ke_task) callconv(.c) abi_result.ke_result {
+fn inlineWait(_: [*c]abi_task_pool.ke_task_pool, _: ?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
     return inline_result;
 }
 
@@ -1768,8 +1768,8 @@ const InlineRuntime = struct {
     bare: BareRuntime = .{},
 
     fn init(self: *InlineRuntime) !void {
-        self.bare.scheduler.dispatch = @ptrCast(&inlineDispatch);
-        self.bare.scheduler.wait = @ptrCast(&inlineWait);
+        self.bare.task_pool.dispatch = @ptrCast(&inlineDispatch);
+        self.bare.task_pool.wait = @ptrCast(&inlineWait);
         try self.bare.init();
     }
 
@@ -2103,11 +2103,11 @@ test "creating a runtime without an ecs is refused" {
     defer f.deinit();
 
     var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
-    const rh = createdRuntime(null, f.scheduler_h.ref, &rp);
+    const rh = createdRuntime(null, f.task_pool_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
 
-test "creating a runtime without a scheduler is refused" {
+test "creating a runtime without a task pool is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 

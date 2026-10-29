@@ -3,7 +3,7 @@
 const std = @import("std");
 const render = @import("render");
 const result = @import("result");
-const scheduler = @import("scheduler");
+const task_pool = @import("task_pool");
 const text = @import("text");
 
 
@@ -90,9 +90,9 @@ pub const ke_asset_loader = extern struct {
     /// be given back to the same loader that produced it. A foreign or hand-built ke_model_data is
     /// not a valid argument. A null data is ignored.
     free_model: ?*const fn (?*ke_asset_loader, ?*ke_model_data) callconv(.c) void = null,
-    /// Asynchronously loads a 3D model, calling on_complete on a scheduler thread once the load has
+    /// Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has
     /// finished or failed.
-    load_model_async: ?*const fn (?*ke_asset_loader, ?*scheduler.ke_scheduler, ?[*:0]const u8, ke_load_model_complete_func, ?*anyopaque) callconv(.c) ?*scheduler.ke_task = null,
+    load_model_async: ?*const fn (?*ke_asset_loader, ?*task_pool.ke_task_pool, ?[*:0]const u8, ke_load_model_complete_func, ?*anyopaque) callconv(.c) ?*task_pool.ke_task = null,
 };
 
 pub const ke_asset_loader_handle = extern struct {

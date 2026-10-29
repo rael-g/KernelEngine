@@ -2,19 +2,19 @@
 
 This is a map: the parts the tick touches, what each receives and what it hands on. How a part
 works inside is on the generated page of its file. Contracts are under `src/c/runtime/`,
-`src/c/scheduler/` and `src/c/ecs/`; the runtime is `src/zig/runtime/src/runtime.zig`.
+`src/c/task_pool/` and `src/c/ecs/`; the runtime is `src/zig/runtime/src/runtime.zig`.
 
 ## The parts
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| runtime | `ke_runtime` | runtime | `ke_ecs`, `ke_scheduler`, `ke_runtime_params` | the tick, and the registration of modules and systems |
+| runtime | `ke_runtime` | runtime | `ke_ecs`, `ke_task_pool`, `ke_runtime_params` | the tick, and the registration of modules and systems |
 | ecs | `ke_ecs` | flecs | queries, structural changes | entity ids, segments of columns |
-| scheduler | `ke_scheduler` | enki | task functions | their completion, and the type of their failure |
+| task pool | `ke_task_pool` | enki | task functions | their completion, and the type of their failure |
 | module | none; `ke_runtime_module_params` | the host or a plugin | the runtime, in `on_load` | components and systems it registers |
 | system | `ke_runtime_system_params` | a module | `ke_system_ctx`, a delta time | structural changes, recorded in `ke_ecs_commands` |
 
-The runtime borrows the ecs and the scheduler from the host and never frees them. In the managed
+The runtime borrows the ecs and the task pool from the host and never frees them. In the managed
 layer `LoadModules` registers every `IRuntimeModule` of the service provider, in dependency order.
 
 ## A tick
@@ -30,7 +30,7 @@ they name the same component and at least one writes it; a system joins the curr
 it conflicts with one already in it, and then opens the next. The access of a system is its
 queries' terms plus its access list, so a system that declares nothing conflicts with nothing.
 
-**A wave is a set of scheduler tasks.** Each system body becomes one `ke_scheduler` task, or
+**A wave is a set of task pool tasks.** Each system body becomes one `ke_task_pool` task, or
 several slices when the system is `per_entity`. The tick thread waits for all of them before the next wave.
 
 **Structure changes at the barrier.** A body reaches component memory only through its
@@ -41,7 +41,7 @@ changes are applied after the wave, so no body sees storage move under it.
 
 **The render phase reads copies.** After the sim phases, `runtimeExtractRenderState` copies what
 each render system's queries matched into buffers the runtime owns. The render phase is one
-scheduler task that runs beside the next tick's sim phases; the next tick joins it before it
+task pool task that runs beside the next tick's sim phases; the next tick joins it before it
 extracts again. Its failure is reported by that join or by `flush_render`.
 
 **A failure crosses threads as a type.** The error record of a body lives in its worker's own

@@ -1,6 +1,6 @@
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.TaskPool.Native;
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Asset.Native;
@@ -15,6 +15,6 @@ public unsafe partial struct ke_asset_loader
     [NativeTypeName("void (*)(struct ke_asset_loader *, ke_model_data *)")]
     public delegate* unmanaged[Cdecl]<ke_asset_loader*, ke_model_data*, void> free_model;
 
-    [NativeTypeName("ke_task *(*)(struct ke_asset_loader *, ke_scheduler *, const char *, ke_load_model_complete_func, void *)")]
-    public delegate* unmanaged[Cdecl]<ke_asset_loader*, KernelEngine.Scheduler.Native.ke_scheduler*, sbyte*, delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>, void*, KernelEngine.Scheduler.Native.ke_task*> load_model_async;
+    [NativeTypeName("ke_task *(*)(struct ke_asset_loader *, ke_task_pool *, const char *, ke_load_model_complete_func, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_asset_loader*, KernelEngine.TaskPool.Native.ke_task_pool*, sbyte*, delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>, void*, KernelEngine.TaskPool.Native.ke_task*> load_model_async;
 }

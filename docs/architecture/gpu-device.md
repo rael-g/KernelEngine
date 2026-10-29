@@ -8,7 +8,7 @@ inside is on the generated page of its file.
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| device | `ke_gpu_device` | webgpu | optionally a `ke_scheduler` and creation flags (`ke_gpu_device_webgpu_params`) | buffers, textures, views, samplers, shader modules, pipelines, bind groups |
+| device | `ke_gpu_device` | webgpu | optionally a `ke_task_pool` and creation flags (`ke_gpu_device_webgpu_params`) | buffers, textures, views, samplers, shader modules, pipelines, bind groups |
 | recording | `ke_gpu_command_encoder`, `ke_gpu_render_pass`, `ke_gpu_compute_pass`, `ke_gpu_command_buffer` | webgpu | the device | command buffers, for `queue_submit` |
 | window target | `ke_gpu_render_target` | webgpu | the device, a `ke_window` | the surface texture of a frame, and its presentation |
 | texture target | `ke_gpu_render_target` | texture_target | the device, a texture | that texture as the frame |

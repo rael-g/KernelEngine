@@ -1,7 +1,7 @@
 using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.TaskPool.Native;
 using KernelEngine.Window.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;

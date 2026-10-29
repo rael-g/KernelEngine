@@ -5,7 +5,7 @@ const ecs = @import("ecs");
 const logger = @import("logger");
 const result = @import("result");
 const runtime = @import("runtime");
-const scheduler = @import("scheduler");
+const task_pool = @import("task_pool");
 
 pub const ke_runtime_params = extern struct {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
@@ -17,8 +17,8 @@ pub const ke_runtime_params = extern struct {
     max_systems_per_phase: u32 = std.mem.zeroes(u32),
 };
 
-/// Creates a runtime over ecs and scheduler, both borrowed for its lifetime.
-pub extern fn ke_runtime_create(ecs: ?*ecs.ke_ecs, scheduler: ?*scheduler.ke_scheduler, params: ?*const ke_runtime_params, out_runtime: ?*runtime.ke_runtime_handle) result.ke_result;
+/// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
+pub extern fn ke_runtime_create(ecs: ?*ecs.ke_ecs, task_pool: ?*task_pool.ke_task_pool, params: ?*const ke_runtime_params, out_runtime: ?*runtime.ke_runtime_handle) result.ke_result;
 
 /// Sends every line ke_runtime logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

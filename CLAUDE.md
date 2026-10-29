@@ -71,16 +71,16 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Eighteen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `result`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Eighteen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `result`, `runtime`, `spatial`, `task_pool`, `text`, `view`, `window`.
 
-One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
+One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `task_pool`? include `task_pool`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
 Contracts worth knowing by name:
 - `ke_log_callback` — where a plugin library's `std.log` lines go, set by the host through the library's `<library>_set_log_callback`
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_scheduler` — the single shared worker pool every parallel subsystem routes through
+- `ke_task_pool` — the single shared worker pool every parallel subsystem routes through
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
@@ -116,7 +116,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .Add<ITaskPool, EnkiTaskPool>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "Title"));
 
@@ -136,11 +136,11 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+There is one worker pool, behind `ke_task_pool`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pool**: a single shared `ke_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
+**Worker pool**: a single shared `ke_task_pool` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
 
 ---
 
@@ -199,7 +199,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases.
+5. **No mutex, condition variable or raw thread in a plugin.** The task pool is the synchronisation layer: work is dispatched to `ke_task_pool` and waited on through it, and a producer and a consumer are ordered by phases.
 
 6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, is a `ke_result` code returned by the call.
 

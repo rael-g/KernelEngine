@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool.Enki;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -10,13 +10,13 @@ namespace KernelEngine.Runtime.Tests;
 
 public class ModulePatternTests : IDisposable
 {
-    private readonly EnkiScheduler _taskScheduler = new();
+    private readonly EnkiTaskPool _taskPool = new();
     private readonly FlecsEcs _ecs = new();
 
     public void Dispose()
     {
         _ecs.Dispose();
-        _taskScheduler.Dispose();
+        _taskPool.Dispose();
     }
 
     private sealed class SimpleModule : IRuntimeModule
@@ -62,7 +62,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(module);
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskPool);
         runtime.LoadModules(sp);
 
         Assert.True(module.OnLoadCalled);
@@ -96,7 +96,7 @@ public class ModulePatternTests : IDisposable
             .Add<IRuntimeModule>(new ModuleA(order));
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskPool);
         runtime.LoadModules(sp);
 
         Assert.Equal(new[] { "A", "B" }, order);
@@ -114,7 +114,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(new CyclicModule());
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskPool);
 
         var ex = Assert.Throws<InvalidOperationException>(() => runtime.LoadModules(sp));
         Assert.Contains("cycle", ex.Message);
@@ -132,7 +132,7 @@ public class ModulePatternTests : IDisposable
         var services = new ServiceCollection().Add<IRuntimeModule>(new MissingDepModule());
         using var sp = services.BuildServiceProvider();
 
-        using var runtime = new Runtime(_ecs, _taskScheduler);
+        using var runtime = new Runtime(_ecs, _taskPool);
 
         var ex = Assert.Throws<InvalidOperationException>((Action)(() => runtime.LoadModules(sp)));
         Assert.Contains("not registered", ex.Message);

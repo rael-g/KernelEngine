@@ -7,7 +7,7 @@
         .ke_abi_logger = .{ .path = "../../../abi/logger" },
         .ke_abi_render = .{ .path = "../../../abi/render" },
         .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_scheduler = .{ .path = "../../../abi/scheduler" },
+        .ke_abi_task_pool = .{ .path = "../../../abi/task_pool" },
         .ke_abi_window = .{ .path = "../../../abi/window" },
     },
     .paths = .{"."},

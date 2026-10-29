@@ -1,6 +1,6 @@
 ﻿
 using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
 

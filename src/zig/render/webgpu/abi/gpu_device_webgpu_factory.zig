@@ -4,7 +4,7 @@ const std = @import("std");
 const logger = @import("logger");
 const render = @import("render");
 const result = @import("result");
-const scheduler = @import("scheduler");
+const task_pool = @import("task_pool");
 const window = @import("window");
 
 
@@ -23,9 +23,9 @@ pub const ke_gpu_device_webgpu_params = extern struct {
     /// only where that API's validation layers are installed.
     enable_validation: bool = std.mem.zeroes(bool),
     /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this scheduler's worker pool. When NULL, the compile runs
+    /// create_render_pipeline_async onto this task pool's worker pool. When NULL, the compile runs
     /// synchronously and the callback is invoked before returning.
-    scheduler: ?*scheduler.ke_scheduler = std.mem.zeroes(?*scheduler.ke_scheduler),
+    task_pool: ?*task_pool.ke_task_pool = std.mem.zeroes(?*task_pool.ke_task_pool),
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying
     /// graphics API, where capture tools read them.
     debug_labels: bool = std.mem.zeroes(bool),

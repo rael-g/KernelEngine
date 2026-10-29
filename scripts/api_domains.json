@@ -134,21 +134,21 @@
       "usings": []
     },
     {
-      "name": "scheduler",
+      "name": "task_pool",
       "headers": [
-        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+        "src/c/task_pool/kernel_engine/task_pool/task_pool.h"
       ],
       "includeDirs": [
-        "src/c/scheduler",
+        "src/c/task_pool",
         "src/c/math",
         "src/zig/common/include",
         "src/c/result",
         "src/c/result"
       ],
-      "apiJson": "src/csharp/scheduler/ke_api.json",
-      "namespace": "KernelEngine.Scheduler",
-      "nativeNamespace": "KernelEngine.Scheduler.Native",
-      "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
+      "apiJson": "src/csharp/task_pool/ke_api.json",
+      "namespace": "KernelEngine.TaskPool",
+      "nativeNamespace": "KernelEngine.TaskPool.Native",
+      "outDir": "src/csharp/task_pool/KernelEngine.TaskPool/Generated",
       "usings": []
     },
     {
@@ -169,7 +169,7 @@
         "src/c/runtime",
         "src/zig/runtime/include",
         "src/c/ecs",
-        "src/c/scheduler",
+        "src/c/task_pool",
         "src/c/math",
         "src/zig/common/include",
         "src/c/result",
@@ -182,7 +182,7 @@
       "abstractionsOutDir": "src/csharp/runtime/KernelEngine.Runtime.Abstractions/Generated",
       "usings": [
         "KernelEngine.Ecs.Native",
-        "KernelEngine.Scheduler.Native"
+        "KernelEngine.TaskPool.Native"
       ],
       "library": "ke_runtime"
     },
@@ -365,7 +365,7 @@
       ],
       "includeDirs": [
         "src/c/asset",
-        "src/c/scheduler",
+        "src/c/task_pool",
         "src/c/render",
         "src/c/math",
         "src/zig/common/include",
@@ -377,7 +377,7 @@
       "namespace": "KernelEngine.Asset",
       "nativeNamespace": "KernelEngine.Asset.Native",
       "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
-      "usings": [ "KernelEngine.Scheduler" ]
+      "usings": [ "KernelEngine.TaskPool" ]
     },
     {
       "_comment": "The data a loader answers with, described where it is declared rather than in one plugin's binding project, so every plugin answering with it reads one projection instead of one per binding.",
@@ -498,7 +498,7 @@
         "src/zig/framework/include",
         "src/c/ecs",
         "src/c/runtime",
-        "src/c/scheduler",
+        "src/c/task_pool",
         "src/c/logger",
         "src/c/math",
         "src/zig/common/include",
@@ -1156,24 +1156,24 @@
     },
     {
       "name": "Enki",
-      "project": "src/csharp/scheduler/KernelEngine.Scheduler.Enki",
-      "namespace": "KernelEngine.Scheduler.Enki.Native",
+      "project": "src/csharp/task_pool/KernelEngine.TaskPool.Enki",
+      "namespace": "KernelEngine.TaskPool.Enki.Native",
       "headers": [
-        "src/zig/scheduler/enki/include/kernel_engine/scheduler/enki/enki_scheduler.h",
-        "src/zig/scheduler/enki/include/kernel_engine/scheduler/enki/scheduler_enki_log.h"
+        "src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/enki_task_pool.h",
+        "src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/task_pool_enki_log.h"
       ],
-      "library": "ke_scheduler_enki",
+      "library": "ke_task_pool_enki",
       "output": "Generated/"
     },
     {
-      "name": "Scheduler",
-      "project": "src/csharp/scheduler/KernelEngine.Scheduler",
-      "namespace": "KernelEngine.Scheduler.Native",
+      "name": "TaskPool",
+      "project": "src/csharp/task_pool/KernelEngine.TaskPool",
+      "namespace": "KernelEngine.TaskPool.Native",
       "headers": [
-        "src/c/scheduler/kernel_engine/scheduler/scheduler.h"
+        "src/c/task_pool/kernel_engine/task_pool/task_pool.h"
       ],
-      "library": "ke_scheduler_enki",
-      "output": "Generated/Scheduler/"
+      "library": "ke_task_pool_enki",
+      "output": "Generated/TaskPool/"
     },
     {
       "name": "StbTrueType",

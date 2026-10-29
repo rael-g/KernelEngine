@@ -662,9 +662,9 @@ internal static class GeneratorShapeCases
         Expect("[provider] asks for another domain's projection, not the pointer inside it",
             Vtable("ke_probe",
                 Slot("attach", "void", Param("self", "ke_probe *", "self"),
-                    Param("scheduler", "ke_scheduler *", "provider"))),
-            contains: ["Attach(ke_probe* self, INativeScheduler scheduler)", "scheduler.Native"],
-            absent: ["ke_scheduler* scheduler", "ke_scheduler *scheduler"]);
+                    Param("pool", "ke_task_pool *", "provider"))),
+            contains: ["Attach(ke_probe* self, INativeTaskPool pool)", "pool.Native"],
+            absent: ["ke_task_pool* pool", "ke_task_pool *pool"]);
 
         ExpectCallbackBridge("a bridged callback becomes a delegate without its context and a pinning trampoline",
             new ApiCallback("ke_probe_line_fn", "void", "Receives a line.",

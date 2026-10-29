@@ -6,7 +6,7 @@ is `examples/csharp/00_runtime_minimal/Program.cs`; every passage below is quote
 ## Choose the parts
 
 The engine has no default set of plugins. The host registers the ones it wants in a service
-collection: a logger and a sink for it, an implementation of the ECS, one of the scheduler, the
+collection: a logger and a sink for it, an implementation of the ECS, one of the task pool, the
 runtime, and each module it wants loaded. Here the only module is the window.
 
 [!code-csharp[](../../examples/csharp/00_runtime_minimal/Program.cs#compose)]

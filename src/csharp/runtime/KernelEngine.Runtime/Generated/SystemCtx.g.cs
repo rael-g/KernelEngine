@@ -9,7 +9,7 @@ using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Runtime.Native;
 using KernelEngine.Ecs.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Runtime;
 

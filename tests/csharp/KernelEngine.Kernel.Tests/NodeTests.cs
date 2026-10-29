@@ -20,7 +20,7 @@ public sealed partial class TextProbe : Node
 
 /// <summary>
 /// A node whose behavior only reads one of its properties and writes the other, so
-/// what it declares to the scheduler can be told apart from what it merely carries.
+/// what it declares to the runtime can be told apart from what it merely carries.
 /// </summary>
 public sealed partial class AccessProbe : Node
 {
@@ -39,7 +39,7 @@ public sealed partial class AccessProbe : Node
 }
 
 /// <summary>
-/// A node whose behavior only reads what it carries, which is what the scheduler
+/// A node whose behavior only reads what it carries, which is what the runtime
 /// needs told apart from writing: two readers of one component may share a wave.
 /// </summary>
 public sealed partial class ReadOnlyProbe : Node

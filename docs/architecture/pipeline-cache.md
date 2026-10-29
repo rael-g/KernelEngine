@@ -11,7 +11,7 @@ cache works inside is on the generated page of its file.
 | service | `get_or_create_pipeline` of `ke_render_service` | the params of the pass | the current pipeline of that request |
 | cache | `PipelineCache` in `pipeline_cache.zig` of the service plugin | the params, reduced to a `PsoKey` | the fallback, then the real pipeline |
 | device | `create_render_pipeline_async` and `flush_pipeline_compiles` of `ke_gpu_device` | the params and a completion callback | the compiled pipeline, to the callback |
-| scheduler | `ke_scheduler`, handed to the device at creation | the compile job | the worker the job runs on |
+| task pool | `ke_task_pool`, handed to the device at creation | the compile job | the worker the job runs on |
 
 ## What ties the parts together
 
@@ -29,7 +29,7 @@ equal requests that race end on one entry.
 **Teardown follows the callback.** A completion callback writes into a cache entry, so the
 service flushes the device's compiles (`flush_pipeline_compiles`) before it destroys the cache.
 
-**Where the compile runs depends on the device.** The webgpu device compiles on the scheduler
+**Where the compile runs depends on the device.** The webgpu device compiles on the task pool
 it was created with, and on the calling thread when it has none or has too many compiles
 outstanding; the callback has then already run when the request returns.
 

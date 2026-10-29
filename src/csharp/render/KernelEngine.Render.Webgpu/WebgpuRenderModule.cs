@@ -7,7 +7,7 @@ using KernelEngine.Render;
 using KernelEngine.Render.Native;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 using KernelEngine.Text.Native;
 using KernelEngine.Window;
 
@@ -114,13 +114,13 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         var window = services.GetRequiredService<IWindow>();
         var ecs = services.GetRequiredService<INativeEcs>();
-        var scheduler = services.GetRequiredService<IScheduler>();
+        var taskPool = services.GetRequiredService<ITaskPool>();
         var world = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
         var rt = ((INativeRuntime)runtime).Native;
         var ec = ecs.Native;
-        var sc = ((INativeScheduler)scheduler).Native;
+        var sc = ((INativeTaskPool)taskPool).Native;
         var wd = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
 
         if (services.GetService<ILogger>() is { } logger)
@@ -128,7 +128,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         var config = services.GetService<IConfiguration>();
         var debugLabels = _debugLabelsOverride || (config?.GetBool("render", "debug_labels", false) ?? false);
-        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, scheduler = sc, debug_labels = debugLabels };
+        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, task_pool = sc, debug_labels = debugLabels };
         fixed (ke_gpu_device_handle* made = &_device)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, made), "webgpu device create");
 

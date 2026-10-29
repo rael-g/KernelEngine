@@ -1,0 +1,16 @@
+.{
+    .name = .ke_task_pool_enki,
+    .version = "0.1.0",
+    .fingerprint = 0x632435d14b40e681,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_task_pool = .{ .path = "../../abi/task_pool" },
+        .abi_task_pool_enki_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+    },
+    .paths = .{"."},
+}

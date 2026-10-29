@@ -4,7 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
-struct ke_scheduler;
+struct ke_task_pool;
 
 #ifndef KE_GPU_WEBGPU_API
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -32,9 +32,9 @@ typedef struct ke_gpu_device_webgpu_params
     /// effect only where that API's validation layers are installed.
     bool                 enable_validation;
     /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this scheduler's worker pool. When NULL,
+    /// create_render_pipeline_async onto this task pool's worker pool. When NULL,
     /// the compile runs synchronously and the callback is invoked before returning.
-    struct ke_scheduler *scheduler;
+    struct ke_task_pool *task_pool;
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool                 debug_labels;

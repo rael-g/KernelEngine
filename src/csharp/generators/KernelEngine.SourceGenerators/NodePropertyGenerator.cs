@@ -731,7 +731,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
     static readonly DiagnosticDescriptor ForeignNodeRule = new(
         id: "KESG009",
-        title: "Behavior hook reaches a node the scheduler cannot see",
+        title: "Behavior hook reaches a node the runtime cannot see",
         messageFormat: "'{0}.{1}': {2}",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Error,
@@ -740,7 +740,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static readonly DiagnosticDescriptor WholeTypeAccessRule = new(
         id: "KESG008",
         title: "Behavior hook declares every component of its type",
-        messageFormat: "'{0}.{1}' declares every component of '{0}' because {2}; the scheduler cannot run it beside other writers of those components",
+        messageFormat: "'{0}.{1}' declares every component of '{0}' because {2}; the runtime cannot run it beside other writers of those components",
         category: "KernelEngine.SourceGenerators",
         DiagnosticSeverity.Info,
         isEnabledByDefault: true);

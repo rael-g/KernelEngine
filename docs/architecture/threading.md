@@ -1,16 +1,16 @@
 # Threading
 
-This is a map: the pool, who submits to it and where work lands. Contract is `ke_scheduler` under
-`src/c/scheduler/`; the only implementation is `src/zig/scheduler/enki/src/enki_scheduler.zig`.
+This is a map: the pool, who submits to it and where work lands. Contract is `ke_task_pool` under
+`src/c/task_pool/`; the only implementation is `src/zig/task_pool/enki/src/enki_task_pool.zig`.
 
 ## The parts
 
 | part | declared as | receives | hands on |
 |---|---|---|---|
-| pool | `ke_scheduler`, made by `ke_scheduler_enki_create` | task functions | their execution on workers |
+| pool | `ke_task_pool`, made by `ke_task_pool_enki_create` | task functions | their execution on workers |
 | runtime | `ke_runtime_create` | the pool | system bodies and the render phase, as tasks |
 | ecs | `ke_ecs_flecs_create` | nothing from the pool | single-threaded storage |
-| managed layer | `IScheduler` | actions | tasks on the pool |
+| managed layer | `ITaskPool` | actions | tasks on the pool |
 
 **There is one pool and no named thread.** Workers are addressed by index. No contract or plugin
 in the engine's native side defines a "sim" or a "render" thread.

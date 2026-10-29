@@ -9,7 +9,7 @@ using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Runtime.Native;
 using KernelEngine.Ecs.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Runtime;
 
@@ -79,13 +79,13 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 
     ke_runtime* INativeRuntime.Native => Handle;
 
-    /// <summary>Creates a runtime over ecs and scheduler, both borrowed for its lifetime.</summary>
+    /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
     /// <param name="@params">NULL takes every default.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    internal Runtime(ke_ecs* ecs, ke_scheduler* scheduler, ke_runtime_params* @params)
+    internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_params* @params)
     {
         ke_runtime_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, scheduler, @params, &handle), "ke_runtime_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, taskPool, @params, &handle), "ke_runtime_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }

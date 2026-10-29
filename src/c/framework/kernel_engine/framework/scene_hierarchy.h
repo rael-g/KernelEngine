@@ -13,7 +13,7 @@ extern "C"
     /// that order once, so a parent's world matrix is final before its children are
     /// reached.
     ///
-    /// The system declares its component access, so the scheduler orders it against
+    /// The system declares its component access, so the runtime orders it against
     /// other systems that touch transforms.
     typedef struct ke_scene_hierarchy ke_scene_hierarchy;
 

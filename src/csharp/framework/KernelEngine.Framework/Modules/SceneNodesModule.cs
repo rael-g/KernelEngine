@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
 

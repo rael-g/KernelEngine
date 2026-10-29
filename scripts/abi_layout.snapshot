@@ -58,15 +58,15 @@ ke_window_handle size=16 align=8
 
 [logger]
 
-[scheduler]
-ke_scheduler size=48 align=8
+[task_pool]
+ke_task_pool size=48 align=8
   handle 0
   dispatch 8
   dispatch_on_complete 16
   wait 24
   is_completed 32
   get_num_workers 40
-ke_scheduler_handle size=16 align=8
+ke_task_pool_handle size=16 align=8
   ref 0
   destroy 8
 

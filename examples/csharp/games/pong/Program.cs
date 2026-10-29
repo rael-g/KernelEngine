@@ -9,8 +9,8 @@ using KernelEngine.Logger;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
@@ -30,7 +30,7 @@ var services = new ServiceCollection()
     .AddAssetResolver()
     .AddInputActions<PongAction>()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .Add<ITaskPool, EnkiTaskPool>()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir))

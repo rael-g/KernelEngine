@@ -7,7 +7,7 @@
     .dependencies = .{
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
-        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_task_pool = .{ .path = "../../abi/task_pool" },
         .abi_window = .{ .path = "../../abi/window" },
         .abi_gpu_device_webgpu_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
