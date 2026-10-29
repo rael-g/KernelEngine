@@ -9,6 +9,7 @@
         .ke_result = .{ .path = "src/zig/result" },
         .ke_ecs_flecs = .{ .path = "src/zig/ecs/flecs" },
         .ke_input_default = .{ .path = "src/zig/input/default" },
+        .ke_file_system_std = .{ .path = "src/zig/file_system/std" },
         .ke_resource_cache_default = .{ .path = "src/zig/resource_cache/default" },
         .ke_task_pool_enki = .{ .path = "src/zig/task_pool/enki" },
         .ke_runtime = .{ .path = "src/zig/runtime" },

@@ -1,0 +1,12 @@
+.{
+    .name = .abi_file_system_std,
+    .version = "0.1.0",
+    .fingerprint = 0xdb6068771fe8c25b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_file_system = .{ .path = "../../../abi/file_system" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

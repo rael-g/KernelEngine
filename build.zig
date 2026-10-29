@@ -171,6 +171,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_file_system_std", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     const task_pool_enki = ctx.member("ke_task_pool_enki", .{
         .target = target,
         .optimize = optimize,
