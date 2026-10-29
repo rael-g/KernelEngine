@@ -23,8 +23,8 @@
         .ke_logger = .{ .path = "../logger" },
         .ke_result = .{ .path = "../result" },
         .zsub = .{
-            .url = "https://github.com/rael-g/zsub/archive/b9dd610a1f4f12fcb8079b2fffc5559abb49d6d0.tar.gz",
-            .hash = "zsub-0.0.0-c8a1QsCuAADnSlGoiE44efObIwqqPO_Qk4zJTv_wXNKP",
+            .url = "https://github.com/rael-g/zsub/archive/155f32f849d7d3eed56cc0df8e73331cfc812b36.tar.gz",
+            .hash = "zsub-0.0.0-c8a1Qn29AADs_6m2PIvvEWKNkieBP7i9KwiW5rAiYuE9",
         },
     },
     .paths = .{"."},
