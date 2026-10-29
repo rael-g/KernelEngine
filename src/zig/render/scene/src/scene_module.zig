@@ -53,9 +53,12 @@ export fn ke_render_scene_components_create(set_in: ?*abi_framework.ke_scene_com
 
 /// The state of one scene resolve. The factory allocates it and `destroyScene` frees it. The
 /// runtime receives the core and `sprite` as the contexts of the two systems, and their queries
-/// point into it, so it is not moved after creation.
+/// point into it, so it is not moved after creation. `destroyScene` unregisters both systems
+/// before it frees the resolve.
 const SceneResolve = struct {
     api: abi_render_scene_factory.ke_render_scene_resolve,
+    runtime: *abi_runtime.ke_runtime,
+    systems: [2]abi_runtime.ke_system_id,
     ids: abi_render_scene_factory.ke_render_scene_component_ids,
     sprite: sprite_resolve.State,
     mesh_terms: [1]abi_runtime.ke_component_access,
@@ -78,6 +81,7 @@ fn componentIds(self: [*c]abi_render_scene_factory.ke_render_scene_resolve) call
 fn destroyScene(self: ?*abi_render_scene_factory.ke_render_scene_resolve) callconv(.c) void {
     const s = self orelse return;
     const st: *SceneResolve = @ptrCast(@alignCast(s.handle));
+    for (st.systems) |id| _ = st.runtime.unregister_system.?(st.runtime, id);
     gpa.destroy(st);
 }
 
@@ -163,13 +167,17 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.ke_render
     mesh.after_count = mesh_resolve_after.len;
     var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &mesh, &system_id));
+    st.runtime = rt;
+    st.systems = .{ sprite_id, system_id };
 }
 
 /// The state of one label resolve. The factory allocates it and `destroyLabel` frees it. The
 /// runtime receives `state` as the context of the system, and its query points into it, so it is
-/// not moved after creation.
+/// not moved after creation. `destroyLabel` unregisters the system before it frees the resolve.
 const LabelResolve = struct {
     state: label_resolve.State,
+    runtime: *abi_runtime.ke_runtime,
+    system: abi_runtime.ke_system_id,
     terms: [1]abi_runtime.ke_component_access,
     queries: [1]abi_runtime.ke_query_decl,
 };
@@ -180,6 +188,7 @@ const label_resolve_before = [_][*c]const u8{"render.ui.labels"};
 /// ignored.
 fn destroyLabel(self: ?*abi_render_scene_factory.ke_render_label_resolve) callconv(.c) void {
     const st: *LabelResolve = @ptrCast(@alignCast(self orelse return));
+    _ = st.runtime.unregister_system.?(st.runtime, st.system);
     gpa.destroy(st);
 }
 
@@ -214,6 +223,8 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
         gpa.destroy(st);
         return registered;
     }
+    st.runtime = rt;
+    st.system = system_id;
     out.* = .{ .ref = @ptrCast(st), .destroy = destroyLabel };
     return R.ok;
 }
@@ -262,6 +273,18 @@ test "the scene resolve registers both its systems and hands out an id for every
     h.destroy.?(h.ref);
 }
 
+test "destroying the scene resolve unregisters both its systems" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_scene_factory.ke_render_scene_resolve_handle = undefined;
+    try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
+}
+
 test "a scene resolve whose mesh system the runtime refuses removes its sprite system and fails" {
     var rig: Rig = undefined;
     try rig.init();
@@ -298,6 +321,20 @@ test "the label resolve registers its system, and fails when the runtime refuses
     _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     try testing.expect(ke_render_label_resolve_create(&p, &h) != R.ok);
     try testing.expect(h.ref == null);
+}
+
+test "destroying the label resolve unregisters its system" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var ui = std.mem.zeroes(abi_render_ui_factory.ke_render_ui);
+    const p = abi_render_scene_factory.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
+    var h: abi_render_scene_factory.ke_render_label_resolve_handle = undefined;
+    try R.check(ke_render_label_resolve_create(&p, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a label resolve missing its ui is refused as an invalid argument" {
