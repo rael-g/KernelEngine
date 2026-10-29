@@ -36,7 +36,10 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
     .hint_count = depth_hint.len,
 };
 
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const SkyboxModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
     camera: *abi_render.ke_render_camera = undefined,
@@ -219,6 +222,7 @@ fn destroyModule(sm: *const SkyboxModule) void {
 /// then frees the module. A null argument is ignored.
 fn destroyHandle(self: ?*abi_render_skybox_factory.ke_render_skybox) callconv(.c) void {
     const sm: *SkyboxModule = @ptrCast(@alignCast(self orelse return));
+    _ = sm.runtime.unregister_system.?(sm.runtime, sm.system);
     destroyModule(sm);
     gpa.destroy(sm);
 }
@@ -260,6 +264,8 @@ export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.k
         gpa.destroy(sm);
         return registered;
     }
+    sm.runtime = rt;
+    sm.system = system_id;
 
     out.* = .{ .ref = @ptrCast(sm), .destroy = destroyHandle };
     return R.ok;
@@ -324,6 +330,19 @@ test "creating and destroying the skybox pass leaves no block allocated and no G
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the skybox pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.ke_render_camera);
+    var h: abi_render_skybox_factory.ke_render_skybox_handle = undefined;
+    try R.check(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a skybox pass whose shader fails to load releases what it had created" {
