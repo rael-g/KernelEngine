@@ -408,6 +408,9 @@ fn oneSegment(meshes: []const abi_render.ke_mesh_component, wts: []const abi_spa
 }
 
 test "a mesh on a layer the camera's cull_mask omits is not drawn" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var svc = opaqueService();
     const cam = cameraSeeing(0b010);
     const meshes = [_]abi_render.ke_mesh_component{ meshOn(0b001), meshOn(0b010), meshOn(0b100) };
@@ -423,6 +426,9 @@ test "a mesh on a layer the camera's cull_mask omits is not drawn" {
 }
 
 test "a camera that names no layer draws nothing into the gbuffer" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var svc = opaqueService();
     const cam = cameraSeeing(0);
     const meshes = [_]abi_render.ke_mesh_component{ meshOn(0b001), meshOn(0b010) };
@@ -436,6 +442,9 @@ test "a camera that names no layer draws nothing into the gbuffer" {
 }
 
 test "a blending mesh the camera can see is left to the forward pass" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var svc = opaqueService();
     const cam = cameraSeeing(0b001);
     var blended = meshOn(0b001);
@@ -453,6 +462,9 @@ test "a blending mesh the camera can see is left to the forward pass" {
 }
 
 test "every visible mesh is collected, however many there are" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var svc = opaqueService();
     const cam = cameraSeeing(0b001);
     const meshes = [_]abi_render.ke_mesh_component{meshOn(0b001)} ** 600;
@@ -466,6 +478,9 @@ test "every visible mesh is collected, however many there are" {
 }
 
 test "meshes are gathered across every segment the query returned" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var svc = opaqueService();
     const cam = cameraSeeing(0b001);
     const a_meshes = [_]abi_render.ke_mesh_component{meshOn(0b001)};
@@ -480,48 +495,77 @@ test "meshes are gathered across every segment the query returned" {
     try testing.expectEqual(@as(usize, 2), out.items.len);
 }
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render.ke_gpu_device),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        _ = self.dev.when(.create_buffer).writesFresh(2);
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.material_binding).returnsFresh();
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.declare).writesFresh(2);
+        _ = self.core.when(.texture_view).returnsFresh();
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+    }
+};
 
 test "creating and destroying the gbuffer pass leaves no block allocated and no GPU resource live" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
+    try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a gbuffer pass whose shader fails to load releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.KE_RESULT_GENERAL);
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
-    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
+    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a gbuffer pass the runtime refuses to register releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
-    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
+    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
