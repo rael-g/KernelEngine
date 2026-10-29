@@ -19,6 +19,10 @@
             .url = "https://github.com/zig-gamedev/zmath/archive/9e42b04a24c970a297b365f3d3022f92dbf3219d.tar.gz",
             .hash = "zmath-0.11.0-dev-wjwivTwtAwDOjG2_KGP-HLtHrONfsFfHttalmxFAGVAK",
         },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/5e3414397c5e17a7677e3ac1699a95d9843db5cc.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QvW_AAAa2cxobKy4cjJJoj2Nw7V2U6ot6cmqcDt3",
+        },
     },
     .paths = .{"."},
 }

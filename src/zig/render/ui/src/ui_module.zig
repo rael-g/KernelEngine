@@ -574,72 +574,100 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, r
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render.ke_gpu_device),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+    ecs: zsub.For(abi_ecs.ke_ecs),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        _ = self.dev.when(.create_buffer).writesFresh(2);
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
+        _ = self.core.when(.join_chain).writesFresh(3);
+        _ = self.core.when(.chain_format).does(chainFormat);
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+        try self.ecs.init();
+        _ = self.ecs.when(.component_register).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.ecs.deinit();
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
+    }
+};
+
+fn chainFormat(args: zsub.For(abi_render.ke_render_service).Args(.chain_format)) abi_render.ke_gpu_texture_format {
+    return if (args[1] >= abi_render.KE_RENDER_STAGE_TONEMAP) abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+}
 
 test "creating and destroying the ui pass leaves no block allocated and no GPU resource live" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
-    try R.check(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h));
+    try R.check(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a ui pass whose shader fails to load releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.KE_RESULT_GENERAL);
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a ui pass the runtime refuses to register releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a ui pass the runtime refuses its second system takes the first one back" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 1;
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.KE_OK, abi_result.KE_RESULT_OUT_OF_MEMORY });
     var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&.{ .runtime = rt.api(), .ecs = ecs.api(), .service = core.api(), .device = dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
+    try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(u32, 0), rt.live_count);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.rt.received(.unregister_system).times(1);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
