@@ -25,7 +25,10 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
 /// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it. The
 /// runtime receives it as the context of `system` at registration. `io` carries the link the pass
 /// holds in the chain, given back when the module is destroyed.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 pub const TonemapModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
 
@@ -138,6 +141,7 @@ fn destroyModule(tm: *const TonemapModule) void {
 /// and frees the module; a null argument is ignored.
 fn destroyHandle(self: ?*abi_render_tonemap_factory.ke_render_tonemap) callconv(.c) void {
     const tm: *TonemapModule = @ptrCast(@alignCast(self orelse return));
+    _ = tm.runtime.unregister_system.?(tm.runtime, tm.system);
     destroyModule(tm);
     gpa.destroy(tm);
 }
@@ -176,6 +180,8 @@ fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_t
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &params, &system_id));
+    tm.runtime = rt;
+    tm.system = system_id;
 }
 
 const testing = std.testing;
@@ -236,6 +242,18 @@ test "creating and destroying the tonemap pass leaves no block allocated and no 
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the tonemap pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
+    try R.check(ke_render_tonemap_create(&testParams(&rig), &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a tonemap pass whose shader fails to load releases what it had created" {
