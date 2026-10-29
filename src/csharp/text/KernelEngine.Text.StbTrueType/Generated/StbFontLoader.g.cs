@@ -5,11 +5,11 @@
 
 namespace KernelEngine.Text.StbTrueType;
 
-/// <summary>Creates a ke_font_loader that reads font files through params' io. Callable from any thread (CPU only).</summary>
+/// <summary>Creates a ke_font_loader that reads font files through io. Callable from any thread (CPU only).</summary>
 public sealed unsafe partial class StbFontLoader : KernelEngine.Text.FontLoader
 {
-    /// <summary>Creates a ke_font_loader that reads font files through params' io. Callable from any thread (CPU only).</summary>
-    /// <param name="io">The io each load reads its font file through; required, borrowed for the lifetime of the loader.</param>
+    /// <summary>Creates a ke_font_loader that reads font files through io. Callable from any thread (CPU only).</summary>
+    /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbFontLoader(KernelEngine.Io.INativeIo io) : base(Create(io))
     {
     }
@@ -17,10 +17,8 @@ public sealed unsafe partial class StbFontLoader : KernelEngine.Text.FontLoader
     private static KernelEngine.Text.Native.ke_font_loader_handle Create(KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(io);
-        KernelEngine.Text.StbTrueType.Native.ke_font_loader_stb_params config = default;
-        config.io = io.Native;
         KernelEngine.Text.Native.ke_font_loader_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&config, &handle), "ke_font_loader_stb_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(io.Native, &handle), "ke_font_loader_stb_create");
         return handle;
     }
 }

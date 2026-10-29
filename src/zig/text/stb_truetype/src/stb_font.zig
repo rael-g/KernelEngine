@@ -175,11 +175,10 @@ fn freeFont(self: ?*abi_text.ke_font_loader, data: [*c]abi_text.ke_font_data) ca
 
 /// Allocates the loader and fills the `load_font` and `free_font` slots; the handle's `destroy`
 /// releases it. Fails with out of memory when it cannot be allocated, leaving the handle zeroed.
-export fn ke_font_loader_stb_create(params: ?*const abi_stb.ke_font_loader_stb_params, out_loader: ?*abi_text.ke_font_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_font_loader_stb_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_text.ke_font_loader_handle) callconv(.c) abi_result.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params orelse return R.code(error.InvalidArgument);
-    const io = p.io orelse return R.code(error.InvalidArgument);
+    const io = io_in orelse return R.code(error.InvalidArgument);
     const state = gpa.create(State) catch {
         log.warn("creating the font loader failed: out of memory", .{});
         return R.code(error.OutOfMemory);
@@ -239,7 +238,7 @@ const ServedIo = struct {
 
     fn loader(self: *ServedIo) !abi_text.ke_font_loader_handle {
         var h: abi_text.ke_font_loader_handle = undefined;
-        try R.check(ke_font_loader_stb_create(&.{ .io = self.sub.api() }, &h));
+        try R.check(ke_font_loader_stb_create(self.sub.api(), &h));
         return h;
     }
 };
@@ -351,7 +350,6 @@ test "loading a font file that does not exist fails with io" {
 test "creating without an io is refused and leaves the handle zeroed" {
     var h: abi_text.ke_font_loader_handle = .{ .ref = null, .destroy = null };
     try testing.expectError(error.InvalidArgument, R.check(ke_font_loader_stb_create(null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_font_loader_stb_create(&.{}, &h)));
     try testing.expect(h.ref == null);
 }
 

@@ -9,7 +9,7 @@ public sealed unsafe partial class StbFontLoader
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
-    /// <param name="io">The io each load reads its font file through; required, borrowed for the lifetime of the loader.</param>
+    /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbFontLoader(KernelEngine.Logger.ILogger logger, KernelEngine.Io.INativeIo io) : base(CreateLogged(logger, io))
     {
     }
