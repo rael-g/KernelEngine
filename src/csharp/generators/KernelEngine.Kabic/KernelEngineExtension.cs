@@ -11,8 +11,9 @@ namespace KernelEngine.Kabic;
 /// that sends the library's log to a <c>KernelEngine.Logger.ILogger</c> through the library's
 /// log-callback setter, and an <c>Add&lt;Class&gt;</c> registration into
 /// <c>Microsoft.Extensions.DependencyInjection</c> that resolves the providers and the logger and
-/// registers the instance as its contract's <c>INative</c> interface. Runs with the section of the
-/// factories extension.
+/// registers the instance as its contract's <c>INative</c> interface, and as the contract's managed
+/// interface when the contract is tagged <c>[interface]</c>. Runs with the section of the factories
+/// extension.
 /// </summary>
 public sealed class KernelEngineExtension : IKabicExtension
 {
@@ -27,7 +28,7 @@ public sealed class KernelEngineExtension : IKabicExtension
             var setter = context.Convention.StripPrefix(f.Function.Name)[..^context.Convention.FactorySuffix.Length] + "_set_log_callback";
             var dir = Path.GetRelativePath(context.Root, f.ProjectDir).Replace('\\', '/');
             context.Emit($"{dir}/Generated/{f.ClassName}.Logging.g.cs", Logging(f, setter));
-            context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f));
+            context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f, context.Convention));
         }
     }
 
@@ -51,9 +52,14 @@ public sealed class KernelEngineExtension : IKabicExtension
         return o.ToString();
     }
 
-    private static string Registration(Factory f)
+    private static string Registration(Factory f, Convention convention)
     {
-        var contractInterface = $"{f.Contract.Spec.Namespace}.INative{f.ContractClass[(f.ContractClass.LastIndexOf('.') + 1)..]}";
+        var contractName = f.ContractClass[(f.ContractClass.LastIndexOf('.') + 1)..];
+        var contractInterface = $"{f.Contract.Spec.Namespace}.INative{contractName}";
+        var vtable = f.HandleType[..^convention.HandleSuffix.Length];
+        var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface")
+            ? $"{f.Contract.Spec.Namespace}.I{contractName}"
+            : null;
         var resolved = f.Arguments.Select(a => a.ManagedType.Contains(".INative")
             ? $"sp.GetRequiredService<{a.ManagedType}>()"
             : "default").ToList();
@@ -63,13 +69,15 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append($"/// <summary>Registers <see cref=\"{f.ClassName}\"/> with a service collection.</summary>\n");
         o.Append($"public static class {f.ClassName}Registration\n{{\n");
         o.Append($"    /// <summary>\n    /// Registers one <see cref=\"{f.ClassName}\"/>, created on first resolution with its providers from the\n");
-        o.Append($"    /// container and its defaults, as itself and as <see cref=\"{contractInterface}\"/>. The library logs to the\n");
+        o.Append($"    /// container and its defaults, as itself, as <see cref=\"{contractInterface}\"/>{(managedInterface is null ? "" : $" and as <see cref=\"{managedInterface}\"/>")}. The library logs to the\n");
         o.Append("    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.\n    /// </summary>\n");
         o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services)\n    {{\n");
         o.Append($"        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is {{ }} logger\n");
         o.Append($"            ? new {f.ClassName}(logger{(args.Length > 0 ? ", " + args : "")})\n");
         o.Append($"            : new {f.ClassName}({args}));\n");
         o.Append($"        services.AddSingleton<{contractInterface}>(sp => sp.GetRequiredService<{f.ClassName}>());\n");
+        if (managedInterface is not null)
+            o.Append($"        services.AddSingleton<{managedInterface}>(sp => sp.GetRequiredService<{f.ClassName}>());\n");
         o.Append("        return services;\n    }\n}\n");
         return o.ToString();
     }
