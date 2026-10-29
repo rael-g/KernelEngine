@@ -27,7 +27,7 @@ var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|Reset
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
 var errorLane = new Regex(@"\bke_error\s*\*\s*\*");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
-var bagName = new Regex(@"\bke_[a-z0-9_]*_(desc|descriptor|info|config)\b");
+var bagName = new Regex(@"\bke_[a-z0-9_]*_(params|descriptor|info)\b");
 var implName = new Regex(@"(?<![A-Za-z0-9])impl_[a-z]|[a-z0-9]Impl\b|[a-z0-9]_impl\b");
 var slashComment = new Regex(@"^\s*//(?![/!])");
 var hashComment = new Regex(@"^\s*#(?!!)");
@@ -109,7 +109,7 @@ var rules = new List<Rule>
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("a parameter bag is named _params, never _desc, _descriptor, _info or _config", 0,
+    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 50,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
