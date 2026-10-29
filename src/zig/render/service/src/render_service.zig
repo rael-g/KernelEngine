@@ -555,7 +555,7 @@ const zsub = @import("zsub");
 /// The device, its command records, the binder and the ecs a service runs on in a test, with what
 /// the recorded commands carried: the latest labels and load ops, and running totals.
 const Gpu = struct {
-    dev: zsub.ForWith(abi_render.ke_gpu_device, .{ .history = 256 }),
+    dev: zsub.ForWith(abi_render.ke_gpu_device, .{ .history = 2 * stress_threads * stress_keys }),
     encoder: zsub.For(abi_render.ke_gpu_command_encoder),
     render_pass: zsub.For(abi_render.ke_gpu_render_pass),
     compute_pass: zsub.For(abi_render.ke_gpu_compute_pass),
