@@ -27,10 +27,13 @@ public sealed class ExtensionContext
     private readonly Func<string, string> _place;
     private readonly Dictionary<string, string> _emitted;
     private readonly List<string> _reports;
+    private readonly string? _zig;
 
     internal ExtensionContext(IReadOnlyList<DomainModel> domains, Convention convention, JsonObject? options,
-        string root, Func<string, string> place, Dictionary<string, string> emitted, List<string> reports)
+        string root, string manifestPath, string? zig, Func<string, string> place, Dictionary<string, string> emitted, List<string> reports)
     {
+        _zig = zig;
+        ManifestPath = manifestPath;
         Domains = domains;
         Convention = convention;
         Options = options;
@@ -52,6 +55,9 @@ public sealed class ExtensionContext
     /// <summary>The root the manifest's paths are relative to.</summary>
     public string Root { get; }
 
+    /// <summary>The path of the manifest the run reads.</summary>
+    public string ManifestPath { get; }
+
     /// <summary>
     /// The text at <paramref name="path"/>, relative to the root: what an earlier extension of this
     /// run emitted there, else what the tree holds, else null.
@@ -72,6 +78,19 @@ public sealed class ExtensionContext
         if (!_emitted.TryAdd(path, text)) Report($"{path} is emitted twice");
     }
 
+    /// <summary>
+    /// Reads <paramref name="headers"/>, paths relative to the root, into an API model, as a
+    /// domain's headers are read; <paramref name="auxHeaders"/> are read for the types they
+    /// declare and are marked external. Throws <c>InvalidOperationException</c> when they do not
+    /// parse.
+    /// </summary>
+    public ApiModel ReadHeaders(IEnumerable<string> headers, IEnumerable<string> includeDirs, IEnumerable<string> auxHeaders)
+    {
+        List<string> Rooted(IEnumerable<string> paths) => [.. paths.Select(p => Path.Combine(Root, p))];
+        var json = Extraction.Run(new Extraction.Request(Rooted(headers), Rooted(includeDirs), Rooted(auxHeaders), [], _zig, Convention));
+        return ApiReader.Read(JsonNode.Parse(json)!.AsObject());
+    }
+
     /// <summary>Records a failure; the run fails once every extension has run.</summary>
     public void Report(string message) => _reports.Add(message);
 }
@@ -85,16 +104,17 @@ public static class ExtensionRunner
     /// <c>InvalidOperationException</c> with every report when any extension reported a failure.
     /// </summary>
     public static IReadOnlyDictionary<string, string> Run(IReadOnlyList<IKabicExtension> extensions,
-        IReadOnlyList<DomainModel> domains, Convention convention, JsonObject manifest, string root,
+        IReadOnlyList<DomainModel> domains, Convention convention, string manifestPath, string root, string? zig,
         Func<string, string> place)
     {
+        var manifest = JsonNode.Parse(File.ReadAllText(manifestPath))!.AsObject();
         var emitted = new Dictionary<string, string>(StringComparer.Ordinal);
         var reports = new List<string>();
         var sections = manifest["extensions"]?.AsObject();
         foreach (var extension in extensions)
         {
             var context = new ExtensionContext(domains, convention, sections?[extension.Name]?.AsObject(),
-                root, place, emitted, reports);
+                root, manifestPath, zig, place, emitted, reports);
             extension.Run(context);
         }
         if (reports.Count > 0)

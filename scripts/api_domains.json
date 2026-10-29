@@ -771,6 +771,9 @@
       "usings": []
     }
   ],
+  "extensions": {
+    "factories": { "bindings": ["FileSystemStd", "IoPool"] }
+  },
   "bindings": [
     {
       "name": "Assimp",

@@ -20,7 +20,7 @@ extern "C"
 /** Construction parameters for ke_file_system_std_create. */
 typedef struct ke_file_system_std_params
 {
-    /// [default:null] The directory relative paths are resolved against; null takes the working
+    /// [default:null] [utf8] The directory relative paths are resolved against; null takes the working
     /// directory of the process.
     const char *root;
 } ke_file_system_std_params;

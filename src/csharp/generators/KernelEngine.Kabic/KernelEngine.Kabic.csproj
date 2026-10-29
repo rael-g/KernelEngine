@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../kabic/Kabic.Cli/Kabic.Cli.csproj" />
+    <ProjectReference Include="../../kabic/Kabic.Factories/Kabic.Factories.csproj" />
   </ItemGroup>
 </Project>

@@ -1,5 +1,3 @@
-using System.Text.Json.Nodes;
-
 using Kabic.Conventions;
 using Kabic.Pipeline;
 
@@ -79,7 +77,7 @@ internal static class GenerateCommand
             try
             {
                 emitted = ExtensionRunner.Run(extensions, ExtensionRunner.Models(specs, apis), convention,
-                    JsonNode.Parse(File.ReadAllText(options.Manifest))!.AsObject(), options.Root, Place);
+                    options.Manifest, options.Root, options.Zig, Place);
             }
             catch (InvalidOperationException e)
             {

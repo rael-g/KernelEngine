@@ -1,5 +1,3 @@
-using System.Text.Json.Nodes;
-
 using Kabic.Conventions;
 using Kabic.Pipeline;
 
@@ -115,7 +113,7 @@ internal static class DriftCommand
                 try
                 {
                     var emitted = ExtensionRunner.Run(extensions, ExtensionRunner.Models(specs, extracted), convention,
-                        JsonNode.Parse(File.ReadAllText(options.Manifest))!.AsObject(), rootDir, p => Path.Combine(rootDir, p));
+                        options.Manifest, rootDir, zigOverride, p => Path.Combine(rootDir, p));
                     foreach (var (path, text) in emitted)
                     {
                         var committed = Path.Combine(rootDir, path);
