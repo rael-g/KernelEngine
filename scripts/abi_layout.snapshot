@@ -297,14 +297,15 @@ ke_glyph_metrics size=40 align=4
   width 28
   height 32
   advance_x 36
-ke_font_data size=40 align=8
+ke_font_data size=48 align=8
   atlas_rgba 0
-  atlas_width 8
-  atlas_height 12
-  glyphs 16
-  glyph_count 24
-  line_height 28
-  ascent 32
+  atlas_byte_count 8
+  atlas_width 12
+  atlas_height 16
+  glyphs 24
+  glyph_count 32
+  line_height 36
+  ascent 40
 ke_font_loader size=24 align=8
   handle 0
   load_font 8

@@ -147,6 +147,7 @@ fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint:
     const fd = gpa.create(abi_text.ke_font_data) catch return error.OutOfMemory;
     fd.* = .{
         .atlas_rgba = @ptrCast(atlas_rgba.ptr),
+        .atlas_byte_count = @intCast(atlas_rgba.len),
         .atlas_width = w,
         .atlas_height = h,
         .glyphs = glyphs.ptr,
@@ -157,15 +158,14 @@ fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint:
     return fd;
 }
 
-/// Runs in the `free_font` slot. It sizes the atlas and glyph arrays from `atlas_width`,
-/// `atlas_height` and `glyph_count`, so those fields must still hold what `loadFont` wrote.
+/// Runs in the `free_font` slot. It sizes the atlas and glyph arrays from `atlas_byte_count` and
+/// `glyph_count`, so those fields must still hold what `loadFont` wrote.
 fn freeFont(self: ?*abi_text.ke_font_loader, data: [*c]abi_text.ke_font_data) callconv(.c) void {
     _ = self;
     if (data == null) return;
     const d: *abi_text.ke_font_data = @ptrCast(data);
     if (d.atlas_rgba != null) {
-        const pixel_bytes: usize = @as(usize, d.atlas_width) * @as(usize, d.atlas_height) * 4;
-        gpa.free(@as([*]u8, @ptrCast(d.atlas_rgba))[0..pixel_bytes]);
+        gpa.free(@as([*]u8, @ptrCast(d.atlas_rgba))[0..d.atlas_byte_count]);
     }
     if (d.glyphs != null) {
         gpa.free(@as([*]abi_text.ke_glyph_metrics, @ptrCast(d.glyphs))[0..d.glyph_count]);

@@ -55,5 +55,5 @@ without the resolver. Models are loaded by `ke_asset_loader` and uploaded by man
   uv, tangent).
 - The invalid handle of `ke_resource_cache` is `KE_RESOURCE_HANDLE_NONE`, not zero.
 - `AddAssetResolver` takes `INativeImageLoader` and `INativeFontLoader` from the container, so
-  `AddStbImageLoader` and `AddTextStbTrueType` have to be registered for textures and fonts to
+  `AddStbImageLoader` and `AddStbFontLoader` have to be registered for textures and fonts to
   resolve.

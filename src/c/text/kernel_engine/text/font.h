@@ -10,7 +10,7 @@ extern "C"
 {
 #endif
 
-    /** Per-glyph layout + atlas-sampling info, in pixels at the baked size.
+    /** [value] Per-glyph layout + atlas-sampling info, in pixels at the baked size.
      * `bearing_x` shifts the quad right of the pen; `bearing_y` shifts up from the baseline.
      * `width`/`height` is the quad size; `u0,v0,u1,v1` is the source rect in the atlas. */
     typedef struct ke_glyph_metrics {
@@ -21,10 +21,11 @@ extern "C"
         float    advance_x;
     } ke_glyph_metrics;
 
-    /** CPU-side font data produced by a loader. Caller owns; release via the loader's
+    /** [view] CPU-side font data produced by a loader. Caller owns; release via the loader's
      * free_font. Atlas is RGBA8 (white RGB + alpha from coverage). */
     typedef struct ke_font_data {
-        uint8_t          *atlas_rgba;     ///< width * height * 4 bytes
+        uint8_t          *atlas_rgba;     ///< [array_of:atlas_byte_count] RGBA8 samples, row-major
+        uint32_t          atlas_byte_count; ///< Bytes atlas_rgba reaches: atlas_width * atlas_height * 4
         uint32_t          atlas_width;
         uint32_t          atlas_height;
         ke_glyph_metrics *glyphs;          ///< [array_of:glyph_count]
@@ -33,7 +34,7 @@ extern "C"
         float             ascent;          ///< Pixels above baseline to top of tallest glyph
     } ke_font_data;
 
-    /** Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern. */
+    /** [interface] Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern. */
     typedef struct ke_font_loader
     {
         void *handle;
@@ -55,7 +56,8 @@ extern "C"
                                uint32_t atlas_size,
                                ke_font_data **out_font);
 
-        /** Frees a ke_font_data previously returned by load_font. */
+        /** [releases:BakedFont] Frees a ke_font_data previously returned by load_font. A null @p data
+         * is ignored. */
         void (*free_font)(struct ke_font_loader *self, ke_font_data *data);
 
     } ke_font_loader;

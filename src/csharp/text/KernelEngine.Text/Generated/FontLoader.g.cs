@@ -17,8 +17,39 @@ public unsafe interface INativeFontLoader
     ke_font_loader* Native { get; }
 }
 
+/// <summary>
+/// Keeps the <see cref="FontLoader"/>-owned memory behind one FontData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class BakedFont : IDisposable
+{
+    private readonly FontLoader _owner;
+    private FontData* _native;
+
+    internal BakedFont(FontLoader owner, FontData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public FontData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(BakedFont))
+        : *_native;
+
+    /// <summary>Gives the memory back to the fontloader that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeFont(native);
+    }
+}
+
 /// <summary>Decodes font files (TTF/OTF/…) on the CPU. Async dispatch is the caller's concern.</summary>
-public unsafe partial class FontLoader : IDisposable, INativeFontLoader
+public unsafe partial class FontLoader : IDisposable, INativeFontLoader, IFontLoader
 {
     private ke_font_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_font_loader*, void> _destroy;
@@ -51,21 +82,21 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader
     /// <param name="path">TTF/OTF file path to decode.</param>
     /// <returns>Receives a ke_font_data (atlas RGBA8 + metrics) the caller releases via free_font; left NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_font_data* LoadFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
+    public BakedFont LoadFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_font_data* resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->load_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &resultOut), "load_font");
-            return resultOut;
+            return new BakedFont(this, (FontData*)resultOut);
         }
     }
 
-    /// <summary>Frees a ke_font_data previously returned by load_font.</summary>
-    public void FreeFont(ke_font_data* data)
+    /// <summary>Frees a ke_font_data previously returned by load_font. A null data is ignored.</summary>
+    internal void FreeFont(FontData* data)
     {
-        Handle->free_font(Handle, data);
+        Handle->free_font(Handle, (ke_font_data*)data);
     }
 
     /// <summary>Releases the native fontloader.</summary>

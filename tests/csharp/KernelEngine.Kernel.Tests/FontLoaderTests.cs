@@ -25,6 +25,7 @@ public class FontLoaderTests
         data->atlas_width = 10;
         data->atlas_height = 10;
         data->atlas_rgba = (byte*)NativeMemory.Alloc(400);
+        data->atlas_byte_count = 400;
         data->glyph_count = 1;
         data->glyphs = (ke_glyph_metrics*)NativeMemory.Alloc((nuint)sizeof(ke_glyph_metrics));
         data->glyphs[0].codepoint = 65;
@@ -83,10 +84,12 @@ public class FontLoaderTests
         FreeFontCalled = false;
         LastResult = true;
 
-        var data = ((IFontLoader)loader).LoadFont("test.ttf", 16);
+        var baked = loader.LoadFont("test.ttf", 16, 32, 95, 512);
+        var width = baked.Data.AtlasWidth;
+        baked.Dispose();
 
         Assert.Equal("test.ttf", LastPath);
-        Assert.Equal(10u, data.AtlasWidth);
+        Assert.Equal(10u, width);
         Assert.True(FreeFontCalled);
 
         unsafe { NativeMemory.Free(h.@ref); }
@@ -103,7 +106,7 @@ public class FontLoaderTests
 
         LastResult = false;
 
-        Assert.Throws<InvalidOperationException>(() => ((IFontLoader)loader).LoadFont("test.ttf", 16));
+        Assert.Throws<InvalidOperationException>(() => loader.LoadFont("test.ttf", 16, 32, 95, 512));
 
         LastResult = true;
         unsafe { NativeMemory.Free(h.@ref); }

@@ -34,11 +34,12 @@ public sealed class Font
     public static Font Load(IRenderResources resources, IFontLoader loader, string path, float pixelSize,
                             uint atlasSize = 512, uint firstCodepoint = 32, uint codepointCount = 95)
     {
-        using var data = loader.LoadFont(path, pixelSize, atlasSize, firstCodepoint, codepointCount);
+        using var baked = loader.LoadFont(path, pixelSize, firstCodepoint, codepointCount, atlasSize);
+        var data = baked.Data;
         var key = $"font:{path}:{pixelSize}:{atlasSize}:{firstCodepoint}:{codepointCount}";
         var atlas = resources.UploadTexture(key, data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
 
-        var glyphs = data.Glyphs;
+        var glyphs = data.Glyphs.ToArray();
         var nativeGlyphs = new FontGlyph[glyphs.Length];
         for (int i = 0; i < glyphs.Length; i++)
         {

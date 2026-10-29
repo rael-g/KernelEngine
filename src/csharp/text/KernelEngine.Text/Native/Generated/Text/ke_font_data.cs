@@ -8,6 +8,9 @@ public unsafe partial struct ke_font_data
     public byte* atlas_rgba;
 
     [NativeTypeName("uint32_t")]
+    public uint atlas_byte_count;
+
+    [NativeTypeName("uint32_t")]
     public uint atlas_width;
 
     [NativeTypeName("uint32_t")]

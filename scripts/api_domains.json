@@ -371,6 +371,7 @@
       "namespace": "KernelEngine.Text",
       "nativeNamespace": "KernelEngine.Text.Native",
       "outDir": "src/csharp/text/KernelEngine.Text/Generated",
+      "abstractionsOutDir": "src/csharp/text/KernelEngine.Text/Generated/Abstractions",
       "usings": []
     },
     {
@@ -773,7 +774,7 @@
     }
   ],
   "extensions": {
-    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool"] }
+    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool", "StbTrueType"] }
   },
   "bindings": [
     {

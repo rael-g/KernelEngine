@@ -82,7 +82,6 @@
     <Project Path="src/csharp/physics/KernelEngine.Physics.Abstractions/KernelEngine.Physics.Abstractions.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Abstractions/KernelEngine.Render.Abstractions.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime.Abstractions/KernelEngine.Runtime.Abstractions.csproj" />
-    <Project Path="src/csharp/text/KernelEngine.Text.Abstractions/KernelEngine.Text.Abstractions.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
   </Folder>
   <Folder Name="/tests/">

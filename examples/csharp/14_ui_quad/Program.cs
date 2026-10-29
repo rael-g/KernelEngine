@@ -22,7 +22,7 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .AddTextStbTrueType()
+    .AddStbFontLoader()
     .AddAssetResolver()
     .Add<INativeEcs, FlecsEcs>()
     .AddEnkiTaskPool()

@@ -4,7 +4,9 @@
     {
       "name": "ke_glyph_metrics",
       "doc": "Per-glyph layout \u002B atlas-sampling info, in pixels at the baked size. \u0060bearing_x\u0060 shifts the quad right of the pen; \u0060bearing_y\u0060 shifts up from the baseline. \u0060width\u0060/\u0060height\u0060 is the quad size; \u0060u0,v0,u1,v1\u0060 is the source rect in the atlas.",
-      "tags": [],
+      "tags": [
+        "value"
+      ],
       "fields": [
         {
           "name": "codepoint",
@@ -71,13 +73,23 @@
     {
       "name": "ke_font_data",
       "doc": "CPU-side font data produced by a loader. Caller owns; release via the loader\u0027s free_font. Atlas is RGBA8 (white RGB \u002B alpha from coverage).",
-      "tags": [],
+      "tags": [
+        "view"
+      ],
       "fields": [
         {
           "name": "atlas_rgba",
           "type": "uint8_t *",
+          "tags": [
+            "array_of:atlas_byte_count"
+          ],
+          "doc": "RGBA8 samples, row-major"
+        },
+        {
+          "name": "atlas_byte_count",
+          "type": "uint32_t",
           "tags": [],
-          "doc": "width * height * 4 bytes"
+          "doc": "Bytes atlas_rgba reaches: atlas_width * atlas_height * 4"
         },
         {
           "name": "atlas_width",
@@ -124,7 +136,9 @@
     {
       "name": "ke_font_loader",
       "doc": "Decodes font files (TTF/OTF/\u2026) on the CPU. Async dispatch is the caller\u0027s concern.",
-      "tags": [],
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",
@@ -187,8 +201,10 @@
         {
           "name": "free_font",
           "returns": "void",
-          "tags": [],
-          "doc": "Frees a ke_font_data previously returned by load_font.",
+          "tags": [
+            "releases:BakedFont"
+          ],
+          "doc": "Frees a ke_font_data previously returned by load_font. A null data is ignored.",
           "return_doc": null,
           "params": [
             {

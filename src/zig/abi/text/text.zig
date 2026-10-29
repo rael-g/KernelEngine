@@ -22,8 +22,10 @@ pub const ke_glyph_metrics = extern struct {
 /// CPU-side font data produced by a loader. Caller owns; release via the loader's free_font.
 /// Atlas is RGBA8 (white RGB + alpha from coverage).
 pub const ke_font_data = extern struct {
-    /// width * height * 4 bytes
-    atlas_rgba: ?*u8 = std.mem.zeroes(?*u8),
+    /// RGBA8 samples, row-major
+    atlas_rgba: ?[*]u8 = std.mem.zeroes(?[*]u8),
+    /// Bytes atlas_rgba reaches: atlas_width * atlas_height * 4
+    atlas_byte_count: u32 = std.mem.zeroes(u32),
     atlas_width: u32 = std.mem.zeroes(u32),
     atlas_height: u32 = std.mem.zeroes(u32),
     glyphs: ?[*]ke_glyph_metrics = std.mem.zeroes(?[*]ke_glyph_metrics),
@@ -40,7 +42,7 @@ pub const ke_font_loader = extern struct {
     /// Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint,
     /// first_codepoint + codepoint_count).
     load_font: ?*const fn (?*ke_font_loader, ?[*:0]const u8, f32, u32, u32, u32, ?*?*ke_font_data) callconv(.c) result.ke_result = null,
-    /// Frees a ke_font_data previously returned by load_font.
+    /// Frees a ke_font_data previously returned by load_font. A null data is ignored.
     free_font: ?*const fn (?*ke_font_loader, ?*ke_font_data) callconv(.c) void = null,
 };
 
