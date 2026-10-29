@@ -58,7 +58,10 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
 /// `destroyHandle`. The registered system keeps a pointer to it as user data from registration on.
 /// Fields that `setup` has not reached keep their initial values, so `destroyModule` releases only
 /// what exists. `names` holds the module's copies of the map, depth and light names of its group.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const ShadowModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
     ndc: abi_render.ke_ndc_convention = undefined,
@@ -318,6 +321,7 @@ fn destroyModule(sh: *ShadowModule) void {
 /// frees a module whose creation succeeded.
 fn destroyHandle(self: ?*abi_render_shadow_factory.ke_render_shadow) callconv(.c) void {
     const sh: *ShadowModule = @ptrCast(@alignCast(self orelse return));
+    _ = sh.runtime.unregister_system.?(sh.runtime, sh.system);
     destroyModule(sh);
     gpa.destroy(sh);
 }
@@ -357,6 +361,8 @@ export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.k
         gpa.destroy(sh);
         return registered;
     }
+    sh.runtime = rt;
+    sh.system = system_id;
 
     out.* = .{ .ref = @ptrCast(sh), .destroy = destroyHandle };
     return R.ok;
@@ -415,6 +421,19 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the shadow pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var view_space = std.mem.zeroes(abi_view.ke_view_space);
+    var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
+    try R.check(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a shadow pass whose shader fails to load releases what it had created" {
