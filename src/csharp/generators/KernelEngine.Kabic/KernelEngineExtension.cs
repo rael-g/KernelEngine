@@ -25,7 +25,12 @@ public sealed class KernelEngineExtension : IKabicExtension
     {
         foreach (var f in FactoriesExtension.Read(context))
         {
-            var setter = context.Convention.StripPrefix(f.Function.Name)[..^context.Convention.FactorySuffix.Length] + "_set_log_callback";
+            if (f.Job.Library is not { } library)
+            {
+                context.Report($"factories: the bindings entry '{f.Job.Name}' names no library, so its log-callback setter is unknown");
+                continue;
+            }
+            var setter = context.Convention.StripPrefix(library) + "_set_log_callback";
             var dir = Path.GetRelativePath(context.Root, f.ProjectDir).Replace('\\', '/');
             context.Emit($"{dir}/Generated/{f.ClassName}.Logging.g.cs", Logging(f, setter));
             context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f, context.Convention));
