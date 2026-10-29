@@ -468,7 +468,15 @@ fn newBinder(params: abi_render_binder_grouped_factory.ke_render_resource_binder
 }
 
 const testing = std.testing;
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const DeviceSub = zsub.For(abi_render.ke_gpu_device);
+
+fn expectReleased(dev: *DeviceSub) !void {
+    try dev.received(.destroy_buffer).sameAs(dev.received(.create_buffer));
+    try dev.received(.destroy_bind_group_layout).sameAs(dev.received(.create_bind_group_layout));
+    try dev.received(.destroy_bind_group).sameAs(dev.received(.create_bind_group));
+}
 
 test {
     _ = reflection;
@@ -515,12 +523,16 @@ const PassProbe = struct {
 };
 
 const Rig = struct {
-    dev: stubs.Device,
+    dev: DeviceSub,
     dir: std.testing.TmpDir,
     path: [std.fs.max_path_bytes]u8,
 
     fn init(self: *Rig) !void {
-        self.dev.init();
+        try self.dev.init();
+        errdefer self.dev.deinit();
+        _ = self.dev.when(.create_buffer).writesFresh(2);
+        _ = self.dev.when(.create_bind_group_layout).writesFresh(2);
+        _ = self.dev.when(.create_bind_group).writesFresh(2);
         self.dir = std.testing.tmpDir(.{});
         errdefer self.dir.cleanup();
         try self.dir.dir.writeFile(testing.io, .{ .sub_path = "lit.vs.json", .data = lit_vs });
@@ -539,6 +551,7 @@ const Rig = struct {
 
     fn deinit(self: *Rig) void {
         self.dir.cleanup();
+        self.dev.deinit();
     }
 };
 
@@ -687,6 +700,6 @@ test "creating a binder and everything it hands out, then destroying them, leave
     b.?.destroy_set.?(b, set);
     b.?.destroy_shader_layout.?(b, layout);
     h.destroy.?(b);
-    try testing.expectEqual(@as(i64, 0), rig.dev.live);
+    try expectReleased(&rig.dev);
     try heap.expectNoLeaks();
 }

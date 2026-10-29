@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .render_common = &.{"shader_files"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = materialParams,
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the grouped resource binder unit tests",
     });
 }
