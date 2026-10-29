@@ -160,13 +160,13 @@ There is one worker pool, behind `ke_task_pool`, and workers are addressed by in
 - **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail returns `ke_result` (`KE_OK` or the code of the failure), writes its value through a last `out_` parameter, and logs the reason with `log.warn`. All callers check the code.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
-- **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
+- **Structs as arguments**: a struct is justified by reuse or by describing an object, never by the number of arguments. A struct that describes an object or a type to be created or registered is a descriptor, suffixed `_desc`. Every other argument is positional. A factory takes its dependencies positionally and its configurable values as the contract's `_config` struct.
 - **Shape of a plugin**, where the language is silent:
   - The entry file is named after the domain and the plugin; a render pass ends in `module`.
   - The state is a struct named `State`, embedding the vtable as the field `api`, whose handle points back at it; one function named `stateOf` recovers it from a slot's first argument.
   - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
-  - A factory is `export` without `pub`, takes a params struct in which zero selects the default, and on failure frees what it took and returns the zeroed handle.
+  - A factory is `export` without `pub`, takes its dependencies positionally, then a `const ke_<x>_config *` in which NULL or a zero field selects the default, and on failure frees what it took and returns the zeroed handle.
   - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or from a package named after its concept, declared in the plugin's `build.zig.zon` (`src/zig/render/object_uniforms/`).
   - A test is named by a sentence stating the behaviour, substitutes the contracts it runs against with zsub (`build.zig.zon`) and configures them in the test, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
@@ -207,7 +207,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers.
 
-8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a params struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
+8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a `_config` struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
 
 9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 
