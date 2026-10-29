@@ -419,36 +419,52 @@ export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi
 
 const testing = std.testing;
 
-const disk_io = @import("disk_io_test.zig");
+const zsub = @import("zsub");
 
-fn makeLoader() abi_asset.ke_asset_loader_handle {
-    var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
-    _ = ke_asset_loader_assimp_create(disk_io.io(), &h);
-    return h;
+const triangle_obj = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+
+var served: ?[]const u8 = null;
+var request_token: u8 = 0;
+
+fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&request_token);
+    return R.ok;
 }
 
-var box_gltf_buffer: [std.fs.max_path_bytes]u8 = undefined;
-
-const climb_prefixes = [_][]const u8{
-    "",
-    "../",
-    "../../",
-    "../../../",
-    "../../../../",
-    "../../../../../",
-    "../../../../../../",
-    "../../../../../../../",
-};
-
-fn boxGltfPath() ?[:0]const u8 {
-    const cwd = std.Io.Dir.cwd();
-    for (climb_prefixes) |prefix| {
-        const candidate = std.fmt.bufPrintZ(&box_gltf_buffer, "{s}examples/assets/Box.gltf", .{prefix}) catch return null;
-        cwd.access(testing.io, candidate, .{ .read = true }) catch continue;
-        return candidate;
+fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+    const bytes = served orelse return R.code(error.NotFound);
+    if (args[2]) |out| {
+        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.bytes = @constCast(bytes.ptr);
+        out.size = bytes.len;
     }
-    return null;
+    return R.ok;
 }
+
+fn freeServed(_: zsub.For(abi_io.ke_io).Args(.free_bytes)) void {}
+
+/// A substitute io serving `bytes` for every path, or no file at all when `bytes` is null.
+const ServedIo = struct {
+    sub: zsub.For(abi_io.ke_io),
+
+    fn init(self: *ServedIo, bytes: ?[]const u8) !void {
+        served = bytes;
+        try self.sub.init();
+        _ = self.sub.when(.read_file).does(readServed);
+        _ = self.sub.when(.wait).does(waitServed);
+        _ = self.sub.when(.free_bytes).does(freeServed);
+    }
+
+    fn deinit(self: *ServedIo) void {
+        self.sub.deinit();
+    }
+
+    fn loader(self: *ServedIo) abi_asset.ke_asset_loader_handle {
+        var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+        _ = ke_asset_loader_assimp_create(self.sub.api(), &h);
+        return h;
+    }
+};
 
 fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
     _ = self;
@@ -474,7 +490,10 @@ fn asyncComplete(code: abi_result.ke_result, data: ?*abi_asset.ke_model_data, us
 }
 
 test "creating a loader yields a usable vtable" {
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
 }
@@ -486,69 +505,66 @@ test "creating without an io is refused and leaves the handle zeroed" {
 }
 
 test "loading a null path yields no model" {
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var model: ?*abi_asset.ke_model_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_model.?(h.ref, null, &model)));
 }
 
-test "loading a file that does not exist yields no model" {
-    const h = makeLoader();
+test "loading a file the io does not find yields no model" {
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var model: ?*abi_asset.ke_model_data = null;
-    try testing.expectError(error.Io, R.check(h.ref.?.load_model.?(h.ref, "non_existent_file.obj", &model)));
+    try testing.expectError(error.Io, R.check(h.ref.?.load_model.?(h.ref, "missing.obj", &model)));
     try testing.expect(model == null);
 }
 
 test "freeing a null model is ignored" {
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     h.ref.?.free_model.?(h.ref, null);
 }
 
-test "loading the box fixture yields at least one mesh" {
-    const path = boxGltfPath() orelse return error.SkipZigTest;
-
-    const h = makeLoader();
+test "a model is read through the io and converted with its mesh" {
+    var served_io: ServedIo = undefined;
+    try served_io.init(triangle_obj);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var model: ?*abi_asset.ke_model_data = null;
-    try R.check(h.ref.?.load_model.?(h.ref, path.ptr, &model));
+    try R.check(h.ref.?.load_model.?(h.ref, "triangle.obj", &model));
     try testing.expect(model != null);
     defer h.ref.?.free_model.?(h.ref, model);
 
-    try testing.expect(model.?.mesh_count > 0);
-}
-
-test "the box fixture carries a material alongside its meshes" {
-    const path = boxGltfPath() orelse return error.SkipZigTest;
-
-    const h = makeLoader();
-    defer h.destroy.?(h.ref);
-
-    var model: ?*abi_asset.ke_model_data = null;
-    try R.check(h.ref.?.load_model.?(h.ref, path.ptr, &model));
-    try testing.expect(model != null);
-    defer h.ref.?.free_model.?(h.ref, model);
-
-    try testing.expect(model.?.mesh_count > 0);
-    try testing.expect(model.?.material_count > 0);
+    try testing.expectEqual(@as(u32, 1), model.?.mesh_count);
+    try served_io.sub.received(.read_file).atLeast(1);
 }
 
 test "an async load runs to completion on the task pool it was given" {
-    const path = boxGltfPath() orelse return error.SkipZigTest;
-
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(triangle_obj);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
     task_pool.dispatch = &immediateDispatch;
 
     var result = AsyncResult{ .loader = h.ref };
-    const task = h.ref.?.load_model_async.?(h.ref, &task_pool, path.ptr, &asyncComplete, &result);
+    const task = h.ref.?.load_model_async.?(h.ref, &task_pool, "triangle.obj", &asyncComplete, &result);
 
     try testing.expect(task != null);
     try testing.expect(result.done);
@@ -556,7 +572,10 @@ test "an async load runs to completion on the task pool it was given" {
 }
 
 test "an async load rejects a missing loader task pool or path" {
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
@@ -568,7 +587,10 @@ test "an async load rejects a missing loader task pool or path" {
 }
 
 test "an async load rejects a missing completion callback" {
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
@@ -578,11 +600,10 @@ test "an async load rejects a missing completion callback" {
 }
 
 test "a malformed model file yields a model carrying no meshes" {
-    const cwd = std.Io.Dir.cwd();
-    try cwd.writeFile(testing.io, .{ .sub_path = "malformed.obj", .data = "THIS IS NOT VALID OBJ CONTENT\n" });
-    defer cwd.deleteFile(testing.io, "malformed.obj") catch {};
-
-    const h = makeLoader();
+    var served_io: ServedIo = undefined;
+    try served_io.init("THIS IS NOT VALID OBJ CONTENT\n");
+    defer served_io.deinit();
+    const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
     var model: ?*abi_asset.ke_model_data = null;
