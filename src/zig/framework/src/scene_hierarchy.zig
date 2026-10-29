@@ -15,10 +15,12 @@ const heap = @import("heap");
 const mat4 = @import("mat4.zig");
 
 /// Created by `ke_scene_hierarchy_create`, owned by the handle it returns, and freed by
-/// `vtDestroy`. The runtime keeps its address as the user data of `propagateSystem`, so the record
-/// must not be moved or copied: `queries` and `access` are pointed at from the registration, and
-/// the query's terms point into `queries_terms`.
+/// `vtDestroy`, which unregisters `propagateSystem` first. The runtime keeps its address as the
+/// user data of that system, so the record must not be moved or copied: `queries` and `access` are
+/// pointed at from the registration, and the query's terms point into `queries_terms`.
 const State = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     ecs: *abi_ecs.ke_ecs,
     transform_cid: abi_ecs.ke_component_id,
     transform2d_cid: abi_ecs.ke_component_id,
@@ -124,12 +126,11 @@ fn propagateSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) 
     return R.ok;
 }
 
-/// The destroy of the handle. Frees the `State`. The runtime keeps the `State` as the user data of
-/// the system and nothing here unregisters it, so the handle must be destroyed only after the
-/// runtime has finished ticking.
+/// The destroy of the handle. Unregisters the system and frees the `State`.
 fn vtDestroy(self_in: ?*abi_framework.ke_scene_hierarchy) callconv(.c) void {
     const self = self_in orelse return;
     const s: *State = @ptrCast(@alignCast(self));
+    _ = s.runtime.unregister_system.?(s.runtime, s.system);
     s.order.deinit(heap.gpa);
     s.stack.deinit(heap.gpa);
     heap.gpa.destroy(s);
@@ -198,6 +199,35 @@ fn create(runtime: *abi_runtime.ke_runtime, ecs: *abi_ecs.ke_ecs) R.Error!abi_fr
 
     var system_id: abi_runtime.ke_system_id = 0;
     try R.check(runtime.register_system.?(runtime, &propagate, &system_id));
+    s.runtime = runtime;
+    s.system = system_id;
 
     return .{ .ref = @ptrCast(s), .destroy = vtDestroy };
+}
+
+const testing = std.testing;
+const zsub = @import("zsub");
+
+fn lookupFound(args: zsub.For(abi_ecs.ke_ecs).Args(.component_lookup)) bool {
+    const meta = args[2] orelse return false;
+    meta.* = std.mem.zeroes(abi_ecs.ke_component_meta);
+    meta.cid = 1;
+    return true;
+}
+
+test "destroying the scene hierarchy unregisters its system" {
+    var ecs: zsub.For(abi_ecs.ke_ecs) = undefined;
+    try ecs.init();
+    defer ecs.deinit();
+    _ = ecs.when(.component_lookup).does(lookupFound);
+    var rt: zsub.For(abi_runtime.ke_runtime) = undefined;
+    try rt.init();
+    defer rt.deinit();
+    _ = rt.when(.register_system).writesFresh(2);
+    var h: abi_framework.ke_scene_hierarchy_handle = undefined;
+    try R.check(ke_scene_hierarchy_create(rt.api(), ecs.api(), &h));
+    h.destroy.?(h.ref);
+    try rt.received(.register_system).times(1);
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rt.received(.unregister_system).sameAs(rt.received(.register_system));
 }

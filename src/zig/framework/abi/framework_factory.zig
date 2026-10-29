@@ -49,7 +49,8 @@ pub extern fn ke_scene_component_set_create(out_set: ?*framework.ke_scene_compon
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the
 /// names a scene_tree already registers them under, so a scene_tree must exist on this ecs
-/// first; creating a hierarchy without one fails as not found.
+/// first; creating a hierarchy without one fails as not found. `runtime` must outlive the
+/// hierarchy, whose destroy unregisters what it registered.
 pub extern fn ke_scene_hierarchy_create(runtime: ?*runtime.ke_runtime, ecs: ?*ecs.ke_ecs, out_hierarchy: ?*framework.ke_scene_hierarchy_handle) result.ke_result;
 
 /// Allocates a scene loader bound to the given world. The loader uses the world's component
@@ -64,7 +65,8 @@ pub extern fn ke_scene_loader_create(world: ?*framework.ke_world, assets: ?*asse
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
 /// them, the existing cids are reused). `runtime` may be NULL, in which case no systems are
 /// registered and the caller is responsible for calling propagate_transforms itself. Passing one
-/// registers the hierarchy maintenance that keeps world matrices current.
+/// registers the hierarchy maintenance that keeps world matrices current, and that runtime must
+/// outlive the tree, whose destroy unregisters it.
 pub extern fn ke_scene_tree_create(ecs: ?*ecs.ke_ecs, runtime: ?*runtime.ke_runtime, out_tree: ?*framework.ke_scene_tree_handle) result.ke_result;
 
 /// Allocates a script host that reads the scene graph out of ecs. params may be NULL to take
