@@ -364,51 +364,81 @@ export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.k
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render.ke_gpu_device),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        _ = self.dev.when(.create_buffer).writesFresh(2);
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.declare).writesFresh(2);
+        _ = self.core.when(.import_buffer).writesFresh(4);
+        _ = self.core.when(.resource_view).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+    }
+};
 
 test "creating and destroying the shadow pass leaves no block allocated and no GPU resource live" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
-    try R.check(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
+    try R.check(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a shadow pass whose shader fails to load releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: stubs.Runtime = undefined;
-    rt.init();
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.KE_RESULT_GENERAL);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
+    try testing.expect(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a shadow pass the runtime refuses to register releases what it had created" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var core: stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     var view_space = std.mem.zeroes(abi_view.ke_view_space);
     var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
+    try testing.expect(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
