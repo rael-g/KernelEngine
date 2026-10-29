@@ -26,7 +26,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),

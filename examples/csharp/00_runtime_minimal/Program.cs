@@ -16,7 +16,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
 #endregion

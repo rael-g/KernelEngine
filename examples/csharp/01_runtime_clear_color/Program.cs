@@ -14,7 +14,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Runtime Clear Color"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));

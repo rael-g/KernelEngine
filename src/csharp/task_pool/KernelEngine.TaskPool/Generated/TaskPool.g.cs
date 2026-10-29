@@ -18,7 +18,7 @@ public unsafe interface INativeTaskPool
 }
 
 /// <summary>Dispatches work to a native thread pool.</summary>
-public unsafe partial class TaskPool : IDisposable, INativeTaskPool
+public unsafe partial class TaskPool : IDisposable, INativeTaskPool, ITaskPool
 {
     private ke_task_pool* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_task_pool*, void> _destroy;

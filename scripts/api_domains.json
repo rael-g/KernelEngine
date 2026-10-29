@@ -149,6 +149,7 @@
       "namespace": "KernelEngine.TaskPool",
       "nativeNamespace": "KernelEngine.TaskPool.Native",
       "outDir": "src/csharp/task_pool/KernelEngine.TaskPool/Generated",
+      "abstractionsOutDir": "src/csharp/task_pool/KernelEngine.TaskPool/Generated/Abstractions",
       "usings": []
     },
     {
@@ -772,7 +773,7 @@
     }
   ],
   "extensions": {
-    "factories": { "bindings": ["FileSystemStd", "IoPool"] }
+    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool"] }
   },
   "bindings": [
     {

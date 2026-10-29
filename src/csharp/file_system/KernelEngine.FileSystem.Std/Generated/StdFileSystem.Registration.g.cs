@@ -12,7 +12,7 @@ public static class StdFileSystemRegistration
 {
     /// <summary>
     /// Registers one <see cref="StdFileSystem"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself and as <see cref="KernelEngine.FileSystem.INativeFileSystem"/>. The library logs to the
+    /// container and its defaults, as itself, as <see cref="KernelEngine.FileSystem.INativeFileSystem"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddStdFileSystem(this IServiceCollection services)

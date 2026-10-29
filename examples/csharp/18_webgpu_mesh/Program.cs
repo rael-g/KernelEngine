@@ -20,7 +20,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 18 Webgpu Mesh (v2)"))
     .Add<IRuntimeModule>(render);

@@ -18,7 +18,7 @@ public sealed unsafe partial class Runtime : IRuntime
     /// Only the pointers are taken: keeping the managed wrappers reachable is the
     /// caller's business, exactly as it is for whoever else borrows them.
     /// </summary>
-    public Runtime(INativeEcs ecs, ITaskPool taskPool)
+    public Runtime(INativeEcs ecs, INativeTaskPool taskPool)
         : this(NativeEcsOf(ecs), NativeTaskPoolOf(taskPool), null)
     {
     }
@@ -27,7 +27,7 @@ public sealed unsafe partial class Runtime : IRuntime
     /// Builds a runtime as the constructor above does, the runtime library logging to
     /// <paramref name="logger"/>.
     /// </summary>
-    public Runtime(INativeEcs ecs, ITaskPool taskPool, KernelEngine.Logger.ILogger logger)
+    public Runtime(INativeEcs ecs, INativeTaskPool taskPool, KernelEngine.Logger.ILogger logger)
         : this(RoutingLog(ecs, logger), taskPool)
     {
     }
@@ -45,7 +45,7 @@ public sealed unsafe partial class Runtime : IRuntime
         return ecs.Native;
     }
 
-    private static ke_task_pool* NativeTaskPoolOf(ITaskPool taskPool)
+    private static ke_task_pool* NativeTaskPoolOf(INativeTaskPool taskPool)
     {
         ArgumentNullException.ThrowIfNull(taskPool);
         return taskPool.Native;

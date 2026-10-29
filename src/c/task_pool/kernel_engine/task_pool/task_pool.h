@@ -28,7 +28,7 @@ extern "C"
      */
     typedef void (*ke_task_on_complete_func)(ke_task *task, void *user_data, ke_result result);
 
-    /** Dispatches work to a native thread pool. */
+    /** [interface] Dispatches work to a native thread pool. */
     typedef struct ke_task_pool
     {
         void *handle;

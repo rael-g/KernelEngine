@@ -19,7 +19,7 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
 #region modules
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))

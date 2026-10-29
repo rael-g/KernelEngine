@@ -26,7 +26,7 @@ var services = new ServiceCollection()
     .AddAssimpAssetLoader()
 #endregion
     .Add<INativeEcs, FlecsEcs>()
-    .Add<ITaskPool, EnkiTaskPool>()
+    .AddEnkiTaskPool()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 12 Asset Loading"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.1f, 0.1f, 0.15f, 1.0f)))

@@ -5,7 +5,9 @@
     {
       "name": "ke_task_pool",
       "doc": "Dispatches work to a native thread pool.",
-      "tags": [],
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",

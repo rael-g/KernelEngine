@@ -114,13 +114,13 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         var window = services.GetRequiredService<IWindow>();
         var ecs = services.GetRequiredService<INativeEcs>();
-        var taskPool = services.GetRequiredService<ITaskPool>();
+        var taskPool = services.GetRequiredService<INativeTaskPool>();
         var world = services.GetService<KernelEngine.Framework.World>();
 
         var win = ((INativeWindow)window).Native;
         var rt = ((INativeRuntime)runtime).Native;
         var ec = ecs.Native;
-        var sc = ((INativeTaskPool)taskPool).Native;
+        var sc = taskPool.Native;
         var wd = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
 
         if (services.GetService<ILogger>() is { } logger)
