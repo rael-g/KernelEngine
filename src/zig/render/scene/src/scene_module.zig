@@ -220,19 +220,26 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
 
 const testing = std.testing;
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
 
 const Rig = struct {
-    dev: stubs.Device,
-    core: stubs.Core,
-    rt: stubs.Runtime,
-    ecs: stubs.Ecs,
+    core: zsub.For(abi_render.ke_render_service),
+    rt: zsub.For(abi_runtime.ke_runtime),
+    ecs: zsub.For(abi_ecs.ke_ecs),
 
-    fn init(self: *Rig) void {
-        self.dev.init();
-        self.core.init(self.dev.api());
-        self.rt.init();
-        self.ecs.init();
+    fn init(self: *Rig) !void {
+        try self.core.init();
+        _ = self.core.when(.cid).returnsFresh();
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+        try self.ecs.init();
+        _ = self.ecs.when(.component_register).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.ecs.deinit();
+        self.rt.deinit();
+        self.core.deinit();
     }
 
     fn sceneParams(self: *Rig) abi_render_scene_factory.ke_render_scene_resolve_params {
@@ -242,10 +249,12 @@ const Rig = struct {
 
 test "the scene resolve registers both its systems and hands out an id for every component" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     var h: abi_render_scene_factory.ke_render_scene_resolve_handle = undefined;
     try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
-    try testing.expectEqual(@as(u32, 2), rig.rt.live_count);
+    try rig.rt.received(.register_system).times(2);
+    try rig.rt.received(.unregister_system).never();
     const ids = h.ref.?.component_ids.?(h.ref);
     inline for (@typeInfo(abi_render_scene_factory.ke_render_scene_component_ids).@"struct".fields) |f| {
         try testing.expect(@field(ids.?, f.name) != abi_ecs.KE_COMPONENT_INVALID);
@@ -255,17 +264,19 @@ test "the scene resolve registers both its systems and hands out an id for every
 
 test "a scene resolve whose mesh system the runtime refuses removes its sprite system and fails" {
     var rig: Rig = undefined;
-    rig.init();
-    rig.rt.limit = 1;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.KE_OK, abi_result.KE_RESULT_OUT_OF_MEMORY });
     var h: abi_render_scene_factory.ke_render_scene_resolve_handle = undefined;
     try testing.expect(ke_render_scene_resolve_create(&rig.sceneParams(), &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(u32, 0), rig.rt.live_count);
+    try rig.rt.received(.unregister_system).times(1);
 }
 
 test "a scene resolve missing its service is refused as an invalid argument" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     var p = rig.sceneParams();
     p.service = null;
     var h: abi_render_scene_factory.ke_render_scene_resolve_handle = undefined;
@@ -275,22 +286,24 @@ test "a scene resolve missing its service is refused as an invalid argument" {
 
 test "the label resolve registers its system, and fails when the runtime refuses it" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui_factory.ke_render_ui);
     const p = abi_render_scene_factory.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
     var h: abi_render_scene_factory.ke_render_label_resolve_handle = undefined;
     try R.check(ke_render_label_resolve_create(&p, &h));
-    try testing.expectEqual(@as(u32, 1), rig.rt.live_count);
+    try rig.rt.received(.register_system).times(1);
     h.destroy.?(h.ref);
 
-    rig.rt.limit = rig.rt.registered;
+    _ = rig.rt.when(.register_system).returns(abi_result.KE_RESULT_OUT_OF_MEMORY);
     try testing.expect(ke_render_label_resolve_create(&p, &h) != R.ok);
     try testing.expect(h.ref == null);
 }
 
 test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
-    rig.init();
+    try rig.init();
+    defer rig.deinit();
     const p = abi_render_scene_factory.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .label_cid = 7 };
     var h: abi_render_scene_factory.ke_render_label_resolve_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, &h)));

@@ -18,6 +18,10 @@
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/b9dd610a1f4f12fcb8079b2fffc5559abb49d6d0.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QsCuAADnSlGoiE44efObIwqqPO_Qk4zJTv_wXNKP",
+        },
     },
     .paths = .{"."},
 }
