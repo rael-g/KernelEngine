@@ -27,8 +27,7 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
     public void LoadToml(KernelEngine.Io.INativeIo io, string path)
     {
         KernelEngine.Configuration.Native.ke_configuration_source_handle source;
-        var parameters = new KernelEngine.Configuration.Native.ke_configuration_toml_params { io = io.Native };
-        NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(&parameters, &source), "ke_configuration_toml_create");
+        NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(io.Native, &source), "ke_configuration_toml_create");
         try
         {
             var bytes = Encoding.UTF8.GetBytes(path + '\0');

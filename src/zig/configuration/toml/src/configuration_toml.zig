@@ -126,11 +126,10 @@ fn destroy(self: [*c]abi_configuration.ke_configuration_source) callconv(.c) voi
 
 /// The factory. Fails with out of memory, leaving the handle zeroed, when the state cannot be
 /// allocated.
-export fn ke_configuration_toml_create(params: ?*const abi_toml.ke_configuration_toml_params, out_source: ?*abi_configuration.ke_configuration_source_handle) callconv(.c) abi_result.ke_result {
+export fn ke_configuration_toml_create(io_in: ?*abi_io.ke_io, out_source: ?*abi_configuration.ke_configuration_source_handle) callconv(.c) abi_result.ke_result {
     const out = out_source orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_configuration.ke_configuration_source_handle);
-    const p = params orelse return R.code(error.InvalidArgument);
-    const io = p.io orelse return R.code(error.InvalidArgument);
+    const io = io_in orelse return R.code(error.InvalidArgument);
     const s = gpa.create(State) catch {
         log.warn("creating the TOML source failed: out of memory", .{});
         return R.code(error.OutOfMemory);
@@ -226,7 +225,7 @@ fn servingIo(sub: *zsub.For(abi_io.ke_io), text: ?[]const u8) !*abi_io.ke_io {
 
 fn madeSource(io: *abi_io.ke_io) !abi_configuration.ke_configuration_source_handle {
     var h: abi_configuration.ke_configuration_source_handle = undefined;
-    try R.check(ke_configuration_toml_create(&.{ .io = io }, &h));
+    try R.check(ke_configuration_toml_create(io, &h));
     return h;
 }
 
@@ -347,7 +346,6 @@ test "null args rejected" {
     defer sub.deinit();
     var none: abi_configuration.ke_configuration_source_handle = undefined;
     try std.testing.expectError(error.InvalidArgument, R.check(ke_configuration_toml_create(null, &none)));
-    try std.testing.expectError(error.InvalidArgument, R.check(ke_configuration_toml_create(&.{}, &none)));
     const h = try madeSource(io);
     defer h.destroy.?(h.ref);
     try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.load.?(null, &cfg, "x")));
