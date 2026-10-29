@@ -19,11 +19,11 @@ public sealed unsafe partial class PoolIo : KernelEngine.Io.Io
     {
         ArgumentNullException.ThrowIfNull(taskPool);
         ArgumentNullException.ThrowIfNull(fileSystem);
-        KernelEngine.Io.Pool.Native.ke_io_pool_params @params = default;
-        @params.task_pool = taskPool.Native;
-        @params.file_system = fileSystem.Native;
+        KernelEngine.Io.Pool.Native.ke_io_pool_params config = default;
+        config.task_pool = taskPool.Native;
+        config.file_system = fileSystem.Native;
         KernelEngine.Io.Native.ke_io_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Io.Pool.Native.NativeMethods.io_pool_create(&@params, &handle), "ke_io_pool_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Io.Pool.Native.NativeMethods.io_pool_create(&config, &handle), "ke_io_pool_create");
         return handle;
     }
 }

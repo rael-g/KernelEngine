@@ -48,7 +48,7 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append("    /// <summary>The same construction, with the library logging to <paramref name=\"logger\"/>.</summary>\n");
         o.Append("    /// <param name=\"logger\">Receives every line the library logs.</param>\n");
         foreach (var a in f.Arguments)
-            o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Field.Doc)}</param>\n");
+            o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
         o.Append($"    public {f.ClassName}(KernelEngine.Logger.ILogger logger{(parameters.Length > 0 ? ", " + parameters : "")}) : base(CreateLogged(logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
         o.Append($"    private static {f.Contract.Spec.NativeNamespace}.{f.HandleType} CreateLogged(KernelEngine.Logger.ILogger logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
         o.Append("        ArgumentNullException.ThrowIfNull(logger);\n");

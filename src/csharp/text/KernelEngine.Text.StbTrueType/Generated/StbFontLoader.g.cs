@@ -17,10 +17,10 @@ public sealed unsafe partial class StbFontLoader : KernelEngine.Text.FontLoader
     private static KernelEngine.Text.Native.ke_font_loader_handle Create(KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(io);
-        KernelEngine.Text.StbTrueType.Native.ke_font_loader_stb_params @params = default;
-        @params.io = io.Native;
+        KernelEngine.Text.StbTrueType.Native.ke_font_loader_stb_params config = default;
+        config.io = io.Native;
         KernelEngine.Text.Native.ke_font_loader_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&@params, &handle), "ke_font_loader_stb_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Text.StbTrueType.Native.NativeMethods.font_loader_stb_create(&config, &handle), "ke_font_loader_stb_create");
         return handle;
     }
 }

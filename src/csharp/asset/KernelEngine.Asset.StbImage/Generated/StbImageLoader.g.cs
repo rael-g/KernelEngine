@@ -17,10 +17,10 @@ public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoad
     private static KernelEngine.Asset.Native.ke_image_loader_handle Create(KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(io);
-        KernelEngine.Asset.StbImage.Native.ke_image_loader_stb_params @params = default;
-        @params.io = io.Native;
+        KernelEngine.Asset.StbImage.Native.ke_image_loader_stb_params config = default;
+        config.io = io.Native;
         KernelEngine.Asset.Native.ke_image_loader_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(&@params, &handle), "ke_image_loader_stb_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(&config, &handle), "ke_image_loader_stb_create");
         return handle;
     }
 }

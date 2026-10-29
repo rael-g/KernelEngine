@@ -7,28 +7,31 @@ using Kabic.Pipeline;
 namespace Kabic.Factories;
 
 /// <summary>
-/// One factory of a bindings project, read from its header: the function, its params struct,
-/// the contract its handle belongs to, and the names the managed class is spelled with.
+/// One factory of a bindings project, read from its header: the function, its config struct when
+/// it takes one, the contract its handle belongs to, and the names the managed class is spelled with.
 /// </summary>
 public sealed record Factory(
     BindingJob Job,
     string ProjectDir,
     string ManagedNamespace,
     ApiFunction Function,
-    ApiStruct Params,
+    ApiStruct? Config,
     DomainModel Contract,
     string ContractClass,
     string ClassName,
     string HandleType,
     IReadOnlyList<FactoryArgument> Arguments);
 
-/// <summary>A field of a factory's params struct, as the constructor argument it becomes.</summary>
-public sealed record FactoryArgument(ApiField Field, string Name, string ManagedType, string Assign, bool IsString);
+/// <summary>
+/// A dependency of a factory, or a field of its config struct, as the constructor argument it
+/// becomes; <see cref="Field"/> is the config field it fills, null for a dependency.
+/// </summary>
+public sealed record FactoryArgument(string? Doc, string? Field, string Name, string ManagedType, string Assign, bool IsString);
 
 /// <summary>
 /// Projects the factory of each bindings project its manifest section names into a partial class
 /// deriving from the class of the contract the factory's handle belongs to, constructed from the
-/// fields of the factory's params struct. Section: <c>{"bindings": ["&lt;binding name&gt;", ...]}</c>.
+/// factory's dependencies, then the fields of its config struct. Section: <c>{"bindings": ["&lt;binding name&gt;", ...]}</c>.
 /// </summary>
 public sealed class FactoriesExtension : IKabicExtension
 {
@@ -76,11 +79,9 @@ public sealed class FactoriesExtension : IKabicExtension
             return null;
         }
         var function = functions[0];
-        if (function.Params is not [var paramsParam, var outParam]
-            || model.Structs.FirstOrDefault(s => s.Name == Bare(paramsParam.Type)) is not { } paramsStruct
-            || !convention.IsHandleType(Bare(outParam.Type)))
+        if (function.Params is not [.., var outParam] || !convention.IsHandleType(Bare(outParam.Type)))
         {
-            context.Report($"factories: {function.Name} is not <params>*, <handle>* out; it is not projected");
+            context.Report($"factories: {function.Name} does not end in a <handle>* out; it is not projected");
             return null;
         }
         var handleType = Bare(outParam.Type);
@@ -92,10 +93,30 @@ public sealed class FactoriesExtension : IKabicExtension
             return null;
         }
         var arguments = new List<FactoryArgument>();
-        foreach (var field in paramsStruct.Fields)
+        ApiStruct? config = null;
+        foreach (var param in function.Params.Take(function.Params.Count - 1))
         {
-            if (Argument(context, field) is { } argument) arguments.Add(argument);
-            else context.Report($"factories: {paramsStruct.Name}.{field.Name} ({field.Type}) has no projection");
+            if (config is not null)
+            {
+                context.Report($"factories: {function.Name} takes {param.Name} after its config; it is not projected");
+                return null;
+            }
+            if (Dependency(context, param) is { } dependency)
+                arguments.Add(dependency);
+            else if (model.Structs.FirstOrDefault(s => s.Name == Bare(param.Type)) is { } configStruct && param.Type.Contains('*'))
+            {
+                config = configStruct;
+                foreach (var field in configStruct.Fields)
+                {
+                    if (Argument(context, field) is { } argument) arguments.Add(argument);
+                    else context.Report($"factories: {configStruct.Name}.{field.Name} ({field.Type}) has no projection");
+                }
+            }
+            else
+            {
+                context.Report($"factories: {function.Name}'s {param.Name} ({param.Type}) is neither a contract nor a config; it is not projected");
+                return null;
+            }
         }
         var contractClass = Idioms.TypeName(contractName, convention);
         var stem = convention.StripPrefix(function.Name)[..^convention.FactorySuffix.Length];
@@ -103,8 +124,19 @@ public sealed class FactoriesExtension : IKabicExtension
         var plugin = stem.StartsWith(contractStem + "_", StringComparison.Ordinal) ? stem[(contractStem.Length + 1)..] : stem;
         var projectDir = Path.GetDirectoryName(job.NativeDir.TrimEnd('/', '\\'))!;
         var managedNamespace = job.Namespace.EndsWith(".Native", StringComparison.Ordinal) ? job.Namespace[..^".Native".Length] : job.Namespace;
-        return new Factory(job, projectDir, managedNamespace, function, paramsStruct, contract,
+        return new Factory(job, projectDir, managedNamespace, function, config, contract,
             $"{contract.Spec.Namespace}.{contractClass}", Idioms.Pascal(plugin) + contractClass, handleType, arguments);
+    }
+
+    private static FactoryArgument? Dependency(ExtensionContext context, ApiParam param)
+    {
+        var type = param.Type.Replace("const ", "").Replace("struct ", "").Trim();
+        if (!type.EndsWith('*')) return null;
+        var target = type.TrimEnd('*', ' ');
+        var domain = context.Domains.FirstOrDefault(d => d.Model.Structs.Any(s => s.Name == target && !s.External && s.IsVtable));
+        if (domain is null) return null;
+        var name = Idioms.Ident(param.Name ?? target);
+        return new FactoryArgument(param.Doc, null, name, $"{domain.Spec.Namespace}.INative{Idioms.TypeName(target, context.Convention)}", $"{name}.Native", false);
     }
 
     private static FactoryArgument? Argument(ExtensionContext context, ApiField field)
@@ -117,12 +149,12 @@ public sealed class FactoriesExtension : IKabicExtension
             var domain = context.Domains.FirstOrDefault(d => d.Model.Structs.Any(s => s.Name == target && !s.External));
             if (domain is null) return null;
             var iface = $"{domain.Spec.Namespace}.INative{Idioms.TypeName(target, context.Convention)}";
-            return new FactoryArgument(field, name, iface, $"{name}.Native", false);
+            return new FactoryArgument(field.Doc, field.Name, name, iface, $"{name}.Native", false);
         }
         if (field.Has("utf8") && type == "char *")
-            return new FactoryArgument(field, name, "string?", "", true);
+            return new FactoryArgument(field.Doc, field.Name, name, "string?", "", true);
         if (type.Contains('*')) return null;
-        return new FactoryArgument(field, name, Idioms.CsPrimitive(type, context.Convention), name, false);
+        return new FactoryArgument(field.Doc, field.Name, name, Idioms.CsPrimitive(type, context.Convention), name, false);
     }
 
     private static string Bare(string cType) => cType.Replace("const ", "").Replace("struct ", "").Trim().TrimEnd('*', ' ');
@@ -136,7 +168,7 @@ public sealed class FactoriesExtension : IKabicExtension
         o.Append($"public sealed unsafe partial class {f.ClassName} : {f.ContractClass}\n{{\n");
         o.Append($"    /// <summary>{Xml(f.Function.Doc)}</summary>\n");
         foreach (var a in f.Arguments)
-            o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Field.Doc)}</param>\n");
+            o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
         o.Append($"    public {f.ClassName}({Parameters(f)}) : base(Create({Names(f)}))\n    {{\n    }}\n\n");
         o.Append($"    private static {f.Contract.Spec.NativeNamespace}.{f.HandleType} Create({Parameters(f, withDefaults: false)})\n    {{\n");
         foreach (var a in f.Arguments.Where(a => a.ManagedType.Contains(".INative")))
@@ -148,11 +180,15 @@ public sealed class FactoriesExtension : IKabicExtension
         var strings = f.Arguments.Any(a => a.IsString);
         var pad = strings ? "            " : "        ";
         if (strings) o.Append("        {\n");
-        o.Append($"{pad}{f.Job.Namespace}.{f.Params.Name} @params = default;\n");
-        foreach (var a in f.Arguments)
-            o.Append($"{pad}@params.{a.Field.Name} = {(a.IsString ? $"(sbyte*){a.Name}Ptr" : a.Assign)};\n");
+        if (f.Config is not null)
+        {
+            o.Append($"{pad}{f.Job.Namespace}.{f.Config.Name} config = default;\n");
+            foreach (var a in f.Arguments.Where(a => a.Field is not null))
+                o.Append($"{pad}config.{a.Field} = {(a.IsString ? $"(sbyte*){a.Name}Ptr" : a.Assign)};\n");
+        }
         o.Append($"{pad}{f.Contract.Spec.NativeNamespace}.{f.HandleType} handle;\n");
-        o.Append($"{pad}{convention.ResultHelperClass}.ThrowIfFailed({f.Job.Namespace}.{f.Job.MethodsClass}.{convention.StripPrefix(f.Function.Name)}(&@params, &handle), \"{f.Function.Name}\");\n");
+        var call = f.Arguments.Where(a => a.Field is null).Select(a => a.Assign).Concat(f.Config is null ? [] : ["&config"]).Append("&handle");
+        o.Append($"{pad}{convention.ResultHelperClass}.ThrowIfFailed({f.Job.Namespace}.{f.Job.MethodsClass}.{convention.StripPrefix(f.Function.Name)}({string.Join(", ", call)}), \"{f.Function.Name}\");\n");
         o.Append($"{pad}return handle;\n");
         if (strings) o.Append("        }\n");
         o.Append("    }\n}\n");
