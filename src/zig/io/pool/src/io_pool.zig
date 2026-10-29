@@ -1,0 +1,455 @@
+//! The `ke_io` contract over a `ke_task_pool` and a `ke_file_system`: each request runs as one task
+//! of the pool, reading through the file system, and is released by the `wait` that collects it.
+
+const std = @import("std");
+
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_io_pool").logFn };
+
+pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
+
+const abi_file_system = @import("abi_file_system");
+const abi_io = @import("abi_io");
+const abi_io_pool_factory = @import("abi_io_pool_factory");
+const abi_result = @import("abi_result");
+const abi_task_pool = @import("abi_task_pool");
+const heap = @import("heap");
+
+const R = @import("result").Result(.{});
+const log = std.log.scoped(.io_pool);
+
+const bytes_header = 16;
+const bytes_alignment: std.mem.Alignment = .@"16";
+
+/// The allocation behind one handle. `api` is the vtable the handle's `ref` points at, and its
+/// `handle` slot points back at this block. `task_pool` and `file_system` are borrowed from the
+/// factory params and never released here.
+const State = struct {
+    api: abi_io.ke_io,
+    task_pool: *abi_task_pool.ke_task_pool,
+    file_system: *abi_file_system.ke_file_system,
+};
+
+const Kind = enum { read_file, open, read_at, stat };
+
+/// One submitted request, allocated by `submit` and freed by `wait`; the `ke_io_request` pointer is
+/// its address. The task writes `code` and `result` and then stores `completed`, so a thread that
+/// reads `completed` as true reads them as written.
+const Request = struct {
+    state: *State,
+    kind: Kind,
+    path: ?[:0]u8,
+    file: ?*abi_file_system.ke_open_file,
+    offset: u64,
+    dst: ?[*]u8,
+    len: usize,
+    task: ?*abi_task_pool.ke_task,
+    code: abi_result.ke_result,
+    result: abi_io.ke_io_result,
+    completed: std.atomic.Value(bool),
+
+    fn run(self: *Request) void {
+        self.code = switch (self.kind) {
+            .read_file => self.readFile(),
+            .open => self.openFile(),
+            .read_at => self.readAt(),
+            .stat => self.statPath(),
+        };
+        if (self.code != R.ok) self.result = std.mem.zeroes(abi_io.ke_io_result);
+        self.completed.store(true, .release);
+    }
+
+    fn readFile(self: *Request) abi_result.ke_result {
+        const fs = self.state.file_system;
+        var file: ?*abi_file_system.ke_open_file = null;
+        const opened = fs.open.?(fs, self.path.?.ptr, &file);
+        if (opened != R.ok) return opened;
+        defer fs.close.?(fs, file);
+
+        var size: u64 = 0;
+        const sized = fs.size.?(fs, file, &size);
+        if (sized != R.ok) return sized;
+        const len = std.math.cast(usize, size) orelse return R.code(error.OutOfMemory);
+        const bytes = allocBytes(len) orelse return R.code(error.OutOfMemory);
+
+        var read: usize = 0;
+        const code = fs.read_at.?(fs, file, 0, bytes, len, &read);
+        if (code != R.ok) {
+            freeBytes(bytes);
+            return code;
+        }
+        self.result.bytes = bytes;
+        self.result.size = read;
+        return R.ok;
+    }
+
+    fn openFile(self: *Request) abi_result.ke_result {
+        const fs = self.state.file_system;
+        return fs.open.?(fs, self.path.?.ptr, &self.result.file);
+    }
+
+    fn readAt(self: *Request) abi_result.ke_result {
+        const fs = self.state.file_system;
+        var read: usize = 0;
+        const code = fs.read_at.?(fs, self.file, self.offset, self.dst, self.len, &read);
+        self.result.size = read;
+        return code;
+    }
+
+    fn statPath(self: *Request) abi_result.ke_result {
+        const fs = self.state.file_system;
+        return fs.stat.?(fs, self.path.?.ptr, &self.result.stat);
+    }
+
+    fn free(self: *Request) void {
+        if (self.path) |p| heap.gpa.free(p);
+        heap.gpa.destroy(self);
+    }
+};
+
+fn stateOf(self: *abi_io.ke_io) *State {
+    return @ptrCast(@alignCast(self.handle));
+}
+
+fn requestOf(request: *abi_io.ke_io_request) *Request {
+    return @ptrCast(@alignCast(request));
+}
+
+/// Allocates `len` bytes behind a header that records `len`, so `freeBytes` can release them from
+/// the pointer alone.
+fn allocBytes(len: usize) ?[*]u8 {
+    const total = std.math.add(usize, len, bytes_header) catch return null;
+    const block = heap.gpa.alignedAlloc(u8, bytes_alignment, total) catch return null;
+    std.mem.writeInt(usize, block[0..@sizeOf(usize)], len, .little);
+    return block.ptr + bytes_header;
+}
+
+fn freeBytes(bytes: [*]u8) void {
+    const base: [*]align(16) u8 = @alignCast(bytes - bytes_header);
+    const len = std.mem.readInt(usize, base[0..@sizeOf(usize)], .little);
+    heap.gpa.free(base[0 .. len + bytes_header]);
+}
+
+fn taskRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
+    const request: *Request = @ptrCast(@alignCast(data orelse return R.code(error.InvalidArgument)));
+    request.run();
+    return request.code;
+}
+
+/// Allocates a request, copies `path` into it, and dispatches it on the task pool. Returns null
+/// with nothing left allocated when an allocation or the dispatch fails.
+fn submit(self: *abi_io.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?[*]u8, len: usize) ?*abi_io.ke_io_request {
+    const s = stateOf(self);
+    const request = heap.gpa.create(Request) catch {
+        log.warn("submitting a {t} request failed: out of memory", .{kind});
+        return null;
+    };
+    request.* = .{
+        .state = s,
+        .kind = kind,
+        .path = null,
+        .file = file,
+        .offset = offset,
+        .dst = dst,
+        .len = len,
+        .task = null,
+        .code = R.ok,
+        .result = std.mem.zeroes(abi_io.ke_io_result),
+        .completed = .init(false),
+    };
+    if (path) |p| request.path = heap.gpa.dupeZ(u8, std.mem.span(p)) catch {
+        log.warn("submitting a {t} request failed: out of memory", .{kind});
+        request.free();
+        return null;
+    };
+    request.task = s.task_pool.dispatch.?(s.task_pool, taskRun, request) orelse {
+        log.warn("submitting a {t} request failed: the task pool refused it", .{kind});
+        request.free();
+        return null;
+    };
+    return @ptrCast(request);
+}
+
+/// Slot `read_file`. The bytes are allocated by the task once the size is known.
+fn readFile(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
+    const self = self_in orelse return null;
+    if (path == null) return null;
+    return submit(self, .read_file, path, null, 0, null, 0);
+}
+
+/// Slot `open`.
+fn open(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
+    const self = self_in orelse return null;
+    if (path == null) return null;
+    return submit(self, .open, path, null, 0, null, 0);
+}
+
+/// Slot `read_at`.
+fn readAt(self_in: ?*abi_io.ke_io, file: ?*abi_file_system.ke_open_file, offset: u64, dst: ?*anyopaque, len: usize) callconv(.c) ?*abi_io.ke_io_request {
+    const self = self_in orelse return null;
+    if (file == null or (dst == null and len != 0)) return null;
+    return submit(self, .read_at, null, file, offset, @ptrCast(dst), len);
+}
+
+/// Slot `stat`.
+fn stat(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8) callconv(.c) ?*abi_io.ke_io_request {
+    const self = self_in orelse return null;
+    if (path == null) return null;
+    return submit(self, .stat, path, null, 0, null, 0);
+}
+
+/// Slot `is_completed`. A null request reports true.
+fn isCompleted(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request) callconv(.c) bool {
+    _ = self_in;
+    const request = request_in orelse return true;
+    return requestOf(request).completed.load(.acquire);
+}
+
+/// Slot `wait`. Waits on the request's task, which leaves the request finished, then copies its
+/// result out and frees it.
+fn wait(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request, out_result: ?*abi_io.ke_io_result) callconv(.c) abi_result.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (out_result) |out| out.* = std.mem.zeroes(abi_io.ke_io_result);
+    const request = requestOf(request_in orelse return R.code(error.InvalidArgument));
+    const s = stateOf(self);
+
+    _ = s.task_pool.wait.?(s.task_pool, request.task);
+    const code = request.code;
+    if (out_result) |out| out.* = request.result;
+    request.free();
+    return code;
+}
+
+/// Slot `close`.
+fn close(self_in: ?*abi_io.ke_io, file: ?*abi_file_system.ke_open_file) callconv(.c) void {
+    const self = self_in orelse return;
+    if (file == null) return;
+    const fs = stateOf(self).file_system;
+    fs.close.?(fs, file);
+}
+
+/// Slot `free_bytes`.
+fn freeBytesSlot(self_in: ?*abi_io.ke_io, bytes: ?*anyopaque) callconv(.c) void {
+    _ = self_in orelse return;
+    freeBytes(@ptrCast(bytes orelse return));
+}
+
+/// The handle's `destroy`. Frees the `State`; requests not yet waited on are not freed. A null
+/// ke_io is ignored.
+fn destroy(self_in: ?*abi_io.ke_io) callconv(.c) void {
+    const self = self_in orelse return;
+    if (self.handle == null) return;
+    heap.gpa.destroy(stateOf(self));
+}
+
+/// The factory. Both the task pool and the file system are required; either missing, or no params,
+/// is an invalid argument. Fails with out of memory when the `State` cannot be allocated, leaving
+/// the handle zeroed.
+export fn ke_io_pool_create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params, out_io: ?*abi_io.ke_io_handle) callconv(.c) abi_result.ke_result {
+    const out = out_io orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_io.ke_io_handle);
+    out.* = create(params_in) catch |err| {
+        log.warn("creating the io failed: {t}", .{err});
+        return R.code(err);
+    };
+    return R.ok;
+}
+
+fn create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params) R.Error!abi_io.ke_io_handle {
+    const params = params_in orelse return error.InvalidArgument;
+    const s = heap.gpa.create(State) catch return error.OutOfMemory;
+    errdefer heap.gpa.destroy(s);
+    s.* = .{
+        .api = std.mem.zeroes(abi_io.ke_io),
+        .task_pool = params.task_pool orelse return error.InvalidArgument,
+        .file_system = params.file_system orelse return error.InvalidArgument,
+    };
+
+    s.api.handle = s;
+    s.api.read_file = readFile;
+    s.api.open = open;
+    s.api.read_at = readAt;
+    s.api.stat = stat;
+    s.api.is_completed = isCompleted;
+    s.api.wait = wait;
+    s.api.close = close;
+    s.api.free_bytes = freeBytesSlot;
+
+    return .{ .ref = &s.api, .destroy = destroy };
+}
+
+const testing = std.testing;
+const zsub = @import("zsub");
+
+const TaskPoolSub = zsub.For(abi_task_pool.ke_task_pool);
+const FileSystemSub = zsub.For(abi_file_system.ke_file_system);
+
+const contents = "the quick brown fox jumps over the lazy dog";
+var open_token: u8 = 0;
+var task_token: u8 = 0;
+
+fn runInline(args: TaskPoolSub.Args(.dispatch)) ?*abi_task_pool.ke_task {
+    _ = args[1].?(args[2]);
+    return @ptrCast(&task_token);
+}
+
+fn openFox(args: FileSystemSub.Args(.open)) abi_result.ke_result {
+    if (!std.mem.eql(u8, std.mem.span(args[1].?), "fox.txt")) return R.code(error.NotFound);
+    args[2].?.* = @ptrCast(&open_token);
+    return R.ok;
+}
+
+fn foxSize(args: FileSystemSub.Args(.size)) abi_result.ke_result {
+    args[2].?.* = contents.len;
+    return R.ok;
+}
+
+fn readFox(args: FileSystemSub.Args(.read_at)) abi_result.ke_result {
+    const offset: usize = @intCast(@min(args[2], contents.len));
+    const n = @min(args[4], contents.len - offset);
+    if (n > 0) @memcpy(@as([*]u8, @ptrCast(args[3].?))[0..n], contents[offset..][0..n]);
+    args[5].?.* = n;
+    return R.ok;
+}
+
+fn statFox(args: FileSystemSub.Args(.stat)) abi_result.ke_result {
+    if (!std.mem.eql(u8, std.mem.span(args[1].?), "fox.txt")) return R.code(error.NotFound);
+    args[2].?.* = .{ .kind = abi_file_system.KE_FILE_KIND_FILE, .size = contents.len };
+    return R.ok;
+}
+
+const Rig = struct {
+    pool: TaskPoolSub,
+    fs: FileSystemSub,
+    handle: abi_io.ke_io_handle,
+
+    fn init(self: *Rig) !void {
+        try self.pool.init();
+        errdefer self.pool.deinit();
+        try self.fs.init();
+        errdefer self.fs.deinit();
+        _ = self.pool.when(.dispatch).does(runInline);
+        _ = self.fs.when(.open).does(openFox);
+        _ = self.fs.when(.size).does(foxSize);
+        _ = self.fs.when(.read_at).does(readFox);
+        _ = self.fs.when(.stat).does(statFox);
+        const params = abi_io_pool_factory.ke_io_pool_params{ .task_pool = self.pool.api(), .file_system = self.fs.api() };
+        try R.check(ke_io_pool_create(&params, &self.handle));
+    }
+
+    fn io(self: *Rig) *abi_io.ke_io {
+        return self.handle.ref.?;
+    }
+
+    fn deinit(self: *Rig) void {
+        self.handle.destroy.?(self.handle.ref);
+        self.fs.deinit();
+        self.pool.deinit();
+    }
+};
+
+test "a whole-file read runs on the task pool and hands the bytes to the caller" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    const request = rig.io().read_file.?(rig.io(), "fox.txt").?;
+    try testing.expect(rig.io().is_completed.?(rig.io(), request));
+    var result: abi_io.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), request, &result));
+    defer rig.io().free_bytes.?(rig.io(), result.bytes);
+
+    try testing.expectEqualStrings(contents, @as([*]const u8, @ptrCast(result.bytes.?))[0..result.size]);
+    try rig.pool.received(.dispatch).times(1);
+    try rig.pool.received(.wait).times(1);
+    try rig.fs.received(.close).sameAs(rig.fs.received(.open));
+}
+
+test "a whole-file read of a missing file fails as not found with a zeroed result" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    const request = rig.io().read_file.?(rig.io(), "missing.txt").?;
+    var result: abi_io.ke_io_result = undefined;
+    try testing.expectError(error.NotFound, R.check(rig.io().wait.?(rig.io(), request, &result)));
+    try testing.expect(result.bytes == null and result.size == 0);
+    try rig.fs.received(.close).never();
+}
+
+test "an opened file is read at an offset into the caller's buffer and closed" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    var result: abi_io.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), rig.io().open.?(rig.io(), "fox.txt").?, &result));
+    const file = result.file.?;
+
+    var buf: [16]u8 = undefined;
+    try R.check(rig.io().wait.?(rig.io(), rig.io().read_at.?(rig.io(), file, contents.len - 3, &buf, buf.len).?, &result));
+    try testing.expectEqualStrings("dog", buf[0..result.size]);
+
+    rig.io().close.?(rig.io(), file);
+    try rig.fs.received(.close).times(1);
+}
+
+test "stat reports what the path names" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    var result: abi_io.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), rig.io().stat.?(rig.io(), "fox.txt").?, &result));
+    try testing.expectEqual(abi_file_system.KE_FILE_KIND_FILE, result.stat.kind);
+    try testing.expectEqual(@as(u64, contents.len), result.stat.size);
+}
+
+test "a request the task pool refuses is not returned" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.pool.when(.dispatch).returns(null);
+
+    try testing.expect(rig.io().read_file.?(rig.io(), "fox.txt") == null);
+}
+
+test "submits with missing arguments return no request and a null request is refused by wait" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    var buf: [4]u8 = undefined;
+    try testing.expect(rig.io().read_file.?(rig.io(), null) == null);
+    try testing.expect(rig.io().open.?(rig.io(), null) == null);
+    try testing.expect(rig.io().stat.?(rig.io(), null) == null);
+    try testing.expect(rig.io().read_at.?(rig.io(), null, 0, &buf, buf.len) == null);
+    try testing.expect(rig.io().read_at.?(rig.io(), @ptrCast(&open_token), 0, null, 4) == null);
+    try testing.expect(readFile(null, "fox.txt") == null);
+    try testing.expectError(error.InvalidArgument, R.check(rig.io().wait.?(rig.io(), null, null)));
+    rig.io().close.?(rig.io(), null);
+    rig.io().free_bytes.?(rig.io(), null);
+    try rig.pool.received(.dispatch).never();
+}
+
+test "creating without a task pool or a file system is refused and leaves the handle zeroed" {
+    var fs: FileSystemSub = undefined;
+    try fs.init();
+    defer fs.deinit();
+
+    var h: abi_io.ke_io_handle = undefined;
+    const params = abi_io_pool_factory.ke_io_pool_params{ .task_pool = null, .file_system = fs.api() };
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(&params, &h)));
+    try testing.expect(h.ref == null and h.destroy == null);
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(&params, null)));
+}
+
+test "reading, waiting, freeing and destroying leaves no block allocated" {
+    var rig: Rig = undefined;
+    try rig.init();
+    var result: abi_io.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), rig.io().read_file.?(rig.io(), "fox.txt").?, &result));
+    rig.io().free_bytes.?(rig.io(), result.bytes);
+    rig.deinit();
+    try heap.expectNoLeaks();
+}

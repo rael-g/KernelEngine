@@ -1,0 +1,11 @@
+.{
+    .name = .ke_abi_io,
+    .version = "0.1.0",
+    .fingerprint = 0x1d0fb9a7fb4c2c11,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_file_system = .{ .path = "../file_system" },
+        .ke_abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

@@ -1,0 +1,14 @@
+.{
+    .name = .abi_io_pool,
+    .version = "0.1.0",
+    .fingerprint = 0x801360f5b2e9e843,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_abi_file_system = .{ .path = "../../../abi/file_system" },
+        .ke_abi_io = .{ .path = "../../../abi/io" },
+        .ke_abi_logger = .{ .path = "../../../abi/logger" },
+        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .ke_abi_task_pool = .{ .path = "../../../abi/task_pool" },
+    },
+    .paths = .{"."},
+}
