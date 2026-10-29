@@ -51,9 +51,11 @@ const UiFont = struct {
 /// or by the create itself when it fails. The handle's reference is `api`, whose `handle` points
 /// back at the state. `io` and `access` are filled once by `setup`. The query declarations are filled by
 /// the create and passed to the registrations by address. `vertices` and `batches` are rewritten by
-/// `system` on every frame.
+/// `system` on every frame. `destroyHandle` unregisters the two systems before it frees the state.
 const UiState = struct {
     api: abi_render_ui_factory.ke_render_ui = undefined,
+    runtime: *abi_runtime.ke_runtime = undefined,
+    systems: [2]abi_runtime.ke_system_id = .{ 0, 0 },
 
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
@@ -502,6 +504,7 @@ fn destroyState(ui: *UiState) void {
 /// The destroy slot of the handle that `ke_render_ui_create` returns.
 fn destroyHandle(self: ?*abi_render_ui_factory.ke_render_ui) callconv(.c) void {
     const ui = stateOf(self orelse return);
+    for (ui.systems) |id| _ = ui.runtime.unregister_system.?(ui.runtime, id);
     destroyState(ui);
     gpa.destroy(ui);
 }
@@ -570,6 +573,8 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, r
     shape_params.execute = labelShapeSystem;
     var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &shape_params, &system_id));
+    ui.runtime = rt;
+    ui.systems = .{ first_system, system_id };
 }
 
 const testing = std.testing;
@@ -633,6 +638,18 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the ui pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    try R.check(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render.ke_ndc_convention), .frame_cid = 1 }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a ui pass whose shader fails to load releases what it had created" {
