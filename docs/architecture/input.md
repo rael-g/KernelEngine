@@ -33,7 +33,7 @@ takes no lock: sinks, `update` and `get_snapshot` must not overlap.
 
 The host calls `PollEvents` on the window, then `Tick` on the runtime. The window module registers
 no system, so the sink calls of a poll never interleave with a tick. Inside the tick, the system
-"Scene.Input" runs in `KE_PHASE_PRE_UPDATE`, pinned to worker 1, with an empty access list: it
+"Scene.Input" runs in `KE_PHASE_PRE_UPDATE` with an empty access list: it
 calls `Update` on `IInput`, captures a snapshot with `CaptureSnapshot`, keeps it in a field of
 `SceneNodesModule`, and calls `Evaluate` on the action evaluator with it. Systems of later phases
 read that field through `View`, so every read in the rest of the tick sees one snapshot.

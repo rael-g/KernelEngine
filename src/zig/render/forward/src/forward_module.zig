@@ -162,7 +162,7 @@ fn rebuildFrameSet(fwd: *ForwardModule) void {
         log.err("transparent-forward frame set creation failed", .{});
 }
 
-/// The render-phase system that `ke_render_forward_create` registers, with no pinned worker. It
+/// The render-phase system that `ke_render_forward_create` registers. It
 /// fails as out of memory when the draw list cannot grow, and with the code of the call that
 /// failed when the per-draw uniforms cannot. Once
 /// `begin_pass` has returned a pass context, every path reaches `end_pass`. A scene without a
@@ -409,7 +409,6 @@ export fn ke_render_forward_create(params_in: ?*const abi_render_forward_factory
     params.query_count = fwd.queries.len;
     params.access_list = &fwd.access;
     params.access_count = fwd.access_count;
-    params.pinned_thread = 0;
     params.user_data = fwd;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

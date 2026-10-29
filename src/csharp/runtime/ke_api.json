@@ -222,14 +222,6 @@
           "doc": null
         },
         {
-          "name": "pinned_thread",
-          "type": "uint32_t",
-          "tags": [
-            "default:0"
-          ],
-          "doc": "The worker the body must run on, or 0 to let any wave thread take it."
-        },
-        {
           "name": "per_entity",
           "type": "_Bool",
           "tags": [

@@ -16,8 +16,6 @@ const heap = @import("heap");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.scheduler_enki);
 
-const pinned_tag: usize = 1;
-
 /// One dispatched body and its outcome, allocated by `allocTask` and freed by `wait`, so it lives
 /// from dispatch until the task is waited on. The worker writes `completed` and `result`; the
 /// waiting thread reads `result` only after enkiTS reports the task finished.
@@ -28,7 +26,6 @@ const Task = struct {
     on_complete_user_data: ?*anyopaque,
     completed: std.atomic.Value(bool),
     handle: ?*anyopaque,
-    tagged_self: ?*abi_scheduler.ke_task,
     result: abi_result.ke_result,
 
     /// Runs on the worker that takes the task. `completed` is stored before the completion
@@ -36,7 +33,7 @@ const Task = struct {
     fn run(self: *Task) void {
         if (self.func) |f| self.result = f(self.data);
         self.completed.store(true, .release);
-        if (self.on_complete) |done| done(self.tagged_self, self.on_complete_user_data, self.result);
+        if (self.on_complete) |done| done(@ptrCast(self), self.on_complete_user_data, self.result);
     }
 };
 
@@ -52,21 +49,6 @@ fn stateOf(self: *abi_scheduler.ke_scheduler) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-/// Packs `pinned` into the low bit of the `Task` address. This holds because a `Task` is allocated
-/// with at least pointer alignment, which leaves that bit clear.
-fn tag(task: *Task, pinned: bool) *abi_scheduler.ke_task {
-    const raw = @intFromPtr(task) | (if (pinned) pinned_tag else 0);
-    return @ptrFromInt(raw);
-}
-
-fn untag(task: *abi_scheduler.ke_task) struct { task: *Task, pinned: bool } {
-    const raw = @intFromPtr(task);
-    return .{
-        .task = @ptrFromInt(raw & ~pinned_tag),
-        .pinned = (raw & pinned_tag) != 0,
-    };
-}
-
 /// The enkiTS task-set entry point. `dispatchOnComplete` adds each set with a size of one, so the
 /// range and thread index enkiTS passes carry nothing and are ignored.
 fn taskSetExecute(start: u32, end: u32, threadnum: u32, args: ?*anyopaque) callconv(.c) void {
@@ -77,13 +59,8 @@ fn taskSetExecute(start: u32, end: u32, threadnum: u32, args: ?*anyopaque) callc
     task.run();
 }
 
-fn pinnedTaskExecute(args: ?*anyopaque) callconv(.c) void {
-    const task: *Task = @ptrCast(@alignCast(args orelse return));
-    task.run();
-}
-
 /// Allocates a `Task` with `completed` false, `result` OK and no enkiTS object yet. The caller
-/// fills `handle` and `tagged_self` once the enkiTS object exists. Returns null, having allocated
+/// fills `handle` once the enkiTS object exists. Returns null, having allocated
 /// nothing, when the allocation fails.
 fn allocTask(
     func: abi_scheduler.ke_task_func,
@@ -99,7 +76,6 @@ fn allocTask(
         .on_complete_user_data = user_data,
         .completed = std.atomic.Value(bool).init(false),
         .handle = null,
-        .tagged_self = null,
         .result = R.ok,
     };
     return task;
@@ -116,8 +92,8 @@ fn dispatch(
     return dispatchOnComplete(self, func, data, null, null);
 }
 
-/// Slot `dispatch_on_complete`. Queues a task set that runs the body and returns the tagged
-/// `Task`. The body may already be running when this returns. A null scheduler, a null body, a
+/// Slot `dispatch_on_complete`. Queues a task set that runs the body and returns the `Task` as
+/// the `ke_task`. The body may already be running when this returns. A null scheduler, a null body, a
 /// destroyed pool or an allocation failure returns null with nothing queued and nothing left
 /// allocated; no error is reported.
 fn dispatchOnComplete(
@@ -138,69 +114,37 @@ fn dispatchOnComplete(
         return null;
     };
     task.handle = set;
-    task.tagged_self = tag(task, false);
 
     c.enkiAddTaskSetArgs(ets, set, task, 1);
-    return task.tagged_self;
-}
-
-/// Slot `dispatch_pinned`. Queues the body as a pinned task on the worker index passed in. Unlike
-/// `dispatchOnComplete` it stores no completion callback. It returns null, with nothing queued and
-/// nothing left allocated, in the same cases as `dispatchOnComplete`; no error is reported.
-fn dispatchPinned(
-    self_in: ?*abi_scheduler.ke_scheduler,
-    thread_num: u32,
-    func: abi_scheduler.ke_task_func,
-    data: ?*anyopaque,
-) callconv(.c) ?*abi_scheduler.ke_task {
-    const self = self_in orelse return null;
-    if (self.handle == null or func == null) return null;
-    const s = stateOf(self);
-    const ets = s.ets orelse return null;
-
-    const task = allocTask(func, data, null, null) orelse return null;
-    const pinned = c.enkiCreatePinnedTask(ets, pinnedTaskExecute, thread_num) orelse {
-        heap.gpa.destroy(task);
-        return null;
-    };
-    task.handle = pinned;
-    task.tagged_self = tag(task, true);
-
-    c.enkiAddPinnedTaskArgs(ets, pinned, task);
-    return task.tagged_self;
+    return @ptrCast(task);
 }
 
 /// Slot `wait`. Blocks until enkiTS reports the task finished, then frees the `Task` and returns
-/// what its body returned. Afterwards the tagged value refers to freed memory, so a task is waited
+/// what its body returned. Afterwards the task refers to freed memory, so a task is waited
 /// on once. A null or destroyed scheduler and a null task are an invalid argument.
 fn wait(self_in: ?*abi_scheduler.ke_scheduler, task_in: ?*abi_scheduler.ke_task) callconv(.c) abi_result.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
-    const tagged = task_in orelse return R.code(error.InvalidArgument);
+    const task_c = task_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const ets = s.ets orelse return R.code(error.InvalidArgument);
 
-    const t = untag(tagged);
-    if (t.pinned) {
-        const pinned: ?*c.enkiPinnedTask = @ptrCast(@alignCast(t.task.handle));
-        c.enkiWaitForPinnedTask(ets, pinned);
-        c.enkiDeletePinnedTask(ets, pinned);
-    } else {
-        const set: ?*c.enkiTaskSet = @ptrCast(@alignCast(t.task.handle));
-        c.enkiWaitForTaskSet(ets, set);
-        c.enkiDeleteTaskSet(ets, set);
-    }
-    const result = t.task.result;
-    heap.gpa.destroy(t.task);
+    const task: *Task = @ptrCast(@alignCast(task_c));
+    const set: ?*c.enkiTaskSet = @ptrCast(@alignCast(task.handle));
+    c.enkiWaitForTaskSet(ets, set);
+    c.enkiDeleteTaskSet(ets, set);
+    const result = task.result;
+    heap.gpa.destroy(task);
     return result;
 }
 
-/// Slot `is_completed`. Reads `completed` without ending the task, so the tagged value stays
-/// usable until `wait` runs. A null task reports true.
+/// Slot `is_completed`. Reads `completed` without ending the task, so the task stays usable until
+/// `wait` runs. A null task reports true.
 fn isCompleted(self_in: ?*abi_scheduler.ke_scheduler, task_in: ?*abi_scheduler.ke_task) callconv(.c) bool {
     _ = self_in;
-    const tagged = task_in orelse return true;
-    return untag(tagged).task.completed.load(.acquire);
+    const task_c = task_in orelse return true;
+    const task: *Task = @ptrCast(@alignCast(task_c));
+    return task.completed.load(.acquire);
 }
 
 /// Slot `get_num_workers`. The enkiTS thread count includes the calling thread, which is not
@@ -256,7 +200,6 @@ fn create(params_in: ?*const abi_scheduler_enki_factory.ke_scheduler_enki_params
     s.api.dispatch_on_complete = dispatchOnComplete;
     s.api.wait = wait;
     s.api.is_completed = isCompleted;
-    s.api.dispatch_pinned = dispatchPinned;
     s.api.get_num_workers = getNumWorkers;
 
     return .{ .ref = &s.api, .destroy = destroy };
@@ -460,19 +403,6 @@ test "a worker count in the params sizes the pool" {
     const h = try created(&params);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(@as(u32, 3), h.ref.?.get_num_workers.?(h.ref));
-}
-
-test "a pinned task runs on its worker and reports completion" {
-    const h = try created(null);
-    defer h.destroy.?(h.ref);
-
-    var ran = Flag.init(false);
-    const task = h.ref.?.dispatch_pinned.?(h.ref, 0, setFlag, &ran);
-    try testing.expect(task != null);
-
-    try testing.expectEqual(R.ok, h.ref.?.wait.?(h.ref, task));
-    try testing.expect(ran.load(.acquire));
-    try testing.expect(h.ref.?.dispatch_pinned.?(h.ref, 0, null, null) == null);
 }
 
 test "a null handle to fill is refused as an invalid argument" {

@@ -18,9 +18,6 @@ public unsafe partial struct ke_scheduler
     [NativeTypeName("bool (*)(struct ke_scheduler *, ke_task *)")]
     public delegate* unmanaged[Cdecl]<ke_scheduler*, ke_task*, bool> is_completed;
 
-    [NativeTypeName("ke_task *(*)(struct ke_scheduler *, uint32_t, ke_task_func, void *)")]
-    public delegate* unmanaged[Cdecl]<ke_scheduler*, uint, delegate* unmanaged[Cdecl]<void*, KernelEngine.Result.Native.ke_result>, void*, ke_task*> dispatch_pinned;
-
     [NativeTypeName("uint32_t (*)(struct ke_scheduler *)")]
     public delegate* unmanaged[Cdecl]<ke_scheduler*, uint> get_num_workers;
 }

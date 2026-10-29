@@ -127,9 +127,6 @@ typedef struct ke_runtime_system_params {
     const ke_component_access *access_list;
     uint32_t                   access_count;
 
-    /// [default:0] The worker the body must run on, or 0 to let any wave thread take it.
-    uint32_t pinned_thread;
-
     /// [default:false] The body's work on one entity is independent of every other entity
     /// it visits. The runtime may then run it as several concurrent slices of the
     /// same entity set, each body call handling the share ke_system_ctx_slice

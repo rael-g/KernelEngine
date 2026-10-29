@@ -109,7 +109,6 @@ fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_
     begin.access_count = st.begin_access.len;
     begin.queries = &st.queries;
     begin.query_count = st.queries.len;
-    begin.pinned_thread = 0;
     begin.user_data = &st.producer;
     begin.execute = frame_producer.system;
     var begin_id: abi_runtime.ke_system_id = 0;
@@ -121,7 +120,6 @@ fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_
     end.phase = abi_runtime.KE_PHASE_RENDER;
     end.access_list = &st.end_access;
     end.access_count = st.end_access.len;
-    end.pinned_thread = 0;
     end.user_data = st;
     end.execute = endSystem;
     var system_id: abi_runtime.ke_system_id = 0;

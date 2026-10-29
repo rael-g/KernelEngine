@@ -34,8 +34,7 @@ managed code. The call that observes the failure throws `InvalidOperationExcepti
 what was queued, or the exception `NativeResults.FromCode` makes for the code.
 
 **The scheduler has its own channel.** The dispatch methods that are not generated return a
-`Task`, except `DispatchPinned`, whose failures are raised through
-`Scheduler.UnobservedDispatchFailure`.
+`Task`, which the body's failure faults.
 
 **A module is the unit a game is loaded in.** `LoadModules` sorts the `IRuntimeModule` services
 by their `Dependencies` over the order they were added, and registers each with its `Name`; a

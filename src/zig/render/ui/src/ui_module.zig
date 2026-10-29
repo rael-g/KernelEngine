@@ -556,7 +556,6 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, r
     params.query_count = ui.queries.len;
     params.access_list = &ui.access;
     params.access_count = ui.access.len;
-    params.pinned_thread = 0;
     params.user_data = ui;
     params.execute = system;
     var first_system: abi_runtime.ke_system_id = 0;
@@ -571,7 +570,6 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, r
     shape_params.phase = abi_runtime.KE_PHASE_UPDATE;
     shape_params.queries = &ui.label_shape_queries;
     shape_params.query_count = ui.label_shape_queries.len;
-    shape_params.pinned_thread = 0;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
     var system_id: abi_runtime.ke_system_id = 0;

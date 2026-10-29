@@ -355,7 +355,6 @@ export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory
     params.query_count = gb.queries.len;
     params.access_list = &gb.access;
     params.access_count = gb.access_count;
-    params.pinned_thread = 0;
     params.user_data = gb;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

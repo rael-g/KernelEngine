@@ -430,7 +430,6 @@ export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory
     params.query_count = cm.cull_queries.len;
     params.access_list = &cm.cull_access;
     params.access_count = cm.cull_access.len;
-    params.pinned_thread = 0;
     params.user_data = cm;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

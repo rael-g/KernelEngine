@@ -146,7 +146,6 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.ke_render
     sprite.phase = abi_runtime.KE_PHASE_UPDATE;
     sprite.queries = &st.sprite_queries;
     sprite.query_count = st.sprite_queries.len;
-    sprite.pinned_thread = 0;
     sprite.user_data = &st.sprite;
     sprite.execute = sprite_resolve.system;
     var sprite_id: abi_runtime.ke_system_id = 0;
@@ -160,7 +159,6 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.ke_render
     mesh.phase = abi_runtime.KE_PHASE_UPDATE;
     mesh.queries = &st.mesh_queries;
     mesh.query_count = st.mesh_queries.len;
-    mesh.pinned_thread = 0;
     mesh.user_data = core;
     mesh.execute = mesh_resolve.system;
     mesh.after = &mesh_resolve_after;
@@ -212,7 +210,6 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
     label.phase = abi_runtime.KE_PHASE_UPDATE;
     label.queries = &st.queries;
     label.query_count = st.queries.len;
-    label.pinned_thread = 0;
     label.user_data = &st.state;
     label.execute = label_resolve.system;
     label.before = &label_resolve_before;

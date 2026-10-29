@@ -59,14 +59,13 @@ ke_window_handle size=16 align=8
 [logger]
 
 [scheduler]
-ke_scheduler size=56 align=8
+ke_scheduler size=48 align=8
   handle 0
   dispatch 8
   dispatch_on_complete 16
   wait 24
   is_completed 32
-  dispatch_pinned 40
-  get_num_workers 48
+  get_num_workers 40
 ke_scheduler_handle size=16 align=8
   ref 0
   destroy 8
@@ -83,7 +82,7 @@ ke_runtime_module_params size=32 align=8
   user_data 8
   on_load 16
   on_unload 24
-ke_runtime_system_params size=104 align=8
+ke_runtime_system_params size=96 align=8
   name 0
   phase 8
   user_data 16
@@ -92,13 +91,12 @@ ke_runtime_system_params size=104 align=8
   query_count 40
   access_list 48
   access_count 56
-  pinned_thread 60
-  per_entity 64
-  after 72
-  after_count 80
-  before 88
-  before_count 96
-  exclusive 100
+  per_entity 60
+  after 64
+  after_count 72
+  before 80
+  before_count 88
+  exclusive 92
 ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
@@ -147,7 +145,7 @@ ke_ecs_segment size=32 align=8
   count 8
   columns 16
   column_count 24
-ke_ecs size=104 align=8
+ke_ecs size=112 align=8
   handle 0
   entity_create 8
   entity_destroy 16
@@ -157,10 +155,11 @@ ke_ecs size=104 align=8
   component_remove 48
   component_get 56
   component_size 64
-  query_register 72
-  query_resolve 80
-  entity_reserve 88
-  entity_materialize 96
+  component_field_write 72
+  query_register 80
+  query_resolve 88
+  entity_reserve 96
+  entity_materialize 104
 ke_ecs_handle size=16 align=8
   ref 0
   destroy 8

@@ -119,39 +119,6 @@
           "receiver": "struct ke_scheduler *"
         },
         {
-          "name": "dispatch_pinned",
-          "returns": "ke_task *",
-          "tags": [],
-          "doc": "Schedules a task on one specific worker thread, which the caller releases by waiting on it.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "thread_num",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": "Index of the worker to run on."
-            },
-            {
-              "name": "func",
-              "type": "ke_task_func",
-              "tags": [
-                "raw_callback",
-                "closure:data"
-              ],
-              "doc": "Entry point invoked on that worker thread."
-            },
-            {
-              "name": "data",
-              "type": "void *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Opaque context passed to func unchanged."
-            }
-          ],
-          "receiver": "struct ke_scheduler *"
-        },
-        {
           "name": "get_num_workers",
           "returns": "uint32_t",
           "tags": [],

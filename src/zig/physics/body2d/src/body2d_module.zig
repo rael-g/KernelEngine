@@ -330,7 +330,6 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     sp.phase = abi_runtime.KE_PHASE_FIXED_POST_UPDATE;
     sp.queries = &m.body_queries;
     sp.query_count = m.body_queries.len;
-    sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
     m.body_system = 0;
@@ -344,7 +343,6 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     cp.phase = abi_runtime.KE_PHASE_FIXED_POST_UPDATE;
     cp.queries = &m.collider_queries;
     cp.query_count = m.collider_queries.len;
-    cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
     m.collider_system = 0;

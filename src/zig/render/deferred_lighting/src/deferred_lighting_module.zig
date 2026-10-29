@@ -258,7 +258,7 @@ fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.ke_render_deferred
     gpa.destroy(dl);
 }
 
-/// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
+/// Builds the pass and registers its system in the render phase.
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
 /// runtime, service, device or gbuffer fails as an invalid argument. A failed setup or a refused
 /// registration fails with its code and leaves the handle zeroed, after the block is released.
@@ -285,7 +285,6 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_defer
     params.query_count = dl.queries.len;
     params.access_list = &dl.access;
     params.access_count = dl.access_count;
-    params.pinned_thread = 0;
     params.user_data = dl;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

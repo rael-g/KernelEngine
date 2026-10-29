@@ -26,8 +26,6 @@ pub const ke_scheduler = extern struct {
     wait: ?*const fn (?*ke_scheduler, ?*ke_task) callconv(.c) result.ke_result = null,
     /// Returns true if the task has finished. Valid only before the task is waited on.
     is_completed: ?*const fn (?*ke_scheduler, ?*ke_task) callconv(.c) bool = null,
-    /// Schedules a task on one specific worker thread, which the caller releases by waiting on it.
-    dispatch_pinned: ?*const fn (?*ke_scheduler, u32, ke_task_func, ?*anyopaque) callconv(.c) ?*ke_task = null,
     /// Returns the number of worker threads in the pool.
     get_num_workers: ?*const fn (?*ke_scheduler) callconv(.c) u32 = null,
 };

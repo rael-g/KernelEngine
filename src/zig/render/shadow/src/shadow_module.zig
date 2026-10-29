@@ -351,7 +351,6 @@ export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.k
     sys_params.query_count = sh.queries.len;
     sys_params.access_list = &sh.access;
     sys_params.access_count = sh.access.len;
-    sys_params.pinned_thread = 0;
     sys_params.user_data = sh;
     sys_params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

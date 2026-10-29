@@ -254,7 +254,6 @@ export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.k
     params.query_count = sm.queries.len;
     params.access_list = &sm.access;
     params.access_count = sm.access.len;
-    params.pinned_thread = 0;
     params.user_data = sm;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

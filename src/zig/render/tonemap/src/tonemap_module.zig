@@ -175,7 +175,6 @@ fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_t
     params.phase = abi_runtime.KE_PHASE_RENDER;
     params.access_list = &tm.access;
     params.access_count = tm.access.len;
-    params.pinned_thread = 0;
     params.user_data = tm;
     params.execute = system;
     var system_id: abi_runtime.ke_system_id = 0;

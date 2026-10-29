@@ -209,7 +209,6 @@ const RuntimeState = struct {
     wave_assignments: ?[*]u32,
     phase_pkgs: ?[*]TaskPkg,
     phase_tasks: ?[*]?*abi_scheduler.ke_task,
-    phase_pinned: ?[*]u32,
     systems_prepared: usize,
     pending_render_task: ?*abi_scheduler.ke_task,
     render_job: ?*RenderJob,
@@ -623,27 +622,22 @@ fn taskPkgRun(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
     return pkg.execute.?(&pkg.ctx, pkg.user_data, pkg.dt);
 }
 
-/// What `runWaveBody` needs for one wave: the packages built for it, a task slot and a pinned
-/// worker index for each, and their number. The arrays are the runtime's per-phase scratch.
+/// What `runWaveBody` needs for one wave: the packages built for it, a task slot for each, and
+/// their number. The arrays are the runtime's per-phase scratch.
 const WaveRunCtx = struct {
     h: *RuntimeHandle,
     pkgs: [*]TaskPkg,
     tasks: [*]?*abi_scheduler.ke_task,
-    pinned: [*]u32,
     wave_size: u32,
 };
 
-/// Dispatches every package of the wave, the pinned ones to their worker and the others to any
-/// worker, then waits for all of them, including after one has failed. The failure it returns is
+/// Dispatches every package of the wave, then waits for all of them, including after one has failed. The failure it returns is
 /// the first in package order, with the name of its system.
 fn runWaveBody(wc: *WaveRunCtx) PhaseFailure {
     const sched = wc.h.state.scheduler;
     var t: u32 = 0;
     while (t < wc.wave_size) : (t += 1) {
-        if (wc.pinned[t] > 0)
-            wc.tasks[t] = sched.dispatch_pinned.?(sched, wc.pinned[t], taskPkgRun, &wc.pkgs[t])
-        else
-            wc.tasks[t] = sched.dispatch.?(sched, taskPkgRun, &wc.pkgs[t]);
+        wc.tasks[t] = sched.dispatch.?(sched, taskPkgRun, &wc.pkgs[t]);
     }
     var failure = PhaseFailure{};
     t = 0;
@@ -669,13 +663,11 @@ fn freePhaseScratch(h: *RuntimeHandle) void {
     cFree(u32, h.state.wave_assignments, n);
     cFree(TaskPkg, h.state.phase_pkgs, n);
     cFree(?*abi_scheduler.ke_task, h.state.phase_tasks, n);
-    cFree(u32, h.state.phase_pinned, n);
     h.state.phase_indices = null;
     h.state.phase_params = null;
     h.state.wave_assignments = null;
     h.state.phase_pkgs = null;
     h.state.phase_tasks = null;
-    h.state.phase_pinned = null;
 }
 
 /// The failure that names a system whose segment or extraction buffers could not be allocated.
@@ -724,7 +716,6 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: abi_runtime.ke_phase, dt: f32) Phas
 
     const pkgs = (h.state.phase_pkgs orelse return .{}) + base;
     const tasks = (h.state.phase_tasks orelse return .{}) + base;
-    const pinned = (h.state.phase_pinned orelse return .{}) + base;
 
     var failure = PhaseFailure{};
     var w: u32 = 0;
@@ -770,12 +761,11 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: abi_runtime.ke_phase, dt: f32) Phas
                 pkg.dt = dt;
                 pkg.defer_q = .{};
                 pkg.allow_defer = phase != abi_runtime.KE_PHASE_RENDER;
-                pinned[wave_size] = rs.params.pinned_thread;
                 wave_size += 1;
             }
         }
 
-        var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .pinned = pinned, .wave_size = wave_size };
+        var wc = WaveRunCtx{ .h = h, .pkgs = pkgs, .tasks = tasks, .wave_size = wave_size };
         failure = failure.firstOf(runWaveBody(&wc));
 
         var t: u32 = 0;
@@ -895,11 +885,11 @@ fn spanOr(text: [*c]const u8) []const u8 {
 }
 
 /// Returns how many packages a system gets in the wave being built, never more than the room left
-/// in it. A system is split only when it declared per-entity work and has no pinned thread, and
-/// only when the scheduler reports more than one worker, which is read here.
+/// in it. A system is split only when it declared per-entity work and the scheduler reports more
+/// than one worker, which is read here.
 fn sliceCountFor(h: *RuntimeHandle, p: *const abi_runtime.ke_runtime_system_params, room: u32) u32 {
     if (room == 0) return 0;
-    if (!p.per_entity or p.pinned_thread != 0 or p.exclusive) return 1;
+    if (!p.per_entity or p.exclusive) return 1;
     const sched = h.state.scheduler;
     const workers: u32 = if (sched.get_num_workers) |f| f(sched) else 0;
     if (workers <= 1) return 1;
@@ -1218,9 +1208,8 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.ke_ecs, scheduler: ?*abi_scheduler.ke
     h.state.wave_assignments = cAlloc(u32, n);
     h.state.phase_pkgs = cAlloc(TaskPkg, n);
     h.state.phase_tasks = cAlloc(?*abi_scheduler.ke_task, n);
-    h.state.phase_pinned = cAlloc(u32, n);
     if (h.state.phase_indices == null or h.state.phase_params == null or h.state.wave_assignments == null or
-        h.state.phase_pkgs == null or h.state.phase_tasks == null or h.state.phase_pinned == null)
+        h.state.phase_pkgs == null or h.state.phase_tasks == null)
     {
         freePhaseScratch(h);
         cFree(RuntimeHandle, @ptrCast(h), 1);
@@ -1466,24 +1455,6 @@ test "a per-entity system runs every slice of its set exactly once" {
     var i: u32 = 0;
     while (i < slices) : (i += 1)
         try testing.expectEqual(@as(u32, 1), probe.seen[i].load(.acquire));
-}
-
-test "a per-entity system pinned to a thread stays one slice" {
-    var f = try Fixture.init();
-    defer f.deinit();
-
-    var probe = SliceProbe{};
-    var sys = systemParams("PinnedSliced", abi_runtime.KE_PHASE_UPDATE);
-    sys.user_data = &probe;
-    sys.execute = &sliceProbeSystem;
-    sys.per_entity = true;
-    sys.pinned_thread = 1;
-    try testing.expect(systemId(f.rt(), &sys) != 0);
-
-    try testing.expect(f.tick(1.0 / 60.0));
-
-    try testing.expectEqual(@as(u32, 1), probe.reported_count.load(.acquire));
-    try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
 }
 
 test "a runtime with no systems ticks and tears down" {
@@ -1789,10 +1760,6 @@ fn inlineDispatch(_: [*c]abi_scheduler.ke_scheduler, func: abi_scheduler.ke_task
     return @ptrCast(&inline_token);
 }
 
-fn inlineDispatchPinned(self: [*c]abi_scheduler.ke_scheduler, _: u32, func: abi_scheduler.ke_task_func, data: ?*anyopaque) callconv(.c) ?*abi_scheduler.ke_task {
-    return inlineDispatch(self, func, data);
-}
-
 fn inlineWait(_: [*c]abi_scheduler.ke_scheduler, _: ?*abi_scheduler.ke_task) callconv(.c) abi_result.ke_result {
     return inline_result;
 }
@@ -1802,7 +1769,6 @@ const InlineRuntime = struct {
 
     fn init(self: *InlineRuntime) !void {
         self.bare.scheduler.dispatch = @ptrCast(&inlineDispatch);
-        self.bare.scheduler.dispatch_pinned = @ptrCast(&inlineDispatchPinned);
         self.bare.scheduler.wait = @ptrCast(&inlineWait);
         try self.bare.init();
     }

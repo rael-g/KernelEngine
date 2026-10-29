@@ -29,9 +29,6 @@ public unsafe partial struct ke_runtime_system_params
     [NativeTypeName("uint32_t")]
     public uint access_count;
 
-    [NativeTypeName("uint32_t")]
-    public uint pinned_thread;
-
     public bool per_entity;
 
     [NativeTypeName("const char *const *")]

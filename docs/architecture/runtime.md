@@ -31,8 +31,7 @@ it conflicts with one already in it, and then opens the next. The access of a sy
 queries' terms plus its access list, so a system that declares nothing conflicts with nothing.
 
 **A wave is a set of scheduler tasks.** Each system body becomes one `ke_scheduler` task, or
-several slices when the system is `per_entity`; a non-zero `pinned_thread` goes through
-`dispatch_pinned`. The tick thread waits for all of them before the next wave.
+several slices when the system is `per_entity`. The tick thread waits for all of them before the next wave.
 
 **Structure changes at the barrier.** A body reaches component memory only through its
 `ke_system_ctx` and changes structure only by recording into `ke_ecs_commands`. The recorded
@@ -58,7 +57,5 @@ phase. A module's `on_load` runs before `register_module` returns; destroy calls
 
 ## What the parts agree on without a contract
 
-- The worker index `0` in `pinned_thread` means any worker; the scheduler itself accepts any
-  index, and the managed layer pins to index 1.
 - The count of phases the runtime sizes its scratch for equals the number of `ke_phase` values.
 - A component is identified across modules by the name it was registered under in `ke_ecs`.

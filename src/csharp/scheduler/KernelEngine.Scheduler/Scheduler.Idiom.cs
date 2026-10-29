@@ -16,41 +16,7 @@ public unsafe partial class Scheduler : IScheduler
     void IScheduler.Dispatch(Action action) => Dispatch(action);
 
     /// <inheritdoc/>
-    void IScheduler.DispatchPinned(uint threadNum, Action action)
-    {
-        ArgumentNullException.ThrowIfNull(action);
-
-        var handle = GCHandle.Alloc(action);
-        Handle->dispatch_pinned(Handle, threadNum, &NativePinnedCallback, (void*)GCHandle.ToIntPtr(handle));
-    }
-
-    /// <inheritdoc/>
     public uint NumWorkers => GetNumWorkers();
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static ke_result NativePinnedCallback(void* data)
-    {
-        var handle = GCHandle.FromIntPtr((IntPtr)data);
-        var action = (Action)handle.Target!;
-        try
-        {
-            action();
-            return ke_result.KE_OK;
-        }
-        catch (Exception ex)
-        {
-            UnobservedDispatchFailure?.Invoke(ex);
-            return ke_result.KE_RESULT_GENERAL;
-        }
-        finally { handle.Free(); }
-    }
-
-    /// <summary>
-    /// Raised when work dispatched through <see cref="IScheduler.DispatchPinned"/> throws.
-    /// That overload answers nothing, so there is no task to fault and no caller to throw
-    /// at; without a subscriber the failure is only observable here.
-    /// </summary>
-    public static event Action<Exception>? UnobservedDispatchFailure;
 
     /// <summary>
     /// Schedules an <see cref="Action"/> on the native thread pool and returns a <see cref="KernelTask"/>.

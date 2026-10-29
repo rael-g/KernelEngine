@@ -99,8 +99,6 @@ pub const ke_runtime_system_params = extern struct {
     /// Anything touching component storage declares it here.
     access_list: ?[*]const ke_component_access = std.mem.zeroes(?[*]const ke_component_access),
     access_count: u32 = std.mem.zeroes(u32),
-    /// The worker the body must run on, or 0 to let any wave thread take it.
-    pinned_thread: u32 = std.mem.zeroes(u32),
     /// The body's work on one entity is independent of every other entity it visits. The runtime may
     /// then run it as several concurrent slices of the same entity set, each body call handling the
     /// share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What

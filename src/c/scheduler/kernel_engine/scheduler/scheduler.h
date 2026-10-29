@@ -64,17 +64,6 @@ extern "C"
         /** Returns true if the task has finished. Valid only before the task is waited on. */
         bool (*is_completed)(struct ke_scheduler *self, ke_task *task);
 
-        /**
-         * Schedules a task on one specific worker thread, which the caller releases by waiting on it.
-         * @param thread_num Index of the worker to run on.
-         * @param func [raw_callback] [closure:data] Entry point invoked on that worker thread.
-         * @param data [borrowed] Opaque context passed to func unchanged.
-         */
-        ke_task *(*dispatch_pinned)(struct ke_scheduler *self,
-                                     uint32_t             thread_num,
-                                     ke_task_func         func,
-                                     void                *data);
-
         /** Returns the number of worker threads in the pool. */
         uint32_t (*get_num_workers)(struct ke_scheduler *self);
 

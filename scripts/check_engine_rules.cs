@@ -24,7 +24,6 @@ var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"std\.debug\.assert|\bassert\(|@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
-var pinning = new Regex(@"pinnedThread:|\.DispatchPinned\(|dispatch_pinned\.\?\(|\.pinned_thread = [1-9]");
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
 var errorLane = new Regex(@"\bke_error\s*\*\s*\*");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
@@ -67,10 +66,6 @@ var rules = new List<Rule>
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
     new("no mutex, condition variable or raw thread in a plugin; the scheduler synchronises", 0,
         Lines(zig, l => threading.IsMatch(l), outsideTests: true)),
-    new("no system or task is pinned to a worker", 0,
-        Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(zig|cs)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)
-            && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
-            l => pinning.IsMatch(l), outsideTests: true)),
     new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
         tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)
                 && !p.StartsWith("src/zig/result/", StringComparison.Ordinal))
