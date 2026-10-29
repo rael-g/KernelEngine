@@ -21,9 +21,11 @@ const gpa = heap.gpa;
 /// The state of one frame. The factory allocates it and `destroyHandle` frees it. The runtime
 /// receives `producer` as the context of the begin system and the frame itself as the context of
 /// the end system, and the systems' queries and access lists point into it, so it is not moved
-/// after creation.
+/// after creation. `destroyHandle` unregisters both systems before it frees the frame.
 const FrameModule = struct {
     api: abi_render_frame_factory.ke_render_frame,
+    runtime: *abi_runtime.ke_runtime,
+    systems: [2]abi_runtime.ke_system_id,
     frame_cid: abi_ecs.ke_component_id,
     producer: frame_producer.State,
     begin_access: [1]abi_runtime.ke_component_access,
@@ -53,6 +55,7 @@ fn endSystem(_: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv
 /// The `destroy` slot of the handle `ke_render_frame_create` returns; a null argument is ignored.
 fn destroyHandle(self: ?*abi_render_frame_factory.ke_render_frame) callconv(.c) void {
     const st = stateOf(self) orelse return;
+    for (st.systems) |id| _ = st.runtime.unregister_system.?(st.runtime, id);
     gpa.destroy(st);
 }
 
@@ -123,6 +126,8 @@ fn create(rt: *abi_runtime.ke_runtime, e: *abi_ecs.ke_ecs, core: *abi_render.ke_
     end.execute = endSystem;
     var system_id: abi_runtime.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &end, &system_id));
+    st.runtime = rt;
+    st.systems = .{ begin_id, system_id };
 
     return .{ .ref = &st.api, .destroy = destroyHandle };
 }
@@ -174,6 +179,18 @@ test "the frame registers its begin and end systems and hands out the tag they s
     try rig.rt.received(.unregister_system).never();
     try testing.expect(h.ref.?.frame_cid.?(h.ref) != abi_ecs.KE_COMPONENT_INVALID);
     h.destroy.?(h.ref);
+}
+
+test "destroying the frame unregisters both its systems" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    const h = testFrame(&rig.params());
+    try testing.expect(h.ref != null);
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a frame whose end system the runtime refuses removes its begin system and fails" {
