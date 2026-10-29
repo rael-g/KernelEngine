@@ -1052,21 +1052,28 @@ fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
     debugSleepMs(debugAsyncDelayMs(&job.build));
     const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(job.device, &job.build.desc);
+    const on_ready = job.on_ready;
+    const user = job.user;
+    freeAsyncCompileJob(job);
+    on_ready(if (pipeline != null) @intFromPtr(pipeline) else abi_render.KE_GPU_INVALID_HANDLE, user);
+    return @intCast(abi_result.KE_OK);
+}
+
+fn freeAsyncCompileJob(job: *AsyncCompileJob) void {
     if (job.build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(job.build.pipeline_layout);
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleRelease(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleRelease(m);
-    job.on_ready(if (pipeline != null) @intFromPtr(pipeline) else abi_render.KE_GPU_INVALID_HANDLE, job.user);
     if (job.label) |l| gpa.free(l);
     if (job.vertex_entry) |e| gpa.free(e);
     if (job.fragment_entry) |e| gpa.free(e);
     gpa.destroy(job);
-    return @intCast(abi_result.KE_OK);
 }
 
 /// Compiles a render pipeline off the caller's thread and reports it through `on_ready`, which
 /// receives the pipeline or the invalid handle when it did not compile. With a task pool and room
 /// in `pending_compiles`, the parameters are copied into an `AsyncCompileJob`, dispatched to the
-/// task pool and listed, and the callback comes later from the worker that compiled. With no
+/// task pool and listed, and the callback comes later from the worker that compiled; a dispatch the
+/// pool refuses calls back at once with the invalid handle. With no
 /// task pool, with the list full, or when a fragment target has no mappable format, the compile
 /// runs inline or fails inline and the callback has fired before this returns. A job that cannot
 /// be allocated calls back at once with the invalid handle. A null `on_ready` does nothing.
@@ -1115,8 +1122,9 @@ fn createRenderPipelineAsync(dev: [*c]abi_render.ke_gpu_device, p: [*c]const abi
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     var task: ?*abi_task_pool.ke_task = null;
     R.check(pool.dispatch.?(pool, runAsyncCompileJob, job, &task)) catch |err| {
-        log.warn("compiling a render pipeline off the caller's thread was refused: {t}; it compiles inline", .{err});
-        _ = runAsyncCompileJob(job);
+        log.warn("compiling a render pipeline was refused by the task pool: {t}", .{err});
+        freeAsyncCompileJob(job);
+        cb(abi_render.KE_GPU_INVALID_HANDLE, user);
         return;
     };
     s.pending_compiles[s.pending_compiles_count] = task;
