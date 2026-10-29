@@ -77,7 +77,10 @@ const Objects = @import("object_uniforms").ObjectUniforms(PerObject);
 /// `destroyModule`, and `frame_set` is replaced whenever the environment cubemap changes or
 /// the declared targets are recreated.
 /// Several fields point into the struct itself, so it must not be moved after `setup`.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const ForwardModule = struct {
+    runtime: *abi_runtime.ke_runtime = undefined,
+    system: abi_runtime.ke_system_id = 0,
     core: *abi_render.ke_render_service = undefined,
     device: *abi_render.ke_gpu_device = undefined,
 
@@ -374,6 +377,7 @@ fn destroyModule(fwd: *ForwardModule) void {
 /// that frees a module created successfully.
 fn destroyHandle(self: ?*abi_render_forward_factory.ke_render_forward) callconv(.c) void {
     const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
+    _ = fwd.runtime.unregister_system.?(fwd.runtime, fwd.system);
     destroyModule(fwd);
     gpa.destroy(fwd);
 }
@@ -415,6 +419,8 @@ export fn ke_render_forward_create(params_in: ?*const abi_render_forward_factory
         gpa.destroy(fwd);
         return registered;
     }
+    fwd.runtime = rt;
+    fwd.system = system_id;
 
     out.* = .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
     return R.ok;
@@ -712,6 +718,18 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the forward pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
+    try R.check(ke_render_forward_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a forward pass whose shader fails to load releases what it had created" {
