@@ -7,6 +7,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const toml = @import("c");
 const abi_configuration = @import("abi_configuration");
+const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
 const abi_toml = @import("abi_configuration_toml_factory");
 const abi_result = @import("abi_result");
@@ -67,18 +68,29 @@ const State = struct {
     io: *abi_io.ke_io,
 };
 
-/// The whole file at `path` with a terminating zero, owned by the caller; null when the file does
-/// not exist.
+/// Whether `path` names a regular file; a path that names nothing is no, and any other failure to
+/// inspect it is returned.
+fn isFile(io: *abi_io.ke_io, path: [*c]const u8) R.Error!bool {
+    var request: ?*abi_io.ke_io_request = null;
+    try R.check(io.stat.?(io, path, &request));
+    var result: abi_io.ke_io_result = undefined;
+    R.check(io.wait.?(io, request, &result)) catch |err| switch (err) {
+        error.NotFound => return false,
+        else => return err,
+    };
+    return result.stat.kind == abi_file_system.KE_FILE_KIND_FILE;
+}
+
+/// The whole file at `path` with a terminating zero, owned by the caller; null when there is no
+/// such file, which is asked first so that its absence is not a failed read.
 fn readText(io: *abi_io.ke_io, path: [*c]const u8) R.Error!?[:0]u8 {
+    if (!try isFile(io, path)) return null;
     var request: ?*abi_io.ke_io_request = null;
     try R.check(io.read_file.?(io, path, &request));
     var result: abi_io.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &result)) catch |err| switch (err) {
-        error.NotFound => return null,
-        else => {
-            log.warn("reading {s} failed: {t}", .{ path, err });
-            return err;
-        },
+    R.check(io.wait.?(io, request, &result)) catch |err| {
+        log.warn("reading {s} failed: {t}", .{ path, err });
+        return err;
     };
     defer io.free_bytes.?(io, result.bytes);
     const bytes: []const u8 = if (result.bytes) |b| @as([*]const u8, @ptrCast(b))[0..@intCast(result.size)] else "";
@@ -184,12 +196,18 @@ fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_resul
     return R.ok;
 }
 
+fn statServed(args: zsub.For(abi_io.ke_io).Args(.stat)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&request_token);
+    return R.ok;
+}
+
 fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
     const text = served orelse return R.code(error.NotFound);
     if (args[2]) |out| {
         out.* = std.mem.zeroes(abi_io.ke_io_result);
         out.bytes = @constCast(text.ptr);
         out.size = text.len;
+        out.stat.kind = abi_file_system.KE_FILE_KIND_FILE;
     }
     return R.ok;
 }
@@ -201,6 +219,7 @@ fn servingIo(sub: *zsub.For(abi_io.ke_io), text: ?[]const u8) !*abi_io.ke_io {
     served = text;
     try sub.init();
     _ = sub.when(.read_file).does(readServed);
+    _ = sub.when(.stat).does(statServed);
     _ = sub.when(.wait).does(waitServed);
     _ = sub.when(.free_bytes).does(freeServed);
     return sub.api();
@@ -218,7 +237,9 @@ fn testLoad(cfg: *abi_configuration.ke_configuration, text: ?[]const u8) !bool {
     defer sub.deinit();
     const h = try madeSource(io);
     defer h.destroy.?(h.ref);
-    return h.ref.?.load.?(h.ref, cfg, "Project") == R.ok;
+    const loaded = h.ref.?.load.?(h.ref, cfg, "Project") == R.ok;
+    if (text == null) try sub.received(.read_file).never();
+    return loaded;
 }
 
 fn mockConfig() abi_configuration.ke_configuration {
@@ -304,7 +325,7 @@ test "dotted sub-tables flatten to dotted section names" {
     try std.testing.expectEqual(@as(?i64, 4), findInt("shadow.cascade", "count"));
 }
 
-test "missing file is not an error and writes nothing" {
+test "a missing file is not an error, is never read and writes nothing" {
     defer clearRecs();
     var cfg = mockConfig();
     try std.testing.expect(try testLoad(&cfg, null));

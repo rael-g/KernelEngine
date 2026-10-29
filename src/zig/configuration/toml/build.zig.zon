@@ -7,6 +7,7 @@
     .dependencies = .{
         .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_configuration_toml_factory = .{ .path = "abi" },
+        .abi_file_system = .{ .path = "../../abi/file_system" },
         .abi_io = .{ .path = "../../abi/io" },
         .abi_result = .{ .path = "../../abi/result" },
         .ke_common = .{ .path = "../../common" },
