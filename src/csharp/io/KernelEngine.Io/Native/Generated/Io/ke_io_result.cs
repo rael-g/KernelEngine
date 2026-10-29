@@ -17,4 +17,9 @@ public unsafe partial struct ke_io_result
     public KernelEngine.FileSystem.Native.ke_file_stat stat;
 
     public bool exists;
+
+    public ke_io_dir_entry* entries;
+
+    [NativeTypeName("uint32_t")]
+    public uint entry_count;
 }

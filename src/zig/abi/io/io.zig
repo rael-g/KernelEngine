@@ -6,6 +6,14 @@ const result = @import("result");
 
 pub const ke_io_request = opaque {};
 
+/// One entry of a directory list_dir reported.
+pub const ke_io_dir_entry = extern struct {
+    /// The entry's name, without its directory; owned by the list it is in.
+    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// What the entry is.
+    kind: file_system.ke_file_kind = std.mem.zeroes(file_system.ke_file_kind),
+};
+
 /// What ke_io.wait reports of a request; each field is filled by the requests named on it.
 pub const ke_io_result = extern struct {
     /// open: the file, released with ke_io.close.
@@ -16,8 +24,12 @@ pub const ke_io_result = extern struct {
     size: u64 = std.mem.zeroes(u64),
     /// stat: what the path names.
     stat: file_system.ke_file_stat = std.mem.zeroes(file_system.ke_file_stat),
-    /// file_exists: whether the path names a regular file.
+    /// file_exists: whether the path names a regular file; dir_exists: a directory.
     exists: bool = std.mem.zeroes(bool),
+    /// list_dir: the entries, owned by the caller and released with ke_io.free_entries.
+    entries: ?*ke_io_dir_entry = std.mem.zeroes(?*ke_io_dir_entry),
+    /// list_dir: the number of entries.
+    entry_count: u32 = std.mem.zeroes(u32),
 };
 
 /// Reads files without blocking the caller: each slot that reads submits a request, which runs
@@ -37,6 +49,21 @@ pub const ke_io = extern struct {
     /// Submits the question whether a path names a regular file; a path that names nothing, or
     /// something else, is reported as no, not as a failure.
     file_exists: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the question whether a path names a directory; a path that names nothing, or
+    /// something else, is reported as no, not as a failure.
+    dir_exists: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the listing of a directory's entries, in no particular order, without "." and "..".
+    list_dir: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the writing of a whole file, which replaces what the path held only once every byte
+    /// is written, so a failed write leaves the earlier file as it was.
+    write_file: ?*const fn (?*ke_io, ?[*:0]const u8, ?*const anyopaque, usize, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the creation of a directory and of every missing directory above it; a directory that
+    /// already exists is not a failure.
+    make_dir: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the removal of a file or of an empty directory.
+    remove: ?*const fn (?*ke_io, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
+    /// Submits the renaming of a file or a directory, replacing a file already at to.
+    rename: ?*const fn (?*ke_io, ?[*:0]const u8, ?[*:0]const u8, ?*?*ke_io_request) callconv(.c) result.ke_result = null,
     /// Reports whether a request has finished, without releasing it. Valid only before the request
     /// is waited on.
     is_completed: ?*const fn (?*ke_io, ?*ke_io_request) callconv(.c) bool = null,
@@ -46,6 +73,9 @@ pub const ke_io = extern struct {
     close: ?*const fn (?*ke_io, ?*file_system.ke_open_file) callconv(.c) void = null,
     /// Releases the bytes a read_file request reported. Null bytes are ignored.
     free_bytes: ?*const fn (?*ke_io, ?*anyopaque) callconv(.c) void = null,
+    /// Releases the entries a list_dir request reported, their names with them. Null entries are
+    /// ignored.
+    free_entries: ?*const fn (?*ke_io, ?*ke_io_dir_entry) callconv(.c) void = null,
 };
 
 pub const ke_io_handle = extern struct {

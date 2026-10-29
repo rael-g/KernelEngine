@@ -86,23 +86,35 @@ ke_file_system_handle size=16 align=8
   destroy 8
 
 [io]
-ke_io_result size=48 align=8
+ke_io_dir_entry size=16 align=8
+  name 0
+  kind 8
+ke_io_result size=64 align=8
   file 0
   bytes 8
   size 16
   stat 24
   exists 40
-ke_io size=80 align=8
+  entries 48
+  entry_count 56
+ke_io size=136 align=8
   handle 0
   read_file 8
   open 16
   read_at 24
   stat 32
   file_exists 40
-  is_completed 48
-  wait 56
-  close 64
-  free_bytes 72
+  dir_exists 48
+  list_dir 56
+  write_file 64
+  make_dir 72
+  remove 80
+  rename 88
+  is_completed 96
+  wait 104
+  close 112
+  free_bytes 120
+  free_entries 128
 ke_io_handle size=16 align=8
   ref 0
   destroy 8

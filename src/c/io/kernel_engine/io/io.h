@@ -12,8 +12,17 @@ extern "C"
 {
 #endif
 
-    /** A read submitted to ke_io, released by the one ke_io.wait it is given to. */
+    /** A request submitted to ke_io, released by the one ke_io.wait it is given to. */
     typedef struct ke_io_request ke_io_request;
+
+    /** One entry of a directory list_dir reported. */
+    typedef struct ke_io_dir_entry
+    {
+        /** The entry's name, without its directory; owned by the list it is in. */
+        const char *name;
+        /** What the entry is. */
+        ke_file_kind kind;
+    } ke_io_dir_entry;
 
     /** What ke_io.wait reports of a request; each field is filled by the requests named on it. */
     typedef struct ke_io_result
@@ -26,8 +35,12 @@ extern "C"
         uint64_t size;
         /** stat: what the path names. */
         ke_file_stat stat;
-        /** file_exists: whether the path names a regular file. */
+        /** file_exists: whether the path names a regular file; dir_exists: a directory. */
         bool exists;
+        /** list_dir: the entries, owned by the caller and released with ke_io.free_entries. */
+        ke_io_dir_entry *entries;
+        /** list_dir: the number of entries. */
+        uint32_t entry_count;
     } ke_io_result;
 
     /**
@@ -92,6 +105,74 @@ extern "C"
         ke_result (*file_exists)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
         /**
+         * Submits the question whether a path names a directory; a path that names nothing, or
+         * something else, is reported as no, not as a failure.
+         * @param path [borrowed] The path to ask about; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*dir_exists)(struct ke_io *self, const char *path, ke_io_request **out_request);
+
+        /**
+         * Submits the listing of a directory's entries, in no particular order, without "." and "..".
+         * @param path [borrowed] The directory to list; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*list_dir)(struct ke_io *self, const char *path, ke_io_request **out_request);
+
+        /**
+         * Submits the writing of a whole file, which replaces what the path held only once every
+         * byte is written, so a failed write leaves the earlier file as it was.
+         * @param path [borrowed] The file to write; copied before the slot returns.
+         * @param bytes [borrowed] What the file holds afterwards; the caller's until wait returns.
+         * @param len The number of bytes in @p bytes.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*write_file)(struct ke_io *self, const char *path, const void *bytes, size_t len,
+                                 ke_io_request **out_request);
+
+        /**
+         * Submits the creation of a directory and of every missing directory above it; a directory
+         * that already exists is not a failure.
+         * @param path [borrowed] The directory to create; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*make_dir)(struct ke_io *self, const char *path, ke_io_request **out_request);
+
+        /**
+         * Submits the removal of a file or of an empty directory.
+         * @param path [borrowed] What to remove; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*remove)(struct ke_io *self, const char *path, ke_io_request **out_request);
+
+        /**
+         * Submits the renaming of a file or a directory, replacing a file already at @p to.
+         * @param from [borrowed] What to rename; copied before the slot returns.
+         * @param to [borrowed] Its new path; copied before the slot returns.
+         * @param out_request [out] Receives the request; null on failure.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
+         *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
+         *         the task pool refused the request with.
+         */
+        ke_result (*rename)(struct ke_io *self, const char *from, const char *to,
+                             ke_io_request **out_request);
+
+        /**
          * Reports whether a request has finished, without releasing it. Valid only before the
          * request is waited on.
          * @param request [borrowed] A request a submit slot returned.
@@ -121,6 +202,13 @@ extern "C"
          * @param bytes [borrowed] The bytes to release.
          */
         void (*free_bytes)(struct ke_io *self, void *bytes);
+
+        /**
+         * Releases the entries a list_dir request reported, their names with them. Null
+         * @p entries are ignored.
+         * @param entries [borrowed] The entries to release.
+         */
+        void (*free_entries)(struct ke_io *self, ke_io_dir_entry *entries);
 
     } ke_io;
 

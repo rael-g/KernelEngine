@@ -227,6 +227,43 @@ fn fileExists(self_in: ?*abi_io.ke_io, path: ?[*:0]const u8, out_request: ?*?*ab
     return submit(self, .file_exists, path, null, 0, null, 0, out);
 }
 
+/// Slots `dir_exists`, `list_dir`, `write_file`, `make_dir`, `remove` and `rename`: not provided,
+/// since `ke_file_system` has no primitive for them; each writes no request and fails as not
+/// supported.
+fn unsupported(comptime name: []const u8, out_request: ?*?*abi_io.ke_io_request) abi_result.ke_result {
+    const out = out_request orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    log.warn(name ++ " is not supported", .{});
+    return R.code(error.NotSupported);
+}
+
+fn dirExists(_: ?*abi_io.ke_io, _: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("dir_exists", out_request);
+}
+
+fn listDir(_: ?*abi_io.ke_io, _: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("list_dir", out_request);
+}
+
+fn writeFile(_: ?*abi_io.ke_io, _: ?[*:0]const u8, _: ?*const anyopaque, _: usize, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("write_file", out_request);
+}
+
+fn makeDir(_: ?*abi_io.ke_io, _: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("make_dir", out_request);
+}
+
+fn remove(_: ?*abi_io.ke_io, _: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("remove", out_request);
+}
+
+fn rename(_: ?*abi_io.ke_io, _: ?[*:0]const u8, _: ?[*:0]const u8, out_request: ?*?*abi_io.ke_io_request) callconv(.c) abi_result.ke_result {
+    return unsupported("rename", out_request);
+}
+
+/// Slot `free_entries`: list_dir reports no entries, so there is nothing to release.
+fn freeEntries(_: ?*abi_io.ke_io, _: ?*abi_io.ke_io_dir_entry) callconv(.c) void {}
+
 /// Slot `is_completed`. A null request reports true.
 fn isCompleted(self_in: ?*abi_io.ke_io, request_in: ?*abi_io.ke_io_request) callconv(.c) bool {
     _ = self_in;
@@ -307,6 +344,13 @@ fn create(params_in: ?*const abi_io_pool_factory.ke_io_pool_params) R.Error!abi_
     s.api.read_at = readAt;
     s.api.stat = stat;
     s.api.file_exists = fileExists;
+    s.api.dir_exists = dirExists;
+    s.api.list_dir = listDir;
+    s.api.write_file = writeFile;
+    s.api.make_dir = makeDir;
+    s.api.remove = remove;
+    s.api.rename = rename;
+    s.api.free_entries = freeEntries;
     s.api.is_completed = isCompleted;
     s.api.wait = wait;
     s.api.close = close;
@@ -512,6 +556,23 @@ test "a file that exists is reported as existing and a missing one as not, witho
     try testing.expect(result.exists);
     try R.check(rig.io().wait.?(rig.io(), try rig.fileExists("missing.txt"), &result));
     try testing.expect(!result.exists);
+}
+
+test "dir_exists, list_dir, write_file, make_dir, remove and rename are not supported and return no request" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+
+    const io = rig.io();
+    var request: ?*abi_io.ke_io_request = null;
+    try testing.expectError(error.NotSupported, R.check(io.dir_exists.?(io, "dir", &request)));
+    try testing.expectError(error.NotSupported, R.check(io.list_dir.?(io, "dir", &request)));
+    try testing.expectError(error.NotSupported, R.check(io.write_file.?(io, "fox.txt", contents.ptr, contents.len, &request)));
+    try testing.expectError(error.NotSupported, R.check(io.make_dir.?(io, "dir", &request)));
+    try testing.expectError(error.NotSupported, R.check(io.remove.?(io, "fox.txt", &request)));
+    try testing.expectError(error.NotSupported, R.check(io.rename.?(io, "fox.txt", "dog.txt", &request)));
+    try testing.expect(request == null);
+    try rig.pool.received(.dispatch).never();
 }
 
 test "a request the task pool refuses fails with the pool's code and returns no request" {

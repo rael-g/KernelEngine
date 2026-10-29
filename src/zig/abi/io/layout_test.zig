@@ -20,6 +20,7 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
+    try expectSameLayout(abi.ke_io_dir_entry, translated("ke_io_dir_entry"));
     try expectSameLayout(abi.ke_io_result, translated("ke_io_result"));
     try expectSameLayout(abi.ke_io, translated("ke_io"));
     try expectSameLayout(abi.ke_io_handle, translated("ke_io_handle"));

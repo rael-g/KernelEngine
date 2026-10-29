@@ -2,6 +2,25 @@
   "enums": [],
   "structs": [
     {
+      "name": "ke_io_dir_entry",
+      "doc": "One entry of a directory list_dir reported.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "The entry\u0027s name, without its directory; owned by the list it is in."
+        },
+        {
+          "name": "kind",
+          "type": "ke_file_kind",
+          "tags": [],
+          "doc": "What the entry is."
+        }
+      ]
+    },
+    {
       "name": "ke_io_result",
       "doc": "What ke_io.wait reports of a request; each field is filled by the requests named on it.",
       "tags": [],
@@ -34,7 +53,19 @@
           "name": "exists",
           "type": "_Bool",
           "tags": [],
-          "doc": "file_exists: whether the path names a regular file."
+          "doc": "file_exists: whether the path names a regular file; dir_exists: a directory."
+        },
+        {
+          "name": "entries",
+          "type": "ke_io_dir_entry *",
+          "tags": [],
+          "doc": "list_dir: the entries, owned by the caller and released with ke_io.free_entries."
+        },
+        {
+          "name": "entry_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "list_dir: the number of entries."
         }
       ]
     }
@@ -204,6 +235,184 @@
           "receiver": "struct ke_io *"
         },
         {
+          "name": "dir_exists",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the question whether a path names a directory; a path that names nothing, or something else, is reported as no, not as a failure.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The path to ask about; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "list_dir",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the listing of a directory\u0027s entries, in no particular order, without \u0022.\u0022 and \u0022..\u0022.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The directory to list; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "write_file",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the writing of a whole file, which replaces what the path held only once every byte is written, so a failed write leaves the earlier file as it was.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The file to write; copied before the slot returns."
+            },
+            {
+              "name": "bytes",
+              "type": "const void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "What the file holds afterwards; the caller\u0027s until wait returns."
+            },
+            {
+              "name": "len",
+              "type": "size_t",
+              "tags": [],
+              "doc": "The number of bytes in bytes."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "make_dir",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the creation of a directory and of every missing directory above it; a directory that already exists is not a failure.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The directory to create; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "remove",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the removal of a file or of an empty directory.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "What to remove; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "rename",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the renaming of a file or a directory, replacing a file already at to.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "params": [
+            {
+              "name": "from",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "What to rename; copied before the slot returns."
+            },
+            {
+              "name": "to",
+              "type": "const char *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Its new path; copied before the slot returns."
+            },
+            {
+              "name": "out_request",
+              "type": "ke_io_request **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the request; null on failure."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
           "name": "is_completed",
           "returns": "_Bool",
           "tags": [],
@@ -280,6 +489,24 @@
                 "borrowed"
               ],
               "doc": "The bytes to release."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
+          "name": "free_entries",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases the entries a list_dir request reported, their names with them. Null entries are ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entries",
+              "type": "ke_io_dir_entry *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The entries to release."
             }
           ],
           "receiver": "struct ke_io *"

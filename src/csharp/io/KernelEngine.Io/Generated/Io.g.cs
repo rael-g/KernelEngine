@@ -106,6 +106,75 @@ public unsafe partial class Io : IDisposable, INativeIo
         return resultOut;
     }
 
+    /// <summary>Submits the question whether a path names a directory; a path that names nothing, or something else, is reported as no, not as a failure.</summary>
+    /// <param name="path">The path to ask about; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* DirExists(sbyte* path)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->dir_exists(Handle, path, &resultOut), "dir_exists");
+        return resultOut;
+    }
+
+    /// <summary>Submits the listing of a directory's entries, in no particular order, without "." and "..".</summary>
+    /// <param name="path">The directory to list; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* ListDir(sbyte* path)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->list_dir(Handle, path, &resultOut), "list_dir");
+        return resultOut;
+    }
+
+    /// <summary>Submits the writing of a whole file, which replaces what the path held only once every byte is written, so a failed write leaves the earlier file as it was.</summary>
+    /// <param name="path">The file to write; copied before the slot returns.</param>
+    /// <param name="bytes">What the file holds afterwards; the caller's until wait returns.</param>
+    /// <param name="len">The number of bytes in bytes.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* WriteFile(sbyte* path, void* bytes, nuint len)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->write_file(Handle, path, bytes, len, &resultOut), "write_file");
+        return resultOut;
+    }
+
+    /// <summary>Submits the creation of a directory and of every missing directory above it; a directory that already exists is not a failure.</summary>
+    /// <param name="path">The directory to create; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* MakeDir(sbyte* path)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->make_dir(Handle, path, &resultOut), "make_dir");
+        return resultOut;
+    }
+
+    /// <summary>Submits the removal of a file or of an empty directory.</summary>
+    /// <param name="path">What to remove; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* Remove(sbyte* path)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->remove(Handle, path, &resultOut), "remove");
+        return resultOut;
+    }
+
+    /// <summary>Submits the renaming of a file or a directory, replacing a file already at to.</summary>
+    /// <param name="from">What to rename; copied before the slot returns.</param>
+    /// <param name="to">Its new path; copied before the slot returns.</param>
+    /// <returns>Receives the request; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ke_io_request* Rename(sbyte* from, sbyte* to)
+    {
+        ke_io_request* resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->rename(Handle, from, to, &resultOut), "rename");
+        return resultOut;
+    }
+
     /// <summary>Reports whether a request has finished, without releasing it. Valid only before the request is waited on.</summary>
     /// <param name="request">A request a submit slot returned.</param>
     public bool IsCompleted(ke_io_request* request)
@@ -136,6 +205,13 @@ public unsafe partial class Io : IDisposable, INativeIo
     public void FreeBytes(nint bytes)
     {
         Handle->free_bytes(Handle, (void*)bytes);
+    }
+
+    /// <summary>Releases the entries a list_dir request reported, their names with them. Null entries are ignored.</summary>
+    /// <param name="entries">The entries to release.</param>
+    public void FreeEntries(ke_io_dir_entry* entries)
+    {
+        Handle->free_entries(Handle, entries);
     }
 
     /// <summary>Releases the native io.</summary>
