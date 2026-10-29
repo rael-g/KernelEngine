@@ -8,6 +8,8 @@ const abi_framework = @import("abi_framework");
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
+const abi_io = @import("abi_io");
+const file_read = @import("file_read.zig");
 
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
@@ -195,6 +197,7 @@ const State = struct {
     actions: ?[*]Action,
     action_count: u32,
     action_capacity: u32,
+    io: *abi_io.ke_io,
 };
 
 fn stateOf(self: *abi_framework.ke_input_actions) *State {
@@ -444,13 +447,13 @@ fn vtLoad(
 }
 
 fn load(s: *State, path: [*c]const u8) R.Error!void {
-    const fp = std.c.fopen(path, "rb") orelse {
-        log.warn("input file '{s}' not found", .{path});
-        return error.NotFound;
+    const text = file_read.readText(s.io, path) catch |err| {
+        log.warn("input file '{s}' could not be read: {t}", .{ path, err });
+        return err;
     };
+    defer heap.gpa.free(text);
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
-    _ = std.c.fclose(fp);
+    const root = c.toml_parse(text.ptr, &errbuf, errbuf.len);
     if (root == null) {
         log.warn("input file '{s}' does not parse: {s}", .{ path, std.mem.sliceTo(&errbuf, 0) });
         return error.Io;
@@ -760,14 +763,15 @@ fn vtDestroy(self_in: ?*abi_framework.ke_input_actions) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Writes a handle to an empty map. A null out-parameter fails as an invalid argument and
+/// Factory. Writes a handle to an empty map, which reads its file through `io_in`. A null out-parameter fails as an invalid argument and
 /// an allocation failure as out of memory, leaving the handle zeroed.
-export fn ke_input_actions_create(out_actions: ?*abi_framework.ke_input_actions_handle) callconv(.c) abi_result.ke_result {
+export fn ke_input_actions_create(io_in: ?*abi_io.ke_io, out_actions: ?*abi_framework.ke_input_actions_handle) callconv(.c) abi_result.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_framework.ke_input_actions_handle);
+    const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
-    s.* = std.mem.zeroes(State);
+    s.* = .{ .api = std.mem.zeroes(abi_framework.ke_input_actions), .actions = null, .action_count = 0, .action_capacity = 0, .io = io };
 
     s.api.handle = s;
     s.api.load = vtLoad;
@@ -790,6 +794,7 @@ export fn ke_input_actions_create(out_actions: ?*abi_framework.ke_input_actions_
 }
 
 const testing = std.testing;
+const disk_io = @import("disk_io_test.zig");
 
 const TempInput = struct {
     tmp: std.testing.TmpDir,
@@ -824,7 +829,7 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_framework.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(&h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(disk_io.io(), &h));
         return .{ .handle = h };
     }
 

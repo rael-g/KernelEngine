@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Asset.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
+using KernelEngine.Io.Native;
 using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -26,11 +27,11 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_loader_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.ke_result scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, ke_scene_loader_handle* out_loader);
+    public static extern KernelEngine.Result.Native.ke_result scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, ke_scene_loader_handle* out_loader);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.ke_result input_actions_create(ke_input_actions_handle* out_actions);
+    public static extern KernelEngine.Result.Native.ke_result input_actions_create([NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, ke_input_actions_handle* out_actions);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_signal_bus_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
@@ -38,7 +39,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.ke_result asset_resolver_create([NativeTypeName("ke_image_loader *")] KernelEngine.Asset.Native.ke_image_loader* image_loader, [NativeTypeName("ke_font_loader *")] KernelEngine.Text.Native.ke_font_loader* font_loader, [NativeTypeName("const char *")] sbyte* project_root, [NativeTypeName("ke_asset_resolver_handle *")] KernelEngine.Asset.Native.ke_asset_resolver_handle* out_resolver);
+    public static extern KernelEngine.Result.Native.ke_result asset_resolver_create([NativeTypeName("ke_image_loader *")] KernelEngine.Asset.Native.ke_image_loader* image_loader, [NativeTypeName("ke_font_loader *")] KernelEngine.Text.Native.ke_font_loader* font_loader, [NativeTypeName("const char *")] sbyte* project_root, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, [NativeTypeName("ke_asset_resolver_handle *")] KernelEngine.Asset.Native.ke_asset_resolver_handle* out_resolver);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_script_host_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

@@ -8,16 +8,18 @@ namespace KernelEngine.Framework;
 /// </summary>
 public unsafe partial class NativeInputActions
 {
-    /// <summary>Creates a native input-actions instance.</summary>
+    /// <summary>Creates a native input-actions instance that loads its file through <paramref name="io"/>.</summary>
     /// <exception cref="InvalidOperationException">The native factory fails.</exception>
-    public NativeInputActions() : this(Create())
+    /// <param name="io">The io the file is read through, borrowed; must outlive the instance.</param>
+    public NativeInputActions(KernelEngine.Io.INativeIo io) : this(Create(io))
     {
     }
 
-    private static ke_input_actions_handle Create()
+    private static ke_input_actions_handle Create(KernelEngine.Io.INativeIo io)
     {
+        ArgumentNullException.ThrowIfNull(io);
         ke_input_actions_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(&handle), "ke_input_actions_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(io.Native, &handle), "ke_input_actions_create");
         return handle;
     }
 }

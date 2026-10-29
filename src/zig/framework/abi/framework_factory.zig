@@ -4,6 +4,7 @@ const std = @import("std");
 const asset = @import("asset");
 const ecs = @import("ecs");
 const framework = @import("framework");
+const io = @import("io");
 const logger = @import("logger");
 const result = @import("result");
 const runtime = @import("runtime");
@@ -34,14 +35,14 @@ pub const ke_signal_bus_params = extern struct {
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
 /// loader. project_root may be NULL — res:// resolution is then disabled; only absolute or
 /// CWD-relative paths work.
-pub extern fn ke_asset_resolver_create(image_loader: ?*asset.ke_image_loader, font_loader: ?*text.ke_font_loader, project_root: ?[*:0]const u8, out_resolver: ?*asset.ke_asset_resolver_handle) result.ke_result;
+pub extern fn ke_asset_resolver_create(image_loader: ?*asset.ke_image_loader, font_loader: ?*text.ke_font_loader, project_root: ?[*:0]const u8, io: ?*io.ke_io, out_resolver: ?*asset.ke_asset_resolver_handle) result.ke_result;
 
 /// Sends every line ke_framework logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_framework_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Creates an empty action map.
-pub extern fn ke_input_actions_create(out_actions: ?*framework.ke_input_actions_handle) result.ke_result;
+pub extern fn ke_input_actions_create(io: ?*io.ke_io, out_actions: ?*framework.ke_input_actions_handle) result.ke_result;
 
 /// Creates an empty scene component set, which the plugins fill through its `add` slot.
 pub extern fn ke_scene_component_set_create(out_set: ?*framework.ke_scene_component_set_handle) result.ke_result;
@@ -59,7 +60,7 @@ pub extern fn ke_scene_hierarchy_create(runtime: ?*runtime.ke_runtime, ecs: ?*ec
 /// loader. String lifetime: a value a block authors into a char field is copied into the
 /// component, but the parsed entries themselves come from an arena freed at loader.destroy().
 /// Nothing the loader wrote outlives it by reference.
-pub extern fn ke_scene_loader_create(world: ?*framework.ke_world, assets: ?*asset.ke_asset_resolver, out_loader: ?*framework.ke_scene_loader_handle) result.ke_result;
+pub extern fn ke_scene_loader_create(world: ?*framework.ke_world, assets: ?*asset.ke_asset_resolver, io: ?*io.ke_io, out_loader: ?*framework.ke_scene_loader_handle) result.ke_result;
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered

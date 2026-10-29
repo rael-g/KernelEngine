@@ -16,9 +16,10 @@ namespace KernelEngine.Framework;
 public unsafe partial class NativeAssetResolver
 {
     /// <summary>
-    /// Creates a native asset resolver.
+    /// Creates a native asset resolver that reads every file through <paramref name="io"/>.
     /// </summary>
     /// <exception cref="InvalidOperationException">The native factory fails.</exception>
+    /// <param name="io">The io files are read through, borrowed; must outlive the resolver.</param>
     /// <param name="imageLoader">
     /// Image loader, borrowed. Without one <c>ResolveTexture</c> throws.
     /// </param>
@@ -29,15 +30,16 @@ public unsafe partial class NativeAssetResolver
     /// Project root that <c>res://</c> paths resolve against; with <see langword="null"/> such a
     /// path resolves to the bare remainder.
     /// </param>
-    public NativeAssetResolver(INativeImageLoader? imageLoader = null,
+    public NativeAssetResolver(KernelEngine.Io.INativeIo io, INativeImageLoader? imageLoader = null,
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
-        : this(Create(imageLoader, fontLoader, projectRoot))
+        : this(Create(io, imageLoader, fontLoader, projectRoot))
     {
     }
 
-    private static ke_asset_resolver_handle Create(INativeImageLoader? imageLoader,
+    private static ke_asset_resolver_handle Create(KernelEngine.Io.INativeIo io, INativeImageLoader? imageLoader,
         INativeFontLoader? fontLoader, string? projectRoot)
     {
+        ArgumentNullException.ThrowIfNull(io);
         byte[]? rootBytes = projectRoot is null ? null : Encoding.UTF8.GetBytes(projectRoot + "\0");
         ke_image_loader* imagePtr = imageLoader is not null ? imageLoader.Native : null;
         ke_font_loader* fontPtr = fontLoader is not null ? fontLoader.Native : null;
@@ -45,7 +47,7 @@ public unsafe partial class NativeAssetResolver
         {
             ke_asset_resolver_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create(
-                imagePtr, fontPtr, (sbyte*)rootPtr, &handle), "ke_asset_resolver_create");
+                imagePtr, fontPtr, (sbyte*)rootPtr, io.Native, &handle), "ke_asset_resolver_create");
             return handle;
         }
     }

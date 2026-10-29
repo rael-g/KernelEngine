@@ -7,6 +7,7 @@
         .ke_abi_asset = .{ .path = "../../abi/asset" },
         .ke_abi_ecs = .{ .path = "../../abi/ecs" },
         .ke_abi_framework = .{ .path = "../../abi/framework" },
+        .ke_abi_io = .{ .path = "../../abi/io" },
         .ke_abi_logger = .{ .path = "../../abi/logger" },
         .ke_abi_result = .{ .path = "../../abi/result" },
         .ke_abi_runtime = .{ .path = "../../abi/runtime" },

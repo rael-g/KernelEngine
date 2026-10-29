@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("asset", b.dependency("ke_abi_asset", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("ke_abi_framework", .{}).module("abi"));
+    abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));
     abi.addImport("runtime", b.dependency("ke_abi_runtime", .{}).module("abi"));
@@ -28,9 +29,11 @@ pub fn build(b: *std.Build) void {
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/ecs"));
+    translated.addIncludePath(b.path("../../../c/file_system"));
     translated.addIncludePath(b.path("../../../c/framework"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../c/input"));
+    translated.addIncludePath(b.path("../../../c/io"));
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));

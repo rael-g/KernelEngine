@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_framework",
         .root = "src/framework_root.zig",
-        .abi = &.{ "abi_asset", "abi_audio", "abi_ecs", "abi_framework", "abi_framework_factory", "abi_input", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
+        .abi = &.{ "abi_asset", "abi_audio", "abi_ecs", "abi_file_system", "abi_framework", "abi_framework_factory", "abi_input", "abi_io", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},

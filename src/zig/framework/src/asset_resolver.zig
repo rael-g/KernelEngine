@@ -14,6 +14,8 @@ const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
 const mesh_shape = @import("mesh_shape.zig");
+const file_read = @import("file_read.zig");
+const abi_io = @import("abi_io");
 
 const res_prefix = "res://";
 const primitive_prefix = "res://primitives/";
@@ -21,7 +23,7 @@ const primitive_prefix = "res://primitives/";
 const path_buf_max = 1024;
 
 /// Allocated by `ke_asset_resolver_create` and freed by `vtDestroy`. `api` is the vtable the handle
-/// refers to. The loaders are borrowed and stay null when none was injected, which makes the
+/// refers to. The loaders and `io`, through which every file is read, are borrowed and stay null when none was injected, which makes the
 /// resolving slots that need them fail. `project_root` is the only memory the state owns, and it is
 /// null exactly when no root was given.
 ///
@@ -37,6 +39,7 @@ const State = struct {
     image_loader: ?*abi_asset.ke_image_loader,
     font_loader: ?*abi_text.ke_font_loader,
     project_root: ?[:0]u8,
+    io: *abi_io.ke_io,
 };
 
 fn stateOf(self: *abi_asset.ke_asset_resolver) *State {
@@ -48,14 +51,6 @@ fn stateOf(self: *abi_asset.ke_asset_resolver) *State {
 fn dupCStr(s: [*c]const u8) ?[:0]u8 {
     if (s == null) return null;
     return heap.gpa.dupeZ(u8, std.mem.span(s)) catch null;
-}
-
-/// Opens the file for binary reading and closes it again, so it reports whether the file can be
-/// opened, not whether it holds data.
-fn fileExists(path: [*:0]const u8) bool {
-    const f = std.c.fopen(path, "rb") orelse return false;
-    _ = std.c.fclose(f);
-    return true;
 }
 
 fn copyStringClamped(dst: []u8, src: []const u8) void {
@@ -112,7 +107,7 @@ fn tomlNumberAt(arr: ?*c.toml_array_t, idx: c_int) ?f32 {
 /// The only reader of material files, called by vtResolveMaterial with the path it resolved. Every
 /// field it sets is first written with its default, so a key the file leaves out keeps that
 /// default. On failure the spec holds only those defaults.
-fn parseMaterialFile(path: [*:0]const u8, out: *abi_render.ke_material_spec) error{ NotFound, Malformed }!void {
+fn parseMaterialFile(io: *abi_io.ke_io, path: [*:0]const u8, out: *abi_render.ke_material_spec) error{ NotFound, Malformed }!void {
     out.base_color[0] = 1.0;
     out.base_color[1] = 1.0;
     out.base_color[2] = 1.0;
@@ -126,10 +121,10 @@ fn parseMaterialFile(path: [*:0]const u8, out: *abi_render.ke_material_spec) err
     out.ior = 1.5;
     out.distortion_strength = 0.05;
 
-    const fp = std.c.fopen(path, "rb") orelse return error.NotFound;
+    const text = file_read.readText(io, path) catch return error.NotFound;
+    defer heap.gpa.free(text);
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
-    _ = std.c.fclose(fp);
+    const root = c.toml_parse(text.ptr, &errbuf, errbuf.len);
     if (root == null) return error.Malformed;
     defer c.toml_free(root);
 
@@ -189,7 +184,7 @@ fn resolveTexture(s: *const State, path: [*:0]const u8) R.Error!*abi_asset.ke_te
     var buf: [path_buf_max]u8 = undefined;
     try resolvePath(s, path, &buf);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
-    if (!fileExists(resolved)) {
+    if (!file_read.isFile(s.io, resolved)) {
         log.warn("texture file {s} not found", .{resolved});
         return error.NotFound;
     }
@@ -261,7 +256,7 @@ fn vtResolveMaterial(self_in: ?*abi_asset.ke_asset_resolver, path: [*c]const u8,
 fn readMaterial(s: *const State, path: [*:0]const u8, out: *abi_render.ke_material_spec) R.Error!void {
     var buf: [path_buf_max]u8 = undefined;
     try resolvePath(s, path, &buf);
-    parseMaterialFile(@ptrCast(&buf), out) catch |err| switch (err) {
+    parseMaterialFile(s.io, @ptrCast(&buf), out) catch |err| switch (err) {
         error.NotFound => {
             log.warn("material file {s} not found", .{path});
             return error.NotFound;
@@ -295,7 +290,7 @@ fn vtResolveFont(
     var buf: [path_buf_max]u8 = undefined;
     resolvePath(s, path, &buf) catch |err| return R.code(err);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
-    if (!fileExists(resolved)) {
+    if (!file_read.isFile(s.io, resolved)) {
         log.warn("font file {s} not found", .{resolved});
         return R.code(error.NotFound);
     }
@@ -451,17 +446,21 @@ export fn ke_asset_resolver_create(
     image_loader: ?*abi_asset.ke_image_loader,
     font_loader: ?*abi_text.ke_font_loader,
     project_root: [*c]const u8,
+    io_in: ?*abi_io.ke_io,
     out_resolver: ?*abi_asset.ke_asset_resolver_handle,
 ) callconv(.c) abi_result.ke_result {
     const out = out_resolver orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_asset.ke_asset_resolver_handle);
+    const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
-    s.* = std.mem.zeroes(State);
-
-    s.image_loader = image_loader;
-    s.font_loader = font_loader;
-    s.project_root = dupCStr(project_root);
+    s.* = .{
+        .api = std.mem.zeroes(abi_asset.ke_asset_resolver),
+        .image_loader = image_loader,
+        .font_loader = font_loader,
+        .project_root = dupCStr(project_root),
+        .io = io,
+    };
     if (project_root != null and s.project_root == null) {
         heap.gpa.destroy(s);
         return R.code(error.OutOfMemory);
@@ -488,9 +487,11 @@ const testing = std.testing;
 
 fn testResolver(image_loader: ?*abi_asset.ke_image_loader, project_root: [*c]const u8) abi_asset.ke_asset_resolver_handle {
     var h = std.mem.zeroes(abi_asset.ke_asset_resolver_handle);
-    _ = ke_asset_resolver_create(image_loader, null, project_root, &h);
+    _ = ke_asset_resolver_create(image_loader, null, project_root, disk_io.io(), &h);
     return h;
 }
+
+const disk_io = @import("disk_io_test.zig");
 
 const material_tolerance: f32 = 1e-6;
 
@@ -524,7 +525,7 @@ const MaterialFile = struct {
 
 test "a material file that is not there fails instead of yielding a blank material" {
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try testing.expectError(error.NotFound, parseMaterialFile("/this/does/not/exist.material", &spec));
+    try testing.expectError(error.NotFound, parseMaterialFile(disk_io.io().?, "/this/does/not/exist.material", &spec));
 }
 
 test "a file without a material section is not a material" {
@@ -532,7 +533,7 @@ test "a file without a material section is not a material" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try testing.expectError(error.Malformed, parseMaterialFile(file.cPath(), &spec));
+    try testing.expectError(error.Malformed, parseMaterialFile(disk_io.io().?, file.cPath(), &spec));
 }
 
 test "every authored key reaches the spec it was written for" {
@@ -548,7 +549,7 @@ test "every authored key reaches the spec it was written for" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try parseMaterialFile(file.cPath(), &spec);
+    try parseMaterialFile(disk_io.io().?, file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 0.8), spec.base_color[0], material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 0.2), spec.base_color[1], material_tolerance);
@@ -565,7 +566,7 @@ test "a key the author left out falls back to the default rather than to zero" {
     defer file.deinit();
 
     var spec = std.mem.zeroes(abi_render.ke_material_spec);
-    try parseMaterialFile(file.cPath(), &spec);
+    try parseMaterialFile(disk_io.io().?, file.cPath(), &spec);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.metallic, material_tolerance);
     try testing.expectApproxEqAbs(@as(f32, 1.0), spec.base_color[0], material_tolerance);

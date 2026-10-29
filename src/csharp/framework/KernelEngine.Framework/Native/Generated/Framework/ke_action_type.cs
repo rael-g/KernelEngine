@@ -1,6 +1,7 @@
 using KernelEngine.Asset.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
+using KernelEngine.Io.Native;
 using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;

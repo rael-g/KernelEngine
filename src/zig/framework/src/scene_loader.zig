@@ -15,6 +15,8 @@ const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
+const abi_io = @import("abi_io");
+const file_read = @import("file_read.zig");
 const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
 const values = @import("scene_values.zig");
@@ -43,6 +45,7 @@ const State = struct {
     api: abi_framework.ke_scene_loader,
     world: *abi_framework.ke_world,
     assets: *abi_asset.ke_asset_resolver,
+    io: *abi_io.ke_io,
 
     script_factory: abi_framework.ke_script_factory_func,
     script_ctx: ?*anyopaque,
@@ -453,12 +456,13 @@ fn loadSceneRecursive(
     override_outer: ?*c.toml_table_t,
     out_root: ?*abi_ecs.ke_entity,
 ) R.Error!void {
-    const fp = std.c.fopen(path, "rb") orelse {
-        return refuse(error.NotFound, "scene file not found");
+    const text = file_read.readText(s.io, path) catch |err| switch (err) {
+        error.NotFound => return refuse(error.NotFound, "scene file not found"),
+        else => return refuse(err, "scene file could not be read"),
     };
+    defer heap.gpa.free(text);
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse_file(@ptrCast(@alignCast(fp)), &errbuf, errbuf.len);
-    _ = std.c.fclose(fp);
+    const root = c.toml_parse(text.ptr, &errbuf, errbuf.len);
     if (root == null) {
         return refuse(error.Io, "failed to parse scene file");
     }
@@ -580,23 +584,27 @@ fn vtDestroy(self_in: ?*abi_framework.ke_scene_loader) callconv(.c) void {
 }
 
 /// Factory. Builds a loader over the given world, resolving "res://" references through the given
-/// asset resolver. A null world, resolver or out-parameter fails as an invalid argument and a
+/// asset resolver and reading every scene file through the given io. A null world, resolver, io or
+/// out-parameter fails as an invalid argument and a
 /// failed allocation as out of memory; each leaves the handle zeroed.
 export fn ke_scene_loader_create(
     world_in: ?*abi_framework.ke_world,
     assets_in: ?*abi_asset.ke_asset_resolver,
+    io_in: ?*abi_io.ke_io,
     out_loader: ?*abi_framework.ke_scene_loader_handle,
 ) callconv(.c) abi_result.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_framework.ke_scene_loader_handle);
     const world = world_in orelse return R.code(error.InvalidArgument);
     const assets = assets_in orelse return R.code(error.InvalidArgument);
+    const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{
         .api = std.mem.zeroes(abi_framework.ke_scene_loader),
         .world = world,
         .assets = assets,
+        .io = io,
         .script_factory = null,
         .script_ctx = null,
         .arena = .init(),
@@ -614,6 +622,7 @@ export fn ke_scene_loader_create(
 const testing = std.testing;
 
 const signal_bus_impl = @import("signal_bus.zig");
+const disk_io = @import("disk_io_test.zig");
 
 const fake_max_components = 32;
 const fake_max_entities = 128;
@@ -922,8 +931,8 @@ const Fixture = struct {
     fn rootAt(self: *Fixture, root: [*c]const u8) !void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, &self.assets_h));
-        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, &self.loader_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, disk_io.io(), &self.assets_h));
+        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, disk_io.io(), &self.loader_h));
     }
 
     fn describe(
@@ -1911,12 +1920,12 @@ test "a scene that fails to load leaves none of the entities it had already crea
 
 test "a loader is never created without a world or an asset resolver" {
     var h: abi_framework.ke_scene_loader_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, disk_io.io(), &h));
     try testing.expect(h.ref == null);
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, disk_io.io(), &h));
     try testing.expect(h.ref == null);
 }
 

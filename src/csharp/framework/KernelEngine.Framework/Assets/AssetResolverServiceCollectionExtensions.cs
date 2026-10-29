@@ -9,7 +9,10 @@ namespace KernelEngine.Framework;
 /// </summary>
 public static class AssetResolverServiceCollectionExtensions
 {
-    /// <summary>Registers <see cref="NativeAssetResolver"/> as a singleton.</summary>
+    /// <summary>
+    /// Registers <see cref="NativeAssetResolver"/> as a singleton, reading through the registered
+    /// <see cref="KernelEngine.Io.INativeIo"/>.
+    /// </summary>
     /// <param name="services">The container to register into.</param>
     /// <param name="projectRoot">
     /// Root for <c>res://</c> resolution. Defaults to the application's base directory.
@@ -18,6 +21,7 @@ public static class AssetResolverServiceCollectionExtensions
                                                       string? projectRoot = null)
     {
         services.AddSingleton(sp => new NativeAssetResolver(
+            sp.GetRequiredService<KernelEngine.Io.INativeIo>(),
             sp.GetService<INativeImageLoader>(),
             sp.GetService<KernelEngine.Text.INativeFontLoader>(),
             projectRoot ?? AppContext.BaseDirectory));

@@ -32,7 +32,8 @@ public static class SceneServiceCollectionExtensions
         services.AddSingleton<SceneLoader>(sp =>
             new SceneLoader(
                 sp.GetRequiredService<World>(),
-                sp.GetRequiredService<NativeAssetResolver>()));
+                sp.GetRequiredService<NativeAssetResolver>(),
+                sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
 
     }
 }

@@ -18,13 +18,14 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
     private InputActionMap(NativeInputActions native) => _native = native;
 
     /// <summary>
-    /// Loads bindings from the <c>.input</c> TOML file at <paramref name="path"/> and resolves
-    /// every <typeparamref name="TEnum"/> value to its native action id.
+    /// Loads bindings from the <c>.input</c> TOML file at <paramref name="path"/>, read through
+    /// <paramref name="io"/>, and resolves every <typeparamref name="TEnum"/> value to its native
+    /// action id.
     /// </summary>
     /// <exception cref="InvalidOperationException">The native load fails.</exception>
-    public static InputActionMap<TEnum> LoadFromFile(string path)
+    public static InputActionMap<TEnum> LoadFromFile(KernelEngine.Io.INativeIo io, string path)
     {
-        var native = new NativeInputActions();
+        var native = new NativeInputActions(io);
         native.Load(path);
 
         var map = new InputActionMap<TEnum>(native);
