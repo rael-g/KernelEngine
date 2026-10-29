@@ -15,7 +15,6 @@ const abi_runtime = @import("abi_runtime");
 const abi_text = @import("abi_text");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_ui);
-const handles = @import("handle");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -102,10 +101,14 @@ fn uiLoadFont(self: [*c]abi_render_ui_factory.ke_render_ui, key: [*c]const u8, a
     return R.ok;
 }
 
+fn fontHandle(idx: usize) u32 {
+    return (@as(u32, @intCast(idx)) & abi_render.KE_HANDLE_INDEX_MASK) | (abi_render.KE_HANDLE_GENERATION_FIRST << abi_render.KE_HANDLE_INDEX_BITS);
+}
+
 fn loadFont(ui: *UiState, key_slice: []const u8, atlas: abi_render.ke_texture_handle, glyphs: [*c]const abi_text.ke_glyph_metrics, glyph_count: u32, line_height: f32, ascent: f32) R.Error!u32 {
     for (ui.fonts.items, 0..) |f, i| {
         if (f.in_use and std.mem.eql(u8, f.key, key_slice))
-            return handles.make(@intCast(i), abi_render.KE_HANDLE_GENERATION_FIRST);
+            return fontHandle(i);
     }
 
     var slot: ?usize = null;
@@ -129,7 +132,7 @@ fn loadFont(ui: *UiState, key_slice: []const u8, atlas: abi_render.ke_texture_ha
         .ascent = ascent,
         .in_use = true,
     };
-    return handles.make(@intCast(idx), abi_render.KE_HANDLE_GENERATION_FIRST);
+    return fontHandle(idx);
 }
 
 fn findGlyph(glyphs: []const abi_text.ke_glyph_metrics, codepoint: u32) ?abi_text.ke_glyph_metrics {
@@ -145,7 +148,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]abi_render.ke_label_component, bb_w: u32,
     const l: *abi_render.ke_label_component = @ptrCast(l_ptr);
     l.glyph_count = 0;
 
-    const font_idx = handles.index(l.font_handle.bits);
+    const font_idx = l.font_handle.bits & abi_render.KE_HANDLE_INDEX_MASK;
     if (l.font_handle.bits == abi_render.KE_HANDLE_NONE or font_idx >= ui.fonts.items.len or !ui.fonts.items[font_idx].in_use)
         return;
     const font = &ui.fonts.items[font_idx];
@@ -328,7 +331,7 @@ fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
             const l = labels[i];
             if (l.glyph_count == 0) continue;
 
-            const font_idx = handles.index(l.font_handle.bits);
+            const font_idx = l.font_handle.bits & abi_render.KE_HANDLE_INDEX_MASK;
             const tex = ui.fonts.items[font_idx].atlas;
             const premul = [4]f32{ l.color[0] * l.color[3], l.color[1] * l.color[3], l.color[2] * l.color[3], l.color[3] };
 

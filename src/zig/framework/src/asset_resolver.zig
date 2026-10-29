@@ -8,7 +8,6 @@ const abi_asset = @import("abi_asset");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_text = @import("abi_text");
-const handles = @import("handle");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
@@ -1062,19 +1061,6 @@ test "the none handle of every render resource is all bits zero" {
 
     const zeroed = std.mem.zeroes(abi_render.ke_mesh_handle);
     try testing.expectEqual(@as(u32, abi_render.KE_HANDLE_NONE), zeroed.bits);
-}
-
-test "a live handle is never zero, not even at index zero" {
-    for (0..8) |index| {
-        const bits = handles.make(@intCast(index), abi_render.KE_HANDLE_GENERATION_FIRST);
-        const h = abi_render.ke_mesh_handle{ .bits = bits };
-        try testing.expect(h.bits != abi_render.KE_HANDLE_NONE);
-        try testing.expectEqual(@as(u32, @intCast(index)), handles.index(h.bits));
-        try testing.expectEqual(
-            @as(u32, abi_render.KE_HANDLE_GENERATION_FIRST),
-            handles.generation(h.bits),
-        );
-    }
 }
 
 test "a res:// path joins the project root and any other path stands as written" {

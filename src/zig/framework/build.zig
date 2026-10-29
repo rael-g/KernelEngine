@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
         .root = "src/framework_root.zig",
         .abi = &.{ "abi_asset", "abi_audio", "abi_ecs", "abi_framework", "abi_framework_factory", "abi_input", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
         .common = &.{"heap"},
-        .render_common = &.{"handle"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,

@@ -4,7 +4,6 @@ const ke_build = @import("ke_build");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    module(b, "handle", &.{"abi_render"});
     module(b, "feature_bindings", &.{"abi_render"});
     module(b, "material_pass_groups", &.{ "abi_render", "abi_result" });
     module(b, "object_uniforms", &.{ "abi_render", "abi_result" });
