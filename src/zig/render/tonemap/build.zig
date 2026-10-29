@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
         .root = "src/tonemap_module.zig",
         .abi = &.{ "abi_ecs", "abi_render", "abi_render_tonemap_factory", "abi_result", "abi_runtime" },
         .common = &.{"heap"},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the tonemap pass unit tests",
     });
 }
