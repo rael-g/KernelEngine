@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .render_common = &.{ "handle", "shader_files" },
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the render service unit tests",
     });
 }

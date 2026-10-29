@@ -550,7 +550,148 @@ test "a frame that never began ends without submitting or presenting anything" {
     try testing.expectEqual(R.ok, frame_lifecycle.endFrame(&core));
 }
 
-const stubs = @import("stubs.zig");
+const zsub = @import("zsub");
+
+/// The device, its command records, the binder and the ecs a service runs on in a test, with what
+/// the recorded commands carried: the latest labels and load ops, and running totals.
+const Gpu = struct {
+    dev: zsub.ForWith(abi_render.ke_gpu_device, .{ .history = 256 }),
+    encoder: zsub.For(abi_render.ke_gpu_command_encoder),
+    render_pass: zsub.For(abi_render.ke_gpu_render_pass),
+    compute_pass: zsub.For(abi_render.ke_gpu_compute_pass),
+    command_buffer: zsub.For(abi_render.ke_gpu_command_buffer),
+    binder: zsub.For(abi_render.ke_render_resource_binder),
+    ecs: zsub.For(abi_ecs.ke_ecs),
+    pipelines: std.atomic.Value(u64),
+    texture_label: [*c]const u8,
+    texture_view_label: [*c]const u8,
+    render_pass_label: [*c]const u8,
+    render_passes: u32,
+    color_load: abi_render.ke_gpu_load_op,
+    depth_load: ?abi_render.ke_gpu_load_op,
+    compute_pass_label: [*c]const u8,
+    debug_group_label: [*c]const u8,
+    submitted: u32,
+    buffer_writes: u32,
+    bytes_written: usize,
+
+    fn init(self: *Gpu) !void {
+        self.pipelines = .init(1 << 32);
+        self.texture_label = null;
+        self.texture_view_label = null;
+        self.render_pass_label = null;
+        self.render_passes = 0;
+        self.color_load = 0;
+        self.depth_load = null;
+        self.compute_pass_label = null;
+        self.debug_group_label = null;
+        self.submitted = 0;
+        self.buffer_writes = 0;
+        self.bytes_written = 0;
+        try self.render_pass.init();
+        try self.compute_pass.init();
+        _ = self.compute_pass.when(.push_debug_group).doesWith(self, pushDebugGroup);
+        try self.command_buffer.init();
+        try self.encoder.init();
+        _ = self.encoder.when(.begin_render_pass).doesWith(self, beginRenderPass);
+        _ = self.encoder.when(.begin_compute_pass).doesWith(self, beginComputePass);
+        _ = self.encoder.when(.finish).writes(1, .{ .ref = self.command_buffer.api(), .destroy = &destroyCommandBuffer });
+        try self.dev.init();
+        inline for (.{ .create_buffer, .create_bind_group_layout, .create_bind_group, .create_compute_pipeline, .create_render_pipeline, .create_sampler, .create_shader_module, .create_texture }) |slot| _ = self.dev.when(slot).writesFresh(2);
+        _ = self.dev.when(.create_texture_view).writesFresh(3).doesWith(self, createTextureView);
+        _ = self.dev.when(.create_texture).doesWith(self, createTexture);
+        _ = self.dev.when(.create_command_encoder).writes(2, .{ .ref = self.encoder.api(), .destroy = &destroyEncoder });
+        _ = self.dev.when(.create_render_pipeline_async).doesWith(self, createRenderPipelineAsync);
+        _ = self.dev.when(.queue_submit).doesWith(self, queueSubmit);
+        _ = self.dev.when(.write_buffer).doesWith(self, writeBuffer);
+        _ = self.dev.when(.get_default_queue).returns(1);
+        _ = self.dev.when(.shader_language).returns(abi_render.KE_GPU_SHADER_LANG_WGSL);
+        _ = self.dev.when(.get_ndc_convention).returns(.{ .z_zero_to_one = true, .y_flip = true });
+        try self.binder.init();
+        inline for (.{ .create_shader_layout, .create_material }) |slot| _ = self.binder.when(slot).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.ecs.init();
+        _ = self.ecs.when(.component_register).writesFresh(2);
+        _ = self.ecs.when(.query_register).writesFresh(3);
+    }
+
+    fn deinit(self: *Gpu) void {
+        self.ecs.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+        self.encoder.deinit();
+        self.command_buffer.deinit();
+        self.compute_pass.deinit();
+        self.render_pass.deinit();
+    }
+
+    fn expectReleased(self: *Gpu) !void {
+        const gpu_handle = zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE);
+        try self.dev.received(.destroy_buffer).where(gpu_handle).sameAs(self.dev.received(.create_buffer));
+        try self.dev.received(.destroy_bind_group_layout).where(gpu_handle).sameAs(self.dev.received(.create_bind_group_layout));
+        try self.dev.received(.destroy_bind_group).where(gpu_handle).sameAs(self.dev.received(.create_bind_group));
+        try self.dev.received(.destroy_compute_pipeline).where(gpu_handle).sameAs(self.dev.received(.create_compute_pipeline));
+        try self.dev.received(.destroy_sampler).where(gpu_handle).sameAs(self.dev.received(.create_sampler));
+        try self.dev.received(.destroy_shader_module).where(gpu_handle).sameAs(self.dev.received(.create_shader_module));
+        try self.dev.received(.destroy_texture).where(gpu_handle).sameAs(self.dev.received(.create_texture));
+        try self.dev.received(.destroy_texture_view).where(gpu_handle).sameAs(self.dev.received(.create_texture_view));
+        const binding = zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID);
+        try self.binder.received(.destroy_shader_layout).where(binding).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(binding).sameAs(self.binder.received(.create_set));
+        try self.binder.received(.destroy_material).where(binding).sameAs(self.binder.received(.create_material));
+        const pipelines = self.dev.received(.create_render_pipeline).calls + self.dev.received(.create_render_pipeline_async).calls;
+        try self.dev.received(.destroy_pipeline).where(gpu_handle).times(pipelines);
+    }
+
+    fn beginRenderPass(self: *Gpu, args: zsub.For(abi_render.ke_gpu_command_encoder).Args(.begin_render_pass)) ?*abi_render.ke_gpu_render_pass {
+        const p = args[1].?;
+        self.render_pass_label = p.label;
+        self.render_passes += 1;
+        self.color_load = if (p.color_attachment_count > 0) p.color_attachments.?[0].load_op else 0;
+        self.depth_load = if (p.depth_stencil_attachment) |d| d.depth_load_op else null;
+        return self.render_pass.api();
+    }
+
+    fn beginComputePass(self: *Gpu, args: zsub.For(abi_render.ke_gpu_command_encoder).Args(.begin_compute_pass)) ?*abi_render.ke_gpu_compute_pass {
+        self.compute_pass_label = if (args[1]) |p| p.label else null;
+        return self.compute_pass.api();
+    }
+
+    fn pushDebugGroup(self: *Gpu, args: zsub.For(abi_render.ke_gpu_compute_pass).Args(.push_debug_group)) void {
+        self.debug_group_label = args[1];
+    }
+
+    fn debugGroupsOpen(self: *Gpu) i64 {
+        return @as(i64, self.compute_pass.received(.push_debug_group).calls) - self.compute_pass.received(.pop_debug_group).calls;
+    }
+
+    fn createTexture(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_texture)) abi_result.ke_result {
+        self.texture_label = args[1].?.label;
+        return abi_result.KE_OK;
+    }
+
+    fn createTextureView(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_texture_view)) abi_result.ke_result {
+        self.texture_view_label = args[2].?.label;
+        return abi_result.KE_OK;
+    }
+
+    fn createRenderPipelineAsync(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_render_pipeline_async)) void {
+        if (args[2]) |ready| ready(self.pipelines.fetchAdd(1, .monotonic), args[3]);
+    }
+
+    fn queueSubmit(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.queue_submit)) void {
+        self.submitted += args[3];
+    }
+
+    fn writeBuffer(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.write_buffer)) void {
+        self.buffer_writes += 1;
+        self.bytes_written += args[4];
+    }
+
+    fn destroyEncoder(_: ?*abi_render.ke_gpu_command_encoder) callconv(.c) void {}
+
+    fn destroyCommandBuffer(_: ?*abi_render.ke_gpu_command_buffer) callconv(.c) void {}
+};
 
 /// Fake render target. `acquired` is a flag set by `acquire`, not a count, and
 /// `presented` is the only tally kept.
@@ -647,19 +788,15 @@ test "creating and destroying the render service leaves no block allocated and n
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
-    try testing.expectEqual(@as(i64, 0), binder.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -667,16 +804,13 @@ test "a render service created without a render target is refused and leaves not
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var h: abi_render.ke_render_service_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = dev.api(), .target = null, .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = gpu.dev.api(), .target = null, .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -684,15 +818,12 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(abi_render.ke_gpu_texture_format, abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
@@ -708,15 +839,12 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
@@ -741,7 +869,7 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
 
     h.destroy.?(svc);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -749,15 +877,12 @@ test "uploads beyond the first frame's records and arena are all written, and th
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
@@ -769,15 +894,15 @@ test "uploads beyond the first frame's records and arena are all written, and th
     const big_len = big.len;
     heap.gpa.free(big);
     _ = svc.*.end_frame.?(svc);
-    try testing.expectEqual(@as(u32, upload_count + 1), dev.buffer_writes);
-    try testing.expectEqual(upload_count * @sizeOf(u32) + big_len, dev.bytes_written);
+    try testing.expectEqual(@as(u32, upload_count + 1), gpu.buffer_writes);
+    try testing.expectEqual(upload_count * @sizeOf(u32) + big_len, gpu.bytes_written);
 
     const core = coreOf(svc);
     try testing.expect(core.upload_records.len >= upload_count + 1);
     try testing.expect(core.upload_arena.len >= upload_count * @sizeOf(u32) + big_len);
 
     h.destroy.?(svc);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -785,15 +910,12 @@ test "a frame with more passes than the first frame's log submits every one, and
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const pass_count = first_passes + 36;
@@ -807,7 +929,7 @@ test "a frame with more passes than the first frame's log submits every one, and
         svc.*.end_pass.?(svc, pass);
     }
     try R.check(svc.*.end_frame.?(svc));
-    try testing.expectEqual(@as(u32, pass_count + 2), dev.submitted);
+    try testing.expectEqual(@as(u32, pass_count + 2), gpu.submitted);
 
     try R.check(svc.*.begin_frame.?(svc));
     const core = coreOf(svc);
@@ -816,7 +938,7 @@ test "a frame with more passes than the first frame's log submits every one, and
     try R.check(svc.*.end_frame.?(svc));
 
     h.destroy.?(svc);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -824,15 +946,12 @@ test "a declared resource's texture and view carry the name it was declared unde
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -844,23 +963,20 @@ test "a declared resource's texture and view carry the name it was declared unde
     desc.height = 4;
     _ = declared(svc, &desc);
 
-    try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_label));
-    try testing.expectEqualStrings("hdr_color", std.mem.span(dev.texture_view_label));
+    try testing.expectEqualStrings("hdr_color", std.mem.span(gpu.texture_label));
+    try testing.expectEqualStrings("hdr_color", std.mem.span(gpu.texture_view_label));
 }
 
 test "a render pass is opened under the name its pass declared" {
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -873,29 +989,25 @@ test "a render pass is opened under the name its pass declared" {
     try R.check(svc.*.begin_frame.?(svc));
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const rp = pass.*.begin_render.?(pass);
-    try testing.expectEqualStrings("render.named", std.mem.span(dev.render_pass_label));
+    try testing.expectEqualStrings("render.named", std.mem.span(gpu.render_pass_label));
     rp.?.end.?(rp);
     svc.*.end_pass.?(svc, pass);
     try R.check(svc.*.end_frame.?(svc));
 }
 
-/// A service over the stubs with a source and a destination color resource declared; `begin`
+/// A service over substitutes with a source and a destination color resource declared; `begin`
 /// begins a frame, which `deinit` ends.
 const PassHarness = struct {
     sd: ShaderDir,
-    dev: stubs.Device,
-    ecs: stubs.Ecs,
-    binder: stubs.Binder,
+    gpu: Gpu,
     target: Target,
     h: abi_render.ke_render_service_handle,
 
     fn init(self: *PassHarness) !void {
         try self.sd.init();
-        self.dev.init();
-        self.ecs.init();
-        self.binder.init();
+        try self.gpu.init();
         self.target.init();
-        self.h = serviceOf(.{ .device = self.dev.api(), .target = self.target.api(), .ecs = self.ecs.api(), .shader_dir = self.sd.path(), .binder = self.binder.api(), .color_format = 0, .depth_format = 0 });
+        self.h = serviceOf(.{ .device = self.gpu.dev.api(), .target = self.target.api(), .ecs = self.gpu.ecs.api(), .shader_dir = self.sd.path(), .binder = self.gpu.binder.api(), .color_format = 0, .depth_format = 0 });
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
         for ([_][*:0]const u8{ "src", "dst" }) |name| {
             var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
@@ -915,7 +1027,7 @@ const PassHarness = struct {
 
     fn run(self: *PassHarness, io: *const abi_render.ke_render_pass_io) !void {
         const svc = self.h.ref.?;
-        self.dev.render_passes = 0;
+        self.gpu.render_passes = 0;
         const pass = svc.*.begin_pass.?(svc, io) orelse return error.TestUnexpectedResult;
         const rp = pass.*.begin_render.?(pass);
         rp.?.end.?(rp);
@@ -926,6 +1038,7 @@ const PassHarness = struct {
         const svc = self.h.ref.?;
         _ = svc.*.end_frame.?(svc);
         self.h.destroy.?(svc);
+        self.gpu.deinit();
         self.sd.deinit();
     }
 };
@@ -947,8 +1060,8 @@ test "a pass drawing over the frame's color loads it in a single render pass" {
     try ph.begin();
     try ph.run(&io);
 
-    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.dev.color_load);
+    try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
+    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
 }
 
 test "a pass that samples the frame's color draws over a copy of it, made first" {
@@ -959,9 +1072,9 @@ test "a pass that samples the frame's color draws over a copy of it, made first"
     try ph.begin();
     try ph.run(&io);
 
-    try testing.expectEqual(@as(u32, 2), ph.dev.render_passes);
-    try testing.expectEqualStrings("render.link", std.mem.span(ph.dev.render_pass_label));
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.dev.color_load);
+    try testing.expectEqual(@as(u32, 2), ph.gpu.render_passes);
+    try testing.expectEqualStrings("render.link", std.mem.span(ph.gpu.render_pass_label));
+    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
 }
 
 test "a pass that replaces the frame's color clears the new one and samples the old" {
@@ -971,7 +1084,7 @@ test "a pass that replaces the frame's color clears the new one and samples the 
     const svc = ph.h.ref.?;
     const io = try joined(&ph, abi_render.KE_RENDER_STAGE_TONEMAP, abi_render.KE_RENDER_CHAIN_REPLACE);
     try ph.begin();
-    ph.dev.render_passes = 0;
+    ph.gpu.render_passes = 0;
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     const source = pass.*.color_source.?(pass);
     const rp = pass.*.begin_render.?(pass);
@@ -979,8 +1092,8 @@ test "a pass that replaces the frame's color clears the new one and samples the 
     svc.*.end_pass.?(svc, pass);
 
     try testing.expect(source != abi_render.KE_GPU_INVALID_HANDLE);
-    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.dev.color_load);
+    try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
+    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
 }
 
 test "a pass outside the chain clears its write and samples no color" {
@@ -996,14 +1109,14 @@ test "a pass outside the chain clears its write and samples no color" {
     io.writes_count = 1;
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
     try testing.expectEqual(@as(abi_render.ke_gpu_texture_view, abi_render.KE_GPU_INVALID_HANDLE), pass.*.color_source.?(pass));
-    ph.dev.render_passes = 0;
+    ph.gpu.render_passes = 0;
     const rp = pass.*.begin_render.?(pass);
     rp.?.end.?(rp);
     svc.*.end_pass.?(svc, pass);
 
-    try testing.expectEqual(@as(u32, 1), ph.dev.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.dev.color_load);
-    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, null), ph.dev.depth_load);
+    try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
+    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
+    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, null), ph.gpu.depth_load);
 }
 
 test "a pass asking for the frame's depth has it attached loaded" {
@@ -1019,7 +1132,7 @@ test "a pass asking for the frame's depth has it attached loaded" {
     io.depth = abi_render.KE_RENDER_DEPTH_TEST;
     try ph.run(&io);
 
-    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.dev.depth_load);
+    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.depth_load);
 }
 
 test "the chain runs by stage, and within a stage in the order the passes joined" {
@@ -1043,17 +1156,17 @@ test "a link whose pass recorded nothing still carries the color through it" {
     try ph.init();
     defer ph.deinit();
     const svc = ph.h.ref.?;
-    ph.dev.render_passes = 0;
+    ph.gpu.render_passes = 0;
     try ph.begin();
     try R.check(svc.*.end_frame.?(svc));
-    const without = ph.dev.render_passes;
+    const without = ph.gpu.render_passes;
 
     _ = try joined(&ph, abi_render.KE_RENDER_STAGE_HDR_POST, abi_render.KE_RENDER_CHAIN_REPLACE);
-    ph.dev.render_passes = 0;
+    ph.gpu.render_passes = 0;
     try ph.begin();
     try R.check(svc.*.end_frame.?(svc));
 
-    try testing.expectEqual(without + 1, ph.dev.render_passes);
+    try testing.expectEqual(without + 1, ph.gpu.render_passes);
 }
 
 test "joining the chain refuses a stage out of range" {
@@ -1088,15 +1201,12 @@ test "a compute pass replays at the end of the frame under its name and with the
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
@@ -1112,26 +1222,23 @@ test "a compute pass replays at the end of the frame under its name and with the
     cp.?.pop_debug_group.?(cp);
     cp.?.end.?(cp);
     svc.*.end_pass.?(svc, pass);
-    try testing.expect(dev.compute_pass_label == null);
+    try testing.expect(gpu.compute_pass_label == null);
     try R.check(svc.*.end_frame.?(svc));
 
-    try testing.expectEqualStrings("render.cull", std.mem.span(dev.compute_pass_label));
-    try testing.expectEqualStrings("bin", std.mem.span(dev.debug_group_label));
-    try testing.expectEqual(@as(i32, 0), dev.debug_groups_open);
+    try testing.expectEqualStrings("render.cull", std.mem.span(gpu.compute_pass_label));
+    try testing.expectEqualStrings("bin", std.mem.span(gpu.debug_group_label));
+    try testing.expectEqual(@as(i64, 0), gpu.debugGroupsOpen());
 }
 
 test "a render service created without a shader directory is refused and leaves nothing behind" {
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = null, .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = null, .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -1154,15 +1261,12 @@ test "pipelines requested from several threads at once settle on one answer per 
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]abi_render.ke_gpu_render_pipeline_params = undefined;
@@ -1185,7 +1289,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     }
 
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -1193,15 +1297,12 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
@@ -1216,7 +1317,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     try testing.expectEqual(compiled, pipeline_cache.getOrCreatePipeline(h.ref, &p));
 
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
 
@@ -1224,15 +1325,12 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     var sd: ShaderDir = undefined;
     try sd.init();
     defer sd.deinit();
-    var dev: stubs.Device = undefined;
-    dev.init();
-    var ecs: stubs.Ecs = undefined;
-    ecs.init();
-    var binder: stubs.Binder = undefined;
-    binder.init();
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(.{ .device = dev.api(), .target = target.api(), .ecs = ecs.api(), .shader_dir = sd.path(), .binder = binder.api(), .color_format = 0, .depth_format = 0 });
+    const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
     const attrs = [_]abi_render.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};
@@ -1256,6 +1354,6 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     try testing.expect(pipeline_cache.getOrCreatePipeline(h.ref, &p) != from_first);
 
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try gpu.expectReleased();
     try heap.expectNoLeaks();
 }
