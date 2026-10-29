@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Kabic.Conventions;
 using Kabic.Pipeline;
 
@@ -10,10 +12,11 @@ namespace Kabic.Cli;
 internal static class GenerateCommand
 {
     /// <summary>
-    /// Regenerates the selected domains and returns zero when all of them were written, or one
-    /// at the first extraction or generation failure.
+    /// Regenerates the selected domains, then, when every domain is selected, runs
+    /// <paramref name="extensions"/> and writes what they emit. Returns zero when everything was
+    /// written, or one at the first extraction, generation or extension failure.
     /// </summary>
-    public static int Run(Options options)
+    public static int Run(Options options, IReadOnlyList<IKabicExtension> extensions)
     {
         var specs = DomainSpec.Load(options.Manifest)
             .Where(s => options.Domains.Count == 0 || options.Domains.Contains(s.Name))
@@ -71,6 +74,25 @@ internal static class GenerateCommand
                 }
                 Console.WriteLine("component layout: regenerated");
             }
+
+            IReadOnlyDictionary<string, string> emitted;
+            try
+            {
+                emitted = ExtensionRunner.Run(extensions, ExtensionRunner.Models(specs, apis), convention,
+                    JsonNode.Parse(File.ReadAllText(options.Manifest))!.AsObject(), options.Root, Place);
+            }
+            catch (InvalidOperationException e)
+            {
+                Console.Error.WriteLine($"[!] extensions failed:\n{e.Message}");
+                return 1;
+            }
+            foreach (var (path, text) in emitted)
+            {
+                var file = Place(path);
+                Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+                File.WriteAllText(file, text);
+            }
+            foreach (var extension in extensions) Console.WriteLine($"{extension.Name}: regenerated");
         }
 
         return 0;

@@ -1,5 +1,7 @@
 using System.Text.Json.Nodes;
 
+using Kabic.Pipeline;
+
 namespace Kabic.Cli.Checks;
 
 /// <summary>
@@ -11,7 +13,7 @@ internal static class ReconstructionCheck
     /// Returns zero when every produced artifact matches the committed tree. Returns one when
     /// regeneration fails or when a produced artifact is missing or differs.
     /// </summary>
-    public static int Execute(Options options)
+    public static int Execute(Options options, IReadOnlyList<IKabicExtension> extensions)
     {
         var rootDir = options.Root;
         var args = options.Raw;
@@ -29,7 +31,7 @@ internal static class ReconstructionCheck
 
         try
         {
-            var regenerated = GenerateCommand.Run(options with { Into = shadow });
+            var regenerated = GenerateCommand.Run(options with { Into = shadow }, extensions);
             if (regenerated != 0)
             {
                 Console.Error.WriteLine("[!] regeneration failed");

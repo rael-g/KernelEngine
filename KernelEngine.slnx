@@ -49,6 +49,7 @@
     <Project Path="src/csharp/kabic/Kabic.Numerics/Kabic.Numerics.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Conventions/Kabic.Conventions.csproj" />
     <Project Path="src/csharp/kabic/Kabic.Cli/Kabic.Cli.csproj" />
+    <Project Path="src/csharp/kabic/Kabic/Kabic.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />

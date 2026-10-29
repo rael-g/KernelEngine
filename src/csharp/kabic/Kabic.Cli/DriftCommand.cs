@@ -1,3 +1,5 @@
+using System.Text.Json.Nodes;
+
 using Kabic.Conventions;
 using Kabic.Pipeline;
 
@@ -11,9 +13,10 @@ internal static class DriftCommand
 {
     /// <summary>
     /// Returns zero when nothing drifted, one when a committed artifact is out of date, and two
-    /// when a check could not run. Drift takes precedence over a check that could not run.
+    /// when a check could not run. Drift takes precedence over a check that could not run. The
+    /// output of <paramref name="extensions"/> is compared once every domain could be extracted.
     /// </summary>
-    public static int Run(Options options)
+    public static int Run(Options options, IReadOnlyList<IKabicExtension> extensions)
     {
         var rootDir = options.Root;
         var zigOverride = options.Zig;
@@ -106,6 +109,27 @@ internal static class DriftCommand
                     driftDetected = true;
                 }
             }
+
+            if (extractionFailures.Count == 0)
+            {
+                try
+                {
+                    var emitted = ExtensionRunner.Run(extensions, ExtensionRunner.Models(specs, extracted), convention,
+                        JsonNode.Parse(File.ReadAllText(options.Manifest))!.AsObject(), rootDir, p => Path.Combine(rootDir, p));
+                    foreach (var (path, text) in emitted)
+                    {
+                        var committed = Path.Combine(rootDir, path);
+                        if (File.Exists(committed) && File.ReadAllText(committed) == text) continue;
+                        Console.WriteLine($"[!] extension output is out of date (committed: {path})");
+                        driftDetected = true;
+                    }
+                }
+                catch (InvalidOperationException e)
+                {
+                    Console.WriteLine($"[?] the extensions could not run, so their output was not compared:\n{e.Message}");
+                    checkFailed = true;
+                }
+            }
         }
         finally
         {
@@ -115,7 +139,7 @@ internal static class DriftCommand
         if (driftDetected)
         {
             Console.WriteLine("\nDrift detected. Regenerate with:");
-            Console.WriteLine("  dotnet run --project src/csharp/kabic/Kabic.Cli -- generate");
+            Console.WriteLine("  kabic generate");
             return 1;
         }
 
