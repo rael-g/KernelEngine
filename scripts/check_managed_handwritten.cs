@@ -2,7 +2,7 @@
 
 using System.Runtime.CompilerServices;
 
-const int Ceiling = 112;
+const int Ceiling = 107;
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));

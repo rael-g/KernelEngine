@@ -9,7 +9,7 @@ using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Asset.Native;
 
-namespace KernelEngine.Asset.StbImage;
+namespace KernelEngine.Asset;
 
 /// <summary>Exposes the raw native imageloader pointer for cross-domain composition wiring.</summary>
 public unsafe interface INativeImageLoader
@@ -17,8 +17,39 @@ public unsafe interface INativeImageLoader
     ke_image_loader* Native { get; }
 }
 
+/// <summary>
+/// Keeps the <see cref="ImageLoader"/>-owned memory behind one TextureData alive for as long
+/// as a caller holds it, and gives it back on dispose. Everything it says about itself is
+/// read through <see cref="Data"/>, which stays valid only until then.
+/// </summary>
+public unsafe sealed class Image : IDisposable
+{
+    private readonly ImageLoader _owner;
+    private TextureData* _native;
+
+    internal Image(ImageLoader owner, TextureData* native)
+    {
+        _owner = owner;
+        _native = native;
+    }
+
+    /// <summary>The reading of the memory this instance is keeping alive.</summary>
+    public TextureData Data => _native is null
+        ? throw new ObjectDisposedException(nameof(Image))
+        : *_native;
+
+    /// <summary>Gives the memory back to the imageloader that produced it.</summary>
+    public void Dispose()
+    {
+        if (_native is null) return;
+        var native = _native;
+        _native = null;
+        _owner.FreeImage(native);
+    }
+}
+
 /// <summary>Decodes 2D images (PNG/JPG/...) from disk into RGBA8. Async dispatch is the caller's responsibility.</summary>
-public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
+public unsafe partial class ImageLoader : IDisposable, INativeImageLoader, IImageLoader
 {
     private ke_image_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_image_loader*, void> _destroy;
@@ -51,21 +82,21 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader
     /// <param name="path">Image file path to decode.</param>
     /// <returns>Receives the image, which the caller owns and releases with free_image; NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_texture_data* LoadImage(string path)
+    public Image LoadImage(string path)
     {
         var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
         fixed (byte* pathPtr = pathBytes)
         {
             ke_texture_data* resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->load_image(Handle, (sbyte*)pathPtr, &resultOut), "load_image");
-            return resultOut;
+            return new Image(this, (TextureData*)resultOut);
         }
     }
 
-    /// <summary>Frees a ke_texture_data previously returned by load_image.</summary>
-    public void FreeImage(ke_texture_data* data)
+    /// <summary>Frees a ke_texture_data previously returned by load_image. A null data is ignored.</summary>
+    internal void FreeImage(TextureData* data)
     {
-        Handle->free_image(Handle, data);
+        Handle->free_image(Handle, (ke_texture_data*)data);
     }
 
     /// <summary>Releases the native imageloader.</summary>

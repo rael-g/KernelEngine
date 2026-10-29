@@ -106,7 +106,7 @@ pub const ke_image_loader = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Loads an image from path into a newly allocated ke_texture_data (RGBA8).
     load_image: ?*const fn (?*ke_image_loader, ?[*:0]const u8, ?*?*ke_texture_data) callconv(.c) result.ke_result = null,
-    /// Frees a ke_texture_data previously returned by load_image.
+    /// Frees a ke_texture_data previously returned by load_image. A null data is ignored.
     free_image: ?*const fn (?*ke_image_loader, ?*ke_texture_data) callconv(.c) void = null,
 };
 

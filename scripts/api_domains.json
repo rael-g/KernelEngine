@@ -459,10 +459,11 @@
         "src/c/result",
         "src/c/result"
       ],
+      "composeHeaders": [ "src/c/asset/kernel_engine/asset/mesh_data.h" ],
       "apiJson": "src/csharp/asset/image_loader.ke_api.json",
-      "namespace": "KernelEngine.Asset.StbImage",
+      "namespace": "KernelEngine.Asset",
       "nativeNamespace": "KernelEngine.Asset.Native",
-      "outDir": "src/csharp/asset/KernelEngine.Asset.StbImage/Generated",
+      "outDir": "src/csharp/asset/KernelEngine.Asset/Generated",
       "usings": []
     },
     {
@@ -774,7 +775,7 @@
     }
   ],
   "extensions": {
-    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool", "StbTrueType"] }
+    "factories": { "bindings": ["Enki", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [
     {
