@@ -83,7 +83,7 @@ public class AudioTests
         var handle = audio.LoadSound("test.wav");
 
         Assert.Equal("test.wav", LastPath);
-        Assert.Equal(42u, handle.Value);
+        Assert.Equal(42u, handle);
         NativeMemory.Free(h.@ref);
     }
 
@@ -106,7 +106,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.UnloadSound(new SoundHandle(123));
+        audio.UnloadSound(123u);
 
         Assert.Equal(123u, LastSoundId);
         NativeMemory.Free(h.@ref);
@@ -119,7 +119,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Play(new SoundHandle(123), 0.5f, true);
+        audio.Play(123u, 0.5f, true);
 
         Assert.Equal(123u, LastSoundId);
         Assert.Equal(0.5f, LastVolume);
@@ -134,7 +134,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Stop(new SoundHandle(123));
+        audio.Stop(123u);
 
         Assert.Equal(123u, LastSoundId);
         NativeMemory.Free(h.@ref);

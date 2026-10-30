@@ -23,7 +23,9 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .AddMiniAudio()
+    .AddMiniaudioAudio()
+    .AddAudioScene()
+    .AddAudioComponentsNodeTypes()
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
@@ -40,7 +42,7 @@ var services = new ServiceCollection()
         var audio = sp.GetRequiredService<IAudio>();
         var beep = audio.LoadSound(beepPath);
         var bass = audio.LoadSound(bassPath);
-        Console.WriteLine($"[Audio] beep={beep.Value} bass={bass.Value}");
+        Console.WriteLine($"[Audio] beep={beep} bass={bass}");
 
         tree.AddNode(new AudioController(audio, beep, bass), "AudioController");
     }));
@@ -108,15 +110,15 @@ sealed class AudioController : Node
     private const int KeyEscape = 256;
 
     private readonly IAudio _audio;
-    private readonly SoundHandle _beep;
-    private readonly SoundHandle _bass;
+    private readonly uint _beep;
+    private readonly uint _bass;
 
     private bool _bassLooping;
     private bool _prevSpace;
     private bool _prevL;
     private bool _prevEsc;
 
-    public AudioController(IAudio audio, SoundHandle beep, SoundHandle bass)
+    public AudioController(IAudio audio, uint beep, uint bass)
     {
         _audio = audio;
         _beep = beep;
@@ -133,7 +135,7 @@ sealed class AudioController : Node
 
         if (space && !_prevSpace)
         {
-            _audio.Play(_beep, volume: 0.6f);
+            _audio.Play(_beep, volume: 0.6f, loop: false);
             Console.WriteLine("BEEP");
         }
         if (l && !_prevL)

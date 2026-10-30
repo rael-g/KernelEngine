@@ -11,7 +11,7 @@ public partial class AudioPlayer
 {
     private readonly IAudio _audio;
 
-    private SoundHandle _handle = SoundHandle.None;
+    private uint? _sound;
 
     /// <summary>Creates a player that loads and plays its clip through <paramref name="audio"/>.</summary>
     public AudioPlayer(IAudio audio) => _audio = audio;
@@ -19,17 +19,20 @@ public partial class AudioPlayer
     protected override void OnReady()
     {
         if (string.IsNullOrEmpty(Path)) return;
-        _handle = _audio.LoadSound(System.IO.Path.Combine(System.AppContext.BaseDirectory, Path));
+        _sound = _audio.LoadSound(System.IO.Path.Combine(System.AppContext.BaseDirectory, Path));
     }
 
     protected override void OnUnbind()
     {
-        if (_handle == SoundHandle.None) return;
-        _audio.UnloadSound(_handle);
-        _handle = SoundHandle.None;
+        if (_sound is not { } sound) return;
+        _audio.UnloadSound(sound);
+        _sound = null;
     }
 
     /// <summary>Plays the loaded clip at <see cref="Volume"/>, restarting it if already
-    /// playing.</summary>
-    public void Play() => _audio.Play(_handle, Volume);
+    /// playing; does nothing when no clip was loaded.</summary>
+    public void Play()
+    {
+        if (_sound is { } sound) _audio.Play(sound, Volume, false);
+    }
 }

@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />

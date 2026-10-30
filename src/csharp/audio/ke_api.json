@@ -5,7 +5,9 @@
     {
       "name": "ke_audio",
       "doc": "Audio playback. Every slot is safe to call from a system body.",
-      "tags": [],
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",
@@ -29,7 +31,7 @@
                 "borrowed",
                 "utf8"
               ],
-              "doc": "Filesystem path to the audio file."
+              "doc": "The audio file, read through the io the backend was created with."
             },
             {
               "name": "out_sound",

@@ -18,7 +18,7 @@ public unsafe interface INativeAudio
 }
 
 /// <summary>Audio playback. Every slot is safe to call from a system body.</summary>
-public unsafe partial class Audio : IDisposable, INativeAudio
+public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
 {
     private ke_audio* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_audio*, void> _destroy;
@@ -48,7 +48,7 @@ public unsafe partial class Audio : IDisposable, INativeAudio
     }
 
     /// <summary>Loads a sound for repeated playback; the backend autodetects the format.</summary>
-    /// <param name="path">Filesystem path to the audio file.</param>
+    /// <param name="path">The audio file, read through the io the backend was created with.</param>
     /// <returns>Receives the sound; KE_AUDIO_SOUND_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint LoadSound(string path)

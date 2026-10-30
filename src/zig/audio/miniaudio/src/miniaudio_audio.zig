@@ -12,6 +12,7 @@ const gpa = heap.gpa;
 
 const ma = @import("c");
 const abi_audio = @import("abi_audio");
+const abi_io = @import("abi_io");
 const abi_resource_cache = @import("abi_resource_cache");
 const abi_resource_cache_default_factory = @import("abi_resource_cache_default_factory");
 const abi_result = @import("abi_result");
@@ -19,11 +20,14 @@ const abi_result = @import("abi_result");
 const R = @import("result").Result(.{});
 
 /// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
-/// it. `sound` is uninitialised only when `initialized` is set, which happens once the file has
-/// opened.
+/// it. `bytes` is the file the io read, which `decoder` reads from until it is released through
+/// the io; `decoder` is initialised once `decoder_ready` is set and `sound` once `initialized` is.
 const LoadedSound = struct {
     sound: ma.ma_sound,
     initialized: bool,
+    decoder: ma.ma_decoder,
+    decoder_ready: bool,
+    bytes: ?*anyopaque,
 };
 
 /// The backend's whole state: allocated by `ke_audio_miniaudio_create`, freed by `audioDestroy`,
@@ -31,8 +35,10 @@ const LoadedSound = struct {
 /// when `engine_ready` is set. `cache` and `cache_destroy` are undefined until the cache is
 /// created, and the destroy callback reads `sounds`, so the map must still exist while the cache is
 /// alive. A sound id is a key of `sounds` and a handle of the cache, which reference-counts it by
-/// id and by path. Everything runs on the calling thread.
+/// id and by path. `io` is borrowed from the factory's caller, and every sound file is read through
+/// it. Everything runs on the calling thread.
 const State = struct {
+    io: *abi_io.ke_io,
     engine: ma.ma_engine,
     engine_ready: bool,
     sounds: std.AutoHashMap(abi_audio.ke_audio_sound, *LoadedSound),
@@ -48,10 +54,14 @@ const log = std.log.scoped(.audio_miniaudio);
 fn destroySoundResource(handle: abi_resource_cache.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(ctx.?));
     const slot: ?*LoadedSound = if (state.sounds.fetchRemove(handle)) |kv| kv.value else null;
-    if (slot) |s| {
-        if (s.initialized) ma.ma_sound_uninit(&s.sound);
-        gpa.destroy(s);
-    }
+    if (slot) |s| release(state, s);
+}
+
+fn release(state: *State, s: *LoadedSound) void {
+    if (s.initialized) ma.ma_sound_uninit(&s.sound);
+    if (s.decoder_ready) _ = ma.ma_decoder_uninit(&s.decoder);
+    if (s.bytes) |bytes| state.io.free_bytes.?(state.io, bytes);
+    gpa.destroy(s);
 }
 
 /// Tears the backend down in the order the cache callback requires: the cache first, which frees
@@ -90,17 +100,35 @@ fn loadSound(state: *State, path: [*c]const u8) R.Error!abi_audio.ke_audio_sound
     if (state.cache.try_get_cached.?(state.cache, path, &cached))
         return @intCast(cached);
 
-    const slot = gpa.create(LoadedSound) catch return error.OutOfMemory;
-    errdefer gpa.destroy(slot);
-    slot.* = std.mem.zeroes(LoadedSound);
+    var request: ?*abi_io.ke_io_request = null;
+    try R.check(state.io.read_file.?(state.io, path, &request));
+    var file: abi_io.ke_io_result = undefined;
+    R.check(state.io.wait.?(state.io, request, &file)) catch |err| switch (err) {
+        error.OutOfMemory => return err,
+        else => return error.NotFound,
+    };
 
-    const r = ma.ma_sound_init_from_file(&state.engine, path, 0, null, null, &slot.sound);
+    const slot = gpa.create(LoadedSound) catch {
+        state.io.free_bytes.?(state.io, file.bytes);
+        return error.OutOfMemory;
+    };
+    slot.* = std.mem.zeroes(LoadedSound);
+    slot.bytes = file.bytes;
+    errdefer release(state, slot);
+
+    const decoded = ma.ma_decoder_init_memory(file.bytes, @intCast(file.size), null, &slot.decoder);
+    if (decoded != ma.MA_SUCCESS) {
+        log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(decoded) });
+        return error.NotFound;
+    }
+    slot.decoder_ready = true;
+
+    const r = ma.ma_sound_init_from_data_source(&state.engine, @ptrCast(&slot.decoder), 0, null, &slot.sound);
     if (r != ma.MA_SUCCESS) {
         log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(r) });
         return error.NotFound;
     }
     slot.initialized = true;
-    errdefer ma.ma_sound_uninit(&slot.sound);
 
     if (state.next_id == 0) state.next_id = 1;
     const id = state.next_id;
@@ -169,12 +197,14 @@ fn audioSetMasterVolume(self: ?*abi_audio.ke_audio, volume: f32) callconv(.c) vo
 
 /// Builds the state, the engine, the cache and the contract struct, in that order, and logs that
 /// the backend initialised. Each failure releases the steps before it, so a failed call leaves no
-/// engine, cache or state behind and the handle zeroed. Fails with out of memory on the state or the
-/// struct, general when the engine cannot start, and whatever the cache creation returns.
-export fn ke_audio_miniaudio_create(out_audio: ?*abi_audio.ke_audio_handle) callconv(.c) abi_result.ke_result {
+/// engine, cache or state behind and the handle zeroed. Fails with invalid argument for a null io,
+/// out of memory on the state or the struct, general when the engine cannot start, and whatever the
+/// cache creation returns.
+export fn ke_audio_miniaudio_create(io_in: ?*abi_io.ke_io, out_audio: ?*abi_audio.ke_audio_handle) callconv(.c) abi_result.ke_result {
     const out = out_audio orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    out.* = create() catch |err| {
+    const io = io_in orelse return R.code(error.InvalidArgument);
+    out.* = create(io) catch |err| {
         log.warn("creating the audio backend failed: {t}", .{err});
         return R.code(err);
     };
@@ -182,10 +212,11 @@ export fn ke_audio_miniaudio_create(out_audio: ?*abi_audio.ke_audio_handle) call
     return R.ok;
 }
 
-fn create() R.Error!abi_audio.ke_audio_handle {
+fn create(io: *abi_io.ke_io) R.Error!abi_audio.ke_audio_handle {
     const state = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(state);
     state.* = .{
+        .io = io,
         .engine = undefined,
         .engine_ready = false,
         .sounds = std.AutoHashMap(abi_audio.ke_audio_sound, *LoadedSound).init(gpa),
@@ -225,10 +256,87 @@ fn create() R.Error!abi_audio.ke_audio_handle {
 
 const testing = std.testing;
 
+const zsub = @import("zsub");
+
+var served: ?[]const u8 = null;
+var request_token: u8 = 0;
+
+fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+    args[2].?.* = @ptrCast(&request_token);
+    return R.ok;
+}
+
+fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+    const bytes = served orelse return R.code(error.NotFound);
+    if (args[2]) |out| {
+        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.bytes = @constCast(bytes.ptr);
+        out.size = bytes.len;
+    }
+    return R.ok;
+}
+
+fn freeServed(_: zsub.For(abi_io.ke_io).Args(.free_bytes)) void {}
+
+var served_io: zsub.For(abi_io.ke_io) = undefined;
+var served_io_ready = false;
+
+fn serving(bytes: ?[]const u8) !*abi_io.ke_io {
+    served = bytes;
+    if (!served_io_ready) {
+        try served_io.init();
+        _ = served_io.when(.read_file).does(readServed);
+        _ = served_io.when(.wait).does(waitServed);
+        _ = served_io.when(.free_bytes).does(freeServed);
+        served_io_ready = true;
+    }
+    return served_io.api();
+}
+
 fn createAudio() abi_audio.ke_audio_handle {
     var h: abi_audio.ke_audio_handle = undefined;
-    R.check(ke_audio_miniaudio_create(&h)) catch return .{ .ref = null, .destroy = null };
+    const io = serving(null) catch return .{ .ref = null, .destroy = null };
+    R.check(ke_audio_miniaudio_create(io, &h)) catch return .{ .ref = null, .destroy = null };
     return h;
+}
+
+const silent_wav = [_]u8{
+    'R', 'I', 'F', 'F', 40, 0, 0, 0, 'W', 'A', 'V', 'E',
+    'f', 'm', 't', ' ', 16, 0, 0, 0, 1, 0, 1, 0,
+    0x44, 0xac, 0, 0, 0x88, 0x58, 0x01, 0, 2, 0, 16, 0,
+    'd', 'a', 't', 'a', 4, 0, 0, 0, 0, 0, 0, 0,
+};
+
+test "creating without an io is refused and leaves the handle zeroed" {
+    var h: abi_audio.ke_audio_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_audio_miniaudio_create(null, &h)));
+    try testing.expect(h.ref == null and h.destroy == null);
+}
+
+test "a sound is read through the io and decoded from memory" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    _ = try serving(&silent_wav);
+    defer served = null;
+    var id: abi_audio.ke_audio_sound = abi_audio.KE_AUDIO_SOUND_INVALID;
+    try R.check(h.ref.?.load_sound.?(h.ref, "beep.wav", &id));
+    try testing.expect(id != abi_audio.KE_AUDIO_SOUND_INVALID);
+    try served_io.received(.read_file).atLeast(1);
+    h.ref.?.unload_sound.?(h.ref, id);
+}
+
+test "bytes that are not a sound are refused as not found" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    _ = try serving("not a sound");
+    defer served = null;
+    var id: abi_audio.ke_audio_sound = 1;
+    try testing.expectError(error.NotFound, R.check(h.ref.?.load_sound.?(h.ref, "noise.wav", &id)));
+    try testing.expectEqual(@as(abi_audio.ke_audio_sound, abi_audio.KE_AUDIO_SOUND_INVALID), id);
 }
 
 test "creating the backend yields a usable handle when a device is available" {
@@ -249,7 +357,7 @@ test "loading a sound with a null path returns the invalid sound id" {
     try testing.expectEqual(@as(abi_audio.ke_audio_sound, abi_audio.KE_AUDIO_SOUND_INVALID), id);
 }
 
-test "loading a sound from a path that does not exist returns the invalid sound id" {
+test "loading a sound the io does not find returns the invalid sound id" {
     const h = createAudio();
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);

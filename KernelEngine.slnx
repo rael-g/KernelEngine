@@ -70,7 +70,6 @@
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
-    <Project Path="src/csharp/audio/KernelEngine.Audio.Abstractions/KernelEngine.Audio.Abstractions.csproj" />
     <Project Path="src/csharp/common/KernelEngine.Common/KernelEngine.Common.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Abstractions/KernelEngine.Ecs.Abstractions.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.SourceGenerators/KernelEngine.SourceGenerators.csproj" />

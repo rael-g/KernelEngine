@@ -16,7 +16,7 @@ extern "C"
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)
 
     /**
-     * Audio playback.
+     * [interface] Audio playback.
      * Every slot is safe to call from a system body.
      */
     typedef struct ke_audio
@@ -25,7 +25,7 @@ extern "C"
 
         /**
          * Loads a sound for repeated playback; the backend autodetects the format.
-         * @param path [borrowed,utf8] Filesystem path to the audio file.
+         * @param path [borrowed,utf8] The audio file, read through the io the backend was created with.
          * @param out_sound [out] Receives the sound; KE_AUDIO_SOUND_INVALID on failure.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_sound;
          *         KE_RESULT_NOT_FOUND when the file cannot be opened; KE_RESULT_OUT_OF_MEMORY.
