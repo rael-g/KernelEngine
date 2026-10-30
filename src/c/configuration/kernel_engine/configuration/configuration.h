@@ -19,6 +19,35 @@ extern "C"
     /// latch-only: it records that the section changed and does nothing else.
     typedef void (*ke_configuration_change_func)(const char *section, void *ctx);
 
+    /** How a field of a config struct is stored. */
+    typedef enum ke_config_type
+    {
+        KE_CONFIG_INT,
+        KE_CONFIG_FLOAT,
+        KE_CONFIG_DOUBLE,
+        KE_CONFIG_BOOL,
+        KE_CONFIG_STRING,
+    } ke_config_type;
+
+    /** A default of a config field; the member read is the one its type names. */
+    typedef union ke_config_value
+    {
+        int64_t     i;
+        double      d;
+        bool        b;
+        const char *s;
+    } ke_config_value;
+
+    /** One field of a config struct: the key naming it, where it lives, and its default. */
+    typedef struct ke_config_field
+    {
+        const char     *key;
+        ke_config_type  type;
+        uint32_t        offset;
+        uint32_t        size;
+        ke_config_value default_value;
+    } ke_config_field;
+
     typedef struct ke_configuration
     {
         void *handle;
@@ -50,6 +79,19 @@ extern "C"
 
         /// Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.
         void (*unsubscribe)(struct ke_configuration *self, ke_configuration_subscription sub);
+
+        /// Fills a config struct: writes each field's default, then the value the store holds for
+        /// the field's key in @p section. A key holding a type the field cannot take is logged and
+        /// leaves the default; an integer is accepted by a float or double field. A string field
+        /// points at the store's copy, valid as get_string's result is.
+        /// @param section [borrowed,utf8] The section the struct's keys live in.
+        /// @param fields [borrowed,array_of:field_count] The struct's field table.
+        /// @param field_count Number of entries in @p fields.
+        /// @param out_config [out] The struct to fill.
+        /// @return KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null argument or a field whose size
+        ///         does not fit its type; fields before it are already written.
+        ke_result (*fill)(struct ke_configuration *self, const char *section, const ke_config_field *fields,
+                          uint32_t field_count, void *out_config);
 
     } ke_configuration;
 

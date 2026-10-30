@@ -20,12 +20,22 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
+    try expectSameLayout(abi.ke_config_value, translated("ke_config_value"));
+    try expectSameLayout(abi.ke_config_field, translated("ke_config_field"));
     try expectSameLayout(abi.ke_configuration, translated("ke_configuration"));
     try expectSameLayout(abi.ke_configuration_handle, translated("ke_configuration_handle"));
     try expectSameLayout(abi.ke_configuration_source, translated("ke_configuration_source"));
     try expectSameLayout(abi.ke_configuration_source_handle, translated("ke_configuration_source_handle"));
     try expectSameLayout(abi.ke_configuration_change_func, c.ke_configuration_change_func);
     try expectSameLayout(abi.ke_configuration_subscription, c.ke_configuration_subscription);
+}
+
+test "every enum value is the header's value" {
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_INT), @as(i64, abi.KE_CONFIG_INT));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_FLOAT), @as(i64, abi.KE_CONFIG_FLOAT));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_DOUBLE), @as(i64, abi.KE_CONFIG_DOUBLE));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_BOOL), @as(i64, abi.KE_CONFIG_BOOL));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_STRING), @as(i64, abi.KE_CONFIG_STRING));
 }
 
 test "every constant is the header's value" {
