@@ -167,6 +167,7 @@
       "name": "ke_transform_component",
       "doc": "An entity\u0027s authored 3D pose.",
       "tags": [
+        "table",
         "node:Node3D",
         "value"
       ],
@@ -200,6 +201,7 @@
       "name": "ke_transform2d_component",
       "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
       "tags": [
+        "table",
         "node:Node2D"
       ],
       "fields": [
@@ -254,6 +256,7 @@
       "name": "ke_camera_component",
       "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
       "tags": [
+        "table",
         "node:Camera",
         "base:Node3D",
         "value"
@@ -313,6 +316,7 @@
       "name": "ke_directional_light_component",
       "doc": "Directional light node. Its properties give the light\u0027s direction, color, intensity and ambient term.",
       "tags": [
+        "table",
         "node:DirectionalLight",
         "base:Node3D",
         "value"
@@ -356,6 +360,7 @@
       "name": "ke_point_light_component",
       "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
       "tags": [
+        "table",
         "node:PointLight",
         "base:Node3D"
       ],
@@ -390,6 +395,7 @@
       "name": "ke_spot_light_component",
       "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
       "tags": [
+        "table",
         "node:SpotLight",
         "base:Node3D"
       ],
@@ -448,6 +454,7 @@
       "name": "ke_ambient_light_component",
       "doc": "Scene-wide ambient light node. First entity with this component wins.",
       "tags": [
+        "table",
         "node:AmbientLight",
         "base:Node3D"
       ],
@@ -484,6 +491,7 @@
       "name": "ke_mesh_component",
       "doc": "Renders a mesh with a material. \u0060mesh\u0060 and \u0060material\u0060 double as output: the engine fills them, at KE_PHASE_UPDATE, whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves \u0060primitive\u0060 empty; the engine only acts where a handle is still invalid.",
       "tags": [
+        "table",
         "node:MeshRenderer",
         "base:Node3D",
         "value"
@@ -577,6 +585,7 @@
       "name": "ke_sprite2d_component",
       "doc": "A textured quad in the plane, resolved into geometry and a material by the engine.",
       "tags": [
+        "table",
         "node:Sprite2D",
         "base:Node2D"
       ],

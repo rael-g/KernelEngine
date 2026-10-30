@@ -11,6 +11,7 @@ extern "C"
 {
 #endif
 
+    /// [table]
     /// [node:Body2D,base:Node2D]
     /// A 2D rigid body. Holds the motion of its entity; its pose is the entity's
     /// ke_transform2d_component, which the body is created at, which moves it when written,
@@ -42,6 +43,7 @@ extern "C"
         KE_SHAPE_KIND_2D_CIRCLE = 1, /**< Circle centered on the node, sized by radius. */
     } ke_shape_kind_2d;
 
+    /// [table]
     /// [node:Collider2D,base:Node2D]
     /// One collision fixture, attached to the nearest ancestor that carries a
     /// ke_body2d_component. The fixture is attached by reconciling this component against

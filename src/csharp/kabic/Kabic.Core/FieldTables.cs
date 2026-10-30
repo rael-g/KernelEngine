@@ -8,14 +8,13 @@ namespace Kabic;
 public static class FieldTables
 {
     /// <summary>
-    /// The structs a scene file can address: the domain's own component structs, in declaration
-    /// order, that have at least one field <see cref="Describes"/> accepts.
+    /// The domain's own structs tagged <c>[table]</c>, in declaration order. Fails when a tagged
+    /// struct has no field <see cref="Describes"/> accepts.
     /// </summary>
     public static IEnumerable<ApiStruct> Describable(ApiModel model, Convention convention) =>
-        model.Structs.Where(s => !s.IsVtable
-            && !s.External
-            && s.Name.EndsWith(convention.ComponentSuffix, StringComparison.Ordinal)
-            && s.Fields.Any(f => Describes(model, f, convention)));
+        model.Structs.Where(s => !s.IsVtable && !s.External && s.Has("table")).Select(s =>
+            s.Fields.Any(f => Describes(model, f, convention)) ? s
+                : throw new InvalidOperationException($"{s.Name}: [table] on a struct with no describable field"));
 
     /// <summary>The fields of <paramref name="s"/> its table describes, in declaration order.</summary>
     public static IEnumerable<ApiField> Fields(ApiModel model, ApiStruct s, Convention convention) =>

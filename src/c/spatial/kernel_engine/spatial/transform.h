@@ -8,6 +8,7 @@ extern "C"
 {
 #endif
 
+    /// [table]
     /// [node:Node3D,value]
     /// An entity's authored 3D pose.
     typedef struct ke_transform_component
@@ -17,6 +18,7 @@ extern "C"
         ke_vec3 scale; ///< [default:1 1 1]
     } ke_transform_component;
 
+    /// [table]
     /// [node:Node2D]
     /// An entity's authored 2D pose, read and written as one unit.
     typedef struct ke_transform2d_component
