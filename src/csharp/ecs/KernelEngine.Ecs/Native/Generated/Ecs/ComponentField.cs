@@ -23,4 +23,10 @@ public unsafe partial struct ComponentField
 
     [NativeTypeName("ke_variant")]
     public Variant DefaultValue;
+
+    [NativeTypeName("const char *const *")]
+    public sbyte** EnumNames;
+
+    [NativeTypeName("uint32_t")]
+    public uint EnumCount;
 }

@@ -173,12 +173,14 @@ ke_system_ctx size=32 align=8
   slice 24
 
 [ecs]
-ke_component_field size=48 align=8
+ke_component_field size=64 align=8
   name 0
   type 8
   offset 12
   size 16
   default_value 24
+  enum_names 48
+  enum_count 56
 ke_component_params size=40 align=8
   name 0
   size 8

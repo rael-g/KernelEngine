@@ -862,6 +862,21 @@
           "type": "ke_variant",
           "tags": [],
           "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        },
+        {
+          "name": "enum_names",
+          "type": "const char *const *",
+          "tags": [
+            "borrowed",
+            "optional"
+          ],
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. NULL leaves the field numeric."
+        },
+        {
+          "name": "enum_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060enum_names\u0060."
         }
       ],
       "external": true

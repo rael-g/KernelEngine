@@ -42,8 +42,9 @@ public enum ComponentFieldKind
 /// <param name="Kind">How the field is addressed.</param>
 /// <param name="Offset">Bytes from the start of the struct.</param>
 /// <param name="Size">Bytes the field occupies.</param>
+/// <param name="EnumNames">The names a scene may write for an integer field, in value order, or null.</param>
 /// <param name="Default">What the field holds when nothing authors it; <see cref="ComponentFieldValue.None"/> leaves zero.</param>
-public readonly record struct ComponentFieldLayout(string Name, ComponentFieldKind Kind, uint Offset, uint Size, ComponentFieldValue Default);
+public readonly record struct ComponentFieldLayout(string Name, ComponentFieldKind Kind, uint Offset, uint Size, ComponentFieldValue Default, string[]? EnumNames = null);
 
 /// <summary>
 /// A field's default value. <see cref="Kind"/> says which member is read: <see cref="Bool"/>,
@@ -80,10 +81,10 @@ public static class ComponentFields
     /// <typeparamref name="TField"/>.
     /// </summary>
     public static ComponentFieldLayout Row<TStruct, TField>(ref TStruct instance, ref TField field, string name,
-        ComponentFieldKind kind, ComponentFieldValue defaultValue)
+        ComponentFieldKind kind, ComponentFieldValue defaultValue, string[]? enumNames = null)
         where TStruct : unmanaged where TField : unmanaged
     {
         var offset = Unsafe.ByteOffset(ref Unsafe.As<TStruct, byte>(ref instance), ref Unsafe.As<TField, byte>(ref field));
-        return new ComponentFieldLayout(name, kind, (uint)offset, (uint)Unsafe.SizeOf<TField>(), defaultValue);
+        return new ComponentFieldLayout(name, kind, (uint)offset, (uint)Unsafe.SizeOf<TField>(), defaultValue, enumNames);
     }
 }

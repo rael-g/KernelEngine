@@ -10,6 +10,8 @@ const unsigned long long layout_values[] = {
     offsetof(ke_component_field, offset),
     offsetof(ke_component_field, size),
     offsetof(ke_component_field, default_value),
+    offsetof(ke_component_field, enum_names),
+    offsetof(ke_component_field, enum_count),
     sizeof(ke_component_params),
     offsetof(ke_component_params, name),
     offsetof(ke_component_params, size),

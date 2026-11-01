@@ -25,6 +25,11 @@ pub const ke_component_field = extern struct {
     /// What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no
     /// default and zero stands.
     default_value: abi_ecs_variant.c.ke_variant = std.mem.zeroes(abi_ecs_variant.c.ke_variant),
+    /// The names a scene may write for an integer field, in value order; a name stands for its
+    /// index. NULL leaves the field numeric.
+    enum_names: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    /// Entries in `enum_names`.
+    enum_count: u32 = std.mem.zeroes(u32),
 };
 
 /// What a component type is registered with.

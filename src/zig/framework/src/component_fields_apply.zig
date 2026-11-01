@@ -11,6 +11,19 @@ fn writeField(ecs: *abi_ecs.c.ke_ecs, component: *anyopaque, field: *const abi_e
     return ecs.component_field_write.?(ecs, component, field, v) == abi_result.c.KE_OK;
 }
 
+/// Turns a string written for a field with enum names into the integer it stands for. Returns
+/// false for a name the field does not declare; any other value passes unchanged.
+fn namedValue(field: *const abi_ecs.c.ke_component_field, value: *abi_ecs_variant.c.ke_variant) bool {
+    if (field.enum_names == null or value.type != abi_ecs_variant.c.KE_VARIANT_STRING) return true;
+    const names: [*]const ?[*:0]const u8 = @ptrCast(field.enum_names);
+    for (names[0..field.enum_count], 0..) |name, index| {
+        if (!keyIs(value.unnamed_0.s, name)) continue;
+        value.* = .{ .type = abi_ecs_variant.c.KE_VARIANT_INT, .unnamed_0 = .{ .i = @intCast(index) } };
+        return true;
+    }
+    return false;
+}
+
 fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
     if (key == null or name == null) return false;
     return std.mem.eql(u8, std.mem.span(key), std.mem.span(name));
@@ -35,7 +48,9 @@ pub fn apply(
         for (fields[0..field_count]) |*field| {
             if (!keyIs(entry.key, field.name)) continue;
             entry.consumed = true;
-            if (!writeField(ecs, base, field, &entry.value)) return field;
+            var value = entry.value;
+            if (!namedValue(field, &value)) return field;
+            if (!writeField(ecs, base, field, &value)) return field;
             break;
         }
     }
@@ -139,4 +154,17 @@ test "only the fields that declare a default are seeded" {
     try testing.expectEqual(@as(usize, 1), ecs.count);
     try testing.expectEqualStrings("count", std.mem.span(ecs.written[0].field));
     try testing.expectEqual(@as(i64, 5), ecs.written[0].value);
+}
+
+test "a name a field declares is written as its index, and an unknown one is refused" {
+    var fake: FakeEcs = undefined;
+    fake.init();
+    var slot: u32 = 0;
+    const names = [_]?[*:0]const u8{ "Left", "Right" };
+    const fields = [_]abi_ecs.c.ke_component_field{.{ .name = "action", .type = abi_ecs_variant.c.KE_VARIANT_INT, .enum_names = @ptrCast(&names), .enum_count = names.len }};
+    var entries = [_]abi_ecs_variant.c.ke_variant_table_entry{.{ .key = "action", .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "Right" } } }};
+    try testing.expect(apply(&fake.api, &slot, &entries, 1, &fields, 1) == null);
+    try testing.expectEqual(@as(i64, 1), fake.written[0].value);
+    entries[0].value.unnamed_0.s = "Up";
+    try testing.expect(apply(&fake.api, &slot, &entries, 1, &fields, 1) != null);
 }

@@ -18,6 +18,10 @@ extern "C"
         /// What the field holds when nothing authors it. KE_VARIANT_NULL means
         /// the header declared no default and zero stands.
         ke_variant      default_value;
+        /// [borrowed,optional] The names a scene may write for an integer field, in value order;
+        /// a name stands for its index. NULL leaves the field numeric.
+        const char *const *enum_names;
+        uint32_t           enum_count; ///< Entries in `enum_names`.
     } ke_component_field;
 
 /** Expands a field table into the `fields` and `field_count` initializers of ke_component_params. */

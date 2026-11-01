@@ -415,11 +415,15 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         foreach (var p in properties)
         {
             if (KindOf(p.Type) is not { } kind) continue;
-            sb.AppendLine($"                {ns}.ComponentFields.Row(ref v, ref v.{p.Name}, \"{SnakeCase(p.Name)}\", {ns}.ComponentFieldKind.{kind}, {ns}.ComponentFieldValue.None),");
+            sb.AppendLine($"                {ns}.ComponentFields.Row(ref v, ref v.{p.Name}, \"{SnakeCase(p.Name)}\", {ns}.ComponentFieldKind.{kind}, {ns}.ComponentFieldValue.None{EnumNames(p.Type)}),");
         }
         sb.AppendLine("            ];");
         sb.AppendLine("        }");
     }
+
+    /// <summary>The argument naming a enum property's values, empty for any other type.</summary>
+    static string EnumNames(ITypeSymbol t) => t.TypeKind == TypeKind.Enum
+        ? $", global::System.Enum.GetNames<{t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>()" : "";
 
     /// <summary>The field kind a property is addressed as, or null for a type a scene cannot write.</summary>
     static string? KindOf(ITypeSymbol t)
