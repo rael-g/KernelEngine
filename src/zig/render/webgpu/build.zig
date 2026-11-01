@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_gpu_device_webgpu",
         .root = "src/gpu_device_webgpu.zig",
-        .abi = &.{ "abi_render_gpu", "abi_asset_resolver", "abi_gpu_device_webgpu_factory", "abi_render", "abi_result", "abi_task_pool", "abi_window" },
+        .abi = &.{ "abi_configuration", "abi_render_gpu", "abi_asset_resolver", "abi_gpu_device_webgpu_factory", "abi_render", "abi_result", "abi_task_pool", "abi_window" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,

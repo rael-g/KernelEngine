@@ -12,11 +12,12 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget : KernelEngine.Re
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">Borrowed, must outlive the target.</param>
     /// <param name="presentMode">Zero selects KE_GPU_PRESENT_MODE_FIFO.</param>
-    public WebgpuWindowGpuRenderTarget(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default) : base(Create(device, window, presentMode))
+    /// <param name="configuration"></param>
+    public WebgpuWindowGpuRenderTarget(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(device, window, presentMode, configuration))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_render_target_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode)
+    private static KernelEngine.Render.Native.ke_gpu_render_target_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode, KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(window);
@@ -24,6 +25,7 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget : KernelEngine.Re
         config.device = device.Native;
         config.window = window.Native;
         config.present_mode = presentMode;
+        config.configuration = (configuration is null ? null : configuration.Native);
         KernelEngine.Render.Native.ke_gpu_render_target_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&config, &handle), "ke_gpu_render_target_webgpu_window_create");
         return handle;

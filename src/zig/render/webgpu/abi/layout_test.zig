@@ -25,6 +25,8 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_gpu_device_webgpu_params, translated("ke_gpu_device_webgpu_params"));
     try expectSameLayout(abi.c.ke_gpu_render_target_webgpu_window_params, translated("ke_gpu_render_target_webgpu_window_params"));
+    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
+    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
     if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
@@ -48,7 +50,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_GPU_PRESENT_MODE_IMMEDIATE), @as(i64, abi.c.KE_GPU_PRESENT_MODE_IMMEDIATE));
 }
 
-extern const layout_values: [9]c_ulonglong;
+extern const layout_values: [11]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -57,10 +59,12 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_device_webgpu_params, "enable_validation"),
         @offsetOf(abi.c.ke_gpu_device_webgpu_params, "task_pool"),
         @offsetOf(abi.c.ke_gpu_device_webgpu_params, "debug_labels"),
+        @offsetOf(abi.c.ke_gpu_device_webgpu_params, "configuration"),
         @sizeOf(abi.c.ke_gpu_render_target_webgpu_window_params),
         @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "device"),
         @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "window"),
         @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "present_mode"),
+        @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "configuration"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

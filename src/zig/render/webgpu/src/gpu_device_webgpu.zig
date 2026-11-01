@@ -365,7 +365,8 @@ pub export fn ke_gpu_device_webgpu_create(
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (params) |p| {
         if (p.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
-        if (p.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
+        const asked = if (p.configuration) |store| store.*.get_bool.?(store, "render", "debug_labels", false) else false;
+        if (p.debug_labels or asked) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
     }
     const s = createDeviceState(instance_flags) catch |err| {
         log.warn("webgpu: device initialisation failed: {s}", .{@errorName(err)});

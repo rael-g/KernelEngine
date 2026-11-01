@@ -15,6 +15,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_cluster_params, grid_y),
     offsetof(ke_render_cluster_params, grid_z),
     offsetof(ke_render_cluster_params, max_lights_per_cluster),
+    offsetof(ke_render_cluster_params, configuration),
     sizeof(ke_render_cluster_handle),
     offsetof(ke_render_cluster_handle, ref),
     offsetof(ke_render_cluster_handle, destroy),

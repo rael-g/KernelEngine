@@ -489,6 +489,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),

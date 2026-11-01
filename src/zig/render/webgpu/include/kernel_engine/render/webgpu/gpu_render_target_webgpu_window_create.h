@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -46,6 +47,8 @@ typedef struct ke_gpu_render_target_webgpu_window_params
     struct ke_window    *window;
     /** Zero selects KE_GPU_PRESENT_MODE_FIFO. */
     ke_gpu_present_mode  present_mode;
+    /// Optional, borrowed. Its [runtime.renderer] vsync false selects IMMEDIATE when present_mode is zero.
+    ke_configuration    *configuration; ///< [optional]
 } ke_gpu_render_target_webgpu_window_params;
 
 /**

@@ -286,7 +286,9 @@ export fn ke_gpu_render_target_webgpu_window_create(
         closeDisplay(created.display);
         return fail(error.NotSupported, "window target: the surface offers no RGBA8 or BGRA8 format on this adapter");
     };
-    const present_mode = presentModeOf(surface, ds.adapter, params.present_mode) orelse {
+    const unsynced = if (params.configuration) |store| !store.*.get_bool.?(store, "runtime.renderer", "vsync", true) else false;
+    const asked = if (params.present_mode == 0 and unsynced) abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_IMMEDIATE else params.present_mode;
+    const present_mode = presentModeOf(surface, ds.adapter, asked) orelse {
         wgpu.wgpuSurfaceRelease(surface);
         closeDisplay(created.display);
         return fail(error.NotSupported, "window target: the surface does not offer the present mode asked for");

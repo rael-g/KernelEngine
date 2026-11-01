@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -57,6 +58,7 @@ extern "C"
         uint32_t grid_z;
         /// Lights one cluster can list. 0 takes the default.
         uint32_t max_lights_per_cluster;
+        ke_configuration  *configuration; ///< [optional] A zero grid field reads its [render] key; borrowed.
     } ke_render_cluster_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device, view space,

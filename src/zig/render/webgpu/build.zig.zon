@@ -8,6 +8,7 @@
         .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_render = .{ .path = "../../abi/render" },
+        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_task_pool = .{ .path = "../../abi/task_pool" },
         .abi_window = .{ .path = "../../abi/window" },

@@ -18,8 +18,8 @@ public static class WebgpuGpuDeviceRegistration
     public static IServiceCollection AddWebgpuGpuDevice(this IServiceCollection services, bool enableValidation = default, bool debugLabels = default)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new WebgpuGpuDevice(logger, enableValidation, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), debugLabels)
-            : new WebgpuGpuDevice(enableValidation, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), debugLabels));
+            ? new WebgpuGpuDevice(logger, enableValidation, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), debugLabels, sp.GetService<KernelEngine.Configuration.INativeConfiguration>())
+            : new WebgpuGpuDevice(enableValidation, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), debugLabels, sp.GetService<KernelEngine.Configuration.INativeConfiguration>()));
         services.AddSingleton<KernelEngine.Render.Gpu.INativeGpuDevice>(sp => sp.GetRequiredService<WebgpuGpuDevice>());
         return services;
     }

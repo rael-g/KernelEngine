@@ -12,16 +12,18 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
     /// <param name="enableValidation">When non-zero, asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
     /// <param name="taskPool"></param>
     /// <param name="debugLabels">When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
-    public WebgpuGpuDevice(bool enableValidation = default, KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool debugLabels = default) : base(Create(enableValidation, taskPool, debugLabels))
+    /// <param name="configuration"></param>
+    public WebgpuGpuDevice(bool enableValidation = default, KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool debugLabels = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(enableValidation, taskPool, debugLabels, configuration))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_device_handle Create(bool enableValidation, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool debugLabels)
+    private static KernelEngine.Render.Native.ke_gpu_device_handle Create(bool enableValidation, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool debugLabels, KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         KernelEngine.Render.Webgpu.Native.ke_gpu_device_webgpu_params config = default;
         config.enable_validation = enableValidation;
         config.task_pool = (taskPool is null ? null : taskPool.Native);
         config.debug_labels = debugLabels;
+        config.configuration = (configuration is null ? null : configuration.Native);
         KernelEngine.Render.Native.ke_gpu_device_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&config, &handle), "ke_gpu_device_webgpu_create");
         return handle;

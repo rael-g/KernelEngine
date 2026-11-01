@@ -12,14 +12,15 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">Borrowed, must outlive the target.</param>
     /// <param name="presentMode">Zero selects KE_GPU_PRESENT_MODE_FIFO.</param>
-    public WebgpuWindowGpuRenderTarget(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default) : base(CreateLogged(logger, device, window, presentMode))
+    /// <param name="configuration"></param>
+    public WebgpuWindowGpuRenderTarget(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(CreateLogged(logger, device, window, presentMode, configuration))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode)
+    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode, KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(device, window, presentMode);
+        return Create(device, window, presentMode, configuration);
     }
 }

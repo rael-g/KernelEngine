@@ -42,6 +42,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_ui_handle _ui;
     private ke_render_label_resolve_handle _labels;
     private ke_render_service* _core;
+    private KernelEngine.Configuration.Native.ke_configuration* _store;
     private RenderService? _renderService;
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
@@ -128,17 +129,17 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             RouteLogs(logger);
 
         var config = services.GetService<IConfiguration>();
-        var debugLabels = _debugLabelsOverride || (config?.GetBool("render", "debug_labels", false) ?? false);
-        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, task_pool = sc, debug_labels = debugLabels };
+        var store = services.GetService<KernelEngine.Configuration.INativeConfiguration>();
+        _store = store is null ? null : store.Native;
+        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, task_pool = sc, debug_labels = _debugLabelsOverride, configuration = _store };
         fixed (ke_gpu_device_handle* made = &_device)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, made), "webgpu device create");
 
-        var vsync = config?.GetBool("runtime.renderer", "vsync", true) ?? true;
         var tp = new ke_gpu_render_target_webgpu_window_params
         {
             device = _device.@ref,
             window = win,
-            present_mode = vsync ? GpuPresentMode.Fifo : GpuPresentMode.Immediate,
+            configuration = _store,
         };
         fixed (ke_gpu_render_target_handle* made = &_target)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, made), "webgpu window render target create");
@@ -146,7 +147,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var ar = services.GetService<KernelEngine.Framework.AssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
             : null;
-        Compose(rt, ec, wd, ar, io.Native, config);
+        Compose(rt, ec, wd, ar, io.Native);
 
         _renderService = RenderService.Borrow(_core);
         var clearColor = _clearColorOverride ?? ResolveClearColor(config);
@@ -185,7 +186,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     private void Compose(KernelEngine.Runtime.Native.ke_runtime* rt, KernelEngine.Ecs.Native.ke_ecs* ec,
         KernelEngine.Framework.Native.ke_world* wd,
-        KernelEngine.Asset.Native.ke_asset_resolver* ar, KernelEngine.Io.Native.ke_io* io, IConfiguration? config)
+        KernelEngine.Asset.Native.ke_asset_resolver* ar, KernelEngine.Io.Native.ke_io* io)
     {
         var dev = _device.@ref;
         var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
@@ -253,12 +254,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 view_space = _viewSpace.@ref,
                 camera = _camera.@ref,
                 output = (sbyte*)clustersName,
-                grid_x = _clusterGridXOverride != 0 ? _clusterGridXOverride : (uint)(config?.GetInt("render", "cluster_grid_x", 0) ?? 0),
-                grid_y = _clusterGridYOverride != 0 ? _clusterGridYOverride : (uint)(config?.GetInt("render", "cluster_grid_y", 0) ?? 0),
-                grid_z = _clusterGridZOverride != 0 ? _clusterGridZOverride : (uint)(config?.GetInt("render", "cluster_grid_z", 0) ?? 0),
-                max_lights_per_cluster = _maxLightsPerClusterOverride != 0
-                    ? _maxLightsPerClusterOverride
-                    : (uint)(config?.GetInt("render", "max_lights_per_cluster", 0) ?? 0),
+                grid_x = _clusterGridXOverride,
+                grid_y = _clusterGridYOverride,
+                grid_z = _clusterGridZOverride,
+                max_lights_per_cluster = _maxLightsPerClusterOverride,
+                configuration = _store,
             };
             fixed (ke_render_cluster_handle* made = &_cluster)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&clp, made), "cluster pass create");

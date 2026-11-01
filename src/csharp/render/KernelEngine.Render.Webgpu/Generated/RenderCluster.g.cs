@@ -21,7 +21,8 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <param name="gridY">Clusters down the screen. 0 takes the default.</param>
     /// <param name="gridZ">Depth slices. 0 takes the default.</param>
     /// <param name="maxLightsPerCluster">Lights one cluster can list. 0 takes the default.</param>
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
+    /// <param name="configuration">A zero grid field reads its [render] key; borrowed.</param>
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster, configuration))
     {
     }
 
@@ -37,7 +38,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
         _handle = default;
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster, KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(service);
@@ -62,6 +63,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
             config.grid_y = gridY;
             config.grid_z = gridZ;
             config.max_lights_per_cluster = maxLightsPerCluster;
+            config.configuration = (configuration is null ? null : configuration.Native);
             KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&config, &handle), "ke_render_cluster_create");
             return handle;

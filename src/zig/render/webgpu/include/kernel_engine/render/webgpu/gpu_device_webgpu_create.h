@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -38,6 +39,8 @@ typedef struct ke_gpu_device_webgpu_params
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool                 debug_labels;
+    /// Optional, borrowed. Read once at creation.
+    ke_configuration    *configuration; ///< [optional]
 } ke_gpu_device_webgpu_params;
 
 /**

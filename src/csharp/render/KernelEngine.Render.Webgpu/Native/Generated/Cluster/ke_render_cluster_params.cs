@@ -3,6 +3,7 @@ using System.Numerics;
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
+using KernelEngine.Configuration.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -47,4 +48,7 @@ public unsafe partial struct ke_render_cluster_params
 
     [NativeTypeName("uint32_t")]
     public uint max_lights_per_cluster;
+
+    [NativeTypeName("ke_configuration *")]
+    public KernelEngine.Configuration.Native.ke_configuration* configuration;
 }

@@ -26,6 +26,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_cluster_params, translated("ke_render_cluster_params"));
     try expectSameLayout(abi.c.ke_render_cluster_handle, translated("ke_render_cluster_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
+    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
@@ -53,7 +55,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [17]c_ulonglong;
+extern const layout_values: [18]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -71,6 +73,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_cluster_params, "grid_y"),
         @offsetOf(abi.c.ke_render_cluster_params, "grid_z"),
         @offsetOf(abi.c.ke_render_cluster_params, "max_lights_per_cluster"),
+        @offsetOf(abi.c.ke_render_cluster_params, "configuration"),
         @sizeOf(abi.c.ke_render_cluster_handle),
         @offsetOf(abi.c.ke_render_cluster_handle, "ref"),
         @offsetOf(abi.c.ke_render_cluster_handle, "destroy"),

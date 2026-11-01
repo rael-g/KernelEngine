@@ -18,8 +18,8 @@ public static class WebgpuWindowGpuRenderTargetRegistration
     public static IServiceCollection AddWebgpuWindowGpuRenderTarget(this IServiceCollection services, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new WebgpuWindowGpuRenderTarget(logger, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Window.INativeWindow>(), presentMode)
-            : new WebgpuWindowGpuRenderTarget(sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Window.INativeWindow>(), presentMode));
+            ? new WebgpuWindowGpuRenderTarget(logger, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Window.INativeWindow>(), presentMode, sp.GetService<KernelEngine.Configuration.INativeConfiguration>())
+            : new WebgpuWindowGpuRenderTarget(sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Window.INativeWindow>(), presentMode, sp.GetService<KernelEngine.Configuration.INativeConfiguration>()));
         services.AddSingleton<KernelEngine.Render.Gpu.INativeGpuRenderTarget>(sp => sp.GetRequiredService<WebgpuWindowGpuRenderTarget>());
         return services;
     }

@@ -12,6 +12,7 @@
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_render = .{ .path = "../../abi/render" },
+        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_runtime = .{ .path = "../../abi/runtime" },
         .abi_spatial = .{ .path = "../../abi/spatial" },

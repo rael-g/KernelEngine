@@ -284,10 +284,10 @@ fn setup(cm: *ClusterModule, p: *const abi_render_cluster_factory.c.ke_render_cl
     cm.world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
     cm.camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
     cm.frame_cid = p.frame.?.frame_cid.?(p.frame);
-    cm.grid_x = if (p.grid_x != 0) p.grid_x else default_grid_x;
-    cm.grid_y = if (p.grid_y != 0) p.grid_y else default_grid_y;
-    cm.grid_z = if (p.grid_z != 0) p.grid_z else default_grid_z;
-    cm.max_lights_per_cluster = if (p.max_lights_per_cluster != 0) p.max_lights_per_cluster else default_max_lights_per_cluster;
+    cm.grid_x = setting(p, p.grid_x, "cluster_grid_x", default_grid_x);
+    cm.grid_y = setting(p, p.grid_y, "cluster_grid_y", default_grid_y);
+    cm.grid_z = setting(p, p.grid_z, "cluster_grid_z", default_grid_z);
+    cm.max_lights_per_cluster = setting(p, p.max_lights_per_cluster, "max_lights_per_cluster", default_max_lights_per_cluster);
     cm.num_clusters = cm.grid_x * cm.grid_y * cm.grid_z;
 
     const point_lights_bytes = MAX_LIGHTS * @sizeOf(PointLightGpu);
@@ -412,6 +412,13 @@ fn destroyHandle(self: ?*abi_render_cluster_factory.c.ke_render_cluster) callcon
 /// invalid argument and a module that cannot be allocated as out of memory. The handle's `ref` is
 /// null when `setup` fails or the runtime refuses the registration, and the objects created so far
 /// are released then.
+fn setting(p: *const abi_render_cluster_factory.c.ke_render_cluster_params, given: u32, key: [*c]const u8, default: u32) u32 {
+    if (given != 0) return given;
+    const store = p.configuration orelse return default;
+    const stored = store.*.get_int.?(store, "render", key, 0);
+    return if (stored > 0) @intCast(stored) else default;
+}
+
 export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory.c.ke_render_cluster_params, out_cluster: [*c]abi_render_cluster_factory.c.ke_render_cluster_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_cluster orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
