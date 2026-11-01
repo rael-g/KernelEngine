@@ -4,6 +4,9 @@
 #nullable enable
 
 using System.Numerics;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework;
 
@@ -13,13 +16,13 @@ public partial class MeshRenderer : Node3D
 {
 
     [NativeField("Mesh", Component = typeof(MeshComponent))]
-    public partial KernelEngine.Render.MeshHandle MeshHandle { get; set; }
+    public partial MeshHandle MeshHandle { get; set; }
 
     [NativeField("Material", Component = typeof(MeshComponent))]
-    public partial KernelEngine.Render.MaterialHandle MaterialHandle { get; set; }
+    public partial MaterialHandle MaterialHandle { get; set; }
 
     [NativeField("BaseColor", Component = typeof(MeshComponent))]
-    public partial Vector4 Color { get; set; }
+    public partial System.Numerics.Vector4 Color { get; set; }
 
     [NativeField("Roughness", Component = typeof(MeshComponent))]
     public partial float Roughness { get; set; }

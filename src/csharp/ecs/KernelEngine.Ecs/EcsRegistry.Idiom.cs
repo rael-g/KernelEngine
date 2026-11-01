@@ -20,6 +20,25 @@ public unsafe partial class EcsRegistry : IEcsRegistry
     public ComponentId RegisterComponent<T>(string name) where T : unmanaged =>
         ComponentRegister(name, (nuint)sizeof(T), (nuint)(sizeof(AlignmentProbe<T>) - sizeof(T)), default);
 
+    /// <summary>
+    /// Registers <typeparamref name="T"/> with the field table its type states, so a scene can
+    /// address its fields. The table stays allocated for the life of the process.
+    /// </summary>
+    public ComponentId RegisterLaidOutComponent<T>(string name) where T : unmanaged, IComponentLayout
+    {
+        var fields = T.Fields;
+        var native = new global::KernelEngine.Ecs.Native.ComponentField[fields.Length];
+        for (var i = 0; i < fields.Length; i++)
+        {
+            native[i] = default;
+            native[i].Name = (sbyte*)System.Runtime.InteropServices.Marshal.StringToCoTaskMemUTF8(fields[i].Name);
+            native[i].Type = (VariantType)(uint)fields[i].Kind;
+            native[i].Offset = fields[i].Offset;
+            native[i].Size = fields[i].Size;
+        }
+        return ComponentRegister(name, (nuint)sizeof(T), (nuint)(sizeof(AlignmentProbe<T>) - sizeof(T)), native);
+    }
+
     private readonly struct AlignmentProbe<T>(byte head, T value) where T : unmanaged
     {
         public readonly byte Head = head;

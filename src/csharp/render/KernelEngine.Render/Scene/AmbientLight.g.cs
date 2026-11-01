@@ -4,6 +4,9 @@
 #nullable enable
 
 using System.Numerics;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework;
 
@@ -13,5 +16,5 @@ public partial class AmbientLight : Node3D
 {
 
     [NativeField("Color", Component = typeof(AmbientLightComponent))]
-    public partial Vector3 Color { get; set; }
+    public partial System.Numerics.Vector3 Color { get; set; }
 }

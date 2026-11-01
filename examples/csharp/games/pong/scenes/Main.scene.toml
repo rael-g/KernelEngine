@@ -38,7 +38,7 @@ scene = "res://scenes/Paddle.scene.toml"
 [entity.transform2d]
 position = [-7.5, 0.0]
 [entity.paddle]
-move_action = "PaddleLeftMove"
+move_action = 0
 
 [[entity]]
 name  = "PaddleRight"
@@ -46,7 +46,7 @@ scene = "res://scenes/Paddle.scene.toml"
 [entity.transform2d]
 position = [7.5, 0.0]
 [entity.paddle]
-move_action = "PaddleRightMove"
+move_action = 1
 
 [[entity]]
 name  = "Ball"

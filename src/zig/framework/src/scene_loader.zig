@@ -165,7 +165,11 @@ fn applyComponentBlock(
         return structural("scene names component '{s}', which the world cannot resolve", .{comp_name});
 
     var field_count: u32 = 0;
-    const fields = world.get_component_fields.?(world, meta.cid, &field_count);
+    var fields = world.get_component_fields.?(world, meta.cid, &field_count);
+    if (fields == null) {
+        fields = meta.fields;
+        field_count = meta.field_count;
+    }
     var apply_ctx: ?*anyopaque = null;
     const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
     if (fields == null and apply_fn == null) {

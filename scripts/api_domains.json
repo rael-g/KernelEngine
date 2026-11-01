@@ -799,6 +799,7 @@
     { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] }
   ],
   "extensions": {
+    "nodes": {},
     "factories": { "bindings": ["Assimp", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [

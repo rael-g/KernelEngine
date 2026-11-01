@@ -145,7 +145,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
         foreach (var slot in slots)
         {
-            sb.AppendLine(HasDefault(slot.Symbol)
+            sb.AppendLine(HasDefault(slot.Symbol, compilation)
                 ? $"    private {slot.TypeName} {slot.State} = {slot.TypeName}.Default;"
                 : $"    private {slot.TypeName} {slot.State};");
             sb.AppendLine($"    private global::KernelEngine.Ecs.ComponentId {slot.Cid};");
@@ -484,7 +484,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.World world,"
             + " global::KernelEngine.Ecs.EcsRegistry ecs)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        _ = ecs.RegisterComponent<{slot.TypeName}>({slot.NameExpression});");
+        sb.AppendLine($"        _ = ecs.RegisterLaidOutComponent<{slot.TypeName}>({slot.NameExpression});");
         sb.AppendLine("        world.RegisterComponentAlias(GeneratedComponentAlias, GeneratedComponentName);");
         sb.AppendLine("    }");
     }
@@ -512,9 +512,10 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// Whether the component declares a static <c>Default</c> of its own type, the neutral value
     /// its <c>[default:]</c> fields hold, which every constructor of the node then starts from.
     /// </summary>
-    static bool HasDefault(INamedTypeSymbol? component) =>
-        component is not null && component.GetMembers("Default").OfType<IPropertySymbol>()
-            .Any(d => d.IsStatic && SymbolEqualityComparer.Default.Equals(d.Type, component));
+    static bool HasDefault(INamedTypeSymbol? component, Compilation compilation) =>
+        component is not null && (component.GetMembers("Default").OfType<IPropertySymbol>()
+            .Any(d => d.IsStatic && SymbolEqualityComparer.Default.Equals(d.Type, component))
+            || compilation.GetTypeByMetadataName($"KernelEngine.Framework.{component.Name}Defaults") is not null);
 
     static INamedTypeSymbol? NamedComponentOf(AttributeData? attr) =>
         attr?.NamedArguments.FirstOrDefault(kv => kv.Key == "Component").Value.Value as INamedTypeSymbol;

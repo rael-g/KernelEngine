@@ -4,8 +4,9 @@
 #nullable enable
 
 using System.Numerics;
-
 using KernelEngine.Common;
+using KernelEngine.Render;
+using KernelEngine.Input;
 using KernelEngine.Ecs;
 
 namespace KernelEngine.Framework;
@@ -16,11 +17,11 @@ public partial class Node3D : Node
 {
 
     [NativeField("Position", Component = typeof(TransformComponent))]
-    public partial Vector3 Position { get; set; }
+    public partial System.Numerics.Vector3 Position { get; set; }
 
     [NativeField("Rotation", Component = typeof(TransformComponent))]
-    public partial Quaternion Rotation { get; set; }
+    public partial System.Numerics.Quaternion Rotation { get; set; }
 
     [NativeField("Scale", Component = typeof(TransformComponent))]
-    public partial Vector3 Scale { get; set; }
+    public partial System.Numerics.Vector3 Scale { get; set; }
 }

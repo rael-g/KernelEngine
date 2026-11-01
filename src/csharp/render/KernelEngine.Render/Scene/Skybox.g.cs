@@ -4,6 +4,9 @@
 #nullable enable
 
 using System.Numerics;
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
 
 namespace KernelEngine.Framework;
 
@@ -13,5 +16,5 @@ public partial class Skybox : Node3D
 {
 
     [NativeField("Cubemap", Component = typeof(SkyboxComponent))]
-    public partial KernelEngine.Render.TextureHandle CubemapHandle { get; set; }
+    public partial TextureHandle CubemapHandle { get; set; }
 }

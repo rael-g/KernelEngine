@@ -4,7 +4,9 @@
 #nullable enable
 
 using System.Numerics;
-
+using KernelEngine.Ecs;
+using KernelEngine.Render;
+using KernelEngine.Input;
 using KernelEngine.Physics;
 
 namespace KernelEngine.Framework;
@@ -18,7 +20,7 @@ public partial class Collider2D : Node2D
     public partial ShapeKind2d Kind { get; set; }
 
     [NativeField("HalfExtents", Component = typeof(Collider2dComponent))]
-    public partial Vector2 HalfExtents { get; set; }
+    public partial System.Numerics.Vector2 HalfExtents { get; set; }
 
     [NativeField("Radius", Component = typeof(Collider2dComponent))]
     public partial float Radius { get; set; }
