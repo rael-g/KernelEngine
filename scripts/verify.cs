@@ -9,7 +9,7 @@ var nativeArgs = new[] { "--prefix", "build/native", "--global-cache-dir", "buil
 
 var stages = new Dictionary<string, Func<List<Step>>>
 {
-    ["build"] = () => [new Step("zig build", "zig", ["build", "--summary", "all", .. nativeArgs])],
+    ["build"] = () => [new Step("zig build", "zig", ["build", "--summary", "all", .. nativeArgs]), new Step("dotnet build", "dotnet", ["build", "KernelEngine.slnx", "--no-incremental"])],
     ["test-native"] = () => [new Step("zig build test", "zig", ["build", "test", .. nativeArgs])],
     ["test-managed"] = () => [new Step("dotnet test", "dotnet", ["test", "KernelEngine.slnx"])],
     ["smoke"] = () => [new Step("19_node_stress", "dotnet", ["run", "--project", "examples/csharp/19_node_stress/node_stress.csproj", "--", "--ticks", "60"])],
