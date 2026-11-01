@@ -31,7 +31,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
-    private readonly bool _debugLabelsOverride;
+    private readonly bool _debugLabelsOverride, _defaultPasses;
     private readonly bool _enableShadows, _enableIbl;
 
     /// <param name="shaderDir">
@@ -59,10 +59,12 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// When true, the names of GPU objects, passes and debug groups reach the graphics API. False
     /// reads <c>[render] debug_labels</c> from <see cref="IConfiguration"/> at <see cref="OnLoad"/>.
     /// </param>
+    /// <param name="defaultPasses">When false, no pass is registered; the host registers its own, in the order their resources flow.</param>
     public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool enableShadows = true, bool enableIbl = true, bool debugLabels = false)
+        bool enableShadows = true, bool enableIbl = true, bool debugLabels = false, bool defaultPasses = true)
     {
+        _defaultPasses = defaultPasses;
         _debugLabelsOverride = debugLabels;
         ArgumentException.ThrowIfNullOrEmpty(shaderDir);
         _shaderDir = shaderDir;
@@ -88,7 +90,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddRenderComponentsNodeTypes()
             .AddUiComponentsNodeTypes()
             .AddNodeType<Sprite2D>();
-        var shadow = _enableShadows ? "shadow" : null;
         services
             .AddWebgpuGpuDevice(enableValidation: true, debugLabels: _debugLabelsOverride)
             .AddWebgpuWindowGpuRenderTarget()
@@ -98,7 +99,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddDefaultRenderCamera()
             .AddDefaultRenderSceneResolve()
             .AddDefaultRenderFrame();
+        if (!_defaultPasses) return;
         if (_enableShadows) services.AddRenderShadow("shadow");
+        var shadow = _enableShadows ? "shadow" : null;
         services
             .AddRenderCluster("clusters", _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride)
             .AddRenderGbuffer("gbuffer")
@@ -119,18 +122,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     {
         var core = services.GetRequiredService<INativeRenderService>().Native;
         _core = core;
-        _ui = services.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>().Native;
+        _ui = services.GetService<KernelEngine.Render.Webgpu.INativeRenderUi>() is { } ui ? ui.Native : null;
         _renderService = RenderService.Borrow(core);
-        services.GetRequiredService<DefaultRenderSceneResolve>();
-        services.GetRequiredService<DefaultRenderFrame>();
-        if (_enableShadows) services.GetRequiredService<RenderShadow>();
-        services.GetRequiredService<RenderCluster>();
-        services.GetRequiredService<RenderGbuffer>();
-        services.GetRequiredService<RenderDeferredLighting>();
-        services.GetRequiredService<RenderSkybox>();
-        services.GetRequiredService<RenderForward>();
-        services.GetRequiredService<RenderTonemap>();
-        services.GetRequiredService<RenderLabelResolve>();
+        foreach (var pass in services.GetServices<IRuntimeModule>().OfType<IResolveOnLoad>().ToList())
+            pass.Resolve(services);
         var clearColor = _clearColorOverride ?? ResolveClearColor(services.GetService<IConfiguration>());
         _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
 
