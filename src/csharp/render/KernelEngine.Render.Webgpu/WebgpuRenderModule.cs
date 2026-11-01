@@ -9,6 +9,7 @@ using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
 using KernelEngine.TaskPool;
 using KernelEngine.Text.Native;
+using KernelEngine.View;
 using KernelEngine.Window;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -24,25 +25,8 @@ namespace KernelEngine.Render.Webgpu;
 /// </summary>
 public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources, INativeRenderResources
 {
-    private ke_gpu_device_handle _device;
-    private ke_gpu_render_target_handle _target;
-    private KernelEngine.Render.Native.ke_render_resource_binder_handle _binder;
-    private KernelEngine.Render.Native.ke_render_service_handle _service;
-    private KernelEngine.View.Native.ke_view_space_handle _viewSpace;
-    private KernelEngine.Render.Native.ke_render_camera_handle _camera;
-    private ke_render_scene_resolve_handle _scene;
-    private ke_render_frame_handle _frame;
-    private ke_render_shadow_handle _shadow;
-    private ke_render_cluster_handle _cluster;
-    private ke_render_gbuffer_handle _gbuffer;
-    private ke_render_deferred_lighting_handle _deferred;
-    private ke_render_skybox_handle _skybox;
-    private ke_render_forward_handle _forward;
-    private ke_render_tonemap_handle _tonemap;
-    private ke_render_ui_handle _ui;
-    private ke_render_label_resolve_handle _labels;
     private ke_render_service* _core;
-    private KernelEngine.Configuration.Native.ke_configuration* _store;
+    private ke_render_ui* _ui;
     private RenderService? _renderService;
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4? _clearColorOverride;
@@ -104,6 +88,26 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddRenderComponentsNodeTypes()
             .AddUiComponentsNodeTypes()
             .AddNodeType<Sprite2D>();
+        var shadow = _enableShadows ? "shadow" : null;
+        services
+            .AddWebgpuGpuDevice(enableValidation: true, debugLabels: _debugLabelsOverride)
+            .AddWebgpuWindowGpuRenderTarget()
+            .AddGroupedRenderResourceBinder(_shaderDir)
+            .AddRenderServiceRenderService(_shaderDir)
+            .AddRhViewSpace()
+            .AddRenderCameraRenderCamera()
+            .AddRenderSceneResolveRenderSceneResolve()
+            .AddRenderFrameRenderFrame();
+        if (_enableShadows) services.AddRenderShadow("shadow");
+        services
+            .AddRenderCluster("clusters", _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride)
+            .AddRenderGbuffer("gbuffer")
+            .AddRenderDeferredLighting(_enableIbl, "gbuffer", shadow, "clusters")
+            .AddRenderSkybox()
+            .AddRenderForward(_enableIbl, shadow, "clusters")
+            .AddRenderTonemap()
+            .AddRenderUiRenderUi()
+            .AddRenderLabelResolve();
     }
 
     /// <summary>
@@ -113,224 +117,27 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var window = services.GetRequiredService<IWindow>();
-        var ecs = services.GetRequiredService<INativeEcs>();
-        var taskPool = services.GetRequiredService<INativeTaskPool>();
-        var io = services.GetRequiredService<KernelEngine.Io.INativeIo>();
-        var world = services.GetService<KernelEngine.Framework.World>();
-
-        var win = ((INativeWindow)window).Native;
-        var rt = ((INativeRuntime)runtime).Native;
-        var ec = ecs.Native;
-        var sc = taskPool.Native;
-        var wd = world != null ? ((KernelEngine.Framework.INativeWorld)world).Native : null;
-
-        if (services.GetService<ILogger>() is { } logger)
-            RouteLogs(logger);
-
-        var config = services.GetService<IConfiguration>();
-        var store = services.GetService<KernelEngine.Configuration.INativeConfiguration>();
-        _store = store is null ? null : store.Native;
-        var dp = new ke_gpu_device_webgpu_params { enable_validation = true, task_pool = sc, debug_labels = _debugLabelsOverride, configuration = _store };
-        fixed (ke_gpu_device_handle* made = &_device)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create(&dp, made), "webgpu device create");
-
-        var tp = new ke_gpu_render_target_webgpu_window_params
-        {
-            device = _device.@ref,
-            window = win,
-            configuration = _store,
-        };
-        fixed (ke_gpu_render_target_handle* made = &_target)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, made), "webgpu window render target create");
-
-        var ar = services.GetService<KernelEngine.Framework.AssetResolver>() is { } resolver
-            ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
-            : null;
-        Compose(rt, ec, wd, ar, io.Native);
-
-        _renderService = RenderService.Borrow(_core);
-        var clearColor = _clearColorOverride ?? ResolveClearColor(config);
+        var core = services.GetRequiredService<INativeRenderService>().Native;
+        _core = core;
+        _ui = services.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>().Native;
+        _renderService = RenderService.Borrow(core);
+        services.GetRequiredService<RenderSceneResolveRenderSceneResolve>();
+        services.GetRequiredService<RenderFrameRenderFrame>();
+        if (_enableShadows) services.GetRequiredService<RenderShadow>();
+        services.GetRequiredService<RenderCluster>();
+        services.GetRequiredService<RenderGbuffer>();
+        services.GetRequiredService<RenderDeferredLighting>();
+        services.GetRequiredService<RenderSkybox>();
+        services.GetRequiredService<RenderForward>();
+        services.GetRequiredService<RenderTonemap>();
+        services.GetRequiredService<RenderLabelResolve>();
+        var clearColor = _clearColorOverride ?? ResolveClearColor(services.GetService<IConfiguration>());
         _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
 
-    }
-
-    /// <summary>
-    /// Sends the log of every native library this module composes to <paramref name="logger"/>.
-    /// </summary>
-    private static void RouteLogs(ILogger logger)
-    {
-        var callback = LogCallbackNative.Pointer;
-        var ctx = LogCallbackNative.Pin(logger.Log);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_binder_grouped_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_set_log_callback(callback, ctx);
-        KernelEngine.View.Native.NativeMethods.view_space_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_set_log_callback(callback, ctx);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(callback, ctx);
-    }
-
-    /// <summary>
-    /// Creates every piece of the renderer on the device and the window target and wires their
-    /// component ids together, then registers render's scene components into the world when there
-    /// is one. Throws <see cref="InvalidOperationException"/> naming the first piece that fails.
-    /// </summary>
-    private void Compose(KernelEngine.Runtime.Native.ke_runtime* rt, KernelEngine.Ecs.Native.ke_ecs* ec,
-        KernelEngine.Framework.Native.ke_world* wd,
-        KernelEngine.Asset.Native.ke_asset_resolver* ar, KernelEngine.Io.Native.ke_io* io)
-    {
-        var dev = _device.@ref;
-        var shaderDirBytes = System.Text.Encoding.UTF8.GetBytes(_shaderDir + '\0');
-        fixed (byte* sd = shaderDirBytes)
-        {
-            var bp = new ke_render_resource_binder_grouped_params { device = dev, shader_dir = (sbyte*)sd, io = io };
-            fixed (KernelEngine.Render.Native.ke_render_resource_binder_handle* made = &_binder)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(&bp, made), "resource binder create");
-            var sp = new ke_render_service_params { device = dev, target = _target.@ref, ecs = ec, shader_dir = (sbyte*)sd, io = io, binder = _binder.@ref };
-            fixed (KernelEngine.Render.Native.ke_render_service_handle* made = &_service)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(&sp, made), "render service create");
-        }
-        var core = _service.@ref;
-        _core = core;
-
-        KernelEngine.View.Native.ke_view_space_handle viewSpace;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.View.Native.NativeMethods.view_space_rh_create(&viewSpace), "ke_view_space_rh_create");
-        _viewSpace = viewSpace;
-        fixed (KernelEngine.Render.Native.ke_render_camera_handle* made = &_camera)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_create(_viewSpace.@ref, dev, made), "camera create");
-
-        var scp = new ke_render_scene_resolve_params { runtime = rt, ecs = ec, service = core, resolver = ar };
-        fixed (ke_render_scene_resolve_handle* made = &_scene)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&scp, made), "scene resolve create");
-
-        var frp = new ke_render_frame_params
-        {
-            runtime = rt,
-            ecs = ec,
-            service = core,
-            camera = _camera.@ref,
-            scene = _scene.@ref,
-        };
-        fixed (ke_render_frame_handle* made = &_frame)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(&frp, made), "frame create");
-
-        fixed (byte* shadowName = "shadow\0"u8)
-        fixed (byte* clustersName = "clusters\0"u8)
-        fixed (byte* gbufferName = "gbuffer\0"u8)
-        {
-            var shadowGroup = _enableShadows ? (sbyte*)shadowName : null;
-            if (_enableShadows)
-            {
-                var shp = new ke_render_shadow_params
-                {
-                    scene = _scene.@ref,
-                    frame = _frame.@ref,
-                    runtime = rt,
-                    service = core,
-                    device = dev,
-                    view_space = _viewSpace.@ref,
-                    output = shadowGroup,
-                };
-                fixed (ke_render_shadow_handle* made = &_shadow)
-                    KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_create(&shp, made), "shadow pass create");
-            }
-
-            var clp = new ke_render_cluster_params
-            {
-                scene = _scene.@ref,
-                frame = _frame.@ref,
-                runtime = rt,
-                service = core,
-                device = dev,
-                view_space = _viewSpace.@ref,
-                camera = _camera.@ref,
-                output = (sbyte*)clustersName,
-                grid_x = _clusterGridXOverride,
-                grid_y = _clusterGridYOverride,
-                grid_z = _clusterGridZOverride,
-                max_lights_per_cluster = _maxLightsPerClusterOverride,
-                configuration = _store,
-            };
-            fixed (ke_render_cluster_handle* made = &_cluster)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&clp, made), "cluster pass create");
-
-            var gbp = new ke_render_gbuffer_params
-            {
-                scene = _scene.@ref,
-                frame = _frame.@ref,
-                runtime = rt,
-                service = core,
-                device = dev,
-                output = (sbyte*)gbufferName,
-            };
-            fixed (ke_render_gbuffer_handle* made = &_gbuffer)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&gbp, made), "gbuffer pass create");
-
-            var dlp = new RenderDeferredLightingParams
-            {
-                Scene = _scene.@ref,
-                Frame = _frame.@ref,
-                Runtime = rt,
-                Service = core,
-                Device = dev,
-                IblEnabled = _enableIbl,
-                Gbuffer = (sbyte*)gbufferName,
-                Shadow = shadowGroup,
-                Clusters = (sbyte*)clustersName,
-            };
-            fixed (ke_render_deferred_lighting_handle* made = &_deferred)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&dlp, made), "deferred lighting pass create");
-
-            var skp = new RenderSkyboxParams
-            {
-                Scene = _scene.@ref,
-                Frame = _frame.@ref,
-                Runtime = rt,
-                Service = core,
-                Device = dev,
-                Camera = _camera.@ref,
-            };
-            fixed (ke_render_skybox_handle* made = &_skybox)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_create(&skp, made), "skybox pass create");
-
-            var fwp = new RenderForwardParams
-            {
-                Scene = _scene.@ref,
-                Frame = _frame.@ref,
-                Runtime = rt,
-                Service = core,
-                Device = dev,
-                IblEnabled = _enableIbl,
-                Shadow = shadowGroup,
-                Clusters = (sbyte*)clustersName,
-            };
-            fixed (ke_render_forward_handle* made = &_forward)
-                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&fwp, made), "forward pass create");
-        }
-
-        var tmp = new RenderTonemapParams { Runtime = rt, Service = core, Device = dev, Frame = _frame.@ref };
-        fixed (ke_render_tonemap_handle* made = &_tonemap)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&tmp, made), "tonemap pass create");
-
-        var uip = new ke_render_ui_params { runtime = rt, ecs = ec, service = core, device = dev, frame = _frame.@ref };
-        fixed (ke_render_ui_handle* made = &_ui)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(&uip, made), "ui pass create");
-
-        var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, scene = _scene.@ref };
-        fixed (ke_render_label_resolve_handle* made = &_labels)
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&lrp, made), "label resolve create");
-
-        if (wd == null)
+        if (services.GetService<KernelEngine.Framework.World>() is not { } world)
             return;
+        var ec = services.GetRequiredService<INativeEcs>().Native;
+        var wd = ((KernelEngine.Framework.INativeWorld)world).Native;
         KernelEngine.Framework.Native.ke_scene_component_set_handle set;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
         try
@@ -480,7 +287,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     public FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,
                                float lineHeight, float ascent)
     {
-        if (_ui.@ref == null)
+        if (_ui == null)
             throw new InvalidOperationException("LoadFont called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
@@ -507,7 +314,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         var texH = atlas;
         KernelEngine.Render.Native.ke_ui_font_handle h;
         fixed (byte* k = keyBytes)
-            KernelEngine.NativeResults.ThrowIfFailed(_ui.@ref->load_font(_ui.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &h), "load_font");
+            KernelEngine.NativeResults.ThrowIfFailed(_ui->load_font(_ui, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &h), "load_font");
         return new FontHandle(h.bits);
     }
 
@@ -517,24 +324,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </summary>
     public void OnUnload(IRuntime runtime, IServiceProvider services)
     {
-        if (_labels.@ref != null) _labels.destroy(_labels.@ref);
-        if (_ui.@ref != null) _ui.destroy(_ui.@ref);
-        if (_tonemap.@ref != null) _tonemap.destroy(_tonemap.@ref);
-        if (_forward.@ref != null) _forward.destroy(_forward.@ref);
-        if (_skybox.@ref != null) _skybox.destroy(_skybox.@ref);
-        if (_deferred.@ref != null) _deferred.destroy(_deferred.@ref);
-        if (_gbuffer.@ref != null) _gbuffer.destroy(_gbuffer.@ref);
-        if (_cluster.@ref != null) _cluster.destroy(_cluster.@ref);
-        if (_shadow.@ref != null) _shadow.destroy(_shadow.@ref);
-        if (_frame.@ref != null) _frame.destroy(_frame.@ref);
-        if (_scene.@ref != null) _scene.destroy(_scene.@ref);
-        if (_camera.@ref != null) _camera.destroy(_camera.@ref);
-        if (_service.@ref != null) _service.destroy(_service.@ref);
-        if (_binder.@ref != null) _binder.destroy(_binder.@ref);
-        if (_viewSpace.@ref != null) _viewSpace.destroy(_viewSpace.@ref);
-        if (_target.@ref != null && _target.destroy != null)
-            _target.destroy(_target.@ref);
-        if (_device.@ref != null && _device.destroy != null)
-            _device.destroy(_device.@ref);
+        _renderService = null;
+        _core = null;
+        _ui = null;
     }
 }

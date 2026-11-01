@@ -25,6 +25,7 @@ public static class AssetResolverServiceCollectionExtensions
             sp.GetService<INativeImageLoader>(),
             sp.GetService<KernelEngine.Text.INativeFontLoader>(),
             projectRoot ?? AppContext.BaseDirectory));
+        services.AddSingleton<INativeAssetResolver>(sp => sp.GetRequiredService<AssetResolver>());
         return services;
     }
 }
