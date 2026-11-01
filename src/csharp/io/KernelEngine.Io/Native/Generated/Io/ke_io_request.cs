@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using KernelEngine.FileSystem.Native;
 using KernelEngine.Result.Native;
 

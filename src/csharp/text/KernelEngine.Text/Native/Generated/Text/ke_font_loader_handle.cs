@@ -1,3 +1,7 @@
+using System.Numerics;
+
+using global::KernelEngine.Text;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Text.Native;

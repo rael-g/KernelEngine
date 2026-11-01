@@ -1,9 +1,14 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+using global::KernelEngine.Render;
+using global::KernelEngine.Text;
+
 using KernelEngine.Ecs.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
-using KernelEngine.Text.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -22,8 +27,8 @@ public unsafe partial struct ke_render_ui_params
     public KernelEngine.Render.Native.ke_gpu_device* device;
 
     [NativeTypeName("ke_ndc_convention")]
-    public KernelEngine.Render.Native.ke_ndc_convention ndc;
+    public global::KernelEngine.Render.NdcConvention ndc;
 
     [NativeTypeName("ke_component_id")]
-    public uint frame_cid;
+    public global::KernelEngine.Ecs.ComponentId frame_cid;
 }

@@ -14,8 +14,8 @@ pub const ke_physics_2d_box2d_params = extern struct {
 };
 
 /// Creates a 2D physics world.
-pub extern fn ke_physics_2d_box2d_create(params: ?*const ke_physics_2d_box2d_params, out_world: ?*physics.ke_physics_2d_handle) result.ke_result;
+pub extern fn ke_physics_2d_box2d_create(params: ?*const ke_physics_2d_box2d_params, out_world: ?*physics.c.ke_physics_2d_handle) result.c.ke_result;
 
 /// Sends every line ke_physics_2d_box2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_physics_2d_box2d_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_physics_2d_box2d_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

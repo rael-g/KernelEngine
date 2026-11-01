@@ -3,6 +3,9 @@
 //! A feature pass publishes its resources under one group name the host gives it, with the
 //! suffixes of `kernel_engine/render/resource_groups.h`, and a lit pass is given the same name.
 
+const abi_render_contract = @import("abi_render_contract");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_gpu = @import("abi_render_gpu");
 const abi_render = @import("abi_render");
 
 /// The longest resource name a group and its suffix make.
@@ -18,13 +21,13 @@ pub fn subName(buf: *[name_capacity]u8, group: [*:0]const u8, suffix: []const u8
 /// The suffixes the cluster pass publishes its light lists and grid under, beside the name
 /// of the shader parameter each one is bound to.
 pub const cluster_buffers = [_]struct { suffix: []const u8, parameter: [*:0]const u8 }{
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_POINT_LIGHTS, .parameter = "point_lights" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_SPOT_LIGHTS, .parameter = "spot_lights" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_POINT_INDICES, .parameter = "point_indices" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_POINT_COUNTS, .parameter = "point_counts" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_SPOT_INDICES, .parameter = "spot_indices" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_SPOT_COUNTS, .parameter = "spot_counts" },
-    .{ .suffix = abi_render.KE_RENDER_CLUSTER_GRID, .parameter = "cluster" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_POINT_LIGHTS, .parameter = "point_lights" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_SPOT_LIGHTS, .parameter = "spot_lights" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_POINT_INDICES, .parameter = "point_indices" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_POINT_COUNTS, .parameter = "point_counts" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_SPOT_INDICES, .parameter = "spot_indices" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_SPOT_COUNTS, .parameter = "spot_counts" },
+    .{ .suffix = abi_render_contract.c.KE_RENDER_CLUSTER_GRID, .parameter = "cluster" },
 };
 
 pub const count = 3 + cluster_buffers.len;
@@ -33,18 +36,18 @@ pub const count = 3 + cluster_buffers.len;
 /// group `clusters`. A missing group, or a resource its group did not publish, binds the
 /// neutral value: the white texture for the shadow map and no buffer otherwise.
 /// `environment` is the view the environment is sampled from.
-pub fn fill(core: *abi_render.ke_render_service, environment: abi_render.ke_gpu_texture_view, shadow: ?[*:0]const u8, clusters: ?[*:0]const u8, out: *[count]abi_render.ke_render_shader_binding) void {
+pub fn fill(core: *abi_render.c.ke_render_service, environment: abi_asset_resolver.c.ke_gpu_texture_view, shadow: ?[*:0]const u8, clusters: ?[*:0]const u8, out: *[count]abi_render_gpu.c.ke_render_shader_binding) void {
     var buf: [name_capacity]u8 = undefined;
     const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
-    const shadow_raw = if (shadow) |g| core.*.resource_view.?(core, g) else abi_render.KE_GPU_INVALID_HANDLE;
+    const shadow_raw = if (shadow) |g| core.*.resource_view.?(core, g) else abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     out[0] = binding("shadowParams");
-    const light = if (shadow) |g| subName(&buf, g, abi_render.KE_RENDER_SHADOW_LIGHT) else null;
+    const light = if (shadow) |g| subName(&buf, g, abi_render_contract.c.KE_RENDER_SHADOW_LIGHT) else null;
     if (light) |name| {
         out[0].buffer = core.*.resource_buffer.?(core, name);
         out[0].buffer_size = core.*.resource_buffer_size.?(core, name);
     }
     out[1] = binding("shadowMap");
-    out[1].texture_view = if (shadow_raw != abi_render.KE_GPU_INVALID_HANDLE) shadow_raw else white_view;
+    out[1].texture_view = if (shadow_raw != abi_render_gpu.c.KE_GPU_INVALID_HANDLE) shadow_raw else white_view;
     out[2] = binding("ibl_env");
     out[2].texture_view = environment;
     for (cluster_buffers, out[3..]) |cb, *o| {
@@ -56,6 +59,6 @@ pub fn fill(core: *abi_render.ke_render_service, environment: abi_render.ke_gpu_
     }
 }
 
-fn binding(name: [*:0]const u8) abi_render.ke_render_shader_binding {
+fn binding(name: [*:0]const u8) abi_render_gpu.c.ke_render_shader_binding {
     return .{ .name = name, .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = 0, .sampler = 0 };
 }

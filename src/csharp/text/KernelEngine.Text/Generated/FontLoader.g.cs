@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Text.Native;
@@ -44,7 +45,7 @@ public unsafe sealed class BakedFont : IDisposable
         if (_native is null) return;
         var native = _native;
         _native = null;
-        _owner.FreeFont(native);
+        _owner.FreeFont((nint)native);
     }
 }
 
@@ -84,7 +85,10 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader, IFontLo
     /// <exception cref="Exception">The native call failed.</exception>
     public BakedFont LoadFont(string path, float pixelSize, uint firstCodepoint, uint codepointCount, uint atlasSize)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             ke_font_data* resultOut = default;
@@ -94,7 +98,7 @@ public unsafe partial class FontLoader : IDisposable, INativeFontLoader, IFontLo
     }
 
     /// <summary>Frees a ke_font_data previously returned by load_font. A null data is ignored.</summary>
-    internal void FreeFont(FontData* data)
+    internal void FreeFont(nint data)
     {
         Handle->free_font(Handle, (ke_font_data*)data);
     }

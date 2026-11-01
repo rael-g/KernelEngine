@@ -25,7 +25,7 @@ plugin did not ask for is not on its include path. All libraries are installed u
 `--prefix` given to the root build.
 
 **Layer 3 is generated from the headers.** ClangSharp produces the raw struct and function
-surface; kabic (`src/csharp/kabic/`) produces the idiomatic projection from the doc tags of the
+surface; kabic (the kabic repository) produces the idiomatic projection from the doc tags of the
 same headers, driven by `scripts/api_domains.json`. Neither output is edited by hand.
 
 **Layer 4 reaches native code through layer 3.** The managed projects copy the plugin libraries

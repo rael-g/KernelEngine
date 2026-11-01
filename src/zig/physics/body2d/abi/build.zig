@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("physics_body2d_factory.zig") });
+    abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("ke_abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));

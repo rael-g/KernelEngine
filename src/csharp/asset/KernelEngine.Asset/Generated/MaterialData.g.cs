@@ -5,6 +5,9 @@
 
 using System.Runtime.InteropServices;
 
+using KernelEngine.Asset.Native;
+using KernelEngine.Render;
+
 namespace KernelEngine.Asset;
 
 /// <summary>Raw CPU-side material data returned by ke_asset_loader::load_model.</summary>

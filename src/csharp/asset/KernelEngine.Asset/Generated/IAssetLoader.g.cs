@@ -3,7 +3,9 @@
 
 #nullable enable
 
+using KernelEngine.Asset.Native;
 using KernelEngine.Common;
+using KernelEngine.Render;
 using KernelEngine.TaskPool;
 
 namespace KernelEngine.Asset;
@@ -20,5 +22,5 @@ public interface IAssetLoader : IDisposable
     /// <param name="taskPool">Non-null task pool.</param>
     /// <param name="path">File path (copied internally; caller may free after return).</param>
     /// <returns>The loaded model; NULL when the load failed.</returns>
-    Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path);
+    global::System.Threading.Tasks.Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path);
 }

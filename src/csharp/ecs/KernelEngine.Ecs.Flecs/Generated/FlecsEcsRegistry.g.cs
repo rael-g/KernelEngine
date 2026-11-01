@@ -16,8 +16,8 @@ public sealed unsafe partial class FlecsEcsRegistry : KernelEngine.Ecs.EcsRegist
 
     private static KernelEngine.Ecs.Native.ke_ecs_handle Create(uint worldIdBase)
     {
-        KernelEngine.Ecs.Flecs.Native.ke_ecs_flecs_config config = default;
-        config.world_id_base = worldIdBase;
+        KernelEngine.Ecs.Flecs.Native.EcsFlecsConfig config = default;
+        config.WorldIdBase = worldIdBase;
         KernelEngine.Ecs.Native.ke_ecs_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&config, &handle), "ke_ecs_flecs_create");
         return handle;

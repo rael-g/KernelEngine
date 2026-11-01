@@ -15,4 +15,7 @@
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
+  </ItemGroup>
 </Project>

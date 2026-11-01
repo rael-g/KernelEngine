@@ -4,9 +4,9 @@
     .fingerprint = 0x91d10f276c3fc502,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_resource_cache = .{ .path = "../../abi/resource_cache" },
         .abi_audio = .{ .path = "../../abi/audio" },
         .abi_io = .{ .path = "../../abi/io" },
-        .abi_resource_cache = .{ .path = "../../abi/resource_cache" },
         .abi_resource_cache_default_factory = .{ .path = "../../resource_cache/default/abi" },
         .abi_result = .{ .path = "../../abi/result" },
         .ke_common = .{ .path = "../../common" },

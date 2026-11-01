@@ -78,6 +78,7 @@ extern "C"
 
     } ke_task_pool;
 
+    /// [owner]
     typedef struct ke_task_pool_handle
     {
         ke_task_pool *ref;

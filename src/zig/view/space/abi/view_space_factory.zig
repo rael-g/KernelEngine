@@ -6,12 +6,12 @@ const view = @import("view");
 
 /// Left-handed view space: the camera looks down +z. A visible point has positive view-space z,
 /// and the farther of two is the larger.
-pub extern fn ke_view_space_lh_create(out_view_space: ?*view.ke_view_space_handle) result.ke_result;
+pub extern fn ke_view_space_lh_create(out_view_space: ?*view.c.ke_view_space_handle) result.c.ke_result;
 
 /// Sends every line ke_view_space logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_view_space_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_view_space_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Right-handed view space: the camera looks down -z. A visible point has negative view-space z,
 /// and the farther of two is the more negative.
-pub extern fn ke_view_space_rh_create(out_view_space: ?*view.ke_view_space_handle) result.ke_result;
+pub extern fn ke_view_space_rh_create(out_view_space: ?*view.c.ke_view_space_handle) result.c.ke_result;

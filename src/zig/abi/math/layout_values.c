@@ -1,0 +1,28 @@
+#include <stddef.h>
+#include <kernel_engine/math/math.h>
+const unsigned long long layout_values[] = {
+    sizeof(ke_vec2),
+    offsetof(ke_vec2, x),
+    offsetof(ke_vec2, y),
+    sizeof(ke_vec3),
+    offsetof(ke_vec3, x),
+    offsetof(ke_vec3, y),
+    offsetof(ke_vec3, z),
+    sizeof(ke_vec4),
+    offsetof(ke_vec4, x),
+    offsetof(ke_vec4, y),
+    offsetof(ke_vec4, z),
+    offsetof(ke_vec4, w),
+    sizeof(ke_quat),
+    offsetof(ke_quat, x),
+    offsetof(ke_quat, y),
+    offsetof(ke_quat, z),
+    offsetof(ke_quat, w),
+    sizeof(ke_mat4),
+    offsetof(ke_mat4, m),
+    sizeof(ke_transform),
+    offsetof(ke_transform, position),
+    offsetof(ke_transform, rotation),
+    offsetof(ke_transform, scale),
+    0,
+};

@@ -7,8 +7,8 @@ const text = @import("text");
 
 /// Creates a ke_font_loader that reads font files through io. Callable from any thread (CPU
 /// only).
-pub extern fn ke_font_loader_stb_create(io: ?*io.ke_io, out_loader: ?*text.ke_font_loader_handle) result.ke_result;
+pub extern fn ke_font_loader_stb_create(io: ?*io.c.ke_io, out_loader: ?*text.c.ke_font_loader_handle) result.c.ke_result;
 
 /// Sends every line ke_text_stb_truetype logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_text_stb_truetype_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_text_stb_truetype_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

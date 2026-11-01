@@ -15,10 +15,10 @@ pub const ke_ecs_flecs_config = extern struct {
 
 /// Sends every line ke_ecs_flecs logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_ecs_flecs_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_ecs_flecs_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Creates a ke_ecs vtable backed by an internally-owned world. Also installs process-wide log
 /// and abort handlers: a check flecs fails makes the slot that called it return
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
-pub extern fn ke_ecs_flecs_create(config: ?*const ke_ecs_flecs_config, out_ecs: ?*ecs.ke_ecs_handle) result.ke_result;
+pub extern fn ke_ecs_flecs_create(config: ?*const ke_ecs_flecs_config, out_ecs: ?*ecs.c.ke_ecs_handle) result.c.ke_result;

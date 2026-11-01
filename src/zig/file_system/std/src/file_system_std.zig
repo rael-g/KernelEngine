@@ -20,7 +20,7 @@ const log = std.log.scoped(.file_system_std);
 /// `root` resolves relative paths and is closed by `destroy` when `owns_root` says the factory
 /// opened it.
 const State = struct {
-    api: abi_file_system.ke_file_system,
+    api: abi_file_system.c.ke_file_system,
     threaded: std.Io.Threaded,
     root: std.Io.Dir,
     owns_root: bool,
@@ -35,17 +35,17 @@ const OpenFile = struct {
     file: std.Io.File,
 };
 
-fn stateOf(self: *abi_file_system.ke_file_system) *State {
+fn stateOf(self: *abi_file_system.c.ke_file_system) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
-fn openFileOf(file: *abi_file_system.ke_open_file) *OpenFile {
+fn openFileOf(file: *abi_file_system.c.ke_open_file) *OpenFile {
     return @ptrCast(@alignCast(file));
 }
 
 /// Slot `open`. Allocates the `OpenFile` only once the file is open, so a failure leaves nothing
 /// allocated and `out_file` null.
-fn open(self_in: ?*abi_file_system.ke_file_system, path_in: ?[*:0]const u8, out_file: ?*?*abi_file_system.ke_open_file) callconv(.c) abi_result.ke_result {
+fn open(self_in: ?*abi_file_system.c.ke_file_system, path_in: ?[*:0]const u8, out_file: ?*?*abi_file_system.c.ke_open_file) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const out = out_file orelse return R.code(error.InvalidArgument);
     out.* = null;
@@ -67,7 +67,7 @@ fn open(self_in: ?*abi_file_system.ke_file_system, path_in: ?[*:0]const u8, out_
 }
 
 /// Slot `size`.
-fn size(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.ke_open_file, out_size: ?*u64) callconv(.c) abi_result.ke_result {
+fn size(self_in: ?*abi_file_system.c.ke_file_system, file_in: ?*abi_file_system.c.ke_open_file, out_size: ?*u64) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const file = file_in orelse return R.code(error.InvalidArgument);
     const out = out_size orelse return R.code(error.InvalidArgument);
@@ -82,7 +82,7 @@ fn size(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.ke
 
 /// Slot `read_at`. Reads until `len` bytes or the end of the file, through positional reads that
 /// move no shared cursor.
-fn readAt(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.ke_open_file, offset: u64, dst: ?*anyopaque, len: usize, out_read: ?*usize) callconv(.c) abi_result.ke_result {
+fn readAt(self_in: ?*abi_file_system.c.ke_file_system, file_in: ?*abi_file_system.c.ke_open_file, offset: u64, dst: ?*anyopaque, len: usize, out_read: ?*usize) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const file = file_in orelse return R.code(error.InvalidArgument);
     const out = out_read orelse return R.code(error.InvalidArgument);
@@ -99,7 +99,7 @@ fn readAt(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.
 }
 
 /// Slot `close`.
-fn close(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.ke_open_file) callconv(.c) void {
+fn close(self_in: ?*abi_file_system.c.ke_file_system, file_in: ?*abi_file_system.c.ke_open_file) callconv(.c) void {
     const self = self_in orelse return;
     const file = file_in orelse return;
     const open_file = openFileOf(file);
@@ -108,7 +108,7 @@ fn close(self_in: ?*abi_file_system.ke_file_system, file_in: ?*abi_file_system.k
 }
 
 /// Slot `stat`. A path that names neither a file nor a directory reports `KE_FILE_KIND_OTHER`.
-fn stat(self_in: ?*abi_file_system.ke_file_system, path_in: ?[*:0]const u8, out_stat: ?*abi_file_system.ke_file_stat) callconv(.c) abi_result.ke_result {
+fn stat(self_in: ?*abi_file_system.c.ke_file_system, path_in: ?[*:0]const u8, out_stat: ?*abi_file_system.c.ke_file_stat) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const path = path_in orelse return R.code(error.InvalidArgument);
     const out = out_stat orelse return R.code(error.InvalidArgument);
@@ -121,9 +121,9 @@ fn stat(self_in: ?*abi_file_system.ke_file_system, path_in: ?[*:0]const u8, out_
     };
     out.* = .{
         .kind = switch (st.kind) {
-            .file => abi_file_system.KE_FILE_KIND_FILE,
-            .directory => abi_file_system.KE_FILE_KIND_DIRECTORY,
-            else => abi_file_system.KE_FILE_KIND_OTHER,
+            .file => abi_file_system.c.KE_FILE_KIND_FILE,
+            .directory => abi_file_system.c.KE_FILE_KIND_DIRECTORY,
+            else => abi_file_system.c.KE_FILE_KIND_OTHER,
         },
         .size = st.size,
     };
@@ -132,7 +132,7 @@ fn stat(self_in: ?*abi_file_system.ke_file_system, path_in: ?[*:0]const u8, out_
 
 /// The handle's `destroy`. Closes the root when the factory opened it and frees the `State`;
 /// files still open are not closed. A null file system is ignored.
-fn destroy(self_in: ?*abi_file_system.ke_file_system) callconv(.c) void {
+fn destroy(self_in: ?*abi_file_system.c.ke_file_system) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -144,9 +144,9 @@ fn destroy(self_in: ?*abi_file_system.ke_file_system) callconv(.c) void {
 /// directory; any other root is opened once here. Fails with not found when the root names no
 /// directory, out of memory when the `State` cannot be allocated and io otherwise, leaving
 /// nothing allocated and the handle zeroed.
-export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params, out_file_system: ?*abi_file_system.ke_file_system_handle) callconv(.c) abi_result.ke_result {
+export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params, out_file_system: ?*abi_file_system.c.ke_file_system_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_file_system orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_file_system.ke_file_system_handle);
+    out.* = std.mem.zeroes(abi_file_system.c.ke_file_system_handle);
     out.* = create(params_in) catch |err| {
         log.warn("creating the file system failed: {t}", .{err});
         return R.code(err);
@@ -154,11 +154,11 @@ export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_facto
     return R.ok;
 }
 
-fn create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params) R.Error!abi_file_system.ke_file_system_handle {
+fn create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params) R.Error!abi_file_system.c.ke_file_system_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
-        .api = std.mem.zeroes(abi_file_system.ke_file_system),
+        .api = std.mem.zeroes(abi_file_system.c.ke_file_system),
         .threaded = .init_single_threaded,
         .root = std.Io.Dir.cwd(),
         .owns_root = false,
@@ -187,7 +187,7 @@ const contents = "the quick brown fox jumps over the lazy dog";
 const Rig = struct {
     dir: testing.TmpDir,
     path: [std.fs.max_path_bytes]u8,
-    handle: abi_file_system.ke_file_system_handle,
+    handle: abi_file_system.c.ke_file_system_handle,
 
     fn init(self: *Rig) !void {
         self.dir = testing.tmpDir(.{});
@@ -200,12 +200,12 @@ const Rig = struct {
         try R.check(ke_file_system_std_create(&params, &self.handle));
     }
 
-    fn fs(self: *Rig) *abi_file_system.ke_file_system {
+    fn fs(self: *Rig) *abi_file_system.c.ke_file_system {
         return self.handle.ref.?;
     }
 
-    fn opened(self: *Rig, path: [*:0]const u8) !*abi_file_system.ke_open_file {
-        var file: ?*abi_file_system.ke_open_file = null;
+    fn opened(self: *Rig, path: [*:0]const u8) !*abi_file_system.c.ke_open_file {
+        var file: ?*abi_file_system.c.ke_open_file = null;
         try R.check(self.fs().open.?(self.fs(), path, &file));
         return file.?;
     }
@@ -252,8 +252,8 @@ test "a read that crosses the end of the file returns the bytes up to it" {
 }
 
 const Reader = struct {
-    fs: *abi_file_system.ke_file_system,
-    file: *abi_file_system.ke_open_file,
+    fs: *abi_file_system.c.ke_file_system,
+    file: *abi_file_system.c.ke_open_file,
     offset: usize,
     ok: bool = false,
 
@@ -291,11 +291,11 @@ test "a path that names nothing is not found by open or stat" {
     try rig.init();
     defer rig.deinit();
 
-    var file: ?*abi_file_system.ke_open_file = null;
+    var file: ?*abi_file_system.c.ke_open_file = null;
     try testing.expectError(error.NotFound, R.check(rig.fs().open.?(rig.fs(), "missing.txt", &file)));
     try testing.expect(file == null);
 
-    var st: abi_file_system.ke_file_stat = undefined;
+    var st: abi_file_system.c.ke_file_stat = undefined;
     try testing.expectError(error.NotFound, R.check(rig.fs().stat.?(rig.fs(), "missing.txt", &st)));
 }
 
@@ -304,13 +304,13 @@ test "stat tells a file and its size from a directory" {
     try rig.init();
     defer rig.deinit();
 
-    var st: abi_file_system.ke_file_stat = undefined;
+    var st: abi_file_system.c.ke_file_stat = undefined;
     try R.check(rig.fs().stat.?(rig.fs(), "fox.txt", &st));
-    try testing.expectEqual(abi_file_system.KE_FILE_KIND_FILE, st.kind);
+    try testing.expectEqual(abi_file_system.c.KE_FILE_KIND_FILE, st.kind);
     try testing.expectEqual(@as(u64, contents.len), st.size);
 
     try R.check(rig.fs().stat.?(rig.fs(), "sub", &st));
-    try testing.expectEqual(abi_file_system.KE_FILE_KIND_DIRECTORY, st.kind);
+    try testing.expectEqual(abi_file_system.c.KE_FILE_KIND_DIRECTORY, st.kind);
 }
 
 test "an absolute path is read regardless of the root" {
@@ -322,18 +322,18 @@ test "an absolute path is read regardless of the root" {
     const real = try rig.dir.dir.realPathFile(testing.io, "fox.txt", &abs);
     abs[real] = 0;
 
-    var cwd_handle: abi_file_system.ke_file_system_handle = undefined;
+    var cwd_handle: abi_file_system.c.ke_file_system_handle = undefined;
     try R.check(ke_file_system_std_create(null, &cwd_handle));
     defer cwd_handle.destroy.?(cwd_handle.ref);
 
-    var st: abi_file_system.ke_file_stat = undefined;
+    var st: abi_file_system.c.ke_file_stat = undefined;
     try R.check(cwd_handle.ref.?.stat.?(cwd_handle.ref, @ptrCast(&abs), &st));
     try testing.expectEqual(@as(u64, contents.len), st.size);
 }
 
 test "a root that names no directory is not found and leaves the handle zeroed" {
     const params = abi_file_system_std_factory.ke_file_system_std_params{ .root = "no/such/root" };
-    var h: abi_file_system.ke_file_system_handle = undefined;
+    var h: abi_file_system.c.ke_file_system_handle = undefined;
     try testing.expectError(error.NotFound, R.check(ke_file_system_std_create(&params, &h)));
     try testing.expect(h.ref == null and h.destroy == null);
 }
@@ -343,10 +343,10 @@ test "null arguments are refused as invalid and a null file to close is ignored"
     try rig.init();
     defer rig.deinit();
 
-    var file: ?*abi_file_system.ke_open_file = null;
+    var file: ?*abi_file_system.c.ke_open_file = null;
     var len: u64 = 0;
     var read: usize = 0;
-    var st: abi_file_system.ke_file_stat = undefined;
+    var st: abi_file_system.c.ke_file_stat = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_file_system_std_create(null, null)));
     try testing.expectError(error.InvalidArgument, R.check(open(null, "fox.txt", &file)));
     try testing.expectError(error.InvalidArgument, R.check(open(rig.fs(), null, &file)));

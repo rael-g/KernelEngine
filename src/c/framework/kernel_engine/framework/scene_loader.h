@@ -42,6 +42,7 @@ extern "C"
 
     } ke_scene_loader;
 
+    /// [owner]
     typedef struct ke_scene_loader_handle
     {
         ke_scene_loader *ref;

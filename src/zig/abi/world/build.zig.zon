@@ -1,0 +1,15 @@
+.{
+    .name = .abi_world,
+    .version = "0.1.0",
+    .fingerprint = 0x207c73c5308a7826,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_result = .{ .path = "../result" },
+        .abi_runtime = .{ .path = "../runtime" },
+        .abi_scene_tree = .{ .path = "../scene_tree" },
+        .abi_signal_bus = .{ .path = "../signal_bus" },
+    },
+    .paths = .{"."},
+}

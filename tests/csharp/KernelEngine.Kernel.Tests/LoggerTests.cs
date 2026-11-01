@@ -29,7 +29,7 @@ public class LoggerTests
         var scope = "render_forward\0"u8.ToArray();
         var message = "pipeline compiled\0"u8.ToArray();
         fixed (byte* s = scope, m = message)
-            LogCallbackNative.Pointer(LogCallbackNative.Pin(logger.Log), KernelEngine.Logger.Native.ke_log_level.KE_LOG_LEVEL_WARNING, (sbyte*)s, (sbyte*)m);
+            LogCallbackNative.Pointer(LogCallbackNative.Pin(logger.Log), LogLevel.Warning, (sbyte*)s, (sbyte*)m);
 
         Assert.Contains(sink.Entries, e => e.Level == LogLevel.Warning && e.Tag == "render_forward" && e.Message == "pipeline compiled");
     }

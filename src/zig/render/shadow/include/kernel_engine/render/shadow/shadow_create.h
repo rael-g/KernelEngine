@@ -30,7 +30,7 @@ extern "C"
 
     typedef struct ke_render_shadow ke_render_shadow;
 
-    /**
+    /** [bag]
      * What the directional shadow pass draws and the shape of its map. A scene larger than
      * `extent` loses shadows outside it, and a caster farther than `light_distance` stops
      * casting. The names are copied.
@@ -61,6 +61,7 @@ extern "C"
         float    far_plane;
     } ke_render_shadow_params;
 
+    /// [owner]
     typedef struct ke_render_shadow_handle
     {
         ke_render_shadow *ref;

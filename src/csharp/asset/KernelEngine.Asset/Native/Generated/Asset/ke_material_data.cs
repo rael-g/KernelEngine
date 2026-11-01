@@ -1,4 +1,8 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
 
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;

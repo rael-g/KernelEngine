@@ -1,0 +1,11 @@
+.{
+    .name = .abi_audio_components,
+    .version = "0.1.0",
+    .fingerprint = 0xcb743c5f14148935,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+    },
+    .paths = .{"."},
+}

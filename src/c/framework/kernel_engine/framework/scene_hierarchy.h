@@ -19,7 +19,7 @@ extern "C"
 
     /// Owner wrapper: destroy releases the ordering buffers. The system is
     /// registered for the runtime's lifetime, so destroy the hierarchy only once
-    /// the runtime it was created against is done ticking.
+    /// [owner] the runtime it was created against is done ticking.
     typedef struct ke_scene_hierarchy_handle
     {
         ke_scene_hierarchy *ref;

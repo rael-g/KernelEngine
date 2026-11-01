@@ -6,8 +6,8 @@ const result = @import("result");
 
 /// Adds audio's scene components to set: the audio player, with its field table, so an
 /// [entity.components.audio_player] block applies.
-pub extern fn ke_audio_scene_components_create(set: ?*framework.ke_scene_component_set) result.ke_result;
+pub extern fn ke_audio_scene_components_create(set: ?*framework.c.ke_scene_component_set) result.c.ke_result;
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_audio_module_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_audio_module_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

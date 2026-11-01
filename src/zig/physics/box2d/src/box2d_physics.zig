@@ -36,14 +36,14 @@ const Entry = struct {
 /// `lookup`. Fixtures are not tracked here: they belong to the Box2D body. Nothing locks, so a
 /// world must be driven from one thread at a time.
 const State = struct {
-    api: abi_physics.ke_physics_2d,
+    api: abi_physics.c.ke_physics_2d,
     world: b2.b2WorldId,
     bodies: ?[*]Entry,
     body_count: u32,
     body_capacity: u32,
 };
 
-fn stateOf(self: *abi_physics.ke_physics_2d) *State {
+fn stateOf(self: *abi_physics.c.ke_physics_2d) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
@@ -51,8 +51,8 @@ const log = std.log.scoped(.physics_2d_box2d);
 
 /// Every operation on an existing body resolves its id here. A null result means the operation
 /// does nothing or reports that the body was not found.
-fn lookup(s: *State, id: abi_physics.ke_body_2d) ?b2.b2BodyId {
-    if (id == abi_physics.KE_BODY_2D_INVALID) return null;
+fn lookup(s: *State, id: abi_physics.c.ke_body_2d) ?b2.b2BodyId {
+    if (id == abi_physics.c.KE_BODY_2D_INVALID) return null;
     const idx = id - 1;
     if (idx >= s.body_count) return null;
     const entry = s.bodies.?[idx];
@@ -60,7 +60,7 @@ fn lookup(s: *State, id: abi_physics.ke_body_2d) ?b2.b2BodyId {
 }
 
 /// Takes effect on the next step; a null vtable or handle is ignored.
-fn setGravity(self_in: ?*abi_physics.ke_physics_2d, x: f32, y: f32) callconv(.c) void {
+fn setGravity(self_in: ?*abi_physics.c.ke_physics_2d, x: f32, y: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     b2.b2World_SetGravity(stateOf(self).world, .{ .x = x, .y = y });
@@ -68,7 +68,7 @@ fn setGravity(self_in: ?*abi_physics.ke_physics_2d, x: f32, y: f32) callconv(.c)
 
 /// Advances the world by the given seconds, split into `sub_step_count` sub-steps. It does not
 /// read the body table.
-fn step(self_in: ?*abi_physics.ke_physics_2d, dt: f32) callconv(.c) void {
+fn step(self_in: ?*abi_physics.c.ke_physics_2d, dt: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     b2.b2World_Step(stateOf(self).world, dt, sub_step_count);
@@ -79,14 +79,14 @@ fn step(self_in: ?*abi_physics.ke_physics_2d, dt: f32) callconv(.c) void {
 /// success the id written is the new count. Fails with invalid argument for a null vtable, handle
 /// or out-parameter and out of memory for a failed table growth or a refused body.
 fn createBody(
-    self_in: ?*abi_physics.ke_physics_2d,
-    body_type: abi_physics.ke_body_type_2d,
+    self_in: ?*abi_physics.c.ke_physics_2d,
+    body_type: abi_physics.c.ke_body_type_2d,
     x: f32,
     y: f32,
-    out_body: ?*abi_physics.ke_body_2d,
-) callconv(.c) abi_result.ke_result {
+    out_body: ?*abi_physics.c.ke_body_2d,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_body orelse return R.code(error.InvalidArgument);
-    out.* = abi_physics.KE_BODY_2D_INVALID;
+    out.* = abi_physics.c.KE_BODY_2D_INVALID;
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -104,8 +104,8 @@ fn createBody(
 
     var def = b2.b2DefaultBodyDef();
     def.type = switch (body_type) {
-        abi_physics.KE_BODY_TYPE_STATIC => b2.b2_staticBody,
-        abi_physics.KE_BODY_TYPE_KINEMATIC => b2.b2_kinematicBody,
+        abi_physics.c.KE_BODY_TYPE_STATIC => b2.b2_staticBody,
+        abi_physics.c.KE_BODY_TYPE_KINEMATIC => b2.b2_kinematicBody,
         else => b2.b2_dynamicBody,
     };
     def.position = .{ .x = x, .y = y };
@@ -124,7 +124,7 @@ fn createBody(
 
 /// Destroys the Box2D body together with its fixtures and marks its entry dead; an id that does
 /// not resolve does nothing.
-fn destroyBody(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d) callconv(.c) void {
+fn destroyBody(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -139,7 +139,7 @@ fn makeShapeDef(
     density: f32,
     friction: f32,
     restitution: f32,
-    filter: ?*const abi_physics.ke_collision_filter_2d,
+    filter: ?*const abi_physics.c.ke_collision_filter_2d,
 ) b2.b2ShapeDef {
     var def = b2.b2DefaultShapeDef();
     def.density = density;
@@ -155,8 +155,8 @@ fn makeShapeDef(
 /// Attaches a box, offset and rotated relative to the body. Fails with invalid argument for a null
 /// vtable or handle and not found when the id does not resolve.
 fn addBoxFixture(
-    self_in: ?*abi_physics.ke_physics_2d,
-    id: abi_physics.ke_body_2d,
+    self_in: ?*abi_physics.c.ke_physics_2d,
+    id: abi_physics.c.ke_body_2d,
     half_w: f32,
     half_h: f32,
     offset_x: f32,
@@ -165,8 +165,8 @@ fn addBoxFixture(
     density: f32,
     friction: f32,
     restitution: f32,
-    filter: ?*const abi_physics.ke_collision_filter_2d,
-) callconv(.c) abi_result.ke_result {
+    filter: ?*const abi_physics.c.ke_collision_filter_2d,
+) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const body = lookup(stateOf(self), id) orelse return R.code(error.NotFound);
@@ -179,16 +179,16 @@ fn addBoxFixture(
 
 /// Attaches a circle centred at the offset. Fails like `addBoxFixture`.
 fn addCircleFixture(
-    self_in: ?*abi_physics.ke_physics_2d,
-    id: abi_physics.ke_body_2d,
+    self_in: ?*abi_physics.c.ke_physics_2d,
+    id: abi_physics.c.ke_body_2d,
     radius: f32,
     offset_x: f32,
     offset_y: f32,
     density: f32,
     friction: f32,
     restitution: f32,
-    filter: ?*const abi_physics.ke_collision_filter_2d,
-) callconv(.c) abi_result.ke_result {
+    filter: ?*const abi_physics.c.ke_collision_filter_2d,
+) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const body = lookup(stateOf(self), id) orelse return R.code(error.NotFound);
@@ -200,9 +200,9 @@ fn addCircleFixture(
 }
 
 /// The output is zeroed first, so a body that does not resolve reads as an all-zero state.
-fn getBodyState(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, out_in: ?*abi_physics.ke_body_state_2d) callconv(.c) void {
+fn getBodyState(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, out_in: ?*abi_physics.c.ke_body_state_2d) callconv(.c) void {
     const out = out_in orelse return;
-    out.* = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    out.* = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
 
     const self = self_in orelse return;
     if (self.handle == null) return;
@@ -219,7 +219,7 @@ fn getBodyState(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d
 }
 
 /// Teleports the body to the position and angle, in radians, keeping its velocity.
-fn setBodyPosition(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, x: f32, y: f32, angle: f32) callconv(.c) void {
+fn setBodyPosition(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, x: f32, y: f32, angle: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
@@ -227,7 +227,7 @@ fn setBodyPosition(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body
 }
 
 /// Overwrites the body's linear velocity; an id that does not resolve does nothing.
-fn setBodyVelocity(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, vx: f32, vy: f32) callconv(.c) void {
+fn setBodyVelocity(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, vx: f32, vy: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
@@ -236,7 +236,7 @@ fn setBodyVelocity(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body
 
 /// Applies the impulse to the body's centre and wakes it; an id that does not resolve does
 /// nothing.
-fn applyImpulse(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, ix: f32, iy: f32) callconv(.c) void {
+fn applyImpulse(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, ix: f32, iy: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
@@ -244,7 +244,7 @@ fn applyImpulse(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d
 }
 
 /// Locks or unlocks the body's rotation; an id that does not resolve does nothing.
-fn setBodyFixedRotation(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, fixed: bool) callconv(.c) void {
+fn setBodyFixedRotation(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, fixed: bool) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
@@ -252,7 +252,7 @@ fn setBodyFixedRotation(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke
 }
 
 /// Scales the gravity that acts on the body; an id that does not resolve does nothing.
-fn setBodyGravityScale(self_in: ?*abi_physics.ke_physics_2d, id: abi_physics.ke_body_2d, scale: f32) callconv(.c) void {
+fn setBodyGravityScale(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body_2d, scale: f32) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const body = lookup(stateOf(self), id) orelse return;
@@ -270,7 +270,7 @@ fn rotAngle(q: b2.b2Rot) f32 {
 }
 
 /// Tears down the world, then the body table, then the state, in that order.
-fn destroy(self_in: ?*abi_physics.ke_physics_2d) callconv(.c) void {
+fn destroy(self_in: ?*abi_physics.c.ke_physics_2d) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -284,10 +284,10 @@ fn destroy(self_in: ?*abi_physics.ke_physics_2d) callconv(.c) void {
 /// state owns.
 export fn ke_physics_2d_box2d_create(
     params_in: ?*const abi_factory.ke_physics_2d_box2d_params,
-    out_world: ?*abi_physics.ke_physics_2d_handle,
-) callconv(.c) abi_result.ke_result {
+    out_world: ?*abi_physics.c.ke_physics_2d_handle,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_physics.ke_physics_2d_handle);
+    out.* = std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
     const params = params_in orelse return R.code(error.InvalidArgument);
     out.* = create(params) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
@@ -297,11 +297,11 @@ export fn ke_physics_2d_box2d_create(
     return R.ok;
 }
 
-fn create(params: *const abi_factory.ke_physics_2d_box2d_params) R.Error!abi_physics.ke_physics_2d_handle {
+fn create(params: *const abi_factory.ke_physics_2d_box2d_params) R.Error!abi_physics.c.ke_physics_2d_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
-        .api = std.mem.zeroes(abi_physics.ke_physics_2d),
+        .api = std.mem.zeroes(abi_physics.c.ke_physics_2d),
         .world = undefined,
         .bodies = null,
         .body_count = 0,
@@ -332,17 +332,17 @@ fn create(params: *const abi_factory.ke_physics_2d_box2d_params) R.Error!abi_phy
 
 const testing = std.testing;
 
-fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.ke_physics_2d_handle {
+fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle {
     var params = std.mem.zeroes(abi_factory.ke_physics_2d_box2d_params);
     params.gravity_x = gravity_x;
     params.gravity_y = gravity_y;
-    var h: abi_physics.ke_physics_2d_handle = undefined;
-    R.check(ke_physics_2d_box2d_create(&params, &h)) catch return std.mem.zeroes(abi_physics.ke_physics_2d_handle);
+    var h: abi_physics.c.ke_physics_2d_handle = undefined;
+    R.check(ke_physics_2d_box2d_create(&params, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
     return h;
 }
 
-fn newBody(h: abi_physics.ke_physics_2d_handle, body_type: abi_physics.ke_body_type_2d, x: f32, y: f32) !abi_physics.ke_body_2d {
-    var body: abi_physics.ke_body_2d = undefined;
+fn newBody(h: abi_physics.c.ke_physics_2d_handle, body_type: abi_physics.c.ke_body_type_2d, x: f32, y: f32) !abi_physics.c.ke_body_2d {
+    var body: abi_physics.c.ke_body_2d = undefined;
     try R.check(h.ref.?.create_body.?(h.ref, body_type, x, y, &body));
     return body;
 }
@@ -373,15 +373,15 @@ test "creating a body returns a handle that is not the invalid sentinel" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
-    try testing.expect(body != abi_physics.KE_BODY_2D_INVALID);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    try testing.expect(body != abi_physics.c.KE_BODY_2D_INVALID);
 }
 
 test "a box fixture attaches to an existing body" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
 }
 
@@ -389,7 +389,7 @@ test "a circle fixture attaches to an existing body" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_circle_fixture.?(h.ref, body, 1.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
 }
 
@@ -397,9 +397,9 @@ test "a body reports the position it was created at" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 10.0, 20.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 10.0, 20.0);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     h.ref.?.get_body_state.?(h.ref, body, &state);
 
     try testing.expectApproxEqAbs(@as(f32, 10.0), state.x, 1e-5);
@@ -410,10 +410,10 @@ test "setting a body position moves it and sets its angle" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     h.ref.?.set_body_position.?(h.ref, body, 5.0, 5.0, 0.78);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     h.ref.?.get_body_state.?(h.ref, body, &state);
 
     try testing.expectApproxEqAbs(@as(f32, 5.0), state.x, 1e-5);
@@ -425,10 +425,10 @@ test "setting a body velocity is readable back before any step" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     h.ref.?.set_body_velocity.?(h.ref, body, 1.0, 2.0);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     h.ref.?.get_body_state.?(h.ref, body, &state);
 
     try testing.expectApproxEqAbs(@as(f32, 1.0), state.velocity_x, 1e-5);
@@ -439,13 +439,13 @@ test "an impulse pushes a body along both axes it was applied on" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, body, 1.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.3, 0.1, null));
     h.ref.?.apply_impulse.?(h.ref, body, 10.0, 10.0);
 
     h.ref.?.step.?(h.ref, 0.016);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     h.ref.?.get_body_state.?(h.ref, body, &state);
 
     try testing.expect(state.velocity_x > 0.0);
@@ -456,10 +456,10 @@ test "destroying a body retires its handle" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     h.ref.?.destroy_body.?(h.ref, body);
 
-    var state = abi_physics.ke_body_state_2d{
+    var state = abi_physics.c.ke_body_state_2d{
         .x = 42.0,
         .y = 42.0,
         .angle = 42.0,
@@ -477,17 +477,17 @@ test "a rotation locked box never picks up spin when it bounces off a wall" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall = try newBody(h, abi_physics.KE_BODY_TYPE_STATIC, 2.0, 0.0);
-    try testing.expect(wall != abi_physics.KE_BODY_2D_INVALID);
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+    try testing.expect(wall != abi_physics.c.KE_BODY_2D_INVALID);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
 
-    const ball = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
-    try testing.expect(ball != abi_physics.KE_BODY_2D_INVALID);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    try testing.expect(ball != abi_physics.c.KE_BODY_2D_INVALID);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, ball, 0.18, 0.18, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
     h.ref.?.set_body_fixed_rotation.?(h.ref, ball, true);
     h.ref.?.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     var i: usize = 0;
     while (i < 120) : (i += 1) {
         h.ref.?.step.?(h.ref, 1.0 / 60.0);
@@ -503,14 +503,14 @@ test "a frictionless circle hitting a wall head on does not start spinning" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall = try newBody(h, abi_physics.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, null));
 
-    const ball = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_circle_fixture.?(h.ref, ball, 0.18, 0.0, 0.0, 1.0, 0.0, 1.0, null));
     h.ref.?.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
 
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     var i: usize = 0;
     while (i < 120) : (i += 1) {
         h.ref.?.step.?(h.ref, 1.0 / 60.0);
@@ -519,18 +519,18 @@ test "a frictionless circle hitting a wall head on does not start spinning" {
     }
 }
 
-fn wallAndBall(h: abi_physics.ke_physics_2d_handle, wall_filter: ?*const abi_physics.ke_collision_filter_2d, ball_filter: ?*const abi_physics.ke_collision_filter_2d) !abi_physics.ke_body_2d {
-    const wall = try newBody(h, abi_physics.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+fn wallAndBall(h: abi_physics.c.ke_physics_2d_handle, wall_filter: ?*const abi_physics.c.ke_collision_filter_2d, ball_filter: ?*const abi_physics.c.ke_collision_filter_2d) !abi_physics.c.ke_body_2d {
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, 0.25, 4.0, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, wall_filter));
 
-    const ball = try newBody(h, abi_physics.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, ball, 0.18, 0.18, 0.0, 0.0, 0.0, 1.0, 0.0, 1.0, ball_filter));
     h.ref.?.set_body_velocity.?(h.ref, ball, 6.0, 0.0);
     return ball;
 }
 
-fn runPast(h: abi_physics.ke_physics_2d_handle, ball: abi_physics.ke_body_2d) abi_physics.ke_body_state_2d {
-    var state = std.mem.zeroes(abi_physics.ke_body_state_2d);
+fn runPast(h: abi_physics.c.ke_physics_2d_handle, ball: abi_physics.c.ke_body_2d) abi_physics.c.ke_body_state_2d {
+    var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     var i: usize = 0;
     while (i < 120) : (i += 1) {
         h.ref.?.step.?(h.ref, 1.0 / 60.0);
@@ -543,8 +543,8 @@ test "a shape whose mask excludes the other's layer passes straight through it" 
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b10 };
-    const ball_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
+    const wall_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b10 };
+    const ball_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
     const ball = try wallAndBall(h, &wall_filter, &ball_filter);
 
     const state = runPast(h, ball);
@@ -556,8 +556,8 @@ test "the same pair collides once each mask names the other's layer" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
-    const ball_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b11 };
+    const wall_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
+    const ball_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b11 };
     const ball = try wallAndBall(h, &wall_filter, &ball_filter);
 
     const state = runPast(h, ball);
@@ -568,8 +568,8 @@ test "clearing one side of the pair is enough to silence the contact" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
-    const ball_filter = abi_physics.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
+    const wall_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b10, .mask = 0b11 };
+    const ball_filter = abi_physics.c.ke_collision_filter_2d{ .layer = 0b01, .mask = 0b01 };
     const ball = try wallAndBall(h, &wall_filter, &ball_filter);
 
     const state = runPast(h, ball);

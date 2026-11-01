@@ -13,8 +13,8 @@ pub const ke_file_system_std_params = extern struct {
 };
 
 /// Creates a ke_file_system over the operating system's files, through Zig's standard library.
-pub extern fn ke_file_system_std_create(params: ?*const ke_file_system_std_params, out_file_system: ?*file_system.ke_file_system_handle) result.ke_result;
+pub extern fn ke_file_system_std_create(params: ?*const ke_file_system_std_params, out_file_system: ?*file_system.c.ke_file_system_handle) result.c.ke_result;
 
 /// Sends every line ke_file_system_std logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_file_system_std_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_file_system_std_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

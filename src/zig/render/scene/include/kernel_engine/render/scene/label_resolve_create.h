@@ -29,13 +29,14 @@ extern "C"
 
     typedef struct ke_render_label_resolve ke_render_label_resolve;
 
+    /// [owner]
     typedef struct ke_render_label_resolve_handle
     {
         ke_render_label_resolve *ref;
         void (*destroy)(ke_render_label_resolve *self);
     } ke_render_label_resolve_handle;
 
-    /// What the label resolve needs to give a label the font it names.
+    /// [bag] What the label resolve needs to give a label the font it names.
     typedef struct ke_render_label_resolve_params
     {
         ke_runtime        *runtime;   ///< Registers the system; borrowed, must outlive it.

@@ -6,8 +6,8 @@ const result = @import("result");
 const view = @import("view");
 
 /// Creates the camera interface over a view space and a clip convention.
-pub extern fn ke_render_camera_create(view_space: ?*view.ke_view_space, clip: ?*const render.ke_ndc_convention, out_camera: ?*render.ke_render_camera_handle) result.ke_result;
+pub extern fn ke_render_camera_create(view_space: ?*view.c.ke_view_space, clip: ?*const render_gpu.c.ke_ndc_convention, out_camera: ?*render_contract.c.ke_render_camera_handle) result.c.ke_result;
 
 /// Sends every line ke_render_camera logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_render_camera_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_render_camera_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

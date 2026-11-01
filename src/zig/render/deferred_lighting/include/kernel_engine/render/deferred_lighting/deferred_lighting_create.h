@@ -27,6 +27,7 @@ extern "C"
 
     typedef struct ke_render_deferred_lighting ke_render_deferred_lighting;
 
+    /// [owner]
     typedef struct ke_render_deferred_lighting_handle
     {
         ke_render_deferred_lighting *ref;
@@ -34,7 +35,7 @@ extern "C"
     } ke_render_deferred_lighting_handle;
 
     /// What the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
-    /// over the frame's color, sampling the frame's depth. The names are copied.
+    /// [bag] over the frame's color, sampling the frame's depth. The names are copied.
     typedef struct ke_render_deferred_lighting_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.

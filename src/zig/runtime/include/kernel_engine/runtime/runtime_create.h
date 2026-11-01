@@ -18,6 +18,7 @@ extern "C" {
 #  endif
 #endif
 
+/// [bag]
 typedef struct ke_runtime_params {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
     float fixed_dt;

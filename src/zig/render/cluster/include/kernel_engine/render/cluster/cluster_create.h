@@ -28,13 +28,14 @@ extern "C"
 
     typedef struct ke_render_cluster ke_render_cluster;
 
+    /// [owner]
     typedef struct ke_render_cluster_handle
     {
         ke_render_cluster *ref;
         void (*destroy)(ke_render_cluster *self);
     } ke_render_cluster_handle;
 
-    /// What the light-cluster pass culls and publishes. The name is copied.
+    /// [bag] What the light-cluster pass culls and publishes. The name is copied.
     typedef struct ke_render_cluster_params
     {
         ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.

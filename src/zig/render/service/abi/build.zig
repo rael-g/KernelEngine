@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_service_factory.zig") });
+    abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));

@@ -8,12 +8,12 @@ const abi_result = @import("abi_result");
 
 const R = @import("result").Result(.{});
 
-const Io = zsub.For(abi_io.ke_io);
+const Io = zsub.For(abi_io.c.ke_io);
 
 const table_heap = std.heap.smp_allocator;
 
 const Request = struct {
-    outcome: R.Error!abi_io.ke_io_result,
+    outcome: R.Error!abi_io.c.ke_io_result,
 };
 
 var files: std.StringHashMapUnmanaged([]const u8) = .empty;
@@ -53,16 +53,16 @@ fn find(path: [*:0]const u8) ?[]const u8 {
     return files.get(key);
 }
 
-fn submit(outcome: R.Error!abi_io.ke_io_result, out: *?*abi_io.ke_io_request) abi_result.ke_result {
+fn submit(outcome: R.Error!abi_io.c.ke_io_result, out: *?*abi_io.c.ke_io_request) abi_result.c.ke_result {
     const request = table_heap.create(Request) catch return R.code(error.OutOfMemory);
     request.* = .{ .outcome = outcome };
     out.* = @ptrCast(request);
     return R.ok;
 }
 
-fn readFile(args: Io.Args(.read_file)) abi_result.ke_result {
-    var result = std.mem.zeroes(abi_io.ke_io_result);
-    const outcome: R.Error!abi_io.ke_io_result = if (find(args[1].?)) |bytes| blk: {
+fn readFile(args: Io.Args(.read_file)) abi_result.c.ke_result {
+    var result = std.mem.zeroes(abi_io.c.ke_io_result);
+    const outcome: R.Error!abi_io.c.ke_io_result = if (find(args[1].?)) |bytes| blk: {
         result.bytes = @constCast(bytes.ptr);
         result.size = bytes.len;
         break :blk result;
@@ -70,16 +70,16 @@ fn readFile(args: Io.Args(.read_file)) abi_result.ke_result {
     return submit(outcome, args[2].?);
 }
 
-fn fileExists(args: Io.Args(.file_exists)) abi_result.ke_result {
-    var result = std.mem.zeroes(abi_io.ke_io_result);
+fn fileExists(args: Io.Args(.file_exists)) abi_result.c.ke_result {
+    var result = std.mem.zeroes(abi_io.c.ke_io_result);
     result.exists = find(args[1].?) != null;
     return submit(result, args[2].?);
 }
 
-fn wait(args: Io.Args(.wait)) abi_result.ke_result {
+fn wait(args: Io.Args(.wait)) abi_result.c.ke_result {
     const request: *Request = @ptrCast(@alignCast(args[1] orelse return R.code(error.InvalidArgument)));
     defer table_heap.destroy(request);
-    if (args[2]) |out| out.* = std.mem.zeroes(abi_io.ke_io_result);
+    if (args[2]) |out| out.* = std.mem.zeroes(abi_io.c.ke_io_result);
     const result = request.outcome catch |err| return R.code(err);
     if (args[2]) |out| out.* = result;
     return R.ok;
@@ -87,7 +87,7 @@ fn wait(args: Io.Args(.wait)) abi_result.ke_result {
 
 fn freeBytes(_: Io.Args(.free_bytes)) void {}
 
-pub fn io() ?*abi_io.ke_io {
+pub fn io() ?*abi_io.c.ke_io {
     if (!configured) {
         substitute.init() catch return null;
         _ = substitute.when(.read_file).does(readFile);

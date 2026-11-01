@@ -36,13 +36,14 @@ extern "C"
         ke_component_id (*frame_cid)(struct ke_render_frame *self);
     } ke_render_frame;
 
+    /// [owner]
     typedef struct ke_render_frame_handle
     {
         ke_render_frame *ref;
         void (*destroy)(ke_render_frame *self);
     } ke_render_frame_handle;
 
-    /// What the frame needs to begin and end on the service and to publish the frame globals.
+    /// [bag] What the frame needs to begin and end on the service and to publish the frame globals.
     typedef struct ke_render_frame_params
     {
         ke_runtime        *runtime; ///< Registers the frame's systems; borrowed, must outlive it.

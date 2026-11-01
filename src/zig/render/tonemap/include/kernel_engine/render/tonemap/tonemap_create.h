@@ -25,6 +25,7 @@ extern "C"
 
     typedef struct ke_render_tonemap ke_render_tonemap;
 
+    /// [owner]
     typedef struct ke_render_tonemap_handle
     {
         ke_render_tonemap *ref;
@@ -32,7 +33,7 @@ extern "C"
     } ke_render_tonemap_handle;
 
     /// What the tonemap pass needs. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and
-    /// replaces the frame's color with its tonemapped copy.
+    /// [bag] replaces the frame's color with its tonemapped copy.
     typedef struct ke_render_tonemap_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.

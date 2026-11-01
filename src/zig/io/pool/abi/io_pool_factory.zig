@@ -7,8 +7,8 @@ const result = @import("result");
 const task_pool = @import("task_pool");
 
 /// Creates a ke_io that runs each request as one task of task_pool, reading through file_system.
-pub extern fn ke_io_pool_create(task_pool: ?*task_pool.ke_task_pool, file_system: ?*file_system.ke_file_system, out_io: ?*io.ke_io_handle) result.ke_result;
+pub extern fn ke_io_pool_create(task_pool: ?*task_pool.c.ke_task_pool, file_system: ?*file_system.c.ke_file_system, out_io: ?*io.c.ke_io_handle) result.c.ke_result;
 
 /// Sends every line ke_io_pool logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_io_pool_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_io_pool_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

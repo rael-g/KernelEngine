@@ -4,6 +4,7 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Window.Native;
 
 namespace KernelEngine.Window;
 

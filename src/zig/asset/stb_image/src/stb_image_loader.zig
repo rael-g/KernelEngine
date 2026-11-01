@@ -1,6 +1,8 @@
 //! Implements the `ke_image_loader` contract on stb_image: it decodes an image file to RGBA
 //! pixels and frees the result.
 
+const abi_image_loader = @import("abi_image_loader");
+const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_asset_stb_image").logFn };
@@ -11,7 +13,6 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 
 const stb = @import("c");
-const abi_asset = @import("abi_asset");
 const abi_io = @import("abi_io");
 const abi_stb = @import("abi_asset_stb_image_factory");
 const abi_result = @import("abi_result");
@@ -23,16 +24,16 @@ const log = std.log.scoped(.asset_stb_image);
 /// The loader: the vtable the handle refers to, whose `handle` points back at the state, and the
 /// borrowed io every load reads its file through.
 const State = struct {
-    api: abi_asset.ke_image_loader,
-    io: *abi_io.ke_io,
+    api: abi_image_loader.c.ke_image_loader,
+    io: *abi_io.c.ke_io,
 };
 
-fn stateOf(self: *abi_asset.ke_image_loader) *State {
+fn stateOf(self: *abi_image_loader.c.ke_image_loader) *State {
     return @fieldParentPtr("api", self);
 }
 
 /// The handle's `destroy`: releases the loader. A null loader is ignored.
-fn destroy(self: ?*abi_asset.ke_image_loader) callconv(.c) void {
+fn destroy(self: ?*abi_image_loader.c.ke_image_loader) callconv(.c) void {
     const loader = self orelse return;
     gpa.destroy(stateOf(loader));
 }
@@ -42,7 +43,7 @@ fn destroy(self: ?*abi_asset.ke_image_loader) callconv(.c) void {
 /// and the image written is null. On success the result owns a copy of the pixels, independent of
 /// stb_image's allocator, and its path field holds the path truncated to fit; it is released
 /// through `freeImage`. The call runs on the calling thread.
-fn loadImage(self: ?*abi_asset.ke_image_loader, path: [*c]const u8, out_image: ?*[*c]abi_asset.ke_texture_data) callconv(.c) abi_result.ke_result {
+fn loadImage(self: ?*abi_image_loader.c.ke_image_loader, path: [*c]const u8, out_image: ?*[*c]abi_mesh_data.c.ke_texture_data) callconv(.c) abi_result.c.ke_result {
     const out = out_image orelse return R.code(error.InvalidArgument);
     out.* = null;
     if (self == null or path == null) return R.code(error.InvalidArgument);
@@ -50,10 +51,10 @@ fn loadImage(self: ?*abi_asset.ke_image_loader, path: [*c]const u8, out_image: ?
     return R.ok;
 }
 
-fn decode(io: *abi_io.ke_io, path: [*c]const u8) R.Error!*abi_asset.ke_texture_data {
-    var request: ?*abi_io.ke_io_request = null;
+fn decode(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error!*abi_mesh_data.c.ke_texture_data {
+    var request: ?*abi_io.c.ke_io_request = null;
     try R.check(io.read_file.?(io, path, &request));
-    var file: abi_io.ke_io_result = undefined;
+    var file: abi_io.c.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &file)) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => {
@@ -75,9 +76,9 @@ fn decode(io: *abi_io.ke_io, path: [*c]const u8) R.Error!*abi_asset.ke_texture_d
 
     const pixel_bytes: usize = @as(usize, @intCast(w)) * @as(usize, @intCast(h)) * 4;
 
-    const data = gpa.create(abi_asset.ke_texture_data) catch return error.OutOfMemory;
+    const data = gpa.create(abi_mesh_data.c.ke_texture_data) catch return error.OutOfMemory;
     errdefer gpa.destroy(data);
-    data.* = std.mem.zeroes(abi_asset.ke_texture_data);
+    data.* = std.mem.zeroes(abi_mesh_data.c.ke_texture_data);
 
     const pixels = gpa.alloc(u8, pixel_bytes) catch return error.OutOfMemory;
     @memcpy(pixels, @as([*]const u8, @ptrCast(raw))[0..pixel_bytes]);
@@ -98,9 +99,9 @@ fn decode(io: *abi_io.ke_io, path: [*c]const u8) R.Error!*abi_asset.ke_texture_d
 
 /// Called through the `free_image` slot on a result of `loadImage`. The pixel buffer is released
 /// with the length `loadImage` recorded in `byte_count`, which is the length it was allocated with.
-fn freeImage(self: ?*abi_asset.ke_image_loader, data: [*c]abi_asset.ke_texture_data) callconv(.c) void {
+fn freeImage(self: ?*abi_image_loader.c.ke_image_loader, data: [*c]abi_mesh_data.c.ke_texture_data) callconv(.c) void {
     if (self == null or data == null) return;
-    const d: *abi_asset.ke_texture_data = @ptrCast(data);
+    const d: *abi_mesh_data.c.ke_texture_data = @ptrCast(data);
     if (d.pixels != null) {
         gpa.free(@as([*]u8, @ptrCast(d.pixels))[0..d.byte_count]);
     }
@@ -110,7 +111,7 @@ fn freeImage(self: ?*abi_asset.ke_image_loader, data: [*c]abi_asset.ke_texture_d
 /// The exported factory. On success the handle's `ref` is the loader with both slots wired and
 /// its `destroy` releases it; when the loader cannot be allocated it fails with out of memory and
 /// the handle stays zeroed.
-export fn ke_image_loader_stb_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_asset.ke_image_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_image_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_image_loader.c.ke_image_loader_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const io = io_in orelse return R.code(error.InvalidArgument);
@@ -130,26 +131,26 @@ const zsub = @import("zsub");
 var served: ?[]const u8 = null;
 var request_token: u8 = 0;
 
-fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+fn readServed(args: zsub.For(abi_io.c.ke_io).Args(.read_file)) abi_result.c.ke_result {
     args[2].?.* = @ptrCast(&request_token);
     return R.ok;
 }
 
-fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
     const bytes = served orelse return R.code(error.NotFound);
     if (args[2]) |out| {
-        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.* = std.mem.zeroes(abi_io.c.ke_io_result);
         out.bytes = @constCast(bytes.ptr);
         out.size = bytes.len;
     }
     return R.ok;
 }
 
-fn freeServed(_: zsub.For(abi_io.ke_io).Args(.free_bytes)) void {}
+fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
 
 /// A substitute io serving `bytes` for every path, or no file at all when `bytes` is null.
 const ServedIo = struct {
-    sub: zsub.For(abi_io.ke_io),
+    sub: zsub.For(abi_io.c.ke_io),
 
     fn init(self: *ServedIo, bytes: ?[]const u8) !void {
         served = bytes;
@@ -163,8 +164,8 @@ const ServedIo = struct {
         self.sub.deinit();
     }
 
-    fn loader(self: *ServedIo) abi_asset.ke_image_loader_handle {
-        var h: abi_asset.ke_image_loader_handle = .{ .ref = null, .destroy = null };
+    fn loader(self: *ServedIo) abi_image_loader.c.ke_image_loader_handle {
+        var h: abi_image_loader.c.ke_image_loader_handle = .{ .ref = null, .destroy = null };
         _ = ke_image_loader_stb_create(self.sub.api(), &h);
         return h;
     }
@@ -191,7 +192,7 @@ test "loading an image with a null loader or a null path fails" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_asset.ke_texture_data = null;
+    var data: [*c]abi_mesh_data.c.ke_texture_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_image.?(null, "path", &data)));
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_image.?(h.ref, null, &data)));
     try testing.expect(data == null);
@@ -222,7 +223,7 @@ test "loading a one pixel targa yields its dimensions and pixels" {
     try testing.expect(h.ref != null);
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_asset.ke_texture_data = null;
+    var data: [*c]abi_mesh_data.c.ke_texture_data = null;
     try R.check(h.ref.?.load_image.?(h.ref, "test_image.tga", &data));
     try testing.expect(data != null);
     defer h.ref.?.free_image.?(h.ref, data);
@@ -233,7 +234,7 @@ test "loading a one pixel targa yields its dimensions and pixels" {
 }
 
 test "creating without an io is refused and leaves the handle zeroed" {
-    var h: abi_asset.ke_image_loader_handle = .{ .ref = null, .destroy = null };
+    var h: abi_image_loader.c.ke_image_loader_handle = .{ .ref = null, .destroy = null };
     try testing.expectError(error.InvalidArgument, R.check(ke_image_loader_stb_create(null, &h)));
     try testing.expect(h.ref == null);
 }
@@ -245,7 +246,7 @@ test "loading a file that does not exist fails with not found" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_asset.ke_texture_data = null;
+    var data: [*c]abi_mesh_data.c.ke_texture_data = null;
     try testing.expectError(error.NotFound, R.check(h.ref.?.load_image.?(h.ref, "missing.png", &data)));
     try testing.expect(data == null);
 }

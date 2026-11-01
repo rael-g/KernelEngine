@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("asset_stb_image_factory.zig") });
-    abi.addImport("asset", b.dependency("ke_abi_asset", .{}).module("abi"));
+    abi.addImport("image_loader", b.dependency("abi_image_loader", .{}).module("abi"));
     abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("ke_abi_result", .{}).module("abi"));

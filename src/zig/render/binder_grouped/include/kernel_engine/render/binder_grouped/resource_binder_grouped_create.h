@@ -20,7 +20,7 @@ extern "C"
 #  endif
 #endif
 
-/// What a grouped resource binder is built on.
+/// [bag] What a grouped resource binder is built on.
 typedef struct ke_render_resource_binder_grouped_params
 {
     /// Borrowed; must outlive the binder.

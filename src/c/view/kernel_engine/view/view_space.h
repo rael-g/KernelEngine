@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-    /** The view space as plain data, for consumers that cannot call this interface. */
+    /** [bag] The view space as plain data, for consumers that cannot call this interface. */
     typedef struct ke_view_space_params
     {
         /// Multiplies a view-space z into a distance in front of the camera.
@@ -93,7 +93,7 @@ extern "C"
                              ke_mat4                   *out_proj);
     } ke_view_space;
 
-    /** Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
+    /** [owner] Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
     typedef struct ke_view_space_handle
     {
         ke_view_space *ref;

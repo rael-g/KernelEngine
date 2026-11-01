@@ -1,6 +1,8 @@
 //! The Assimp implementation of the `ke_asset_loader` contract: it imports a model file into a
 //! `ke_model_data` of records that own their memory, synchronously or on the task pool.
 
+const abi_asset_loader = @import("abi_asset_loader");
+const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_asset_assimp").logFn };
@@ -8,7 +10,6 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const c = @import("c");
-const abi_asset = @import("abi_asset");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
 const abi_task_pool = @import("abi_task_pool");
@@ -45,8 +46,8 @@ const TrackingHeap = std.heap.DebugAllocator(.{ .thread_safe = true });
 /// thread-safe standard allocator otherwise. `io` is borrowed from the factory's caller, and every
 /// file an import opens is read through it.
 const State = struct {
-    api: abi_asset.ke_asset_loader,
-    io: *abi_io.ke_io,
+    api: abi_asset_loader.c.ke_asset_loader,
+    io: *abi_io.c.ke_io,
     heap: if (debug_heap) TrackingHeap else void,
     gpa: std.mem.Allocator,
 };
@@ -55,7 +56,7 @@ const State = struct {
 /// loader's own storage.
 const state_heap = std.heap.smp_allocator;
 
-fn stateOf(self: *abi_asset.ke_asset_loader) *State {
+fn stateOf(self: *abi_asset_loader.c.ke_asset_loader) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
@@ -152,7 +153,7 @@ fn registerTexture(
 /// reason, or a failed allocation of the model's arrays does. It runs on the caller's thread for
 /// the synchronous slot and on a worker for the asynchronous one. It reads only the allocator from
 /// the State and writes nothing into it.
-fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
+fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_mesh_data.c.ke_model_data {
     if (path == null) {
                 return error.InvalidArgument;
     }
@@ -181,7 +182,7 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
     defer table.items.deinit(gpa);
 
     const mat_count = scene.mNumMaterials;
-    const mats = gpa.alloc(abi_asset.ke_material_data, mat_count) catch {
+    const mats = gpa.alloc(abi_mesh_data.c.ke_material_data, mat_count) catch {
                 return error.OutOfMemory;
     };
     const albedo_idx = gpa.alloc(i32, mat_count) catch {
@@ -209,12 +210,12 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
     }
 
     const tex_count: u32 = @intCast(table.items.items.len);
-    const texs = gpa.alloc(abi_asset.ke_texture_data, tex_count) catch {
+    const texs = gpa.alloc(abi_mesh_data.c.ke_texture_data, tex_count) catch {
         gpa.free(mats);
                 return error.OutOfMemory;
     };
     for (table.items.items, 0..) |*ref, ti| {
-        texs[ti] = std.mem.zeroes(abi_asset.ke_texture_data);
+        texs[ti] = std.mem.zeroes(abi_mesh_data.c.ke_texture_data);
         if (ref.is_embedded) {
             if (ref.embedded) |et| {
                 _ = textures.decodeEmbedded(gpa, et, &texs[ti]);
@@ -232,7 +233,7 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
     }
 
     const mesh_count = scene.mNumMeshes;
-    const meshes = gpa.alloc(abi_asset.ke_mesh_data, mesh_count) catch {
+    const meshes = gpa.alloc(abi_mesh_data.c.ke_mesh_data, mesh_count) catch {
         gpa.free(mats);
         gpa.free(texs);
                 return error.OutOfMemory;
@@ -246,7 +247,7 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
             -1;
     }
 
-    const model = gpa.create(abi_asset.ke_model_data) catch {
+    const model = gpa.create(abi_mesh_data.c.ke_model_data) catch {
         gpa.free(mats);
         gpa.free(texs);
         gpa.free(meshes);
@@ -268,10 +269,10 @@ fn loadModel(s: *State, path: [*c]const u8) R.Error!*abi_asset.ke_model_data {
 /// The `load_model` slot, run on the caller's thread. A missing loader, handle or out-parameter is
 /// an invalid argument; everything else is reported by `loadModel`.
 fn vtLoadModel(
-    self_in: ?*abi_asset.ke_asset_loader,
+    self_in: ?*abi_asset_loader.c.ke_asset_loader,
     path: [*c]const u8,
-    out_model: ?*?*abi_asset.ke_model_data,
-) callconv(.c) abi_result.ke_result {
+    out_model: ?*?*abi_mesh_data.c.ke_model_data,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_model orelse return R.code(error.InvalidArgument);
     out.* = null;
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -283,23 +284,23 @@ fn vtLoadModel(
 /// The `free_model` slot. It releases the records `loadModel` allocated for a model, through the
 /// allocator of the loader it is given, which is the allocator those records were made with. A null
 /// loader, handle or model is ignored.
-fn vtFreeModel(self_in: ?*abi_asset.ke_asset_loader, data_in: ?*abi_asset.ke_model_data) callconv(.c) void {
+fn vtFreeModel(self_in: ?*abi_asset_loader.c.ke_asset_loader, data_in: ?*abi_mesh_data.c.ke_model_data) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const data = data_in orelse return;
     const gpa = stateOf(self).gpa;
 
     if (data.meshes) |raw| {
-        const meshes: [*]abi_asset.ke_mesh_data = @ptrCast(raw);
+        const meshes: [*]abi_mesh_data.c.ke_mesh_data = @ptrCast(raw);
         for (0..data.mesh_count) |i| converter.freeMesh(gpa, &meshes[i]);
         gpa.free(meshes[0..data.mesh_count]);
     }
     if (data.materials) |raw| {
-        const mats: [*]abi_asset.ke_material_data = @ptrCast(raw);
+        const mats: [*]abi_mesh_data.c.ke_material_data = @ptrCast(raw);
         gpa.free(mats[0..data.material_count]);
     }
     if (data.textures) |raw| {
-        const texs: [*]abi_asset.ke_texture_data = @ptrCast(raw);
+        const texs: [*]abi_mesh_data.c.ke_texture_data = @ptrCast(raw);
         for (0..data.texture_count) |i| textures.freePixels(gpa, &texs[i]);
         gpa.free(texs[0..data.texture_count]);
     }
@@ -312,14 +313,14 @@ fn vtFreeModel(self_in: ?*abi_asset.ke_asset_loader, data_in: ?*abi_asset.ke_mod
 const AsyncCtx = struct {
     state: *State,
     path: [:0]u8,
-    on_complete: abi_asset.ke_load_model_complete_func,
+    on_complete: abi_asset_loader.c.ke_load_model_complete_func,
     user_data: ?*anyopaque,
 };
 
 /// The task body that the dispatch runs on the thread it chooses. It runs `loadModel`, calls the
 /// completion callback once with the model or the load failure, and frees the context. A failure is
 /// reported only through the callback, so the task itself returns OK.
-fn asyncBody(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
+fn asyncBody(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return R.ok));
     const gpa = ctx.state.gpa;
     const loaded = loadModel(ctx.state, ctx.path.ptr);
@@ -335,12 +336,12 @@ fn asyncBody(data: ?*anyopaque) callconv(.c) abi_result.ke_result {
 /// run by then if dispatch runs it inline. When the context or its path copy cannot be allocated,
 /// the callback is called at once on the calling thread and the result is null.
 fn vtLoadModelAsync(
-    self_in: ?*abi_asset.ke_asset_loader,
-    task_pool_in: ?*abi_task_pool.ke_task_pool,
+    self_in: ?*abi_asset_loader.c.ke_asset_loader,
+    task_pool_in: ?*abi_task_pool.c.ke_task_pool,
     path: [*c]const u8,
-    on_complete: abi_asset.ke_load_model_complete_func,
+    on_complete: abi_asset_loader.c.ke_load_model_complete_func,
     user_data: ?*anyopaque,
-) callconv(.c) ?*abi_task_pool.ke_task {
+) callconv(.c) ?*abi_task_pool.c.ke_task {
     const self = self_in orelse return null;
     const task_pool = task_pool_in orelse return null;
     if (self.handle == null or path == null or on_complete == null) return null;
@@ -365,7 +366,7 @@ fn vtLoadModelAsync(
         .user_data = user_data,
     };
 
-    var task: ?*abi_task_pool.ke_task = null;
+    var task: ?*abi_task_pool.c.ke_task = null;
     R.check(task_pool.dispatch.?(task_pool, asyncBody, ctx, &task)) catch |err| {
         log.warn("loading {s} asynchronously failed: the task pool refused it: {t}", .{ path, err });
         gpa.free(path_copy);
@@ -378,7 +379,7 @@ fn vtLoadModelAsync(
 
 /// The `destroy` slot. It frees the State, and logs a warning, not an error, when the leak check
 /// finds live memory. Models that `free_model` has not released are what that check reports.
-fn vtDestroy(self_in: ?*abi_asset.ke_asset_loader) callconv(.c) void {
+fn vtDestroy(self_in: ?*abi_asset_loader.c.ke_asset_loader) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -391,9 +392,9 @@ fn vtDestroy(self_in: ?*abi_asset.ke_asset_loader) callconv(.c) void {
 /// Factory for the Assimp loader. It writes a handle whose ref is the vtable, or fails with out of
 /// memory, the handle zeroed, when the State cannot be allocated. Each call builds its own State, so
 /// each loader has its own leak tracking in a Debug build.
-export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_asset.ke_asset_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_asset_loader.c.ke_asset_loader_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+    out.* = std.mem.zeroes(abi_asset_loader.c.ke_asset_loader_handle);
     const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = state_heap.create(State) catch {
@@ -401,7 +402,7 @@ export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi
         return R.code(error.OutOfMemory);
     };
     s.* = .{
-        .api = std.mem.zeroes(abi_asset.ke_asset_loader),
+        .api = std.mem.zeroes(abi_asset_loader.c.ke_asset_loader),
         .io = io,
         .heap = if (debug_heap) .init else {},
         .gpa = undefined,
@@ -426,26 +427,26 @@ const triangle_obj = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
 var served: ?[]const u8 = null;
 var request_token: u8 = 0;
 
-fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+fn readServed(args: zsub.For(abi_io.c.ke_io).Args(.read_file)) abi_result.c.ke_result {
     args[2].?.* = @ptrCast(&request_token);
     return R.ok;
 }
 
-fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
     const bytes = served orelse return R.code(error.NotFound);
     if (args[2]) |out| {
-        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.* = std.mem.zeroes(abi_io.c.ke_io_result);
         out.bytes = @constCast(bytes.ptr);
         out.size = bytes.len;
     }
     return R.ok;
 }
 
-fn freeServed(_: zsub.For(abi_io.ke_io).Args(.free_bytes)) void {}
+fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
 
 /// A substitute io serving `bytes` for every path, or no file at all when `bytes` is null.
 const ServedIo = struct {
-    sub: zsub.For(abi_io.ke_io),
+    sub: zsub.For(abi_io.c.ke_io),
 
     fn init(self: *ServedIo, bytes: ?[]const u8) !void {
         served = bytes;
@@ -459,14 +460,14 @@ const ServedIo = struct {
         self.sub.deinit();
     }
 
-    fn loader(self: *ServedIo) abi_asset.ke_asset_loader_handle {
-        var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+    fn loader(self: *ServedIo) abi_asset_loader.c.ke_asset_loader_handle {
+        var h = std.mem.zeroes(abi_asset_loader.c.ke_asset_loader_handle);
         _ = ke_asset_loader_assimp_create(self.sub.api(), &h);
         return h;
     }
 };
 
-fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.ke_task) callconv(.c) abi_result.ke_result {
+fn immediateDispatch(self: [*c]abi_task_pool.c.ke_task_pool, func: abi_asset_loader.c.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.c.ke_task) callconv(.c) abi_result.c.ke_result {
     _ = self;
     if (func) |f| _ = f(data);
     out_task.* = @ptrFromInt(1);
@@ -476,10 +477,10 @@ fn immediateDispatch(self: [*c]abi_task_pool.ke_task_pool, func: abi_task_pool.k
 const AsyncResult = struct {
     done: bool = false,
     failed: bool = false,
-    loader: ?*abi_asset.ke_asset_loader = null,
+    loader: ?*abi_asset_loader.c.ke_asset_loader = null,
 };
 
-fn asyncComplete(code: abi_result.ke_result, data: ?*abi_asset.ke_model_data, user: ?*anyopaque) callconv(.c) void {
+fn asyncComplete(code: abi_result.c.ke_result, data: ?*abi_mesh_data.c.ke_model_data, user: ?*anyopaque) callconv(.c) void {
     const result: *AsyncResult = @ptrCast(@alignCast(user orelse return));
     result.failed = code != R.ok;
     if (data) |model| {
@@ -499,7 +500,7 @@ test "creating a loader yields a usable vtable" {
 }
 
 test "creating without an io is refused and leaves the handle zeroed" {
-    var h = std.mem.zeroes(abi_asset.ke_asset_loader_handle);
+    var h = std.mem.zeroes(abi_asset_loader.c.ke_asset_loader_handle);
     try testing.expectError(error.InvalidArgument, R.check(ke_asset_loader_assimp_create(null, &h)));
     try testing.expect(h.ref == null and h.destroy == null);
 }
@@ -511,7 +512,7 @@ test "loading a null path yields no model" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var model: ?*abi_asset.ke_model_data = null;
+    var model: ?*abi_mesh_data.c.ke_model_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_model.?(h.ref, null, &model)));
 }
 
@@ -522,7 +523,7 @@ test "loading a file the io does not find yields no model" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var model: ?*abi_asset.ke_model_data = null;
+    var model: ?*abi_mesh_data.c.ke_model_data = null;
     try testing.expectError(error.Io, R.check(h.ref.?.load_model.?(h.ref, "missing.obj", &model)));
     try testing.expect(model == null);
 }
@@ -544,7 +545,7 @@ test "a model is read through the io and converted with its mesh" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var model: ?*abi_asset.ke_model_data = null;
+    var model: ?*abi_mesh_data.c.ke_model_data = null;
     try R.check(h.ref.?.load_model.?(h.ref, "triangle.obj", &model));
     try testing.expect(model != null);
     defer h.ref.?.free_model.?(h.ref, model);
@@ -560,7 +561,7 @@ test "an async load runs to completion on the task pool it was given" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
     task_pool.dispatch = &immediateDispatch;
 
     var result = AsyncResult{ .loader = h.ref };
@@ -578,7 +579,7 @@ test "an async load rejects a missing loader task pool or path" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
     task_pool.dispatch = &immediateDispatch;
 
     try testing.expect(h.ref.?.load_model_async.?(null, &task_pool, "test.obj", &asyncComplete, null) == null);
@@ -593,7 +594,7 @@ test "an async load rejects a missing completion callback" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var task_pool = std.mem.zeroes(abi_task_pool.ke_task_pool);
+    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
     task_pool.dispatch = &immediateDispatch;
 
     try testing.expect(h.ref.?.load_model_async.?(h.ref, &task_pool, "test.obj", null, null) == null);
@@ -606,7 +607,7 @@ test "a malformed model file yields a model carrying no meshes" {
     const h = served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var model: ?*abi_asset.ke_model_data = null;
+    var model: ?*abi_mesh_data.c.ke_model_data = null;
     try R.check(h.ref.?.load_model.?(h.ref, "malformed.obj", &model));
     try testing.expect(model != null);
     defer h.ref.?.free_model.?(h.ref, model);

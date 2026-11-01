@@ -18,8 +18,8 @@ pub const ke_runtime_params = extern struct {
 };
 
 /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
-pub extern fn ke_runtime_create(ecs: ?*ecs.ke_ecs, task_pool: ?*task_pool.ke_task_pool, params: ?*const ke_runtime_params, out_runtime: ?*runtime.ke_runtime_handle) result.ke_result;
+pub extern fn ke_runtime_create(ecs: ?*ecs.c.ke_ecs, task_pool: ?*task_pool.c.ke_task_pool, params: ?*const ke_runtime_params, out_runtime: ?*runtime.c.ke_runtime_handle) result.c.ke_result;
 
 /// Sends every line ke_runtime logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_runtime_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_runtime_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

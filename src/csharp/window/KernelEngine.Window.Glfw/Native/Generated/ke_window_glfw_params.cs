@@ -1,5 +1,8 @@
+using System.Numerics;
+
+using global::KernelEngine.Logger;
+
 using KernelEngine.Input.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Window.Native;
 

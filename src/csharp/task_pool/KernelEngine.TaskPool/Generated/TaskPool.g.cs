@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.TaskPool.Native;
@@ -23,6 +24,16 @@ public unsafe partial class TaskPool : IDisposable, INativeTaskPool, ITaskPool
     private ke_task_pool* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_task_pool*, void> _destroy;
     private readonly bool _borrowed;
+
+    /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath engine code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the engine called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
 
     private ke_task_pool* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(TaskPool));
@@ -47,17 +58,128 @@ public unsafe partial class TaskPool : IDisposable, INativeTaskPool, ITaskPool
         _borrowed = borrowed;
     }
 
+    /// <summary>Schedules a task, which the caller releases by waiting on it.</summary>
+    /// <param name="func">Entry point invoked on a worker thread.</param>
+    /// <returns>Receives the task; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public NativeTask Dispatch(Task? func)
+    {
+        var funcHandle = func is null ? default : GCHandle.Alloc(func);
+        s_parkedCallbackException = null;
+        nint resultOut = default;
+        KernelEngine.Result.Native.Result rc;
+        bool ok;
+        try
+        {
+            ok = (rc = Handle->dispatch(Handle, func is null ? null : (delegate* unmanaged[Cdecl]<void*, KernelEngine.Result.Native.Result>)&DispatchFuncTrampoline, (void*)GCHandle.ToIntPtr(funcHandle), (ke_task**)&resultOut)) == KernelEngine.Result.Native.Result.Ok;
+        }
+        finally
+        {
+            if (funcHandle.IsAllocated) funcHandle.Free();
+        }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
+        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "dispatch");
+        return new NativeTask(resultOut);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static KernelEngine.Result.Native.Result DispatchFuncTrampoline(void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is Task handler)
+            {
+                handler();
+                return KernelEngine.Result.Native.Result.Ok;
+            }
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_task_func: no handler is registered"));
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+            return KernelEngine.NativeResults.ToCode(ex);
+        }
+    }
+
+    /// <summary>Schedules a task and a completion callback run once it finishes.</summary>
+    /// <param name="func">Entry point invoked on a worker thread.</param>
+    /// <param name="onComplete">Invoked after func returns.</param>
+    /// <returns>Receives the task; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public NativeTask DispatchOnComplete(Task? func, TaskOnComplete? onComplete)
+    {
+        var funcHandle = func is null ? default : GCHandle.Alloc(func);
+        var onCompleteHandle = onComplete is null ? default : GCHandle.Alloc(onComplete);
+        s_parkedCallbackException = null;
+        nint resultOut = default;
+        KernelEngine.Result.Native.Result rc;
+        bool ok;
+        try
+        {
+            ok = (rc = Handle->dispatch_on_complete(Handle, func is null ? null : (delegate* unmanaged[Cdecl]<void*, KernelEngine.Result.Native.Result>)&DispatchOnCompleteFuncTrampoline, (void*)GCHandle.ToIntPtr(funcHandle), onComplete is null ? null : (delegate* unmanaged[Cdecl]<ke_task*, void*, KernelEngine.Result.Native.Result, void>)&DispatchOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(onCompleteHandle), (ke_task**)&resultOut)) == KernelEngine.Result.Native.Result.Ok;
+        }
+        finally
+        {
+            if (funcHandle.IsAllocated) funcHandle.Free();
+            if (onCompleteHandle.IsAllocated) onCompleteHandle.Free();
+        }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
+        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "dispatch_on_complete");
+        return new NativeTask(resultOut);
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static KernelEngine.Result.Native.Result DispatchOnCompleteFuncTrampoline(void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is Task handler)
+            {
+                handler();
+                return KernelEngine.Result.Native.Result.Ok;
+            }
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_task_func: no handler is registered"));
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+            return KernelEngine.NativeResults.ToCode(ex);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void DispatchOnCompleteTrampoline(ke_task* arg0, void* ctx, KernelEngine.Result.Native.Result arg2)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is TaskOnComplete handler)
+                handler((nint)arg0, arg2);
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
+        }
+    }
+
     /// <summary>Blocks the calling thread until the task completes, releases the task, and returns what its body returned. Every task a dispatch slot returns is waited on exactly once: afterwards the pointer is invalid for wait and is_completed alike, and a task never waited on is never released and reports its failure nowhere.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Wait(ke_task* task)
+    public void Wait(NativeTask task)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->wait(Handle, task), "wait");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->wait(Handle, (ke_task*)task.Address), "wait");
     }
 
     /// <summary>Returns true if the task has finished. Valid only before the task is waited on.</summary>
-    public bool IsCompleted(ke_task* task)
+    public bool IsCompleted(NativeTask task)
     {
-        return Handle->is_completed(Handle, task);
+        return Handle->is_completed(Handle, (ke_task*)task.Address);
     }
 
     /// <summary>Returns the number of worker threads in the pool.</summary>

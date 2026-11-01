@@ -1,4 +1,7 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Logger;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Configuration.Native;
@@ -20,16 +23,16 @@ public unsafe partial struct ke_configuration
     public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, sbyte*, sbyte*> get_string;
 
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const char *, int64_t)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, long, KernelEngine.Result.Native.ke_result> set_int;
+    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, long, KernelEngine.Result.Native.Result> set_int;
 
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const char *, double)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, double, KernelEngine.Result.Native.ke_result> set_double;
+    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, double, KernelEngine.Result.Native.Result> set_double;
 
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const char *, bool)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, bool, KernelEngine.Result.Native.ke_result> set_bool;
+    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, bool, KernelEngine.Result.Native.Result> set_bool;
 
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const char *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.ke_result> set_string;
+    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, sbyte*, sbyte*, KernelEngine.Result.Native.Result> set_string;
 
     [NativeTypeName("ke_configuration_subscription (*)(struct ke_configuration *, const char *, ke_configuration_change_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, delegate* unmanaged[Cdecl]<sbyte*, void*, void>, void*, uint> subscribe;
@@ -38,5 +41,5 @@ public unsafe partial struct ke_configuration
     public delegate* unmanaged[Cdecl]<ke_configuration*, uint, void> unsubscribe;
 
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const ke_config_field *, uint32_t, void *)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, ke_config_field*, uint, void*, KernelEngine.Result.Native.ke_result> fill;
+    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, ConfigField*, uint, void*, KernelEngine.Result.Native.Result> fill;
 }

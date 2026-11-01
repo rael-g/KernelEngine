@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../common/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
+        .link_libc = true,
         .target = target,
         .optimize = optimize,
         .imports = &.{
@@ -21,5 +22,8 @@ pub fn build(b: *std.Build) void {
             .{ .name = "c", .module = translated.createModule() },
         },
     }) });
+    tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../c/result"));
+    tests.root_module.addIncludePath(b.path("../../common/include"));
     b.step("test", "Check the result ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

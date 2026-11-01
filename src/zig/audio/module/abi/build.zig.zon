@@ -4,6 +4,9 @@
     .fingerprint = 0xe8a5d0fd0aec11ea,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_framework = .{ .path = "../../../abi/framework" },
         .ke_abi_framework = .{ .path = "../../../abi/framework" },
         .ke_abi_logger = .{ .path = "../../../abi/logger" },
         .ke_abi_result = .{ .path = "../../../abi/result" },

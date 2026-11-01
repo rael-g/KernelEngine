@@ -4,7 +4,9 @@
 #nullable enable
 
 using System.Runtime.InteropServices;
-using KernelEngine.Common;
+
+using KernelEngine.Asset.Native;
+using KernelEngine.Render;
 
 namespace KernelEngine.Asset;
 

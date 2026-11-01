@@ -41,7 +41,7 @@ public sealed unsafe class Body2DModule : IRuntimeModule
             runtime = ((INativeRuntime)runtime).Native,
             ecs = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
-            scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.SceneTree).Native,
+            scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.Tree).Native,
         };
 
         ke_physics_body2d_module_handle handle;

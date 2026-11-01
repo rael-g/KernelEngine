@@ -1,4 +1,8 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
 
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
@@ -10,7 +14,7 @@ namespace KernelEngine.Asset.Native;
 public unsafe partial struct ke_mesh_data
 {
     [NativeTypeName("ke_vertex *")]
-    public KernelEngine.Render.Native.ke_vertex* vertices;
+    public global::KernelEngine.Render.Vertex* vertices;
 
     [NativeTypeName("uint32_t")]
     public uint vertex_count;

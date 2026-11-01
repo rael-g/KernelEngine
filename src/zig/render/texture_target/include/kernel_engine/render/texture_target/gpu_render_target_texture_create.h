@@ -22,7 +22,7 @@ extern "C"
 {
 #endif
 
-/// The texture a render target draws into, as the caller created it.
+/// [bag] The texture a render target draws into, as the caller created it.
 typedef struct ke_gpu_render_target_texture_params
 {
     /// Borrowed, must outlive the target; created with KE_GPU_TEXTURE_USAGE_COLOR_ATTACH.

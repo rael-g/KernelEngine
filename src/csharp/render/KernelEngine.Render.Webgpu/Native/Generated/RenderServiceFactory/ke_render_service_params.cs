@@ -1,6 +1,11 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+using global::KernelEngine.Render;
+
 using KernelEngine.Ecs.Native;
 using KernelEngine.Io.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 
@@ -27,8 +32,8 @@ public unsafe partial struct ke_render_service_params
     public KernelEngine.Render.Native.ke_render_resource_binder* binder;
 
     [NativeTypeName("ke_gpu_texture_format")]
-    public KernelEngine.Render.Native.ke_gpu_texture_format color_format;
+    public global::KernelEngine.Render.GpuTextureFormat color_format;
 
     [NativeTypeName("ke_gpu_texture_format")]
-    public KernelEngine.Render.Native.ke_gpu_texture_format depth_format;
+    public global::KernelEngine.Render.GpuTextureFormat depth_format;
 }

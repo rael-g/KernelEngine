@@ -1,6 +1,99 @@
 {
-  "enums": [],
+  "enums": [
+    {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
   "structs": [
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_vec2",
       "doc": "Two floats, x then y.",
@@ -255,7 +348,9 @@
     {
       "name": "ke_ui_font_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "bits",
@@ -475,6 +570,8 @@
   "vtables": [],
   "functions": [],
   "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [],
   "type_aliases": {},
   "constants": [
     {

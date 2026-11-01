@@ -5,9 +5,11 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using KernelEngine.Asset.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Asset.Native;
+using KernelEngine.Render;
 using KernelEngine.TaskPool;
 
 namespace KernelEngine.Asset;
@@ -45,7 +47,7 @@ public unsafe sealed class Model : IDisposable
         if (_native is null) return;
         var native = _native;
         _native = null;
-        _owner.FreeModel(native);
+        _owner.FreeModel((nint)native);
     }
 }
 
@@ -85,7 +87,10 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     /// <exception cref="Exception">The native call failed.</exception>
     public Model LoadModel(string path)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             ke_model_data* resultOut = default;
@@ -95,7 +100,7 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     }
 
     /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
-    internal void FreeModel(ModelData* data)
+    internal void FreeModel(nint data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);
     }
@@ -104,16 +109,19 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     /// <param name="taskPool">Non-null task pool.</param>
     /// <param name="path">File path (copied internally; caller may free after return).</param>
     /// <returns>The loaded model; NULL when the load failed.</returns>
-    public Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path)
+    public global::System.Threading.Tasks.Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path)
     {
         var source = new TaskCompletionSource<Model>(TaskCreationOptions.RunContinuationsAsynchronously);
         var completion = GCHandle.Alloc(new LoadModelAsyncCompletion { Owner = this, Source = source });
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             try
             {
-                Handle->load_model_async(Handle, taskPool.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.ke_result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
+                Handle->load_model_async(Handle, taskPool.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.Result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
             }
             catch
             {
@@ -132,14 +140,14 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void LoadModelAsyncOnCompleteTrampoline(KernelEngine.Result.Native.ke_result arg0, ke_model_data* arg1, void* ctx)
+    private static void LoadModelAsyncOnCompleteTrampoline(KernelEngine.Result.Native.Result arg0, ke_model_data* arg1, void* ctx)
     {
         var pending = GCHandle.FromIntPtr((nint)ctx);
         if (pending.Target is not LoadModelAsyncCompletion state) return;
         pending.Free();
         try
         {
-            if (arg0 != KernelEngine.Result.Native.ke_result.KE_OK || arg1 == null)
+            if (arg0 != KernelEngine.Result.Native.Result.Ok || arg1 == null)
                 state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "load_model_async"));
             else
                 state.Source.TrySetResult(new Model(state.Owner, (ModelData*)arg1));

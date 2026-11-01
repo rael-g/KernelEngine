@@ -89,6 +89,7 @@ extern "C"
 
     } ke_file_system;
 
+    /// [owner]
     typedef struct ke_file_system_handle
     {
         ke_file_system *ref;

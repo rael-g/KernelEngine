@@ -30,6 +30,7 @@ typedef enum ke_render_size_mode
     KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER = 1,
 } ke_render_size_mode;
 
+/// [bag]
 typedef struct ke_render_resource_params
 {
     const char             *name;
@@ -356,6 +357,7 @@ struct ke_render_service
     ke_gpu_texture_format (*chain_format)(struct ke_render_service *self, ke_render_stage stage);
 };
 
+/// [owner]
 typedef struct ke_render_service_handle
 {
     ke_render_service *ref;

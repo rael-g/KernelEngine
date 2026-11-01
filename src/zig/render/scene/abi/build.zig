@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_scene_factory.zig") });
-    abi.addImport("asset", b.dependency("ke_abi_asset", .{}).module("abi"));
+    abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("ke_abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));

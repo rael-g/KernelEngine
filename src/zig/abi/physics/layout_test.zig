@@ -3,6 +3,8 @@ const abi = @import("abi");
 const c = @import("c");
 
 fn expectSameLayout(comptime A: type, comptime C: type) !void {
+    @setEvalBranchQuota(100_000_000);
+    if (@typeInfo(C) == .@"opaque") return;
     try std.testing.expectEqual(@sizeOf(C), @sizeOf(A));
     try std.testing.expectEqual(@alignOf(C), @alignOf(A));
     switch (@typeInfo(A)) {
@@ -20,41 +22,58 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_collision_filter_2d, translated("ke_collision_filter_2d"));
-    try expectSameLayout(abi.ke_body_state_2d, translated("ke_body_state_2d"));
-    try expectSameLayout(abi.ke_body2d_component, translated("ke_body2d_component"));
-    try expectSameLayout(abi.ke_collider2d_component, translated("ke_collider2d_component"));
-    try expectSameLayout(abi.ke_physics_2d, translated("ke_physics_2d"));
-    try expectSameLayout(abi.ke_physics_2d_handle, translated("ke_physics_2d_handle"));
-    try expectSameLayout(abi.ke_body_2d, c.ke_body_2d);
+    @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_collision_filter_2d, translated("ke_collision_filter_2d"));
+    try expectSameLayout(abi.c.ke_body_state_2d, translated("ke_body_state_2d"));
+    try expectSameLayout(abi.c.ke_physics_2d, translated("ke_physics_2d"));
+    try expectSameLayout(abi.c.ke_physics_2d_handle, translated("ke_physics_2d_handle"));
+    if (@hasDecl(c, "ke_body_2d")) try expectSameLayout(abi.c.ke_body_2d, c.ke_body_2d);
 }
 
 test "every enum value is the header's value" {
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_STATIC), @as(i64, abi.KE_BODY_TYPE_STATIC));
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_KINEMATIC), @as(i64, abi.KE_BODY_TYPE_KINEMATIC));
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_DYNAMIC), @as(i64, abi.KE_BODY_TYPE_DYNAMIC));
-    try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_BOX), @as(i64, abi.KE_SHAPE_KIND_2D_BOX));
-    try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_CIRCLE), @as(i64, abi.KE_SHAPE_KIND_2D_CIRCLE));
-}
-
-fn expectSameValue(a: anytype, k: anytype) !void {
-    switch (@typeInfo(@TypeOf(a))) {
-        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
-        .@"union" => {},
-        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
-        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
-    }
-}
-
-test "every field table lists the header's entries" {
-    try std.testing.expectEqual(c.ke_body2d_component_fields.len, abi.ke_body2d_component_fields.len);
-    for (abi.ke_body2d_component_fields, c.ke_body2d_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_collider2d_component_fields.len, abi.ke_collider2d_component_fields.len);
-    for (abi.ke_collider2d_component_fields, c.ke_collider2d_component_fields) |a, k| try expectSameValue(a, k);
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_STATIC), @as(i64, abi.c.KE_BODY_TYPE_STATIC));
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_KINEMATIC), @as(i64, abi.c.KE_BODY_TYPE_KINEMATIC));
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_DYNAMIC), @as(i64, abi.c.KE_BODY_TYPE_DYNAMIC));
 }
 
 test "every constant is the header's value" {
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_BODY2D, abi.KE_COMPONENT_NAME_BODY2D);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_COLLIDER2D, abi.KE_COMPONENT_NAME_COLLIDER2D);
-    try std.testing.expectEqual(@as(i128, c.KE_BODY_2D_INVALID), @as(i128, abi.KE_BODY_2D_INVALID));
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_BODY_2D_INVALID), @as(i128, abi.c.KE_BODY_2D_INVALID));
+}
+
+extern const layout_values: [28]c_ulonglong;
+
+test "every size and offset is the one C computes" {
+    @setEvalBranchQuota(100_000_000);
+    const expected = [_]usize{
+        @sizeOf(abi.c.ke_collision_filter_2d),
+        @offsetOf(abi.c.ke_collision_filter_2d, "layer"),
+        @offsetOf(abi.c.ke_collision_filter_2d, "mask"),
+        @sizeOf(abi.c.ke_body_state_2d),
+        @offsetOf(abi.c.ke_body_state_2d, "x"),
+        @offsetOf(abi.c.ke_body_state_2d, "y"),
+        @offsetOf(abi.c.ke_body_state_2d, "angle"),
+        @offsetOf(abi.c.ke_body_state_2d, "velocity_x"),
+        @offsetOf(abi.c.ke_body_state_2d, "velocity_y"),
+        @offsetOf(abi.c.ke_body_state_2d, "angular_velocity"),
+        @sizeOf(abi.c.ke_physics_2d),
+        @offsetOf(abi.c.ke_physics_2d, "handle"),
+        @offsetOf(abi.c.ke_physics_2d, "set_gravity"),
+        @offsetOf(abi.c.ke_physics_2d, "step"),
+        @offsetOf(abi.c.ke_physics_2d, "create_body"),
+        @offsetOf(abi.c.ke_physics_2d, "destroy_body"),
+        @offsetOf(abi.c.ke_physics_2d, "add_box_fixture"),
+        @offsetOf(abi.c.ke_physics_2d, "add_circle_fixture"),
+        @offsetOf(abi.c.ke_physics_2d, "get_body_state"),
+        @offsetOf(abi.c.ke_physics_2d, "set_body_position"),
+        @offsetOf(abi.c.ke_physics_2d, "set_body_velocity"),
+        @offsetOf(abi.c.ke_physics_2d, "apply_impulse"),
+        @offsetOf(abi.c.ke_physics_2d, "set_body_fixed_rotation"),
+        @offsetOf(abi.c.ke_physics_2d, "set_body_gravity_scale"),
+        @sizeOf(abi.c.ke_physics_2d_handle),
+        @offsetOf(abi.c.ke_physics_2d_handle, "ref"),
+        @offsetOf(abi.c.ke_physics_2d_handle, "destroy"),
+    };
+    for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

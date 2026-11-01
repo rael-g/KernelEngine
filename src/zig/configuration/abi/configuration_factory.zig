@@ -5,8 +5,8 @@ const logger = @import("logger");
 const result = @import("result");
 
 /// Creates an empty configuration store.
-pub extern fn ke_configuration_create(out_store: ?*configuration.ke_configuration_handle) result.ke_result;
+pub extern fn ke_configuration_create(out_store: ?*configuration.c.ke_configuration_handle) result.c.ke_result;
 
 /// Sends every line ke_configuration logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_configuration_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_configuration_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

@@ -55,7 +55,7 @@ and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_do
 cites a line, and that every document is in the index. `check_engine_rules` checks the rules of `CLAUDE.md` that can be read off the tracked files, each
 against a ceiling that can only go down. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
-What each one fails on is stated by the check itself, in `src/csharp/kabic/Kabic.Cli/` and in the
+What each one fails on is stated by the check itself, in the kabic repository, `src/Kabic.Cli/` and in the
 scripts. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
 

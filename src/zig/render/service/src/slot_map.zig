@@ -1,13 +1,14 @@
 //! A generational store whose handles are `u32` values packing a slot index with a generation.
 
+const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
 const rc = @import("render_service.zig");
 const abi_render = @import("abi_render");
 
-const index_bits: u5 = @intCast(abi_render.KE_HANDLE_INDEX_BITS);
-const index_mask: u32 = abi_render.KE_HANDLE_INDEX_MASK;
-const generation_mask: u32 = abi_render.KE_HANDLE_GENERATION_MASK;
-const GENERATION_FIRST: u32 = abi_render.KE_HANDLE_GENERATION_FIRST;
+const index_bits: u5 = @intCast(abi_render_handles.c.KE_HANDLE_INDEX_BITS);
+const index_mask: u32 = abi_render_handles.c.KE_HANDLE_INDEX_MASK;
+const generation_mask: u32 = abi_render_handles.c.KE_HANDLE_GENERATION_MASK;
+const GENERATION_FIRST: u32 = abi_render_handles.c.KE_HANDLE_GENERATION_FIRST;
 
 fn indexOf(bits: u32) u32 {
     return bits & index_mask;
@@ -60,8 +61,8 @@ pub fn SlotMap(comptime T: type) type {
                 return pack(idx, s.generation);
             }
             const idx: u32 = @intCast(self.slots.items.len);
-            if (idx > index_mask) return abi_render.KE_HANDLE_NONE;
-            self.slots.append(self.alloc, .{ .payload = value, .generation = GENERATION_FIRST, .occupied = true }) catch return abi_render.KE_HANDLE_NONE;
+            if (idx > index_mask) return abi_render_handles.c.KE_HANDLE_NONE;
+            self.slots.append(self.alloc, .{ .payload = value, .generation = GENERATION_FIRST, .occupied = true }) catch return abi_render_handles.c.KE_HANDLE_NONE;
             return pack(idx, GENERATION_FIRST);
         }
 
@@ -69,7 +70,7 @@ pub fn SlotMap(comptime T: type) type {
         /// generation. The pointer points into `slots`, so it is valid only until an `insert`
         /// that must append.
         pub fn get(self: *Self, bits: u32) ?*T {
-            if (bits == abi_render.KE_HANDLE_NONE) return null;
+            if (bits == abi_render_handles.c.KE_HANDLE_NONE) return null;
             const idx = indexOf(bits);
             if (idx >= self.slots.items.len) return null;
             const s = &self.slots.items[idx];
@@ -84,7 +85,7 @@ pub fn SlotMap(comptime T: type) type {
         /// reused and its slot stays unoccupied.
         pub fn remove(self: *Self, bits: u32) ?T {
             const idx = indexOf(bits);
-            if (bits == abi_render.KE_HANDLE_NONE or idx >= self.slots.items.len) return null;
+            if (bits == abi_render_handles.c.KE_HANDLE_NONE or idx >= self.slots.items.len) return null;
             const s = &self.slots.items[idx];
             if (!s.occupied or s.generation != generationOf(bits)) return null;
             const payload = s.payload;
@@ -139,7 +140,7 @@ test "the generation wraps past zero so no live handle equals the none handle" {
     while (turns <= generation_mask) : (turns += 1) {
         _ = map.remove(h);
         h = map.insert(0);
-        try testing.expect(h != abi_render.KE_HANDLE_NONE);
+        try testing.expect(h != abi_render_handles.c.KE_HANDLE_NONE);
         try testing.expect(generationOf(h) != 0);
     }
 }
@@ -150,7 +151,7 @@ test "a live handle is never zero, not even at index zero" {
 
     for (0..8) |index| {
         const h = map.insert(0);
-        try testing.expect(h != abi_render.KE_HANDLE_NONE);
+        try testing.expect(h != abi_render_handles.c.KE_HANDLE_NONE);
         try testing.expectEqual(@as(u32, @intCast(index)), indexOf(h));
         try testing.expectEqual(GENERATION_FIRST, generationOf(h));
     }
@@ -161,6 +162,6 @@ test "the none handle never resolves" {
     defer map.deinit();
 
     _ = map.insert(1);
-    try testing.expect(map.get(abi_render.KE_HANDLE_NONE) == null);
-    try testing.expect(map.remove(abi_render.KE_HANDLE_NONE) == null);
+    try testing.expect(map.get(abi_render_handles.c.KE_HANDLE_NONE) == null);
+    try testing.expect(map.remove(abi_render_handles.c.KE_HANDLE_NONE) == null);
 }

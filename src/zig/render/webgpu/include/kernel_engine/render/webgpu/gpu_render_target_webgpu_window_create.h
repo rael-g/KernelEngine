@@ -37,7 +37,7 @@ typedef enum ke_gpu_present_mode
     KE_GPU_PRESENT_MODE_IMMEDIATE = 2,
 } ke_gpu_present_mode;
 
-/** @brief Parameters for a render target presenting into a window. */
+/** [bag] @brief Parameters for a render target presenting into a window. */
 typedef struct ke_gpu_render_target_webgpu_window_params
 {
     /** A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target. */

@@ -212,6 +212,7 @@ extern "C"
 
     } ke_io;
 
+    /// [owner]
     typedef struct ke_io_handle
     {
         ke_io *ref;

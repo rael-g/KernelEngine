@@ -1,4 +1,8 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
 
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
@@ -10,11 +14,14 @@ public unsafe partial struct ke_render_resource_params
     [NativeTypeName("const char *")]
     public sbyte* name;
 
-    public ke_render_resource_type type;
+    [NativeTypeName("ke_render_resource_type")]
+    public global::KernelEngine.Render.RenderResourceType type;
 
-    public ke_gpu_texture_format format;
+    [NativeTypeName("ke_gpu_texture_format")]
+    public global::KernelEngine.Render.GpuTextureFormat format;
 
-    public ke_render_size_mode size_mode;
+    [NativeTypeName("ke_render_size_mode")]
+    public global::KernelEngine.Render.RenderSizeMode size_mode;
 
     [NativeTypeName("uint32_t")]
     public uint width;

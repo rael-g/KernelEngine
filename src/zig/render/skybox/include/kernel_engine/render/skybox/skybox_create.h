@@ -27,6 +27,7 @@ extern "C"
 
     typedef struct ke_render_skybox ke_render_skybox;
 
+    /// [owner]
     typedef struct ke_render_skybox_handle
     {
         ke_render_skybox *ref;
@@ -34,7 +35,7 @@ extern "C"
     } ke_render_skybox_handle;
 
     /// What the skybox pass needs. It joins the chain at KE_RENDER_STAGE_SKY and draws over the
-    /// frame's color where the frame's depth is at the far plane.
+    /// [bag] frame's color where the frame's depth is at the far plane.
     typedef struct ke_render_skybox_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.

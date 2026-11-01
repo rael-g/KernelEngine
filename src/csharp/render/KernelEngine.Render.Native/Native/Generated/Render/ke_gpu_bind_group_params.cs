@@ -1,3 +1,8 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
@@ -15,5 +20,5 @@ public unsafe partial struct ke_gpu_bind_group_params
     public uint entry_count;
 
     [NativeTypeName("const ke_gpu_bind_group_entry *")]
-    public ke_gpu_bind_group_entry* entries;
+    public global::KernelEngine.Render.GpuBindGroupEntry* entries;
 }

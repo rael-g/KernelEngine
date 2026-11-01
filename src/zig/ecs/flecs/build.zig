@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const built = ke_build.plugin(b, .{
         .name = "ke_ecs_flecs",
         .root = "src/ecs_flecs.zig",
-        .abi = &.{ "abi_ecs", "abi_ecs_flecs_factory", "abi_math", "abi_result" },
+        .abi = &.{ "abi_ecs_variant", "abi_asset_resolver", "abi_ecs", "abi_ecs_flecs_factory", "abi_math", "abi_result" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,

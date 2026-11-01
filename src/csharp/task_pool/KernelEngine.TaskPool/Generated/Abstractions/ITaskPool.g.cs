@@ -7,14 +7,33 @@ using KernelEngine.Common;
 
 namespace KernelEngine.TaskPool;
 
+/// <summary>Body of a scheduled task, run on a worker thread.</summary>
+public delegate void Task();
+
+/// <summary>Run once the task body has returned, on the same worker thread.</summary>
+/// <param name="task">The task that finished.</param>
+/// <param name="result">What the body returned.</param>
+public delegate void TaskOnComplete(nint task, KernelEngine.Result.Native.Result result);
+
 /// <summary>The taskpool contract game code depends on, so a caller names a capability rather than the <see cref="TaskPool"/> that carries it.</summary>
-public unsafe interface ITaskPool : IDisposable
+public interface ITaskPool : IDisposable
 {
+    /// <summary>Schedules a task, which the caller releases by waiting on it.</summary>
+    /// <param name="func">Entry point invoked on a worker thread.</param>
+    /// <returns>Receives the task; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    NativeTask Dispatch(Task? func);
+    /// <summary>Schedules a task and a completion callback run once it finishes.</summary>
+    /// <param name="func">Entry point invoked on a worker thread.</param>
+    /// <param name="onComplete">Invoked after func returns.</param>
+    /// <returns>Receives the task; null on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    NativeTask DispatchOnComplete(Task? func, TaskOnComplete? onComplete);
     /// <summary>Blocks the calling thread until the task completes, releases the task, and returns what its body returned. Every task a dispatch slot returns is waited on exactly once: afterwards the pointer is invalid for wait and is_completed alike, and a task never waited on is never released and reports its failure nowhere.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Wait(ke_task* task);
+    void Wait(NativeTask task);
     /// <summary>Returns true if the task has finished. Valid only before the task is waited on.</summary>
-    bool IsCompleted(ke_task* task);
+    bool IsCompleted(NativeTask task);
     /// <summary>Returns the number of worker threads in the pool.</summary>
     uint GetNumWorkers();
 }

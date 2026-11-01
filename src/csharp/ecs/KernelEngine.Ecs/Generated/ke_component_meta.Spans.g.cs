@@ -6,8 +6,8 @@
 namespace KernelEngine.Ecs.Native;
 
 /// <summary>The counted pointers of <c>ke_component_meta</c>, read as the sequences they bound.</summary>
-public unsafe partial struct ke_component_meta
+public unsafe partial struct ComponentMeta
 {
     /// <summary>The <c>field_count</c> elements <c>fields</c> reaches.</summary>
-    public readonly ReadOnlySpan<ke_component_field> Fields => fields == null ? default : new ReadOnlySpan<ke_component_field>(fields, (int)field_count);
+    public readonly ReadOnlySpan<ComponentField> FieldsSpan => Fields == null ? default : new ReadOnlySpan<ComponentField>(Fields, (int)FieldCount);
 }

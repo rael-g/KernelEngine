@@ -45,13 +45,14 @@ extern "C"
                                ke_ui_font_handle *out_font);
     } ke_render_ui;
 
+    /// [owner]
     typedef struct ke_render_ui_handle
     {
         ke_render_ui *ref;
         void (*destroy)(ke_render_ui *self);
     } ke_render_ui_handle;
 
-    /// What the ui pass needs to draw its quads and labels over the frame's color.
+    /// [bag] What the ui pass needs to draw its quads and labels over the frame's color.
     typedef struct ke_render_ui_params
     {
         ke_runtime        *runtime; ///< Registers the pass's systems; borrowed, must outlive it.

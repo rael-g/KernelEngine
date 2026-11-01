@@ -11,7 +11,7 @@ A node type is a managed class deriving from `Node` that stands for a set of ECS
 
 | part | where | receives | hands on |
 |---|---|---|---|
-| kabic | `src/csharp/kabic/` | a component struct tagged "[node:Name]" in a header | a `partial` class with `GeneratedNodeComponentAttribute`, and an Add<Domain>NodeTypes registrar |
+| kabic | the kabic repository | a component struct tagged "[node:Name]" in a header | a `partial` class with `GeneratedNodeComponentAttribute`, and an Add<Domain>NodeTypes registrar |
 | `NodePropertyGenerator` | `src/csharp/generators/` | a class deriving from `Node` with `partial` properties, `Update` or `On` | component slots, behavior overrides, signal dispatch, `RegisterSceneApply` |
 | `NodeTypeRegistry` | `Scene/NodeTypeRegistry.cs` | `AddNodeType<T>` registrations | a `Type` for a name a scene wrote |
 | `ScriptHost` | `Scene/ScriptHost.Idiom.cs` | a constructed `Node` and its entity | a script type registered per node class, a binding, borrows, signal deliveries |

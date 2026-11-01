@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using KernelEngine.Common;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -42,11 +43,11 @@ var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0
 EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
-var transformCid = reg.RegisterComponent<TransformComponent>(TransformComponent.Name);
-var worldCid = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
-var cameraCid = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
-var meshCid = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
-var lightCid = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
+var transformCid = reg.RegisterComponent<TransformComponent>("transform");
+var worldCid = reg.RegisterComponent<WorldTransformComponent>("world_transform");
+var cameraCid = reg.RegisterComponent<CameraComponent>("camera");
+var meshCid = reg.RegisterComponent<MeshComponent>("mesh");
+var lightCid = reg.RegisterComponent<DirectionalLightComponent>("directional_light");
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];

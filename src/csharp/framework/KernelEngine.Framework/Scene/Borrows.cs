@@ -1,3 +1,4 @@
+using KernelEngine.Ecs;
 namespace KernelEngine.Framework;
 
 /// <summary>
@@ -20,10 +21,10 @@ public sealed class NodeNameAttribute : Attribute
 public readonly ref struct Emit<T> where T : unmanaged
 {
     private readonly SignalBus? _bus;
-    private readonly ulong _source;
+    private readonly Entity _source;
     private readonly uint _signalId;
 
-    internal Emit(SignalBus? bus, ulong source, uint signalId)
+    internal Emit(SignalBus? bus, Entity source, uint signalId)
     {
         _bus = bus;
         _source = source;
@@ -40,6 +41,6 @@ public readonly ref struct Emit<T> where T : unmanaged
     public unsafe void Send(in T payload)
     {
         if (_bus is null) return;
-        fixed (T* p = &payload) _bus.Emit(_source, _signalId, p, (uint)sizeof(T));
+        fixed (T* p = &payload) _bus.Emit(_source, _signalId, (nint)p, (uint)sizeof(T));
     }
 }

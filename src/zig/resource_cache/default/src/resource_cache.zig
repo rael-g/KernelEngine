@@ -27,7 +27,7 @@ fn hashString(str: ?[*:0]const u8) u64 {
 
 const RC_EMPTY: u64 = 0;
 const RC_TOMBSTONE: u64 = std.math.maxInt(u64);
-const HANDLE_NONE: abi_resource_cache.ke_resource_handle = std.math.maxInt(u32);
+const HANDLE_NONE: abi_resource_cache.c.ke_resource_handle = std.math.maxInt(u32);
 
 /// One entry of a `Table`. In `resources` only `key`, `refcount` and `handle` are set. In `paths`
 /// `text` is the slot's own copy of the path, freed by `drop` or `deinit`, and `handle` names the
@@ -146,7 +146,7 @@ const Table = struct {
 };
 
 /// Shifts the handle up by one, so handle zero is an ordinary key and never the empty marker.
-fn keyFromHandle(h: abi_resource_cache.ke_resource_handle) u64 {
+fn keyFromHandle(h: abi_resource_cache.c.ke_resource_handle) u64 {
     return @as(u64, h) + 1;
 }
 
@@ -166,21 +166,21 @@ fn keyFromPath(path: ?[*:0]const u8) u64 {
 /// path entry keeps its own copy of the text, so two paths with the same hash stay two entries.
 /// Nothing here starts a thread or takes a lock.
 const State = struct {
-    api: abi_resource_cache.ke_resource_cache,
-    destroy_fn: abi_resource_cache.ke_resource_destroy_func,
+    api: abi_resource_cache.c.ke_resource_cache,
+    destroy_fn: abi_resource_cache.c.ke_resource_destroy_func,
     destroy_ctx: ?*anyopaque,
     resources: Table,
     paths: Table,
 };
 
-fn stateOf(self: *abi_resource_cache.ke_resource_cache) *State {
+fn stateOf(self: *abi_resource_cache.c.ke_resource_cache) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
 /// Starts the resource at one reference, after making room, so a failure changes nothing. Fails
 /// with invalid argument for a null cache or the none handle, with already exists for a
 /// registered handle, and with out of memory when the table cannot grow.
-fn vtRegister(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource_cache.ke_resource_handle) callconv(.c) abi_result.ke_result {
+fn vtRegister(self: ?*abi_resource_cache.c.ke_resource_cache, handle: abi_resource_cache.c.ke_resource_handle) callconv(.c) abi_result.c.ke_result {
     if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     if (!s.resources.reserve()) return R.code(error.OutOfMemory);
@@ -198,7 +198,7 @@ fn vtRegister(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource
 
 /// Adds one reference. Fails with invalid argument for a null cache or the none handle, and with
 /// not found for a handle that is not registered.
-fn vtRetain(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource_cache.ke_resource_handle) callconv(.c) abi_result.ke_result {
+fn vtRetain(self: ?*abi_resource_cache.c.ke_resource_cache, handle: abi_resource_cache.c.ke_resource_handle) callconv(.c) abi_result.c.ke_result {
     if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     var found = false;
@@ -210,7 +210,7 @@ fn vtRetain(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource_c
 
 /// Scans the whole `paths` table and drops every entry naming the handle, so no path outlives
 /// the resource it leads to.
-fn evictPathsForHandle(s: *State, handle: abi_resource_cache.ke_resource_handle) void {
+fn evictPathsForHandle(s: *State, handle: abi_resource_cache.c.ke_resource_handle) void {
     for (s.paths.slots) |*p| {
         if (p.key != RC_EMPTY and p.key != RC_TOMBSTONE and p.handle == handle) s.paths.drop(p);
     }
@@ -220,7 +220,7 @@ fn evictPathsForHandle(s: *State, handle: abi_resource_cache.ke_resource_handle)
 /// path entries, and only then calls the destroy callback, so it never finds the handle still
 /// cached. Fails with invalid argument for a null cache or the none handle, with not found for an
 /// unregistered handle, and with a general error for a count already at zero.
-fn vtRelease(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource_cache.ke_resource_handle) callconv(.c) abi_result.ke_result {
+fn vtRelease(self: ?*abi_resource_cache.c.ke_resource_cache, handle: abi_resource_cache.c.ke_resource_handle) callconv(.c) abi_result.c.ke_result {
     if (self == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     var found = false;
@@ -248,7 +248,7 @@ fn vtRelease(self: ?*abi_resource_cache.ke_resource_cache, handle: abi_resource_
 /// Looks the path up by hash and stored text. A hit retains the handle for the caller and writes
 /// it out. An entry whose handle is no longer registered is dropped and reported as a miss. A
 /// miss and a null argument both return false and set no error.
-fn vtTryGetCached(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u8, out_handle: [*c]abi_resource_cache.ke_resource_handle) callconv(.c) bool {
+fn vtTryGetCached(self: ?*abi_resource_cache.c.ke_resource_cache, key: [*c]const u8, out_handle: [*c]abi_resource_cache.c.ke_resource_handle) callconv(.c) bool {
     if (self == null or key == null or out_handle == null) return false;
     const s = stateOf(self.?);
     var found = false;
@@ -268,7 +268,7 @@ fn vtTryGetCached(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u
 /// unchanged, and the entry is dropped when the last release runs. Fails with invalid argument
 /// for a null cache, key or the none handle, with out of memory when `paths` cannot grow,
 /// with already exists for a cached path, and with out of memory when the copy fails.
-fn vtCacheInsert(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u8, handle: abi_resource_cache.ke_resource_handle) callconv(.c) abi_result.ke_result {
+fn vtCacheInsert(self: ?*abi_resource_cache.c.ke_resource_cache, key: [*c]const u8, handle: abi_resource_cache.c.ke_resource_handle) callconv(.c) abi_result.c.ke_result {
     if (self == null or key == null or handle == HANDLE_NONE) return R.code(error.InvalidArgument);
     const s = stateOf(self.?);
     if (!s.paths.reserve()) return R.code(error.OutOfMemory);
@@ -287,7 +287,7 @@ fn vtCacheInsert(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u8
 
 /// Drops the entry for the path and leaves the resource and its count alone. An absent entry or
 /// a null argument does nothing.
-fn vtCacheEvict(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u8) callconv(.c) void {
+fn vtCacheEvict(self: ?*abi_resource_cache.c.ke_resource_cache, key: [*c]const u8) callconv(.c) void {
     if (self == null or key == null) return;
     const s = stateOf(self.?);
     var found = false;
@@ -298,7 +298,7 @@ fn vtCacheEvict(self: ?*abi_resource_cache.ke_resource_cache, key: [*c]const u8)
 
 /// Calls `destroy_fn` once for every live resource whatever its count, so resources that still
 /// had references are destroyed without a release call.
-fn vtDestroy(self: ?*abi_resource_cache.ke_resource_cache) callconv(.c) void {
+fn vtDestroy(self: ?*abi_resource_cache.c.ke_resource_cache) callconv(.c) void {
     const api = self orelse return;
     const s = stateOf(api);
 
@@ -318,7 +318,7 @@ fn vtDestroy(self: ?*abi_resource_cache.ke_resource_cache) callconv(.c) void {
 /// `vtDestroy`. Fails with invalid argument for null parameters and with out of memory when the
 /// state or either table cannot be allocated, freeing what was allocated before it and leaving the
 /// handle zeroed.
-export fn ke_resource_cache_create(params: ?*const abi_resource_cache.ke_resource_cache_params, out_cache: ?*abi_resource_cache.ke_resource_cache_handle) callconv(.c) abi_result.ke_result {
+export fn ke_resource_cache_create(params: ?*const abi_resource_cache.c.ke_resource_cache_params, out_cache: ?*abi_resource_cache.c.ke_resource_cache_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_cache orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params orelse return R.code(error.InvalidArgument);
@@ -329,7 +329,7 @@ export fn ke_resource_cache_create(params: ?*const abi_resource_cache.ke_resourc
     return R.ok;
 }
 
-fn create(params: *const abi_resource_cache.ke_resource_cache_params) R.Error!abi_resource_cache.ke_resource_cache_handle {
+fn create(params: *const abi_resource_cache.c.ke_resource_cache_params) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
     const s = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(s);
     s.* = std.mem.zeroes(State);
@@ -354,36 +354,36 @@ fn create(params: *const abi_resource_cache.ke_resource_cache_params) R.Error!ab
 const testing = std.testing;
 
 var test_destroy_calls: i32 = 0;
-var test_last_destroyed: abi_resource_cache.ke_resource_handle = abi_resource_cache.KE_RESOURCE_HANDLE_NONE;
+var test_last_destroyed: abi_resource_cache.c.ke_resource_handle = abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE;
 
-fn countingDestroy(handle: abi_resource_cache.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
+fn countingDestroy(handle: abi_resource_cache.c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     _ = ctx;
     test_destroy_calls += 1;
     test_last_destroyed = handle;
 }
 
-fn markerDestroy(handle: abi_resource_cache.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
+fn markerDestroy(handle: abi_resource_cache.c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     _ = handle;
     const marker: *i32 = @ptrCast(@alignCast(ctx orelse return));
     marker.* += 1;
 }
 
-fn makeCountingCache() abi_resource_cache.ke_resource_cache_handle {
+fn makeCountingCache() abi_resource_cache.c.ke_resource_cache_handle {
     test_destroy_calls = 0;
-    test_last_destroyed = abi_resource_cache.KE_RESOURCE_HANDLE_NONE;
-    var params = std.mem.zeroes(abi_resource_cache.ke_resource_cache_params);
+    test_last_destroyed = abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE;
+    var params = std.mem.zeroes(abi_resource_cache.c.ke_resource_cache_params);
     params.destroy_fn = &countingDestroy;
     params.destroy_ctx = null;
-    var h: abi_resource_cache.ke_resource_cache_handle = undefined;
+    var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
     R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
     return h;
 }
 
-fn makeMarkerCache(marker: *i32) abi_resource_cache.ke_resource_cache_handle {
-    var params = std.mem.zeroes(abi_resource_cache.ke_resource_cache_params);
+fn makeMarkerCache(marker: *i32) abi_resource_cache.c.ke_resource_cache_handle {
+    var params = std.mem.zeroes(abi_resource_cache.c.ke_resource_cache_params);
     params.destroy_fn = &markerDestroy;
     params.destroy_ctx = marker;
-    var h: abi_resource_cache.ke_resource_cache_handle = undefined;
+    var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
     R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
     return h;
 }
@@ -402,7 +402,7 @@ test "registering the none handle is rejected" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    try testing.expect(h.ref.?.register_resource.?(h.ref, abi_resource_cache.KE_RESOURCE_HANDLE_NONE) != R.ok);
+    try testing.expect(h.ref.?.register_resource.?(h.ref, abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE) != R.ok);
 }
 
 test "registering the same handle twice is rejected" {
@@ -427,7 +427,7 @@ test "each retain adds a release the resource must wait for" {
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
     try R.check(h.ref.?.release.?(h.ref, 1));
     try testing.expectEqual(@as(i32, 1), test_destroy_calls);
-    try testing.expectEqual(@as(abi_resource_cache.ke_resource_handle, 1), test_last_destroyed);
+    try testing.expectEqual(@as(abi_resource_cache.c.ke_resource_handle, 1), test_last_destroyed);
 }
 
 test "retaining an unknown handle fails" {
@@ -465,7 +465,7 @@ test "looking up a path that was never cached misses" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "res://missing", &out));
 }
 
@@ -476,9 +476,9 @@ test "a cache hit returns the handle and retains it for the caller" {
     try R.check(h.ref.?.register_resource.?(h.ref, 10));
     try R.check(h.ref.?.cache_insert.?(h.ref, "res://x.mesh", 10));
 
-    var out: abi_resource_cache.ke_resource_handle = abi_resource_cache.KE_RESOURCE_HANDLE_NONE;
+    var out: abi_resource_cache.c.ke_resource_handle = abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE;
     try testing.expect(h.ref.?.try_get_cached.?(h.ref, "res://x.mesh", &out));
-    try testing.expectEqual(@as(abi_resource_cache.ke_resource_handle, 10), out);
+    try testing.expectEqual(@as(abi_resource_cache.c.ke_resource_handle, 10), out);
     try R.check(h.ref.?.release.?(h.ref, 10));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
     try R.check(h.ref.?.release.?(h.ref, 10));
@@ -505,7 +505,7 @@ test "releasing the last reference evicts the cached path" {
     try R.check(h.ref.?.cache_insert.?(h.ref, "res://y.tex", 20));
     try R.check(h.ref.?.release.?(h.ref, 20));
 
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "res://y.tex", &out));
 }
 
@@ -517,7 +517,7 @@ test "evicting a path leaves the resource itself alive" {
     try R.check(h.ref.?.cache_insert.?(h.ref, "res://z.mat", 30));
 
     h.ref.?.cache_evict.?(h.ref, "res://z.mat");
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "res://z.mat", &out));
     try testing.expectEqual(@as(i32, 0), test_destroy_calls);
     try R.check(h.ref.?.release.?(h.ref, 30));
@@ -528,8 +528,8 @@ test "every resource survives the rehashes caused by many insertions" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    const n: abi_resource_cache.ke_resource_handle = 200;
-    var i: abi_resource_cache.ke_resource_handle = 1;
+    const n: abi_resource_cache.c.ke_resource_handle = 200;
+    var i: abi_resource_cache.c.ke_resource_handle = 1;
     while (i <= n) : (i += 1) {
         try R.check(h.ref.?.register_resource.?(h.ref, i));
     }
@@ -563,7 +563,7 @@ test "a cached path pointing at an unregistered handle reports a miss" {
     defer h.destroy.?(h.ref);
 
     try R.check(h.ref.?.cache_insert.?(h.ref, "res://stale", 500));
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "res://stale", &out));
 }
 
@@ -573,7 +573,7 @@ test "inserting with a null cache, a null key or the none handle is rejected" {
 
     try testing.expect(h.ref.?.cache_insert.?(null, null, 0) != R.ok);
     try testing.expect(h.ref.?.cache_insert.?(h.ref, null, 0) != R.ok);
-    try testing.expect(h.ref.?.cache_insert.?(h.ref, "x", abi_resource_cache.KE_RESOURCE_HANDLE_NONE) != R.ok);
+    try testing.expect(h.ref.?.cache_insert.?(h.ref, "x", abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE) != R.ok);
 }
 
 test "evicting with a null cache or a null key is a no-op" {
@@ -593,17 +593,17 @@ test "a released slot is reused without losing later lookups" {
     try R.check(h.ref.?.release.?(h.ref, 1));
     try R.check(h.ref.?.register_resource.?(h.ref, 3));
 
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try R.check(h.ref.?.cache_insert.?(h.ref, "res://3", 3));
     try testing.expect(h.ref.?.try_get_cached.?(h.ref, "res://3", &out));
-    try testing.expectEqual(@as(abi_resource_cache.ke_resource_handle, 3), out);
+    try testing.expectEqual(@as(abi_resource_cache.c.ke_resource_handle, 3), out);
 }
 
 test "a rehash triggered while tombstones are present keeps the table consistent" {
     const h = makeCountingCache();
     defer h.destroy.?(h.ref);
 
-    var i: abi_resource_cache.ke_resource_handle = 1;
+    var i: abi_resource_cache.c.ke_resource_handle = 1;
     while (i <= 40) : (i += 1) {
         try R.check(h.ref.?.register_resource.?(h.ref, i));
     }
@@ -616,7 +616,7 @@ test "a rehash triggered while tombstones are present keeps the table consistent
         try R.check(h.ref.?.register_resource.?(h.ref, i));
     }
 
-    var out: abi_resource_cache.ke_resource_handle = 0;
+    var out: abi_resource_cache.c.ke_resource_handle = 0;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "res://missing", &out));
 
     i = 21;
@@ -656,14 +656,14 @@ test "two different paths whose hashes collide stay two different entries" {
     try R.check(h.ref.?.register_resource.?(h.ref, 2));
     try R.check(h.ref.?.cache_insert.?(h.ref, "!B", 1));
 
-    var found: abi_resource_cache.ke_resource_handle = abi_resource_cache.KE_RESOURCE_HANDLE_NONE;
+    var found: abi_resource_cache.c.ke_resource_handle = abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE;
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "\"!", &found));
     try R.check(h.ref.?.cache_insert.?(h.ref, "\"!", 2));
 
     try testing.expect(h.ref.?.try_get_cached.?(h.ref, "!B", &found));
-    try testing.expectEqual(@as(abi_resource_cache.ke_resource_handle, 1), found);
+    try testing.expectEqual(@as(abi_resource_cache.c.ke_resource_handle, 1), found);
     try testing.expect(h.ref.?.try_get_cached.?(h.ref, "\"!", &found));
-    try testing.expectEqual(@as(abi_resource_cache.ke_resource_handle, 2), found);
+    try testing.expectEqual(@as(abi_resource_cache.c.ke_resource_handle, 2), found);
 
     h.ref.?.cache_evict.?(h.ref, "!B");
     try testing.expect(!h.ref.?.try_get_cached.?(h.ref, "!B", &found));

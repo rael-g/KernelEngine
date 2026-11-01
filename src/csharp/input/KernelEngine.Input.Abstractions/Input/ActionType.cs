@@ -2,7 +2,7 @@
 
 /// <summary>
 /// The kind of value an <see cref="InputAction"/> produces. Determines which value field
-/// of <see cref="InputActionEvent"/> is meaningful and which polling accessor applies.
+/// of <see cref="ActionEvent"/> is meaningful and which polling accessor applies.
 /// </summary>
 public enum ActionType
 {
@@ -18,7 +18,7 @@ public enum ActionType
 }
 
 /// <summary>
-/// Lifecycle phase of an <see cref="InputActionEvent"/>.
+/// Lifecycle phase of an <see cref="ActionEvent"/>.
 /// </summary>
 public enum ActionPhase
 {

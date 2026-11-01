@@ -1,5 +1,10 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+using global::KernelEngine.Runtime;
+
 using KernelEngine.Ecs.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.TaskPool.Native;
 
@@ -10,12 +15,13 @@ public unsafe partial struct ke_runtime_system_params
     [NativeTypeName("const char *")]
     public sbyte* name;
 
-    public ke_phase phase;
+    [NativeTypeName("ke_phase")]
+    public global::KernelEngine.Runtime.RuntimePhase phase;
 
     public void* user_data;
 
     [NativeTypeName("ke_system_execute_fn")]
-    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Result.Native.ke_result> execute;
+    public delegate* unmanaged[Cdecl]<ke_system_ctx*, void*, float, KernelEngine.Result.Native.Result> execute;
 
     [NativeTypeName("const ke_query_decl *")]
     public ke_query_decl* queries;
@@ -24,7 +30,7 @@ public unsafe partial struct ke_runtime_system_params
     public uint query_count;
 
     [NativeTypeName("const ke_component_access *")]
-    public ke_component_access* access_list;
+    public global::KernelEngine.Runtime.ComponentAccess* access_list;
 
     [NativeTypeName("uint32_t")]
     public uint access_count;

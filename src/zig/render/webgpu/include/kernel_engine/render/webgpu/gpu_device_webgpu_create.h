@@ -25,7 +25,7 @@ extern "C"
 {
 #endif
 
-/// @brief Parameters for the WebGPU GPU device.
+/// [bag] @brief Parameters for the WebGPU GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {
     /// When non-zero, asks the underlying graphics API to validate every call, which takes

@@ -1,3 +1,8 @@
+using System.Numerics;
+
+using global::KernelEngine.Common;
+using global::KernelEngine.Physics;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
@@ -14,19 +19,19 @@ public unsafe partial struct ke_physics_2d
     public delegate* unmanaged[Cdecl]<ke_physics_2d*, float, void> step;
 
     [NativeTypeName("ke_result (*)(struct ke_physics_2d *, ke_body_type_2d, float, float, ke_body_2d *)")]
-    public delegate* unmanaged[Cdecl]<ke_physics_2d*, ke_body_type_2d, float, float, uint*, KernelEngine.Result.Native.ke_result> create_body;
+    public delegate* unmanaged[Cdecl]<ke_physics_2d*, global::KernelEngine.Physics.BodyType2D, float, float, uint*, KernelEngine.Result.Native.Result> create_body;
 
     [NativeTypeName("void (*)(struct ke_physics_2d *, ke_body_2d)")]
     public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, void> destroy_body;
 
     [NativeTypeName("ke_result (*)(struct ke_physics_2d *, ke_body_2d, float, float, float, float, float, float, float, float, const ke_collision_filter_2d *)")]
-    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, float, float, float, float, float, float, ke_collision_filter_2d*, KernelEngine.Result.Native.ke_result> add_box_fixture;
+    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, float, float, float, float, float, float, global::KernelEngine.Physics.CollisionFilter2d*, KernelEngine.Result.Native.Result> add_box_fixture;
 
     [NativeTypeName("ke_result (*)(struct ke_physics_2d *, ke_body_2d, float, float, float, float, float, float, const ke_collision_filter_2d *)")]
-    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, float, float, float, float, ke_collision_filter_2d*, KernelEngine.Result.Native.ke_result> add_circle_fixture;
+    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, float, float, float, float, global::KernelEngine.Physics.CollisionFilter2d*, KernelEngine.Result.Native.Result> add_circle_fixture;
 
     [NativeTypeName("void (*)(struct ke_physics_2d *, ke_body_2d, ke_body_state_2d *)")]
-    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, ke_body_state_2d*, void> get_body_state;
+    public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, global::KernelEngine.Physics.BodyState2d*, void> get_body_state;
 
     [NativeTypeName("void (*)(struct ke_physics_2d *, ke_body_2d, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_physics_2d*, uint, float, float, float, void> set_body_position;

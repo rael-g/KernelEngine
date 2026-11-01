@@ -18,11 +18,11 @@ public unsafe partial class SceneLoader
     /// <param name="world">The world into which entities are loaded.</param>
     /// <param name="assets">Resolves <c>res://</c> paths; must outlive the loader.</param>
     /// <param name="io">Reads the scene files; must outlive the loader.</param>
-    public SceneLoader(World world, NativeAssetResolver assets, KernelEngine.Io.INativeIo io) : this(Create(world, assets, io))
+    public SceneLoader(World world, AssetResolver assets, KernelEngine.Io.INativeIo io) : this(Create(world, assets, io))
     {
     }
 
-    private static ke_scene_loader_handle Create(World world, NativeAssetResolver assets, KernelEngine.Io.INativeIo io)
+    private static ke_scene_loader_handle Create(World world, AssetResolver assets, KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(world);
         ArgumentNullException.ThrowIfNull(assets);

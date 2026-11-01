@@ -10,7 +10,7 @@ namespace KernelEngine.Framework;
 public static class AssetResolverServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers <see cref="NativeAssetResolver"/> as a singleton, reading through the registered
+    /// Registers <see cref="AssetResolver"/> as a singleton, reading through the registered
     /// <see cref="KernelEngine.Io.INativeIo"/>.
     /// </summary>
     /// <param name="services">The container to register into.</param>
@@ -20,7 +20,7 @@ public static class AssetResolverServiceCollectionExtensions
     public static IServiceCollection AddAssetResolver(this IServiceCollection services,
                                                       string? projectRoot = null)
     {
-        services.AddSingleton(sp => new NativeAssetResolver(
+        services.AddSingleton(sp => new AssetResolver(
             sp.GetRequiredService<KernelEngine.Io.INativeIo>(),
             sp.GetService<INativeImageLoader>(),
             sp.GetService<KernelEngine.Text.INativeFontLoader>(),

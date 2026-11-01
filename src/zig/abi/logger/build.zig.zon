@@ -1,9 +1,10 @@
 .{
-    .name = .ke_abi_logger,
+    .name = .abi_logger,
     .version = "0.1.0",
-    .fingerprint = 0xc2cc4777933077a1,
+    .fingerprint = 0x9cbf3e84a5ac7b4d,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

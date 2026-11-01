@@ -84,7 +84,7 @@ extern "C"
          * @param half_w [vector2:half_extents]
          * @param offset_x [vector2:offset]
          * @param offset_angle Radians, CCW positive, about the offset center.
-         * @param filter [opt] Layers the fixture occupies and tests against. NULL
+         * @param filter [optional] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
          * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
@@ -97,7 +97,7 @@ extern "C"
         /**
          * Attaches a circle fixture at the given offset from the body origin.
          * @param offset_x [vector2:offset]
-         * @param filter [opt] Layers the fixture occupies and tests against. NULL
+         * @param filter [optional] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
          * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
@@ -145,6 +145,7 @@ extern "C"
 
     } ke_physics_2d;
 
+    /// [owner]
     typedef struct ke_physics_2d_handle
     {
         ke_physics_2d *ref;

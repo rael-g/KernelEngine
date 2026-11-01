@@ -25,7 +25,7 @@ extern "C"
 #endif
 
     /// Sizing for one signal bus. Each field's default is a convenience, not a
-    /// ceiling.
+    /// [bag] ceiling.
     typedef struct ke_signal_bus_params
     {
         uint32_t max_signals;      ///< Distinct signal names; 0 uses the default.

@@ -22,6 +22,7 @@
 extern "C" {
 #endif
 
+/// [bag]
 typedef struct ke_window_glfw_params {
     struct ke_input  *input;  /**< [borrowed,nullable] Optional input sink target. */
     const char       *title;  /**< [borrowed,utf8] Window title. */

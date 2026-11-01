@@ -11,28 +11,14 @@ namespace KernelEngine.Ecs;
 public unsafe partial class EcsRegistry : IEcsRegistry
 {
     /// <inheritdoc/>
-    public ulong CreateEntity() => EntityCreate();
+    public Entity CreateEntity() => EntityCreate();
 
     /// <inheritdoc/>
-    public void DestroyEntity(ulong entity) => EntityDestroy(entity);
+    public void DestroyEntity(Entity entity) => EntityDestroy(entity);
 
     /// <inheritdoc/>
-    public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout
-    {
-        var utf8 = Encoding.UTF8.GetBytes(name + '\0');
-        fixed (byte* n = utf8)
-        {
-            var p = new ke_component_params
-            {
-                name = (sbyte*)n,
-                size = (nuint)sizeof(T),
-                alignment = (nuint)(sizeof(AlignmentProbe<T>) - sizeof(T)),
-                fields = NativeFieldTable<T>.Fields,
-                field_count = (uint)NativeFieldTable<T>.Length,
-            };
-            return ComponentRegister(&p);
-        }
-    }
+    public ComponentId RegisterComponent<T>(string name) where T : unmanaged =>
+        ComponentRegister(name, (nuint)sizeof(T), (nuint)(sizeof(AlignmentProbe<T>) - sizeof(T)), default);
 
     private readonly struct AlignmentProbe<T>(byte head, T value) where T : unmanaged
     {
@@ -41,34 +27,34 @@ public unsafe partial class EcsRegistry : IEcsRegistry
     }
 
     /// <inheritdoc/>
-    public bool TryLookupComponent(string name, out uint componentId)
+    public bool TryLookupComponent(string name, out ComponentId componentId)
     {
         if (TryComponentLookup(name, out var meta))
         {
-            componentId = meta.cid;
+            componentId = meta.Cid;
             return true;
         }
-        componentId = 0;
+        componentId = default;
         return false;
     }
 
     /// <inheritdoc cref="IEcsRegistry.AddComponent{T}"/>
-    public Span<T> AddComponent<T>(ulong entity, uint componentId) where T : unmanaged
+    public Span<T> AddComponent<T>(Entity entity, ComponentId componentId) where T : unmanaged
     {
         var ptr = (T*)ComponentAdd(entity, componentId);
         return ptr != null ? new Span<T>(ptr, 1) : Span<T>.Empty;
     }
 
     /// <inheritdoc cref="IEcsRegistry.GetComponent{T}"/>
-    public Span<T> GetComponent<T>(ulong entity, uint componentId) where T : unmanaged
+    public Span<T> GetComponent<T>(Entity entity, ComponentId componentId) where T : unmanaged
     {
         var ptr = (T*)ComponentGet(entity, componentId);
         return ptr != null ? new Span<T>(ptr, 1) : Span<T>.Empty;
     }
 
     /// <inheritdoc/>
-    public void RemoveComponent(ulong entity, uint componentId) => ComponentRemove(entity, componentId);
+    public void RemoveComponent(Entity entity, ComponentId componentId) => ComponentRemove(entity, componentId);
 
     /// <inheritdoc/>
-    public bool HasComponent(ulong entity, uint componentId) => ComponentGet(entity, componentId) != 0;
+    public bool HasComponent(Entity entity, ComponentId componentId) => ComponentGet(entity, componentId) != 0;
 }

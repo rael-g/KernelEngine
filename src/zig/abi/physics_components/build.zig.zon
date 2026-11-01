@@ -1,0 +1,13 @@
+.{
+    .name = .abi_physics_components,
+    .version = "0.1.0",
+    .fingerprint = 0xdd13f12bf90aea65,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_math = .{ .path = "../math" },
+        .abi_physics = .{ .path = "../physics" },
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+    },
+    .paths = .{"."},
+}

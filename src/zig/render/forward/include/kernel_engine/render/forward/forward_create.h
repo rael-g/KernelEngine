@@ -27,6 +27,7 @@ extern "C"
 
     typedef struct ke_render_forward ke_render_forward;
 
+    /// [owner]
     typedef struct ke_render_forward_handle
     {
         ke_render_forward *ref;
@@ -35,7 +36,7 @@ extern "C"
 
     /// What the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
     /// samples the frame's color and draws over a copy of it, tested against the frame's depth.
-    /// The group names are copied.
+    /// [bag] The group names are copied.
     typedef struct ke_render_forward_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.

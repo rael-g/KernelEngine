@@ -119,7 +119,7 @@ var rules = new List<Rule>
         Lines(sources.Where(s => s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
     new("no comment in C besides a doc comment", 10,
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
-    new("no comment in C# besides a doc comment", 6,
+    new("no comment in C# besides a doc comment", 0,
         Lines(managed, l => slashComment.IsMatch(l))),
     new("a shader in the engine leaves its binding numbers to the compiler", 0,
         Lines(sources.Where(s => s.Key.StartsWith("src/", StringComparison.Ordinal) && s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => shaderBindingNumber.IsMatch(l))),

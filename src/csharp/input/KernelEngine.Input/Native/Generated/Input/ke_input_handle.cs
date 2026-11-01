@@ -1,4 +1,9 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Input;
+using global::KernelEngine.Logger;
+
+using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Input.Native;

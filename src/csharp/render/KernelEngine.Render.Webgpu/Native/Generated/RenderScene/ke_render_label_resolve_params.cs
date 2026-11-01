@@ -1,7 +1,11 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
 using KernelEngine.Asset.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -22,5 +26,5 @@ public unsafe partial struct ke_render_label_resolve_params
     public KernelEngine.Asset.Native.ke_asset_resolver* resolver;
 
     [NativeTypeName("ke_component_id")]
-    public uint label_cid;
+    public global::KernelEngine.Ecs.ComponentId label_cid;
 }

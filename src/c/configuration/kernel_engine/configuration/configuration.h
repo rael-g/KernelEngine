@@ -95,6 +95,7 @@ extern "C"
 
     } ke_configuration;
 
+    /// [owner]
     typedef struct ke_configuration_handle
     {
         ke_configuration *ref;

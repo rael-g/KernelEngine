@@ -4,6 +4,7 @@
     .fingerprint = 0x632435d14b40e681,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_asset_loader = .{ .path = "../../abi/asset_loader" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_task_pool = .{ .path = "../../abi/task_pool" },
         .abi_task_pool_enki_factory = .{ .path = "abi" },

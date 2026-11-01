@@ -53,6 +53,7 @@ extern "C"
 
     } ke_audio;
 
+    /// [owner]
     typedef struct ke_audio_handle
     {
         ke_audio *ref;

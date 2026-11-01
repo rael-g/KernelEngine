@@ -1,10 +1,10 @@
 .{
-    .name = .ke_abi_text,
+    .name = .abi_text,
     .version = "0.1.0",
-    .fingerprint = 0x0d4862b93fb2ea0f,
+    .fingerprint = 0xea3d5cd3c64ce549,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_result = .{ .path = "../result" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

@@ -1,6 +1,9 @@
+using System.Numerics;
 using System.Runtime.InteropServices;
 
-using KernelEngine.Logger.Native;
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -12,8 +15,8 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_render_cluster", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_cluster_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.ke_result render_cluster_create([NativeTypeName("const ke_render_cluster_params *")] ke_render_cluster_params* @params, ke_render_cluster_handle* out_cluster);
+    public static extern KernelEngine.Result.Native.Result render_cluster_create([NativeTypeName("const ke_render_cluster_params *")] ke_render_cluster_params* @params, ke_render_cluster_handle* out_cluster);
 
     [DllImport("ke_render_cluster", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_cluster_set_log_callback", ExactSpelling = true)]
-    public static extern void render_cluster_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, KernelEngine.Logger.Native.ke_log_level, sbyte*, sbyte*, void> callback, void* ctx);
+    public static extern void render_cluster_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);
 }

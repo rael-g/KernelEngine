@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Window.Native;
@@ -7,7 +9,7 @@ public unsafe partial struct ke_window
     public void* handle;
 
     [NativeTypeName("ke_result (*)(struct ke_window *)")]
-    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Result.Native.ke_result> on_initialize;
+    public delegate* unmanaged[Cdecl]<ke_window*, KernelEngine.Result.Native.Result> on_initialize;
 
     [NativeTypeName("void (*)(struct ke_window *)")]
     public delegate* unmanaged[Cdecl]<ke_window*, void> on_shutdown;

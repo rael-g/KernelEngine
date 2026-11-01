@@ -1,4 +1,8 @@
+using System.Numerics;
 using System.Runtime.CompilerServices;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
 
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
@@ -22,21 +26,26 @@ public unsafe partial struct ke_gpu_render_pipeline_params
     [NativeTypeName("const char *")]
     public sbyte* fragment_entry;
 
-    public ke_gpu_primitive_topology primitive_topology;
+    [NativeTypeName("ke_gpu_primitive_topology")]
+    public global::KernelEngine.Render.GpuPrimitiveTopology primitive_topology;
 
-    public ke_gpu_cull_mode cull_mode;
+    [NativeTypeName("ke_gpu_cull_mode")]
+    public global::KernelEngine.Render.GpuCullMode cull_mode;
 
-    public ke_gpu_front_face front_face;
+    [NativeTypeName("ke_gpu_front_face")]
+    public global::KernelEngine.Render.GpuFrontFace front_face;
 
     [NativeTypeName("uint32_t")]
     public uint vertex_buffer_count;
 
     [NativeTypeName("const ke_gpu_vertex_buffer_layout *")]
-    public ke_gpu_vertex_buffer_layout* vertex_buffers;
+    public GpuVertexBufferLayout* vertex_buffers;
 
-    public ke_gpu_blend_state blend_state;
+    [NativeTypeName("ke_gpu_blend_state")]
+    public global::KernelEngine.Render.GpuBlendState blend_state;
 
-    public ke_gpu_depth_stencil_state depth_stencil;
+    [NativeTypeName("ke_gpu_depth_stencil_state")]
+    public global::KernelEngine.Render.GpuDepthStencilState depth_stencil;
 
     [NativeTypeName("ke_gpu_bind_group_layout[4]")]
     public _bind_group_layouts_e__FixedBuffer bind_group_layouts;
@@ -61,6 +70,6 @@ public unsafe partial struct ke_gpu_render_pipeline_params
     [InlineArray(8)]
     public partial struct _color_target_formats_e__FixedBuffer
     {
-        public ke_gpu_texture_format e0;
+        public global::KernelEngine.Render.GpuTextureFormat e0;
     }
 }

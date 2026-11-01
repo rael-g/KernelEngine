@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_runtime",
         .root = "src/runtime.zig",
-        .abi = &.{ "abi_ecs", "abi_result", "abi_runtime", "abi_runtime_factory", "abi_task_pool" },
+        .abi = &.{ "abi_framework", "abi_asset_resolver", "abi_asset_loader", "abi_ecs", "abi_result", "abi_runtime", "abi_runtime_factory", "abi_task_pool" },
         .common = &.{"heap"},
         .third_party = thirdParty,
         .tests = "Run unit tests",

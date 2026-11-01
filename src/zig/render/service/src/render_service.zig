@@ -1,6 +1,10 @@
 //! The root of the render service plugin: the state every file of the plugin works on and the one
 //! factory that builds it and fills the `ke_render_service` vtable.
 
+const abi_render_contract = @import("abi_render_contract");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_gpu = @import("abi_render_gpu");
+const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
 const FrameLog = @import("frame_log.zig").FrameLog;
 
@@ -41,7 +45,7 @@ const first_upload_arena = 8 * 1024 * 1024;
 /// One buffer write queued during a frame: where it goes on the GPU and the bytes it copies out
 /// of the upload arena.
 pub const UploadRecord = struct {
-    buffer: abi_render.ke_gpu_buffer,
+    buffer: abi_asset_resolver.c.ke_gpu_buffer,
     gpu_offset: u64,
     arena_offset: usize,
     size: usize,
@@ -51,33 +55,33 @@ pub const UploadRecord = struct {
 /// `upload_spill` by the thread that made it.
 pub const SpilledUpload = struct {
     next: ?*SpilledUpload,
-    buffer: abi_render.ke_gpu_buffer,
+    buffer: abi_asset_resolver.c.ke_gpu_buffer,
     gpu_offset: u64,
     data: []u8,
 };
 
 /// A mesh in `mesh_store`: the vertex and index buffers it owns and the number of indices.
 pub const Mesh = struct {
-    vbo: abi_render.ke_gpu_buffer,
-    ibo: abi_render.ke_gpu_buffer,
+    vbo: abi_asset_resolver.c.ke_gpu_buffer,
+    ibo: abi_asset_resolver.c.ke_gpu_buffer,
     index_count: u32,
 };
 
 /// A texture in `texture_store`: the GPU texture it owns and its default view.
 pub const Texture = struct {
-    tex: abi_render.ke_gpu_texture,
-    view: abi_render.ke_gpu_texture_view,
+    tex: abi_asset_resolver.c.ke_gpu_texture,
+    view: abi_asset_resolver.c.ke_gpu_texture_view,
 };
 
 /// A material in `material_store`: what the binder holds for it, its alpha mode and cutoff, the
 /// name of its shader, and the albedo and normal textures it samples.
 pub const Material = struct {
-    binding: abi_render.ke_render_material_binding,
-    alpha_mode: abi_render.ke_alpha_mode,
+    binding: abi_asset_resolver.c.ke_render_material_binding,
+    alpha_mode: abi_render_handles.c.ke_alpha_mode,
     alpha_cutoff: f32,
     shader: [MAX_SHADER_NAME]u8,
-    albedo: abi_render.ke_texture_handle,
-    normal: abi_render.ke_texture_handle,
+    albedo: abi_render_handles.c.ke_texture_handle,
+    normal: abi_render_handles.c.ke_texture_handle,
 };
 
 /// One named entry of `resources`. The fields from `buffer` on keep their defaults unless an import
@@ -85,27 +89,27 @@ pub const Material = struct {
 /// One named entry of the table. `name` is a copy the table owns, freed with the table.
 pub const Resource = struct {
     name: [*:0]const u8,
-    cid: abi_ecs.ke_component_id,
-    format: abi_render.ke_gpu_texture_format,
-    texture: abi_render.ke_gpu_texture,
-    view: abi_render.ke_gpu_texture_view,
+    cid: abi_asset_resolver.c.ke_component_id,
+    format: abi_render_gpu.c.ke_gpu_texture_format,
+    texture: abi_asset_resolver.c.ke_gpu_texture,
+    view: abi_asset_resolver.c.ke_gpu_texture_view,
     is_backbuffer: bool,
     is_transient: bool,
     clear_value: [4]f32,
     relative: bool = false,
     scale_x: f32 = 1.0,
     scale_y: f32 = 1.0,
-    buffer: abi_render.ke_gpu_buffer = abi_render.KE_GPU_INVALID_HANDLE,
+    buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     buffer_size: u64 = 0,
 };
 
 /// The `?u32` labels are offsets into the `labels` of the record that holds the command, not
 /// pointers. They are null when no text was stored.
 pub const ComputeCmd = union(enum) {
-    set_pipeline: abi_render.ke_gpu_pipeline,
-    set_bind_group: struct { index: u32, bg: abi_render.ke_gpu_bind_group, first_offset: u32, count: u32 },
+    set_pipeline: abi_asset_resolver.c.ke_gpu_pipeline,
+    set_bind_group: struct { index: u32, bg: abi_asset_resolver.c.ke_gpu_bind_group, first_offset: u32, count: u32 },
     dispatch: struct { x: u32, y: u32, z: u32 },
-    dispatch_indirect: struct { buf: abi_render.ke_gpu_buffer, offset: usize },
+    dispatch_indirect: struct { buf: abi_asset_resolver.c.ke_gpu_buffer, offset: usize },
     push_debug_group: ?u32,
     pop_debug_group,
     insert_debug_marker: ?u32,
@@ -114,7 +118,7 @@ pub const ComputeCmd = union(enum) {
 /// `labels` by `storeLabel` and dynamic offsets into `offsets`, so a command never keeps a pointer
 /// the caller owns.
 pub const ComputeRecord = struct {
-    pass: abi_render.ke_gpu_compute_pass,
+    pass: abi_render_gpu.c.ke_gpu_compute_pass,
     cmds: std.ArrayList(ComputeCmd),
     offsets: std.ArrayList(u32),
     pass_label: ?u32,
@@ -153,11 +157,11 @@ pub const ComputeRecord = struct {
 /// frees it. `materialAt` falls
 /// back to `white_material` for a handle it does not know. The two upload counters are atomic.
 pub const CoreState = struct {
-    device: *abi_render.ke_gpu_device,
-    ecs: *abi_ecs.ke_ecs,
-    target: *abi_render.ke_gpu_render_target,
-    binder: *abi_render.ke_render_resource_binder,
-    queue: abi_render.ke_gpu_queue,
+    device: *abi_render_gpu.c.ke_gpu_device,
+    ecs: *abi_ecs.c.ke_ecs,
+    target: *abi_render_gpu.c.ke_gpu_render_target,
+    binder: *abi_render_gpu.c.ke_render_resource_binder,
+    queue: abi_asset_resolver.c.ke_gpu_queue,
 
     resources: std.ArrayList(Resource),
 
@@ -183,45 +187,45 @@ pub const CoreState = struct {
     mesh_store: slot_map.SlotMap(Mesh),
     texture_store: slot_map.SlotMap(Texture),
     material_store: slot_map.SlotMap(Material),
-    mesh_cache: *abi_resource_cache.ke_resource_cache,
-    texture_cache: *abi_resource_cache.ke_resource_cache,
-    material_cache: *abi_resource_cache.ke_resource_cache,
-    mesh_cache_destroy: *const fn (*abi_resource_cache.ke_resource_cache) callconv(.c) void,
-    texture_cache_destroy: *const fn (*abi_resource_cache.ke_resource_cache) callconv(.c) void,
-    material_cache_destroy: *const fn (*abi_resource_cache.ke_resource_cache) callconv(.c) void,
+    mesh_cache: *abi_resource_cache.c.ke_resource_cache,
+    texture_cache: *abi_resource_cache.c.ke_resource_cache,
+    material_cache: *abi_resource_cache.c.ke_resource_cache,
+    mesh_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
+    texture_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
+    material_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
 
-    shader_store: slot_map.SlotMap(abi_render.ke_gpu_shader_module),
-    shader_cache: *abi_resource_cache.ke_resource_cache,
-    shader_cache_destroy: *const fn (*abi_resource_cache.ke_resource_cache) callconv(.c) void,
+    shader_store: slot_map.SlotMap(abi_asset_resolver.c.ke_gpu_shader_module),
+    shader_cache: *abi_resource_cache.c.ke_resource_cache,
+    shader_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
-    io: *abi_io.ke_io,
+    io: *abi_io.c.ke_io,
 
     globals: frame_globals.Globals,
-    default_normal: abi_render.ke_texture_handle,
-    default_cubemap: abi_render.ke_texture_handle,
-    white_texture_h: abi_render.ke_texture_handle,
-    white_material: abi_render.ke_material_handle,
+    default_normal: abi_render_handles.c.ke_texture_handle,
+    default_cubemap: abi_render_handles.c.ke_texture_handle,
+    white_texture_h: abi_render_handles.c.ke_texture_handle,
+    white_material: abi_render_handles.c.ke_material_handle,
 
-    ndc: abi_render.ke_ndc_convention,
+    ndc: abi_render_gpu.c.ke_ndc_convention,
 
     pipeline_cache: pipeline_cache.PipelineCache,
 
-    api: [*c]abi_render.ke_render_service = null,
+    api: [*c]abi_render.c.ke_render_service = null,
     blit: blit_mod.Blit = .{},
     chain: frame_chain.Chain = .{},
-    clear_pass: ?abi_render.ke_gpu_command_encoder_handle = null,
+    clear_pass: ?abi_render_gpu.c.ke_gpu_command_encoder_handle = null,
 
     /// Null when the handle is stale or was never issued.
-    pub fn meshAt(self: *CoreState, h: abi_render.ke_mesh_handle) ?*Mesh {
+    pub fn meshAt(self: *CoreState, h: abi_render_handles.c.ke_mesh_handle) ?*Mesh {
         return self.mesh_store.get(h.bits);
     }
 
     /// Null when the handle is stale or was never issued.
-    pub fn textureAt(self: *CoreState, h: abi_render.ke_texture_handle) ?*Texture {
+    pub fn textureAt(self: *CoreState, h: abi_render_handles.c.ke_texture_handle) ?*Texture {
         return self.texture_store.get(h.bits);
     }
 
-    pub fn materialAt(self: *CoreState, h: abi_render.ke_material_handle) *Material {
+    pub fn materialAt(self: *CoreState, h: abi_render_handles.c.ke_material_handle) *Material {
         return self.material_store.get(h.bits) orelse
             self.material_store.get(self.white_material.bits).?;
     }
@@ -242,35 +246,35 @@ pub const CoreState = struct {
 /// command encoder it records into and whether it records compute work.
 pub const PassState = struct {
     core: *CoreState,
-    io: abi_render.ke_render_pass_io,
-    encoder: abi_render.ke_gpu_command_encoder_handle,
+    io: abi_render.c.ke_render_pass_io,
+    encoder: abi_render_gpu.c.ke_gpu_command_encoder_handle,
     record: ?*ComputeRecord,
 };
 
 /// A pass that ended during the frame: its encoder, and the record replayed on it before it is
 /// finished when the pass recorded compute work. The frame submits them in the order they ended.
 pub const EndedPass = struct {
-    encoder: abi_render.ke_gpu_command_encoder_handle,
+    encoder: abi_render_gpu.c.ke_gpu_command_encoder_handle,
     record: ?*ComputeRecord,
-    chain: abi_render.ke_render_chain_link = abi_render.KE_RENDER_CHAIN_NONE,
+    chain: abi_asset_resolver.c.ke_render_chain_link = abi_render.c.KE_RENDER_CHAIN_NONE,
 };
 
 /// The state behind a render service vtable.
-pub inline fn coreOf(self: [*c]abi_render.ke_render_service) *CoreState {
+pub inline fn coreOf(self: [*c]abi_render.c.ke_render_service) *CoreState {
     return @ptrCast(@alignCast(self.*.handle));
 }
 /// The state behind a pass context.
-pub inline fn passOf(self: [*c]abi_render.ke_render_pass_ctx) *PassState {
+pub inline fn passOf(self: [*c]abi_render_contract.c.ke_render_pass_ctx) *PassState {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
 /// True for the depth and depth-stencil formats.
-pub fn isDepthFormat(fmt: abi_render.ke_gpu_texture_format) bool {
-    return fmt >= abi_render.KE_GPU_TEXTURE_FORMAT_D16_UNORM and fmt <= abi_render.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT;
+pub fn isDepthFormat(fmt: abi_render_gpu.c.ke_gpu_texture_format) bool {
+    return fmt >= abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D16_UNORM and fmt <= abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT;
 }
 
 /// The service's `resource_binder` slot.
-fn resourceBinder(self: [*c]abi_render.ke_render_service) callconv(.c) [*c]abi_render.ke_render_resource_binder {
+fn resourceBinder(self: [*c]abi_render.c.ke_render_service) callconv(.c) [*c]abi_render_gpu.c.ke_render_resource_binder {
     if (self == null) return null;
     return coreOf(self).binder;
 }
@@ -280,7 +284,7 @@ fn resourceBinder(self: [*c]abi_render.ke_render_service) callconv(.c) [*c]abi_r
 /// GPU objects of transient resources, the caches and stores, the shared globals and the pipeline
 /// cache, and frees the memory the state owns. After it, neither the state nor the
 /// vtable is valid.
-fn destroyCore(self: [*c]abi_render.ke_render_service) callconv(.c) void {
+fn destroyCore(self: [*c]abi_render.c.ke_render_service) callconv(.c) void {
     const st = coreOf(self);
     if (st.device.flush_pipeline_compiles) |flush| flush(st.device);
     st.blit.release(st.binder);
@@ -288,8 +292,8 @@ fn destroyCore(self: [*c]abi_render.ke_render_service) callconv(.c) void {
     for (st.resources.items) |*r| {
         gpa.free(std.mem.span(r.name));
         if (r.is_transient) {
-            if (r.view != abi_render.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
-            if (r.texture != abi_render.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
+            if (r.view != abi_render_gpu.c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture_view.?(st.device, r.view);
+            if (r.texture != abi_render_gpu.c.KE_GPU_INVALID_HANDLE) st.device.destroy_texture.?(st.device, r.texture);
         }
     }
     st.material_cache_destroy(st.material_cache);
@@ -315,13 +319,13 @@ fn destroyCore(self: [*c]abi_render.ke_render_service) callconv(.c) void {
     st.resources.deinit(gpa);
     gpa.free(@constCast(st.shader_dir));
     gpa.destroy(st);
-    gpa.destroy(@as(*abi_render.ke_render_service, @ptrCast(self)));
+    gpa.destroy(@as(*abi_render.c.ke_render_service, @ptrCast(self)));
 }
 
 /// Builds the state and the vtable whole, or frees in reverse what it took and fails. The vtable's
 /// handle is the state; the shared globals, the default resources, the blit shaders and the frame's
 /// color and depth are not made yet.
-fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_target, e: *abi_ecs.ke_ecs, bnd: *abi_render.ke_render_resource_binder, shader_dir_span: []const u8, io: *abi_io.ke_io) R.Error!*abi_render.ke_render_service {
+fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_render_target, e: *abi_ecs.c.ke_ecs, bnd: *abi_render_gpu.c.ke_render_resource_binder, shader_dir_span: []const u8, io: *abi_io.c.ke_io) R.Error!*abi_render.c.ke_render_service {
     const st = try gpa.create(CoreState);
     errdefer gpa.destroy(st);
     const upload_arena = try gpa.alloc(u8, first_upload_arena);
@@ -369,16 +373,16 @@ fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_targe
         .mesh_cache_destroy = undefined,
         .texture_cache_destroy = undefined,
         .material_cache_destroy = undefined,
-        .shader_store = slot_map.SlotMap(abi_render.ke_gpu_shader_module).init(gpa),
+        .shader_store = slot_map.SlotMap(abi_asset_resolver.c.ke_gpu_shader_module).init(gpa),
         .shader_cache = undefined,
         .shader_cache_destroy = undefined,
         .shader_dir = shader_dir_owned,
         .io = io,
         .globals = .{},
-        .default_normal = .{ .bits = abi_render.KE_HANDLE_NONE },
-        .default_cubemap = .{ .bits = abi_render.KE_HANDLE_NONE },
-        .white_texture_h = .{ .bits = abi_render.KE_HANDLE_NONE },
-        .white_material = .{ .bits = abi_render.KE_HANDLE_NONE },
+        .default_normal = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
+        .default_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
+        .white_texture_h = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
+        .white_material = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
         .ndc = dev.get_ndc_convention.?(dev),
         .pipeline_cache = pipeline_cache.PipelineCache.init(),
     };
@@ -399,22 +403,22 @@ fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_targe
     st.material_cache_destroy = mat_ch.destroy.?;
     st.shader_cache_destroy = shader_ch.destroy.?;
 
-    var bb_cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &bb_cid));
+    var bb_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "backbuffer", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &bb_cid));
     const bb_name = try gpa.dupeZ(u8, "backbuffer");
     errdefer gpa.free(bb_name);
     st.resources.appendAssumeCapacity(.{
         .name = bb_name.ptr,
         .cid = bb_cid,
         .format = tgt.format.?(tgt),
-        .texture = abi_render.KE_GPU_INVALID_HANDLE,
-        .view = abi_render.KE_GPU_INVALID_HANDLE,
+        .texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+        .view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
         .is_backbuffer = true,
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },
     });
 
-    const core = try gpa.create(abi_render.ke_render_service);
+    const core = try gpa.create(abi_render.c.ke_render_service);
     core.* = .{
         .handle = st,
         .declare = resource_table.declare,
@@ -470,9 +474,9 @@ fn assemble(dev: *abi_render.ke_gpu_device, tgt: *abi_render.ke_gpu_render_targe
     return core;
 }
 
-fn resourceCache(destroy_fn: abi_resource_cache.ke_resource_destroy_func, st: *CoreState) R.Error!abi_resource_cache.ke_resource_cache_handle {
-    var h: abi_resource_cache.ke_resource_cache_handle = undefined;
-    try R.check(abi_resource_cache_default_factory.ke_resource_cache_create(&abi_resource_cache.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
+fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: *CoreState) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
+    var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
+    try R.check(abi_resource_cache_default_factory.ke_resource_cache_create(&abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
     return h;
 }
 
@@ -485,18 +489,18 @@ fn resourceCache(destroy_fn: abi_resource_cache.ke_resource_destroy_func, st: *C
 /// device, target, ecs, shader directory, io or binder in them, fail as an invalid argument; a step
 /// that fails fails the factory with its code. On success the ref is the new vtable and `destroy`
 /// is `destroyCore`.
-export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke_render_service_params, out_service: [*c]abi_render.ke_render_service_handle) callconv(.c) abi_result.ke_result {
+export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke_render_service_params, out_service: [*c]abi_render.c.ke_render_service_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_service orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params orelse return R.code(error.InvalidArgument);
-    const dev: *abi_render.ke_gpu_device = p.device orelse return R.code(error.InvalidArgument);
-    const tgt: *abi_render.ke_gpu_render_target = p.target orelse return R.code(error.InvalidArgument);
-    const e: *abi_ecs.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
+    const dev: *abi_render_gpu.c.ke_gpu_device = p.device orelse return R.code(error.InvalidArgument);
+    const tgt: *abi_render_gpu.c.ke_gpu_render_target = p.target orelse return R.code(error.InvalidArgument);
+    const e: *abi_ecs.c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
     if (p.shader_dir == null) return R.code(error.InvalidArgument);
-    const io: *abi_io.ke_io = p.io orelse return R.code(error.InvalidArgument);
-    const bnd: *abi_render.ke_render_resource_binder = p.binder orelse return R.code(error.InvalidArgument);
-    const color_format = if (p.color_format != abi_render.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-    const depth_format = if (p.depth_format != abi_render.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else abi_render.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
+    const io: *abi_io.c.ke_io = p.io orelse return R.code(error.InvalidArgument);
+    const bnd: *abi_render_gpu.c.ke_render_resource_binder = p.binder orelse return R.code(error.InvalidArgument);
+    const color_format = if (p.color_format != abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID) p.color_format else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    const depth_format = if (p.depth_format != abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
     const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir.?), io) catch |err| return R.code(err);
     prepare(core, color_format, depth_format) catch |err| {
@@ -507,7 +511,7 @@ export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke
     return R.ok;
 }
 
-fn prepare(core: *abi_render.ke_render_service, color_format: abi_render.ke_gpu_texture_format, depth_format: abi_render.ke_gpu_texture_format) R.Error!void {
+fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!void {
     const st = coreOf(core);
     try st.globals.create(st.device);
     try st.globals.provideTo(st.binder);
@@ -518,7 +522,7 @@ fn prepare(core: *abi_render.ke_render_service, color_format: abi_render.ke_gpu_
     const black_cube_px = [_]u8{0} ** (4 * 6);
     try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, &st.default_cubemap));
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    try R.check(asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = abi_render.KE_HANDLE_NONE }, .{ .bits = abi_render.KE_HANDLE_NONE }, abi_render.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
+    try R.check(asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
 
     st.api = core;
     try st.blit.prepare(core, st.binder);
@@ -527,9 +531,9 @@ fn prepare(core: *abi_render.ke_render_service, color_format: abi_render.ke_gpu_
 
 const testing = std.testing;
 
-fn deadFrame(state: *CoreState) abi_render.ke_render_service {
+fn deadFrame(state: *CoreState) abi_render.c.ke_render_service {
     state.frame_live = false;
-    var core = std.mem.zeroes(abi_render.ke_render_service);
+    var core = std.mem.zeroes(abi_render.c.ke_render_service);
     core.handle = state;
     return core;
 }
@@ -543,7 +547,7 @@ test "a pass cannot be opened once the frame has no target view to draw into" {
     var state: CoreState = undefined;
     var core = deadFrame(&state);
 
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     try testing.expect(pass_recording.beginPass(&core, &io) == null);
 }
 
@@ -559,20 +563,20 @@ const zsub = @import("zsub");
 /// The device, its command records, the binder and the ecs a service runs on in a test, with what
 /// the recorded commands carried: the latest labels and load ops, and running totals.
 const Gpu = struct {
-    dev: zsub.ForWith(abi_render.ke_gpu_device, .{ .history = 2 * stress_threads * stress_keys }),
-    encoder: zsub.For(abi_render.ke_gpu_command_encoder),
-    render_pass: zsub.For(abi_render.ke_gpu_render_pass),
-    compute_pass: zsub.For(abi_render.ke_gpu_compute_pass),
-    command_buffer: zsub.For(abi_render.ke_gpu_command_buffer),
-    binder: zsub.For(abi_render.ke_render_resource_binder),
-    ecs: zsub.For(abi_ecs.ke_ecs),
+    dev: zsub.ForWith(abi_render_gpu.c.ke_gpu_device, .{ .history = 2 * stress_threads * stress_keys }),
+    encoder: zsub.For(abi_render_gpu.c.ke_gpu_command_encoder),
+    render_pass: zsub.For(abi_render_gpu.c.ke_gpu_render_pass),
+    compute_pass: zsub.For(abi_render_gpu.c.ke_gpu_compute_pass),
+    command_buffer: zsub.For(abi_render_gpu.c.ke_gpu_command_buffer),
+    binder: zsub.For(abi_render_gpu.c.ke_render_resource_binder),
+    ecs: zsub.For(abi_ecs.c.ke_ecs),
     pipelines: std.atomic.Value(u64),
     texture_label: [*c]const u8,
     texture_view_label: [*c]const u8,
     render_pass_label: [*c]const u8,
     render_passes: u32,
-    color_load: abi_render.ke_gpu_load_op,
-    depth_load: ?abi_render.ke_gpu_load_op,
+    color_load: abi_render_gpu.c.ke_gpu_load_op,
+    depth_load: ?abi_render_gpu.c.ke_gpu_load_op,
     compute_pass_label: [*c]const u8,
     debug_group_label: [*c]const u8,
     submitted: u32,
@@ -609,7 +613,7 @@ const Gpu = struct {
         _ = self.dev.when(.queue_submit).doesWith(self, queueSubmit);
         _ = self.dev.when(.write_buffer).doesWith(self, writeBuffer);
         _ = self.dev.when(.get_default_queue).returns(1);
-        _ = self.dev.when(.shader_language).returns(abi_render.KE_GPU_SHADER_LANG_WGSL);
+        _ = self.dev.when(.shader_language).returns(abi_render_gpu.c.KE_GPU_SHADER_LANG_WGSL);
         _ = self.dev.when(.get_ndc_convention).returns(.{ .z_zero_to_one = true, .y_flip = true });
         try self.binder.init();
         inline for (.{ .create_shader_layout, .create_material }) |slot| _ = self.binder.when(slot).writesFresh(2);
@@ -630,7 +634,7 @@ const Gpu = struct {
     }
 
     fn expectReleased(self: *Gpu) !void {
-        const gpu_handle = zsub.argIsNot(1, abi_render.KE_GPU_INVALID_HANDLE);
+        const gpu_handle = zsub.argIsNot(1, abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
         try self.dev.received(.destroy_buffer).where(gpu_handle).sameAs(self.dev.received(.create_buffer));
         try self.dev.received(.destroy_bind_group_layout).where(gpu_handle).sameAs(self.dev.received(.create_bind_group_layout));
         try self.dev.received(.destroy_bind_group).where(gpu_handle).sameAs(self.dev.received(.create_bind_group));
@@ -639,7 +643,7 @@ const Gpu = struct {
         try self.dev.received(.destroy_shader_module).where(gpu_handle).sameAs(self.dev.received(.create_shader_module));
         try self.dev.received(.destroy_texture).where(gpu_handle).sameAs(self.dev.received(.create_texture));
         try self.dev.received(.destroy_texture_view).where(gpu_handle).sameAs(self.dev.received(.create_texture_view));
-        const binding = zsub.argIsNot(1, abi_render.KE_RENDER_BINDING_INVALID);
+        const binding = zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID);
         try self.binder.received(.destroy_shader_layout).where(binding).sameAs(self.binder.received(.create_shader_layout));
         try self.binder.received(.destroy_set).where(binding).sameAs(self.binder.received(.create_set));
         try self.binder.received(.destroy_material).where(binding).sameAs(self.binder.received(.create_material));
@@ -647,7 +651,7 @@ const Gpu = struct {
         try self.dev.received(.destroy_pipeline).where(gpu_handle).times(pipelines);
     }
 
-    fn beginRenderPass(self: *Gpu, args: zsub.For(abi_render.ke_gpu_command_encoder).Args(.begin_render_pass)) ?*abi_render.ke_gpu_render_pass {
+    fn beginRenderPass(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_command_encoder).Args(.begin_render_pass)) ?*abi_render_gpu.c.ke_gpu_render_pass {
         const p = args[1].?;
         self.render_pass_label = p.label;
         self.render_passes += 1;
@@ -656,12 +660,12 @@ const Gpu = struct {
         return self.render_pass.api();
     }
 
-    fn beginComputePass(self: *Gpu, args: zsub.For(abi_render.ke_gpu_command_encoder).Args(.begin_compute_pass)) ?*abi_render.ke_gpu_compute_pass {
+    fn beginComputePass(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_command_encoder).Args(.begin_compute_pass)) ?*abi_render_gpu.c.ke_gpu_compute_pass {
         self.compute_pass_label = if (args[1]) |p| p.label else null;
         return self.compute_pass.api();
     }
 
-    fn pushDebugGroup(self: *Gpu, args: zsub.For(abi_render.ke_gpu_compute_pass).Args(.push_debug_group)) void {
+    fn pushDebugGroup(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_compute_pass).Args(.push_debug_group)) void {
         self.debug_group_label = args[1];
     }
 
@@ -669,45 +673,45 @@ const Gpu = struct {
         return @as(i64, self.compute_pass.received(.push_debug_group).calls) - self.compute_pass.received(.pop_debug_group).calls;
     }
 
-    fn createTexture(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_texture)) abi_result.ke_result {
+    fn createTexture(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.create_texture)) abi_result.c.ke_result {
         self.texture_label = args[1].?.label;
-        return abi_result.KE_OK;
+        return abi_result.c.KE_OK;
     }
 
-    fn createTextureView(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_texture_view)) abi_result.ke_result {
+    fn createTextureView(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.create_texture_view)) abi_result.c.ke_result {
         self.texture_view_label = args[2].?.label;
-        return abi_result.KE_OK;
+        return abi_result.c.KE_OK;
     }
 
-    fn createRenderPipelineAsync(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.create_render_pipeline_async)) void {
+    fn createRenderPipelineAsync(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.create_render_pipeline_async)) void {
         if (args[2]) |ready| ready(self.pipelines.fetchAdd(1, .monotonic), args[3]);
     }
 
-    fn queueSubmit(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.queue_submit)) void {
+    fn queueSubmit(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.queue_submit)) void {
         self.submitted += args[3];
     }
 
-    fn writeBuffer(self: *Gpu, args: zsub.For(abi_render.ke_gpu_device).Args(.write_buffer)) void {
+    fn writeBuffer(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.write_buffer)) void {
         self.buffer_writes += 1;
         self.bytes_written += args[4];
     }
 
-    fn destroyEncoder(_: ?*abi_render.ke_gpu_command_encoder) callconv(.c) void {}
+    fn destroyEncoder(_: ?*abi_render_gpu.c.ke_gpu_command_encoder) callconv(.c) void {}
 
-    fn destroyCommandBuffer(_: ?*abi_render.ke_gpu_command_buffer) callconv(.c) void {}
+    fn destroyCommandBuffer(_: ?*abi_render_gpu.c.ke_gpu_command_buffer) callconv(.c) void {}
 };
 
 /// Fake render target. `acquired` is a flag set by `acquire`, not a count, and
 /// `presented` is the only tally kept.
 const Target = struct {
-    vtable: abi_render.ke_gpu_render_target,
+    vtable: abi_render_gpu.c.ke_gpu_render_target,
     acquired: bool,
     presented: u32,
     width: u32,
     height: u32,
 
     pub fn init(self: *Target) void {
-        self.* = .{ .vtable = std.mem.zeroes(abi_render.ke_gpu_render_target), .acquired = false, .presented = 0, .width = 1, .height = 1 };
+        self.* = .{ .vtable = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_target), .acquired = false, .presented = 0, .width = 1, .height = 1 };
         self.vtable.handle = self;
         self.vtable.acquire = &acquire;
         self.vtable.present = &present;
@@ -715,54 +719,54 @@ const Target = struct {
         self.vtable.format = &format;
     }
 
-    pub fn api(self: *Target) *abi_render.ke_gpu_render_target {
+    pub fn api(self: *Target) *abi_render_gpu.c.ke_gpu_render_target {
         return &self.vtable;
     }
 
-    fn of(self: ?*abi_render.ke_gpu_render_target) *Target {
+    fn of(self: ?*abi_render_gpu.c.ke_gpu_render_target) *Target {
         return @ptrCast(@alignCast(self.?.handle));
     }
 
     /// Repeated acquires are not counted: `acquired` is a flag.
-    fn acquire(self: ?*abi_render.ke_gpu_render_target, out: [*c]abi_render.ke_gpu_texture_view) callconv(.c) abi_result.ke_result {
+    fn acquire(self: ?*abi_render_gpu.c.ke_gpu_render_target, out: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
         of(self).acquired = true;
         out.* = 1;
-        return abi_result.KE_OK;
+        return abi_result.c.KE_OK;
     }
 
     /// Fails as an invalid argument and leaves `presented` alone unless an acquire came first.
-    fn present(self: ?*abi_render.ke_gpu_render_target) callconv(.c) abi_result.ke_result {
+    fn present(self: ?*abi_render_gpu.c.ke_gpu_render_target) callconv(.c) abi_result.c.ke_result {
         const t = of(self);
-        if (!t.acquired) return abi_result.KE_RESULT_INVALID_ARGUMENT;
+        if (!t.acquired) return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
         t.acquired = false;
         t.presented += 1;
-        return abi_result.KE_OK;
+        return abi_result.c.KE_OK;
     }
 
-    fn size(self: ?*abi_render.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+    fn size(self: ?*abi_render_gpu.c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
         if (out_w != null) out_w.* = of(self).width;
         if (out_h != null) out_h.* = of(self).height;
     }
 
-    fn format(_: ?*abi_render.ke_gpu_render_target) callconv(.c) abi_render.ke_gpu_texture_format {
-        return abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    fn format(_: ?*abi_render_gpu.c.ke_gpu_render_target) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
+        return abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
     }
 };
 
-fn serviceOf(params: abi_render_service_factory.ke_render_service_params) abi_render.ke_render_service_handle {
-    var h: abi_render.ke_render_service_handle = .{ .ref = null, .destroy = null };
+fn serviceOf(params: abi_render_service_factory.ke_render_service_params) abi_render.c.ke_render_service_handle {
+    var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
     _ = ke_render_service_create(&params, &h);
     return h;
 }
 
-fn declared(svc: [*c]abi_render.ke_render_service, desc: *const abi_render.ke_render_resource_params) abi_ecs.ke_component_id {
-    var cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
+fn declared(svc: [*c]abi_render.c.ke_render_service, desc: *const abi_render.c.ke_render_resource_params) abi_asset_resolver.c.ke_component_id {
+    var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     _ = svc.*.declare.?(svc, desc, &cid);
     return cid;
 }
 
-fn chainLink(svc: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_stage, mode: abi_render.ke_render_chain_mode) abi_render.ke_render_chain_link {
-    var link: abi_render.ke_render_chain_link = abi_render.KE_RENDER_CHAIN_NONE;
+fn chainLink(svc: [*c]abi_render.c.ke_render_service, stage: abi_render.c.ke_render_stage, mode: abi_render.c.ke_render_chain_mode) abi_asset_resolver.c.ke_render_chain_link {
+    var link: abi_asset_resolver.c.ke_render_chain_link = abi_render.c.KE_RENDER_CHAIN_NONE;
     _ = svc.*.join_chain.?(svc, stage, mode, &link);
     return link;
 }
@@ -770,14 +774,14 @@ fn chainLink(svc: [*c]abi_render.ke_render_service, stage: abi_render.ke_render_
 var empty_shader: [1]u8 = .{0};
 var shader_request: u8 = 0;
 
-fn readEmpty(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+fn readEmpty(args: zsub.For(abi_io.c.ke_io).Args(.read_file)) abi_result.c.ke_result {
     args[2].?.* = @ptrCast(&shader_request);
     return R.ok;
 }
 
-fn waitEmpty(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+fn waitEmpty(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
     if (args[2]) |out| {
-        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.* = std.mem.zeroes(abi_io.c.ke_io_result);
         out.bytes = &empty_shader;
     }
     return R.ok;
@@ -785,7 +789,7 @@ fn waitEmpty(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
 
 /// A substitute io under a shader directory, giving every shader the service reads as empty.
 const ShaderDir = struct {
-    io: zsub.For(abi_io.ke_io),
+    io: zsub.For(abi_io.c.ke_io),
 
     fn init(self: *ShaderDir) !void {
         try self.io.init();
@@ -797,7 +801,7 @@ const ShaderDir = struct {
         return "shaders";
     }
 
-    fn api(self: *ShaderDir) *abi_io.ke_io {
+    fn api(self: *ShaderDir) *abi_io.c.ke_io {
         return self.io.api();
     }
 
@@ -829,7 +833,7 @@ test "a render service created without a render target is refused and leaves not
     var gpu: Gpu = undefined;
     try gpu.init();
     defer gpu.deinit();
-    var h: abi_render.ke_render_service_handle = undefined;
+    var h: abi_render.c.ke_render_service_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(&.{ .device = gpu.dev.api(), .target = null, .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 }, &h)));
     try testing.expect(h.ref == null);
     try gpu.expectReleased();
@@ -848,7 +852,7 @@ test "a frame acquires the render target as the backbuffer and presents it once 
     const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
-    try testing.expectEqual(@as(abi_render.ke_gpu_texture_format, abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
+    try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_texture_format, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
     try R.check(svc.*.begin_frame.?(svc));
     try testing.expect(target.acquired);
     try R.check(svc.*.end_frame.?(svc));
@@ -869,10 +873,10 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
-    var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
+    var desc = std.mem.zeroes(abi_render.c.ke_render_resource_params);
     desc.name = "hdr";
-    desc.format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
-    desc.size_mode = abi_render.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+    desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
     _ = declared(svc, &desc);
@@ -941,7 +945,7 @@ test "a frame with more passes than the first frame's log submits every one, and
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const pass_count = first_passes + 36;
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.name = "render.cull";
     try R.check(svc.*.begin_frame.?(svc));
     for (0..pass_count) |_| {
@@ -977,10 +981,10 @@ test "a declared resource's texture and view carry the name it was declared unde
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
-    var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
+    var desc = std.mem.zeroes(abi_render.c.ke_render_resource_params);
     desc.name = "hdr_color";
-    desc.format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
-    desc.size_mode = abi_render.KE_RENDER_SIZE_ABSOLUTE;
+    desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    desc.size_mode = abi_render.c.KE_RENDER_SIZE_ABSOLUTE;
     desc.width = 4;
     desc.height = 4;
     _ = declared(svc, &desc);
@@ -1003,7 +1007,7 @@ test "a render pass is opened under the name its pass declared" {
     defer h.destroy.?(svc);
 
     const writes = [_]?[*:0]const u8{"backbuffer"};
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.name = "render.named";
     io.writes = &writes;
     io.writes_count = 1;
@@ -1023,7 +1027,7 @@ const PassHarness = struct {
     sd: ShaderDir,
     gpu: Gpu,
     target: Target,
-    h: abi_render.ke_render_service_handle,
+    h: abi_render.c.ke_render_service_handle,
 
     fn init(self: *PassHarness) !void {
         try self.sd.init();
@@ -1032,13 +1036,13 @@ const PassHarness = struct {
         self.h = serviceOf(.{ .device = self.gpu.dev.api(), .target = self.target.api(), .ecs = self.gpu.ecs.api(), .shader_dir = self.sd.path(), .io = self.sd.api(), .binder = self.gpu.binder.api(), .color_format = 0, .depth_format = 0 });
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
         for ([_][*:0]const u8{ "src", "dst" }) |name| {
-            var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
+            var desc = std.mem.zeroes(abi_render.c.ke_render_resource_params);
             desc.name = name;
-            desc.format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-            desc.size_mode = abi_render.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+            desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+            desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
             desc.scale_x = 1.0;
             desc.scale_y = 1.0;
-            try testing.expect(declared(svc, &desc) != abi_ecs.KE_COMPONENT_INVALID);
+            try testing.expect(declared(svc, &desc) != abi_ecs.c.KE_COMPONENT_INVALID);
         }
     }
 
@@ -1047,7 +1051,7 @@ const PassHarness = struct {
         try R.check(svc.*.begin_frame.?(svc));
     }
 
-    fn run(self: *PassHarness, io: *const abi_render.ke_render_pass_io) !void {
+    fn run(self: *PassHarness, io: *const abi_render.c.ke_render_pass_io) !void {
         const svc = self.h.ref.?;
         self.gpu.render_passes = 0;
         const pass = svc.*.begin_pass.?(svc, io) orelse return error.TestUnexpectedResult;
@@ -1065,12 +1069,12 @@ const PassHarness = struct {
     }
 };
 
-fn joined(ph: *PassHarness, stage: abi_render.ke_render_stage, mode: abi_render.ke_render_chain_mode) !abi_render.ke_render_pass_io {
+fn joined(ph: *PassHarness, stage: abi_render.c.ke_render_stage, mode: abi_render.c.ke_render_chain_mode) !abi_render.c.ke_render_pass_io {
     const svc = ph.h.ref.?;
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.name = "render.link";
     io.chain = chainLink(svc, stage, mode);
-    try testing.expect(io.chain != abi_render.KE_RENDER_CHAIN_NONE);
+    try testing.expect(io.chain != abi_render.c.KE_RENDER_CHAIN_NONE);
     return io;
 }
 
@@ -1078,25 +1082,25 @@ test "a pass drawing over the frame's color loads it in a single render pass" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
-    const io = try joined(&ph, abi_render.KE_RENDER_STAGE_OPAQUE, abi_render.KE_RENDER_CHAIN_DRAW_OVER);
+    const io = try joined(&ph, abi_render.c.KE_RENDER_STAGE_OPAQUE, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER);
     try ph.begin();
     try ph.run(&io);
 
     try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
+    try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_load_op, abi_render_gpu.c.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
 }
 
 test "a pass that samples the frame's color draws over a copy of it, made first" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
-    const io = try joined(&ph, abi_render.KE_RENDER_STAGE_TRANSPARENT, abi_render.KE_RENDER_CHAIN_SAMPLE_OVER);
+    const io = try joined(&ph, abi_render.c.KE_RENDER_STAGE_TRANSPARENT, abi_render.c.KE_RENDER_CHAIN_SAMPLE_OVER);
     try ph.begin();
     try ph.run(&io);
 
     try testing.expectEqual(@as(u32, 2), ph.gpu.render_passes);
     try testing.expectEqualStrings("render.link", std.mem.span(ph.gpu.render_pass_label));
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
+    try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_load_op, abi_render_gpu.c.KE_GPU_LOAD_OP_LOAD), ph.gpu.color_load);
 }
 
 test "a pass that replaces the frame's color clears the new one and samples the old" {
@@ -1104,7 +1108,7 @@ test "a pass that replaces the frame's color clears the new one and samples the 
     try ph.init();
     defer ph.deinit();
     const svc = ph.h.ref.?;
-    const io = try joined(&ph, abi_render.KE_RENDER_STAGE_TONEMAP, abi_render.KE_RENDER_CHAIN_REPLACE);
+    const io = try joined(&ph, abi_render.c.KE_RENDER_STAGE_TONEMAP, abi_render.c.KE_RENDER_CHAIN_REPLACE);
     try ph.begin();
     ph.gpu.render_passes = 0;
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
@@ -1113,9 +1117,9 @@ test "a pass that replaces the frame's color clears the new one and samples the 
     rp.?.end.?(rp);
     svc.*.end_pass.?(svc, pass);
 
-    try testing.expect(source != abi_render.KE_GPU_INVALID_HANDLE);
+    try testing.expect(source != abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
     try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
+    try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_load_op, abi_render_gpu.c.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
 }
 
 test "a pass outside the chain clears its write and samples no color" {
@@ -1126,19 +1130,19 @@ test "a pass outside the chain clears its write and samples no color" {
     const svc = ph.h.ref.?;
 
     const writes = [_]?[*:0]const u8{"dst"};
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
     const pass = svc.*.begin_pass.?(svc, &io) orelse return error.TestUnexpectedResult;
-    try testing.expectEqual(@as(abi_render.ke_gpu_texture_view, abi_render.KE_GPU_INVALID_HANDLE), pass.*.color_source.?(pass));
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), pass.*.color_source.?(pass));
     ph.gpu.render_passes = 0;
     const rp = pass.*.begin_render.?(pass);
     rp.?.end.?(rp);
     svc.*.end_pass.?(svc, pass);
 
     try testing.expectEqual(@as(u32, 1), ph.gpu.render_passes);
-    try testing.expectEqual(@as(abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
-    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, null), ph.gpu.depth_load);
+    try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_load_op, abi_render_gpu.c.KE_GPU_LOAD_OP_CLEAR), ph.gpu.color_load);
+    try testing.expectEqual(@as(?abi_render_gpu.c.ke_gpu_load_op, null), ph.gpu.depth_load);
 }
 
 test "a pass asking for the frame's depth has it attached loaded" {
@@ -1148,13 +1152,13 @@ test "a pass asking for the frame's depth has it attached loaded" {
     try ph.begin();
 
     const writes = [_]?[*:0]const u8{"dst"};
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
-    io.depth = abi_render.KE_RENDER_DEPTH_TEST;
+    io.depth = abi_render.c.KE_RENDER_DEPTH_TEST;
     try ph.run(&io);
 
-    try testing.expectEqual(@as(?abi_render.ke_gpu_load_op, abi_render.KE_GPU_LOAD_OP_LOAD), ph.gpu.depth_load);
+    try testing.expectEqual(@as(?abi_render_gpu.c.ke_gpu_load_op, abi_render_gpu.c.KE_GPU_LOAD_OP_LOAD), ph.gpu.depth_load);
 }
 
 test "the chain runs by stage, and within a stage in the order the passes joined" {
@@ -1162,15 +1166,15 @@ test "the chain runs by stage, and within a stage in the order the passes joined
     try ph.init();
     defer ph.deinit();
     const svc = ph.h.ref.?;
-    const overlay = chainLink(svc, abi_render.KE_RENDER_STAGE_OVERLAY, abi_render.KE_RENDER_CHAIN_DRAW_OVER);
-    const sky = chainLink(svc, abi_render.KE_RENDER_STAGE_SKY, abi_render.KE_RENDER_CHAIN_DRAW_OVER);
-    const opaque_first = chainLink(svc, abi_render.KE_RENDER_STAGE_OPAQUE, abi_render.KE_RENDER_CHAIN_DRAW_OVER);
-    const opaque_second = chainLink(svc, abi_render.KE_RENDER_STAGE_OPAQUE, abi_render.KE_RENDER_CHAIN_DRAW_OVER);
+    const overlay = chainLink(svc, abi_render.c.KE_RENDER_STAGE_OVERLAY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER);
+    const sky = chainLink(svc, abi_render.c.KE_RENDER_STAGE_SKY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER);
+    const opaque_first = chainLink(svc, abi_render.c.KE_RENDER_STAGE_OPAQUE, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER);
+    const opaque_second = chainLink(svc, abi_render.c.KE_RENDER_STAGE_OPAQUE, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER);
     try ph.begin();
 
-    var order: [4]abi_render.ke_render_chain_link = undefined;
+    var order: [4]abi_asset_resolver.c.ke_render_chain_link = undefined;
     for (coreOf(svc).chain.links.items, &order) |l, *o| o.* = l.id;
-    try testing.expectEqualSlices(abi_render.ke_render_chain_link, &.{ opaque_first, opaque_second, sky, overlay }, &order);
+    try testing.expectEqualSlices(abi_asset_resolver.c.ke_render_chain_link, &.{ opaque_first, opaque_second, sky, overlay }, &order);
 }
 
 test "a link whose pass recorded nothing still carries the color through it" {
@@ -1183,7 +1187,7 @@ test "a link whose pass recorded nothing still carries the color through it" {
     try R.check(svc.*.end_frame.?(svc));
     const without = ph.gpu.render_passes;
 
-    _ = try joined(&ph, abi_render.KE_RENDER_STAGE_HDR_POST, abi_render.KE_RENDER_CHAIN_REPLACE);
+    _ = try joined(&ph, abi_render.c.KE_RENDER_STAGE_HDR_POST, abi_render.c.KE_RENDER_CHAIN_REPLACE);
     ph.gpu.render_passes = 0;
     try ph.begin();
     try R.check(svc.*.end_frame.?(svc));
@@ -1197,9 +1201,9 @@ test "joining the chain refuses a stage out of range" {
     defer ph.deinit();
     try ph.begin();
     const svc = ph.h.ref.?;
-    var link: abi_render.ke_render_chain_link = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(svc.*.join_chain.?(svc, abi_render.KE_RENDER_STAGE_COUNT, abi_render.KE_RENDER_CHAIN_DRAW_OVER, &link)));
-    try testing.expectEqual(abi_render.KE_RENDER_CHAIN_NONE, link);
+    var link: abi_asset_resolver.c.ke_render_chain_link = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(svc.*.join_chain.?(svc, abi_render.c.KE_RENDER_STAGE_COUNT, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &link)));
+    try testing.expectEqual(abi_render.c.KE_RENDER_CHAIN_NONE, link);
 }
 
 test "declaring a name again with the same description answers the same resource, and another description is refused" {
@@ -1208,15 +1212,15 @@ test "declaring a name again with the same description answers the same resource
     defer ph.deinit();
     const svc = ph.h.ref.?;
 
-    var desc = std.mem.zeroes(abi_render.ke_render_resource_params);
+    var desc = std.mem.zeroes(abi_render.c.ke_render_resource_params);
     desc.name = "src";
-    desc.format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-    desc.size_mode = abi_render.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
+    desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+    desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
     try testing.expectEqual(svc.*.cid.?(svc, "src"), declared(svc, &desc));
-    desc.format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
-    try testing.expectEqual(@as(abi_ecs.ke_component_id, abi_ecs.KE_COMPONENT_INVALID), declared(svc, &desc));
+    desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_component_id, abi_ecs.c.KE_COMPONENT_INVALID), declared(svc, &desc));
 }
 
 test "a compute pass replays at the end of the frame under its name and with the debug groups recorded into it" {
@@ -1232,7 +1236,7 @@ test "a compute pass replays at the end of the frame under its name and with the
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
-    var io = std.mem.zeroes(abi_render.ke_render_pass_io);
+    var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.name = "render.cull";
 
     try R.check(svc.*.begin_frame.?(svc));
@@ -1269,8 +1273,8 @@ const stress_threads = 8;
 const stress_rounds = 4;
 
 const Stress = struct {
-    svc: *abi_render.ke_render_service,
-    params: *[stress_keys]abi_render.ke_gpu_render_pipeline_params,
+    svc: *abi_render.c.ke_render_service,
+    params: *[stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_params,
 
     fn run(self: *const Stress) void {
         for (0..stress_rounds) |_| {
@@ -1291,9 +1295,9 @@ test "pipelines requested from several threads at once settle on one answer per 
     const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
-    var params: [stress_keys]abi_render.ke_gpu_render_pipeline_params = undefined;
+    var params: [stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined;
     for (&params, 0..) |*p, i| {
-        p.* = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
+        p.* = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
         p.vertex_module = i + 1;
         p.fragment_module = i + 1000;
         p.color_target_count = 1;
@@ -1306,7 +1310,7 @@ test "pipelines requested from several threads at once settle on one answer per 
 
     for (&params) |*p| {
         const first = pipeline_cache.getOrCreatePipeline(h.ref, p);
-        try testing.expect(first != abi_render.KE_GPU_INVALID_HANDLE);
+        try testing.expect(first != abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
         try testing.expectEqual(first, pipeline_cache.getOrCreatePipeline(h.ref, p));
     }
 
@@ -1327,14 +1331,14 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
-    var p = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
+    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
     p.vertex_module = 5;
     p.fragment_module = 6;
     p.color_target_count = 1;
 
     const fallback = pipeline_cache.getOrCreatePipeline(h.ref, &p);
     const compiled = pipeline_cache.getOrCreatePipeline(h.ref, &p);
-    try testing.expect(fallback != abi_render.KE_GPU_INVALID_HANDLE);
+    try testing.expect(fallback != abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
     try testing.expect(compiled != fallback);
     try testing.expectEqual(compiled, pipeline_cache.getOrCreatePipeline(h.ref, &p));
 
@@ -1355,11 +1359,11 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     const h = serviceOf(.{ .device = gpu.dev.api(), .target = target.api(), .ecs = gpu.ecs.api(), .shader_dir = sd.path(), .io = sd.api(), .binder = gpu.binder.api(), .color_format = 0, .depth_format = 0 });
     try testing.expect(h.ref != null);
 
-    const attrs = [_]abi_render.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};
-    var first_layout = [_]abi_render.ke_gpu_vertex_buffer_layout{.{ .stride = 12, .step_mode = 0, .attribute_count = 1, .attributes = &attrs }};
+    const attrs = [_]abi_render_gpu.c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};
+    var first_layout = [_]abi_render_gpu.c.ke_gpu_vertex_buffer_layout{.{ .stride = 12, .step_mode = 0, .attribute_count = 1, .attributes = &attrs }};
     var copy_layout = first_layout;
 
-    var p = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
+    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
     p.vertex_module = 5;
     p.fragment_module = 6;
     p.color_target_count = 1;

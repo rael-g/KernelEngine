@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_audio_miniaudio",
         .root = "src/miniaudio_audio.zig",
-        .abi = &.{ "abi_audio", "abi_io", "abi_resource_cache", "abi_resource_cache_default_factory", "abi_result" },
+        .abi = &.{ "abi_resource_cache", "abi_audio", "abi_io", "abi_resource_cache_default_factory", "abi_result" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},

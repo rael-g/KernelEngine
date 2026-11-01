@@ -5,9 +5,9 @@ const resource_cache = @import("resource_cache");
 const result = @import("result");
 
 /// Creates a resource cache.
-pub extern fn ke_resource_cache_create(params: ?*const resource_cache.ke_resource_cache_params, out_cache: ?*resource_cache.ke_resource_cache_handle) result.ke_result;
+pub extern fn ke_resource_cache_create(params: ?*const resource_cache.c.ke_resource_cache_params, out_cache: ?*resource_cache.c.ke_resource_cache_handle) result.c.ke_result;
 
 /// Sends every line ke_resource_cache_default logs to callback, with ctx; a NULL callback sends
 /// them back to stderr, where they go until this is called. Called once, before the library
 /// logs.
-pub extern fn ke_resource_cache_default_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_resource_cache_default_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

@@ -1,6 +1,7 @@
 //! The context a system body receives and the queue of structural changes it records, applied
 //! after its wave returns.
 
+const abi_asset_resolver = @import("abi_asset_resolver");
 const std = @import("std");
 
 const abi_ecs = @import("abi_ecs");
@@ -29,11 +30,11 @@ pub const DeferKind = enum(c_int) {
 /// queue's arena for attach and callback, and `fn_` is set only for callback.
 pub const DeferCommand = struct {
     kind: DeferKind,
-    entity: abi_ecs.ke_entity,
-    cid: abi_ecs.ke_component_id,
+    entity: abi_asset_resolver.c.ke_entity,
+    cid: abi_asset_resolver.c.ke_component_id,
     attach_offset: usize,
     attach_size: usize,
-    fn_: abi_ecs.ke_defer_fn,
+    fn_: abi_ecs.c.ke_defer_fn,
 };
 
 /// The structural changes one package records during its body. A body never changes the world
@@ -56,31 +57,31 @@ pub const DeferQueue = struct {
 /// it. `runtimeRunPhase` sets it for each package: `defer_q` is null in the render phase, where no
 /// body may record a change, and the segment arrays point at what the wave resolved for the system.
 pub const CtxState = struct {
-    ecs: ?*abi_ecs.ke_ecs,
-    access_list: ?[*]const abi_runtime.ke_component_access,
+    ecs: ?*abi_ecs.c.ke_ecs,
+    access_list: ?[*]const abi_runtime.c.ke_component_access,
     access_count: u32,
     system_name: [*c]const u8,
     defer_q: ?*DeferQueue,
-    seg_ptrs: ?[*]const ?[*]const abi_ecs.ke_ecs_segment,
+    seg_ptrs: ?[*]const ?[*]const abi_ecs.c.ke_ecs_segment,
     seg_counts: ?[*]const usize,
     view_query_count: u32,
     slice_index: u32,
     slice_count: u32,
 };
 
-pub fn ctxOf(ptr: ?*abi_runtime.ke_system_ctx) ?*CtxState {
+pub fn ctxOf(ptr: ?*abi_runtime.c.ke_system_ctx) ?*CtxState {
     const ctx = ptr orelse return null;
     return @ptrCast(@alignCast(ctx.handle));
 }
 
-pub fn commandsOf(ptr: ?*abi_ecs.ke_ecs_commands) ?*CtxState {
+pub fn commandsOf(ptr: ?*abi_ecs.c.ke_ecs_commands) ?*CtxState {
     const cmds = ptr orelse return null;
     return @ptrCast(@alignCast(cmds.handle));
 }
 
 /// Binds the context and the commands of one package to its `CtxState`. The package must not move
 /// until its wave has been waited for.
-pub fn bindCtx(ctx: *abi_runtime.ke_system_ctx, commands: *abi_ecs.ke_ecs_commands, state: *CtxState) void {
+pub fn bindCtx(ctx: *abi_runtime.c.ke_system_ctx, commands: *abi_ecs.c.ke_ecs_commands, state: *CtxState) void {
     commands.* = .{
         .handle = state,
         .spawn = &commandsSpawn,
@@ -99,7 +100,7 @@ pub fn bindCtx(ctx: *abi_runtime.ke_system_ctx, commands: *abi_ecs.ke_ecs_comman
 /// wave was dispatched, or the copies made by `runtimeExtractRenderState` for a render system, and
 /// their number through the count pointer. A null context, an index past the system's queries or a
 /// system with no queries returns null and a count of zero; no error is reported.
-pub fn ctxView(ctx: ?*abi_runtime.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.ke_ecs_segment {
+pub fn ctxView(ctx: ?*abi_runtime.c.ke_system_ctx, query_index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
     if (out_count != null) out_count.* = 0;
     const s = ctxOf(ctx) orelse return null;
     if (s.seg_ptrs == null or query_index >= s.view_query_count) return null;
@@ -154,7 +155,7 @@ pub fn deferArenaPush(q: *DeferQueue, data: ?*const anyopaque, size: usize) usiz
 
 /// Slot `slice` of every system context. Reports which share of its entity set the body has, as an
 /// index and a count; a null context reports index 0 of 1.
-pub fn ctxSlice(ctx: ?*abi_runtime.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
+pub fn ctxSlice(ctx: ?*abi_runtime.c.ke_system_ctx, out_index: [*c]u32, out_count: [*c]u32) callconv(.c) void {
     const s = ctxOf(ctx);
     if (out_index != null) out_index.* = if (s) |st| st.slice_index else 0;
     if (out_count != null) out_count.* = if (s) |st| st.slice_count else 1;
@@ -163,7 +164,7 @@ pub fn ctxSlice(ctx: ?*abi_runtime.ke_system_ctx, out_index: [*c]u32, out_count:
 /// Finds the queue a recording call writes to. It fails with invalid argument for a null or
 /// unbound commands table, and with not supported when the package has no queue, which is the
 /// case in the render phase.
-pub fn recordTarget(self: ?*abi_ecs.ke_ecs_commands) R.Error!*DeferQueue {
+pub fn recordTarget(self: ?*abi_ecs.c.ke_ecs_commands) R.Error!*DeferQueue {
     const s = commandsOf(self) orelse return error.InvalidArgument;
     return s.defer_q orelse error.NotSupported;
 }
@@ -178,7 +179,7 @@ pub fn recordCommand(q: *DeferQueue) R.Error!*DeferCommand {
 }
 
 /// The code a recording slot hands back for `err`, after logging it under the slot's name.
-fn refused(comptime slot: []const u8, err: R.Error) abi_result.ke_result {
+fn refused(comptime slot: []const u8, err: R.Error) abi_result.c.ke_result {
     log.warn("recording " ++ slot ++ " failed: {t}", .{err});
     return R.code(err);
 }
@@ -188,17 +189,17 @@ fn refused(comptime slot: []const u8, err: R.Error) abi_result.ke_result {
 /// with invalid argument for an unbound table, not supported in the render phase, not initialized
 /// without a world, and out of memory when the id pool is spent or the queue cannot grow; each
 /// leaves the invalid entity.
-pub fn commandsSpawn(self: ?*abi_ecs.ke_ecs_commands, out_entity: ?*abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
+pub fn commandsSpawn(self: ?*abi_ecs.c.ke_ecs_commands, out_entity: ?*abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const out = out_entity orelse return R.code(error.InvalidArgument);
-    out.* = abi_ecs.KE_ENTITY_INVALID;
+    out.* = abi_ecs.c.KE_ENTITY_INVALID;
     out.* = spawn(self) catch |err| return refused("a spawn", err);
     return R.ok;
 }
 
-fn spawn(self: ?*abi_ecs.ke_ecs_commands) R.Error!abi_ecs.ke_entity {
+fn spawn(self: ?*abi_ecs.c.ke_ecs_commands) R.Error!abi_asset_resolver.c.ke_entity {
     const q = try recordTarget(self);
     const ecs = commandsOf(self).?.ecs orelse return error.NotInitialized;
-    var entity: abi_ecs.ke_entity = abi_ecs.KE_ENTITY_INVALID;
+    var entity: abi_asset_resolver.c.ke_entity = abi_ecs.c.KE_ENTITY_INVALID;
     try R.check(ecs.entity_reserve.?(ecs, &entity));
     const cmd = try recordCommand(q);
     cmd.kind = .spawn;
@@ -212,12 +213,12 @@ fn spawn(self: ?*abi_ecs.ke_ecs_commands) R.Error!abi_ecs.ke_entity {
 /// for an unbound table or a size that differs from the component's, not supported in the render
 /// phase, not initialized without a world, and out of memory when the queue or its arena cannot
 /// grow.
-pub fn commandsAttach(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) abi_result.ke_result {
+pub fn commandsAttach(self: ?*abi_ecs.c.ke_ecs_commands, entity: abi_asset_resolver.c.ke_entity, cid: abi_asset_resolver.c.ke_component_id, data: ?*const anyopaque, size: usize) callconv(.c) abi_result.c.ke_result {
     attach(self, entity, cid, data, size) catch |err| return refused("an attach", err);
     return R.ok;
 }
 
-fn attach(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_component_id, data: ?*const anyopaque, size: usize) R.Error!void {
+fn attach(self: ?*abi_ecs.c.ke_ecs_commands, entity: abi_asset_resolver.c.ke_entity, cid: abi_asset_resolver.c.ke_component_id, data: ?*const anyopaque, size: usize) R.Error!void {
     const q = try recordTarget(self);
     if (size != 0) {
         const ecs = commandsOf(self).?.ecs orelse return error.NotInitialized;
@@ -236,7 +237,7 @@ fn attach(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity, cid: abi_e
 /// Slot `detach` of the commands of a body. Records the removal for `deferFlush`. Fails with
 /// invalid argument for an unbound table, not supported in the render phase, and out of memory when
 /// the queue cannot grow.
-pub fn commandsDetach(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity, cid: abi_ecs.ke_component_id) callconv(.c) abi_result.ke_result {
+pub fn commandsDetach(self: ?*abi_ecs.c.ke_ecs_commands, entity: abi_asset_resolver.c.ke_entity, cid: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const q = recordTarget(self) catch |err| return refused("a detach", err);
     const cmd = recordCommand(q) catch |err| return refused("a detach", err);
     cmd.kind = .detach;
@@ -247,7 +248,7 @@ pub fn commandsDetach(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity
 
 /// Slot `despawn` of the commands of a body. Records the destruction for `deferFlush`. Fails in
 /// the same ways as `commandsDetach`.
-pub fn commandsDespawn(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entity) callconv(.c) abi_result.ke_result {
+pub fn commandsDespawn(self: ?*abi_ecs.c.ke_ecs_commands, entity: abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const q = recordTarget(self) catch |err| return refused("a despawn", err);
     const cmd = recordCommand(q) catch |err| return refused("a despawn", err);
     cmd.kind = .despawn;
@@ -259,12 +260,12 @@ pub fn commandsDespawn(self: ?*abi_ecs.ke_ecs_commands, entity: abi_ecs.ke_entit
 /// and a pointer to a copy of the user bytes taken here, so the caller's bytes need not outlive
 /// the call. Fails with invalid argument for an unbound table or a null function, not supported in
 /// the render phase, and out of memory when the queue or its arena cannot grow.
-pub fn commandsDefer(self: ?*abi_ecs.ke_ecs_commands, func: abi_ecs.ke_defer_fn, user: ?*const anyopaque, user_size: usize) callconv(.c) abi_result.ke_result {
+pub fn commandsDefer(self: ?*abi_ecs.c.ke_ecs_commands, func: abi_ecs.c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) callconv(.c) abi_result.c.ke_result {
     deferCall(self, func, user, user_size) catch |err| return refused("a deferred call", err);
     return R.ok;
 }
 
-fn deferCall(self: ?*abi_ecs.ke_ecs_commands, func: abi_ecs.ke_defer_fn, user: ?*const anyopaque, user_size: usize) R.Error!void {
+fn deferCall(self: ?*abi_ecs.c.ke_ecs_commands, func: abi_ecs.c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) R.Error!void {
     const q = try recordTarget(self);
     if (func == null) return error.InvalidArgument;
     const offset = deferArenaPush(q, user, user_size);
@@ -283,7 +284,7 @@ pub var s_defer_applied_total: u32 = 0;
 /// every task of the wave has returned; the caller frees the queue's buffers afterwards. The first
 /// command the ecs refuses stops the flush, the commands after it are dropped with the rest of the
 /// queue, and its failure is returned.
-pub fn deferFlush(q: *DeferQueue, ecs: *abi_ecs.ke_ecs) R.Error!void {
+pub fn deferFlush(q: *DeferQueue, ecs: *abi_ecs.c.ke_ecs) R.Error!void {
     defer {
         q.count = 0;
         q.arena_used = 0;

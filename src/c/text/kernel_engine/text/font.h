@@ -62,6 +62,7 @@ extern "C"
 
     } ke_font_loader;
 
+    /// [owner]
     typedef struct ke_font_loader_handle
     {
         ke_font_loader *ref;

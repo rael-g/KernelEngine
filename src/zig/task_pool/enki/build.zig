@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_task_pool_enki",
         .root = "src/enki_task_pool.zig",
-        .abi = &.{ "abi_result", "abi_task_pool", "abi_task_pool_enki_factory" },
+        .abi = &.{ "abi_asset_loader", "abi_result", "abi_task_pool", "abi_task_pool_enki_factory" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = thirdParty,

@@ -5,9 +5,10 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using KernelEngine.Audio.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Audio.Native;
 
 namespace KernelEngine.Audio;
 
@@ -53,7 +54,10 @@ public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
     /// <exception cref="Exception">The native call failed.</exception>
     public uint LoadSound(string path)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             uint resultOut = default;

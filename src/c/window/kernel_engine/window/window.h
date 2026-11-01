@@ -43,6 +43,7 @@ extern "C"
         void *(*get_native_handle)(struct ke_window *self);
     } ke_window;
 
+    /// [owner]
     typedef struct ke_window_handle
     {
         ke_window *ref;

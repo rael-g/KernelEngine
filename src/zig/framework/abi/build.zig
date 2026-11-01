@@ -5,7 +5,14 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("framework_factory.zig") });
-    abi.addImport("asset", b.dependency("ke_abi_asset", .{}).module("abi"));
+    abi.addImport("world", b.dependency("abi_world", .{}).module("abi"));
+    abi.addImport("signal_bus", b.dependency("abi_signal_bus", .{}).module("abi"));
+    abi.addImport("script_host", b.dependency("abi_script_host", .{}).module("abi"));
+    abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
+    abi.addImport("scene_loader", b.dependency("abi_scene_loader", .{}).module("abi"));
+    abi.addImport("input_actions", b.dependency("abi_input_actions", .{}).module("abi"));
+    abi.addImport("image_loader", b.dependency("abi_image_loader", .{}).module("abi"));
+    abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("ke_abi_framework", .{}).module("abi"));
     abi.addImport("io", b.dependency("ke_abi_io", .{}).module("abi"));

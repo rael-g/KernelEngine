@@ -8,7 +8,7 @@ var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 
 var generator = Path.Combine(rootDir, "src", "csharp", "generators", "KernelEngine.SourceGenerators");
 var framework = Path.Combine(rootDir, "src", "csharp", "framework");
-var kabic     = Path.Combine(rootDir, "src", "csharp", "kabic");
+var kabic     = Path.Combine(rootDir, "..", "kabic", "src");
 
 static IEnumerable<string> SourcesUnder(string dir) =>
     Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories)

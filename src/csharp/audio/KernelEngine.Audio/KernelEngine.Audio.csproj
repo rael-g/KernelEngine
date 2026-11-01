@@ -24,4 +24,7 @@
 
   <Import Project="../../NativeDependencies.targets" />
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
 </Project>

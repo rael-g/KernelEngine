@@ -1,6 +1,8 @@
 //! The window render target of the webgpu plugin: a `ke_gpu_render_target` whose frames are the
 //! images of a window's surface.
 
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const builtin = @import("builtin");
 const dev_impl = @import("gpu_device_webgpu.zig");
@@ -20,12 +22,12 @@ const log = std.log.scoped(.gpu_webgpu);
 /// first configured, and afterwards hold the size it was last configured to. `display` is non-null
 /// only on Linux, where it is the display the surface was made on.
 const WindowTarget = struct {
-    vtable: abi_render.ke_gpu_render_target,
+    vtable: abi_render_gpu.c.ke_gpu_render_target,
     device: *dev_impl.DeviceState,
-    window: *abi_window.ke_window,
+    window: *abi_window.c.ke_window,
     surface: wgpu.WGPUSurface,
     display: ?*anyopaque,
-    format: abi_render.ke_gpu_texture_format,
+    format: abi_render_gpu.c.ke_gpu_texture_format,
     wgpu_format: wgpu.WGPUTextureFormat,
     width: u32,
     height: u32,
@@ -49,7 +51,7 @@ fn closeDisplay(display: ?*anyopaque) void {
 /// the surface, or the operating system is none of Windows, Linux or macOS, and the caller reports
 /// it. On Linux a display opened here is closed when the surface cannot be made, and otherwise
 /// travels in the returned `Surface` for the caller to close.
-fn createSurface(instance: wgpu.WGPUInstance, window: *abi_window.ke_window) ?Surface {
+fn createSurface(instance: wgpu.WGPUInstance, window: *abi_window.c.ke_window) ?Surface {
     const native = window.get_native_handle.?(window) orelse return null;
     switch (builtin.os.tag) {
         .windows => {
@@ -90,12 +92,12 @@ fn createSurface(instance: wgpu.WGPUInstance, window: *abi_window.ke_window) ?Su
     }
 }
 
-fn of(self: [*c]abi_render.ke_gpu_render_target) *WindowTarget {
+fn of(self: [*c]abi_render_gpu.c.ke_gpu_render_target) *WindowTarget {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
 /// Logs `msg` and returns the code of `err`.
-fn fail(err: R.Error, comptime msg: []const u8) abi_result.ke_result {
+fn fail(err: R.Error, comptime msg: []const u8) abi_result.c.ke_result {
     log.warn(msg, .{});
     return R.code(err);
 }
@@ -144,9 +146,9 @@ fn releaseFrame(t: *WindowTarget) void {
 /// lost texture is not a failure either: the surface is configured again and the invalid handle is
 /// written. A failure after the surface produced a texture releases that texture and leaves no
 /// frame held.
-fn acquire(self: [*c]abi_render.ke_gpu_render_target, out_view: ?*abi_render.ke_gpu_texture_view) callconv(.c) abi_result.ke_result {
+fn acquire(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_view: ?*abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const out = out_view orelse return R.code(error.InvalidArgument);
-    out.* = abi_render.KE_GPU_INVALID_HANDLE;
+    out.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const t = of(self);
     if (t.view != null) return fail(error.InvalidArgument, "window target: a frame is already acquired");
     const area = windowSize(t);
@@ -184,7 +186,7 @@ fn acquire(self: [*c]abi_render.ke_gpu_render_target, out_view: ?*abi_render.ke_
 
 /// Presents the held frame and releases it. The result of the surface's present is discarded, so a
 /// failed present is not reported, and the frame is released either way.
-fn present(self: [*c]abi_render.ke_gpu_render_target) callconv(.c) abi_result.ke_result {
+fn present(self: [*c]abi_render_gpu.c.ke_gpu_render_target) callconv(.c) abi_result.c.ke_result {
     const t = of(self);
     if (t.view == null) return fail(error.InvalidArgument, "window target: no frame is acquired");
     _ = wgpu.wgpuSurfacePresent(t.surface);
@@ -194,21 +196,21 @@ fn present(self: [*c]abi_render.ke_gpu_render_target) callconv(.c) abi_result.ke
 
 /// Reports the cached `width` and `height` without asking the window. Those fields change only in
 /// `configure`.
-fn size(self: [*c]abi_render.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+fn size(self: [*c]abi_render_gpu.c.ke_gpu_render_target, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
     const t = of(self);
     if (out_w != null) out_w.* = t.width;
     if (out_h != null) out_h.* = t.height;
 }
 
 /// Reports the format `chooseFormat` picked at creation.
-fn format(self: [*c]abi_render.ke_gpu_render_target) callconv(.c) abi_render.ke_gpu_texture_format {
+fn format(self: [*c]abi_render_gpu.c.ke_gpu_render_target) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
     return of(self).format;
 }
 
 /// The function behind the `destroy` slot of the factory's handle. It releases a held frame before
 /// the surface it was drawn from, and closes the display last, after the surface made on it is
 /// gone.
-fn destroy(self: [*c]abi_render.ke_gpu_render_target) callconv(.c) void {
+fn destroy(self: [*c]abi_render_gpu.c.ke_gpu_render_target) callconv(.c) void {
     const t = of(self);
     releaseFrame(t);
     wgpu.wgpuSurfaceUnconfigure(t.surface);
@@ -217,7 +219,7 @@ fn destroy(self: [*c]abi_render.ke_gpu_render_target) callconv(.c) void {
     gpa.destroy(t);
 }
 
-const Choice = struct { ke_format: abi_render.ke_gpu_texture_format, wgpu_format: wgpu.WGPUTextureFormat };
+const Choice = struct { ke_format: abi_render_gpu.c.ke_gpu_texture_format, wgpu_format: wgpu.WGPUTextureFormat };
 
 /// Returns the first format in the surface's listing that is BGRA8 or RGBA8, so the order the
 /// driver lists them decides between the two. Returns null when the capabilities cannot be read
@@ -229,8 +231,8 @@ fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
     var i: usize = 0;
     while (i < caps.formatCount) : (i += 1) {
         switch (caps.formats[i]) {
-            wgpu.WGPUTextureFormat_BGRA8Unorm => return .{ .ke_format = abi_render.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM, .wgpu_format = caps.formats[i] },
-            wgpu.WGPUTextureFormat_RGBA8Unorm => return .{ .ke_format = abi_render.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .wgpu_format = caps.formats[i] },
+            wgpu.WGPUTextureFormat_BGRA8Unorm => return .{ .ke_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM, .wgpu_format = caps.formats[i] },
+            wgpu.WGPUTextureFormat_RGBA8Unorm => return .{ .ke_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .wgpu_format = caps.formats[i] },
             else => {},
         }
     }
@@ -259,15 +261,15 @@ fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi
 /// its `get_default_queue` slot is the function this plugin installs.
 export fn ke_gpu_render_target_webgpu_window_create(
     params_in: ?*const abi_gpu_device_webgpu_factory.ke_gpu_render_target_webgpu_window_params,
-    out_target: ?*abi_render.ke_gpu_render_target_handle,
-) abi_result.ke_result {
+    out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle,
+) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const params = params_in orelse {
         return fail(error.InvalidArgument, "window target: params are required");
     };
-    const device: [*c]abi_render.ke_gpu_device = params.device;
-    const window: ?*abi_window.ke_window = params.window;
+    const device: [*c]abi_render_gpu.c.ke_gpu_device = params.device;
+    const window: ?*abi_window.c.ke_window = params.window;
     if (device == null or device.*.get_default_queue != dev_impl.getDefaultQueue) {
         return fail(error.InvalidArgument, "window target: the device was not created by ke_gpu_device_webgpu_create");
     }
@@ -323,14 +325,14 @@ fn destroyUnconfigured(t: *WindowTarget) void {
 }
 
 test "a window target refuses missing params, a device it did not come from and a missing window" {
-    var target: abi_render.ke_gpu_render_target_handle = undefined;
+    var target: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(null, &target));
     try std.testing.expect(target.ref == null);
 
-    var foreign = std.mem.zeroes(abi_render.ke_gpu_device);
+    var foreign = std.mem.zeroes(abi_render_gpu.c.ke_gpu_device);
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_FIFO }, &target));
 
-    var handle: abi_render.ke_gpu_device_handle = undefined;
+    var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
     if (dev_impl.ke_gpu_device_webgpu_create(null, &handle) != R.ok) return error.SkipZigTest;
     const dev = handle.ref;
     defer handle.destroy.?(dev);

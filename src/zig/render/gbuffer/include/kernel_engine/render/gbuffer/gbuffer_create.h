@@ -26,13 +26,14 @@ extern "C"
 
     typedef struct ke_render_gbuffer ke_render_gbuffer;
 
+    /// [owner]
     typedef struct ke_render_gbuffer_handle
     {
         ke_render_gbuffer *ref;
         void (*destroy)(ke_render_gbuffer *self);
     } ke_render_gbuffer_handle;
 
-    /// What the gbuffer pass writes, besides the frame's depth. The names are copied.
+    /// [bag] What the gbuffer pass writes, besides the frame's depth. The names are copied.
     typedef struct ke_render_gbuffer_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.

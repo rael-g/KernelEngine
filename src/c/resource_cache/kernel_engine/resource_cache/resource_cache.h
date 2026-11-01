@@ -18,6 +18,7 @@ extern "C"
     /// reaches zero (or once during destroy() for every still-live resource).
     typedef void (*ke_resource_destroy_func)(ke_resource_handle handle, void *ctx);
 
+    /// [bag]
     typedef struct ke_resource_cache_params
     {
         ke_resource_destroy_func  destroy_fn;    ///< invoked on refcount → 0 (and on destroy of still-live entries); may be NULL
@@ -60,6 +61,7 @@ extern "C"
 
     } ke_resource_cache;
 
+    /// [owner]
     typedef struct ke_resource_cache_handle
     {
         ke_resource_cache *ref;

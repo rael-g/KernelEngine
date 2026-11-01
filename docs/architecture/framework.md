@@ -21,7 +21,7 @@ only through its vtable.
 | scene loader | `ke_scene_loader` | `ke_scene_loader_create` | a `ke_world`, a `ke_asset_resolver`, a `ke_io` | nodes, components and connections built from a scene file |
 
 The managed side mirrors them as `World`, `SceneTree`, `ScriptHost`, `SignalBus`, `SceneLoader`,
-`NativeAssetResolver` and `NativeInputActions`, and composes them in three runtime modules:
+`AssetResolver` and `InputActions`, and composes them in three runtime modules:
 `FrameworkModule` (signal bus, world and the tree it owns), `SceneNodesModule` (script host,
 input, signal delivery, one behavior system per node type) and `SceneRouterModule` (scene
 switching). Each depends on the one before it.

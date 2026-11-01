@@ -1,6 +1,857 @@
 {
   "enums": [
     {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_index_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT16",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT32",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_INVALID",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R32_FLOAT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R16_FLOAT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D16_UNORM",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RG32_FLOAT",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R8_UNORM",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_dimension",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_DIM_1D",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_2D",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_3D",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_CUBE",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_load_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_LOAD_OP_LOAD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_CLEAR",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_DONT_CARE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_store_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STORE_OP_STORE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STORE_OP_DONT_CARE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FILTER_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FILTER_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_sampler_mipmap_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_address_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_ADDRESS_MODE_REPEAT",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_compare_function",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_COMPARE_UNDEFINED",
+          "value": 0,
+          "doc": "No comparison (default for samplers without shadow compare)"
+        },
+        {
+          "name": "KE_GPU_COMPARE_NEVER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_EQUAL",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS_EQUAL",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_NOT_EQUAL",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER_EQUAL",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_ALWAYS",
+          "value": 8,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_primitive_topology",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_cull_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_CULL_MODE_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_FRONT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_BACK",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_front_face",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FRONT_FACE_CCW",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FRONT_FACE_CW",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_factor",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ZERO",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_ALPHA",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_ALPHA",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_COLOR",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_COLOR",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_OP_ADD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_SUBTRACT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_REVERSE_SUBTRACT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MIN",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MAX",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_stencil_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STENCIL_OP_KEEP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_ZERO",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_REPLACE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INVERT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INCREMENT_CLAMP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_DECREMENT_CLAMP",
+          "value": 5,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_step_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_VERTEX",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_INSTANCE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X2",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X3",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X4",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X2",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X4",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4",
+          "value": 6,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_binding_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BINDING_TYPE_BUFFER",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_SAMPLER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_TEXTURE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_BUFFER",
+          "value": 3,
+          "doc": "read-write storage (compute only)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_TEXTURE",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER",
+          "value": 5,
+          "doc": "read-only storage (usable in fragment)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_DEPTH_TEXTURE",
+          "value": 6,
+          "doc": "depth-format texture, sampled or texel-fetched"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_shader_language",
+      "doc": "Shader source language a device accepts. Query via \u0060ke_gpu_device::shader_language\u0060.",
+      "values": [
+        {
+          "name": "KE_GPU_SHADER_LANG_WGSL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_SPIRV",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_MSL",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_DXIL",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_render_resource_type",
       "doc": null,
       "values": [
@@ -123,9 +974,563 @@
   ],
   "structs": [
     {
-      "name": "ke_render_resource_params",
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
       "doc": null,
       "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_clear_value",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "depth",
+                "type": "float",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "stencil",
+                "type": "uint8_t",
+                "tags": [],
+                "doc": null
+              }
+            ]
+          }
+        }
+      ],
+      "external": true,
+      "union": true
+    },
+    {
+      "name": "ke_gpu_capabilities",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "max_texture_dimension_2d",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_texture_array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_bind_groups",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_attributes",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_buffers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_uniform_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_storage_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_x",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_y",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_z",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_bindless",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_mesh_shaders",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_ray_tracing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "copy_bytes_per_row_alignment",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Byte multiple a texture/buffer copy\u0027s bytes_per_row must be a multiple of; 1 when the backend imposes none."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_resource_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
       "fields": [
         {
           "name": "name",
@@ -1427,7 +2832,9 @@
     {
       "name": "ke_render_service_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -1451,6 +2858,11 @@
   ],
   "functions": [],
   "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",

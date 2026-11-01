@@ -1,0 +1,11 @@
+.{
+    .name = .abi_mesh_data,
+    .version = "0.1.0",
+    .fingerprint = 0x410a397ed6c46e16,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_mesh = .{ .path = "../mesh" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

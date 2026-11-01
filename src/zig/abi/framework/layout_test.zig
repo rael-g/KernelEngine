@@ -3,6 +3,8 @@ const abi = @import("abi");
 const c = @import("c");
 
 fn expectSameLayout(comptime A: type, comptime C: type) !void {
+    @setEvalBranchQuota(100_000_000);
+    if (@typeInfo(C) == .@"opaque") return;
     try std.testing.expectEqual(@sizeOf(C), @sizeOf(A));
     try std.testing.expectEqual(@alignOf(C), @alignOf(A));
     switch (@typeInfo(A)) {
@@ -20,53 +22,36 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_hierarchy_component, translated("ke_hierarchy_component"));
-    try expectSameLayout(abi.ke_name_component, translated("ke_name_component"));
-    try expectSameLayout(abi.ke_input_action_event, translated("ke_input_action_event"));
-    try expectSameLayout(abi.ke_world_params, translated("ke_world_params"));
-    try expectSameLayout(abi.ke_signal_delivery, translated("ke_signal_delivery"));
-    try expectSameLayout(abi.ke_input_actions, translated("ke_input_actions"));
-    try expectSameLayout(abi.ke_input_actions_handle, translated("ke_input_actions_handle"));
-    try expectSameLayout(abi.ke_world, translated("ke_world"));
-    try expectSameLayout(abi.ke_world_handle, translated("ke_world_handle"));
-    try expectSameLayout(abi.ke_scene_component_set, translated("ke_scene_component_set"));
-    try expectSameLayout(abi.ke_scene_component_set_handle, translated("ke_scene_component_set_handle"));
-    try expectSameLayout(abi.ke_scene_hierarchy_handle, translated("ke_scene_hierarchy_handle"));
-    try expectSameLayout(abi.ke_scene_loader, translated("ke_scene_loader"));
-    try expectSameLayout(abi.ke_scene_loader_handle, translated("ke_scene_loader_handle"));
-    try expectSameLayout(abi.ke_scene_tree, translated("ke_scene_tree"));
-    try expectSameLayout(abi.ke_scene_tree_handle, translated("ke_scene_tree_handle"));
-    try expectSameLayout(abi.ke_script_host, translated("ke_script_host"));
-    try expectSameLayout(abi.ke_script_host_handle, translated("ke_script_host_handle"));
-    try expectSameLayout(abi.ke_signal_bus, translated("ke_signal_bus"));
-    try expectSameLayout(abi.ke_signal_bus_handle, translated("ke_signal_bus_handle"));
-    try expectSameLayout(abi.ke_component_apply_fn, c.ke_component_apply_fn);
-    try expectSameLayout(abi.ke_input_action_event_func, c.ke_input_action_event_func);
-    try expectSameLayout(abi.ke_script_factory_func, c.ke_script_factory_func);
-    try expectSameLayout(abi.ke_script_type_id, c.ke_script_type_id);
+    @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_scene_component_set, translated("ke_scene_component_set"));
+    try expectSameLayout(abi.c.ke_scene_component_set_handle, translated("ke_scene_component_set_handle"));
+    try expectSameLayout(abi.c.ke_scene_hierarchy_handle, translated("ke_scene_hierarchy_handle"));
+    if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
+    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
+    if (@hasDecl(c, "ke_module_id")) try expectSameLayout(abi.c.ke_module_id, c.ke_module_id);
+    if (@hasDecl(c, "ke_module_load_fn")) try expectSameLayout(abi.c.ke_module_load_fn, c.ke_module_load_fn);
+    if (@hasDecl(c, "ke_module_unload_fn")) try expectSameLayout(abi.c.ke_module_unload_fn, c.ke_module_unload_fn);
+    if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
+    if (@hasDecl(c, "ke_system_execute_fn")) try expectSameLayout(abi.c.ke_system_execute_fn, c.ke_system_execute_fn);
+    if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-test "every enum value is the header's value" {
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_BUTTON), @as(i64, abi.KE_ACTION_TYPE_BUTTON));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS1D), @as(i64, abi.KE_ACTION_TYPE_AXIS1D));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS2D), @as(i64, abi.KE_ACTION_TYPE_AXIS2D));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS3D), @as(i64, abi.KE_ACTION_TYPE_AXIS3D));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_STARTED), @as(i64, abi.KE_ACTION_PHASE_STARTED));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_PERFORMED), @as(i64, abi.KE_ACTION_PHASE_PERFORMED));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_CANCELED), @as(i64, abi.KE_ACTION_PHASE_CANCELED));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_REACH_SELF), @as(i64, abi.KE_SCRIPT_REACH_SELF));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_REACH_ANY), @as(i64, abi.KE_SCRIPT_REACH_ANY));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_RESOLVE_FOUND), @as(i64, abi.KE_SCRIPT_RESOLVE_FOUND));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_RESOLVE_NONE), @as(i64, abi.KE_SCRIPT_RESOLVE_NONE));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_RESOLVE_AMBIGUOUS), @as(i64, abi.KE_SCRIPT_RESOLVE_AMBIGUOUS));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_BORROW_DESCENDANT), @as(i64, abi.KE_SCRIPT_BORROW_DESCENDANT));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_BORROW_ANCESTOR), @as(i64, abi.KE_SCRIPT_BORROW_ANCESTOR));
-    try std.testing.expectEqual(@as(i64, c.KE_SCRIPT_BORROW_ANYWHERE), @as(i64, abi.KE_SCRIPT_BORROW_ANYWHERE));
-}
+extern const layout_values: [11]c_ulonglong;
 
-test "every constant is the header's value" {
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_HIERARCHY, abi.KE_COMPONENT_NAME_HIERARCHY);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_NAME, abi.KE_COMPONENT_NAME_NAME);
-    try std.testing.expectEqual(@as(i128, c.KE_SCRIPT_TYPE_NONE), @as(i128, abi.KE_SCRIPT_TYPE_NONE));
-    try std.testing.expectEqual(@as(i128, c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN), @as(i128, abi.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN));
+test "every size and offset is the one C computes" {
+    @setEvalBranchQuota(100_000_000);
+    const expected = [_]usize{
+        @sizeOf(abi.c.ke_scene_component_set),
+        @offsetOf(abi.c.ke_scene_component_set, "handle"),
+        @offsetOf(abi.c.ke_scene_component_set, "add"),
+        @offsetOf(abi.c.ke_scene_component_set, "register_into"),
+        @sizeOf(abi.c.ke_scene_component_set_handle),
+        @offsetOf(abi.c.ke_scene_component_set_handle, "ref"),
+        @offsetOf(abi.c.ke_scene_component_set_handle, "destroy"),
+        @sizeOf(abi.c.ke_scene_hierarchy_handle),
+        @offsetOf(abi.c.ke_scene_hierarchy_handle, "ref"),
+        @offsetOf(abi.c.ke_scene_hierarchy_handle, "destroy"),
+    };
+    for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

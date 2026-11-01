@@ -1,4 +1,7 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Logger;
+
 using KernelEngine.Physics.Native;
 using KernelEngine.Result.Native;
 

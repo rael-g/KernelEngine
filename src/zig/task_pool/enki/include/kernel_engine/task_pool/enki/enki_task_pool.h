@@ -20,7 +20,7 @@ extern "C" {
     #endif
 #endif
 
-/** Construction parameters for ke_task_pool_enki_create. */
+/** [bag] Construction parameters for ke_task_pool_enki_create. */
 typedef struct ke_task_pool_enki_params
 {
     /// Worker threads besides the calling thread. 0 takes one per hardware thread

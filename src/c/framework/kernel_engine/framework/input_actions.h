@@ -102,6 +102,7 @@ extern "C"
 
     } ke_input_actions;
 
+    /// [owner]
     typedef struct ke_input_actions_handle
     {
         ke_input_actions *ref;

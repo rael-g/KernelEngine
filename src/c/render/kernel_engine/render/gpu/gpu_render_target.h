@@ -32,6 +32,7 @@ typedef struct ke_gpu_render_target
     ke_gpu_texture_format (*format)(struct ke_gpu_render_target *self);
 } ke_gpu_render_target;
 
+/// [owner]
 typedef struct ke_gpu_render_target_handle
 {
     ke_gpu_render_target *ref;

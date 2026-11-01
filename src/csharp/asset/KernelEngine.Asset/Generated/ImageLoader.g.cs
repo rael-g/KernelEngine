@@ -5,9 +5,11 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using KernelEngine.Asset.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Asset.Native;
+using KernelEngine.Render;
 
 namespace KernelEngine.Asset;
 
@@ -44,7 +46,7 @@ public unsafe sealed class Image : IDisposable
         if (_native is null) return;
         var native = _native;
         _native = null;
-        _owner.FreeImage(native);
+        _owner.FreeImage((nint)native);
     }
 }
 
@@ -84,7 +86,10 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader, IImag
     /// <exception cref="Exception">The native call failed.</exception>
     public Image LoadImage(string path)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             ke_texture_data* resultOut = default;
@@ -94,7 +99,7 @@ public unsafe partial class ImageLoader : IDisposable, INativeImageLoader, IImag
     }
 
     /// <summary>Frees a ke_texture_data previously returned by load_image. A null data is ignored.</summary>
-    internal void FreeImage(TextureData* data)
+    internal void FreeImage(nint data)
     {
         Handle->free_image(Handle, (ke_texture_data*)data);
     }

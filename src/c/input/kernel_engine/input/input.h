@@ -128,6 +128,7 @@ extern "C"
 
     } ke_input;
 
+    /// [owner]
     typedef struct ke_input_handle
     {
         ke_input *ref;

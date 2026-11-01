@@ -148,7 +148,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine(HasDefault(slot.Symbol)
                 ? $"    private {slot.TypeName} {slot.State} = {slot.TypeName}.Default;"
                 : $"    private {slot.TypeName} {slot.State};");
-            sb.AppendLine($"    private uint {slot.Cid};");
+            sb.AppendLine($"    private global::KernelEngine.Ecs.ComponentId {slot.Cid};");
         }
         sb.AppendLine();
 
@@ -384,7 +384,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("    /// that borrows this type calls it when it binds, before its behavior declares the component.</summary>");
             sb.AppendLine("    public static void GeneratedRegisterComponent(global::KernelEngine.Framework.ScriptHost scriptHost) =>");
             sb.AppendLine($"        scriptHost.RegisterComponent<{slots[0].TypeName}>({slots[0].NameExpression});");
-            EmitSceneApply(sb, slots[0], properties);
+            EmitSceneApply(sb, slots[0]);
         }
 
         EmitSignalDispatch(sb, classSymbol, overrideModifier);
@@ -403,11 +403,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     {
         const string ns = "global::KernelEngine.Ecs";
         sb.AppendLine();
-        sb.AppendLine($"        private static readonly {ns}.ComponentField[] s_fields = DescribeFields();");
+        sb.AppendLine($"        private static readonly {ns}.ComponentFieldLayout[] s_fields = DescribeFields();");
         sb.AppendLine();
-        sb.AppendLine($"        public static global::System.ReadOnlySpan<{ns}.ComponentField> Fields => s_fields;");
+        sb.AppendLine($"        public static global::System.ReadOnlySpan<{ns}.ComponentFieldLayout> Fields => s_fields;");
         sb.AppendLine();
-        sb.AppendLine($"        private static {ns}.ComponentField[] DescribeFields()");
+        sb.AppendLine($"        private static {ns}.ComponentFieldLayout[] DescribeFields()");
         sb.AppendLine("        {");
         sb.AppendLine($"            var v = default({typeName});");
         sb.AppendLine("            return");
@@ -475,60 +475,17 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     /// <summary>
     /// Emits the static <c>RegisterSceneApply</c> of a game node: it registers the component under
     /// the node type's qualified name, the type's short name as an alias a scene may write while
-    /// no other component answers to it, and an apply callback that reads each property of a
-    /// supported type from the block by its snake case key. A property of any other type has no scene key.
+    /// no other component answers to it, with no apply callback.
     /// </summary>
-    static void EmitSceneApply(StringBuilder sb, Slot slot, ImmutableArray<IPropertySymbol> properties)
+    static void EmitSceneApply(StringBuilder sb, Slot slot)
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>Registers this node's component and the scene-file apply for it.</summary>");
         sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.World world,"
-            + " global::KernelEngine.Ecs.IEcsRegistry ecs)");
+            + " global::KernelEngine.Ecs.EcsRegistry ecs)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        var cid = ecs.RegisterComponent<{slot.TypeName}>({slot.NameExpression});");
+        sb.AppendLine($"        _ = ecs.RegisterComponent<{slot.TypeName}>({slot.NameExpression});");
         sb.AppendLine("        world.RegisterComponentAlias(GeneratedComponentAlias, GeneratedComponentName);");
-        sb.AppendLine($"        world.RegisterComponentApply(cid, static (ref {slot.TypeName} comp,"
-            + " in global::KernelEngine.Ecs.VariantReader reader) =>");
-        sb.AppendLine("        {");
-        foreach (var p in properties)
-        {
-            var key = SnakeCase(p.Name);
-            var t = p.Type;
-            if (t.TypeKind == TypeKind.Enum)
-            {
-                sb.AppendLine($"            if (reader.TryGetString(\"{key}\", out var s_{key}) && global::System.Enum.TryParse<{t.ToDisplayString()}>(s_{key}, true, out var e_{key}))");
-                sb.AppendLine($"                comp.{p.Name} = e_{key};");
-                continue;
-            }
-            if (t.SpecialType == SpecialType.System_String)
-            {
-                sb.AppendLine($"            if (reader.TryGetString(\"{key}\", out var v_{key}))");
-                sb.AppendLine($"                GeneratedUtf8Set(ref comp.{p.Name}, v_{key} ?? string.Empty, \"{p.Name}\");");
-                continue;
-            }
-
-            var read = t.ToDisplayString() switch
-            {
-                "float" or "double" => $"reader.TryGetFloat(\"{key}\", out var v_{key})",
-                "bool" => $"reader.TryGetBool(\"{key}\", out var v_{key})",
-                "int" or "uint" or "long" or "short" or "byte" => $"reader.TryGetInt(\"{key}\", out var v_{key})",
-                "System.Numerics.Vector2" => $"reader.TryGetVec2(\"{key}\", out var v_{key})",
-                "System.Numerics.Vector3" => $"reader.TryGetVec3(\"{key}\", out var v_{key})",
-                "System.Numerics.Vector4" => $"reader.TryGetVec4(\"{key}\", out var v_{key})",
-                "System.Numerics.Quaternion" => $"reader.TryGetQuat(\"{key}\", out var v_{key})",
-                _ => null,
-            };
-            if (read is null) continue;
-            var cast = t.ToDisplayString() switch
-            {
-                "double" => $"(double)v_{key}",
-                "int" or "uint" or "long" or "short" or "byte" => $"({t.ToDisplayString()})v_{key}",
-                "string" => $"v_{key} ?? string.Empty",
-                _ => $"v_{key}",
-            };
-            sb.AppendLine($"            if ({read}) comp.{p.Name} = {cast};");
-        }
-        sb.AppendLine("        });");
         sb.AppendLine("    }");
     }
 
@@ -601,6 +558,13 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     {
         if (propertyType.SpecialType == SpecialType.System_Boolean && fieldType.SpecialType == SpecialType.System_Byte)
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
+        var property = propertyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var field = fieldType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        if (propertyType.TypeKind == TypeKind.Enum && fieldType.TypeKind == TypeKind.Enum)
+            return (expr => $"({property}){expr}", expr => $"({field}){expr}");
+        if (fieldType.Name.EndsWith("_e__FixedBuffer", System.StringComparison.Ordinal))
+            return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{field}, {property}>({expr})",
+                expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{property}, {field}>({expr})");
         return null;
     }
 
@@ -695,7 +659,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             var nodeName = nameAttr is not null ? (string)nameAttr.ConstructorArguments[0].Value! : "";
             var reach = ReachOf((INamedTypeSymbol)pp.Type)!;
             args.Add($"new global::KernelEngine.Framework.{kind}<{arg}>("
-                + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.ScriptBorrow.{reach}))");
+                + $"Borrow<{arg}>(\"{nodeName}\", global::KernelEngine.Framework.Native.ScriptBorrow.{reach}))");
         }
         sb.AppendLine($"        {hook.Method}({string.Join(", ", args)});");
         sb.AppendLine("    }");

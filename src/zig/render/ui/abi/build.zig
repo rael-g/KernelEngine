@@ -5,6 +5,10 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_ui_factory.zig") });
+    abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
+    abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
+    abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
+    abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("ke_abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("ke_abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("ke_abi_render", .{}).module("abi"));

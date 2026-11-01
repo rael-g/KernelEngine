@@ -9,25 +9,24 @@ public unsafe class InputDrainTests
 {
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static uint MockDrainEvents(ke_input* self, ke_input_event* buffer, uint capacity)
+    private static uint MockDrainEvents(ke_input* self, InputEvent* buffer, uint capacity)
     {
         if (capacity < 5) return 0;
 
-        buffer[0].kind = ke_input_event_kind.KE_INPUT_EVENT_KEY_DOWN;
-        buffer[0].code = (int)Key.W;
+        buffer[0].Kind = InputEventKind.KeyDown;
+        buffer[0].Key = Key.W;
 
-        buffer[1].kind = ke_input_event_kind.KE_INPUT_EVENT_MOUSE_SCROLL;
-        buffer[1].x = 1.5f;
-        buffer[1].y = -2.5f;
+        buffer[1].Kind = InputEventKind.MouseScroll;
+        buffer[1].Scroll = new System.Numerics.Vector2(1.5f, -2.5f);
 
-        buffer[2].kind = ke_input_event_kind.KE_INPUT_EVENT_KEY_UP;
-        buffer[2].code = (int)Key.Escape;
+        buffer[2].Kind = InputEventKind.KeyUp;
+        buffer[2].Key = Key.Escape;
 
-        buffer[3].kind = ke_input_event_kind.KE_INPUT_EVENT_MOUSE_BUTTON_DOWN;
-        buffer[3].code = (int)MouseButton.Left;
+        buffer[3].Kind = InputEventKind.MouseButtonDown;
+        buffer[3].Button = MouseButton.Left;
 
-        buffer[4].kind = ke_input_event_kind.KE_INPUT_EVENT_MOUSE_BUTTON_UP;
-        buffer[4].code = (int)MouseButton.Right;
+        buffer[4].Kind = InputEventKind.MouseButtonUp;
+        buffer[4].Button = MouseButton.Right;
 
         return 5;
     }
@@ -43,7 +42,7 @@ public unsafe class InputDrainTests
         field.SetValue(input, System.Reflection.Pointer.Box(mock, typeof(ke_input*)));
 
         var buffer = new InputEvent[10];
-        int count = input.DrainEvents(buffer);
+        var count = (int)input.DrainEvents(buffer);
 
         Assert.Equal(5, count);
         Assert.Equal(InputEventKind.KeyDown, buffer[0].Kind);
@@ -62,16 +61,16 @@ public unsafe class InputDrainTests
     [Fact]
     public void SnapshotAccessors_DecodeBitsets()
     {
-        var data = new ke_input_snapshot();
-        data.keys_down[1] = 1UL << (65 % 64);
-        data.mouse_buttons_down = 1u << (int)MouseButton.Right;
+        var data = new InputSnapshot();
+        data.KeysDown[1] = 1UL << (65 % 64);
+        data.MouseButtonsDown = 1u << (int)MouseButton.Right;
 
         using var input = new Input();
 
-        Assert.True(input.SnapshotIsKeyDown(&data, Key.A));
-        Assert.False(input.SnapshotIsKeyDown(&data, (Key)64));
-        Assert.False(input.SnapshotIsKeyPressed(&data, Key.A));
-        Assert.True(input.SnapshotIsMouseButtonDown(&data, MouseButton.Right));
-        Assert.False(input.SnapshotIsMouseButtonDown(&data, MouseButton.Left));
+        Assert.True(input.SnapshotIsKeyDown(data, Key.A));
+        Assert.False(input.SnapshotIsKeyDown(data, (Key)64));
+        Assert.False(input.SnapshotIsKeyPressed(data, Key.A));
+        Assert.True(input.SnapshotIsMouseButtonDown(data, MouseButton.Right));
+        Assert.False(input.SnapshotIsMouseButtonDown(data, MouseButton.Left));
     }
 }

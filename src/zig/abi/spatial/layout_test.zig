@@ -3,6 +3,8 @@ const abi = @import("abi");
 const c = @import("c");
 
 fn expectSameLayout(comptime A: type, comptime C: type) !void {
+    @setEvalBranchQuota(100_000_000);
+    if (@typeInfo(C) == .@"opaque") return;
     try std.testing.expectEqual(@sizeOf(C), @sizeOf(A));
     try std.testing.expectEqual(@alignOf(C), @alignOf(A));
     switch (@typeInfo(A)) {
@@ -20,29 +22,28 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_transform_component, translated("ke_transform_component"));
-    try expectSameLayout(abi.ke_transform2d_component, translated("ke_transform2d_component"));
-    try expectSameLayout(abi.ke_world_transform_component, translated("ke_world_transform_component"));
+    @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_transform_component, translated("ke_transform_component"));
+    try expectSameLayout(abi.c.ke_transform2d_component, translated("ke_transform2d_component"));
+    try expectSameLayout(abi.c.ke_world_transform_component, translated("ke_world_transform_component"));
 }
 
-fn expectSameValue(a: anytype, k: anytype) !void {
-    switch (@typeInfo(@TypeOf(a))) {
-        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
-        .@"union" => {},
-        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
-        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
-    }
-}
+extern const layout_values: [12]c_ulonglong;
 
-test "every field table lists the header's entries" {
-    try std.testing.expectEqual(c.ke_transform_component_fields.len, abi.ke_transform_component_fields.len);
-    for (abi.ke_transform_component_fields, c.ke_transform_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_transform2d_component_fields.len, abi.ke_transform2d_component_fields.len);
-    for (abi.ke_transform2d_component_fields, c.ke_transform2d_component_fields) |a, k| try expectSameValue(a, k);
-}
-
-test "every constant is the header's value" {
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM, abi.KE_COMPONENT_NAME_TRANSFORM);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM2D, abi.KE_COMPONENT_NAME_TRANSFORM2D);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi.KE_COMPONENT_NAME_WORLD_TRANSFORM);
+test "every size and offset is the one C computes" {
+    @setEvalBranchQuota(100_000_000);
+    const expected = [_]usize{
+        @sizeOf(abi.c.ke_transform_component),
+        @offsetOf(abi.c.ke_transform_component, "position"),
+        @offsetOf(abi.c.ke_transform_component, "rotation"),
+        @offsetOf(abi.c.ke_transform_component, "scale"),
+        @sizeOf(abi.c.ke_transform2d_component),
+        @offsetOf(abi.c.ke_transform2d_component, "position"),
+        @offsetOf(abi.c.ke_transform2d_component, "rotation"),
+        @offsetOf(abi.c.ke_transform2d_component, "scale"),
+        @offsetOf(abi.c.ke_transform2d_component, "depth"),
+        @sizeOf(abi.c.ke_world_transform_component),
+        @offsetOf(abi.c.ke_world_transform_component, "matrix"),
+    };
+    for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

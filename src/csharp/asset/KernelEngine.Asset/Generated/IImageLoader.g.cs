@@ -3,7 +3,9 @@
 
 #nullable enable
 
+using KernelEngine.Asset.Native;
 using KernelEngine.Common;
+using KernelEngine.Render;
 
 namespace KernelEngine.Asset;
 

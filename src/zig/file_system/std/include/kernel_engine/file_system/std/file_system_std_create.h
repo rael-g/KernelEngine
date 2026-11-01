@@ -17,7 +17,7 @@ extern "C"
 #  endif
 #endif
 
-/** Construction parameters for ke_file_system_std_create. */
+/** [bag] Construction parameters for ke_file_system_std_create. */
 typedef struct ke_file_system_std_params
 {
     /// [default:null] [utf8] The directory relative paths are resolved against; null takes the working

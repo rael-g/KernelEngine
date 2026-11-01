@@ -94,6 +94,7 @@ extern "C"
 
     } ke_scene_tree;
 
+    /// [owner]
     typedef struct ke_scene_tree_handle
     {
         ke_scene_tree *ref;

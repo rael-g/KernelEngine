@@ -1,10 +1,10 @@
 .{
-    .name = .ke_abi_task_pool,
+    .name = .abi_task_pool,
     .version = "0.1.0",
-    .fingerprint = 0xc1a6c40b23ef051c,
+    .fingerprint = 0x41d5ebe5d61bbc8d,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_result = .{ .path = "../result" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

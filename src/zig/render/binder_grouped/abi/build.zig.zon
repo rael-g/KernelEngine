@@ -4,6 +4,10 @@
     .fingerprint = 0x52c3b41aa6715628,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_io = .{ .path = "../../../abi/io" },
         .ke_abi_io = .{ .path = "../../../abi/io" },
         .ke_abi_logger = .{ .path = "../../../abi/logger" },
         .ke_abi_render = .{ .path = "../../../abi/render" },

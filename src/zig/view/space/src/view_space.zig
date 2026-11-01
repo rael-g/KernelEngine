@@ -2,6 +2,7 @@
 //! left-handed factory. Its slots build view and projection matrices and report no errors beyond
 //! the allocation in `create`.
 
+const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const zm = @import("zmath");
 
@@ -24,30 +25,30 @@ const Handedness = enum { right, left };
 /// The allocation behind one handle, freed by `destroy`. `api` is the vtable the handle's `ref`
 /// points at, and its `handle` field points back here, which is how a slot finds `hand`.
 const State = struct {
-    api: abi_view.ke_view_space,
+    api: abi_view.c.ke_view_space,
     hand: Handedness,
 };
 
-fn stateOf(self: *abi_view.ke_view_space) *State {
+fn stateOf(self: *abi_view.c.ke_view_space) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
 /// Packs a vector into a lane with the given homogeneous component: one for a point, zero for a
 /// direction.
-fn vec(v: *const abi_math.ke_vec3, w: f32) zm.Vec {
+fn vec(v: *const abi_math.c.ke_vec3, w: f32) zm.Vec {
     return zm.f32x4(v.x, v.y, v.z, w);
 }
 
 /// Writes `m` through `out`. A null `out` is skipped, so a slot given no destination changes
 /// nothing.
-fn store(out: [*c]abi_math.ke_mat4, m: zm.Mat) void {
+fn store(out: [*c]abi_math.c.ke_mat4, m: zm.Mat) void {
     if (out == null) return;
     zm.storeMat(out.*.m[0..16], m);
 }
 
 /// Reports the factor that turns a view-space z into a distance in front of the camera: negative
 /// for right-handed, positive for left-handed. Returns zero when self or its handle is null.
-fn viewSpaceParams(self_in: ?*abi_view.ke_view_space) callconv(.c) abi_view.ke_view_space_params {
+fn viewSpaceParams(self_in: ?*abi_view.c.ke_view_space) callconv(.c) abi_view.c.ke_view_space_params {
     const self = self_in orelse return .{ .depth_from_view_z = 0.0 };
     if (self.handle == null) return .{ .depth_from_view_z = 0.0 };
     return .{ .depth_from_view_z = switch (stateOf(self).hand) {
@@ -60,11 +61,11 @@ fn viewSpaceParams(self_in: ?*abi_view.ke_view_space) callconv(.c) abi_view.ke_v
 /// look-to function of the handedness. Returns without writing when self, its handle or any of
 /// the three inputs is null.
 fn viewSpaceLookTo(
-    self_in: ?*abi_view.ke_view_space,
-    eye: [*c]const abi_math.ke_vec3,
-    forward: [*c]const abi_math.ke_vec3,
-    up: [*c]const abi_math.ke_vec3,
-    out_view: [*c]abi_math.ke_mat4,
+    self_in: ?*abi_view.c.ke_view_space,
+    eye: [*c]const abi_math.c.ke_vec3,
+    forward: [*c]const abi_math.c.ke_vec3,
+    up: [*c]const abi_math.c.ke_vec3,
+    out_view: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or eye == null or forward == null or up == null) return;
@@ -81,11 +82,11 @@ fn viewSpaceLookTo(
 /// function of the handedness. Returns without writing when self, its handle or any of the three
 /// inputs is null.
 fn viewSpaceLookAt(
-    self_in: ?*abi_view.ke_view_space,
-    eye: [*c]const abi_math.ke_vec3,
-    target: [*c]const abi_math.ke_vec3,
-    up: [*c]const abi_math.ke_vec3,
-    out_view: [*c]abi_math.ke_mat4,
+    self_in: ?*abi_view.c.ke_view_space,
+    eye: [*c]const abi_math.c.ke_vec3,
+    target: [*c]const abi_math.c.ke_vec3,
+    up: [*c]const abi_math.c.ke_vec3,
+    out_view: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or eye == null or target == null or up == null) return;
@@ -103,9 +104,9 @@ fn viewSpaceLookAt(
 /// rotation elements are all near zero looks at the origin from the eye with world up instead.
 /// Returns without writing when self, its handle or the matrix is null.
 fn viewSpaceFromTransform(
-    self_in: ?*abi_view.ke_view_space,
-    camera_world: [*c]const abi_math.ke_mat4,
-    out_view: [*c]abi_math.ke_mat4,
+    self_in: ?*abi_view.c.ke_view_space,
+    camera_world: [*c]const abi_math.c.ke_mat4,
+    out_view: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera_world == null) return;
@@ -139,7 +140,7 @@ fn viewSpaceFromTransform(
 
 /// Applies the adjustment zmath leaves to the caller: negates the vertical scale of `p_in` when
 /// `y_flip` of the clip convention is set.
-fn intoClip(p_in: zm.Mat, clip: abi_render.ke_ndc_convention) zm.Mat {
+fn intoClip(p_in: zm.Mat, clip: abi_render_gpu.c.ke_ndc_convention) zm.Mat {
     var p = p_in;
     if (clip.y_flip) p[1][1] = -p[1][1];
     return p;
@@ -149,13 +150,13 @@ fn intoClip(p_in: zm.Mat, clip: abi_render.ke_ndc_convention) zm.Mat {
 /// `z_zero_to_one` of the clip convention is set and in the GL range otherwise, then applies
 /// `intoClip`. Returns without writing when self, its handle or the clip convention is null.
 fn viewSpacePerspective(
-    self_in: ?*abi_view.ke_view_space,
+    self_in: ?*abi_view.c.ke_view_space,
     fov_y: f32,
     aspect: f32,
     near_plane: f32,
     far_plane: f32,
-    clip_in: [*c]const abi_render.ke_ndc_convention,
-    out_proj: [*c]abi_math.ke_mat4,
+    clip_in: [*c]const abi_render_gpu.c.ke_ndc_convention,
+    out_proj: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or clip_in == null) return;
@@ -178,13 +179,13 @@ fn viewSpacePerspective(
 /// chosen as `viewSpacePerspective` does. Returns without writing when self, its handle or the
 /// clip convention is null.
 fn viewSpaceOrthographic(
-    self_in: ?*abi_view.ke_view_space,
+    self_in: ?*abi_view.c.ke_view_space,
     width: f32,
     height: f32,
     near_plane: f32,
     far_plane: f32,
-    clip_in: [*c]const abi_render.ke_ndc_convention,
-    out_proj: [*c]abi_math.ke_mat4,
+    clip_in: [*c]const abi_render_gpu.c.ke_ndc_convention,
+    out_proj: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or clip_in == null) return;
@@ -205,7 +206,7 @@ fn viewSpaceOrthographic(
 
 /// Frees the `State` that `create` allocated. After it returns, the vtable that lived inside that
 /// `State` is gone, so any `ref` taken from the handle no longer points at live memory.
-fn destroy(self_in: ?*abi_view.ke_view_space) callconv(.c) void {
+fn destroy(self_in: ?*abi_view.c.ke_view_space) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
@@ -214,15 +215,15 @@ fn destroy(self_in: ?*abi_view.ke_view_space) callconv(.c) void {
 /// Allocates the `State` for the handedness, wires every vtable slot, and writes the handle whose
 /// `ref` is that vtable and whose `destroy` is `destroy`. Fails with out of memory, leaving
 /// nothing allocated and the handle zeroed.
-fn create(hand: Handedness, out_view_space: ?*abi_view.ke_view_space_handle) abi_result.ke_result {
+fn create(hand: Handedness, out_view_space: ?*abi_view.c.ke_view_space_handle) abi_result.c.ke_result {
     const out = out_view_space orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_view.ke_view_space_handle);
+    out.* = std.mem.zeroes(abi_view.c.ke_view_space_handle);
 
     const s = heap.gpa.create(State) catch {
         log.warn("creating the view space failed: out of memory", .{});
         return R.code(error.OutOfMemory);
     };
-    s.* = .{ .api = std.mem.zeroes(abi_view.ke_view_space), .hand = hand };
+    s.* = .{ .api = std.mem.zeroes(abi_view.c.ke_view_space), .hand = hand };
     s.api.handle = s;
     s.api.params = viewSpaceParams;
     s.api.look_to = viewSpaceLookTo;
@@ -236,29 +237,29 @@ fn create(hand: Handedness, out_view_space: ?*abi_view.ke_view_space_handle) abi
 }
 
 /// Creates a right-handed view space through `create`.
-export fn ke_view_space_rh_create(out_view_space: ?*abi_view.ke_view_space_handle) callconv(.c) abi_result.ke_result {
+export fn ke_view_space_rh_create(out_view_space: ?*abi_view.c.ke_view_space_handle) callconv(.c) abi_result.c.ke_result {
     return create(.right, out_view_space);
 }
 
 /// Creates a left-handed view space through `create`.
-export fn ke_view_space_lh_create(out_view_space: ?*abi_view.ke_view_space_handle) callconv(.c) abi_result.ke_result {
+export fn ke_view_space_lh_create(out_view_space: ?*abi_view.c.ke_view_space_handle) callconv(.c) abi_result.c.ke_result {
     return create(.left, out_view_space);
 }
 
 const testing = std.testing;
 
-fn made(factory: anytype) !abi_view.ke_view_space_handle {
-    var h: abi_view.ke_view_space_handle = undefined;
+fn made(factory: anytype) !abi_view.c.ke_view_space_handle {
+    var h: abi_view.c.ke_view_space_handle = undefined;
     try R.check(factory(&h));
     return h;
 }
 
-const webgpu_clip: abi_render.ke_ndc_convention = .{ .z_zero_to_one = true, .y_flip = false };
+const webgpu_clip: abi_render_gpu.c.ke_ndc_convention = .{ .z_zero_to_one = true, .y_flip = false };
 
-fn viewDepthOf(h: abi_view.ke_view_space_handle, world: abi_math.ke_vec3, eye: abi_math.ke_vec3) f32 {
-    const target = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 0 };
-    const up = abi_math.ke_vec3{ .x = 0, .y = 1, .z = 0 };
-    var view: abi_math.ke_mat4 = undefined;
+fn viewDepthOf(h: abi_view.c.ke_view_space_handle, world: abi_math.c.ke_vec3, eye: abi_math.c.ke_vec3) f32 {
+    const target = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const up = abi_math.c.ke_vec3{ .x = 0, .y = 1, .z = 0 };
+    var view: abi_math.c.ke_mat4 = undefined;
     h.ref.?.look_at.?(h.ref, &eye, &target, &up, &view);
     const m = zm.loadMat(&view.m);
     const p = zm.mul(zm.f32x4(world.x, world.y, world.z, 1.0), m);
@@ -266,9 +267,9 @@ fn viewDepthOf(h: abi_view.ke_view_space_handle, world: abi_math.ke_vec3, eye: a
 }
 
 test "both view spaces report a surface in front of the camera as positive depth" {
-    const eye = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 10 };
-    const near_point = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 2 };
-    const far_point = abi_math.ke_vec3{ .x = 0, .y = 0, .z = -2 };
+    const eye = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 10 };
+    const near_point = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 2 };
+    const far_point = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = -2 };
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
         const h = try made(factory);
@@ -291,8 +292,8 @@ test "the two view spaces disagree on the sign of view z and only there" {
     try testing.expectEqual(@as(f32, -1.0), rh.ref.?.params.?(rh.ref).depth_from_view_z);
     try testing.expectEqual(@as(f32, 1.0), lh.ref.?.params.?(lh.ref).depth_from_view_z);
 
-    const eye = abi_math.ke_vec3{ .x = 1, .y = 2, .z = 7 };
-    const point = abi_math.ke_vec3{ .x = -3, .y = 1, .z = 0.5 };
+    const eye = abi_math.c.ke_vec3{ .x = 1, .y = 2, .z = 7 };
+    const point = abi_math.c.ke_vec3{ .x = -3, .y = 1, .z = 0.5 };
     try testing.expectApproxEqAbs(viewDepthOf(rh, point, eye), viewDepthOf(lh, point, eye), 1e-4);
 }
 
@@ -304,8 +305,8 @@ test "a top-left framebuffer origin flips the projection's y row, whatever the v
         const h = try made(factory);
         defer h.destroy.?(h.ref);
 
-        var plain: abi_math.ke_mat4 = undefined;
-        var flipped: abi_math.ke_mat4 = undefined;
+        var plain: abi_math.c.ke_mat4 = undefined;
+        var flipped: abi_math.c.ke_mat4 = undefined;
         h.ref.?.perspective.?(h.ref, 1.0, 1.6, 0.1, 100.0, &webgpu_clip, &plain);
         h.ref.?.perspective.?(h.ref, 1.0, 1.6, 0.1, 100.0, &flipped_clip, &flipped);
 
@@ -319,7 +320,7 @@ test "a perspective projection puts the near plane at clip zero and the far plan
         const h = try made(factory);
         defer h.destroy.?(h.ref);
 
-        var proj: abi_math.ke_mat4 = undefined;
+        var proj: abi_math.c.ke_mat4 = undefined;
         h.ref.?.perspective.?(h.ref, 1.0, 1.0, 0.5, 50.0, &webgpu_clip, &proj);
         const p = zm.loadMat(&proj.m);
 
@@ -335,8 +336,8 @@ test "a perspective projection puts the near plane at clip zero and the far plan
 }
 
 test "every slot tolerates a null self instead of faulting on it" {
-    var out: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
-    const zero = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    var out: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
+    const zero = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
 
     viewSpaceLookTo(null, &zero, &zero, &zero, &out);
     viewSpaceLookAt(null, &zero, &zero, &zero, &out);
@@ -352,8 +353,8 @@ test "a null output matrix is dropped rather than written through" {
     const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
-    const zero = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 0 };
-    const up = abi_math.ke_vec3{ .x = 0, .y = 1, .z = 0 };
+    const zero = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const up = abi_math.c.ke_vec3{ .x = 0, .y = 1, .z = 0 };
     h.ref.?.look_at.?(h.ref, &up, &zero, &up, null);
     h.ref.?.perspective.?(h.ref, 1.0, 1.0, 0.1, 10.0, &webgpu_clip, null);
 }
@@ -362,17 +363,17 @@ test "a missing clip convention leaves the projection untouched" {
     const h = try made(ke_view_space_rh_create);
     defer h.destroy.?(h.ref);
 
-    var out: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
+    var out: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
     h.ref.?.perspective.?(h.ref, 1.0, 1.0, 0.1, 10.0, null, &out);
     try testing.expectEqual(@as(f32, 0.0), out.m[0]);
 }
 
-fn cameraLookingDown(axis: abi_math.ke_vec3, from: abi_math.ke_vec3) abi_math.ke_mat4 {
+fn cameraLookingDown(axis: abi_math.c.ke_vec3, from: abi_math.c.ke_vec3) abi_math.c.ke_mat4 {
     const f = zm.normalize3(zm.f32x4(axis.x, axis.y, axis.z, 0));
     const world_up = zm.f32x4(0, 1, 0, 0);
     const right = zm.normalize3(zm.cross3(world_up, f));
     const up = zm.cross3(f, right);
-    var m: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
+    var m: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
     m.m[0] = right[0];
     m.m[1] = right[1];
     m.m[2] = right[2];
@@ -390,8 +391,8 @@ fn cameraLookingDown(axis: abi_math.ke_vec3, from: abi_math.ke_vec3) abi_math.ke
 }
 
 test "the same camera basis faces opposite ways under the two view spaces" {
-    const local_z = abi_math.ke_vec3{ .x = 1, .y = 0, .z = 0 };
-    const at_origin = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const local_z = abi_math.c.ke_vec3{ .x = 1, .y = 0, .z = 0 };
+    const at_origin = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
     const world = cameraLookingDown(local_z, at_origin);
     const toward_plus_x = zm.f32x4(6, 0, 0, 1);
 
@@ -400,8 +401,8 @@ test "the same camera basis faces opposite ways under the two view spaces" {
     const lh = try made(ke_view_space_lh_create);
     defer lh.destroy.?(lh.ref);
 
-    var rh_view: abi_math.ke_mat4 = undefined;
-    var lh_view: abi_math.ke_mat4 = undefined;
+    var rh_view: abi_math.c.ke_mat4 = undefined;
+    var lh_view: abi_math.c.ke_mat4 = undefined;
     rh.ref.?.view_from_transform.?(rh.ref, &world, &rh_view);
     lh.ref.?.view_from_transform.?(lh.ref, &world, &lh_view);
 
@@ -416,9 +417,9 @@ test "the same camera basis faces opposite ways under the two view spaces" {
 }
 
 test "turning a camera around swaps which side of it is visible" {
-    const local_z = abi_math.ke_vec3{ .x = 1, .y = 0, .z = 0 };
-    const flipped_z = abi_math.ke_vec3{ .x = -1, .y = 0, .z = 0 };
-    const at_origin = abi_math.ke_vec3{ .x = 0, .y = 0, .z = 0 };
+    const local_z = abi_math.c.ke_vec3{ .x = 1, .y = 0, .z = 0 };
+    const flipped_z = abi_math.c.ke_vec3{ .x = -1, .y = 0, .z = 0 };
+    const at_origin = abi_math.c.ke_vec3{ .x = 0, .y = 0, .z = 0 };
     const point = zm.f32x4(6, 0, 0, 1);
 
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
@@ -429,8 +430,8 @@ test "turning a camera around swaps which side of it is visible" {
         const facing = cameraLookingDown(local_z, at_origin);
         const turned = cameraLookingDown(flipped_z, at_origin);
 
-        var a: abi_math.ke_mat4 = undefined;
-        var b: abi_math.ke_mat4 = undefined;
+        var a: abi_math.c.ke_mat4 = undefined;
+        var b: abi_math.c.ke_mat4 = undefined;
         h.ref.?.view_from_transform.?(h.ref, &facing, &a);
         h.ref.?.view_from_transform.?(h.ref, &turned, &b);
 
@@ -441,7 +442,7 @@ test "turning a camera around swaps which side of it is visible" {
 }
 
 test "an unrotated camera basis aims at the world origin rather than at nothing" {
-    var world: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
+    var world: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
     world.m[0] = 1.0;
     world.m[5] = 1.0;
     world.m[10] = 1.0;
@@ -452,7 +453,7 @@ test "an unrotated camera basis aims at the world origin rather than at nothing"
         const h = try made(factory);
         defer h.destroy.?(h.ref);
 
-        var view: abi_math.ke_mat4 = undefined;
+        var view: abi_math.c.ke_mat4 = undefined;
         h.ref.?.view_from_transform.?(h.ref, &world, &view);
         const m = zm.loadMat(&view.m);
         const sign = h.ref.?.params.?(h.ref).depth_from_view_z;
@@ -462,8 +463,8 @@ test "an unrotated camera basis aims at the world origin rather than at nothing"
     }
 }
 
-fn cameraAt(z: f32) abi_math.ke_mat4 {
-    var world: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
+fn cameraAt(z: f32) abi_math.c.ke_mat4 {
+    var world: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
     world.m[0] = 1.0;
     world.m[5] = 1.0;
     world.m[10] = 1.0;
@@ -472,9 +473,9 @@ fn cameraAt(z: f32) abi_math.ke_mat4 {
     return world;
 }
 
-fn ndcOf(h: abi_view.ke_view_space_handle, world: abi_math.ke_mat4, half_height: f32, aspect: f32, p: zm.Vec) zm.Vec {
-    var view: abi_math.ke_mat4 = undefined;
-    var proj: abi_math.ke_mat4 = undefined;
+fn ndcOf(h: abi_view.c.ke_view_space_handle, world: abi_math.c.ke_mat4, half_height: f32, aspect: f32, p: zm.Vec) zm.Vec {
+    var view: abi_math.c.ke_mat4 = undefined;
+    var proj: abi_math.c.ke_mat4 = undefined;
     h.ref.?.view_from_transform.?(h.ref, &world, &view);
     const height = half_height * 2.0;
     h.ref.?.orthographic.?(h.ref, height * aspect, height, 0.1, 100.0, &webgpu_clip, &proj);

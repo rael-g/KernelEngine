@@ -27,7 +27,7 @@ public sealed class PongModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs = services.GetRequiredService<IEcsRegistry>();
+        var ecs = (EcsRegistry)services.GetRequiredService<IEcsRegistry>();
         var world = services.GetRequiredService<World>();
 
         Paddle.RegisterSceneApply(world, ecs);

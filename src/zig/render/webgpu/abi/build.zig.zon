@@ -4,6 +4,11 @@
     .fingerprint = 0xbe42e95ab1700c8a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_window = .{ .path = "../../../abi/window" },
+        .abi_task_pool = .{ .path = "../../../abi/task_pool" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
         .ke_abi_logger = .{ .path = "../../../abi/logger" },
         .ke_abi_render = .{ .path = "../../../abi/render" },
         .ke_abi_result = .{ .path = "../../../abi/result" },

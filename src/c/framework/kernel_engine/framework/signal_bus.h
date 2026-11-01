@@ -109,7 +109,7 @@ extern "C"
         void (*clear_frame)(struct ke_signal_bus *self);
     };
 
-    /// Owner wrapper: destroy releases the connection table and frame storage.
+    /// [owner] Owner wrapper: destroy releases the connection table and frame storage.
     typedef struct ke_signal_bus_handle
     {
         ke_signal_bus *ref;

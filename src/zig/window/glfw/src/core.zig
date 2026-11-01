@@ -15,17 +15,17 @@ const R = @import("result").Result(.{});
 /// also destroys the owned `dev`. `input` is borrowed and may be null; `initialized` is set by
 /// `initialize` and cleared by `shutdownInternal`.
 pub const Core = struct {
-    api: abi_window.ke_window,
+    api: abi_window.c.ke_window,
     dev: ?device.Device,
-    input: ?*abi_input.ke_input,
+    input: ?*abi_input.c.ke_input,
     initialized: bool,
 
     /// Returns null when the heap cannot provide the Core. The Core starts uninitialized, and a
     /// null `input` is accepted: events are then dropped.
-    pub fn create(dev: device.Device, input: ?*abi_input.ke_input) ?*Core {
+    pub fn create(dev: device.Device, input: ?*abi_input.c.ke_input) ?*Core {
         const self = heap.gpa.create(Core) catch return null;
         self.* = .{
-            .api = std.mem.zeroes(abi_window.ke_window),
+            .api = std.mem.zeroes(abi_window.c.ke_window),
             .dev = dev,
             .input = input,
             .initialized = false,
@@ -51,11 +51,11 @@ pub const Core = struct {
     }
 
     /// The returned pointer stays valid until `destroyApi` frees the Core.
-    pub fn toApi(self: *Core) *abi_window.ke_window {
+    pub fn toApi(self: *Core) *abi_window.c.ke_window {
         return &self.api;
     }
 
-    fn from(self: ?*abi_window.ke_window) ?*Core {
+    fn from(self: ?*abi_window.c.ke_window) ?*Core {
         const s = self orelse return null;
         return @ptrCast(@alignCast(s.handle));
     }
@@ -69,7 +69,7 @@ pub const Core = struct {
     /// The owner handle's `destroy` slot, and the factory's rollback when `initialize` fails. The
     /// `ke_window` pointer handed out earlier is dangling once it returns. A null handle does
     /// nothing.
-    pub fn destroyApi(self_in: ?*abi_window.ke_window) callconv(.c) void {
+    pub fn destroyApi(self_in: ?*abi_window.c.ke_window) callconv(.c) void {
         const self = from(self_in) orelse return;
         self.shutdownInternal();
         if (self.dev) |dev| dev.destroy();
@@ -79,20 +79,20 @@ pub const Core = struct {
 
     /// The `on_initialize` slot. The factory already started the device, so this only checks the
     /// table; a null table is an invalid argument.
-    fn onInitialize(self_in: ?*abi_window.ke_window) callconv(.c) abi_result.ke_result {
+    fn onInitialize(self_in: ?*abi_window.c.ke_window) callconv(.c) abi_result.c.ke_result {
         if (from(self_in) == null) return R.code(error.InvalidArgument);
         return R.ok;
     }
 
     /// The `on_shutdown` slot. Stops the device through `shutdownInternal` and keeps the Core; a
     /// null table is ignored.
-    fn onShutdown(self_in: ?*abi_window.ke_window) callconv(.c) void {
+    fn onShutdown(self_in: ?*abi_window.c.ke_window) callconv(.c) void {
         const self = from(self_in) orelse return;
         self.shutdownInternal();
     }
 
     /// A missing handle or device answers that the window should close.
-    fn shouldClose(self_in: ?*abi_window.ke_window) callconv(.c) bool {
+    fn shouldClose(self_in: ?*abi_window.c.ke_window) callconv(.c) bool {
         const self = from(self_in) orelse return true;
         const dev = self.dev orelse return true;
         return if (dev.shouldClose()) true else false;
@@ -100,7 +100,7 @@ pub const Core = struct {
 
     /// The `poll_events` slot. Drains the device's pending events through `handleEvent` before it
     /// returns. A null table or a Core without a device does nothing.
-    fn pollEvents(self_in: ?*abi_window.ke_window) callconv(.c) void {
+    fn pollEvents(self_in: ?*abi_window.c.ke_window) callconv(.c) void {
         const self = from(self_in) orelse return;
         const dev = self.dev orelse return;
         dev.pollEvents(.{ .ctx = self, .on_event = handleEvent });
@@ -108,7 +108,7 @@ pub const Core = struct {
 
     /// The `get_size` slot. Writes the width and height into each non-null out pointer; a null
     /// table or a Core without a device writes zero.
-    fn getSize(self_in: ?*abi_window.ke_window, width: [*c]i32, height: [*c]i32) callconv(.c) void {
+    fn getSize(self_in: ?*abi_window.c.ke_window, width: [*c]i32, height: [*c]i32) callconv(.c) void {
         var w: u32 = 0;
         var h: u32 = 0;
         if (from(self_in)) |self| {
@@ -119,7 +119,7 @@ pub const Core = struct {
     }
 
     /// The `get_native_handle` slot. Null when the table or the device is missing.
-    fn getNativeHandle(self_in: ?*abi_window.ke_window) callconv(.c) ?*anyopaque {
+    fn getNativeHandle(self_in: ?*abi_window.c.ke_window) callconv(.c) ?*anyopaque {
         const self = from(self_in) orelse return null;
         const dev = self.dev orelse return null;
         return dev.getNativeHandle();
@@ -132,14 +132,14 @@ pub const Core = struct {
         const input = self.input orelse return;
         switch (ev.type) {
             .key_down, .key_up => {
-                const action: c_int = if (ev.type == .key_down) abi_input.KE_INPUT_ACTION_PRESS else abi_input.KE_INPUT_ACTION_RELEASE;
+                const action: c_int = if (ev.type == .key_down) abi_input.c.KE_INPUT_ACTION_PRESS else abi_input.c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_key) |f| f(input, @intCast(ev.data.key.key_code), action);
             },
             .mouse_move => {
                 if (input.on_mouse_move) |f| f(input, ev.data.mouse_move.x, ev.data.mouse_move.y);
             },
             .mouse_button_down, .mouse_button_up => {
-                const action: c_int = if (ev.type == .mouse_button_down) abi_input.KE_INPUT_ACTION_PRESS else abi_input.KE_INPUT_ACTION_RELEASE;
+                const action: c_int = if (ev.type == .mouse_button_down) abi_input.c.KE_INPUT_ACTION_PRESS else abi_input.c.KE_INPUT_ACTION_RELEASE;
                 if (input.on_mouse_button) |f| f(input, @intCast(ev.data.mouse_button.button), action);
             },
             .mouse_scroll => {
@@ -241,25 +241,25 @@ const InputSpy = struct {
         scroll_count = 0;
     }
 
-    fn onKey(_: [*c]abi_input.ke_input, code: i32, action: c_int) callconv(.c) void {
+    fn onKey(_: [*c]abi_input.c.ke_input, code: i32, action: c_int) callconv(.c) void {
         keys[key_count] = .{ .code = code, .action = action };
         key_count += 1;
     }
-    fn onMouseMove(_: [*c]abi_input.ke_input, x: f32, y: f32) callconv(.c) void {
+    fn onMouseMove(_: [*c]abi_input.c.ke_input, x: f32, y: f32) callconv(.c) void {
         moves[move_count] = .{ .x = x, .y = y };
         move_count += 1;
     }
-    fn onMouseButton(_: [*c]abi_input.ke_input, button: i32, action: c_int) callconv(.c) void {
+    fn onMouseButton(_: [*c]abi_input.c.ke_input, button: i32, action: c_int) callconv(.c) void {
         buttons[button_count] = .{ .button = button, .action = action };
         button_count += 1;
     }
-    fn onMouseScroll(_: [*c]abi_input.ke_input, dx: f32, dy: f32) callconv(.c) void {
+    fn onMouseScroll(_: [*c]abi_input.c.ke_input, dx: f32, dy: f32) callconv(.c) void {
         scrolls[scroll_count] = .{ .dx = dx, .dy = dy };
         scroll_count += 1;
     }
 
-    fn make() abi_input.ke_input {
-        var input = std.mem.zeroes(abi_input.ke_input);
+    fn make() abi_input.c.ke_input {
+        var input = std.mem.zeroes(abi_input.c.ke_input);
         input.on_key = onKey;
         input.on_mouse_move = onMouseMove;
         input.on_mouse_button = onMouseButton;
@@ -268,7 +268,7 @@ const InputSpy = struct {
     }
 };
 
-fn makeCore(dev: *FakeDevice, input: ?*abi_input.ke_input) *Core {
+fn makeCore(dev: *FakeDevice, input: ?*abi_input.c.ke_input) *Core {
     return Core.create(dev.asDevice(), input).?;
 }
 

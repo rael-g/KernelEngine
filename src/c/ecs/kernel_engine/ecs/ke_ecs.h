@@ -12,10 +12,11 @@ extern "C"
 #endif
 
     /** A component tuple registered once and resolved into archetype segments. */
+    /// [id]
     typedef uint64_t ke_query_id;
 #define KE_QUERY_INVALID ((ke_query_id)0)
 
-    /**
+    /** [view]
      * One archetype's slice of a query match: the matched entities, plus one
      * column base pointer per query term in the order query_register received
      * them, each aligned 1:1 with `entities`. A tag term's column is NULL.
@@ -190,6 +191,7 @@ extern "C"
 
     } ke_ecs;
 
+    /// [owner]
     typedef struct ke_ecs_handle
     {
         ke_ecs *ref;

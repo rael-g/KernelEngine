@@ -1,3 +1,7 @@
+using System.Numerics;
+
+using global::KernelEngine.Common;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Common.Native;

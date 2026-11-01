@@ -35,6 +35,7 @@ extern "C"
         ke_result (*register_into)(struct ke_scene_component_set *self, ke_ecs *ecs, ke_world *world);
     } ke_scene_component_set;
 
+    /// [owner]
     typedef struct ke_scene_component_set_handle
     {
         ke_scene_component_set *ref;

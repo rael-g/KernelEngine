@@ -12,4 +12,7 @@
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
 </Project>

@@ -25,6 +25,7 @@ extern "C"
 {
 #endif
 
+/// [bag]
 typedef struct ke_render_service_params
 {
     ke_gpu_device             *device; ///< Borrowed, must outlive the service.

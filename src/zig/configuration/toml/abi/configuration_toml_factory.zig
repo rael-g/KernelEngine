@@ -9,8 +9,8 @@ const result = @import("result");
 /// section named by its path joined with dots, arrays are skipped, and every other key is
 /// written as an integer, a double, a boolean or a string, tried in that order. A parse error
 /// writes nothing.
-pub extern fn ke_configuration_toml_create(io: ?*io.ke_io, out_source: ?*configuration.ke_configuration_source_handle) result.ke_result;
+pub extern fn ke_configuration_toml_create(io: ?*io.c.ke_io, out_source: ?*configuration.c.ke_configuration_source_handle) result.c.ke_result;
 
 /// Sends every line ke_configuration_toml logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_configuration_toml_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_configuration_toml_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

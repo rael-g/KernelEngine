@@ -144,6 +144,7 @@ extern "C"
                                   size_t                    capacity);
     } ke_asset_resolver;
 
+    /// [owner]
     typedef struct ke_asset_resolver_handle
     {
         ke_asset_resolver *ref;

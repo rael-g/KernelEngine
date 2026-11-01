@@ -5,10 +5,15 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Framework.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Input;
+using KernelEngine.Render;
+using KernelEngine.Runtime;
 using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework;
@@ -19,14 +24,8 @@ public unsafe interface INativeWorld
     ke_world* Native { get; }
 }
 
-/// <summary>Fills a component from a scene block's keys. Entries are mutable so the callback can mark what it took: a key it accepted must have `consumed` set, or the loader will report it as one nothing in the engine wanted.</summary>
-/// <param name="component">The component's memory, already added to the entity.</param>
-/// <param name="entries">The block's keys, one per key the scene declared.</param>
-/// <param name="count">Number of entries.</param>
-public unsafe delegate void ComponentApply(nint component, ke_variant_table_entry* entries, uint count);
 
-
-public unsafe partial class World : IDisposable, INativeWorld
+public unsafe partial class World : IDisposable, INativeWorld, IWorld
 {
     private ke_world* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_world*, void> _destroy;
@@ -37,17 +36,7 @@ public unsafe partial class World : IDisposable, INativeWorld
     /// The engine holds only an opaque pointer to it, which stops nothing on this
     /// side from collecting or moving the object before the engine calls back into it.
     /// </summary>
-    private readonly Dictionary<uint, GCHandle> _retainedApply = new();
-
-    /// <summary>
-    /// Where a managed exception waits out the native frames. A handler runs
-    /// underneath engine code that has no way to carry an exception, so throwing
-    /// through it would tear down the process; the trampoline parks it here and
-    /// the call rethrows once the native stack has unwound. Per-thread, because
-    /// a handler runs on whichever thread the engine called it from.
-    /// </summary>
-    [ThreadStatic]
-    private static Exception? s_parkedCallbackException;
+    private readonly Dictionary<ComponentId, GCHandle> _retainedApply = new();
 
     private ke_world* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(World));
@@ -72,67 +61,50 @@ public unsafe partial class World : IDisposable, INativeWorld
         _borrowed = borrowed;
     }
 
+    /// <summary>The ecs the world was created with.</summary>
+    public nint Ecs()
+    {
+        return (nint)Handle->ecs(Handle);
+    }
+
+    /// <summary>The runtime the world was created with.</summary>
+    public nint Runtime()
+    {
+        return (nint)Handle->runtime(Handle);
+    }
+
+    /// <summary>The scene tree the world was created with.</summary>
+    public nint SceneTree()
+    {
+        return (nint)Handle->scene_tree(Handle);
+    }
+
     /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
     /// <param name="fields">The table.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void RegisterComponentFields(uint cid, ReadOnlySpan<ke_component_field> fields)
+    public void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields)
     {
-        fixed (ke_component_field* fieldsPtr = fields)
+        fixed (ComponentField* fieldsPtr = fields)
         {
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->register_component_fields(Handle, cid, fieldsPtr, (uint)fields.Length), "register_component_fields");
+            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_component_fields(Handle, cid, fieldsPtr, (uint)fields.Length)), "register_component_fields");
         }
     }
 
-    /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>
-    /// <param name="cid">The component the callback answers for.</param>
-    /// <param name="apply">Consulted after the field table.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void RegisterComponentApply(uint cid, ComponentApply? apply)
+    /// <summary>Field table registered for `cid`, or NULL.</summary>
+    public ReadOnlySpan<ComponentField> GetComponentFields(ComponentId cid)
     {
-        var applyHandle = apply is null ? default : GCHandle.Alloc(apply);
-        s_parkedCallbackException = null;
-        KernelEngine.Result.Native.ke_result rc;
-        bool ok;
-        try
-        {
-            ok = (rc = Handle->register_component_apply(Handle, cid, apply is null ? null : (delegate* unmanaged[Cdecl]<void*, void*, ke_variant_table_entry*, uint, KernelEngine.Result.Native.ke_result>)&RegisterComponentApplyTrampoline, (void*)GCHandle.ToIntPtr(applyHandle))) == KernelEngine.Result.Native.ke_result.KE_OK;
-        }
-        catch
-        {
-            if (applyHandle.IsAllocated) applyHandle.Free();
-            throw;
-        }
-        if (s_parkedCallbackException is { } parked)
-        {
-            s_parkedCallbackException = null;
-            throw parked;
-        }
-        if (!ok)
-        {
-            if (applyHandle.IsAllocated) applyHandle.Free();
-            throw KernelEngine.NativeResults.FromCode(rc, "register_component_apply");
-        }
-        if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();
-        _retainedApply[cid] = applyHandle;
+        uint outCountLocal = 0;
+        var front = Handle->get_component_fields(Handle, cid, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<ComponentField>(front, (int)outCountLocal);
     }
 
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static KernelEngine.Result.Native.ke_result RegisterComponentApplyTrampoline(void* ctx, void* arg1, ke_variant_table_entry* arg2, uint arg3)
+    /// <summary>Callback registered for `cid`, or NULL, and the context it was registered with.</summary>
+    public nint GetComponentApply(ComponentId cid, out nint outCtx)
     {
-        try
-        {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is ComponentApply handler)
-            {
-                handler((nint)arg1, arg2, arg3);
-                return KernelEngine.Result.Native.ke_result.KE_OK;
-            }
-            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_component_apply_fn: no handler is registered"));
-        }
-        catch (Exception ex)
-        {
-            s_parkedCallbackException ??= ex;
-            return KernelEngine.NativeResults.ToCode(ex);
-        }
+        nint outCtxLocal;
+        var result = (nint)Handle->get_component_apply(Handle, cid, (void**)&outCtxLocal);
+        outCtx = outCtxLocal;
+        return result;
     }
 
     /// <summary>Lets a scene name the component registered as `name` by `alias` as well. The alias answers only while it is unambiguous: a second name registered under the same alias, or a component registered under the alias itself, makes it ambiguous, and a scene must then write the full name. Registering the same pair twice changes nothing.</summary>
@@ -141,29 +113,20 @@ public unsafe partial class World : IDisposable, INativeWorld
     /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterComponentAlias(string alias, string name)
     {
-        var aliasBytes = System.Text.Encoding.UTF8.GetBytes(alias + '\0');
+        var aliasText = alias ?? "";
+        var aliasSize = System.Text.Encoding.UTF8.GetMaxByteCount(aliasText.Length) + 1;
+        Span<byte> aliasBytes = aliasSize <= 512 ? stackalloc byte[512] : new byte[aliasSize];
+        aliasBytes[System.Text.Encoding.UTF8.GetBytes(aliasText, aliasBytes)] = 0;
         fixed (byte* aliasPtr = aliasBytes)
         {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
-        fixed (byte* namePtr = nameBytes)
-        {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->register_component_alias(Handle, (sbyte*)aliasPtr, (sbyte*)namePtr), "register_component_alias");
+            var nameText = name ?? "";
+            var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+            Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+            nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+            fixed (byte* namePtr = nameBytes)
+            {
+                KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_component_alias(Handle, (sbyte*)aliasPtr, (sbyte*)namePtr)), "register_component_alias");
             }
-        }
-    }
-
-    /// <summary>Resolves the component name a scene wrote: the component registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument when the alias is ambiguous, logging the candidates.</summary>
-    /// <param name="name">The name the scene wrote.</param>
-    /// <returns>Receives the component's id, size and field metadata.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ke_component_meta ResolveComponent(string name)
-    {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
-        fixed (byte* namePtr = nameBytes)
-        {
-            ke_component_meta resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_component(Handle, (sbyte*)namePtr, &resultOut), "resolve_component");
-            return resultOut;
         }
     }
 
@@ -180,4 +143,17 @@ public unsafe partial class World : IDisposable, INativeWorld
     }
 
     partial void OnDispose();
+
+    /// <summary>What retained handlers threw and no call has reported yet, from any thread the engine ran them on.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<Exception> s_raisedCallbackFailures = new();
+
+    /// <summary>Throws what retained handlers raised, or returns <paramref name="code"/> when they raised nothing.</summary>
+    private static T DrainRaised<T>(T code)
+    {
+        var collected = new List<Exception>();
+        while (s_raisedCallbackFailures.TryDequeue(out var failure)) collected.Add(failure);
+        if (collected.Count == 0) return code;
+        throw new InvalidOperationException("A handler registered with this provider threw",
+            collected.Count == 1 ? collected[0] : new AggregateException(collected));
+    }
 }

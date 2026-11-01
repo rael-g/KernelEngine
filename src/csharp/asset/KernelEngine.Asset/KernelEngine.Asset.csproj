@@ -14,5 +14,11 @@
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+  </ItemGroup>
 </Project>
 

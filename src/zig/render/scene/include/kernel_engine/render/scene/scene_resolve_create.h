@@ -51,13 +51,14 @@ extern "C"
         const ke_render_scene_component_ids *(*component_ids)(struct ke_render_scene_resolve *self);
     } ke_render_scene_resolve;
 
+    /// [owner]
     typedef struct ke_render_scene_resolve_handle
     {
         ke_render_scene_resolve *ref;
         void (*destroy)(ke_render_scene_resolve *self);
     } ke_render_scene_resolve_handle;
 
-    /// What the scene resolve needs to register the components and upload what they name.
+    /// [bag] What the scene resolve needs to register the components and upload what they name.
     typedef struct ke_render_scene_resolve_params
     {
         ke_runtime        *runtime;  ///< Registers the resolve systems; borrowed, must outlive it.

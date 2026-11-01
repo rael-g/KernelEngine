@@ -7,8 +7,8 @@ const result = @import("result");
 
 /// Sends every line ke_audio_miniaudio logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_audio_miniaudio_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_audio_miniaudio_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Creates a ke_audio backend for the audio output device, reading each sound file through io
 /// and decoding it from memory.
-pub extern fn ke_audio_miniaudio_create(io: ?*io.ke_io, out_audio: ?*audio.ke_audio_handle) result.ke_result;
+pub extern fn ke_audio_miniaudio_create(io: ?*io.c.ke_io, out_audio: ?*audio.c.ke_audio_handle) result.c.ke_result;

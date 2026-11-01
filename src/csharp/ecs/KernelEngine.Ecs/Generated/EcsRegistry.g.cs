@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
@@ -18,7 +19,7 @@ public unsafe interface INativeEcs
 }
 
 /// <summary>Entity lifetime and component storage.</summary>
-public unsafe partial class EcsRegistry : IDisposable, INativeEcs
+public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
 {
     private ke_ecs* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
@@ -50,43 +51,65 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Creates a fresh entity with no components. Structural; single-threaded.</summary>
     /// <returns>Receives the entity; the null entity on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong EntityCreate()
+    public Entity EntityCreate()
     {
-        ulong resultOut = default;
+        Entity resultOut = default;
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_create(Handle, &resultOut), "entity_create");
         return resultOut;
     }
 
     /// <summary>Destroys an entity and all its components; an entity that is not alive is left alone. Structural; single-threaded.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void EntityDestroy(ulong entity)
+    public void EntityDestroy(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_destroy(Handle, entity), "entity_destroy");
     }
 
     /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With `fields` the layouts are compared field by field; without them, only the size and the alignment are compared.</summary>
-    /// <param name="@params">The name, size, alignment and field table of the type.</param>
+    /// <param name="name">Unique component name.</param>
+    /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
+    /// <param name="alignment">A power of two; 0 selects the alignment of max_align_t.</param>
+    /// <param name="fields">The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.</param>
     /// <returns>Receives the component's id; KE_COMPONENT_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint ComponentRegister(ke_component_params* @params)
+    public ComponentId ComponentRegister(string name, nuint size, nuint alignment, ReadOnlySpan<ComponentField> fields)
     {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, @params, &resultOut), "component_register");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            fixed (ComponentField* fieldsPtr = fields)
+            {
+                ke_component_params @params = default;
+                @params.name = (sbyte*)namePtr;
+                @params.size = size;
+                @params.alignment = alignment;
+                @params.fields = fieldsPtr;
+                @params.field_count = (uint)fields.Length;
+                ComponentId resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, &@params, &resultOut), "component_register");
+                return resultOut;
+            }
+        }
     }
 
     /// <summary>Looks up a previously registered component by name.</summary>
     /// <param name="name">Component name to find.</param>
-    /// <param name="meta">Receives the component's id, size, and field metadata.</param>
+    /// <param name="outMeta">Receives the component's id, size, and field metadata.</param>
     /// <returns>false if no component of that name is registered.</returns>
-    public bool TryComponentLookup(string name, out ke_component_meta meta)
+    public bool TryComponentLookup(string name, out ComponentMeta outMeta)
     {
-        ke_component_meta metaLocal;
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        ComponentMeta outMetaLocal;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &metaLocal);
-            meta = metaLocal;
+            var found = Handle->component_lookup(Handle, (sbyte*)namePtr, &outMetaLocal);
+            outMeta = outMetaLocal;
             return found;
         }
     }
@@ -94,7 +117,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.</summary>
     /// <returns>Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public nint ComponentAdd(ulong entity, uint component)
+    public nint ComponentAdd(Entity entity, ComponentId component)
     {
         nint resultOut = default;
         KernelEngine.NativeResults.ThrowIfFailed(Handle->component_add(Handle, entity, component, (void**)&resultOut), "component_add");
@@ -103,19 +126,19 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
 
     /// <summary>Detaches a component from an entity; an entity that is not alive is left alone. Structural; single-threaded.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void ComponentRemove(ulong entity, uint component)
+    public void ComponentRemove(Entity entity, ComponentId component)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->component_remove(Handle, entity, component), "component_remove");
     }
 
     /// <summary>Returns an entity's component storage, or NULL if it doesn't have that component. The pointer is valid until the next structural change on this ecs.</summary>
-    public nint ComponentGet(ulong entity, uint component)
+    public nint ComponentGet(Entity entity, ComponentId component)
     {
         return (nint)Handle->component_get(Handle, entity, component);
     }
 
     /// <summary>Byte size of a registered component's element; 0 for a tag or unknown cid.</summary>
-    public nuint ComponentSize(uint cid)
+    public nuint ComponentSize(ComponentId cid)
     {
         return Handle->component_size(Handle, cid);
     }
@@ -125,18 +148,18 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <param name="field">Where in the component, and of which type and size.</param>
     /// <param name="@value">The value to write.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void ComponentFieldWrite(nint component, ke_component_field* field, ke_variant* @value)
+    public void ComponentFieldWrite(nint component, ComponentField field, Variant @value)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_field_write(Handle, (void*)component, field, @value), "component_field_write");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_field_write(Handle, (void*)component, (ComponentField*)&field, (Variant*)&@value), "component_field_write");
     }
 
     /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>
     /// <param name="cids">Component tuple to match.</param>
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong QueryRegister(ReadOnlySpan<uint> cids)
+    public ulong QueryRegister(ReadOnlySpan<ComponentId> cids)
     {
-        fixed (uint* cidsPtr = cids)
+        fixed (ComponentId* cidsPtr = cids)
         {
             ulong resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->query_register(Handle, cidsPtr, (nuint)cids.Length, &resultOut), "query_register");
@@ -147,30 +170,30 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs
     /// <summary>Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.</summary>
     /// <param name="outSegments">Receives the matched segments.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public (nint Columns, nuint Count) QueryResolveRaw(ulong query, Span<ke_ecs_segment> outSegments)
+    public (nint OutColumns, nuint OutCount) QueryResolve(ulong query, Span<ke_ecs_segment> outSegments)
     {
         fixed (ke_ecs_segment* outSegmentsPtr = outSegments)
         {
-            nint columns;
-            nuint count;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&columns, &count), "query_resolve");
-            return (columns, count);
+            nint outColumns;
+            nuint outCount;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&outColumns, &outCount), "query_resolve");
+            return (outColumns, outCount);
         }
     }
 
     /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.</summary>
     /// <returns>Receives the id; the null entity on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong EntityReserve()
+    public Entity EntityReserve()
     {
-        ulong resultOut = default;
+        Entity resultOut = default;
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_reserve(Handle, &resultOut), "entity_reserve");
         return resultOut;
     }
 
     /// <summary>Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void EntityMaterialize(ulong entity)
+    public void EntityMaterialize(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_materialize(Handle, entity), "entity_materialize");
     }

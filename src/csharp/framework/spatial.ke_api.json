@@ -253,5 +253,7 @@
   "vtables": [],
   "functions": [],
   "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [],
   "type_aliases": {}
 }

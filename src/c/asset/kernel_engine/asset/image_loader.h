@@ -32,6 +32,7 @@ extern "C"
 
     } ke_image_loader;
 
+    /// [owner]
     typedef struct ke_image_loader_handle
     {
         ke_image_loader *ref;

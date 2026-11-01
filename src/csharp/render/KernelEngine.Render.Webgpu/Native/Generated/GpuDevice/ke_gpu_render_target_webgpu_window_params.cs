@@ -1,4 +1,7 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Logger;
+
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.TaskPool.Native;
@@ -14,5 +17,6 @@ public unsafe partial struct ke_gpu_render_target_webgpu_window_params
     [NativeTypeName("struct ke_window *")]
     public KernelEngine.Window.Native.ke_window* window;
 
-    public ke_gpu_present_mode present_mode;
+    [NativeTypeName("ke_gpu_present_mode")]
+    public GpuPresentMode present_mode;
 }

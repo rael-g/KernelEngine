@@ -24,27 +24,27 @@ const log = std.log.scoped(.text_stb_truetype);
 /// The loader: the vtable the handle refers to, whose `handle` points back at the state, and the
 /// borrowed io every bake reads its font file through.
 const State = struct {
-    api: abi_text.ke_font_loader,
-    io: *abi_io.ke_io,
+    api: abi_text.c.ke_font_loader,
+    io: *abi_io.c.ke_io,
 };
 
-fn stateOf(self: *abi_text.ke_font_loader) *State {
+fn stateOf(self: *abi_text.c.ke_font_loader) *State {
     return @fieldParentPtr("api", self);
 }
 
 /// Frees the loader that `ke_font_loader_stb_create` allocated. A null loader is ignored. Fonts
 /// already loaded are separate allocations and stay valid until freed.
-fn destroy(self: ?*abi_text.ke_font_loader) callconv(.c) void {
+fn destroy(self: ?*abi_text.c.ke_font_loader) callconv(.c) void {
     const loader = self orelse return;
     gpa.destroy(stateOf(loader));
 }
 
 /// The whole file at `path`, released with the io's `free_bytes`. Fails with io when it cannot be
 /// read or is empty, and with out of memory when the request cannot be allocated.
-fn readFile(io: *abi_io.ke_io, path: [*c]const u8) R.Error![]const u8 {
-    var request: ?*abi_io.ke_io_request = null;
+fn readFile(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error![]const u8 {
+    var request: ?*abi_io.c.ke_io_request = null;
     try R.check(io.read_file.?(io, path, &request));
-    var file: abi_io.ke_io_result = undefined;
+    var file: abi_io.c.ke_io_result = undefined;
     R.check(io.wait.?(io, request, &file)) catch |err| switch (err) {
         error.OutOfMemory => return err,
         else => return error.Io,
@@ -61,14 +61,14 @@ fn readFile(io: *abi_io.ke_io, path: [*c]const u8) R.Error![]const u8 {
 /// and releases it through `free_font`; on failure it is null and nothing `bake` allocated
 /// survives.
 fn loadFont(
-    self: ?*abi_text.ke_font_loader,
+    self: ?*abi_text.c.ke_font_loader,
     path: [*c]const u8,
     pixel_size: f32,
     first_codepoint: u32,
     codepoint_count: u32,
     atlas_size: u32,
-    out_font: ?*[*c]abi_text.ke_font_data,
-) callconv(.c) abi_result.ke_result {
+    out_font: ?*[*c]abi_text.c.ke_font_data,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_font orelse return R.code(error.InvalidArgument);
     out.* = null;
     if (self == null or path == null) return R.code(error.InvalidArgument);
@@ -86,7 +86,7 @@ fn loadFont(
 /// is ended whenever it was begun. Fails with invalid argument for a non-positive pixel size or a
 /// zero atlas size or codepoint count, io when the file cannot be read, out of memory, and general
 /// when the packer cannot begin or pack the range or the font cannot be initialised.
-fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint: u32, codepoint_count: u32, atlas_size: u32) R.Error!*abi_text.ke_font_data {
+fn bake(io: *abi_io.c.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint: u32, codepoint_count: u32, atlas_size: u32) R.Error!*abi_text.c.ke_font_data {
     if (pixel_size <= 0.0 or atlas_size == 0 or codepoint_count == 0) return error.InvalidArgument;
 
     const ttf = try readFile(io, path);
@@ -127,7 +127,7 @@ fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint:
     const ascent = @as(f32, @floatFromInt(ascent_i)) * scale;
     const line_h = @as(f32, @floatFromInt(ascent_i - descent_i + line_gap_i)) * scale;
 
-    const glyphs = gpa.alloc(abi_text.ke_glyph_metrics, codepoint_count) catch return error.OutOfMemory;
+    const glyphs = gpa.alloc(abi_text.c.ke_glyph_metrics, codepoint_count) catch return error.OutOfMemory;
     errdefer gpa.free(glyphs);
 
     for (0..codepoint_count) |i| {
@@ -144,7 +144,7 @@ fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint:
         glyphs[i].advance_x = pcc.xadvance;
     }
 
-    const fd = gpa.create(abi_text.ke_font_data) catch return error.OutOfMemory;
+    const fd = gpa.create(abi_text.c.ke_font_data) catch return error.OutOfMemory;
     fd.* = .{
         .atlas_rgba = @ptrCast(atlas_rgba.ptr),
         .atlas_byte_count = @intCast(atlas_rgba.len),
@@ -160,22 +160,22 @@ fn bake(io: *abi_io.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint:
 
 /// Runs in the `free_font` slot. It sizes the atlas and glyph arrays from `atlas_byte_count` and
 /// `glyph_count`, so those fields must still hold what `loadFont` wrote.
-fn freeFont(self: ?*abi_text.ke_font_loader, data: [*c]abi_text.ke_font_data) callconv(.c) void {
+fn freeFont(self: ?*abi_text.c.ke_font_loader, data: [*c]abi_text.c.ke_font_data) callconv(.c) void {
     _ = self;
     if (data == null) return;
-    const d: *abi_text.ke_font_data = @ptrCast(data);
+    const d: *abi_text.c.ke_font_data = @ptrCast(data);
     if (d.atlas_rgba != null) {
         gpa.free(@as([*]u8, @ptrCast(d.atlas_rgba))[0..d.atlas_byte_count]);
     }
     if (d.glyphs != null) {
-        gpa.free(@as([*]abi_text.ke_glyph_metrics, @ptrCast(d.glyphs))[0..d.glyph_count]);
+        gpa.free(@as([*]abi_text.c.ke_glyph_metrics, @ptrCast(d.glyphs))[0..d.glyph_count]);
     }
     gpa.destroy(d);
 }
 
 /// Allocates the loader and fills the `load_font` and `free_font` slots; the handle's `destroy`
 /// releases it. Fails with out of memory when it cannot be allocated, leaving the handle zeroed.
-export fn ke_font_loader_stb_create(io_in: ?*abi_io.ke_io, out_loader: ?*abi_text.ke_font_loader_handle) callconv(.c) abi_result.ke_result {
+export fn ke_font_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_text.c.ke_font_loader_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const io = io_in orelse return R.code(error.InvalidArgument);
@@ -203,26 +203,26 @@ const zsub = @import("zsub");
 var served: ?[]const u8 = null;
 var request_token: u8 = 0;
 
-fn readServed(args: zsub.For(abi_io.ke_io).Args(.read_file)) abi_result.ke_result {
+fn readServed(args: zsub.For(abi_io.c.ke_io).Args(.read_file)) abi_result.c.ke_result {
     args[2].?.* = @ptrCast(&request_token);
     return R.ok;
 }
 
-fn waitServed(args: zsub.For(abi_io.ke_io).Args(.wait)) abi_result.ke_result {
+fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
     const bytes = served orelse return R.code(error.NotFound);
     if (args[2]) |out| {
-        out.* = std.mem.zeroes(abi_io.ke_io_result);
+        out.* = std.mem.zeroes(abi_io.c.ke_io_result);
         out.bytes = @constCast(bytes.ptr);
         out.size = bytes.len;
     }
     return R.ok;
 }
 
-fn freeServed(_: zsub.For(abi_io.ke_io).Args(.free_bytes)) void {}
+fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
 
 /// A substitute io serving `bytes` for every path, or no file at all when `bytes` is null.
 const ServedIo = struct {
-    sub: zsub.For(abi_io.ke_io),
+    sub: zsub.For(abi_io.c.ke_io),
 
     fn init(self: *ServedIo, bytes: ?[]const u8) !void {
         served = bytes;
@@ -236,8 +236,8 @@ const ServedIo = struct {
         self.sub.deinit();
     }
 
-    fn loader(self: *ServedIo) !abi_text.ke_font_loader_handle {
-        var h: abi_text.ke_font_loader_handle = undefined;
+    fn loader(self: *ServedIo) !abi_text.c.ke_font_loader_handle {
+        var h: abi_text.c.ke_font_loader_handle = undefined;
         try R.check(ke_font_loader_stb_create(self.sub.api(), &h));
         return h;
     }
@@ -266,7 +266,7 @@ test "loading a font from a null path fails" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_font.?(h.ref, null, 16.0, 32, 96, 512, &data)));
     try testing.expect(data == null);
 }
@@ -278,7 +278,7 @@ test "loading a font with a zero pixel size fails" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_font.?(h.ref, "test.ttf", 0.0, 32, 96, 512, &data)));
     try testing.expect(data == null);
 }
@@ -290,7 +290,7 @@ test "loading a font with a negative pixel size fails" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_font.?(h.ref, "test.ttf", -1.0, 32, 96, 512, &data)));
     try testing.expect(data == null);
 }
@@ -302,7 +302,7 @@ test "loading a font with a zero codepoint count fails" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_font.?(h.ref, "test.ttf", 16.0, 32, 0, 512, &data)));
     try testing.expect(data == null);
 }
@@ -314,7 +314,7 @@ test "loading a font with a zero atlas size fails" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.load_font.?(h.ref, "test.ttf", 16.0, 32, 96, 0, &data)));
     try testing.expect(data == null);
 }
@@ -328,7 +328,7 @@ test "loading a real system font produces an atlas with every requested glyph" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try R.check(h.ref.?.load_font.?(h.ref, "font.ttf", 16.0, 32, 96, 512, &data));
     defer h.ref.?.free_font.?(h.ref, data);
     try testing.expectEqual(@as(u32, 96), data.*.glyph_count);
@@ -342,13 +342,13 @@ test "loading a font file that does not exist fails with io" {
     const h = try served_io.loader();
     defer h.destroy.?(h.ref);
 
-    var data: [*c]abi_text.ke_font_data = null;
+    var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.Io, R.check(h.ref.?.load_font.?(h.ref, "missing.ttf", 16.0, 32, 96, 512, &data)));
     try testing.expect(data == null);
 }
 
 test "creating without an io is refused and leaves the handle zeroed" {
-    var h: abi_text.ke_font_loader_handle = .{ .ref = null, .destroy = null };
+    var h: abi_text.c.ke_font_loader_handle = .{ .ref = null, .destroy = null };
     try testing.expectError(error.InvalidArgument, R.check(ke_font_loader_stb_create(null, &h)));
     try testing.expect(h.ref == null);
 }

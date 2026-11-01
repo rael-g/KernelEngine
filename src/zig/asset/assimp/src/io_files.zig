@@ -14,7 +14,7 @@ const file_heap = std.heap.smp_allocator;
 /// the cursor Assimp reads from. `file` is what Assimp is handed; its `UserData` points back here.
 const OpenFile = struct {
     file: c.aiFile,
-    io: *abi_io.ke_io,
+    io: *abi_io.c.ke_io,
     raw: ?*anyopaque,
     bytes: [*]const u8,
     size: usize,
@@ -23,17 +23,17 @@ const OpenFile = struct {
 
 /// The bytes of the file at `path`, read whole through `io` and released with its `free_bytes`.
 /// A file the io cannot read fails with the code the io reported.
-pub fn readWhole(io: *abi_io.ke_io, path: [*:0]const u8) R.Error!abi_io.ke_io_result {
-    var request: ?*abi_io.ke_io_request = null;
+pub fn readWhole(io: *abi_io.c.ke_io, path: [*:0]const u8) R.Error!abi_io.c.ke_io_result {
+    var request: ?*abi_io.c.ke_io_request = null;
     try R.check(io.read_file.?(io, path, &request));
-    var result: abi_io.ke_io_result = undefined;
+    var result: abi_io.c.ke_io_result = undefined;
     try R.check(io.wait.?(io, request, &result));
     return result;
 }
 
 /// The aiFileIO of one import over `io`, which is borrowed for as long as the import runs. A file
 /// asked for writing is refused.
-pub fn of(io: *abi_io.ke_io) c.aiFileIO {
+pub fn of(io: *abi_io.c.ke_io) c.aiFileIO {
     return .{ .OpenProc = open, .CloseProc = close, .UserData = @ptrCast(io) };
 }
 
@@ -44,7 +44,7 @@ fn openOf(file: [*c]c.aiFile) *OpenFile {
 fn open(file_io: [*c]c.aiFileIO, path: [*c]const u8, mode: [*c]const u8) callconv(.c) [*c]c.aiFile {
     if (file_io == null or path == null) return null;
     if (mode != null and std.mem.indexOfScalar(u8, std.mem.span(mode), 'w') != null) return null;
-    const io: *abi_io.ke_io = @ptrCast(@alignCast(file_io.*.UserData));
+    const io: *abi_io.c.ke_io = @ptrCast(@alignCast(file_io.*.UserData));
     const read = readWhole(io, path) catch |err| {
         log.warn("reading {s} failed: {t}", .{ path, err });
         return null;

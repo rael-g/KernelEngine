@@ -1,3 +1,8 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
@@ -8,9 +13,11 @@ public unsafe partial struct ke_gpu_texture_view_params
     [NativeTypeName("const char *")]
     public sbyte* label;
 
-    public ke_gpu_texture_format format;
+    [NativeTypeName("ke_gpu_texture_format")]
+    public global::KernelEngine.Render.GpuTextureFormat format;
 
-    public ke_gpu_texture_dimension dimension;
+    [NativeTypeName("ke_gpu_texture_dimension")]
+    public global::KernelEngine.Render.GpuTextureDimension dimension;
 
     [NativeTypeName("ke_gpu_texture_aspect")]
     public uint aspect;

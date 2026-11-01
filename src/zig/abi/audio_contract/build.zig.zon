@@ -1,0 +1,13 @@
+.{
+    .name = .abi_audio_contract,
+    .version = "0.1.0",
+    .fingerprint = 0x411eaaab1bb706ab,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_audio_components = .{ .path = "../audio_components" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

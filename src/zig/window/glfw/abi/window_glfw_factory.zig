@@ -8,7 +8,7 @@ const window = @import("window");
 
 pub const ke_window_glfw_params = extern struct {
     /// Optional input sink target.
-    input: ?*input.ke_input = std.mem.zeroes(?*input.ke_input),
+    input: ?*input.c.ke_input = std.mem.zeroes(?*input.c.ke_input),
     /// Window title.
     title: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     width: i32 = std.mem.zeroes(i32),
@@ -17,8 +17,8 @@ pub const ke_window_glfw_params = extern struct {
 };
 
 /// Creates a window and starts it.
-pub extern fn ke_window_glfw_create(params: ?*const ke_window_glfw_params, out_window: ?*window.ke_window_handle) result.ke_result;
+pub extern fn ke_window_glfw_create(params: ?*const ke_window_glfw_params, out_window: ?*window.c.ke_window_handle) result.c.ke_result;
 
 /// Sends every line ke_window_glfw logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
-pub extern fn ke_window_glfw_set_log_callback(callback: logger.ke_log_callback, ctx: ?*anyopaque) void;
+pub extern fn ke_window_glfw_set_log_callback(callback: logger.c.ke_log_callback, ctx: ?*anyopaque) void;

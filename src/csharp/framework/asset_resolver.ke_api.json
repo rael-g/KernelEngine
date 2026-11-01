@@ -1,6 +1,381 @@
 {
   "enums": [
     {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_binding_hint_flags",
+      "doc": "What a pass states about a shader binding that the shader\u0027s reflection does not carry.",
+      "values": [
+        {
+          "name": "KE_RENDER_BINDING_HINT_DEPTH",
+          "value": 1,
+          "doc": "The texture is bound to a depth-format view."
+        },
+        {
+          "name": "KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET",
+          "value": 2,
+          "doc": "The buffer is bound with a dynamic offset given when its set is bound."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_resource_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_RENDER_RESOURCE_TEXTURE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_RESOURCE_BUFFER",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_size_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_RENDER_SIZE_ABSOLUTE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_stage",
+      "doc": "Where a pass that works on the frame\u0027s color runs. The stages run in this order, and the passes of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the service\u0027s color format, the later ones in the backbuffer\u0027s.",
+      "values": [
+        {
+          "name": "KE_RENDER_STAGE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_SKY",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TRANSPARENT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_HDR_POST",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_TONEMAP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_LDR_POST",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_OVERLAY",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_STAGE_COUNT",
+          "value": 7,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_chain_mode",
+      "doc": "What a pass in the chain does with the frame\u0027s color.",
+      "values": [
+        {
+          "name": "KE_RENDER_CHAIN_DRAW_OVER",
+          "value": 0,
+          "doc": "Draws over the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_SAMPLE_OVER",
+          "value": 1,
+          "doc": "Samples the current color, through the context\u0027s color_source, and draws over a copy of it, which becomes the current color."
+        },
+        {
+          "name": "KE_RENDER_CHAIN_REPLACE",
+          "value": 2,
+          "doc": "Samples the current color and writes every texel of a new one, which becomes the current color."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_depth_mode",
+      "doc": "How a pass\u0027s render pass uses the frame\u0027s depth.",
+      "values": [
+        {
+          "name": "KE_RENDER_DEPTH_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_DEPTH_TEST",
+          "value": 1,
+          "doc": "Attached and tested against; the pass\u0027s pipeline does not write it."
+        },
+        {
+          "name": "KE_RENDER_DEPTH_WRITE",
+          "value": 2,
+          "doc": "Attached, tested against and written."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_mesh_primitive",
       "doc": null,
       "values": [
@@ -29,6 +404,944 @@
     }
   ],
   "structs": [
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_spec",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal_path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "ke_alpha_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "_Bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "_Bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_binding_hint",
+      "doc": "A hint for the binding a shader declares under \u0060name\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "flags",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_shader_binding",
+      "doc": "What one named parameter of a shader is bound to; only the field its type reads is used.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "The parameter\u0027s name; the uniform data of a block is named after the block."
+        },
+        {
+          "name": "buffer",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_offset",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "texture_view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sampler",
+          "type": "ke_gpu_sampler",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_shader_layout_params",
+      "doc": "The compiled shader a layout is built for.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "shader",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Logical name the shader was compiled under, as a render service\u0027s load_shader takes it."
+        },
+        {
+          "name": "stages",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bitwise OR of the KE_GPU_SHADER_STAGE_* stages the shader is compiled for."
+        },
+        {
+          "name": "hints",
+          "type": "const ke_render_binding_hint *",
+          "tags": [
+            "array_of:hint_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "hint_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_material_data",
+      "doc": "The data of one material, as the \u0060mat\u0060 parameter block of a material shader reads it.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Linear RGBA."
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [],
+          "doc": "The discard threshold; 0 draws every fragment."
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal_map",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_resource_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_render_resource_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size_mode",
+          "type": "ke_render_size_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Read when size_mode is ABSOLUTE."
+        },
+        {
+          "name": "height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale_x",
+          "type": "float",
+          "tags": [],
+          "doc": "Read when size_mode is RELATIVE_TO_BACKBUFFER."
+        },
+        {
+          "name": "scale_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "clear_value",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Per-resource clear color."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_frame_globals",
+      "doc": "What every shader reads about the frame being drawn, under the parameter \u0060ke_frame\u0060. Matrices are stored the way the math library stores them.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "view",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_view_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "inv_proj",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "camera_pos",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "World position of the camera in xyz; w is 1."
+        },
+        {
+          "name": "viewport",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Backbuffer width and height in pixels in xy; zw are 0."
+        },
+        {
+          "name": "time",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the first frame."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous frame."
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_lighting",
+      "doc": "The scene\u0027s light that every lit shader reads, under the parameter \u0060ke_lighting\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Direction the directional light travels in xyz; w is 1 when the scene has one, else 0."
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Color of the directional light in rgb; a is its intensity."
+        },
+        {
+          "name": "ambient",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Ambient color in rgb; a is 0."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_pass_io",
+      "doc": "A pass\u0027s declared resource I/O. Every write is cleared when the pass\u0027s render pass opens. A pass in the chain draws into the frame\u0027s color as its first color attachment, before its writes.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name the pass\u0027s render or compute pass is labeled with; copied when the pass begins."
+        },
+        {
+          "name": "reads",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:reads_count"
+          ],
+          "doc": "The tags the pass reads."
+        },
+        {
+          "name": "reads_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "writes",
+          "type": "const char *const *",
+          "tags": [
+            "array_of:writes_count"
+          ],
+          "doc": "The tags the pass writes."
+        },
+        {
+          "name": "writes_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "chain",
+          "type": "ke_render_chain_link",
+          "tags": [],
+          "doc": "The pass\u0027s link, or KE_RENDER_CHAIN_NONE for a pass outside the chain."
+        },
+        {
+          "name": "depth",
+          "type": "ke_render_depth_mode",
+          "tags": [],
+          "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vertex",
+      "doc": "Per-vertex data of a mesh, as uploaded.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "nx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "ny",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "nz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "u",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "v",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "tx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "ty",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tw",
+          "type": "float",
+          "tags": [],
+          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_mesh_shape_data",
       "doc": "The vertices and indices of a baked mesh shape.",
@@ -410,6 +1723,1559 @@
   ],
   "vtables": [
     {
+      "name": "ke_render_resource_binder",
+      "doc": "Brings the resources of a frame to the shaders that read them. A pass names a shader\u0027s parameters and never learns how they reach it: in groups, in tables indexed per draw, or any other way the implementation chooses.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "provide",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Makes \u0060binding\u0060 the resource of every shader parameter of its name that a resource set leaves out. The name is copied.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the binding has no name, or KE_RESULT_OUT_OF_MEMORY when it cannot be kept.",
+          "params": [
+            {
+              "name": "binding",
+              "type": "const ke_render_shader_binding *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_shader_layout",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Builds the layout of a compiled shader from what the build recorded about it.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the shader\u0027s record is missing, or KE_RESULT_INVALID_ARGUMENT when it cannot be read or a hint names no parameter of the shader, the reason logged.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_render_shader_layout_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_layout",
+              "type": "ke_render_shader_layout *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the layout; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_shader_layout",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a layout; the invalid one is ignored. A set created against it must be destroyed first.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "pipeline_layouts",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Fills the bind group layouts a pipeline running the shader of \u0060layout\u0060 declares.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT when the layout is unknown or the shader needs more than \u0060capacity\u0060 layouts.",
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_layouts",
+              "type": "ke_gpu_bind_group_layout *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the layouts in the order the pipeline takes them; they stay owned by the binder and live as long as \u0060layout\u0060."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "The number of entries \u0060out_layouts\u0060 holds."
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of layouts written."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_set",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Binds resources to one group of a shader by the names its parameters carry. A parameter left out is bound to what \u0060provide\u0060 gave under its name.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the shader declares no such block, or KE_RESULT_INVALID_ARGUMENT when a binding names no parameter of the group, a parameter is bound twice or a parameter has no resource, the reason logged.",
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "block",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Name of a parameter block the shader declares; NULL selects its parameters declared outside any block."
+            },
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Name shown by capture and validation tools."
+            },
+            {
+              "name": "bindings",
+              "type": "const ke_render_shader_binding *",
+              "tags": [
+                "array_of:binding_count"
+              ],
+              "doc": "The resources bound, each to the parameter it names."
+            },
+            {
+              "name": "binding_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_set",
+              "type": "ke_render_resource_set *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the set; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a set; the invalid one is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_render_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes the resources of \u0060set\u0060 those the next draws of \u0060pass\u0060 read, with one dynamic offset per binding hinted KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET, in the order the shader declares them.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_render_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [
+                "array_of:dynamic_offset_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offset_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_compute_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes the resources of \u0060set\u0060 those the next dispatches of \u0060pass\u0060 read, as bind_render_set does.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_compute_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offset_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_material",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Keeps the data of one material for the shaders that draw with it. The texture views are borrowed and must outlive the binding.",
+          "return_doc": "KE_OK, or the device\u0027s code.",
+          "params": [
+            {
+              "name": "data",
+              "type": "const ke_render_material_data *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_material",
+              "type": "ke_render_material_binding *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the binding; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a material binding; the invalid one is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "material",
+              "type": "ke_render_material_binding",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes \u0060material\u0060 the one the next draws of \u0060pass\u0060 with the shader of \u0060layout\u0060 read. An unknown material or a shader that declares no material binds nothing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_render_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "material",
+              "type": "ke_render_material_binding",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_resource_binder_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_resource_binder *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_resource_binder *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_service",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "declare",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a transient resource the service allocates and recycles.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_render_resource_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the tag-component cid to place in a pass\u0027s access_list."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "import_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Imports an externally-owned texture under \u0060name\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "tex",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives its tag-component cid."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "import_tag",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the cid."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "import_buffer",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Publishes an externally-owned GPU buffer under \u0060name\u0060 for another pass to bind by name.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "buffer",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives its tag-component cid."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "cid",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": null,
+          "return_doc": "The tag cid minted for \u0060name\u0060, or KE_COMPONENT_INVALID.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "begin_pass",
+          "returns": "struct ke_render_pass_ctx *",
+          "tags": [],
+          "doc": "Opens a pass\u0027s recording context, from inside a render system\u0027s body.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "io",
+              "type": "const ke_render_pass_io *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "end_pass",
+          "returns": "void",
+          "tags": [],
+          "doc": "Closes a recording context opened by begin_pass.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "ctx",
+              "type": "struct ke_render_pass_ctx *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "begin_frame",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target\u0027s code when acquiring failed.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "end_frame",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target\u0027s code when presenting failed.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "upload_mesh",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Uploads interleaved vertices and 16-bit indices to device buffers.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key; required."
+            },
+            {
+              "name": "vertices",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "vertices_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "indices",
+              "type": "const uint16_t *",
+              "tags": [
+                "array_of:index_count"
+              ],
+              "doc": "Triangle list indices."
+            },
+            {
+              "name": "index_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_mesh",
+              "type": "ke_mesh_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded mesh."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "mesh_buffers",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_mesh_handle",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_vbo",
+              "type": "ke_gpu_buffer *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_ibo",
+              "type": "ke_gpu_buffer *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_index_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "set_clear_color",
+          "returns": "void",
+          "tags": [],
+          "doc": "The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "r",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "g",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "b",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "a",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "upload_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key; required."
+            },
+            {
+              "name": "width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "rgba",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_texture",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded texture."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "create_material",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key; required."
+            },
+            {
+              "name": "base_color",
+              "type": "const float *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "metallic",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "roughness",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "albedo",
+              "type": "ke_texture_handle",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "normal",
+              "type": "ke_texture_handle",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "alpha_mode",
+              "type": "ke_alpha_mode",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "alpha_cutoff",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "ior",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "distortion_strength",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "shader",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Authored material name; NULL/empty selects the engine default."
+            },
+            {
+              "name": "out_material",
+              "type": "ke_material_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the material."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "material_binding",
+          "returns": "ke_render_material_binding",
+          "tags": [],
+          "doc": "What the service\u0027s resource binder holds for a material handle, the argument a pass gives its bind_material; an unknown handle resolves to the built-in white material.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "material_alpha_mode",
+          "returns": "ke_alpha_mode",
+          "tags": [],
+          "doc": "The pass bucket for a material handle, resolved from CPU-side storage \u2014 no GPU state touched.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "material_alpha_cutoff",
+          "returns": "float",
+          "tags": [],
+          "doc": "The MASK discard threshold for a material handle.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "upload_cubemap",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key; required."
+            },
+            {
+              "name": "face_size",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "faces",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cubemap",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the handle of the uploaded cubemap."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "texture_view",
+          "returns": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": "The GPU view for a texture/cubemap handle.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_texture_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_view",
+          "returns": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": "The GPU view of a declared transient resource, by name.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_texture",
+          "returns": "ke_gpu_texture",
+          "tags": [],
+          "doc": "The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_buffer",
+          "returns": "ke_gpu_buffer",
+          "tags": [],
+          "doc": "The GPU buffer published under \u0060name\u0060 via import_buffer.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_buffer_size",
+          "returns": "uint64_t",
+          "tags": [],
+          "doc": "The size (bytes) of the buffer published under \u0060name\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "backbuffer_size",
+          "returns": "void",
+          "tags": [],
+          "doc": "The backbuffer\u0027s pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame\u0027s size.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_w",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_h",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "upload",
+          "returns": "void",
+          "tags": [],
+          "doc": "Records a buffer upload to be flushed single-threaded at end_frame (before submit).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "buffer",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "get_or_create_pipeline",
+          "returns": "ke_gpu_pipeline",
+          "tags": [],
+          "doc": "Returns the pipeline for this exact params state, compiling it on first request.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_gpu_render_pipeline_params *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "material_shader",
+          "returns": "const char *",
+          "tags": [],
+          "doc": "The authored-material shader name a material handle was created with (see create_material\u0027s \u0060shader\u0060).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "retain_mesh",
+          "returns": "void",
+          "tags": [],
+          "doc": "Adds a reference to a mesh, keeping it resident.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_mesh_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "release_mesh",
+          "returns": "void",
+          "tags": [],
+          "doc": "Drops a reference to a mesh, freeing it at zero.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_mesh_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "retain_texture",
+          "returns": "void",
+          "tags": [],
+          "doc": "Adds a reference to a texture, keeping it resident.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_texture_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "release_texture",
+          "returns": "void",
+          "tags": [],
+          "doc": "Drops a reference to a texture, freeing it at zero.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_texture_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "retain_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Adds a reference to a material, keeping it resident.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "release_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Drops a reference to a material, freeing it at zero.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_material_handle",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "try_get_mesh",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle to \u0060out\u0060. try_get_texture also serves cubemaps (shared cache).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key."
+            },
+            {
+              "name": "out",
+              "type": "ke_mesh_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resident handle on a cache hit."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "try_get_texture",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Path-keyed probe for a resident texture upload.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key."
+            },
+            {
+              "name": "out",
+              "type": "ke_texture_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resident handle on a cache hit."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "try_get_material",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Path-keyed probe for a resident material.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Dedup cache key."
+            },
+            {
+              "name": "out",
+              "type": "ke_material_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resident handle on a cache hit."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "white_texture",
+          "returns": "ke_texture_handle",
+          "tags": [],
+          "doc": "The built-in 1\u00D71 white texture, resolvable everywhere a neutral albedo is wanted.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "load_shader",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "stage",
+              "type": "ke_gpu_shader_stage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_module",
+              "type": "ke_gpu_shader_module *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the module."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "set_frame_globals",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the frame globals and records their upload; a shader reads them as \u0060ke_frame\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "globals",
+              "type": "const ke_render_frame_globals *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "frame_globals",
+          "returns": "const ke_render_frame_globals *",
+          "tags": [],
+          "doc": "The frame globals last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "set_lighting",
+          "returns": "void",
+          "tags": [],
+          "doc": "Replaces the scene\u0027s light and records its upload; a shader reads it as \u0060ke_lighting\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "lighting",
+              "type": "const ke_render_lighting *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "lighting",
+          "returns": "const ke_render_lighting *",
+          "tags": [],
+          "doc": "The scene\u0027s light last set, zero before the first.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_binder",
+          "returns": "ke_render_resource_binder *",
+          "tags": [],
+          "doc": "The resource binder the service was created with, through which a pass brings its resources to its shaders; the service has given it \u0060ke_frame\u0060, \u0060ke_lighting\u0060 and the \u0060ke_samp_*\u0060 samplers.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "backbuffer_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the backbuffer, the format a pipeline drawing into it declares.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "resource_generation",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "Counts the times the targets declared relative to the backbuffer were recreated, which \u0060begin_frame\u0060 does when the backbuffer changes size. A pass that keeps something made from a declared target\u0027s view, a bind group for instance, rebuilds it when the count changes.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "join_chain",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a stage or mode out of range.",
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "mode",
+              "type": "ke_render_chain_mode",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_link",
+              "type": "ke_render_chain_link *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the link; KE_RENDER_CHAIN_NONE on failure."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "leave_chain",
+          "returns": "void",
+          "tags": [],
+          "doc": "Gives the place back. An unknown link is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "link",
+              "type": "ke_render_chain_link",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "chain_format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of the color a pass of stage draws into, the format its pipeline declares.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "stage",
+              "type": "ke_render_stage",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_service_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_service *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_service *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_image_loader",
+      "doc": "Decodes 2D images (PNG/JPG/...) from disk into RGBA8. Async dispatch is the caller\u0027s responsibility.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_image",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Loads an image from path into a newly allocated ke_texture_data (RGBA8).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_image; KE_RESULT_NOT_FOUND when the file cannot be decoded, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Image file path to decode."
+            },
+            {
+              "name": "out_image",
+              "type": "ke_texture_data **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the image, which the caller owns and releases with free_image; NULL on failure."
+            }
+          ],
+          "receiver": "struct ke_image_loader *"
+        },
+        {
+          "name": "free_image",
+          "returns": "void",
+          "tags": [
+            "releases:Image"
+          ],
+          "doc": "Frees a ke_texture_data previously returned by load_image. A null data is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "data",
+              "type": "ke_texture_data *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_image_loader *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_image_loader_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_image_loader *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_image_loader *"
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_font_loader",
       "doc": "Decodes font files (TTF/OTF/\u2026) on the CPU. Async dispatch is the caller\u0027s concern.",
       "tags": [
@@ -498,7 +3364,9 @@
     {
       "name": "ke_font_loader_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -855,7 +3723,9 @@
     {
       "name": "ke_asset_resolver_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -879,6 +3749,11 @@
   ],
   "functions": [],
   "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
@@ -894,6 +3769,10 @@
     "ke_gpu_pipeline": "uint64_t",
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
-    "ke_gpu_queue": "uint64_t"
+    "ke_gpu_queue": "uint64_t",
+    "ke_render_shader_layout": "uint64_t",
+    "ke_render_resource_set": "uint64_t",
+    "ke_render_material_binding": "uint64_t",
+    "ke_render_chain_link": "uint32_t"
   }
 }

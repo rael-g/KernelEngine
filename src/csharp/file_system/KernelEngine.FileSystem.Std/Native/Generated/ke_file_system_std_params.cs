@@ -1,5 +1,8 @@
+using System.Numerics;
+
+using global::KernelEngine.Logger;
+
 using KernelEngine.FileSystem.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.FileSystem.Std.Native;

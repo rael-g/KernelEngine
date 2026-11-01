@@ -27,6 +27,7 @@ extern "C"
                           const char *path);
     } ke_configuration_source;
 
+    /// [owner]
     typedef struct ke_configuration_source_handle
     {
         ke_configuration_source *ref;

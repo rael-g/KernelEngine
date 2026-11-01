@@ -138,12 +138,12 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         {
             device = _device.@ref,
             window = win,
-            present_mode = vsync ? ke_gpu_present_mode.KE_GPU_PRESENT_MODE_FIFO : ke_gpu_present_mode.KE_GPU_PRESENT_MODE_IMMEDIATE,
+            present_mode = vsync ? GpuPresentMode.Fifo : GpuPresentMode.Immediate,
         };
         fixed (ke_gpu_render_target_handle* made = &_target)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(&tp, made), "webgpu window render target create");
 
-        var ar = services.GetService<KernelEngine.Framework.NativeAssetResolver>() is { } resolver
+        var ar = services.GetService<KernelEngine.Framework.AssetResolver>() is { } resolver
             ? (KernelEngine.Asset.Native.ke_asset_resolver*)((KernelEngine.Framework.INativeAssetResolver)resolver).Native
             : null;
         Compose(rt, ec, wd, ar, io.Native, config);
@@ -219,10 +219,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             ecs = ec,
             service = core,
             camera = _camera.@ref,
-            camera_cid = ids.camera,
-            world_transform_cid = ids.world_transform,
-            directional_light_cid = ids.directional_light,
-            ambient_light_cid = ids.ambient_light,
+            camera_cid = ids.Camera,
+            world_transform_cid = ids.WorldTransform,
+            directional_light_cid = ids.DirectionalLight,
+            ambient_light_cid = ids.AmbientLight,
         };
         fixed (ke_render_frame_handle* made = &_frame)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(&frp, made), "frame create");
@@ -242,9 +242,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                     device = dev,
                     view_space = _viewSpace.@ref,
                     ndc = ndc,
-                    mesh_cid = ids.mesh,
-                    world_transform_cid = ids.world_transform,
-                    light_cid = ids.directional_light,
+                    mesh_cid = ids.Mesh,
+                    world_transform_cid = ids.WorldTransform,
+                    light_cid = ids.DirectionalLight,
                     frame_cid = frameCid,
                     output = shadowGroup,
                 };
@@ -259,10 +259,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 device = dev,
                 view_space = _viewSpace.@ref,
                 camera = _camera.@ref,
-                point_light_cid = ids.point_light,
-                spot_light_cid = ids.spot_light,
-                world_transform_cid = ids.world_transform,
-                camera_cid = ids.camera,
+                point_light_cid = ids.PointLight,
+                spot_light_cid = ids.SpotLight,
+                world_transform_cid = ids.WorldTransform,
+                camera_cid = ids.Camera,
                 frame_cid = frameCid,
                 output = (sbyte*)clustersName,
                 grid_x = _clusterGridXOverride != 0 ? _clusterGridXOverride : (uint)(config?.GetInt("render", "cluster_grid_x", 0) ?? 0),
@@ -280,65 +280,65 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
                 runtime = rt,
                 service = core,
                 device = dev,
-                mesh_cid = ids.mesh,
-                world_transform_cid = ids.world_transform,
-                camera_cid = ids.camera,
+                mesh_cid = ids.Mesh,
+                world_transform_cid = ids.WorldTransform,
+                camera_cid = ids.Camera,
                 frame_cid = frameCid,
                 output = (sbyte*)gbufferName,
             };
             fixed (ke_render_gbuffer_handle* made = &_gbuffer)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&gbp, made), "gbuffer pass create");
 
-            var dlp = new ke_render_deferred_lighting_params
+            var dlp = new RenderDeferredLightingParams
             {
-                runtime = rt,
-                service = core,
-                device = dev,
-                ibl_enabled = _enableIbl,
-                camera_cid = ids.camera,
-                world_transform_cid = ids.world_transform,
-                skybox_cid = ids.skybox,
-                frame_cid = frameCid,
-                gbuffer = (sbyte*)gbufferName,
-                shadow = shadowGroup,
-                clusters = (sbyte*)clustersName,
+                Runtime = rt,
+                Service = core,
+                Device = dev,
+                IblEnabled = _enableIbl,
+                CameraCid = ids.Camera,
+                WorldTransformCid = ids.WorldTransform,
+                SkyboxCid = ids.Skybox,
+                FrameCid = frameCid,
+                Gbuffer = (sbyte*)gbufferName,
+                Shadow = shadowGroup,
+                Clusters = (sbyte*)clustersName,
             };
             fixed (ke_render_deferred_lighting_handle* made = &_deferred)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&dlp, made), "deferred lighting pass create");
 
-            var skp = new ke_render_skybox_params
+            var skp = new RenderSkyboxParams
             {
-                runtime = rt,
-                service = core,
-                device = dev,
-                camera = _camera.@ref,
-                camera_cid = ids.camera,
-                world_transform_cid = ids.world_transform,
-                skybox_cid = ids.skybox,
-                frame_cid = frameCid,
+                Runtime = rt,
+                Service = core,
+                Device = dev,
+                Camera = _camera.@ref,
+                CameraCid = ids.Camera,
+                WorldTransformCid = ids.WorldTransform,
+                SkyboxCid = ids.Skybox,
+                FrameCid = frameCid,
             };
             fixed (ke_render_skybox_handle* made = &_skybox)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_create(&skp, made), "skybox pass create");
 
-            var fwp = new ke_render_forward_params
+            var fwp = new RenderForwardParams
             {
-                runtime = rt,
-                service = core,
-                device = dev,
-                ibl_enabled = _enableIbl,
-                mesh_cid = ids.mesh,
-                world_transform_cid = ids.world_transform,
-                camera_cid = ids.camera,
-                skybox_cid = ids.skybox,
-                frame_cid = frameCid,
-                shadow = shadowGroup,
-                clusters = (sbyte*)clustersName,
+                Runtime = rt,
+                Service = core,
+                Device = dev,
+                IblEnabled = _enableIbl,
+                MeshCid = ids.Mesh,
+                WorldTransformCid = ids.WorldTransform,
+                CameraCid = ids.Camera,
+                SkyboxCid = ids.Skybox,
+                FrameCid = frameCid,
+                Shadow = shadowGroup,
+                Clusters = (sbyte*)clustersName,
             };
             fixed (ke_render_forward_handle* made = &_forward)
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&fwp, made), "forward pass create");
         }
 
-        var tmp = new ke_render_tonemap_params { runtime = rt, service = core, device = dev, frame_cid = frameCid };
+        var tmp = new RenderTonemapParams { Runtime = rt, Service = core, Device = dev, FrameCid = frameCid };
         fixed (ke_render_tonemap_handle* made = &_tonemap)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&tmp, made), "tonemap pass create");
 
@@ -346,7 +346,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         fixed (ke_render_ui_handle* made = &_ui)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_create(&uip, made), "ui pass create");
 
-        var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, label_cid = ids.label };
+        var lrp = new ke_render_label_resolve_params { runtime = rt, service = core, ui = _ui.@ref, resolver = ar, label_cid = ids.Label };
         fixed (ke_render_label_resolve_handle* made = &_labels)
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&lrp, made), "label resolve create");
 
@@ -393,8 +393,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         fixed (MeshVertex* v = vertices)
         {
-            var h = _renderService.UploadMesh(key, v, (nuint)(vertices.Length * sizeof(MeshVertex)), indices);
-            return new MeshHandle(h.bits);
+            var h = _renderService.UploadMesh(key, (nint)v, (nuint)(vertices.Length * sizeof(MeshVertex)), indices);
+            return h;
         }
     }
 
@@ -407,8 +407,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         fixed (byte* p = rgba)
         {
-            var h = _renderService.UploadTexture(key, width, height, p);
-            return new TextureHandle(h.bits);
+            var h = _renderService.UploadTexture(key, width, height, (nint)p);
+            return h;
         }
     }
 
@@ -421,8 +421,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
 
         fixed (byte* p = faces)
         {
-            var h = _renderService.UploadCubemap(key, faceSize, p);
-            return new TextureHandle(h.bits);
+            var h = _renderService.UploadCubemap(key, faceSize, (nint)p);
+            return h;
         }
     }
 
@@ -437,11 +437,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        var albedoH = new ke_texture_handle { bits = albedo?.Value ?? uint.MaxValue };
-        var normalH = new ke_texture_handle { bits = normalMap?.Value ?? uint.MaxValue };
-        var h = _renderService.CreateMaterial(key, &baseColor.X, metallic, roughness, albedoH, normalH,
-            (ke_alpha_mode)(int)alphaMode, alphaCutoff, ior, distortionStrength, shader ?? "");
-        return new MaterialHandle(h.bits);
+        var albedoH = albedo ?? new TextureHandle { Bits = uint.MaxValue };
+        var normalH = normalMap ?? new TextureHandle { Bits = uint.MaxValue };
+        var h = _renderService.CreateMaterial(key, (nint)(&baseColor.X), metallic, roughness, albedoH, normalH,
+            alphaMode, alphaCutoff, ior, distortionStrength, shader ?? "");
+        return h;
     }
 
     /// <summary>
@@ -456,28 +456,28 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         {
             if (_renderService == null)
                 throw new InvalidOperationException("WhiteTexture read before the render module was loaded");
-            return new TextureHandle(_renderService.WhiteTexture().bits);
+            return _renderService.WhiteTexture();
         }
     }
 
     /// <inheritdoc/>
-    public void RetainMesh(MeshHandle h) => _renderService!.RetainMesh(new ke_mesh_handle { bits = h.Value });
+    public void RetainMesh(MeshHandle h) => _renderService!.RetainMesh(h);
     /// <inheritdoc/>
-    public void ReleaseMesh(MeshHandle h) => _renderService!.ReleaseMesh(new ke_mesh_handle { bits = h.Value });
+    public void ReleaseMesh(MeshHandle h) => _renderService!.ReleaseMesh(h);
     /// <inheritdoc/>
-    public void RetainTexture(TextureHandle h) => _renderService!.RetainTexture(new ke_texture_handle { bits = h.Value });
+    public void RetainTexture(TextureHandle h) => _renderService!.RetainTexture(h);
     /// <inheritdoc/>
-    public void ReleaseTexture(TextureHandle h) => _renderService!.ReleaseTexture(new ke_texture_handle { bits = h.Value });
+    public void ReleaseTexture(TextureHandle h) => _renderService!.ReleaseTexture(h);
     /// <inheritdoc/>
-    public void RetainMaterial(MaterialHandle h) => _renderService!.RetainMaterial(new ke_material_handle { bits = h.Value });
+    public void RetainMaterial(MaterialHandle h) => _renderService!.RetainMaterial(h);
     /// <inheritdoc/>
-    public void ReleaseMaterial(MaterialHandle h) => _renderService!.ReleaseMaterial(new ke_material_handle { bits = h.Value });
+    public void ReleaseMaterial(MaterialHandle h) => _renderService!.ReleaseMaterial(h);
 
     /// <inheritdoc/>
     public bool TryGetMesh(string key, out MeshHandle handle)
     {
         var found = _renderService!.TryGetMesh(key, out var h);
-        handle = new MeshHandle(h.bits);
+        handle = h;
         return found;
     }
 
@@ -485,7 +485,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     public bool TryGetTexture(string key, out TextureHandle handle)
     {
         var found = _renderService!.TryGetTexture(key, out var h);
-        handle = new TextureHandle(h.bits);
+        handle = h;
         return found;
     }
 
@@ -493,7 +493,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     public bool TryGetMaterial(string key, out MaterialHandle handle)
     {
         var found = _renderService!.TryGetMaterial(key, out var h);
-        handle = new MaterialHandle(h.bits);
+        handle = h;
         return found;
     }
 
@@ -506,26 +506,26 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         ArgumentException.ThrowIfNullOrEmpty(key);
 
         var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
-        var native = stackalloc ke_glyph_metrics[glyphs.Length];
+        var native = stackalloc KernelEngine.Text.GlyphMetrics[glyphs.Length];
         for (int i = 0; i < glyphs.Length; i++)
         {
             var g = glyphs[i];
-            native[i] = new ke_glyph_metrics
+            native[i] = new KernelEngine.Text.GlyphMetrics
             {
-                codepoint = g.Codepoint,
-                u0 = g.U0,
-                v0 = g.V0,
-                u1 = g.U1,
-                v1 = g.V1,
-                bearing_x = g.BearingX,
-                bearing_y = g.BearingY,
-                width = g.Width,
-                height = g.Height,
-                advance_x = g.AdvanceX,
+                Codepoint = g.Codepoint,
+                U0 = g.U0,
+                V0 = g.V0,
+                U1 = g.U1,
+                V1 = g.V1,
+                BearingX = g.BearingX,
+                BearingY = g.BearingY,
+                Width = g.Width,
+                Height = g.Height,
+                AdvanceX = g.AdvanceX,
             };
         }
 
-        var texH = new ke_texture_handle { bits = atlas.Value };
+        var texH = atlas;
         KernelEngine.Render.Native.ke_ui_font_handle h;
         fixed (byte* k = keyBytes)
             KernelEngine.NativeResults.ThrowIfFailed(_ui.@ref->load_font(_ui.@ref, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &h), "load_font");

@@ -4,6 +4,7 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Ecs;
 
 namespace KernelEngine.Runtime;
 
@@ -50,10 +51,10 @@ public interface IRuntime : IDisposable
     ulong LastSystem();
     /// <summary>Declares member one of the members of the exclusive group group: no entity holds two members of one group. Two systems whose every query requires a different member of the same group touch disjoint entities, so what they access through their queries puts no order between them; what their access lists name still does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void DeclareExclusive(uint group, uint member);
+    void DeclareExclusive(ComponentId group, ComponentId member);
     /// <summary>Declares that whoever owns cid orders the systems writing it, so the runtime puts no order between two writers of cid. A writer still runs before a system that only reads it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void DeclareSelfOrdered(uint cid);
+    void DeclareSelfOrdered(ComponentId cid);
     /// <summary>Builds the order of every phase as the next tick would. Within a phase, a system runs after the systems it names in `after` and before those it names in `before`, a writer of a component before a system that only reads it, and of two writers with neither order, the one registered first runs first: an ambiguity.</summary>
     /// <param name="refuseAmbiguity">When true, an ambiguity fails the check too.</param>
     /// <exception cref="Exception">The native call failed.</exception>

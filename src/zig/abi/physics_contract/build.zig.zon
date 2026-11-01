@@ -1,0 +1,13 @@
+.{
+    .name = .abi_physics_contract,
+    .version = "0.1.0",
+    .fingerprint = 0x98f054644790e10e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_physics_components = .{ .path = "../physics_components" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

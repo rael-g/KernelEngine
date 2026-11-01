@@ -1,5 +1,9 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
 using KernelEngine.Ecs.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -21,14 +25,14 @@ public unsafe partial struct ke_render_frame_params
     public KernelEngine.Render.Native.ke_render_camera* camera;
 
     [NativeTypeName("ke_component_id")]
-    public uint camera_cid;
+    public global::KernelEngine.Ecs.ComponentId camera_cid;
 
     [NativeTypeName("ke_component_id")]
-    public uint world_transform_cid;
+    public global::KernelEngine.Ecs.ComponentId world_transform_cid;
 
     [NativeTypeName("ke_component_id")]
-    public uint directional_light_cid;
+    public global::KernelEngine.Ecs.ComponentId directional_light_cid;
 
     [NativeTypeName("ke_component_id")]
-    public uint ambient_light_cid;
+    public global::KernelEngine.Ecs.ComponentId ambient_light_cid;
 }

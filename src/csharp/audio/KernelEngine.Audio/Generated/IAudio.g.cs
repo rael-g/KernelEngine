@@ -3,6 +3,7 @@
 
 #nullable enable
 
+using KernelEngine.Audio.Native;
 using KernelEngine.Common;
 
 namespace KernelEngine.Audio;

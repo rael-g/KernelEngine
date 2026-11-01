@@ -16,11 +16,11 @@ public class AudioTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockLoadSound(ke_audio* self, sbyte* path, uint* outSound)
+    private static unsafe global::KernelEngine.Result.Native.Result MockLoadSound(ke_audio* self, sbyte* path, uint* outSound)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
         *outSound = LastResult ? 42u : 0u;
-        return LastResult ? ke_result.KE_OK : ke_result.KE_RESULT_NOT_FOUND;
+        return LastResult ? global::KernelEngine.Result.Native.Result.Ok : global::KernelEngine.Result.Native.Result.NotFound;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -30,12 +30,12 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
+    private static unsafe global::KernelEngine.Result.Native.Result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
     {
         LastSoundId = soundId;
         LastVolume = volume;
         LastLoop = loop;
-        return ke_result.KE_OK;
+        return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]

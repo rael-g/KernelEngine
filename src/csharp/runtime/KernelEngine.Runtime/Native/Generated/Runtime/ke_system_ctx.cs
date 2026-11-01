@@ -1,5 +1,10 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+using global::KernelEngine.Runtime;
+
 using KernelEngine.Ecs.Native;
-using KernelEngine.Logger.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.TaskPool.Native;
 

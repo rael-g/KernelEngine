@@ -5,10 +5,12 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Io.Native;
+using KernelEngine.FileSystem;
 using KernelEngine.FileSystem.Native;
+using KernelEngine.Io.Native;
 
 namespace KernelEngine.Io;
 
@@ -19,7 +21,7 @@ public unsafe interface INativeIo
 }
 
 /// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
-public unsafe partial class Io : IDisposable, INativeIo
+public unsafe partial class Io : IDisposable, INativeIo, IIo
 {
     private ke_io* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_io*, void> _destroy;
@@ -52,22 +54,36 @@ public unsafe partial class Io : IDisposable, INativeIo
     /// <param name="path">The file to read; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* ReadFile(sbyte* path)
+    public IoRequest ReadFile(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_file(Handle, path, &resultOut), "read_file");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->read_file(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "read_file");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the opening of a file for read_at.</summary>
     /// <param name="path">The file to open; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* Open(sbyte* path)
+    public IoRequest Open(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, path, &resultOut), "open");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "open");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits a read from an open file at an offset; it reads fewer than len bytes only at the end of the file.</summary>
@@ -77,55 +93,83 @@ public unsafe partial class Io : IDisposable, INativeIo
     /// <param name="len">The number of bytes dst holds.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* ReadAt(ke_open_file* file, ulong offset, nint dst, nuint len)
+    public IoRequest ReadAt(nint file, ulong offset, nint dst, nuint len)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, file, offset, (void*)dst, len, &resultOut), "read_at");
-        return resultOut;
+        nint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, (ke_open_file*)file, offset, (void*)dst, len, (ke_io_request**)&resultOut), "read_at");
+        return new IoRequest(resultOut);
     }
 
     /// <summary>Submits an inspection of what a path names.</summary>
     /// <param name="path">The path to inspect; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* Stat(sbyte* path)
+    public IoRequest Stat(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, path, &resultOut), "stat");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "stat");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the question whether a path names a regular file; a path that names nothing, or something else, is reported as no, not as a failure.</summary>
     /// <param name="path">The path to ask about; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* FileExists(sbyte* path)
+    public IoRequest FileExists(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->file_exists(Handle, path, &resultOut), "file_exists");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->file_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "file_exists");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the question whether a path names a directory; a path that names nothing, or something else, is reported as no, not as a failure.</summary>
     /// <param name="path">The path to ask about; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* DirExists(sbyte* path)
+    public IoRequest DirExists(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->dir_exists(Handle, path, &resultOut), "dir_exists");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->dir_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "dir_exists");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the listing of a directory's entries, in no particular order, without "." and "..".</summary>
     /// <param name="path">The directory to list; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* ListDir(sbyte* path)
+    public IoRequest ListDir(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->list_dir(Handle, path, &resultOut), "list_dir");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->list_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "list_dir");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the writing of a whole file, which replaces what the path held only once every byte is written, so a failed write leaves the earlier file as it was.</summary>
@@ -134,33 +178,54 @@ public unsafe partial class Io : IDisposable, INativeIo
     /// <param name="len">The number of bytes in bytes.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* WriteFile(sbyte* path, void* bytes, nuint len)
+    public IoRequest WriteFile(string path, nint bytes, nuint len)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->write_file(Handle, path, bytes, len, &resultOut), "write_file");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->write_file(Handle, (sbyte*)pathPtr, (void*)bytes, len, (ke_io_request**)&resultOut), "write_file");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the creation of a directory and of every missing directory above it; a directory that already exists is not a failure.</summary>
     /// <param name="path">The directory to create; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* MakeDir(sbyte* path)
+    public IoRequest MakeDir(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->make_dir(Handle, path, &resultOut), "make_dir");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->make_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "make_dir");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the removal of a file or of an empty directory.</summary>
     /// <param name="path">What to remove; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* Remove(sbyte* path)
+    public IoRequest Remove(string path)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->remove(Handle, path, &resultOut), "remove");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->remove(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "remove");
+            return new IoRequest(resultOut);
+        }
     }
 
     /// <summary>Submits the renaming of a file or a directory, replacing a file already at to.</summary>
@@ -168,36 +233,50 @@ public unsafe partial class Io : IDisposable, INativeIo
     /// <param name="to">Its new path; copied before the slot returns.</param>
     /// <returns>Receives the request; null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_request* Rename(sbyte* from, sbyte* to)
+    public IoRequest Rename(string from, string to)
     {
-        ke_io_request* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->rename(Handle, from, to, &resultOut), "rename");
-        return resultOut;
+        var fromText = from ?? "";
+        var fromSize = System.Text.Encoding.UTF8.GetMaxByteCount(fromText.Length) + 1;
+        Span<byte> fromBytes = fromSize <= 512 ? stackalloc byte[512] : new byte[fromSize];
+        fromBytes[System.Text.Encoding.UTF8.GetBytes(fromText, fromBytes)] = 0;
+        fixed (byte* fromPtr = fromBytes)
+        {
+            var toText = to ?? "";
+            var toSize = System.Text.Encoding.UTF8.GetMaxByteCount(toText.Length) + 1;
+            Span<byte> toBytes = toSize <= 512 ? stackalloc byte[512] : new byte[toSize];
+            toBytes[System.Text.Encoding.UTF8.GetBytes(toText, toBytes)] = 0;
+            fixed (byte* toPtr = toBytes)
+            {
+                nint resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->rename(Handle, (sbyte*)fromPtr, (sbyte*)toPtr, (ke_io_request**)&resultOut), "rename");
+                return new IoRequest(resultOut);
+            }
+        }
     }
 
     /// <summary>Reports whether a request has finished, without releasing it. Valid only before the request is waited on.</summary>
     /// <param name="request">A request a submit slot returned.</param>
-    public bool IsCompleted(ke_io_request* request)
+    public bool IsCompleted(IoRequest request)
     {
-        return Handle->is_completed(Handle, request);
+        return Handle->is_completed(Handle, (ke_io_request*)request.Address);
     }
 
     /// <summary>Blocks until the request finishes, releases it, and reports what it read.</summary>
     /// <param name="request">A request a submit slot returned; invalid afterwards.</param>
     /// <returns>Receives what the request read; left zeroed when it failed.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_io_result Wait(ke_io_request* request)
+    public IoResult Wait(IoRequest request)
     {
-        ke_io_result resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->wait(Handle, request, &resultOut), "wait");
+        IoResult resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->wait(Handle, (ke_io_request*)request.Address, &resultOut), "wait");
         return resultOut;
     }
 
     /// <summary>Releases a file an open request reported; it is invalid afterwards. A null file is ignored.</summary>
     /// <param name="file">The file to release.</param>
-    public void Close(ke_open_file* file)
+    public void Close(nint file)
     {
-        Handle->close(Handle, file);
+        Handle->close(Handle, (ke_open_file*)file);
     }
 
     /// <summary>Releases the bytes a read_file request reported. Null bytes are ignored.</summary>
@@ -209,9 +288,9 @@ public unsafe partial class Io : IDisposable, INativeIo
 
     /// <summary>Releases the entries a list_dir request reported, their names with them. Null entries are ignored.</summary>
     /// <param name="entries">The entries to release.</param>
-    public void FreeEntries(ke_io_dir_entry* entries)
+    public void FreeEntries(nint entries)
     {
-        Handle->free_entries(Handle, entries);
+        Handle->free_entries(Handle, (IoDirEntry*)entries);
     }
 
     /// <summary>Releases the native io.</summary>

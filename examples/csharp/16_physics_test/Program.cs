@@ -61,8 +61,8 @@ var services = new ServiceCollection()
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Position = new Vector3(0f, FloorY, 0f);
         floor.Scale = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
-        var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
-        physics.AddBoxFixture(floorBody, new Vector2(FloorHalfW, FloorHalfH), friction: 0.5f);
+        var floorBody = physics.CreateBody(BodyType2D.Static, 0f, FloorY);
+        physics.AddBoxFixture(floorBody, FloorHalfW, FloorHalfH, 0, 0, 0, 1f, 0.5f, 0f, null);
 
         tree.AddNode(new PhysicsScene(physics, cubeMesh, ballMat), "PhysicsScene");
     }));
@@ -99,7 +99,7 @@ sealed class PhysicsScene : Node
     private readonly IPhysics2D _physics;
     private readonly MeshHandle _ballMesh;
     private readonly MaterialHandle _ballMat;
-    private readonly List<(MeshRenderer Node, BodyHandle2D Body)> _balls = new();
+    private readonly List<(MeshRenderer Node, uint Body)> _balls = new();
 
     private bool _prevSpace;
     private bool _prevR;
@@ -129,7 +129,7 @@ sealed class PhysicsScene : Node
         {
             var (node, body) = _balls[i];
             var s = _physics.GetBodyState(body);
-            node.Position = new Vector3(s.Position.X, s.Position.Y, 0f);
+            node.Position = new Vector3(s.X, s.Y, 0f);
             node.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle);
         }
 
@@ -165,8 +165,8 @@ sealed class PhysicsScene : Node
             $"Ball_{_balls.Count}");
         node.Position = new Vector3(at.X, at.Y, 0f);
 
-        var body = _physics.CreateBody(BodyType2D.Dynamic, at);
-        _physics.AddBoxFixture(body, new Vector2(0.5f, 0.5f), density: 1f, friction: 0.3f, restitution: 0.5f);
+        var body = _physics.CreateBody(BodyType2D.Dynamic, at.X, at.Y);
+        _physics.AddBoxFixture(body, 0.5f, 0.5f, 0, 0, 0, 1f, 0.3f, 0.5f, null);
 
         _balls.Add((node, body));
         Console.WriteLine($"Spawned at ({at.X:F2}, {at.Y:F2}); total={_balls.Count}");

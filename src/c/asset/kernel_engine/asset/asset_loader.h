@@ -54,6 +54,7 @@ extern "C"
 
     } ke_asset_loader;
 
+    /// [owner]
     typedef struct ke_asset_loader_handle
     {
         ke_asset_loader *ref;

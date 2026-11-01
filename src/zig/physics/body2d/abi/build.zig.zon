@@ -4,6 +4,13 @@
     .fingerprint = 0x3f07f6a2d6e7625b,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_scene_tree = .{ .path = "../../../abi/scene_tree" },
+        .abi_runtime = .{ .path = "../../../abi/runtime" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_physics = .{ .path = "../../../abi/physics" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_framework = .{ .path = "../../../abi/framework" },
+        .abi_ecs = .{ .path = "../../../abi/ecs" },
         .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
         .ke_abi_framework = .{ .path = "../../../abi/framework" },
         .ke_abi_logger = .{ .path = "../../../abi/logger" },

@@ -21,7 +21,7 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for a ke_physics_2d world.
+/// [bag] @brief Construction parameters for a ke_physics_2d world.
 typedef struct ke_physics_2d_box2d_params
 {
     float                gravity_x;    ///< Default 0

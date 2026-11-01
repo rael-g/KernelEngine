@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.FileSystem.Native;
@@ -18,7 +19,7 @@ public unsafe interface INativeFileSystem
 }
 
 /// <summary>Read-only access to the files of one platform. Paths are UTF-8 with '/' as the separator; a relative path is resolved against the root the implementation was created with. Every slot may be called from several threads at once, read_at on one open file included.</summary>
-public unsafe partial class FileSystem : IDisposable, INativeFileSystem
+public unsafe partial class FileSystem : IDisposable, INativeFileSystem, IFileSystem
 {
     private ke_file_system* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_file_system*, void> _destroy;
@@ -51,21 +52,28 @@ public unsafe partial class FileSystem : IDisposable, INativeFileSystem
     /// <param name="path">The file to open.</param>
     /// <returns>Receives the open file, released by close; left null on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_open_file* Open(sbyte* path)
+    public OpenFile Open(string path)
     {
-        ke_open_file* resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, path, &resultOut), "open");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, (sbyte*)pathPtr, (ke_open_file**)&resultOut), "open");
+            return new OpenFile(resultOut);
+        }
     }
 
     /// <summary>Reports the size of an open file.</summary>
     /// <param name="file">A file open was given.</param>
     /// <returns>Receives the size in bytes.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong Size(ke_open_file* file)
+    public ulong Size(OpenFile file)
     {
         ulong resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->size(Handle, file, &resultOut), "size");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->size(Handle, (ke_open_file*)file.Address, &resultOut), "size");
         return resultOut;
     }
 
@@ -76,29 +84,36 @@ public unsafe partial class FileSystem : IDisposable, INativeFileSystem
     /// <param name="len">The number of bytes dst holds.</param>
     /// <returns>Receives the number of bytes read, fewer than len only at the end of the file.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public nuint ReadAt(ke_open_file* file, ulong offset, nint dst, nuint len)
+    public nuint ReadAt(OpenFile file, ulong offset, nint dst, nuint len)
     {
         nuint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, file, offset, (void*)dst, len, &resultOut), "read_at");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, (ke_open_file*)file.Address, offset, (void*)dst, len, &resultOut), "read_at");
         return resultOut;
     }
 
     /// <summary>Releases an open file; it is invalid afterwards. A null file is ignored.</summary>
     /// <param name="file">A file open was given.</param>
-    public void Close(ke_open_file* file)
+    public void Close(OpenFile file)
     {
-        Handle->close(Handle, file);
+        Handle->close(Handle, (ke_open_file*)file.Address);
     }
 
     /// <summary>Reports what a path names without opening it.</summary>
     /// <param name="path">The path to inspect.</param>
     /// <returns>Receives what the path names.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_file_stat Stat(sbyte* path)
+    public FileStat Stat(string path)
     {
-        ke_file_stat resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, path, &resultOut), "stat");
-        return resultOut;
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            FileStat resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, (sbyte*)pathPtr, &resultOut), "stat");
+            return resultOut;
+        }
     }
 
     /// <summary>Releases the native filesystem.</summary>

@@ -5,9 +5,13 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Framework.Native;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -18,7 +22,7 @@ public unsafe interface INativeSignalBus
 }
 
 
-public unsafe partial class SignalBus : IDisposable, INativeSignalBus
+public unsafe partial class SignalBus : IDisposable, INativeSignalBus, ISignalBus
 {
     private ke_signal_bus* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_signal_bus*, void> _destroy;
@@ -51,7 +55,10 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     /// <exception cref="Exception">The native call failed.</exception>
     public uint SignalId(string name, uint payloadSize)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
             uint resultOut = default;
@@ -61,50 +68,53 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     }
 
     /// <summary>Resolves a signal by name without registering it. An unregistered name fails.</summary>
-    public bool TrySignalLookup(string name, out uint id)
+    public bool TrySignalLookup(string name, out uint outId)
     {
-        uint idLocal;
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        uint outIdLocal;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->signal_lookup(Handle, (sbyte*)namePtr, &idLocal);
-            id = idLocal;
+            var found = Handle->signal_lookup(Handle, (sbyte*)namePtr, &outIdLocal);
+            outId = outIdLocal;
             return found;
         }
     }
 
     /// <summary>Wires one source entity's signal to one target entity, tagged with a handler selector. Connecting the same quadruple twice is a no-op rather than a duplicate delivery.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Connect(ulong source, uint signalId, ulong target, uint handlerId)
+    public void Connect(Entity source, uint signalId, Entity target, uint handlerId)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->connect(Handle, source, signalId, target, handlerId), "connect");
     }
 
     /// <summary>Removes a connection previously made by connect(). Returns false when no such connection exists.</summary>
-    public bool Disconnect(ulong source, uint signalId, ulong target, uint handlerId)
+    public bool Disconnect(Entity source, uint signalId, Entity target, uint handlerId)
     {
         return Handle->disconnect(Handle, source, signalId, target, handlerId);
     }
 
     /// <summary>Drops every connection naming this entity as source or target.</summary>
-    public void ForgetEntity(ulong entity)
+    public void ForgetEntity(Entity entity)
     {
         Handle->forget_entity(Handle, entity);
     }
 
     /// <summary>Queues one emission for this frame. The payload is copied into frame storage, so the caller's buffer need not outlive the call.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Emit(ulong source, uint signalId, void* payload, uint payloadSize)
+    public void Emit(Entity source, uint signalId, nint payload, uint payloadSize)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->emit(Handle, source, signalId, payload, payloadSize), "emit");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->emit(Handle, source, signalId, (void*)payload, payloadSize), "emit");
     }
 
     /// <summary>Joins this frame's emissions against the connection table and returns the resulting deliveries. Idempotent within a frame: calling it twice returns the same list rather than duplicating it.</summary>
-    public ReadOnlySpan<ke_signal_delivery> Deliveries()
+    public ReadOnlySpan<SignalDelivery> Deliveries()
     {
-        uint countLocal = 0;
-        var front = Handle->deliveries(Handle, &countLocal);
-        return front == null ? default : new ReadOnlySpan<ke_signal_delivery>(front, (int)countLocal);
+        uint outCountLocal = 0;
+        var front = Handle->deliveries(Handle, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<SignalDelivery>(front, (int)outCountLocal);
     }
 
     /// <summary>Discards this frame's emissions and deliveries. Connections survive.</summary>
@@ -112,26 +122,6 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus
     {
         Handle->clear_frame(Handle);
     }
-
-    private readonly Dictionary<Type, uint> _signalIdIds = new();
-    private readonly Dictionary<uint, Type> _signalIdTypes = new();
-
-    /// <summary>The id <typeparamref name="T"/> interns to, registering it on first use.</summary>
-    public uint SignalIdOf<T>() where T : unmanaged
-    {
-        if (_signalIdIds.TryGetValue(typeof(T), out var cached)) return cached;
-        var resolved = SignalId(typeof(T).Name, (uint)sizeof(T));
-        _signalIdIds[typeof(T)] = resolved;
-        _signalIdTypes[resolved] = typeof(T);
-        return resolved;
-    }
-
-    /// <summary>
-    /// The type <paramref name="id"/> was interned for, or null when this runtime never
-    /// interned one. Null is a normal answer rather than a failure: an id another
-    /// language registered is real, and simply has no type here to name it.
-    /// </summary>
-    public Type? SignalIdTypeOf(uint id) => _signalIdTypes.TryGetValue(id, out var t) ? t : null;
 
     /// <summary>Releases the native signalbus.</summary>
     public void Dispose()

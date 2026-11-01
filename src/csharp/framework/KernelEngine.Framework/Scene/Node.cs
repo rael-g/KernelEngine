@@ -11,7 +11,7 @@ namespace KernelEngine.Framework;
 public abstract class Node
 {
     /// <summary>ECS entity this node wraps. 0 while the node is not bound.</summary>
-    public ulong Entity { get; private set; }
+    public Entity Entity { get; private set; }
 
     private ScriptHost? ScriptHost { get; set; }
 
@@ -139,7 +139,7 @@ public abstract class Node
     /// system's command queue so the change applies at the wave barrier. For a component this
     /// node's own type does not declare.
     /// </summary>
-    protected void Attach<T>(in View view, uint cid, in T value) where T : unmanaged =>
+    protected void Attach<T>(in View view, ComponentId cid, in T value) where T : unmanaged =>
         view.Commands.Attach(Entity, cid, in value);
 
     /// <summary>
@@ -178,19 +178,19 @@ public abstract class Node
     internal void UnbindFromScene()
     {
         ScriptHost = null;
-        Entity = 0;
+        Entity = default;
     }
 
     /// <summary>Whether this node is bound to <paramref name="world"/>.</summary>
     internal bool BelongsTo(ScriptHost world) => ReferenceEquals(ScriptHost, world);
 
-    internal void BindToScene(ScriptHost scriptHost, ulong entity)
+    internal void BindToScene(ScriptHost scriptHost, Entity entity)
     {
         PreBind(scriptHost, entity);
         CompleteBind();
     }
 
-    internal void PreBind(ScriptHost scriptHost, ulong entity)
+    internal void PreBind(ScriptHost scriptHost, Entity entity)
     {
         ScriptHost = scriptHost;
         Entity = entity;
@@ -201,7 +201,7 @@ public abstract class Node
     /// binding, unless the entity already carries that component, in which case the existing
     /// value is kept.
     /// </summary>
-    protected internal void GeneratedSeed<T>(uint cid, in T state) where T : unmanaged
+    protected internal void GeneratedSeed<T>(ComponentId cid, in T state) where T : unmanaged
     {
         if (ScriptHost!.TryGetByCid<T>(Entity, cid, out _)) return;
         ScriptHost.SetByCid(Entity, cid, in state);
@@ -210,13 +210,13 @@ public abstract class Node
     /// <summary>
     /// Writes one of this node's component values.
     /// </summary>
-    protected internal void GeneratedSet<T>(uint cid, in T state) where T : unmanaged =>
+    protected internal void GeneratedSet<T>(ComponentId cid, in T state) where T : unmanaged =>
         ScriptHost!.SetByCid(Entity, cid, in state);
 
     /// <summary>
     /// Reads one of this node's component values. Counterpart to <see cref="GeneratedSet{T}"/>.
     /// </summary>
-    protected internal bool GeneratedTryGet<T>(uint cid, out T state) where T : unmanaged =>
+    protected internal bool GeneratedTryGet<T>(ComponentId cid, out T state) where T : unmanaged =>
         ScriptHost!.TryGetByCid(Entity, cid, out state);
 
     /// <summary>
@@ -226,7 +226,7 @@ public abstract class Node
     /// case before binding and while an attach is queued behind a wave barrier, and a writer
     /// must then publish through <see cref="GeneratedSet{T}"/>.
     /// </summary>
-    protected internal ref T GeneratedStorage<T>(uint cid, ref T authored, out bool live) where T : unmanaged
+    protected internal ref T GeneratedStorage<T>(ComponentId cid, ref T authored, out bool live) where T : unmanaged
     {
         if (ScriptHost is not null)
         {

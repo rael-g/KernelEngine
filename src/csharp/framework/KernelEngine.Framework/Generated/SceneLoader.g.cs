@@ -5,9 +5,13 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Framework.Native;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -17,13 +21,8 @@ public unsafe interface INativeSceneLoader
     ke_scene_loader* Native { get; }
 }
 
-/// <summary>Builds and binds the script an entity's declared type names.</summary>
-/// <param name="entity">The entity the script is bound to.</param>
-/// <param name="typeName">Qualified node type name, as the scene file spells it.</param>
-public delegate void ScriptFactory(ulong entity, string typeName);
 
-
-public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
+public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, ISceneLoader
 {
     private ke_scene_loader* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_loader*, void> _destroy;
@@ -45,30 +44,6 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     /// </summary>
     [ThreadStatic]
     private static Exception? s_parkedCallbackException;
-
-    /// <summary>
-    /// What retained handlers of this provider have thrown and not yet been told
-    /// about. A retained handler outlives the call that registered it, so there is
-    /// no call left to rethrow at; it reports failure through its own channel and
-    /// leaves the exception here for whichever call observes that failure. A handler
-    /// may run on any thread the engine calls it from, and may fail more than once
-    /// before anyone asks, so nothing here is ever discarded unread.
-    /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentQueue<Exception> _callbackFailures = new();
-
-    /// <summary>
-    /// Throws what retained handlers have reported since the last drain, as they
-    /// threw it, or returns when none have. More than one may have failed before
-    /// anyone asked, so they are reported together rather than the last one winning.
-    /// </summary>
-    private void DrainCallbackFailures()
-    {
-        var collected = new List<Exception>();
-        while (_callbackFailures.TryDequeue(out var failure)) collected.Add(failure);
-        if (collected.Count == 0) return;
-        throw new InvalidOperationException("A handler registered with this provider threw",
-            collected.Count == 1 ? collected[0] : new AggregateException(collected));
-    }
 
     private ke_scene_loader* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SceneLoader));
@@ -98,13 +73,13 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     /// <exception cref="Exception">The native call failed.</exception>
     public void Load(string path)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
-            KernelEngine.Result.Native.ke_result rc;
-            if ((rc = Handle->load(Handle, (sbyte*)pathPtr)) != KernelEngine.Result.Native.ke_result.KE_OK && _callbackFailures.IsEmpty)
-                throw KernelEngine.NativeResults.FromCode(rc, "load");
-            DrainCallbackFailures();
+            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->load(Handle, (sbyte*)pathPtr)), "load");
         }
     }
 
@@ -113,15 +88,13 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterScriptFactory(ScriptFactory? factory)
     {
-        var factoryHandle = factory is null
-            ? default
-            : GCHandle.Alloc(new RegisterScriptFactoryClosures { Owner = this, Factory = factory });
+        var factoryHandle = factory is null ? default : GCHandle.Alloc(factory);
         s_parkedCallbackException = null;
-        KernelEngine.Result.Native.ke_result rc;
+        KernelEngine.Result.Native.Result rc;
         bool ok;
         try
         {
-            ok = (rc = Handle->register_script_factory(Handle, factory is null ? null : (delegate* unmanaged[Cdecl]<void*, ulong, sbyte*, KernelEngine.Result.Native.ke_result>)&RegisterScriptFactoryTrampoline, (void*)GCHandle.ToIntPtr(factoryHandle))) == KernelEngine.Result.Native.ke_result.KE_OK;
+            ok = (rc = Handle->register_script_factory(Handle, factory is null ? null : (delegate* unmanaged[Cdecl]<void*, Entity, sbyte*, KernelEngine.Result.Native.Result>)&RegisterScriptFactoryTrampoline, (void*)GCHandle.ToIntPtr(factoryHandle))) == KernelEngine.Result.Native.Result.Ok;
         }
         catch
         {
@@ -142,29 +115,21 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
         _retainedFactory = factoryHandle;
     }
 
-    /// <summary>The handler, and the provider a failure of it is reported to.</summary>
-    private sealed class RegisterScriptFactoryClosures
-    {
-        public required SceneLoader Owner;
-        public ScriptFactory? Factory;
-    }
-
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static KernelEngine.Result.Native.ke_result RegisterScriptFactoryTrampoline(void* ctx, ulong arg1, sbyte* arg2)
+    private static KernelEngine.Result.Native.Result RegisterScriptFactoryTrampoline(void* ctx, Entity arg1, sbyte* arg2)
     {
         try
         {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures state && state.Factory is { } handler)
+            if (GCHandle.FromIntPtr((nint)ctx).Target is ScriptFactory handler)
             {
                 handler(arg1, Marshal.PtrToStringUTF8((nint)arg2) ?? "");
-                return KernelEngine.Result.Native.ke_result.KE_OK;
+                return KernelEngine.Result.Native.Result.Ok;
             }
             return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_script_factory_func: no handler is registered"));
         }
         catch (Exception ex)
         {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterScriptFactoryClosures failed)
-                failed.Owner._callbackFailures.Enqueue(ex);
+            s_raisedCallbackFailures.Enqueue(ex);
             return KernelEngine.NativeResults.ToCode(ex);
         }
     }
@@ -181,4 +146,17 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader
     }
 
     partial void OnDispose();
+
+    /// <summary>What retained handlers threw and no call has reported yet, from any thread the engine ran them on.</summary>
+    private static readonly System.Collections.Concurrent.ConcurrentQueue<Exception> s_raisedCallbackFailures = new();
+
+    /// <summary>Throws what retained handlers raised, or returns <paramref name="code"/> when they raised nothing.</summary>
+    private static T DrainRaised<T>(T code)
+    {
+        var collected = new List<Exception>();
+        while (s_raisedCallbackFailures.TryDequeue(out var failure)) collected.Add(failure);
+        if (collected.Count == 0) return code;
+        throw new InvalidOperationException("A handler registered with this provider threw",
+            collected.Count == 1 ? collected[0] : new AggregateException(collected));
+    }
 }
