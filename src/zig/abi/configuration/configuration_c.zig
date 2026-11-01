@@ -37,6 +37,7 @@ pub const ke_config_field = extern struct {
     default_value: ke_config_value = std.mem.zeroes(ke_config_value),
 };
 
+/// A typed (section, key) to value store.
 pub const ke_configuration = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     get_int: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, i64) callconv(.c) i64 = null,

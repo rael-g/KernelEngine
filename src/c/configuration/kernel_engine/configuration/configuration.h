@@ -48,6 +48,7 @@ extern "C"
         ke_config_value default_value;
     } ke_config_field;
 
+    /** [interface] A typed (section, key) to value store. */
     typedef struct ke_configuration
     {
         void *handle;
@@ -87,11 +88,11 @@ extern "C"
         /// @param section [borrowed,utf8] The section the struct's keys live in.
         /// @param fields [borrowed,array_of:field_count] The struct's field table.
         /// @param field_count Number of entries in @p fields.
-        /// @param out_config [out] The struct to fill.
+        /// @param config [borrowed] The struct to fill.
         /// @return KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null argument or a field whose size
         ///         does not fit its type; fields before it are already written.
         ke_result (*fill)(struct ke_configuration *self, const char *section, const ke_config_field *fields,
-                          uint32_t field_count, void *out_config);
+                          uint32_t field_count, void *config);
 
     } ke_configuration;
 

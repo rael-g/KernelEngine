@@ -97,8 +97,7 @@ pub const Configuration = struct {
             .fill = &struct {
                 fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: ?[*]const c.ke_config_field, a2: u32, a3: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.fill(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |items| items[0..a2] else &.{}) catch |failure| return resultOf(failure);
-                    (a3 orelse return resultOf(error.Failed)).* = value;
+                    T.fill(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |items| items[0..a2] else &.{}, a3) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -160,10 +159,8 @@ pub const Configuration = struct {
     /// field's key in section. A key holding a type the field cannot take is logged and leaves the
     /// default; an integer is accepted by a float or double field. A string field points at the
     /// store's copy, valid as get_string's result is.
-    pub fn fill(self: Configuration, section: [:0]const u8, fields: []const c.ke_config_field) Error!void {
-        var written: void = undefined;
-        try checkResult(self.ptr.fill.?(self.ptr, section.ptr, fields.ptr, @intCast(fields.len), &written));
-        return written;
+    pub fn fill(self: Configuration, section: [:0]const u8, fields: []const c.ke_config_field, config: ?*anyopaque) Error!void {
+        try checkResult(self.ptr.fill.?(self.ptr, section.ptr, fields.ptr, @intCast(fields.len), config));
     }
 
 };

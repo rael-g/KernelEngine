@@ -1,39 +1,37 @@
 using System.Text;
 
+using KernelEngine.Common;
+using KernelEngine.Configuration.Native;
+
 using ConfigNative = KernelEngine.Configuration.Native.NativeMethods;
 
 namespace KernelEngine.Configuration;
 
-/// <summary>
-/// Owns a native <c>ke_configuration</c> store, created empty. <see cref="LoadToml"/> fills it
-/// from a file, and a missing file is not an error. A getter returns its fallback for a missing
-/// key or a value of another type; a setter throws when the native call fails. The store is
-/// released by <see cref="Dispose"/>.
-/// </summary>
-public sealed unsafe class Configuration : IConfiguration, IDisposable
+public unsafe partial class Configuration
 {
-    private KernelEngine.Configuration.Native.ke_configuration* _native;
-    private readonly delegate* unmanaged[Cdecl]<KernelEngine.Configuration.Native.ke_configuration*, void> _destroy;
-
-    public Configuration()
+    /// <summary>Creates an empty store.</summary>
+    public Configuration() : this(Create())
     {
-        KernelEngine.Configuration.Native.ke_configuration_handle handle;
+    }
+
+    private static ke_configuration_handle Create()
+    {
+        ke_configuration_handle handle;
         NativeResults.ThrowIfFailed(ConfigNative.configuration_create(&handle), "ke_configuration_create");
-        _native = handle.@ref;
-        _destroy = handle.destroy;
+        return handle;
     }
 
     /// <summary>Reads <paramref name="path"/> into the store through <paramref name="io"/>. A missing file is a no-op.</summary>
     public void LoadToml(KernelEngine.Io.INativeIo io, string path)
     {
-        KernelEngine.Configuration.Native.ke_configuration_source_handle source;
+        ke_configuration_source_handle source;
         NativeResults.ThrowIfFailed(ConfigNative.configuration_toml_create(io.Native, &source), "ke_configuration_toml_create");
         try
         {
             var bytes = Encoding.UTF8.GetBytes(path + '\0');
             fixed (byte* p = bytes)
             {
-                NativeResults.ThrowIfFailed(source.@ref->load(source.@ref, _native, (sbyte*)p), "load");
+                NativeResults.ThrowIfFailed(source.@ref->load(source.@ref, Handle, (sbyte*)p), "load");
             }
         }
         finally
@@ -41,106 +39,32 @@ public sealed unsafe class Configuration : IConfiguration, IDisposable
             source.destroy(source.@ref);
         }
     }
+}
 
-    public long GetInt(string section, string key, long fallback)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-            return _native->get_int(_native, (sbyte*)sp, (sbyte*)kp, fallback);
-    }
-
-    public double GetDouble(string section, string key, double fallback)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-            return _native->get_double(_native, (sbyte*)sp, (sbyte*)kp, fallback);
-    }
-
-    public bool GetBool(string section, string key, bool fallback)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-            return _native->get_bool(_native, (sbyte*)sp, (sbyte*)kp, fallback);
-    }
-
-    public string GetString(string section, string key, string fallback)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        var f = Ansi(fallback);
-        fixed (byte* sp = s, kp = k, fp = f)
-        {
-            var result = _native->get_string(_native, (sbyte*)sp, (sbyte*)kp, (sbyte*)fp);
-            return System.Runtime.InteropServices.Marshal.PtrToStringAnsi((nint)result) ?? fallback;
-        }
-    }
-
-    public void SetInt(string section, string key, long value)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-        {
-            NativeResults.ThrowIfFailed(_native->set_int(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_int");
-        }
-    }
-
-    public void SetDouble(string section, string key, double value)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-        {
-            NativeResults.ThrowIfFailed(_native->set_double(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_double");
-        }
-    }
-
-    public void SetBool(string section, string key, bool value)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        fixed (byte* sp = s, kp = k)
-        {
-            NativeResults.ThrowIfFailed(_native->set_bool(_native, (sbyte*)sp, (sbyte*)kp, value), "configuration set_bool");
-        }
-    }
-
-    public void SetString(string section, string key, string value)
-    {
-        var s = Ansi(section);
-        var k = Ansi(key);
-        var v = Ansi(value);
-        fixed (byte* sp = s, kp = k, vp = v)
-        {
-            NativeResults.ThrowIfFailed(_native->set_string(_native, (sbyte*)sp, (sbyte*)kp, (sbyte*)vp), "configuration set_string");
-        }
-    }
-
-    public float[] GetFloatArray(string section, string key, float[] fallback)
+/// <summary>Float arrays stored as indexed scalar keys.</summary>
+public static class ConfigurationArrays
+{
+    /// <summary>
+    /// Reads <paramref name="fallback"/>.Length scalar keys named <c>key_0</c>, <c>key_1</c>, ...
+    /// An index that is missing or of another type takes that index's value of
+    /// <paramref name="fallback"/>.
+    /// </summary>
+    public static float[] GetFloatArray(this IConfiguration configuration, string section, string key, float[] fallback)
     {
         var result = new float[fallback.Length];
         for (int i = 0; i < fallback.Length; i++)
-            result[i] = (float)GetDouble(section, $"{key}_{i}", fallback[i]);
+            result[i] = (float)configuration.GetDouble(section, $"{key}_{i}", fallback[i]);
         return result;
     }
 
-    public void SetFloatArray(string section, string key, float[] values)
+    /// <summary>
+    /// Writes <paramref name="values"/> as scalar keys <c>key_0</c>, <c>key_1</c>, ... An array
+    /// in a TOML file is skipped when the file is loaded, so a file must author the indexed keys
+    /// itself to be read back by <see cref="GetFloatArray"/>.
+    /// </summary>
+    public static void SetFloatArray(this IConfiguration configuration, string section, string key, float[] values)
     {
         for (int i = 0; i < values.Length; i++)
-            SetDouble(section, $"{key}_{i}", values[i]);
-    }
-
-    private static byte[] Ansi(string s) => Encoding.ASCII.GetBytes(s + '\0');
-
-    public void Dispose()
-    {
-        if (_native != null)
-        {
-            if (_destroy != null) _destroy(_native);
-            _native = null;
-        }
+            configuration.SetDouble(section, $"{key}_{i}", values[i]);
     }
 }

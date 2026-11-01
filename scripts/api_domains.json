@@ -166,6 +166,22 @@
       "usings": []
     },
     {
+      "name": "configuration",
+      "headers": [
+        "src/c/configuration/kernel_engine/configuration/configuration.h",
+        "src/c/configuration/kernel_engine/configuration/configuration_source.h"
+      ],
+      "includeDirs": [
+        "src/c/configuration",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/configuration/ke_api.json",
+      "namespace": "KernelEngine.Configuration",
+      "nativeNamespace": "KernelEngine.Configuration.Native",
+      "outDir": "src/csharp/configuration/KernelEngine.Configuration/Generated"
+    },
+    {
       "name": "io",
       "headers": [
         "src/c/io/kernel_engine/io/io.h"
@@ -819,7 +835,6 @@
     { "name": "view_space_factory", "packageDir": "src/zig/view/space/abi", "headers": ["src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_log.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/view", "src/zig/view/space/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/task_pool", "src/c/text", "src/c/window"] },
     { "name": "window_glfw_factory", "packageDir": "src/zig/window/glfw/abi", "headers": ["src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h", "src/zig/window/glfw/include/kernel_engine/window/glfw/window_glfw_log.h"], "includeDirs": ["src/c/input", "src/c/logger", "src/c/result", "src/c/window", "src/zig/window/glfw/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view"] },
     { "name": "audio_contract", "headers": ["src/c/audio/kernel_engine/audio/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
-    { "name": "configuration", "headers": ["src/c/configuration/kernel_engine/configuration/configuration.h", "src/c/configuration/kernel_engine/configuration/configuration_source.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "framework", "headers": ["src/c/framework/kernel_engine/framework/scene_component_set.h", "src/c/framework/kernel_engine/framework/scene_hierarchy.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "framework_components", "headers": [ "src/c/framework/kernel_engine/framework/components.h" ], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "physics_contract", "headers": ["src/c/physics/kernel_engine/physics/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
