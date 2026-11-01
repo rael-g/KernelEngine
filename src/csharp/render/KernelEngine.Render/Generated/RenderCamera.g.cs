@@ -50,6 +50,54 @@ public unsafe partial class RenderCamera : IDisposable, INativeRenderCamera, IRe
         _borrowed = borrowed;
     }
 
+    /// <summary>World-to-view for a camera placed by `camera_world`.</summary>
+    /// <param name="cameraWorld">The camera's world transform.</param>
+    public System.Numerics.Matrix4x4 View(System.Numerics.Matrix4x4 cameraWorld)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->view(Handle, (System.Numerics.Matrix4x4*)&cameraWorld, &result);
+        return result;
+    }
+
+    /// <summary>The view matrix of `view` with its translation removed, leaving only the rotation.</summary>
+    /// <param name="cameraWorld">The camera's world transform.</param>
+    public System.Numerics.Matrix4x4 ViewRotation(System.Numerics.Matrix4x4 cameraWorld)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->view_rotation(Handle, (System.Numerics.Matrix4x4*)&cameraWorld, &result);
+        return result;
+    }
+
+    /// <summary>The projection the camera describes. `orthographic` picks the kind, `orthographic_size` is half the visible height, and `fov` is the vertical field of view in degrees.</summary>
+    /// <param name="camera">The camera component.</param>
+    /// <param name="aspect">Width over height of the surface drawn into.</param>
+    public System.Numerics.Matrix4x4 Projection(CameraComponent camera, float aspect)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->projection(Handle, (CameraComponent*)&camera, aspect, &result);
+        return result;
+    }
+
+    /// <summary>A perspective projection from the camera's field of view, whatever its `orthographic` flag says.</summary>
+    /// <param name="camera">The camera component.</param>
+    /// <param name="aspect">Width over height of the surface drawn into.</param>
+    public System.Numerics.Matrix4x4 PerspectiveProjection(CameraComponent camera, float aspect)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->perspective_projection(Handle, (CameraComponent*)&camera, aspect, &result);
+        return result;
+    }
+
+    /// <summary>The perspective frustum the camera's field of view describes, whatever its `orthographic` flag says.</summary>
+    /// <param name="camera">The camera component.</param>
+    /// <param name="aspect">Width over height of the surface drawn into.</param>
+    public CameraFrustum PerspectiveFrustum(CameraComponent camera, float aspect)
+    {
+        CameraFrustum result;
+        Handle->perspective_frustum(Handle, (CameraComponent*)&camera, aspect, &result);
+        return result;
+    }
+
     /// <summary>Releases the native rendercamera.</summary>
     public void Dispose()
     {

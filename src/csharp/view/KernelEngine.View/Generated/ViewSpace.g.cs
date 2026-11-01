@@ -48,6 +48,32 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
         _borrowed = borrowed;
     }
 
+    /// <summary>World-to-view for a camera at `eye` facing `forward` with `up` above.</summary>
+    /// <param name="forward">Need not be normalized.</param>
+    public System.Numerics.Matrix4x4 LookTo(System.Numerics.Vector3 eye, System.Numerics.Vector3 forward, System.Numerics.Vector3 up)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->look_to(Handle, (System.Numerics.Vector3*)&eye, (System.Numerics.Vector3*)&forward, (System.Numerics.Vector3*)&up, &result);
+        return result;
+    }
+
+    /// <summary>World-to-view for a camera at `eye` aimed at `target`.</summary>
+    public System.Numerics.Matrix4x4 LookAt(System.Numerics.Vector3 eye, System.Numerics.Vector3 target, System.Numerics.Vector3 up)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->look_at(Handle, (System.Numerics.Vector3*)&eye, (System.Numerics.Vector3*)&target, (System.Numerics.Vector3*)&up, &result);
+        return result;
+    }
+
+    /// <summary>World-to-view for a camera placed by `camera_world`, whose rotation basis gives the camera's local axes. Which of them the camera faces along is the view space's to decide, so the same transform yields opposite facings under the two handednesses. A basis carrying no rotation aims at the world origin.</summary>
+    /// <param name="cameraWorld">The camera's world transform.</param>
+    public System.Numerics.Matrix4x4 ViewFromTransform(System.Numerics.Matrix4x4 cameraWorld)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->view_from_transform(Handle, (System.Numerics.Matrix4x4*)&cameraWorld, &result);
+        return result;
+    }
+
     /// <summary>Releases the native viewspace.</summary>
     public void Dispose()
     {

@@ -11,4 +11,12 @@ namespace KernelEngine.View;
 /// <summary>The viewspace contract game code depends on, so a caller names a capability rather than the <see cref="ViewSpace"/> that carries it.</summary>
 public interface IViewSpace : IDisposable
 {
+    /// <summary>World-to-view for a camera at `eye` facing `forward` with `up` above.</summary>
+    /// <param name="forward">Need not be normalized.</param>
+    System.Numerics.Matrix4x4 LookTo(System.Numerics.Vector3 eye, System.Numerics.Vector3 forward, System.Numerics.Vector3 up);
+    /// <summary>World-to-view for a camera at `eye` aimed at `target`.</summary>
+    System.Numerics.Matrix4x4 LookAt(System.Numerics.Vector3 eye, System.Numerics.Vector3 target, System.Numerics.Vector3 up);
+    /// <summary>World-to-view for a camera placed by `camera_world`, whose rotation basis gives the camera's local axes. Which of them the camera faces along is the view space's to decide, so the same transform yields opposite facings under the two handednesses. A basis carrying no rotation aims at the world origin.</summary>
+    /// <param name="cameraWorld">The camera's world transform.</param>
+    System.Numerics.Matrix4x4 ViewFromTransform(System.Numerics.Matrix4x4 cameraWorld);
 }
