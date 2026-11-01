@@ -5,13 +5,13 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-public sealed unsafe partial class RenderCameraRenderCamera
+public sealed unsafe partial class DefaultRenderCamera
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
     /// <param name="viewSpace">Must outlive the camera.</param>
     /// <param name="device">Read once, for its clip convention.</param>
-    public RenderCameraRenderCamera(KernelEngine.Logger.ILogger logger, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(CreateLogged(logger, viewSpace, device))
+    public DefaultRenderCamera(KernelEngine.Logger.ILogger logger, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(CreateLogged(logger, viewSpace, device))
     {
     }
 

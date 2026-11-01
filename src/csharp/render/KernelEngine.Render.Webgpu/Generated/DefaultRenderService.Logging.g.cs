@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-public sealed unsafe partial class RenderServiceRenderService
+public sealed unsafe partial class DefaultRenderService
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
@@ -17,7 +17,7 @@ public sealed unsafe partial class RenderServiceRenderService
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
     /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST; zero selects RGBA16_FLOAT.</param>
     /// <param name="depthFormat">Format of the frame's depth; zero selects D32_FLOAT.</param>
-    public RenderServiceRenderService(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default) : base(CreateLogged(logger, device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat))
+    public DefaultRenderService(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default) : base(CreateLogged(logger, device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat))
     {
     }
 

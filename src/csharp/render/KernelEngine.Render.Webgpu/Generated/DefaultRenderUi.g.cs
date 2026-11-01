@@ -6,7 +6,7 @@
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>Registers the pass's update-phase label system and render-phase system. A missing runtime, ecs, service or device fails as an invalid argument.</summary>
-public sealed unsafe partial class RenderUiRenderUi : KernelEngine.Render.Webgpu.RenderUi
+public sealed unsafe partial class DefaultRenderUi : KernelEngine.Render.Webgpu.RenderUi
 {
     /// <summary>Registers the pass's update-phase label system and render-phase system. A missing runtime, ecs, service or device fails as an invalid argument.</summary>
     /// <param name="runtime">Registers the pass's systems; borrowed, must outlive it.</param>
@@ -14,7 +14,7 @@ public sealed unsafe partial class RenderUiRenderUi : KernelEngine.Render.Webgpu
     /// <param name="service">Holds the frame's color, over which the pass draws at KE_RENDER_STAGE_OVERLAY; borrowed.</param>
     /// <param name="device">Borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    public RenderUiRenderUi(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(Create(runtime, ecs, service, device, frame))
+    public DefaultRenderUi(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(Create(runtime, ecs, service, device, frame))
     {
     }
 

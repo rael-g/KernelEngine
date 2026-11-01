@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-public sealed unsafe partial class RenderUiRenderUi
+public sealed unsafe partial class DefaultRenderUi
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
@@ -14,7 +14,7 @@ public sealed unsafe partial class RenderUiRenderUi
     /// <param name="service">Holds the frame's color, over which the pass draws at KE_RENDER_STAGE_OVERLAY; borrowed.</param>
     /// <param name="device">Borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    public RenderUiRenderUi(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(logger, runtime, ecs, service, device, frame))
+    public DefaultRenderUi(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(logger, runtime, ecs, service, device, frame))
     {
     }
 

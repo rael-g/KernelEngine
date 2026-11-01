@@ -6,7 +6,7 @@
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which begins the frame and publishes the frame globals and the scene's light, and "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid argument; the handle's ref is NULL on failure.</summary>
-public sealed unsafe partial class RenderFrameRenderFrame : KernelEngine.Render.RenderFrame
+public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.RenderFrame
 {
     /// <summary>Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which begins the frame and publishes the frame globals and the scene's light, and "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid argument; the handle's ref is NULL on failure.</summary>
     /// <param name="runtime">Registers the frame's systems; borrowed, must outlive it.</param>
@@ -14,7 +14,7 @@ public sealed unsafe partial class RenderFrameRenderFrame : KernelEngine.Render.
     /// <param name="service">The frame begins and ends on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
     /// <param name="scene">Names the components the frame reads; borrowed.</param>
-    public RenderFrameRenderFrame(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(Create(runtime, ecs, service, camera, scene))
+    public DefaultRenderFrame(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(Create(runtime, ecs, service, camera, scene))
     {
     }
 

@@ -6,14 +6,14 @@
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>Registers the scene's render components and the update-phase systems "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on failure, and the component types registered before it stay registered.</summary>
-public sealed unsafe partial class RenderSceneResolveRenderSceneResolve : KernelEngine.Render.RenderSceneResolve
+public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Render.RenderSceneResolve
 {
     /// <summary>Registers the scene's render components and the update-phase systems "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on failure, and the component types registered before it stay registered.</summary>
     /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
     /// <param name="ecs">Registers the components; borrowed.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
     /// <param name="resolver"></param>
-    public RenderSceneResolveRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
+    public DefaultRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
     {
     }
 

@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-public sealed unsafe partial class RenderFrameRenderFrame
+public sealed unsafe partial class DefaultRenderFrame
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
@@ -14,7 +14,7 @@ public sealed unsafe partial class RenderFrameRenderFrame
     /// <param name="service">The frame begins and ends on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
     /// <param name="scene">Names the components the frame reads; borrowed.</param>
-    public RenderFrameRenderFrame(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(CreateLogged(logger, runtime, ecs, service, camera, scene))
+    public DefaultRenderFrame(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(CreateLogged(logger, runtime, ecs, service, camera, scene))
     {
     }
 

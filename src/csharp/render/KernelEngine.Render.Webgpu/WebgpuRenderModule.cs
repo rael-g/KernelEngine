@@ -93,11 +93,11 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddWebgpuGpuDevice(enableValidation: true, debugLabels: _debugLabelsOverride)
             .AddWebgpuWindowGpuRenderTarget()
             .AddGroupedRenderResourceBinder(_shaderDir)
-            .AddRenderServiceRenderService(_shaderDir)
+            .AddDefaultRenderService(_shaderDir)
             .AddRhViewSpace()
-            .AddRenderCameraRenderCamera()
-            .AddRenderSceneResolveRenderSceneResolve()
-            .AddRenderFrameRenderFrame();
+            .AddDefaultRenderCamera()
+            .AddDefaultRenderSceneResolve()
+            .AddDefaultRenderFrame();
         if (_enableShadows) services.AddRenderShadow("shadow");
         services
             .AddRenderCluster("clusters", _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride)
@@ -106,7 +106,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddRenderSkybox()
             .AddRenderForward(_enableIbl, shadow, "clusters")
             .AddRenderTonemap()
-            .AddRenderUiRenderUi()
+            .AddDefaultRenderUi()
             .AddRenderLabelResolve();
     }
 
@@ -121,8 +121,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _core = core;
         _ui = services.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>().Native;
         _renderService = RenderService.Borrow(core);
-        services.GetRequiredService<RenderSceneResolveRenderSceneResolve>();
-        services.GetRequiredService<RenderFrameRenderFrame>();
+        services.GetRequiredService<DefaultRenderSceneResolve>();
+        services.GetRequiredService<DefaultRenderFrame>();
         if (_enableShadows) services.GetRequiredService<RenderShadow>();
         services.GetRequiredService<RenderCluster>();
         services.GetRequiredService<RenderGbuffer>();

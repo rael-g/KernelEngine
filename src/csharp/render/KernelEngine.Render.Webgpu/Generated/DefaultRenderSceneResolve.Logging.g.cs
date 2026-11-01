@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-public sealed unsafe partial class RenderSceneResolveRenderSceneResolve
+public sealed unsafe partial class DefaultRenderSceneResolve
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
@@ -13,7 +13,7 @@ public sealed unsafe partial class RenderSceneResolveRenderSceneResolve
     /// <param name="ecs">Registers the components; borrowed.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
     /// <param name="resolver"></param>
-    public RenderSceneResolveRenderSceneResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(CreateLogged(logger, runtime, ecs, service, resolver))
+    public DefaultRenderSceneResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(CreateLogged(logger, runtime, ecs, service, resolver))
     {
     }
 

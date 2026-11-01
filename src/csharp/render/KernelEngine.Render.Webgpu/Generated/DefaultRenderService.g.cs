@@ -6,7 +6,7 @@
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>Creates a render service whose frames draw into the params' target.</summary>
-public sealed unsafe partial class RenderServiceRenderService : KernelEngine.Render.RenderService
+public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.RenderService
 {
     /// <summary>Creates a render service whose frames draw into the params' target.</summary>
     /// <param name="device">Borrowed, must outlive the service.</param>
@@ -17,7 +17,7 @@ public sealed unsafe partial class RenderServiceRenderService : KernelEngine.Ren
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
     /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST; zero selects RGBA16_FLOAT.</param>
     /// <param name="depthFormat">Format of the frame's depth; zero selects D32_FLOAT.</param>
-    public RenderServiceRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default) : base(Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat))
+    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default) : base(Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat))
     {
     }
 

@@ -6,12 +6,12 @@
 namespace KernelEngine.Render.Webgpu;
 
 /// <summary>Creates the camera interface over a view space and the clip convention of a device.</summary>
-public sealed unsafe partial class RenderCameraRenderCamera : KernelEngine.Render.RenderCamera
+public sealed unsafe partial class DefaultRenderCamera : KernelEngine.Render.RenderCamera
 {
     /// <summary>Creates the camera interface over a view space and the clip convention of a device.</summary>
     /// <param name="viewSpace">Must outlive the camera.</param>
     /// <param name="device">Read once, for its clip convention.</param>
-    public RenderCameraRenderCamera(KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(Create(viewSpace, device))
+    public DefaultRenderCamera(KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(Create(viewSpace, device))
     {
     }
 
