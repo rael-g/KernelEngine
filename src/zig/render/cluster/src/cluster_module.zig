@@ -16,6 +16,7 @@ const cluster_buffers = feature_bindings.cluster_buffers;
 const c = @import("c");
 const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
+const abi_configuration = @import("abi_configuration");
 const abi_render_cluster_factory = @import("abi_render_cluster_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -566,6 +567,26 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+fn storedGridX(_: [*c]abi_configuration.c.ke_configuration, _: [*c]const u8, _: [*c]const u8, _: i64) callconv(.c) i64 {
+    return 7;
+}
+
+fn missingKey(_: [*c]abi_configuration.c.ke_configuration, _: [*c]const u8, _: [*c]const u8, fallback: i64) callconv(.c) i64 {
+    return fallback;
+}
+
+test "a given grid value wins over the store and the store over the default" {
+    var store = std.mem.zeroes(abi_configuration.c.ke_configuration);
+    store.get_int = storedGridX;
+    var p = std.mem.zeroes(abi_render_cluster_factory.c.ke_render_cluster_params);
+    try testing.expectEqual(@as(u32, 3), setting(&p, 0, "k", 3));
+    p.configuration = @ptrCast(&store);
+    try testing.expectEqual(@as(u32, 7), setting(&p, 0, "k", 3));
+    try testing.expectEqual(@as(u32, 5), setting(&p, 5, "k", 3));
+    store.get_int = missingKey;
+    try testing.expectEqual(@as(u32, 3), setting(&p, 0, "k", 3));
 }
 
 test "a cluster pass the runtime refuses to register releases what it had created" {
