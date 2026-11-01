@@ -63,7 +63,7 @@ public sealed class KernelEngineExtension : IKabicExtension
         var contractName = f.ContractClass[(f.ContractClass.LastIndexOf('.') + 1)..];
         var vtable = CType.Of(f.Contract.Model.Structs.First(s => s.Name == f.HandleType).Fields[0].Type).Name;
         var contractInterface = $"{f.Contract.Spec.Namespace}.{Idioms.NativeInterface(vtable, convention)}";
-        var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface")
+        var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface") || f.Contract.Spec.AbstractionsOutDir is not null
             ? $"{f.Contract.Spec.Namespace}.I{contractName}"
             : null;
         var resolved = f.Arguments.Select(a => a.IsRequiredProvider ? $"sp.GetRequiredService<{a.ManagedType}>()"

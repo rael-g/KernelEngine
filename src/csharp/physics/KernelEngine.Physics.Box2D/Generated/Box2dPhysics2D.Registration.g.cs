@@ -12,7 +12,7 @@ public static class Box2dPhysics2DRegistration
 {
     /// <summary>
     /// Registers one <see cref="Box2dPhysics2D"/>, created on first resolution with its providers from the
-    /// container and the given values, as itself, as <see cref="KernelEngine.Physics.INativePhysics2d"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.Physics.INativePhysics2d"/> and as <see cref="KernelEngine.Physics.IPhysics2D"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddBox2dPhysics2D(this IServiceCollection services)
@@ -21,6 +21,7 @@ public static class Box2dPhysics2DRegistration
             ? new Box2dPhysics2D(logger, sp.GetService<KernelEngine.Configuration.INativeConfiguration>())
             : new Box2dPhysics2D(sp.GetService<KernelEngine.Configuration.INativeConfiguration>()));
         services.AddSingleton<KernelEngine.Physics.INativePhysics2d>(sp => sp.GetRequiredService<Box2dPhysics2D>());
+        services.AddSingleton<KernelEngine.Physics.IPhysics2D>(sp => sp.GetRequiredService<Box2dPhysics2D>());
         return services;
     }
 }
