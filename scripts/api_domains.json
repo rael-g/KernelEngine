@@ -43,9 +43,9 @@
       "include": "kernel_engine/ecs/component_field.h",
       "nameMacroPrefix": "KE_COMPONENT_NAME_",
       "managedNamespace": "KernelEngine.Ecs",
-      "managedOut": "src/csharp/ecs/KernelEngine.Ecs.Abstractions/Generated/ComponentLayout.g.cs",
+      
       "bindingsNamespace": "KernelEngine.Ecs.Native",
-      "nativeOut": "src/csharp/ecs/KernelEngine.Ecs/Generated/NativeFieldTable.g.cs",
+      
       "variants": {
         "null": { "constant": "KE_VARIANT_NULL" },
         "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
@@ -800,6 +800,7 @@
   ],
   "extensions": {
     "nodes": {},
+    "fieldTables": {},
     "factories": { "bindings": ["Assimp", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [
