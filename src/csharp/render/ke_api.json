@@ -1753,6 +1753,75 @@
           "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
         }
       ]
+    },
+    {
+      "name": "ke_render_scene_component_ids",
+      "doc": "The ids the ecs gave the scene\u0027s render components, which the passes are created with.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "camera",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "directional_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "point_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "spot_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ambient_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "skybox",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sprite2d",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "label",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "world_transform",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        }
+      ]
     }
   ],
   "vtables": [
@@ -2867,6 +2936,110 @@
           "return_doc": null,
           "params": [],
           "receiver": "ke_render_service *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_frame",
+      "doc": "The systems that begin and end a frame on the render service.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "frame_cid",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "The tag the system that begins the frame writes and the system that ends it reads. A pass that reads it runs inside the frame.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_frame *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_frame_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_frame *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_frame *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_scene_resolve",
+      "doc": "The scene\u0027s render components and the update-phase systems that give a mesh and a sprite the GPU resources they name.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "component_ids",
+          "returns": "const ke_render_scene_component_ids *",
+          "tags": [],
+          "doc": "The ids of the components the scene resolve registered; valid while it lives.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_scene_resolve *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_scene_resolve_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_scene_resolve *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_scene_resolve *"
         }
       ]
     }

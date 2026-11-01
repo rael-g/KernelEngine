@@ -23,17 +23,10 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
-    try expectSameLayout(abi.c.ke_render_frame, translated("ke_render_frame"));
-    try expectSameLayout(abi.c.ke_render_frame_handle, translated("ke_render_frame_handle"));
-    try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
-    try expectSameLayout(abi.c.ke_render_scene_resolve_handle, translated("ke_render_scene_resolve_handle"));
     try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
     try expectSameLayout(abi.c.ke_render_camera_handle, translated("ke_render_camera_handle"));
     try expectSameLayout(abi.c.ke_render_pass_ctx, translated("ke_render_pass_ctx"));
-    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
     if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
@@ -75,39 +68,16 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.c.KE_COMPONENT_NAME_LABEL);
 }
 
-extern const layout_values: [49]c_ulonglong;
+extern const layout_values: [26]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_render_scene_component_ids),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "mesh"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "camera"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "directional_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "point_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "spot_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "ambient_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "skybox"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "sprite2d"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "label"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "world_transform"),
         @sizeOf(abi.c.ke_camera_frustum),
         @offsetOf(abi.c.ke_camera_frustum, "tan_half_fov_y"),
         @offsetOf(abi.c.ke_camera_frustum, "aspect"),
         @offsetOf(abi.c.ke_camera_frustum, "near_plane"),
         @offsetOf(abi.c.ke_camera_frustum, "far_plane"),
-        @sizeOf(abi.c.ke_render_frame),
-        @offsetOf(abi.c.ke_render_frame, "handle"),
-        @offsetOf(abi.c.ke_render_frame, "frame_cid"),
-        @sizeOf(abi.c.ke_render_frame_handle),
-        @offsetOf(abi.c.ke_render_frame_handle, "ref"),
-        @offsetOf(abi.c.ke_render_frame_handle, "destroy"),
-        @sizeOf(abi.c.ke_render_scene_resolve),
-        @offsetOf(abi.c.ke_render_scene_resolve, "handle"),
-        @offsetOf(abi.c.ke_render_scene_resolve, "component_ids"),
-        @sizeOf(abi.c.ke_render_scene_resolve_handle),
-        @offsetOf(abi.c.ke_render_scene_resolve_handle, "ref"),
-        @offsetOf(abi.c.ke_render_scene_resolve_handle, "destroy"),
         @sizeOf(abi.c.ke_render_camera),
         @offsetOf(abi.c.ke_render_camera, "handle"),
         @offsetOf(abi.c.ke_render_camera, "view"),

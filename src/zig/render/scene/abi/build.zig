@@ -11,7 +11,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
-    abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_ui_factory", b.dependency("abi_render_ui_factory", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));

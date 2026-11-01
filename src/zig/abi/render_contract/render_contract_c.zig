@@ -9,8 +9,6 @@ const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_ui_components = @import("ui_components");
 
-pub const ke_component_id = u32;
-pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
 pub const ke_gpu_buffer = u64;
@@ -60,20 +58,6 @@ pub const KE_RENDER_CLUSTER_GRID = ".grid";
 pub const KE_COMPONENT_NAME_UI_QUAD = "ui_quad";
 pub const KE_COMPONENT_NAME_LABEL = "label";
 
-/// The ids the ecs gave the scene's render components, which the passes are created with.
-pub const ke_render_scene_component_ids = extern struct {
-    mesh: ke_component_id = std.mem.zeroes(ke_component_id),
-    camera: ke_component_id = std.mem.zeroes(ke_component_id),
-    directional_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    point_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    spot_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    ambient_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    skybox: ke_component_id = std.mem.zeroes(ke_component_id),
-    sprite2d: ke_component_id = std.mem.zeroes(ke_component_id),
-    label: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform: ke_component_id = std.mem.zeroes(ke_component_id),
-};
-
 /// The perspective frustum a camera's field of view describes.
 pub const ke_camera_frustum = extern struct {
     /// Tangent of half the vertical field of view.
@@ -81,32 +65,6 @@ pub const ke_camera_frustum = extern struct {
     aspect: f32 = std.mem.zeroes(f32),
     near_plane: f32 = std.mem.zeroes(f32),
     far_plane: f32 = std.mem.zeroes(f32),
-};
-
-/// The systems that begin and end a frame on the render service.
-pub const ke_render_frame = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The tag the system that begins the frame writes and the system that ends it reads. A pass
-    /// that reads it runs inside the frame.
-    frame_cid: ?*const fn (?*ke_render_frame) callconv(.c) ke_component_id = null,
-};
-
-pub const ke_render_frame_handle = extern struct {
-    ref: ?*ke_render_frame = std.mem.zeroes(?*ke_render_frame),
-    destroy: ?*const fn (?*ke_render_frame) callconv(.c) void = null,
-};
-
-/// The scene's render components and the update-phase systems that give a mesh and a sprite the
-/// GPU resources they name.
-pub const ke_render_scene_resolve = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The ids of the components the scene resolve registered; valid while it lives.
-    component_ids: ?*const fn (?*ke_render_scene_resolve) callconv(.c) ?*const ke_render_scene_component_ids = null,
-};
-
-pub const ke_render_scene_resolve_handle = extern struct {
-    ref: ?*ke_render_scene_resolve = std.mem.zeroes(?*ke_render_scene_resolve),
-    destroy: ?*const fn (?*ke_render_scene_resolve) callconv(.c) void = null,
 };
 
 /// The matrices and projection that a camera component and its world transform describe. Every

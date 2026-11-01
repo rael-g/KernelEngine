@@ -13,6 +13,8 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/service/render_service.h>
+        \\#include <kernel_engine/render/frame.h>
+        \\#include <kernel_engine/render/scene_resolve.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/ecs"));

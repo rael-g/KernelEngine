@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-    /// The ids the ecs gave the scene's render components, which the passes are created with.
+    /// [value] The ids the ecs gave the scene's render components, which the passes are created with.
     typedef struct ke_render_scene_component_ids
     {
         ke_component_id mesh;
@@ -23,8 +23,8 @@ extern "C"
         ke_component_id world_transform;
     } ke_render_scene_component_ids;
 
-    /// The scene's render components and the update-phase systems that give a mesh and a sprite
-    /// the GPU resources they name.
+    /** [interface] The scene's render components and the update-phase systems that give a mesh and a sprite
+     * the GPU resources they name. */
     typedef struct ke_render_scene_resolve
     {
         void *handle;

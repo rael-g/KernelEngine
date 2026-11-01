@@ -388,6 +388,17 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   chain 36
   depth 40
+ke_render_scene_component_ids size=40 align=4
+  mesh 0
+  camera 4
+  directional_light 8
+  point_light 12
+  spot_light 16
+  ambient_light 20
+  skybox 24
+  sprite2d 28
+  label 32
+  world_transform 36
 ke_render_service size=400 align=8
   handle 0
   declare 8
@@ -440,6 +451,18 @@ ke_render_service size=400 align=8
   leave_chain 384
   chain_format 392
 ke_render_service_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_frame size=16 align=8
+  handle 0
+  frame_cid 8
+ke_render_frame_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_scene_resolve size=16 align=8
+  handle 0
+  component_ids 8
+ke_render_scene_resolve_handle size=16 align=8
   ref 0
   destroy 8
 

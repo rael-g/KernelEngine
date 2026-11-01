@@ -19,8 +19,8 @@ const resultOf = abi_result.resultOf;
 /// begins the frame and publishes the frame globals and the scene's light, and
 /// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
 /// the handle's ref is NULL on failure.
-pub fn renderFrameCreate(params: ?*const c.ke_render_frame_params) Error!abi_render_contract.c.ke_render_frame_handle {
-    var written: abi_render_contract.c.ke_render_frame_handle = undefined;
+pub fn renderFrameCreate(params: ?*const c.ke_render_frame_params) Error!abi_render.c.ke_render_frame_handle {
+    var written: abi_render.c.ke_render_frame_handle = undefined;
     try checkResult(c.ke_render_frame_create(params, &written));
     return written;
 }

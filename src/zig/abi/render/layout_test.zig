@@ -27,8 +27,13 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_frame_globals, translated("ke_render_frame_globals"));
     try expectSameLayout(abi.c.ke_render_lighting, translated("ke_render_lighting"));
     try expectSameLayout(abi.c.ke_render_pass_io, translated("ke_render_pass_io"));
+    try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_render_service, translated("ke_render_service"));
     try expectSameLayout(abi.c.ke_render_service_handle, translated("ke_render_service_handle"));
+    try expectSameLayout(abi.c.ke_render_frame, translated("ke_render_frame"));
+    try expectSameLayout(abi.c.ke_render_frame_handle, translated("ke_render_frame_handle"));
+    try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
+    try expectSameLayout(abi.c.ke_render_scene_resolve_handle, translated("ke_render_scene_resolve_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
@@ -79,7 +84,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.c.KE_RENDER_CHAIN_NONE));
 }
 
-extern const layout_values: [89]c_ulonglong;
+extern const layout_values: [112]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -118,6 +123,17 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_pass_io, "writes_count"),
         @offsetOf(abi.c.ke_render_pass_io, "chain"),
         @offsetOf(abi.c.ke_render_pass_io, "depth"),
+        @sizeOf(abi.c.ke_render_scene_component_ids),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "mesh"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "camera"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "directional_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "point_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "spot_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "ambient_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "skybox"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "sprite2d"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "label"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "world_transform"),
         @sizeOf(abi.c.ke_render_service),
         @offsetOf(abi.c.ke_render_service, "handle"),
         @offsetOf(abi.c.ke_render_service, "declare"),
@@ -172,6 +188,18 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_render_service_handle),
         @offsetOf(abi.c.ke_render_service_handle, "ref"),
         @offsetOf(abi.c.ke_render_service_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_frame),
+        @offsetOf(abi.c.ke_render_frame, "handle"),
+        @offsetOf(abi.c.ke_render_frame, "frame_cid"),
+        @sizeOf(abi.c.ke_render_frame_handle),
+        @offsetOf(abi.c.ke_render_frame_handle, "ref"),
+        @offsetOf(abi.c.ke_render_frame_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_scene_resolve),
+        @offsetOf(abi.c.ke_render_scene_resolve, "handle"),
+        @offsetOf(abi.c.ke_render_scene_resolve, "component_ids"),
+        @sizeOf(abi.c.ke_render_scene_resolve_handle),
+        @offsetOf(abi.c.ke_render_scene_resolve_handle, "ref"),
+        @offsetOf(abi.c.ke_render_scene_resolve_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

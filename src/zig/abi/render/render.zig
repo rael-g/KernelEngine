@@ -662,8 +662,66 @@ pub const RenderService = struct {
 
 };
 
+pub const RenderFrame = struct {
+    ptr: *c.ke_render_frame,
+    owner: ?c.ke_render_frame_handle = null,
+
+    pub fn deinit(self: RenderFrame) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_frame {
+        return .{
+            .frame_cid = &struct {
+                fn call(self: ?*c.ke_render_frame) callconv(.c) c.ke_component_id {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
+                    return T.frameCid(state);
+                }
+            }.call,
+        };
+    }
+
+    /// The tag the system that begins the frame writes and the system that ends it reads. A pass
+    /// that reads it runs inside the frame.
+    pub fn frameCid(self: RenderFrame) c.ke_component_id {
+        return self.ptr.frame_cid.?(self.ptr);
+    }
+
+};
+
+pub const RenderSceneResolve = struct {
+    ptr: *c.ke_render_scene_resolve,
+    owner: ?c.ke_render_scene_resolve_handle = null,
+
+    pub fn deinit(self: RenderSceneResolve) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_scene_resolve {
+        return .{
+            .component_ids = &struct {
+                fn call(self: ?*c.ke_render_scene_resolve) callconv(.c) ?*const c.ke_render_scene_component_ids {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*const c.ke_render_scene_component_ids)));
+                    return T.componentIds(state);
+                }
+            }.call,
+        };
+    }
+
+    /// The ids of the components the scene resolve registered; valid while it lives.
+    pub fn componentIds(self: RenderSceneResolve) ?*const c.ke_render_scene_component_ids {
+        return self.ptr.component_ids.?(self.ptr);
+    }
+
+};
+
 pub const RenderResourceParams = c.ke_render_resource_params;
 pub const RenderFrameGlobals = c.ke_render_frame_globals;
 pub const RenderLighting = c.ke_render_lighting;
 pub const RenderPassIo = c.ke_render_pass_io;
+pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
 pub const RenderServiceHandle = c.ke_render_service_handle;
+pub const RenderFrameHandle = c.ke_render_frame_handle;
+pub const RenderSceneResolveHandle = c.ke_render_scene_resolve_handle;

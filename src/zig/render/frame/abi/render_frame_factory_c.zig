@@ -72,7 +72,7 @@ pub const ke_render_frame_params = extern struct {
 /// begins the frame and publishes the frame globals and the scene's light, and
 /// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
 /// the handle's ref is NULL on failure.
-pub extern fn ke_render_frame_create(params: ?*const ke_render_frame_params, out_frame: ?*abi_render_contract.c.ke_render_frame_handle) abi_result.c.ke_result;
+pub extern fn ke_render_frame_create(params: ?*const ke_render_frame_params, out_frame: ?*abi_render.c.ke_render_frame_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

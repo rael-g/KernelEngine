@@ -7,7 +7,6 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_render_ui_factory = @import("render_ui_factory");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -111,4 +110,4 @@ pub extern fn ke_render_scene_components_create(set: ?*abi_framework.c.ke_scene_
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
 /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
 /// failure, and the component types registered before it stay registered.
-pub extern fn ke_render_scene_resolve_create(params: ?*const ke_render_scene_resolve_params, out_resolve: ?*abi_render_contract.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;
+pub extern fn ke_render_scene_resolve_create(params: ?*const ke_render_scene_resolve_params, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;

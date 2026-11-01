@@ -8,7 +8,7 @@ extern "C"
 {
 #endif
 
-    /// The systems that begin and end a frame on the render service.
+    /** [interface] The systems that begin and end a frame on the render service. */
     typedef struct ke_render_frame
     {
         void *handle;
