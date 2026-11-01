@@ -7,6 +7,7 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_contract = @import("render_contract");
 const abi_render_ui_factory = @import("render_ui_factory");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -75,20 +76,6 @@ pub const ke_render_label_resolve_params = extern struct {
     label_cid: ke_component_id = std.mem.zeroes(ke_component_id),
 };
 
-/// The ids the ecs gave the scene's render components, which the passes are created with.
-pub const ke_render_scene_component_ids = extern struct {
-    mesh: ke_component_id = std.mem.zeroes(ke_component_id),
-    camera: ke_component_id = std.mem.zeroes(ke_component_id),
-    directional_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    point_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    spot_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    ambient_light: ke_component_id = std.mem.zeroes(ke_component_id),
-    skybox: ke_component_id = std.mem.zeroes(ke_component_id),
-    sprite2d: ke_component_id = std.mem.zeroes(ke_component_id),
-    label: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform: ke_component_id = std.mem.zeroes(ke_component_id),
-};
-
 /// What the scene resolve needs to register the components and upload what they name.
 pub const ke_render_scene_resolve_params = extern struct {
     /// Registers the resolve systems; borrowed, must outlive it.
@@ -104,19 +91,6 @@ pub const ke_render_scene_resolve_params = extern struct {
 pub const ke_render_label_resolve_handle = extern struct {
     ref: ?*ke_render_label_resolve = std.mem.zeroes(?*ke_render_label_resolve),
     destroy: ?*const fn (?*ke_render_label_resolve) callconv(.c) void = null,
-};
-
-/// The scene's render components and the update-phase systems that give a mesh and a sprite the
-/// GPU resources they name.
-pub const ke_render_scene_resolve = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The ids of the components the scene resolve registered; valid while it lives.
-    component_ids: ?*const fn (?*ke_render_scene_resolve) callconv(.c) ?*const ke_render_scene_component_ids = null,
-};
-
-pub const ke_render_scene_resolve_handle = extern struct {
-    ref: ?*ke_render_scene_resolve = std.mem.zeroes(?*ke_render_scene_resolve),
-    destroy: ?*const fn (?*ke_render_scene_resolve) callconv(.c) void = null,
 };
 
 /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
@@ -137,4 +111,4 @@ pub extern fn ke_render_scene_components_create(set: ?*abi_framework.c.ke_scene_
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
 /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
 /// failure, and the component types registered before it stay registered.
-pub extern fn ke_render_scene_resolve_create(params: ?*const ke_render_scene_resolve_params, out_resolve: ?*ke_render_scene_resolve_handle) abi_result.c.ke_result;
+pub extern fn ke_render_scene_resolve_create(params: ?*const ke_render_scene_resolve_params, out_resolve: ?*abi_render_contract.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;

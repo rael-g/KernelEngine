@@ -10,6 +10,7 @@
         .abi_framework = .{ .path = "../../../abi/framework" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_render = .{ .path = "../../../abi/render" },
+        .abi_render_contract = .{ .path = "../../../abi/render_contract" },
         .abi_render_ui_factory = .{ .path = "../../ui/abi" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_runtime = .{ .path = "../../../abi/runtime" },

@@ -15,43 +15,15 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderFrame = struct {
-    ptr: *c.ke_render_frame,
-    owner: ?c.ke_render_frame_handle = null,
-
-    pub fn deinit(self: RenderFrame) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// The vtable whose slots call the methods of T, which embeds it as the named field.
-    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_frame {
-        return .{
-            .frame_cid = &struct {
-                fn call(self: ?*c.ke_render_frame) callconv(.c) c.ke_component_id {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
-                    return T.frameCid(state);
-                }
-            }.call,
-        };
-    }
-
-    /// The tag the system that begins the frame writes and the system that ends it reads. A pass
-    /// that reads it runs inside the frame.
-    pub fn frameCid(self: RenderFrame) c.ke_component_id {
-        return self.ptr.frame_cid.?(self.ptr);
-    }
-
-    /// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
-    /// begins the frame and publishes the frame globals and the scene's light, and
-    /// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
-    /// the handle's ref is NULL on failure.
-    pub fn create(params: ?*const c.ke_render_frame_params) Error!RenderFrame {
-        var written: c.ke_render_frame_handle = undefined;
-        try checkResult(c.ke_render_frame_create(params, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
-    }
-
-};
+/// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
+/// begins the frame and publishes the frame globals and the scene's light, and
+/// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
+/// the handle's ref is NULL on failure.
+pub fn renderFrameCreate(params: ?*const c.ke_render_frame_params) Error!abi_render_contract.c.ke_render_frame_handle {
+    var written: abi_render_contract.c.ke_render_frame_handle = undefined;
+    try checkResult(c.ke_render_frame_create(params, &written));
+    return written;
+}
 
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
@@ -60,4 +32,3 @@ pub fn renderFrameSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
 }
 
 pub const RenderFrameParams = c.ke_render_frame_params;
-pub const RenderFrameHandle = c.ke_render_frame_handle;

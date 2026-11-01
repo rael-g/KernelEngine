@@ -1,15 +1,40 @@
 #include <stddef.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/render/component_fields.h>
 #include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/render/service/pass_context.h>
 #include <kernel_engine/render/ui/component_fields.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_render_scene_component_ids),
+    offsetof(ke_render_scene_component_ids, mesh),
+    offsetof(ke_render_scene_component_ids, camera),
+    offsetof(ke_render_scene_component_ids, directional_light),
+    offsetof(ke_render_scene_component_ids, point_light),
+    offsetof(ke_render_scene_component_ids, spot_light),
+    offsetof(ke_render_scene_component_ids, ambient_light),
+    offsetof(ke_render_scene_component_ids, skybox),
+    offsetof(ke_render_scene_component_ids, sprite2d),
+    offsetof(ke_render_scene_component_ids, label),
+    offsetof(ke_render_scene_component_ids, world_transform),
     sizeof(ke_camera_frustum),
     offsetof(ke_camera_frustum, tan_half_fov_y),
     offsetof(ke_camera_frustum, aspect),
     offsetof(ke_camera_frustum, near_plane),
     offsetof(ke_camera_frustum, far_plane),
+    sizeof(ke_render_frame),
+    offsetof(ke_render_frame, handle),
+    offsetof(ke_render_frame, frame_cid),
+    sizeof(ke_render_frame_handle),
+    offsetof(ke_render_frame_handle, ref),
+    offsetof(ke_render_frame_handle, destroy),
+    sizeof(ke_render_scene_resolve),
+    offsetof(ke_render_scene_resolve, handle),
+    offsetof(ke_render_scene_resolve, component_ids),
+    sizeof(ke_render_scene_resolve_handle),
+    offsetof(ke_render_scene_resolve_handle, ref),
+    offsetof(ke_render_scene_resolve_handle, destroy),
     sizeof(ke_render_camera),
     offsetof(ke_render_camera, handle),
     offsetof(ke_render_camera, view),

@@ -11,11 +11,5 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_frame_params, world_transform_cid),
     offsetof(ke_render_frame_params, directional_light_cid),
     offsetof(ke_render_frame_params, ambient_light_cid),
-    sizeof(ke_render_frame),
-    offsetof(ke_render_frame, handle),
-    offsetof(ke_render_frame, frame_cid),
-    sizeof(ke_render_frame_handle),
-    offsetof(ke_render_frame_handle, ref),
-    offsetof(ke_render_frame_handle, destroy),
     0,
 };

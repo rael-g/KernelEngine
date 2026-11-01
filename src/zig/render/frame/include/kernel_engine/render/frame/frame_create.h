@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/camera.h>
+#include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -23,25 +24,6 @@
 extern "C"
 {
 #endif
-
-    /// The systems that begin and end a frame on the render service.
-    typedef struct ke_render_frame
-    {
-        void *handle;
-
-        /**
-         * The tag the system that begins the frame writes and the system that ends it reads. A
-         * pass that reads it runs inside the frame.
-         */
-        ke_component_id (*frame_cid)(struct ke_render_frame *self);
-    } ke_render_frame;
-
-    /// [owner]
-    typedef struct ke_render_frame_handle
-    {
-        ke_render_frame *ref;
-        void (*destroy)(ke_render_frame *self);
-    } ke_render_frame_handle;
 
     /// [bag] What the frame needs to begin and end on the service and to publish the frame globals.
     typedef struct ke_render_frame_params

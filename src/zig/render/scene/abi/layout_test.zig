@@ -24,11 +24,8 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_render_label_resolve_params, translated("ke_render_label_resolve_params"));
-    try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_render_scene_resolve_params, translated("ke_render_scene_resolve_params"));
     try expectSameLayout(abi.c.ke_render_label_resolve_handle, translated("ke_render_label_resolve_handle"));
-    try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
-    try expectSameLayout(abi.c.ke_render_scene_resolve_handle, translated("ke_render_scene_resolve_handle"));
     if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
@@ -58,7 +55,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [32]c_ulonglong;
+extern const layout_values: [15]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -69,17 +66,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_label_resolve_params, "ui"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "resolver"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "label_cid"),
-        @sizeOf(abi.c.ke_render_scene_component_ids),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "mesh"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "camera"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "directional_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "point_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "spot_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "ambient_light"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "skybox"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "sprite2d"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "label"),
-        @offsetOf(abi.c.ke_render_scene_component_ids, "world_transform"),
         @sizeOf(abi.c.ke_render_scene_resolve_params),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "runtime"),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "ecs"),
@@ -88,12 +74,6 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_render_label_resolve_handle),
         @offsetOf(abi.c.ke_render_label_resolve_handle, "ref"),
         @offsetOf(abi.c.ke_render_label_resolve_handle, "destroy"),
-        @sizeOf(abi.c.ke_render_scene_resolve),
-        @offsetOf(abi.c.ke_render_scene_resolve, "handle"),
-        @offsetOf(abi.c.ke_render_scene_resolve, "component_ids"),
-        @sizeOf(abi.c.ke_render_scene_resolve_handle),
-        @offsetOf(abi.c.ke_render_scene_resolve_handle, "ref"),
-        @offsetOf(abi.c.ke_render_scene_resolve_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

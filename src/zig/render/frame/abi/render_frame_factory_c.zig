@@ -68,24 +68,11 @@ pub const ke_render_frame_params = extern struct {
     ambient_light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
 };
 
-/// The systems that begin and end a frame on the render service.
-pub const ke_render_frame = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The tag the system that begins the frame writes and the system that ends it reads. A pass
-    /// that reads it runs inside the frame.
-    frame_cid: ?*const fn (?*ke_render_frame) callconv(.c) ke_component_id = null,
-};
-
-pub const ke_render_frame_handle = extern struct {
-    ref: ?*ke_render_frame = std.mem.zeroes(?*ke_render_frame),
-    destroy: ?*const fn (?*ke_render_frame) callconv(.c) void = null,
-};
-
 /// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
 /// begins the frame and publishes the frame globals and the scene's light, and
 /// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
 /// the handle's ref is NULL on failure.
-pub extern fn ke_render_frame_create(params: ?*const ke_render_frame_params, out_frame: ?*ke_render_frame_handle) abi_result.c.ke_result;
+pub extern fn ke_render_frame_create(params: ?*const ke_render_frame_params, out_frame: ?*abi_render_contract.c.ke_render_frame_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

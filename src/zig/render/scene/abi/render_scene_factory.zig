@@ -7,6 +7,7 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_contract = @import("render_contract");
 const abi_render_ui_factory = @import("render_ui_factory");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -17,43 +18,6 @@ pub const c = @import("render_scene_factory_c.zig");
 pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
-
-pub const RenderSceneResolve = struct {
-    ptr: *c.ke_render_scene_resolve,
-    owner: ?c.ke_render_scene_resolve_handle = null,
-
-    pub fn deinit(self: RenderSceneResolve) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// The vtable whose slots call the methods of T, which embeds it as the named field.
-    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_scene_resolve {
-        return .{
-            .component_ids = &struct {
-                fn call(self: ?*c.ke_render_scene_resolve) callconv(.c) ?*const c.ke_render_scene_component_ids {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*const c.ke_render_scene_component_ids)));
-                    return T.componentIds(state);
-                }
-            }.call,
-        };
-    }
-
-    /// The ids of the components the scene resolve registered; valid while it lives.
-    pub fn componentIds(self: RenderSceneResolve) ?*const c.ke_render_scene_component_ids {
-        return self.ptr.component_ids.?(self.ptr);
-    }
-
-    /// Registers the scene's render components and the update-phase systems
-    /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
-    /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
-    /// failure, and the component types registered before it stay registered.
-    pub fn create(params: ?*const c.ke_render_scene_resolve_params) Error!RenderSceneResolve {
-        var written: c.ke_render_scene_resolve_handle = undefined;
-        try checkResult(c.ke_render_scene_resolve_create(params, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
-    }
-
-};
 
 pub const RenderLabelResolve = struct {
     ptr: *c.ke_render_label_resolve,
@@ -87,8 +51,16 @@ pub fn renderSceneComponentsCreate(set: ?*abi_framework.c.ke_scene_component_set
     try checkResult(c.ke_render_scene_components_create(set));
 }
 
+/// Registers the scene's render components and the update-phase systems
+/// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
+/// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
+/// failure, and the component types registered before it stay registered.
+pub fn renderSceneResolveCreate(params: ?*const c.ke_render_scene_resolve_params) Error!abi_render_contract.c.ke_render_scene_resolve_handle {
+    var written: abi_render_contract.c.ke_render_scene_resolve_handle = undefined;
+    try checkResult(c.ke_render_scene_resolve_create(params, &written));
+    return written;
+}
+
 pub const RenderLabelResolveParams = c.ke_render_label_resolve_params;
-pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
 pub const RenderSceneResolveParams = c.ke_render_scene_resolve_params;
 pub const RenderLabelResolveHandle = c.ke_render_label_resolve_handle;
-pub const RenderSceneResolveHandle = c.ke_render_scene_resolve_handle;

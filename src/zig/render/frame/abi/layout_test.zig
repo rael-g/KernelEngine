@@ -24,8 +24,6 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_render_frame_params, translated("ke_render_frame_params"));
-    try expectSameLayout(abi.c.ke_render_frame, translated("ke_render_frame"));
-    try expectSameLayout(abi.c.ke_render_frame_handle, translated("ke_render_frame_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
@@ -54,7 +52,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [16]c_ulonglong;
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -68,12 +66,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_frame_params, "world_transform_cid"),
         @offsetOf(abi.c.ke_render_frame_params, "directional_light_cid"),
         @offsetOf(abi.c.ke_render_frame_params, "ambient_light_cid"),
-        @sizeOf(abi.c.ke_render_frame),
-        @offsetOf(abi.c.ke_render_frame, "handle"),
-        @offsetOf(abi.c.ke_render_frame, "frame_cid"),
-        @sizeOf(abi.c.ke_render_frame_handle),
-        @offsetOf(abi.c.ke_render_frame_handle, "ref"),
-        @offsetOf(abi.c.ke_render_frame_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

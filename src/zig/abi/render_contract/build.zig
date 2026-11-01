@@ -14,6 +14,8 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
+        \\#include <kernel_engine/render/frame.h>
+        \\#include <kernel_engine/render/scene_resolve.h>
         \\#include <kernel_engine/render/camera.h>
         \\#include <kernel_engine/render/component_fields.h>
         \\#include <kernel_engine/render/resource_groups.h>
