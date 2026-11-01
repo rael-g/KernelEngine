@@ -182,6 +182,29 @@
       "outDir": "src/csharp/configuration/KernelEngine.Configuration/Generated"
     },
     {
+      "name": "render_gpu",
+      "opaque": true,
+      "headers": [
+        "src/c/render/kernel_engine/render/gpu/ndc_convention.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_enums.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_commands.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/render/kernel_engine/render/gpu/gpu_render_target.h",
+        "src/c/render/kernel_engine/render/binding/resource_binder.h"
+      ],
+      "includeDirs": [
+        "src/c/render",
+        "src/c/ecs",
+        "src/c/math",
+        "src/c/result",
+        "src/zig/common/include"
+      ],
+      "apiJson": "src/csharp/render/render_gpu.ke_api.json",
+      "namespace": "KernelEngine.Render.Gpu",
+      "nativeNamespace": "KernelEngine.Render.Native",
+      "outDir": "src/csharp/render/KernelEngine.Render/Generated/Gpu"
+    },
+    {
       "name": "io",
       "headers": [
         "src/c/io/kernel_engine/io/io.h"
@@ -846,7 +869,6 @@
     { "name": "view", "headers": ["src/c/view/kernel_engine/view/view_space.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "result", "headers": [ "src/c/result/kernel_engine/result/result.h" ], "includeDirs": [ "src/c/result", "src/zig/common/include" ] },
     { "name": "render_handles", "headers": [ "src/c/render/kernel_engine/render/handles.h" ], "includeDirs": [ "src/c/render", "src/c/result", "src/zig/common/include" ] },
-    { "name": "render_gpu", "headers": [ "src/c/render/kernel_engine/render/gpu/ndc_convention.h", "src/c/render/kernel_engine/render/gpu/gpu_enums.h", "src/c/render/kernel_engine/render/gpu/gpu_commands.h", "src/c/render/kernel_engine/render/gpu/gpu_device.h", "src/c/render/kernel_engine/render/gpu/gpu_render_target.h", "src/c/render/kernel_engine/render/binding/resource_binder.h" ], "includeDirs": [ "src/c/render", "src/c/ecs", "src/c/math", "src/c/result", "src/zig/common/include" ] },
     { "name": "render_material", "headers": [ "src/c/render/kernel_engine/render/material_file.h" ], "includeDirs": [ "src/c/render", "src/c/math", "src/c/result", "src/zig/common/include" ] },
     { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] }
   ],
