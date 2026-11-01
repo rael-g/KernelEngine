@@ -565,8 +565,6 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             return (expr => $"{expr} != 0", expr => $"(byte)({expr} ? 1 : 0)");
         var property = propertyType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var field = fieldType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        if (propertyType.TypeKind == TypeKind.Enum && fieldType.TypeKind == TypeKind.Enum)
-            return (expr => $"({property}){expr}", expr => $"({field}){expr}");
         if (fieldType.Name.EndsWith("_e__FixedBuffer", System.StringComparison.Ordinal))
             return (expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{field}, {property}>({expr})",
                 expr => $"global::System.Runtime.CompilerServices.Unsafe.BitCast<{property}, {field}>({expr})");
