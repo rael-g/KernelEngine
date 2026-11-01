@@ -12,22 +12,21 @@ public sealed unsafe partial class RenderSceneResolveRenderSceneResolve : Kernel
     /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
     /// <param name="ecs">Registers the components; borrowed.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.</param>
-    public RenderSceneResolveRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver resolver) : base(Create(runtime, ecs, service, resolver))
+    /// <param name="resolver"></param>
+    public RenderSceneResolveRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver resolver)
+    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(service);
-        ArgumentNullException.ThrowIfNull(resolver);
         KernelEngine.Render.Webgpu.Native.ke_render_scene_resolve_params config = default;
         config.runtime = runtime.Native;
         config.ecs = ecs.Native;
         config.service = service.Native;
-        config.resolver = resolver.Native;
+        config.resolver = (resolver is null ? null : resolver.Native);
         KernelEngine.Render.Native.ke_render_scene_resolve_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&config, &handle), "ke_render_scene_resolve_create");
         return handle;

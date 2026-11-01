@@ -34,7 +34,7 @@ extern "C"
         ke_ecs            *ecs;      ///< Registers the components; borrowed.
         ke_render_service *service;  ///< Uploads the meshes, materials and textures; borrowed, must outlive it.
         /// Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.
-        ke_asset_resolver *resolver;
+        ke_asset_resolver *resolver; ///< [optional]
     } ke_render_scene_resolve_params;
 
     /// Registers the scene's render components and the update-phase systems

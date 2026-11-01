@@ -30,7 +30,10 @@ public static class ServiceCollectionExtensions
         where TContract : class
         where TImpl : class, TContract
     {
-        return services.AddSingleton<TContract, TImpl>();
+        services.AddSingleton<TContract, TImpl>();
+        if (typeof(TContract) == typeof(IRuntime))
+            services.AddSingleton<INativeRuntime>(sp => (INativeRuntime)sp.GetRequiredService<IRuntime>());
+        return services;
     }
 
     /// <summary>

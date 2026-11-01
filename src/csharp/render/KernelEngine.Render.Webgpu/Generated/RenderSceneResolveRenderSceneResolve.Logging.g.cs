@@ -12,12 +12,12 @@ public sealed unsafe partial class RenderSceneResolveRenderSceneResolve
     /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
     /// <param name="ecs">Registers the components; borrowed.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.</param>
-    public RenderSceneResolveRenderSceneResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver resolver) : base(CreateLogged(logger, runtime, ecs, service, resolver))
+    /// <param name="resolver"></param>
+    public RenderSceneResolveRenderSceneResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(CreateLogged(logger, runtime, ecs, service, resolver))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver resolver)
+    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));

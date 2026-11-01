@@ -14,8 +14,8 @@ public static class RenderLabelResolveRegistration
     public static IServiceCollection AddRenderLabelResolve(this IServiceCollection services)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderLabelResolve(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>(), sp.GetRequiredService<KernelEngine.Framework.INativeAssetResolver>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>())
-            : new RenderLabelResolve(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>(), sp.GetRequiredService<KernelEngine.Framework.INativeAssetResolver>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>()));
+            ? new RenderLabelResolve(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>())
+            : new RenderLabelResolve(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>()));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderLabelResolve>());
         return services;
     }

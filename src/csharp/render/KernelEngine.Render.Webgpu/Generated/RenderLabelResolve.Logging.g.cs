@@ -12,13 +12,13 @@ public sealed unsafe partial class RenderLabelResolve
     /// <param name="runtime">Registers the system; borrowed, must outlive it.</param>
     /// <param name="service">Uploads the glyph atlas; borrowed, must outlive it.</param>
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the font a label names; optional, borrowed. Without it every label is reported.</param>
+    /// <param name="resolver"></param>
     /// <param name="scene">Names the label component; borrowed.</param>
-    public RenderLabelResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(CreateLogged(logger, runtime, service, ui, resolver, scene))
+    public RenderLabelResolve(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(CreateLogged(logger, runtime, service, ui, resolver, scene))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));

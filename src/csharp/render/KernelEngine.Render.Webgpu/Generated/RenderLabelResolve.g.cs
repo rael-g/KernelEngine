@@ -12,9 +12,9 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
     /// <param name="runtime">Registers the system; borrowed, must outlive it.</param>
     /// <param name="service">Uploads the glyph atlas; borrowed, must outlive it.</param>
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the font a label names; optional, borrowed. Without it every label is reported.</param>
+    /// <param name="resolver"></param>
     /// <param name="scene">Names the label component; borrowed.</param>
-    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(Create(runtime, service, ui, resolver, scene))
+    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(Create(runtime, service, ui, resolver, scene))
     {
     }
 
@@ -30,18 +30,17 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
         _handle = default;
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(ui);
-        ArgumentNullException.ThrowIfNull(resolver);
         ArgumentNullException.ThrowIfNull(scene);
         KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_params config = default;
         config.runtime = runtime.Native;
         config.service = service.Native;
         config.ui = ui.Native;
-        config.resolver = resolver.Native;
+        config.resolver = (resolver is null ? null : resolver.Native);
         config.scene = scene.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&config, &handle), "ke_render_label_resolve_create");

@@ -45,7 +45,7 @@ extern "C"
         ke_render_service *service;   ///< Uploads the glyph atlas; borrowed, must outlive it.
         ke_render_ui      *ui;        ///< Registers the font; borrowed, must outlive it.
         /// Reads the font a label names; optional, borrowed. Without it every label is reported.
-        ke_asset_resolver *resolver;
+        ke_asset_resolver *resolver; ///< [optional]
         ke_render_scene_resolve *scene; ///< Names the label component; borrowed.
     } ke_render_label_resolve_params;
 

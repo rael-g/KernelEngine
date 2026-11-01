@@ -18,8 +18,8 @@ public static class RenderSceneResolveRenderSceneResolveRegistration
     public static IServiceCollection AddRenderSceneResolveRenderSceneResolve(this IServiceCollection services)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderSceneResolveRenderSceneResolve(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Framework.INativeAssetResolver>())
-            : new RenderSceneResolveRenderSceneResolve(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Framework.INativeAssetResolver>()));
+            ? new RenderSceneResolveRenderSceneResolve(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>())
+            : new RenderSceneResolveRenderSceneResolve(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>()));
         services.AddSingleton<KernelEngine.Render.INativeRenderSceneResolve>(sp => sp.GetRequiredService<RenderSceneResolveRenderSceneResolve>());
         services.AddSingleton<KernelEngine.Render.IRenderSceneResolve>(sp => sp.GetRequiredService<RenderSceneResolveRenderSceneResolve>());
         return services;

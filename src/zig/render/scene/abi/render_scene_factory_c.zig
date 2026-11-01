@@ -70,7 +70,6 @@ pub const ke_render_label_resolve_params = extern struct {
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
     /// Registers the font; borrowed, must outlive it.
     ui: ?*abi_render_ui.c.ke_render_ui = std.mem.zeroes(?*abi_render_ui.c.ke_render_ui),
-    /// Reads the font a label names; optional, borrowed. Without it every label is reported.
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
     /// Names the label component; borrowed.
     scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
@@ -84,7 +83,6 @@ pub const ke_render_scene_resolve_params = extern struct {
     ecs: ?*abi_ecs.c.ke_ecs = std.mem.zeroes(?*abi_ecs.c.ke_ecs),
     /// Uploads the meshes, materials and textures; borrowed, must outlive it.
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
 };
 
