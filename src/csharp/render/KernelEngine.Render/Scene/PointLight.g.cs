@@ -4,9 +4,10 @@
 #nullable enable
 
 using System.Numerics;
+
 using KernelEngine.Ecs;
-using KernelEngine.Render;
 using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
