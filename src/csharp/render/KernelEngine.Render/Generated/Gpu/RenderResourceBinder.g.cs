@@ -3,37 +3,187 @@
 
 #nullable enable
 
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using KernelEngine.Common;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Render.Gpu;
 
-/// <summary>Hands on the raw native ke_render_resource_binder pointer.</summary>
+/// <summary>Exposes the raw native renderresourcebinder pointer for cross-domain composition wiring.</summary>
 public unsafe interface INativeRenderResourceBinder
 {
-    /// <summary>The native pointer.</summary>
     ke_render_resource_binder* Native { get; }
 }
 
-/// <summary>Owns a ke_render_resource_binder.</summary>
-public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderResourceBinder
+/// <summary>Brings the resources of a frame to the shaders that read them. A pass names a shader's parameters and never learns how they reach it: in groups, in tables indexed per draw, or any other way the implementation chooses.</summary>
+public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderResourceBinder, IRenderResourceBinder
 {
-    private ke_render_resource_binder_handle _handle;
+    private ke_render_resource_binder* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_render_resource_binder*, void> _destroy;
+    private readonly bool _borrowed;
 
-    ke_render_resource_binder* INativeRenderResourceBinder.Native => _handle.@ref != null ? _handle.@ref : throw new ObjectDisposedException(nameof(RenderResourceBinder));
+    private ke_render_resource_binder* Handle => _native != null ? _native
+        : throw new ObjectDisposedException(nameof(RenderResourceBinder));
 
-    /// <summary>Takes ownership of <paramref name="handle"/>.</summary>
+    ke_render_resource_binder* INativeRenderResourceBinder.Native => Handle;
+
+    /// <summary>Wraps an owner <c>ke_render_resource_binder_handle</c> and runs renderresourcebinder's startup lifecycle hook.</summary>
     public RenderResourceBinder(ke_render_resource_binder_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
-        _handle = handle;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
-    /// <summary>Releases the native object.</summary>
+    /// <summary>Wraps a <c>ke_render_resource_binder*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static RenderResourceBinder Borrow(ke_render_resource_binder* native) => new(native, borrowed: true);
+
+    private RenderResourceBinder(ke_render_resource_binder* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
+    }
+
+    /// <summary>Makes `binding` the resource of every shader parameter of its name that a resource set leaves out. The name is copied.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void Provide(RenderShaderBinding binding)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->provide(Handle, (RenderShaderBinding*)&binding), "provide");
+    }
+
+    /// <summary>Builds the layout of a compiled shader from what the build recorded about it.</summary>
+    /// <param name="shader">Logical name the shader was compiled under, as a render service's load_shader takes it.</param>
+    /// <param name="stages">Bitwise OR of the KE_GPU_SHADER_STAGE_* stages the shader is compiled for.</param>
+    /// <returns>Receives the layout; KE_RENDER_BINDING_INVALID on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateShaderLayout(string shader, uint stages, ReadOnlySpan<RenderBindingHint> hints)
+    {
+        var shaderText = shader ?? "";
+        var shaderSize = System.Text.Encoding.UTF8.GetMaxByteCount(shaderText.Length) + 1;
+        Span<byte> shaderBytes = shaderSize <= 512 ? stackalloc byte[512] : new byte[shaderSize];
+        shaderBytes[System.Text.Encoding.UTF8.GetBytes(shaderText, shaderBytes)] = 0;
+        fixed (byte* shaderPtr = shaderBytes)
+        {
+            fixed (RenderBindingHint* hintsPtr = hints)
+            {
+                ke_render_shader_layout_params @params = default;
+                @params.shader = (sbyte*)shaderPtr;
+                @params.stages = stages;
+                @params.hints = hintsPtr;
+                @params.hint_count = (uint)hints.Length;
+                ulong resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_shader_layout(Handle, &@params, &resultOut), "create_shader_layout");
+                return resultOut;
+            }
+        }
+    }
+
+    /// <summary>Destroys a layout; the invalid one is ignored. A set created against it must be destroyed first.</summary>
+    public void DestroyShaderLayout(ulong layout)
+    {
+        Handle->destroy_shader_layout(Handle, layout);
+    }
+
+    /// <summary>Fills the bind group layouts a pipeline running the shader of `layout` declares.</summary>
+    /// <param name="outLayouts">Receives the layouts in the order the pipeline takes them; they stay owned by the binder and live as long as `layout`.</param>
+    /// <returns>Receives the number of layouts written.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public uint PipelineLayouts(ulong layout, Span<ulong> outLayouts)
+    {
+        fixed (ulong* outLayoutsPtr = outLayouts)
+        {
+            uint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->pipeline_layouts(Handle, layout, outLayoutsPtr, (uint)outLayouts.Length, &resultOut), "pipeline_layouts");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Binds resources to one group of a shader by the names its parameters carry. A parameter left out is bound to what `provide` gave under its name.</summary>
+    /// <param name="block">Name of a parameter block the shader declares; NULL selects its parameters declared outside any block.</param>
+    /// <param name="label">Name shown by capture and validation tools.</param>
+    /// <param name="bindings">The resources bound, each to the parameter it names.</param>
+    /// <returns>Receives the set; KE_RENDER_BINDING_INVALID on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateSet(ulong layout, string block, string label, ReadOnlySpan<RenderShaderBinding> bindings)
+    {
+        var blockText = block ?? "";
+        var blockSize = System.Text.Encoding.UTF8.GetMaxByteCount(blockText.Length) + 1;
+        Span<byte> blockBytes = blockSize <= 512 ? stackalloc byte[512] : new byte[blockSize];
+        blockBytes[System.Text.Encoding.UTF8.GetBytes(blockText, blockBytes)] = 0;
+        fixed (byte* blockPtr = blockBytes)
+        {
+            var labelText = label ?? "";
+            var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+            Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+            labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+            fixed (byte* labelPtr = labelBytes)
+            {
+                fixed (RenderShaderBinding* bindingsPtr = bindings)
+                {
+                    ulong resultOut = default;
+                    KernelEngine.NativeResults.ThrowIfFailed(Handle->create_set(Handle, layout, (sbyte*)blockPtr, (sbyte*)labelPtr, bindingsPtr, (uint)bindings.Length, &resultOut), "create_set");
+                    return resultOut;
+                }
+            }
+        }
+    }
+
+    /// <summary>Destroys a set; the invalid one is ignored.</summary>
+    public void DestroySet(ulong set)
+    {
+        Handle->destroy_set(Handle, set);
+    }
+
+    /// <summary>Makes the resources of `set` those the next draws of `pass` read, with one dynamic offset per binding hinted KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET, in the order the shader declares them.</summary>
+    public void BindRenderSet(nint pass, ulong set, ReadOnlySpan<uint> dynamicOffsets)
+    {
+        fixed (uint* dynamicOffsetsPtr = dynamicOffsets)
+        {
+            Handle->bind_render_set(Handle, (ke_gpu_render_pass*)pass, set, dynamicOffsetsPtr, (uint)dynamicOffsets.Length);
+        }
+    }
+
+    /// <summary>Makes the resources of `set` those the next dispatches of `pass` read, as bind_render_set does.</summary>
+    public void BindComputeSet(nint pass, ulong set, nint dynamicOffsets, uint dynamicOffsetCount)
+    {
+        Handle->bind_compute_set(Handle, (ke_gpu_compute_pass*)pass, set, (uint*)dynamicOffsets, dynamicOffsetCount);
+    }
+
+    /// <summary>Keeps the data of one material for the shaders that draw with it. The texture views are borrowed and must outlive the binding.</summary>
+    /// <returns>Receives the binding; KE_RENDER_BINDING_INVALID on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateMaterial(RenderMaterialData data)
+    {
+        ulong resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (RenderMaterialData*)&data, &resultOut), "create_material");
+        return resultOut;
+    }
+
+    /// <summary>Destroys a material binding; the invalid one is ignored.</summary>
+    public void DestroyMaterial(ulong material)
+    {
+        Handle->destroy_material(Handle, material);
+    }
+
+    /// <summary>Makes `material` the one the next draws of `pass` with the shader of `layout` read. An unknown material or a shader that declares no material binds nothing.</summary>
+    public void BindMaterial(nint pass, ulong layout, ulong material)
+    {
+        Handle->bind_material(Handle, (ke_gpu_render_pass*)pass, layout, material);
+    }
+
+    /// <summary>Releases the native renderresourcebinder.</summary>
     public void Dispose()
     {
-        if (_handle.@ref == null) return;
-        _handle.destroy(_handle.@ref);
-        _handle = default;
-        GC.SuppressFinalize(this);
+        OnDispose();
+        if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
+        _destroy(_native);
+        _native = null;
     }
+
+    partial void OnDispose();
 }

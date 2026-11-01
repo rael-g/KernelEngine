@@ -299,6 +299,7 @@ pub const ke_gpu_vertex_attribute = extern struct {
     offset: u64 = std.mem.zeroes(u64),
 };
 
+/// One vertex buffer of a pipeline.
 pub const ke_gpu_vertex_buffer_layout = extern struct {
     stride: u64 = std.mem.zeroes(u64),
     step_mode: ke_gpu_vertex_step_mode = std.mem.zeroes(ke_gpu_vertex_step_mode),

@@ -122,6 +122,7 @@ typedef struct ke_gpu_vertex_attribute
     uint64_t             offset;
 } ke_gpu_vertex_attribute;
 
+/// [value] One vertex buffer of a pipeline.
 typedef struct ke_gpu_vertex_buffer_layout
 {
     uint64_t                       stride;

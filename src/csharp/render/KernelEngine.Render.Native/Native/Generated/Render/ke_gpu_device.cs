@@ -16,7 +16,7 @@ public unsafe partial struct ke_gpu_device
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong> get_default_queue;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_queue, ke_gpu_command_buffer *const *, uint32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, ke_gpu_command_buffer**, uint, void> queue_submit;
+    public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, GpuCommandBuffer**, uint, void> queue_submit;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_queue)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, void> queue_poll;

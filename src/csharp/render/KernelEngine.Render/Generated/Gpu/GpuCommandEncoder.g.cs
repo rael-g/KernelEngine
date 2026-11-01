@@ -3,37 +3,118 @@
 
 #nullable enable
 
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using KernelEngine.Common;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Render.Gpu;
 
-/// <summary>Hands on the raw native ke_gpu_command_encoder pointer.</summary>
+/// <summary>Exposes the raw native gpucommandencoder pointer for cross-domain composition wiring.</summary>
 public unsafe interface INativeGpuCommandEncoder
 {
-    /// <summary>The native pointer.</summary>
     ke_gpu_command_encoder* Native { get; }
 }
 
-/// <summary>Owns a ke_gpu_command_encoder.</summary>
-public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEncoder
+
+public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEncoder, IGpuCommandEncoder
 {
-    private ke_gpu_command_encoder_handle _handle;
+    private ke_gpu_command_encoder* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, void> _destroy;
+    private readonly bool _borrowed;
 
-    ke_gpu_command_encoder* INativeGpuCommandEncoder.Native => _handle.@ref != null ? _handle.@ref : throw new ObjectDisposedException(nameof(GpuCommandEncoder));
+    private ke_gpu_command_encoder* Handle => _native != null ? _native
+        : throw new ObjectDisposedException(nameof(GpuCommandEncoder));
 
-    /// <summary>Takes ownership of <paramref name="handle"/>.</summary>
+    ke_gpu_command_encoder* INativeGpuCommandEncoder.Native => Handle;
+
+    /// <summary>Wraps an owner <c>ke_gpu_command_encoder_handle</c> and runs gpucommandencoder's startup lifecycle hook.</summary>
     public GpuCommandEncoder(ke_gpu_command_encoder_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
-        _handle = handle;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
-    /// <summary>Releases the native object.</summary>
+    /// <summary>Wraps a <c>ke_gpu_command_encoder*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static GpuCommandEncoder Borrow(ke_gpu_command_encoder* native) => new(native, borrowed: true);
+
+    private GpuCommandEncoder(ke_gpu_command_encoder* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
+    }
+
+
+    public void CopyBufferToBuffer(ulong src, nuint srcOffset, ulong dst, nuint dstOffset, nuint size)
+    {
+        Handle->copy_buffer_to_buffer(Handle, src, srcOffset, dst, dstOffset, size);
+    }
+
+    /// <summary>Copies tightly described rows of texels from a buffer into a texture. Fails with KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void CopyBufferToTexture(ulong src, nuint srcOffset, uint bytesPerRow, ulong dst, uint dstX, uint dstY, uint dstZ, uint width, uint height)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->copy_buffer_to_texture(Handle, src, srcOffset, bytesPerRow, dst, dstX, dstY, dstZ, width, height), "copy_buffer_to_texture");
+    }
+
+
+    public void CopyTextureToTexture(ulong src, ulong dst, uint width, uint height)
+    {
+        Handle->copy_texture_to_texture(Handle, src, dst, width, height);
+    }
+
+    /// <summary>Copies a texture region into a buffer created with KE_GPU_BUFFER_USAGE_COPY_DST; the texture needs KE_GPU_TEXTURE_USAGE_COPY_SRC. Fails with KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void CopyTextureToBuffer(ulong src, uint srcX, uint srcY, uint srcZ, ulong dst, nuint dstOffset, uint bytesPerRow, uint width, uint height)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->copy_texture_to_buffer(Handle, src, srcX, srcY, srcZ, dst, dstOffset, bytesPerRow, width, height), "copy_texture_to_buffer");
+    }
+
+    /// <summary>Opens a named group that capture tools nest the following commands under, until the matching pop_debug_group. The label is copied by the call.</summary>
+    public void PushDebugGroup(string label)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            Handle->push_debug_group(Handle, (sbyte*)labelPtr);
+        }
+    }
+
+    /// <summary>Closes the group the last unmatched push_debug_group opened.</summary>
+    public void PopDebugGroup()
+    {
+        Handle->pop_debug_group(Handle);
+    }
+
+    /// <summary>Marks a single named point in the command stream. The label is copied by the call.</summary>
+    public void InsertDebugMarker(string label)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            Handle->insert_debug_marker(Handle, (sbyte*)labelPtr);
+        }
+    }
+
+    /// <summary>Releases the native gpucommandencoder.</summary>
     public void Dispose()
     {
-        if (_handle.@ref == null) return;
-        _handle.destroy(_handle.@ref);
-        _handle = default;
-        GC.SuppressFinalize(this);
+        OnDispose();
+        if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
+        _destroy(_native);
+        _native = null;
     }
+
+    partial void OnDispose();
 }

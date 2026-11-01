@@ -1220,8 +1220,10 @@
     },
     {
       "name": "ke_gpu_vertex_buffer_layout",
-      "doc": null,
-      "tags": [],
+      "doc": "One vertex buffer of a pipeline.",
+      "tags": [
+        "value"
+      ],
       "fields": [
         {
           "name": "stride",

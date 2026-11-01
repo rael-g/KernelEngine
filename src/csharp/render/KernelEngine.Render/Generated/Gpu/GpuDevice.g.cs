@@ -3,37 +3,390 @@
 
 #nullable enable
 
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+
+using KernelEngine.Common;
+using KernelEngine.Common.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Render.Gpu;
 
-/// <summary>Hands on the raw native ke_gpu_device pointer.</summary>
+/// <summary>Exposes the raw native gpudevice pointer for cross-domain composition wiring.</summary>
 public unsafe interface INativeGpuDevice
 {
-    /// <summary>The native pointer.</summary>
     ke_gpu_device* Native { get; }
 }
 
-/// <summary>Owns a ke_gpu_device.</summary>
-public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice
+
+public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevice
 {
-    private ke_gpu_device_handle _handle;
+    private ke_gpu_device* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_gpu_device*, void> _destroy;
+    private readonly bool _borrowed;
 
-    ke_gpu_device* INativeGpuDevice.Native => _handle.@ref != null ? _handle.@ref : throw new ObjectDisposedException(nameof(GpuDevice));
+    private ke_gpu_device* Handle => _native != null ? _native
+        : throw new ObjectDisposedException(nameof(GpuDevice));
 
-    /// <summary>Takes ownership of <paramref name="handle"/>.</summary>
+    ke_gpu_device* INativeGpuDevice.Native => Handle;
+
+    /// <summary>Wraps an owner <c>ke_gpu_device_handle</c> and runs gpudevice's startup lifecycle hook.</summary>
     public GpuDevice(ke_gpu_device_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
-        _handle = handle;
+        _native = handle.@ref;
+        _destroy = handle.destroy;
     }
 
-    /// <summary>Releases the native object.</summary>
+    /// <summary>Wraps a <c>ke_gpu_device*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static GpuDevice Borrow(ke_gpu_device* native) => new(native, borrowed: true);
+
+    private GpuDevice(ke_gpu_device* native, bool borrowed)
+    {
+        _native = native;
+        _destroy = null;
+        _borrowed = borrowed;
+    }
+
+
+    public ulong GetDefaultQueue()
+    {
+        return Handle->get_default_queue(Handle);
+    }
+
+    /// <summary>Submits the command buffers to the queue, in order.</summary>
+    public void QueueSubmit(ulong q, Span<nint> cmds)
+    {
+        fixed (nint* cmdsPtr = cmds)
+        {
+            Handle->queue_submit(Handle, q, (GpuCommandBuffer**)cmdsPtr, (uint)cmds.Length);
+        }
+    }
+
+    /// <summary>Runs this device's event pump without blocking: delivers the callbacks of work that has completed since the last pump (create_render_pipeline_async, map_buffer_read).</summary>
+    public void QueuePoll(ulong q)
+    {
+        Handle->queue_poll(Handle, q);
+    }
+
+
+    public void QueueWaitIdle(ulong q)
+    {
+        Handle->queue_wait_idle(Handle, q);
+    }
+
+    /// <summary>Creates a buffer. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateBuffer(string label, nint initialData, nuint size, uint usage, bool mappedAtCreation)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_buffer_params p = default;
+            p.label = (sbyte*)labelPtr;
+            p.initial_data = (void*)initialData;
+            p.size = size;
+            p.usage = usage;
+            p.mapped_at_creation = mappedAtCreation;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_buffer(Handle, &p, &resultOut), "create_buffer");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Creates a texture. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="initialData">Optional. Tightly-packed RGBA8 pixels (mip 0 only).</param>
+    /// <param name="initialDataSize">Byte size of initial_data.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateTexture(string label, uint width, uint height, uint depthOrArrayLayers, GpuTextureFormat format, GpuTextureDimension dimension, uint usage, byte mipLevelCount, byte sampleCount, nint initialData, uint initialDataSize)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_texture_params p = default;
+            p.label = (sbyte*)labelPtr;
+            p.width = width;
+            p.height = height;
+            p.depth_or_array_layers = depthOrArrayLayers;
+            p.format = (GpuTextureFormat)format;
+            p.dimension = (GpuTextureDimension)dimension;
+            p.usage = usage;
+            p.mip_level_count = mipLevelCount;
+            p.sample_count = sampleCount;
+            p.initial_data = (void*)initialData;
+            p.initial_data_size = initialDataSize;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_texture(Handle, &p, &resultOut), "create_texture");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Creates a view of `tex`. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateTextureView(ulong tex, string label, GpuTextureFormat format, GpuTextureDimension dimension, uint aspect, byte baseMipLevel, byte mipLevelCount, byte baseArrayLayer, byte arrayLayerCount)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_texture_view_params p = default;
+            p.label = (sbyte*)labelPtr;
+            p.format = (GpuTextureFormat)format;
+            p.dimension = (GpuTextureDimension)dimension;
+            p.aspect = aspect;
+            p.base_mip_level = baseMipLevel;
+            p.mip_level_count = mipLevelCount;
+            p.base_array_layer = baseArrayLayer;
+            p.array_layer_count = arrayLayerCount;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_texture_view(Handle, tex, &p, &resultOut), "create_texture_view");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Creates a sampler. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateSampler(string label, GpuFilter minFilter, GpuFilter magFilter, GpuSamplerMipmapFilter mipmapFilter, GpuAddressMode addressModeU, GpuAddressMode addressModeV, GpuAddressMode addressModeW, float lodMinClamp, float lodMaxClamp, GpuCompareFunction compare, ushort maxAnisotropy)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_sampler_params p = default;
+            p.label = (sbyte*)labelPtr;
+            p.min_filter = (GpuFilter)minFilter;
+            p.mag_filter = (GpuFilter)magFilter;
+            p.mipmap_filter = (GpuSamplerMipmapFilter)mipmapFilter;
+            p.address_mode_u = (GpuAddressMode)addressModeU;
+            p.address_mode_v = (GpuAddressMode)addressModeV;
+            p.address_mode_w = (GpuAddressMode)addressModeW;
+            p.lod_min_clamp = lodMinClamp;
+            p.lod_max_clamp = lodMaxClamp;
+            p.compare = (GpuCompareFunction)compare;
+            p.max_anisotropy = maxAnisotropy;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_sampler(Handle, &p, &resultOut), "create_sampler");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Creates a shader module. The backend's reason for rejecting the source is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="code">shader bytes in the device's accepted language (query ke_gpu_device::shader_language); WGSL text or SPIR-V binary etc.</param>
+    /// <param name="byteSize">size in bytes (excluding any text terminator)</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateShaderModule(string label, nint code, nuint byteSize)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_shader_module_params p = default;
+            p.label = (sbyte*)labelPtr;
+            p.code = (void*)code;
+            p.byte_size = byteSize;
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_shader_module(Handle, &p, &resultOut), "create_shader_module");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Creates a bind group layout. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateBindGroupLayout(string label, ReadOnlySpan<GpuBindGroupLayoutEntry> entries)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            fixed (GpuBindGroupLayoutEntry* entriesPtr = entries)
+            {
+                ke_gpu_bind_group_layout_params p = default;
+                p.label = (sbyte*)labelPtr;
+                p.entry_count = (uint)entries.Length;
+                p.entries = entriesPtr;
+                ulong resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_bind_group_layout(Handle, &p, &resultOut), "create_bind_group_layout");
+                return resultOut;
+            }
+        }
+    }
+
+    /// <summary>Creates a bind group. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateBindGroup(string label, ulong layout, ReadOnlySpan<GpuBindGroupEntry> entries)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            fixed (GpuBindGroupEntry* entriesPtr = entries)
+            {
+                ke_gpu_bind_group_params p = default;
+                p.label = (sbyte*)labelPtr;
+                p.layout = layout;
+                p.entry_count = (uint)entries.Length;
+                p.entries = entriesPtr;
+                ulong resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_bind_group(Handle, &p, &resultOut), "create_bind_group");
+                return resultOut;
+            }
+        }
+    }
+
+
+    public void DestroyBuffer(ulong h)
+    {
+        Handle->destroy_buffer(Handle, h);
+    }
+
+
+    public void DestroyTexture(ulong h)
+    {
+        Handle->destroy_texture(Handle, h);
+    }
+
+
+    public void DestroyTextureView(ulong h)
+    {
+        Handle->destroy_texture_view(Handle, h);
+    }
+
+
+    public void DestroySampler(ulong h)
+    {
+        Handle->destroy_sampler(Handle, h);
+    }
+
+
+    public void DestroyShaderModule(ulong h)
+    {
+        Handle->destroy_shader_module(Handle, h);
+    }
+
+    /// <summary>Releases a pipeline made by create_render_pipeline or create_render_pipeline_async.</summary>
+    public void DestroyPipeline(ulong h)
+    {
+        Handle->destroy_pipeline(Handle, h);
+    }
+
+
+    public void DestroyBindGroupLayout(ulong h)
+    {
+        Handle->destroy_bind_group_layout(Handle, h);
+    }
+
+
+    public void DestroyBindGroup(ulong h)
+    {
+        Handle->destroy_bind_group(Handle, h);
+    }
+
+
+    public void WriteBuffer(ulong h, ulong offset, nint data, nuint size)
+    {
+        Handle->write_buffer(Handle, h, offset, (void*)data, size);
+    }
+
+
+    public nint MapBuffer(ulong h, nuint offset, nuint size)
+    {
+        return (nint)Handle->map_buffer(Handle, h, offset, size);
+    }
+
+
+    public nint MapBufferWrite(ulong h, nuint offset, nuint size)
+    {
+        return (nint)Handle->map_buffer_write(Handle, h, offset, size);
+    }
+
+
+    public void UnmapBuffer(ulong h)
+    {
+        Handle->unmap_buffer(Handle, h);
+    }
+
+
+    public void GetCapabilities(nint @out)
+    {
+        Handle->get_capabilities(Handle, (GpuCapabilities*)@out);
+    }
+
+    /// <summary>Returns a typed extension vtable by name, or NULL if unsupported.</summary>
+    public nint QueryExtension(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return (nint)Handle->query_extension(Handle, (sbyte*)namePtr);
+        }
+    }
+
+    /// <summary>Shader source language this device accepts in create_shader_module.</summary>
+    public GpuShaderLanguage ShaderLanguage()
+    {
+        return (GpuShaderLanguage)Handle->shader_language(Handle);
+    }
+
+    /// <summary>Clip-space convention this backend expects projections built in.</summary>
+    public NdcConvention GetNdcConvention()
+    {
+        return Handle->get_ndc_convention(Handle);
+    }
+
+    /// <summary>Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its on_ready callback. Call before destroying anything an in-flight callback might still write into. A no-op if nothing is pending.</summary>
+    public void FlushPipelineCompiles()
+    {
+        Handle->flush_pipeline_compiles(Handle);
+    }
+
+    /// <summary>Releases a pipeline made by create_compute_pipeline.</summary>
+    public void DestroyComputePipeline(ulong h)
+    {
+        Handle->destroy_compute_pipeline(Handle, h);
+    }
+
+    /// <summary>Releases the native gpudevice.</summary>
     public void Dispose()
     {
-        if (_handle.@ref == null) return;
-        _handle.destroy(_handle.@ref);
-        _handle = default;
-        GC.SuppressFinalize(this);
+        OnDispose();
+        if (_native == null) return;
+        if (_borrowed) { _native = null; return; }
+        _destroy(_native);
+        _native = null;
     }
+
+    partial void OnDispose();
 }
