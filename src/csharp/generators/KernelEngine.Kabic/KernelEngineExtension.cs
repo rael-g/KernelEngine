@@ -66,18 +66,20 @@ public sealed class KernelEngineExtension : IKabicExtension
         var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface")
             ? $"{f.Contract.Spec.Namespace}.I{contractName}"
             : null;
-        var resolved = f.Arguments.Select(a => a.ManagedType.Contains(".INative")
-            ? $"sp.GetRequiredService<{a.ManagedType}>()"
-            : "default").ToList();
+        var resolved = f.Arguments.Select(a => a.IsRequiredProvider ? $"sp.GetRequiredService<{a.ManagedType}>()"
+            : a.IsOptionalProvider ? $"sp.GetService<{a.ManagedType.TrimEnd('?')}>()"
+            : a.Name).ToList();
+        var values = string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative"))
+            .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = default"));
         var args = string.Join(", ", resolved);
         var o = new StringBuilder(Header(f));
         o.Append("using Microsoft.Extensions.DependencyInjection;\n\n");
         o.Append($"/// <summary>Registers <see cref=\"{f.ClassName}\"/> with a service collection.</summary>\n");
         o.Append($"public static class {f.ClassName}Registration\n{{\n");
         o.Append($"    /// <summary>\n    /// Registers one <see cref=\"{f.ClassName}\"/>, created on first resolution with its providers from the\n");
-        o.Append($"    /// container and its defaults, as itself, as <see cref=\"{contractInterface}\"/>{(managedInterface is null ? "" : $" and as <see cref=\"{managedInterface}\"/>")}. The library logs to the\n");
+        o.Append($"    /// container and the given values, as itself, as <see cref=\"{contractInterface}\"/>{(managedInterface is null ? "" : $" and as <see cref=\"{managedInterface}\"/>")}. The library logs to the\n");
         o.Append("    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.\n    /// </summary>\n");
-        o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services)\n    {{\n");
+        o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services{values})\n    {{\n");
         o.Append($"        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is {{ }} logger\n");
         o.Append($"            ? new {f.ClassName}(logger{(args.Length > 0 ? ", " + args : "")})\n");
         o.Append($"            : new {f.ClassName}({args}));\n");

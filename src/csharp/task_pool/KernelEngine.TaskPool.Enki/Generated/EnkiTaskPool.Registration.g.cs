@@ -12,14 +12,14 @@ public static class EnkiTaskPoolRegistration
 {
     /// <summary>
     /// Registers one <see cref="EnkiTaskPool"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.TaskPool.INativeTaskPool"/> and as <see cref="KernelEngine.TaskPool.ITaskPool"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.TaskPool.INativeTaskPool"/> and as <see cref="KernelEngine.TaskPool.ITaskPool"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddEnkiTaskPool(this IServiceCollection services)
+    public static IServiceCollection AddEnkiTaskPool(this IServiceCollection services, uint workerCount = default)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new EnkiTaskPool(logger, default)
-            : new EnkiTaskPool(default));
+            ? new EnkiTaskPool(logger, workerCount)
+            : new EnkiTaskPool(workerCount));
         services.AddSingleton<KernelEngine.TaskPool.INativeTaskPool>(sp => sp.GetRequiredService<EnkiTaskPool>());
         services.AddSingleton<KernelEngine.TaskPool.ITaskPool>(sp => sp.GetRequiredService<EnkiTaskPool>());
         return services;

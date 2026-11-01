@@ -12,14 +12,14 @@ public static class StdFileSystemRegistration
 {
     /// <summary>
     /// Registers one <see cref="StdFileSystem"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.FileSystem.INativeFileSystem"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.FileSystem.INativeFileSystem"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddStdFileSystem(this IServiceCollection services)
+    public static IServiceCollection AddStdFileSystem(this IServiceCollection services, string? root = default)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new StdFileSystem(logger, default)
-            : new StdFileSystem(default));
+            ? new StdFileSystem(logger, root)
+            : new StdFileSystem(root));
         services.AddSingleton<KernelEngine.FileSystem.INativeFileSystem>(sp => sp.GetRequiredService<StdFileSystem>());
         return services;
     }

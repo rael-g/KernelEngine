@@ -14,10 +14,10 @@ part works inside is on the generated page of its file. Contracts are under `src
 | action map | `ke_input_actions`, `InputActionMap` | framework | an `IInputReader` that is also an `INativeInputReader` | polled action values |
 | system | none; the `Scene.Input` system of `SceneNodesModule` | framework | `IInput`, the action evaluator | the snapshot kept for the tick |
 
-**The window feeds the sinks.** `ke_window_glfw_params` carries a borrowed, nullable `ke_input`.
+**The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
 `on_mouse_button`, `on_mouse_move` or `on_mouse_scroll`. With no input every event is dropped.
-The managed `AddGlfwWindow` fills the field from `INativeInput` when the window singleton is first
+The managed `AddGlfwWindow` passes `INativeInput` when the window singleton is first
 resolved, so it is seen only if `INativeInput` is registered by then.
 
 **An edge belongs to a frame.** `pressed` and `released` are set by the sink call that causes them

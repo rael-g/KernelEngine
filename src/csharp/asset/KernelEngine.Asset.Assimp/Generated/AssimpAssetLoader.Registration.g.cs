@@ -12,7 +12,7 @@ public static class AssimpAssetLoaderRegistration
 {
     /// <summary>
     /// Registers one <see cref="AssimpAssetLoader"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.Asset.INativeAssetLoader"/> and as <see cref="KernelEngine.Asset.IAssetLoader"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.Asset.INativeAssetLoader"/> and as <see cref="KernelEngine.Asset.IAssetLoader"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddAssimpAssetLoader(this IServiceCollection services)

@@ -156,12 +156,11 @@ static void renderer_destroy(renderer *r)
 int main(void)
 {
     printf("--- c_demo_14: forward lit cube through the render core ---\n");
-    ke_window_glfw_params wp = {
-        .input = NULL,
+    ke_window_glfw_config wp = {
         .title = "c_demo_14 forward mesh", .width = 800, .height = 600,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window", made_window);
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init", window_ready);

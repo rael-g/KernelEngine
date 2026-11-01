@@ -23,9 +23,9 @@ file against a list of keys.
 |---|---|---|---|---|
 | `project` | `default_scene` | string | `Main` | `SceneRouterModule.ResolveInitialScene`, `SceneRouterModule.cs:79-87` |
 | `logging` | `console_level` | string, a `LogLevel` name (case-insensitive); parsed but has no effect on output, see `architecture/logging.md` | `Trace` | `AddConsoleSink`, `Logger/ServiceCollectionExtensions.cs:35-37` |
-| `runtime.window` | `width`, `height` | int | 1280, 720 | `AddGlfwWindow`, `Window.Glfw/ServiceCollectionExtensions.cs:24-25` |
-| `runtime.window` | `title` | string | `KernelEngine` | same, `:26` |
-| `runtime.window` | `fullscreen` | bool | `false` | same, `:27` |
+| `runtime.window` | `width`, `height` | int | 1280, 720 | `ke_window_glfw_create`, `src/zig/window/glfw/src/window_glfw.zig` |
+| `runtime.window` | `title` | string | `KernelEngine` | same |
+| `runtime.window` | `fullscreen` | bool | `false` | same |
 | `runtime.physics_2d` | `gravity_x` | float | `0.0` | `ke_physics_2d_box2d_create`, `src/zig/physics/box2d/src/box2d_physics.zig` |
 | `runtime.physics_2d` | `gravity_y` | float | `-9.81` | same |
 | `render` | `clear_color_r`, `_g`, `_b`, `_a` | float | 0.10, 0.15, 0.30, 1.0 | `WebgpuRenderModule.ResolveClearColor`, `WebgpuRenderModule.cs:147-156` |
@@ -42,10 +42,8 @@ own defaults (`src/zig/render/module/src/render_module.zig:195-209`). `clear_col
 skips arrays (`src/zig/configuration/toml/src/configuration_toml.zig:59-60`).
 
 Each of the constructors named above also has an overload that takes the same values inline and
-bypasses the file (`AddConsoleSink(LogLevel)`, `AddGlfwWindow(width, height, title)`,
-`GlfwWindowModule(width, height, title)`); the inline form is the
-one that runs when it is used, since it never consults `IConfiguration`
-(`Window.Glfw/ServiceCollectionExtensions.cs:37-42`, `GlfwWindowModule.cs:31-41`).
+bypasses the file (`AddConsoleSink(LogLevel)`, `GlfwWindowModule(width, height, title)`); the inline form is the
+one that runs when it is used, since it never consults `IConfiguration`.
 
 ## Keys read only by the command-line tool
 

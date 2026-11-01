@@ -10,15 +10,14 @@ public sealed unsafe partial class Box2dPhysics2D : KernelEngine.Physics.Physics
 {
     /// <summary>Creates a 2D physics world.</summary>
     /// <param name="configuration">Holds gravity_x and gravity_y in section runtime.physics_2d; a missing key, or NULL here, selects (0, -9.81).</param>
-    public Box2dPhysics2D(KernelEngine.Configuration.INativeConfiguration configuration) : base(Create(configuration))
+    public Box2dPhysics2D(KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(configuration))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Configuration.INativeConfiguration configuration)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration)
     {
-        ArgumentNullException.ThrowIfNull(configuration);
         KernelEngine.Physics.Native.ke_physics_2d_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(configuration.Native, &handle), "ke_physics_2d_box2d_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create((configuration is null ? null : configuration.Native), &handle), "ke_physics_2d_box2d_create");
         return handle;
     }
 }

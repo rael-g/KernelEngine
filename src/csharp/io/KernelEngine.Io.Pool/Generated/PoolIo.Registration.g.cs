@@ -12,7 +12,7 @@ public static class PoolIoRegistration
 {
     /// <summary>
     /// Registers one <see cref="PoolIo"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.Io.INativeIo"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.Io.INativeIo"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddPoolIo(this IServiceCollection services)

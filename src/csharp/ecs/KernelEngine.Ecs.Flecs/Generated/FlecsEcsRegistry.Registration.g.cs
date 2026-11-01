@@ -12,14 +12,14 @@ public static class FlecsEcsRegistryRegistration
 {
     /// <summary>
     /// Registers one <see cref="FlecsEcsRegistry"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.Ecs.INativeEcs"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.Ecs.INativeEcs"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddFlecsEcsRegistry(this IServiceCollection services)
+    public static IServiceCollection AddFlecsEcsRegistry(this IServiceCollection services, uint worldIdBase = default)
     {
         services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new FlecsEcsRegistry(logger, default)
-            : new FlecsEcsRegistry(default));
+            ? new FlecsEcsRegistry(logger, worldIdBase)
+            : new FlecsEcsRegistry(worldIdBase));
         services.AddSingleton<KernelEngine.Ecs.INativeEcs>(sp => sp.GetRequiredService<FlecsEcsRegistry>());
         return services;
     }

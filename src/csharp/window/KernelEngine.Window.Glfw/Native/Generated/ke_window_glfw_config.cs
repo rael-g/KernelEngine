@@ -2,17 +2,15 @@ using System.Numerics;
 
 using global::KernelEngine.Logger;
 
+using KernelEngine.Configuration.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Window.Native;
 
 namespace KernelEngine.Window.Glfw.Native;
 
-public unsafe partial struct ke_window_glfw_params
+public unsafe partial struct ke_window_glfw_config
 {
-    [NativeTypeName("struct ke_input *")]
-    public KernelEngine.Input.Native.ke_input* input;
-
     [NativeTypeName("const char *")]
     public sbyte* title;
 

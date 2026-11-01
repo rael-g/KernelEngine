@@ -12,7 +12,7 @@ public static class StbFontLoaderRegistration
 {
     /// <summary>
     /// Registers one <see cref="StbFontLoader"/>, created on first resolution with its providers from the
-    /// container and its defaults, as itself, as <see cref="KernelEngine.Text.INativeFontLoader"/> and as <see cref="KernelEngine.Text.IFontLoader"/>. The library logs to the
+    /// container and the given values, as itself, as <see cref="KernelEngine.Text.INativeFontLoader"/> and as <see cref="KernelEngine.Text.IFontLoader"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddStbFontLoader(this IServiceCollection services)

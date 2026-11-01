@@ -2,11 +2,10 @@
 #include <kernel_engine/window/glfw/glfw_window.h>
 #include <kernel_engine/window/glfw/window_glfw_log.h>
 const unsigned long long layout_values[] = {
-    sizeof(ke_window_glfw_params),
-    offsetof(ke_window_glfw_params, input),
-    offsetof(ke_window_glfw_params, title),
-    offsetof(ke_window_glfw_params, width),
-    offsetof(ke_window_glfw_params, height),
-    offsetof(ke_window_glfw_params, fullscreen),
+    sizeof(ke_window_glfw_config),
+    offsetof(ke_window_glfw_config, title),
+    offsetof(ke_window_glfw_config, width),
+    offsetof(ke_window_glfw_config, height),
+    offsetof(ke_window_glfw_config, fullscreen),
     0,
 };

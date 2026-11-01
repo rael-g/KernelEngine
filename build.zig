@@ -505,6 +505,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "triangle",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -526,6 +527,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "triangle",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -548,6 +550,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "rotate",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -570,6 +573,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "mesh",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -591,6 +595,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "tex",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -612,6 +617,7 @@ pub fn build(b: *std.Build) void {
         .@"shader-name" = "depth",
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
@@ -632,6 +638,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .slangc = ctx.slangc,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "math" }),
@@ -668,6 +675,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "task_pool" }),
@@ -727,6 +735,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "task_pool" }),
@@ -793,6 +802,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
             b.pathJoin(&.{ src_c, "task_pool" }),
