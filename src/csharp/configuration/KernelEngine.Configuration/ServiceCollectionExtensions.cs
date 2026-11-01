@@ -20,6 +20,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
         services.Replace(ServiceDescriptor.Singleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path)));
+        services.TryAddSingleton<INativeConfiguration>(sp => (Configuration)sp.GetRequiredService<IConfiguration>());
         return services;
     }
 
@@ -31,6 +32,7 @@ public static class ServiceCollectionExtensions
     public static void TryAddConfigurationSingleton(this IServiceCollection services, string? path = null)
     {
         services.TryAddSingleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path));
+        services.TryAddSingleton<INativeConfiguration>(sp => (Configuration)sp.GetRequiredService<IConfiguration>());
     }
 
     private static Configuration Load(KernelEngine.Io.INativeIo io, string? path)

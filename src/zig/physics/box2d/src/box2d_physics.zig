@@ -8,10 +8,23 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 const abi_physics = @import("abi_physics");
+const abi_configuration = @import("abi_configuration");
 const abi_result = @import("abi_result");
 const abi_factory = @import("abi_physics_2d_box2d_factory");
 const b2 = @import("box2d");
 const heap = @import("heap");
+
+const Config = extern struct {
+    gravity_x: f32,
+    gravity_y: f32,
+};
+
+const default_config: Config = .{ .gravity_x = 0, .gravity_y = -9.81 };
+
+const config_fields = [_]abi_configuration.c.ke_config_field{
+    .{ .key = "gravity_x", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(Config, "gravity_x"), .size = 4, .default_value = .{ .d = default_config.gravity_x } },
+    .{ .key = "gravity_y", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(Config, "gravity_y"), .size = 4, .default_value = .{ .d = default_config.gravity_y } },
+};
 
 /// Error reporter bound to this file's C error types; every failure in this file is reported
 /// through it.
@@ -283,13 +296,17 @@ fn destroy(self_in: ?*abi_physics.c.ke_physics_2d) callconv(.c) void {
 /// the state first. On success the handle's destroy slot releases the world and everything the
 /// state owns.
 export fn ke_physics_2d_box2d_create(
-    params_in: ?*const abi_factory.c.ke_physics_2d_box2d_params,
+    configuration: ?*abi_configuration.c.ke_configuration,
     out_world: ?*abi_physics.c.ke_physics_2d_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
-    const params = params_in orelse return R.code(error.InvalidArgument);
-    out.* = create(params) catch |err| {
+    var config = default_config;
+    if (configuration) |store| {
+        const result = store.fill.?(store, "runtime.physics_2d", &config_fields, config_fields.len, &config);
+        if (result != abi_result.c.KE_OK) return result;
+    }
+    out.* = create(&config) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
         return R.code(err);
     };
@@ -297,7 +314,7 @@ export fn ke_physics_2d_box2d_create(
     return R.ok;
 }
 
-fn create(params: *const abi_factory.c.ke_physics_2d_box2d_params) R.Error!abi_physics.c.ke_physics_2d_handle {
+fn create(params: *const Config) R.Error!abi_physics.c.ke_physics_2d_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
@@ -332,13 +349,26 @@ fn create(params: *const abi_factory.c.ke_physics_2d_box2d_params) R.Error!abi_p
 
 const testing = std.testing;
 
+var stub_gravity: Config = default_config;
+
+fn stubFill(_: [*c]abi_configuration.c.ke_configuration, _: [*c]const u8, _: [*c]const abi_configuration.c.ke_config_field, _: u32, config: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    @as(*Config, @ptrCast(@alignCast(config))).* = stub_gravity;
+    return abi_result.c.KE_OK;
+}
+
 fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle {
-    var params = std.mem.zeroes(abi_factory.c.ke_physics_2d_box2d_params);
-    params.gravity_x = gravity_x;
-    params.gravity_y = gravity_y;
+    stub_gravity = .{ .gravity_x = gravity_x, .gravity_y = gravity_y };
+    var store = std.mem.zeroes(abi_configuration.c.ke_configuration);
+    store.fill = stubFill;
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    R.check(ke_physics_2d_box2d_create(&params, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
+    R.check(ke_physics_2d_box2d_create(&store, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
     return h;
+}
+
+test "a null configuration creates a world with the default gravity" {
+    var h: abi_physics.c.ke_physics_2d_handle = undefined;
+    try R.check(ke_physics_2d_box2d_create(null, &h));
+    h.destroy.?(h.ref);
 }
 
 fn newBody(h: abi_physics.c.ke_physics_2d_handle, body_type: abi_physics.c.ke_body_type_2d, x: f32, y: f32) !abi_physics.c.ke_body_2d {

@@ -472,6 +472,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_c, "physics" }),
             b.pathJoin(&.{ src_zig, "physics/box2d/include" }),

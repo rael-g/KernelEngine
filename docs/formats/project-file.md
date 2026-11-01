@@ -26,8 +26,8 @@ file against a list of keys.
 | `runtime.window` | `width`, `height` | int | 1280, 720 | `AddGlfwWindow`, `Window.Glfw/ServiceCollectionExtensions.cs:24-25` |
 | `runtime.window` | `title` | string | `KernelEngine` | same, `:26` |
 | `runtime.window` | `fullscreen` | bool | `false` | same, `:27` |
-| `runtime.physics_2d` | `gravity_x` | float | `0.0` | `AddBox2D`, `Physics.Box2D/ServiceCollectionExtensions.cs:22` |
-| `runtime.physics_2d` | `gravity_y` | float | `-9.81` | same, `:23` |
+| `runtime.physics_2d` | `gravity_x` | float | `0.0` | `ke_physics_2d_box2d_create`, `src/zig/physics/box2d/src/box2d_physics.zig` |
+| `runtime.physics_2d` | `gravity_y` | float | `-9.81` | same |
 | `render` | `clear_color_r`, `_g`, `_b`, `_a` | float | 0.10, 0.15, 0.30, 1.0 | `WebgpuRenderModule.ResolveClearColor`, `WebgpuRenderModule.cs:147-156` |
 | `render` | `cluster_grid_x`, `_y`, `_z` | int | 0 | `WebgpuRenderModule.OnLoad`, `WebgpuRenderModule.cs:118-120` |
 | `render` | `max_lights_per_cluster` | int | 0 | same, `:121-123` |
@@ -43,7 +43,7 @@ skips arrays (`src/zig/configuration/toml/src/configuration_toml.zig:59-60`).
 
 Each of the constructors named above also has an overload that takes the same values inline and
 bypasses the file (`AddConsoleSink(LogLevel)`, `AddGlfwWindow(width, height, title)`,
-`AddBox2D(gravityX, gravityY)`, `GlfwWindowModule(width, height, title)`); the inline form is the
+`GlfwWindowModule(width, height, title)`); the inline form is the
 one that runs when it is used, since it never consults `IConfiguration`
 (`Window.Glfw/ServiceCollectionExtensions.cs:37-42`, `GlfwWindowModule.cs:31-41`).
 

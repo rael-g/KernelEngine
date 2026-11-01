@@ -851,7 +851,7 @@
   "extensions": {
     "nodes": {},
     "fieldTables": {},
-    "factories": { "bindings": ["Assimp", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
+    "factories": { "bindings": ["Assimp", "Box2D", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [
     {
