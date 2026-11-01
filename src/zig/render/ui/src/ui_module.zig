@@ -58,7 +58,7 @@ const UiFont = struct {
 /// the create and passed to the registrations by address. `vertices` and `batches` are rewritten by
 /// `system` on every frame. `destroyHandle` unregisters the two systems before it frees the state.
 const UiState = struct {
-    api: abi_render_ui_factory.ke_render_ui = undefined,
+    api: abi_render_ui_factory.c.ke_render_ui = undefined,
     runtime: *abi_runtime.c.ke_runtime = undefined,
     systems: [2]abi_framework.c.ke_system_id = .{ 0, 0 },
 
@@ -90,14 +90,14 @@ const UiState = struct {
 };
 
 /// Recovers the state from the `handle` of its `api` field, which points back at it.
-fn stateOf(self: [*c]abi_render_ui_factory.ke_render_ui) *UiState {
+fn stateOf(self: [*c]abi_render_ui_factory.c.ke_render_ui) *UiState {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
 /// Called through the `load_font` slot. A key already in use writes that font's handle, and the
 /// glyph table given with the call is not copied again. The copies made here are released by
 /// `destroyState`. A table, key or glyphs that cannot be kept fail as out of memory.
-fn uiLoadFont(self: [*c]abi_render_ui_factory.ke_render_ui, key: [*c]const u8, atlas: abi_render_handles.c.ke_texture_handle,
+fn uiLoadFont(self: [*c]abi_render_ui_factory.c.ke_render_ui, key: [*c]const u8, atlas: abi_render_handles.c.ke_texture_handle,
               glyphs: [*c]const abi_text.c.ke_glyph_metrics, glyph_count: u32,
               line_height: f32, ascent: f32, out_font: [*c]abi_ui_components.c.ke_ui_font_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_font orelse return R.code(error.InvalidArgument);
@@ -399,7 +399,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// makes.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params) R.Error!void {
+fn setup(ui: *UiState, p: *const abi_render_ui_factory.c.ke_render_ui_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     ui.core = core;
@@ -511,7 +511,7 @@ fn destroyState(ui: *UiState) void {
 }
 
 /// The destroy slot of the handle that `ke_render_ui_create` returns.
-fn destroyHandle(self: ?*abi_render_ui_factory.ke_render_ui) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_ui_factory.c.ke_render_ui) callconv(.c) void {
     const ui = stateOf(self orelse return);
     for (ui.systems) |id| _ = ui.runtime.unregister_system.?(ui.runtime, id);
     destroyState(ui);
@@ -524,7 +524,7 @@ fn destroyHandle(self: ?*abi_render_ui_factory.ke_render_ui) callconv(.c) void {
 /// `system` in the render phase. A failing `setup`, component or system registration fails with its
 /// code and leaves the handle zeroed, and a refused second system takes the first back. On success
 /// the returned handle owns the state until its destroy slot runs.
-export fn ke_render_ui_create(params_in: ?*const abi_render_ui_factory.ke_render_ui_params, out_ui: [*c]abi_render_ui_factory.ke_render_ui_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_ui_create(params_in: ?*const abi_render_ui_factory.c.ke_render_ui_params, out_ui: [*c]abi_render_ui_factory.c.ke_render_ui_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_ui orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -544,7 +544,7 @@ export fn ke_render_ui_create(params_in: ?*const abi_render_ui_factory.ke_render
     return R.ok;
 }
 
-fn register(ui: *UiState, p: *const abi_render_ui_factory.ke_render_ui_params, rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs) R.Error!void {
+fn register(ui: *UiState, p: *const abi_render_ui_factory.c.ke_render_ui_params, rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs) R.Error!void {
     try setup(ui, p);
 
     ui.quad_cid = abi_ecs.c.KE_COMPONENT_INVALID;
@@ -640,7 +640,7 @@ test "creating and destroying the ui pass leaves no block allocated and no GPU r
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    var h: abi_render_ui_factory.c.ke_render_ui_handle = undefined;
     try R.check(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .frame_cid = 1 }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -651,7 +651,7 @@ test "destroying the ui pass unregisters every system it registered" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    var h: abi_render_ui_factory.c.ke_render_ui_handle = undefined;
     try R.check(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .frame_cid = 1 }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -664,7 +664,7 @@ test "a ui pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    var h: abi_render_ui_factory.c.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -676,7 +676,7 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    var h: abi_render_ui_factory.c.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -688,7 +688,7 @@ test "a ui pass the runtime refuses its second system takes the first one back" 
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
-    var h: abi_render_ui_factory.ke_render_ui_handle = undefined;
+    var h: abi_render_ui_factory.c.ke_render_ui_handle = undefined;
     try testing.expect(ke_render_ui_create(&.{ .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .frame_cid = 1 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.rt.received(.unregister_system).times(1);

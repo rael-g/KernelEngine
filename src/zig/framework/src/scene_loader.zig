@@ -918,7 +918,7 @@ const Fixture = struct {
 
         self.runtime = std.mem.zeroes(abi_runtime.c.ke_runtime);
 
-        try testing.expectEqual(R.ok, abi_framework_factory.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.c.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
 
         self.bus_h = std.mem.zeroes(abi_signal_bus.c.ke_signal_bus_handle);
         if (with_signal_bus) {
@@ -930,7 +930,7 @@ const Fixture = struct {
         params.runtime = &self.runtime;
         params.scene_tree = self.tree_h.ref;
         params.signal_bus = self.bus_h.ref;
-        try testing.expectEqual(R.ok, abi_framework_factory.ke_world_create(&params, &self.world_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.c.ke_world_create(&params, &self.world_h));
 
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, @sizeOf(abi_render_components.c.ke_camera_component), generatedFields(&abi_render_contract.c.ke_camera_component_fields), abi_render_contract.c.ke_camera_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(abi_render_components.c.ke_directional_light_component), generatedFields(&abi_render_contract.c.ke_directional_light_component_fields), abi_render_contract.c.ke_directional_light_component_fields.len);
@@ -950,7 +950,7 @@ const Fixture = struct {
     fn rootAt(self: *Fixture, root: [*c]const u8) !void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        try testing.expectEqual(R.ok, abi_framework_factory.ke_asset_resolver_create(null, null, root, served_files.io(), &self.assets_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.c.ke_asset_resolver_create(null, null, root, served_files.io(), &self.assets_h));
         try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, served_files.io(), &self.loader_h));
     }
 

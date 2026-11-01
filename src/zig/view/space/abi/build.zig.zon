@@ -1,15 +1,12 @@
 .{
-    .name = .abi_view_space,
+    .name = .abi_view_space_factory,
     .version = "0.1.0",
-    .fingerprint = 0x58a009a937418278,
+    .fingerprint = 0xbe9bd3149a82c85a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_view = .{ .path = "../../../abi/view" },
-        .abi_result = .{ .path = "../../../abi/result" },
         .abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_view = .{ .path = "../../../abi/view" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_view = .{ .path = "../../../abi/view" },
     },
     .paths = .{"."},
 }

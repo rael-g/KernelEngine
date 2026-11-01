@@ -240,11 +240,11 @@ fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
 }
 
 /// The WebGPU present mode for the one asked for, when the surface offers it on this adapter.
-fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi_gpu_device_webgpu_factory.ke_gpu_present_mode) ?wgpu.WGPUPresentMode {
+fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi_gpu_device_webgpu_factory.c.ke_gpu_present_mode) ?wgpu.WGPUPresentMode {
     const wanted: wgpu.WGPUPresentMode = switch (mode) {
-        abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_FIFO => wgpu.WGPUPresentMode_Fifo,
-        abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_MAILBOX => wgpu.WGPUPresentMode_Mailbox,
-        abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_IMMEDIATE => wgpu.WGPUPresentMode_Immediate,
+        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO => wgpu.WGPUPresentMode_Fifo,
+        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_MAILBOX => wgpu.WGPUPresentMode_Mailbox,
+        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_IMMEDIATE => wgpu.WGPUPresentMode_Immediate,
         else => return null,
     };
     var caps = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
@@ -260,7 +260,7 @@ fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi
 /// the surface and display made so far, so nothing is left allocated. A device is refused unless
 /// its `get_default_queue` slot is the function this plugin installs.
 export fn ke_gpu_render_target_webgpu_window_create(
-    params_in: ?*const abi_gpu_device_webgpu_factory.ke_gpu_render_target_webgpu_window_params,
+    params_in: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_render_target_webgpu_window_params,
     out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
@@ -330,11 +330,11 @@ test "a window target refuses missing params, a device it did not come from and 
     try std.testing.expect(target.ref == null);
 
     var foreign = std.mem.zeroes(abi_render_gpu.c.ke_gpu_device);
-    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_FIFO }, &target));
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO }, &target));
 
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
     if (dev_impl.ke_gpu_device_webgpu_create(null, &handle) != R.ok) return error.SkipZigTest;
     const dev = handle.ref;
     defer handle.destroy.?(dev);
-    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = abi_gpu_device_webgpu_factory.KE_GPU_PRESENT_MODE_FIFO }, &target));
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO }, &target));
 }

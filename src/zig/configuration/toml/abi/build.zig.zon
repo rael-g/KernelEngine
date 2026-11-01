@@ -1,17 +1,13 @@
 .{
-    .name = .abi_configuration_toml,
+    .name = .abi_configuration_toml_factory,
     .version = "0.1.0",
-    .fingerprint = 0xa0ddb46c2601545d,
+    .fingerprint = 0x0287b1a44bd173d8,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_result = .{ .path = "../../../abi/result" },
-        .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_io = .{ .path = "../../../abi/io" },
         .abi_configuration = .{ .path = "../../../abi/configuration" },
-        .ke_abi_configuration = .{ .path = "../../../abi/configuration" },
-        .ke_abi_io = .{ .path = "../../../abi/io" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

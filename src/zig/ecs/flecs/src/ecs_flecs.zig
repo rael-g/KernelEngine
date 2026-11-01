@@ -700,7 +700,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
 /// `default_world_id_base`. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
 export fn ke_ecs_flecs_create(
-    config: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_config,
+    config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config,
     out_ecs: ?*abi_ecs.c.ke_ecs_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_ecs orelse return R.code(error.InvalidArgument);
@@ -712,7 +712,7 @@ export fn ke_ecs_flecs_create(
     return R.ok;
 }
 
-fn create(config: ?*const abi_ecs_flecs_factory.ke_ecs_flecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
+fn create(config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
     const world_id_base: u32 = blk: {
         const p = config orelse break :blk default_world_id_base;
         break :blk if (p.*.world_id_base == 0) default_world_id_base else p.*.world_id_base;
@@ -1039,7 +1039,7 @@ test "a reserved id can never be one the world's own allocator will issue" {
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 0 };
+    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config{ .world_id_base = 0 };
     var probe: abi_ecs.c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&config, &probe));
     const low = stateOf(probe.ref.?).reserve_low;
@@ -1164,14 +1164,14 @@ test "materializing an id the world already owns leaves it alone" {
 }
 
 test "a split that leaves no room for the reserve pool is refused" {
-    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 1 };
+    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config{ .world_id_base = 1 };
     var handle: abi_ecs.c.ke_ecs_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_ecs_flecs_create(&config, &handle)));
     try testing.expect(handle.ref == null);
 }
 
 test "a caller may move the split between the two id allocators" {
-    var config = abi_ecs_flecs_factory.ke_ecs_flecs_config{ .world_id_base = 1_000_000 };
+    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config{ .world_id_base = 1_000_000 };
     var handle: abi_ecs.c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&config, &handle));
     defer handle.destroy.?(handle.ref);

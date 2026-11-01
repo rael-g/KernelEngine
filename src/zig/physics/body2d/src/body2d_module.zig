@@ -279,7 +279,7 @@ fn findBody(
 /// of that handle. Its two systems are unregistered from the runtime and the bodies the module
 /// created are destroyed with it, so the runtime and the physics world it was given must still be
 /// alive.
-fn destroyHandle(self: ?*abi_physics_body2d_factory.ke_physics_body2d_module) callconv(.c) void {
+fn destroyHandle(self: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
     _ = m.runtime.unregister_system.?(m.runtime, m.collider_system);
     _ = m.runtime.unregister_system.?(m.runtime, m.body_system);
@@ -294,8 +294,8 @@ fn destroyHandle(self: ?*abi_physics_body2d_factory.ke_physics_body2d_module) ca
 /// argument for a missing argument, out of memory for a failed allocation, and the runtime's code
 /// for a system it refuses. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
-    params: ?*const abi_physics_body2d_factory.ke_physics_body2d_module_params,
-    out_module: ?*abi_physics_body2d_factory.ke_physics_body2d_module_handle,
+    params: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_params,
+    out_module: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
@@ -307,7 +307,7 @@ export fn ke_physics_body2d_module_create(
     return R.ok;
 }
 
-fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params) R.Error!abi_physics_body2d_factory.ke_physics_body2d_module_handle {
+fn create(pr: *const abi_physics_body2d_factory.c.ke_physics_body2d_module_params) R.Error!abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
     const rt = pr.runtime orelse return error.InvalidArgument;
     const ecs = pr.ecs orelse return error.InvalidArgument;
     const physics = pr.physics orelse return error.InvalidArgument;
@@ -375,8 +375,8 @@ export fn ke_physics_scene_components_create(set_in: ?*abi_framework.c.ke_scene_
 
 const testing = std.testing;
 
-fn made(params: ?*const abi_physics_body2d_factory.ke_physics_body2d_module_params) !abi_physics_body2d_factory.ke_physics_body2d_module_handle {
-    var h: abi_physics_body2d_factory.ke_physics_body2d_module_handle = undefined;
+fn made(params: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_params) !abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
+    var h: abi_physics_body2d_factory.c.ke_physics_body2d_module_handle = undefined;
     try R.check(ke_physics_body2d_module_create(params, &h));
     return h;
 }
@@ -432,7 +432,7 @@ test "creating and destroying the body2d module leaves no block allocated and no
     defer rt.deinit();
     var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
-    var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+    var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
     params.runtime = rt.api();
     params.ecs = ecs.api();
     params.physics = &physics;
@@ -456,7 +456,7 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
     defer rt.deinit();
     var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
-    var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+    var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
     try testing.expect(std.meta.isError(made(null)));
     try testing.expect(std.meta.isError(made(&params)));
     params.runtime = rt.api();
@@ -484,7 +484,7 @@ test "a body2d module the runtime refuses a system of fails the create and leave
         try substituteRuntime(&rt);
         defer rt.deinit();
         _ = rt.when(.register_system).returnsSeq(answers);
-        var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+        var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
         params.runtime = rt.api();
         params.ecs = ecs.api();
         params.physics = &physics;

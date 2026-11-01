@@ -135,7 +135,7 @@ fn loadedApi() ?*Api {
 /// nothing left allocated.
 fn create(
     inner: ?*abi_render_gpu.c.ke_gpu_render_target,
-    params: ?*const abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params,
+    params: ?*const abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params,
     api: ?*Api,
 ) R.Error!abi_render_gpu.c.ke_gpu_render_target_handle {
     const target = inner orelse return error.InvalidArgument;
@@ -161,7 +161,7 @@ fn create(
 /// errors of `create`, among them not found when RenderDoc is not loaded, leaving the handle zeroed.
 export fn ke_gpu_render_target_renderdoc_create(
     inner: ?*abi_render_gpu.c.ke_gpu_render_target,
-    params: ?*const abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params,
+    params: ?*const abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params,
     out_target: [*c]abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
@@ -268,7 +268,7 @@ fn acquired(t: *abi_render_gpu.c.ke_gpu_render_target) !abi_asset_resolver.c.ke_
 test "only the chosen frames are captured, each from before its acquire until after its present" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params{ .first_frame = 1, .frame_count = 2 };
+    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params{ .first_frame = 1, .frame_count = 2 };
     const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
@@ -290,7 +290,7 @@ test "only the chosen frames are captured, each from before its acquire until af
 test "a chosen frame the inner target has nothing to draw into is discarded and captured on the next acquire" {
     var inner: Fake = undefined;
     const api = inner.init(1);
-    const p = abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
+    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
     const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
@@ -307,7 +307,7 @@ test "a chosen frame the inner target has nothing to draw into is discarded and 
 test "size and format are the inner target's" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 0 };
+    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 0 };
     const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
@@ -325,7 +325,7 @@ test "size and format are the inner target's" {
 test "a target destroyed with a capture open discards it" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
+    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
     const h = try create(&inner.vtable, &p, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
 
@@ -338,7 +338,7 @@ test "a target destroyed with a capture open discards it" {
 test "creation is refused without an inner target, without params, and when RenderDoc is not loaded" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
+    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_params{ .first_frame = 0, .frame_count = 1 };
 
     try testing.expectError(error.InvalidArgument, create(null, &p, api));
     try testing.expectError(error.InvalidArgument, create(&inner.vtable, null, api));

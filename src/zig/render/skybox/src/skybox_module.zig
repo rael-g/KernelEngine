@@ -142,7 +142,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// `destroyModule` to release.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.ke_render_skybox_params) R.Error!void {
+fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skybox_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     sm.core = core;
@@ -226,7 +226,7 @@ fn destroyModule(sm: *const SkyboxModule) void {
 
 /// The `destroy` slot of the handle `ke_render_skybox_create` returns. Releases the GPU objects,
 /// then frees the module. A null argument is ignored.
-fn destroyHandle(self: ?*abi_render_skybox_factory.ke_render_skybox) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_skybox_factory.c.ke_render_skybox) callconv(.c) void {
     const sm: *SkyboxModule = @ptrCast(@alignCast(self orelse return));
     _ = sm.runtime.unregister_system.?(sm.runtime, sm.system);
     destroyModule(sm);
@@ -237,7 +237,7 @@ fn destroyHandle(self: ?*abi_render_skybox_factory.ke_render_skybox) callconv(.c
 /// service, device or camera fails as an invalid argument, and a module that
 /// cannot be allocated as out of memory. When `setup` or the registration fails, it fails with
 /// that step's code and leaves the handle zeroed.
-export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.ke_render_skybox_params, out_skybox: [*c]abi_render_skybox_factory.ke_render_skybox_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.c.ke_render_skybox_params, out_skybox: [*c]abi_render_skybox_factory.c.ke_render_skybox_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_skybox orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -330,7 +330,7 @@ test "creating and destroying the skybox pass leaves no block allocated and no G
     try rig.init();
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
-    var h: abi_render_skybox_factory.ke_render_skybox_handle = undefined;
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
     try R.check(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -342,7 +342,7 @@ test "destroying the skybox pass unregisters every system it registered" {
     try rig.init();
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
-    var h: abi_render_skybox_factory.ke_render_skybox_handle = undefined;
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
     try R.check(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -356,7 +356,7 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
-    var h: abi_render_skybox_factory.ke_render_skybox_handle = undefined;
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
     try testing.expect(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -369,7 +369,7 @@ test "a skybox pass the runtime refuses to register releases what it had created
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
-    var h: abi_render_skybox_factory.ke_render_skybox_handle = undefined;
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
     try testing.expect(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

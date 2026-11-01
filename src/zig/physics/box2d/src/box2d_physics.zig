@@ -283,7 +283,7 @@ fn destroy(self_in: ?*abi_physics.c.ke_physics_2d) callconv(.c) void {
 /// the state first. On success the handle's destroy slot releases the world and everything the
 /// state owns.
 export fn ke_physics_2d_box2d_create(
-    params_in: ?*const abi_factory.ke_physics_2d_box2d_params,
+    params_in: ?*const abi_factory.c.ke_physics_2d_box2d_params,
     out_world: ?*abi_physics.c.ke_physics_2d_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
@@ -297,7 +297,7 @@ export fn ke_physics_2d_box2d_create(
     return R.ok;
 }
 
-fn create(params: *const abi_factory.ke_physics_2d_box2d_params) R.Error!abi_physics.c.ke_physics_2d_handle {
+fn create(params: *const abi_factory.c.ke_physics_2d_box2d_params) R.Error!abi_physics.c.ke_physics_2d_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
@@ -333,7 +333,7 @@ fn create(params: *const abi_factory.ke_physics_2d_box2d_params) R.Error!abi_phy
 const testing = std.testing;
 
 fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle {
-    var params = std.mem.zeroes(abi_factory.ke_physics_2d_box2d_params);
+    var params = std.mem.zeroes(abi_factory.c.ke_physics_2d_box2d_params);
     params.gravity_x = gravity_x;
     params.gravity_y = gravity_y;
     var h: abi_physics.c.ke_physics_2d_handle = undefined;

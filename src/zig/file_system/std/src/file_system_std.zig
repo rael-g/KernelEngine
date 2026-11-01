@@ -144,7 +144,7 @@ fn destroy(self_in: ?*abi_file_system.c.ke_file_system) callconv(.c) void {
 /// directory; any other root is opened once here. Fails with not found when the root names no
 /// directory, out of memory when the `State` cannot be allocated and io otherwise, leaving
 /// nothing allocated and the handle zeroed.
-export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params, out_file_system: ?*abi_file_system.c.ke_file_system_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_factory.c.ke_file_system_std_params, out_file_system: ?*abi_file_system.c.ke_file_system_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_file_system orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_file_system.c.ke_file_system_handle);
     out.* = create(params_in) catch |err| {
@@ -154,7 +154,7 @@ export fn ke_file_system_std_create(params_in: ?*const abi_file_system_std_facto
     return R.ok;
 }
 
-fn create(params_in: ?*const abi_file_system_std_factory.ke_file_system_std_params) R.Error!abi_file_system.c.ke_file_system_handle {
+fn create(params_in: ?*const abi_file_system_std_factory.c.ke_file_system_std_params) R.Error!abi_file_system.c.ke_file_system_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
@@ -196,7 +196,7 @@ const Rig = struct {
         try self.dir.dir.createDir(testing.io, "sub", .default_dir);
         const p = try std.fmt.bufPrint(&self.path, ".zig-cache/tmp/{s}", .{self.dir.sub_path});
         self.path[p.len] = 0;
-        const params = abi_file_system_std_factory.ke_file_system_std_params{ .root = @ptrCast(&self.path) };
+        const params = abi_file_system_std_factory.c.ke_file_system_std_params{ .root = @ptrCast(&self.path) };
         try R.check(ke_file_system_std_create(&params, &self.handle));
     }
 
@@ -332,7 +332,7 @@ test "an absolute path is read regardless of the root" {
 }
 
 test "a root that names no directory is not found and leaves the handle zeroed" {
-    const params = abi_file_system_std_factory.ke_file_system_std_params{ .root = "no/such/root" };
+    const params = abi_file_system_std_factory.c.ke_file_system_std_params{ .root = "no/such/root" };
     var h: abi_file_system.c.ke_file_system_handle = undefined;
     try testing.expectError(error.NotFound, R.check(ke_file_system_std_create(&params, &h)));
     try testing.expect(h.ref == null and h.destroy == null);

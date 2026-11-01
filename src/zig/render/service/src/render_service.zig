@@ -476,7 +476,7 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
 
 fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: *CoreState) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
     var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    try R.check(abi_resource_cache_default_factory.ke_resource_cache_create(&abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
+    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(&abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
     return h;
 }
 
@@ -489,7 +489,7 @@ fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: 
 /// device, target, ecs, shader directory, io or binder in them, fail as an invalid argument; a step
 /// that fails fails the factory with its code. On success the ref is the new vtable and `destroy`
 /// is `destroyCore`.
-export fn ke_render_service_create(params: ?*const abi_render_service_factory.ke_render_service_params, out_service: [*c]abi_render.c.ke_render_service_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_service_create(params: ?*const abi_render_service_factory.c.ke_render_service_params, out_service: [*c]abi_render.c.ke_render_service_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_service orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params orelse return R.code(error.InvalidArgument);
@@ -753,7 +753,7 @@ const Target = struct {
     }
 };
 
-fn serviceOf(params: abi_render_service_factory.ke_render_service_params) abi_render.c.ke_render_service_handle {
+fn serviceOf(params: abi_render_service_factory.c.ke_render_service_params) abi_render.c.ke_render_service_handle {
     var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
     _ = ke_render_service_create(&params, &h);
     return h;

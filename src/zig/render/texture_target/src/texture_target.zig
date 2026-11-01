@@ -91,7 +91,7 @@ fn destroy(self: [*c]abi_render_gpu.c.ke_gpu_render_target) callconv(.c) void {
 /// with no view or target left allocated.
 export fn ke_gpu_render_target_texture_create(
     device: ?*abi_render_gpu.c.ke_gpu_device,
-    params: ?*const abi_gpu_render_target_texture_factory.ke_gpu_render_target_texture_params,
+    params: ?*const abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params,
     out_target: [*c]abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
@@ -139,7 +139,7 @@ fn substituteDevice(dev: *DeviceSub) !void {
     _ = dev.when(.create_texture_view).writesFresh(3);
 }
 
-fn validParams() abi_gpu_render_target_texture_factory.ke_gpu_render_target_texture_params {
+fn validParams() abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params {
     return .{ .texture = 7, .width = 64, .height = 32, .format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM };
 }
 
@@ -197,7 +197,7 @@ test "a texture target without a device, params, texture, format or size is refu
     try substituteDevice(&dev);
     defer dev.deinit();
     const valid = validParams();
-    var cases = [_]abi_gpu_render_target_texture_factory.ke_gpu_render_target_texture_params{ valid, valid, valid, valid };
+    var cases = [_]abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params{ valid, valid, valid, valid };
     cases[0].texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     cases[1].format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID;
     cases[2].width = 0;

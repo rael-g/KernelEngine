@@ -16,7 +16,7 @@ const std = @import("std");
 /// here: `bake` reports each label that reaches it.
 pub const State = struct {
     core: *abi_render.c.ke_render_service,
-    ui: *abi_render_ui_factory.ke_render_ui,
+    ui: *abi_render_ui_factory.c.ke_render_ui,
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
 };
 
@@ -111,7 +111,7 @@ fn labelNaming(path: []const u8) abi_ui_components.c.ke_label_component {
 
 test "a label whose font never resolved gets the failed-font handle" {
     var core = std.mem.zeroes(abi_render.c.ke_render_service);
-    var ui = std.mem.zeroes(abi_render_ui_factory.ke_render_ui);
+    var ui = std.mem.zeroes(abi_render_ui_factory.c.ke_render_ui);
     var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
@@ -120,7 +120,7 @@ test "a label whose font never resolved gets the failed-font handle" {
 
 test "a font that failed to resolve is not retried on the next tick" {
     var core = std.mem.zeroes(abi_render.c.ke_render_service);
-    var ui = std.mem.zeroes(abi_render_ui_factory.ke_render_ui);
+    var ui = std.mem.zeroes(abi_render_ui_factory.c.ke_render_ui);
     var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
@@ -132,7 +132,7 @@ test "a font that failed to resolve is not retried on the next tick" {
 
 test "a label naming no font at all is left alone, having asked for nothing" {
     var core = std.mem.zeroes(abi_render.c.ke_render_service);
-    var ui = std.mem.zeroes(abi_render_ui_factory.ke_render_ui);
+    var ui = std.mem.zeroes(abi_render_ui_factory.c.ke_render_ui);
     var st = State{ .core = &core, .ui = &ui, .resolver = null };
     _ = &st;
     const l = std.mem.zeroes(abi_ui_components.c.ke_label_component);

@@ -575,7 +575,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) R.Error!a
     s.api.propagate_transforms = vtPropagateTransforms;
     s.api.hierarchy_generation = vtHierarchyGeneration;
 
-    if (runtime) |rt| try R.check(abi_framework_factory.ke_scene_hierarchy_create(rt, ecs, &s.hierarchy));
+    if (runtime) |rt| try R.check(abi_framework_factory.c.ke_scene_hierarchy_create(rt, ecs, &s.hierarchy));
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }

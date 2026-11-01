@@ -1,15 +1,12 @@
 .{
-    .name = .abi_ecs_flecs,
+    .name = .abi_ecs_flecs_factory,
     .version = "0.1.0",
-    .fingerprint = 0xbd740aeeec883a38,
+    .fingerprint = 0xc5b014eb6808fc18,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_result = .{ .path = "../../../abi/result" },
-        .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_ecs = .{ .path = "../../../abi/ecs" },
-        .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

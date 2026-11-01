@@ -1191,7 +1191,7 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 /// `fixed_dt`, `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
-export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.ke_runtime_params, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_runtime orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or task_pool == null) {
@@ -1268,7 +1268,7 @@ fn spawned(commands: [*c]abi_ecs.c.ke_ecs_commands) abi_asset_resolver.c.ke_enti
     return entity;
 }
 
-fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.ke_runtime_params) abi_runtime.c.ke_runtime_handle {
+fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params) abi_runtime.c.ke_runtime_handle {
     var h: abi_runtime.c.ke_runtime_handle = .{ .ref = null, .destroy = null };
     _ = ke_runtime_create(ecs, task_pool, params, &h);
     return h;
@@ -1301,7 +1301,7 @@ const Fixture = struct {
         var eh: abi_ecs.c.ke_ecs_handle = undefined;
         try R.check(ke_ecs_flecs_create(null, &eh));
 
-        var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
+        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
         const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
@@ -1618,7 +1618,7 @@ const BareRuntime = struct {
     runtime_h: abi_runtime.c.ke_runtime_handle = undefined,
 
     fn init(self: *BareRuntime) !void {
-        var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
+        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
         self.runtime_h = createdRuntime(&self.ecs, &self.task_pool, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
@@ -2116,7 +2116,7 @@ test "creating a runtime without an ecs is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
+    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
     const rh = createdRuntime(null, f.task_pool_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -2125,7 +2125,7 @@ test "creating a runtime without a task pool is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.ke_runtime_params);
+    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
     const rh = createdRuntime(f.ecs_h.ref, null, &rp);
     try testing.expect(rh.ref == null);
 }

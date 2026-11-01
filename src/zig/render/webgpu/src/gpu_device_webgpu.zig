@@ -357,7 +357,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
 /// written `destroy` releases the wgpu objects and the state without waiting for compiles still
 /// listed.
 pub export fn ke_gpu_device_webgpu_create(
-    params: ?*const abi_gpu_device_webgpu_factory.ke_gpu_device_webgpu_params,
+    params: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_params,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);

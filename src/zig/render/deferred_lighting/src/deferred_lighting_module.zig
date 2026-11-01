@@ -162,7 +162,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// release through `destroyModule`.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.ke_render_deferred_lighting_params) R.Error!void {
+fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const camera_cid = p.camera_cid;
     const world_transform_cid = p.world_transform_cid;
@@ -257,7 +257,7 @@ fn destroyModule(dl: *const DeferredLightingModule) void {
 
 /// The `destroy` slot of the handle that `ke_render_deferred_lighting_create` returns. It releases
 /// the GPU objects and then frees the block.
-fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.ke_render_deferred_lighting) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
     _ = dl.runtime.unregister_system.?(dl.runtime, dl.system);
     destroyModule(dl);
@@ -268,7 +268,7 @@ fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.ke_render_deferred
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
 /// runtime, service, device or gbuffer fails as an invalid argument. A failed setup or a refused
 /// registration fails with its code and leaves the handle zeroed, after the block is released.
-export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_deferred_lighting_factory.ke_render_deferred_lighting_params, out_lighting: [*c]abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params, out_lighting: [*c]abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_lighting orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -366,7 +366,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
     try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -377,7 +377,7 @@ test "destroying the deferred lighting pass unregisters every system it register
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
     try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -390,7 +390,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
     try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -402,7 +402,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
     try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

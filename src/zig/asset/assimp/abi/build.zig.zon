@@ -1,16 +1,15 @@
 .{
-    .name = .abi_asset_assimp,
+    .name = .abi_asset_assimp_factory,
     .version = "0.1.0",
-    .fingerprint = 0x7c6104269e28c531,
+    .fingerprint = 0xbba261775f3dee09,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_result = .{ .path = "../../../abi/result" },
-        .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_io = .{ .path = "../../../abi/io" },
         .abi_asset_loader = .{ .path = "../../../abi/asset_loader" },
-        .ke_abi_io = .{ .path = "../../../abi/io" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_mesh_data = .{ .path = "../../../abi/mesh_data" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_task_pool = .{ .path = "../../../abi/task_pool" },
     },
     .paths = .{"."},
 }

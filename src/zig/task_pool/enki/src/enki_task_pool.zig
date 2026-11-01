@@ -191,7 +191,7 @@ fn destroy(self_in: ?*abi_task_pool.c.ke_task_pool) callconv(.c) void {
 /// any other count is the workers besides the calling thread, which enkiTS counts as one of its
 /// threads. Fails with out of memory when the `State` cannot be allocated and general when the
 /// enkiTS object cannot be created, leaving nothing allocated and the handle zeroed.
-export fn ke_task_pool_enki_create(params_in: ?*const abi_task_pool_enki_factory.ke_task_pool_enki_params, out_task_pool: ?*abi_task_pool.c.ke_task_pool_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_task_pool_enki_create(params_in: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params, out_task_pool: ?*abi_task_pool.c.ke_task_pool_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_task_pool orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_task_pool.c.ke_task_pool_handle);
     out.* = create(params_in) catch |err| {
@@ -201,7 +201,7 @@ export fn ke_task_pool_enki_create(params_in: ?*const abi_task_pool_enki_factory
     return R.ok;
 }
 
-fn create(params_in: ?*const abi_task_pool_enki_factory.ke_task_pool_enki_params) R.Error!abi_task_pool.c.ke_task_pool_handle {
+fn create(params_in: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params) R.Error!abi_task_pool.c.ke_task_pool_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{ .api = std.mem.zeroes(abi_task_pool.c.ke_task_pool), .ets = null };
@@ -267,7 +267,7 @@ fn recordCompletionFailure(task_in: ?*abi_task_pool.c.ke_task, user_data: ?*anyo
     seen.* = result;
 }
 
-fn created(params: ?*const abi_task_pool_enki_factory.ke_task_pool_enki_params) !abi_task_pool.c.ke_task_pool_handle {
+fn created(params: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params) !abi_task_pool.c.ke_task_pool_handle {
     var h: abi_task_pool.c.ke_task_pool_handle = undefined;
     try R.check(ke_task_pool_enki_create(params, &h));
     return h;
@@ -453,7 +453,7 @@ test "the worker count excludes the calling thread" {
 }
 
 test "a worker count in the params sizes the pool" {
-    var params = std.mem.zeroes(abi_task_pool_enki_factory.ke_task_pool_enki_params);
+    var params = std.mem.zeroes(abi_task_pool_enki_factory.c.ke_task_pool_enki_params);
     params.worker_count = 3;
     const h = try created(&params);
     defer h.destroy.?(h.ref);

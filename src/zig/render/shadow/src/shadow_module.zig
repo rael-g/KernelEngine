@@ -35,7 +35,7 @@ const Shape = struct {
     far_plane: f32 = 50.0,
 };
 
-fn shapeOf(p: *const abi_render_shadow_factory.ke_render_shadow_params) Shape {
+fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_params) Shape {
     const d = Shape{};
     return .{
         .resolution = if (p.resolution != 0) p.resolution else d.resolution,
@@ -196,7 +196,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// fills the access list and the queries. A step that fails fails with the code of the render
 /// service or the device, and leaves the handles created before it stored in the module, for
 /// `destroyModule` to release; a pipeline that cannot be created fails as not initialized.
-fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.ke_render_shadow_params) R.Error!void {
+fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.c.ke_render_shadow_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const mesh_cid = p.mesh_cid;
@@ -324,7 +324,7 @@ fn destroyModule(sh: *ShadowModule) void {
 
 /// The `destroy` slot of the handle `ke_render_shadow_create` returns. It is the only path that
 /// frees a module whose creation succeeded.
-fn destroyHandle(self: ?*abi_render_shadow_factory.ke_render_shadow) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_shadow_factory.c.ke_render_shadow) callconv(.c) void {
     const sh: *ShadowModule = @ptrCast(@alignCast(self orelse return));
     _ = sh.runtime.unregister_system.?(sh.runtime, sh.system);
     destroyModule(sh);
@@ -334,7 +334,7 @@ fn destroyHandle(self: ?*abi_render_shadow_factory.ke_render_shadow) callconv(.c
 /// A missing runtime, service, device, view space or output fails as an invalid argument and a
 /// module that cannot be allocated as out of memory; a failing `setup` or a runtime refusing the
 /// system fails with its code and leaves the handle zeroed, and every such path frees the module.
-export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.ke_render_shadow_params, out_shadow: [*c]abi_render_shadow_factory.ke_render_shadow_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.c.ke_render_shadow_params, out_shadow: [*c]abi_render_shadow_factory.c.ke_render_shadow_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_shadow orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -420,7 +420,7 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     try rig.init();
     defer rig.deinit();
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
     try R.check(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -432,7 +432,7 @@ test "destroying the shadow pass unregisters every system it registered" {
     try rig.init();
     defer rig.deinit();
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
     try R.check(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -446,7 +446,7 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
     try testing.expect(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -459,7 +459,7 @@ test "a shadow pass the runtime refuses to register releases what it had created
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_shadow_factory.ke_render_shadow_handle = undefined;
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
     try testing.expect(ke_render_shadow_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .ndc = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention), .mesh_cid = 1, .world_transform_cid = 2, .light_cid = 3, .frame_cid = 4, .output = "shadow" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

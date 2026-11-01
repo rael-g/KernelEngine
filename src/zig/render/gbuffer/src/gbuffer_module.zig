@@ -211,7 +211,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// `pipeline_template`, `io`, `access` and `queries`, and it requests the pipeline now, so a
 /// failure there fails creation instead of the first frame. On failure the module keeps the
 /// handles it made for `destroyModule`.
-fn setup(gb: *GBufferModule, p: *const abi_render_gbuffer_factory.ke_render_gbuffer_params) R.Error!void {
+fn setup(gb: *GBufferModule, p: *const abi_render_gbuffer_factory.c.ke_render_gbuffer_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const mesh_cid = p.mesh_cid;
@@ -327,7 +327,7 @@ fn destroyModule(gb: *GBufferModule) void {
 
 /// The destroy slot of the handle `ke_render_gbuffer_create` returns: releases the module's GPU
 /// objects and frees the module. A null ref does nothing.
-fn destroyHandle(self: ?*abi_render_gbuffer_factory.ke_render_gbuffer) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_gbuffer_factory.c.ke_render_gbuffer) callconv(.c) void {
     const gb: *GBufferModule = @ptrCast(@alignCast(self orelse return));
     _ = gb.runtime.unregister_system.?(gb.runtime, gb.system);
     destroyModule(gb);
@@ -339,7 +339,7 @@ fn destroyHandle(self: ?*abi_render_gbuffer_factory.ke_render_gbuffer) callconv(
 /// render service, device or output fails as an invalid argument and a failed allocation as
 /// out of memory. A failing setup, or a runtime that refuses the registration, fails with its code
 /// and leaves the handle zeroed after releasing the module.
-export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory.ke_render_gbuffer_params, out_gbuffer: [*c]abi_render_gbuffer_factory.ke_render_gbuffer_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory.c.ke_render_gbuffer_params, out_gbuffer: [*c]abi_render_gbuffer_factory.c.ke_render_gbuffer_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_gbuffer orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -550,7 +550,7 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
+    var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
     try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -561,7 +561,7 @@ test "destroying the gbuffer pass unregisters every system it registered" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
+    var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
     try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -574,7 +574,7 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
+    var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
     try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -586,7 +586,7 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var h: abi_render_gbuffer_factory.ke_render_gbuffer_handle = undefined;
+    var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
     try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

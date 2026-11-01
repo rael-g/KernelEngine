@@ -1,17 +1,13 @@
 .{
-    .name = .abi_window_glfw,
+    .name = .abi_window_glfw_factory,
     .version = "0.1.0",
-    .fingerprint = 0x77a7d331861cd0f8,
+    .fingerprint = 0x13d9a8368299ddba,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_window = .{ .path = "../../../abi/window" },
-        .abi_result = .{ .path = "../../../abi/result" },
-        .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_input = .{ .path = "../../../abi/input" },
-        .ke_abi_input = .{ .path = "../../../abi/input" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_window = .{ .path = "../../../abi/window" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_window = .{ .path = "../../../abi/window" },
     },
     .paths = .{"."},
 }

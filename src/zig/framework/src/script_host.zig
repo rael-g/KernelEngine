@@ -534,7 +534,7 @@ fn destroy(self_in: ?*abi_script_host.c.ke_script_host) callconv(.c) void {
 /// handle zeroed.
 pub export fn ke_script_host_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
-    params: [*c]const abi_framework_factory.ke_script_host_params,
+    params: [*c]const abi_framework_factory.c.ke_script_host_params,
     out_host: ?*abi_script_host.c.ke_script_host_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_host orelse return R.code(error.InvalidArgument);

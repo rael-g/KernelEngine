@@ -272,7 +272,7 @@ fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, 
 /// its group's names, and fills the access list, which writes the group's tag, and the queries. A
 /// failed step fails with its code, and the objects
 /// created before it stay set for `destroyModule` to release.
-fn setup(cm: *ClusterModule, p: *const abi_render_cluster_factory.ke_render_cluster_params) R.Error!void {
+fn setup(cm: *ClusterModule, p: *const abi_render_cluster_factory.c.ke_render_cluster_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     cm.core = core;
@@ -400,7 +400,7 @@ fn destroyModule(cm: *const ClusterModule) void {
 
 /// The `destroy` slot of the handle `ke_render_cluster_create` returns. It releases the GPU objects
 /// and frees the module, so the `ref` it was given is invalid afterwards.
-fn destroyHandle(self: ?*abi_render_cluster_factory.ke_render_cluster) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_cluster_factory.c.ke_render_cluster) callconv(.c) void {
     const cm: *ClusterModule = @ptrCast(@alignCast(self orelse return));
     _ = cm.runtime.unregister_system.?(cm.runtime, cm.system);
     destroyModule(cm);
@@ -412,7 +412,7 @@ fn destroyHandle(self: ?*abi_render_cluster_factory.ke_render_cluster) callconv(
 /// invalid argument and a module that cannot be allocated as out of memory. The handle's `ref` is
 /// null when `setup` fails or the runtime refuses the registration, and the objects created so far
 /// are released then.
-export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory.ke_render_cluster_params, out_cluster: [*c]abi_render_cluster_factory.ke_render_cluster_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_cluster_create(params_in: ?*const abi_render_cluster_factory.c.ke_render_cluster_params, out_cluster: [*c]abi_render_cluster_factory.c.ke_render_cluster_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_cluster orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -511,7 +511,7 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     try R.check(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -524,7 +524,7 @@ test "destroying the cluster pass unregisters every system it registered" {
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     try R.check(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -539,7 +539,7 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     try testing.expect(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -553,7 +553,7 @@ test "a cluster pass the runtime refuses to register releases what it had create
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-    var h: abi_render_cluster_factory.ke_render_cluster_handle = undefined;
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     try testing.expect(ke_render_cluster_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .point_light_cid = 1, .spot_light_cid = 2, .world_transform_cid = 3, .camera_cid = 4, .frame_cid = 5, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

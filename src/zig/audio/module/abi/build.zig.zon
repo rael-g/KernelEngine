@@ -1,15 +1,14 @@
 .{
-    .name = .abi_audio_module,
+    .name = .abi_audio_module_factory,
     .version = "0.1.0",
-    .fingerprint = 0xe8a5d0fd0aec11ea,
+    .fingerprint = 0x11a6f119f5397e67,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_result = .{ .path = "../../../abi/result" },
-        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_ecs_variant = .{ .path = "../../../abi/ecs_variant" },
         .abi_framework = .{ .path = "../../../abi/framework" },
-        .ke_abi_framework = .{ .path = "../../../abi/framework" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_runtime = .{ .path = "../../../abi/runtime" },
     },
     .paths = .{"."},
 }

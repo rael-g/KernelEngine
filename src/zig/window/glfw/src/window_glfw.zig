@@ -30,7 +30,7 @@ test {
 /// and its device. The title falls back to "KernelEngine" when absent, and a negative size becomes
 /// zero. The input in the params is handed to the core, which borrows it.
 export fn ke_window_glfw_create(
-    params_in: ?*const abi_window_glfw_factory.ke_window_glfw_params,
+    params_in: ?*const abi_window_glfw_factory.c.ke_window_glfw_params,
     out_window: ?*abi_window.c.ke_window_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_window orelse return R.code(error.InvalidArgument);
@@ -43,7 +43,7 @@ export fn ke_window_glfw_create(
     return R.ok;
 }
 
-fn create(params: *const abi_window_glfw_factory.ke_window_glfw_params) R.Error!abi_window.c.ke_window_handle {
+fn create(params: *const abi_window_glfw_factory.c.ke_window_glfw_params) R.Error!abi_window.c.ke_window_handle {
     const dev = glfw.GlfwDevice.create() orelse return error.OutOfMemory;
 
     const core = core_mod.Core.create(dev.asDevice(), params.input) orelse {

@@ -260,7 +260,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// failure it leaves the handles it had already made in the module, where `destroyModule` finds and releases them.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.ke_render_forward_params) R.Error!void {
+fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.c.ke_render_forward_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const mesh_cid = p.mesh_cid;
@@ -380,7 +380,7 @@ fn destroyModule(fwd: *ForwardModule) void {
 
 /// The `destroy` slot of the handle that `ke_render_forward_create` returns. It is the only place
 /// that frees a module created successfully.
-fn destroyHandle(self: ?*abi_render_forward_factory.ke_render_forward) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_forward_factory.c.ke_render_forward) callconv(.c) void {
     const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
     _ = fwd.runtime.unregister_system.?(fwd.runtime, fwd.system);
     destroyModule(fwd);
@@ -391,7 +391,7 @@ fn destroyHandle(self: ?*abi_render_forward_factory.ke_render_forward) callconv(
 /// module, and its `destroy` must be called to release it. On failure `ref` is null and the module
 /// and its GPU objects are released. A missing runtime, service or device fails as an invalid
 /// argument. A failure in `setup` or of the registration fails with its code.
-export fn ke_render_forward_create(params_in: ?*const abi_render_forward_factory.ke_render_forward_params, out_forward: [*c]abi_render_forward_factory.ke_render_forward_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_forward_create(params_in: ?*const abi_render_forward_factory.c.ke_render_forward_params, out_forward: [*c]abi_render_forward_factory.c.ke_render_forward_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_forward orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
@@ -717,7 +717,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
     try R.check(ke_render_forward_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
@@ -728,7 +728,7 @@ test "destroying the forward pass unregisters every system it registered" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
     try R.check(ke_render_forward_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
@@ -741,7 +741,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
     try testing.expect(ke_render_forward_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
@@ -753,7 +753,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var h: abi_render_forward_factory.ke_render_forward_handle = undefined;
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
     try testing.expect(ke_render_forward_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .skybox_cid = 4, .frame_cid = 5, .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();

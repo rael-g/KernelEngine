@@ -354,16 +354,16 @@ fn destroy(self_in: ?*abi_signal_bus.c.ke_signal_bus) callconv(.c) void {
 /// argument; a failed allocation frees what was allocated before it, fails as out of memory and
 /// leaves the handle zeroed.
 pub export fn ke_signal_bus_create(
-    params: [*c]const abi_framework_factory.ke_signal_bus_params,
+    params: [*c]const abi_framework_factory.c.ke_signal_bus_params,
     out_bus: ?*abi_signal_bus.c.ke_signal_bus_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_bus orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_signal_bus.c.ke_signal_bus_handle);
-    out.* = create(if (params != null) params.* else std.mem.zeroes(abi_framework_factory.ke_signal_bus_params)) catch |err| return R.code(err);
+    out.* = create(if (params != null) params.* else std.mem.zeroes(abi_framework_factory.c.ke_signal_bus_params)) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn create(params: abi_framework_factory.ke_signal_bus_params) error{OutOfMemory}!abi_signal_bus.c.ke_signal_bus_handle {
+fn create(params: abi_framework_factory.c.ke_signal_bus_params) error{OutOfMemory}!abi_signal_bus.c.ke_signal_bus_handle {
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
     s.signals = try heap.gpa.alloc(Signal, orDefault(params.max_signals, default_max_signals));
