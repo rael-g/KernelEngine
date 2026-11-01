@@ -22,6 +22,8 @@ public sealed class NodesExtension : IKabicExtension
     /// <inheritdoc/>
     public void Run(ExtensionContext context)
     {
+        var borrows = context.Domains.SelectMany(d => d.Model.Enums).First(e => e.Name == "ke_script_borrow" && !e.External);
+        context.Emit("src/csharp/framework/KernelEngine.Framework/Generated/ScriptBorrowWrappers.g.cs", BorrowWrappers(borrows, context.Convention));
         foreach (var (spec, model) in context.Domains.Select(d => (d.Spec, d.Model)))
         {
             var nodes = model.Structs.Where(s => !s.IsVtable && !s.External && s.Has("node")).ToList();
@@ -31,6 +33,45 @@ public sealed class NodesExtension : IKabicExtension
             var registrar = Idioms.TypeName(spec.Name, context.Convention) + "NodeTypes";
             context.Emit($"{spec.OutDir}/{registrar}.g.cs", Registrar(registrar, nodes.Select(n => n.TagValue("node")!), NodeNamespace));
         }
+    }
+
+    static string BorrowWrappers(ApiEnum kinds, Convention convention)
+    {
+        const string reach = "global::KernelEngine.Framework.Native.ScriptBorrow";
+        var o = new List<string>
+        {
+            Header, $"namespace {NodeNamespace};", "",
+            "/// <summary>Marks a borrow wrapper with the reach it resolves with, so a projection recognises a borrow parameter by what it means.</summary>",
+            "[AttributeUsage(AttributeTargets.Struct)]", "public sealed class NodeBorrowAttribute : Attribute", "{",
+            "    /// <summary>Where this wrapper's borrow looks for the node it names.</summary>",
+            $"    public {reach} Reach {{ get; }}", "",
+            "    /// <param name=\"reach\">Where this wrapper's borrow looks for the node it names.</param>",
+            $"    public NodeBorrowAttribute({reach} reach) => Reach = reach;", "}", "",
+        };
+        foreach (var value in kinds.Values)
+        {
+            var member = Idioms.EnumMember(value.Name, kinds.Name);
+            o.AddRange([
+                "/// <summary>",
+                $"/// {Escape(value.Doc ?? $"A borrow resolved with {member}.")} Obtained as a parameter rather than stored in a field:",
+                "/// re-resolved each time it is handed over, so it can never dangle, and its type is what puts",
+                "/// <typeparamref name=\"T\"/>'s components into the borrowing body's access list.",
+                "/// </summary>",
+                $"[NodeBorrow({reach}.{member})]",
+                $"public readonly ref struct {member}<T> where T : class", "{",
+                "    private readonly T? _node;", "",
+                "    /// <summary>The borrowed node, or null when none matched.</summary>",
+                "    public T? Node => _node;", "",
+                "    /// <summary>True when a node matched this borrow.</summary>",
+                "    public bool IsBound => _node is not null;", "",
+                "    /// <param name=\"node\">The node this borrow resolved to, or null when none matched.</param>",
+                $"    public {member}(T? node) => _node = node;", "",
+                "    /// <summary>Unwraps the borrow, throwing when nothing matched.</summary>",
+                "    public T Value => _node ?? throw new InvalidOperationException(",
+                $"        $\"No node of type {{typeof(T).Name}} is bound for this {member.ToLowerInvariant()} borrow.\");",
+                "}", ""]);
+        }
+        return string.Join('\n', o);
     }
 
     static string NodeType(ApiModel model, DomainSpec spec, ApiStruct node, Convention convention)
