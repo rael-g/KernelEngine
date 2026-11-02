@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Render;
 using KernelEngine.View.Native;
 
 namespace KernelEngine.View;
@@ -71,6 +72,25 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
     {
         System.Numerics.Matrix4x4 result;
         Handle->view_from_transform(Handle, (System.Numerics.Matrix4x4*)&cameraWorld, &result);
+        return result;
+    }
+
+    /// <summary>Perspective projection into `clip`'s conventions.</summary>
+    /// <param name="fovY">Vertical field of view, in radians.</param>
+    /// <param name="clip">The device's clip space, from get_ndc_convention.</param>
+    public System.Numerics.Matrix4x4 Perspective(float fovY, float aspect, float nearPlane, float farPlane, NdcConvention clip)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->perspective(Handle, fovY, aspect, nearPlane, farPlane, (NdcConvention*)&clip, &result);
+        return result;
+    }
+
+    /// <summary>Orthographic projection into `clip`'s conventions.</summary>
+    /// <param name="clip">The device's clip space, from get_ndc_convention.</param>
+    public System.Numerics.Matrix4x4 Orthographic(float width, float height, float nearPlane, float farPlane, NdcConvention clip)
+    {
+        System.Numerics.Matrix4x4 result;
+        Handle->orthographic(Handle, width, height, nearPlane, farPlane, (NdcConvention*)&clip, &result);
         return result;
     }
 
