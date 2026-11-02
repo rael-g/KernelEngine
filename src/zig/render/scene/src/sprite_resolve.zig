@@ -4,6 +4,7 @@ const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
 const abi_ecs = @import("abi_ecs");
+const abi_mesh = @import("abi_mesh");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -69,7 +70,7 @@ fn quadFor(core: *abi_render.c.ke_render_service, sp: *const abi_render_componen
     });
 
     var mesh: abi_render_handles.c.ke_mesh_handle = abi_render_handles.c.KE_MESH_NONE;
-    if (core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, &mesh) != R.ok)
+    if (core.upload_mesh.?(core, k, @ptrCast(&verts), verts.len, &idx, idx.len, &mesh) != R.ok)
         log.warn("a sprite quad could not be uploaded", .{});
     return mesh;
 }
@@ -205,8 +206,8 @@ const Capture = struct {
 fn captureUploadMesh(
     _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    vertices: ?*const anyopaque,
-    _: usize,
+    vertices: [*c]const abi_mesh.c.ke_mesh_vertex,
+    _: u32,
     indices: [*c]const u16,
     index_count: u32,
     out: [*c]abi_render_handles.c.ke_mesh_handle,
@@ -214,7 +215,7 @@ fn captureUploadMesh(
     const k = std.mem.span(key);
     @memcpy(Capture.key[0..k.len], k);
     Capture.key_len = k.len;
-    const v: [*]const Vertex = @ptrCast(@alignCast(vertices.?));
+    const v: [*]const Vertex = @ptrCast(vertices.?);
     Capture.verts = v[0..4].*;
     @memcpy(Capture.indices[0..index_count], indices[0..index_count]);
     Capture.calls += 1;
@@ -381,8 +382,8 @@ const Refs = struct {
 fn refUploadMesh(
     _: [*c]abi_render.c.ke_render_service,
     _: [*c]const u8,
-    _: ?*const anyopaque,
-    _: usize,
+    _: [*c]const abi_mesh.c.ke_mesh_vertex,
+    _: u32,
     _: [*c]const u16,
     _: u32,
     out: [*c]abi_render_handles.c.ke_mesh_handle,

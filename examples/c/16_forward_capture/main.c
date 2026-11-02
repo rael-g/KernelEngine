@@ -247,7 +247,7 @@ int main(int argc, char **argv)
     ke_render_service *core = render.service.ref;
 
     ke_mesh_handle cube_h = { 0 };
-    check("upload_mesh", core->upload_mesh(core, "example:cube", cube, sizeof(cube), cube_idx,
+    check("upload_mesh", core->upload_mesh(core, "example:cube", (const ke_mesh_vertex *)cube, sizeof(cube) / sizeof(cube[0]), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &cube_h));
 
     const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };

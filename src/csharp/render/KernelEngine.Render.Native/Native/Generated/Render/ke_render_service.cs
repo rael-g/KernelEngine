@@ -39,8 +39,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_result (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, KernelEngine.Result.Native.Result> end_frame;
 
-    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const void *, size_t, const uint16_t *, uint32_t, ke_mesh_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, void*, nuint, ushort*, uint, global::KernelEngine.Render.MeshHandle*, KernelEngine.Result.Native.Result> upload_mesh;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const ke_mesh_vertex *, uint32_t, const uint16_t *, uint32_t, ke_mesh_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, global::KernelEngine.Render.MeshVertex*, uint, ushort*, uint, global::KernelEngine.Render.MeshHandle*, KernelEngine.Result.Native.Result> upload_mesh;
 
     [NativeTypeName("bool (*)(struct ke_render_service *, ke_mesh_handle, ke_gpu_buffer *, ke_gpu_buffer *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.MeshHandle, ulong*, ulong*, uint*, bool> mesh_buffers;

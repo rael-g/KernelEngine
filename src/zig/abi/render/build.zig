@@ -7,6 +7,7 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
+    abi.addImport("mesh", b.dependency("abi_mesh", .{}).module("abi"));
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));

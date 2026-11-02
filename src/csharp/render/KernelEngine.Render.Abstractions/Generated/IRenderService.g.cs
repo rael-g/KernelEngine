@@ -40,10 +40,11 @@ public interface IRenderService : IDisposable
     void EndFrame();
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="vertices">Interleaved vertices.</param>
     /// <param name="indices">Triangle list indices.</param>
     /// <returns>Receives the handle of the uploaded mesh.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    MeshHandle UploadMesh(string key, nint vertices, nuint verticesSize, ReadOnlySpan<ushort> indices);
+    MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices);
     /// <summary>Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.</summary>
     bool TryMeshBuffers(MeshHandle h, out ulong outVbo, out ulong outIbo, out uint outIndexCount);
     /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>

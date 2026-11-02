@@ -1,6 +1,4 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 
 namespace KernelEngine.Render;
 
@@ -8,19 +6,14 @@ namespace KernelEngine.Render;
 /// One interleaved mesh vertex: object-space position, normal, texture coordinates and tangent,
 /// laid out sequentially as <see cref="IRenderResources.UploadMesh"/> uploads them.
 /// </summary>
-[StructLayout(LayoutKind.Sequential)]
-public struct MeshVertex
+public partial struct MeshVertex
 {
-    public Vector3 Position;
-    public Vector3 Normal;
-    public Vector2 UV;
-    public Vector3 Tangent;
-
+    /// <summary>Creates a vertex from its four attributes.</summary>
     public MeshVertex(Vector3 position, Vector3 normal, Vector2 uv, Vector3 tangent)
     {
         Position = position;
         Normal = normal;
-        UV = uv;
+        Uv = uv;
         Tangent = tangent;
     }
 }

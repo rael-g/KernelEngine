@@ -172,11 +172,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("UploadMesh called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        fixed (MeshVertex* v = vertices)
-        {
-            var h = _renderService.UploadMesh(key, (nint)v, (nuint)(vertices.Length * sizeof(MeshVertex)), indices);
-            return h;
-        }
+        return _renderService.UploadMesh(key, vertices, indices);
     }
 
     /// <inheritdoc/>

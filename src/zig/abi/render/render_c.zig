@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_math = @import("math");
+const abi_mesh = @import("mesh");
 const abi_render_components = @import("render_components");
 const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
@@ -194,7 +195,7 @@ pub const ke_render_service = extern struct {
     /// frame began, and fails with the target's code when presenting failed.
     end_frame: ?*const fn (?*ke_render_service) callconv(.c) abi_result.c.ke_result = null,
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
-    upload_mesh: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*const anyopaque, usize, ?[*]const u16, u32, ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result = null,
+    upload_mesh: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?[*]const abi_mesh.c.ke_mesh_vertex, u32, ?[*]const u16, u32, ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result = null,
     /// Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never
     /// uploaded.
     mesh_buffers: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_mesh_handle, ?*ke_gpu_buffer, ?*ke_gpu_buffer, ?*u32) callconv(.c) bool = null,

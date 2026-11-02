@@ -6,6 +6,7 @@ const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
 const rc = @import("render_service.zig");
+const abi_mesh = @import("abi_mesh");
 const abi_render = @import("abi_render");
 const abi_resource_cache = @import("abi_resource_cache");
 const abi_result = @import("abi_result");
@@ -37,15 +38,15 @@ fn registerCached(cache: *abi_resource_cache.c.ke_resource_cache, key: [*c]const
 /// fails as an invalid argument. A buffer the device cannot create fails with the device's code,
 /// after destroying the buffer made before it. A full store fails as out of memory, after
 /// destroying both buffers.
-pub fn uploadMesh(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32, out_mesh: [*c]abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
+pub fn uploadMesh(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_mesh_vertex, vertex_count: u32, indices: [*c]const u16, index_count: u32, out_mesh: [*c]abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_mesh orelse return R.code(error.InvalidArgument);
     out.* = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
     if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
-    out.* = .{ .bits = mesh(rc.coreOf(self), key, vertices, vertices_size, indices, index_count) catch |err| return R.code(err) };
+    out.* = .{ .bits = mesh(rc.coreOf(self), key, vertices, vertex_count, indices, index_count) catch |err| return R.code(err) };
     return R.ok;
 }
 
-fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: [*c]const u16, index_count: u32) R.Error!u32 {
+fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_mesh_vertex, vertex_count: u32, indices: [*c]const u16, index_count: u32) R.Error!u32 {
     const cached = tryCached(st.mesh_cache, key);
     if (cached != abi_render_handles.c.KE_HANDLE_NONE) return cached;
 
@@ -53,7 +54,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: ?*const anyopaque, verti
     try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
         .label = "mesh.vertices",
         .initial_data = vertices,
-        .size = vertices_size,
+        .size = @as(usize, vertex_count) * @sizeOf(abi_mesh.c.ke_mesh_vertex),
         .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_VERTEX | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST,
         .mapped_at_creation = false,
     }, &vbo));

@@ -1541,6 +1541,122 @@
       "external": true
     },
     {
+      "name": "ke_vertex",
+      "doc": "Per-vertex data of a mesh, as authored.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "nx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "ny",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "nz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "u",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "v",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "tx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "ty",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tw",
+          "type": "float",
+          "tags": [],
+          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_vertex",
+      "doc": "One interleaved vertex as a mesh is uploaded to the device.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "uv",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "tangent",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_render_resource_params",
       "doc": null,
       "tags": [
@@ -2589,13 +2705,15 @@
             },
             {
               "name": "vertices",
-              "type": "const void *",
-              "tags": [],
-              "doc": null
+              "type": "const ke_mesh_vertex *",
+              "tags": [
+                "array_of:vertex_count"
+              ],
+              "doc": "Interleaved vertices."
             },
             {
-              "name": "vertices_size",
-              "type": "size_t",
+              "name": "vertex_count",
+              "type": "uint32_t",
               "tags": [],
               "doc": null
             },

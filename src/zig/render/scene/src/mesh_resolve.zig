@@ -2,6 +2,7 @@
 
 const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
+const abi_mesh = @import("abi_mesh");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -32,7 +33,7 @@ fn quad(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mes
         .{ .position = .{ -0.5, 0.5, 0 }, .normal = .{ 0, 0, 1 }, .uv = .{ 0, 0 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:quad", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:quad", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 /// A unit square lying flat with its normal along the positive y axis, uploaded under its own key.
@@ -46,7 +47,7 @@ fn plane(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_me
         .{ .position = .{ -0.5, 0, 0.5 }, .normal = n, .uv = .{ 0, 1 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:plane", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:plane", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 fn sub(a: [3]f32, b: [3]f32) [3]f32 {
@@ -89,7 +90,7 @@ fn cube(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mes
         idx[i + 4] = @intCast(v + 2);
         idx[i + 5] = @intCast(v + 3);
     }
-    return core.upload_mesh.?(core, "primitive:cube", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:cube", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 const sphere_rings = 24;
@@ -143,7 +144,7 @@ fn uvSphere(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke
             ii += 6;
         }
     }
-    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 /// Maps the name in the component's primitive field to one of the built-in shapes, uploaded
@@ -253,8 +254,8 @@ const Recorder = struct {
 fn recordUploadMesh(
     _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    _: ?*const anyopaque,
-    vertices_size: usize,
+    _: [*c]const abi_mesh.c.ke_mesh_vertex,
+    vertex_count: u32,
     _: [*c]const u16,
     idx_count: u32,
     out: [*c]abi_render_handles.c.ke_mesh_handle,
@@ -262,7 +263,7 @@ fn recordUploadMesh(
     const k = std.mem.span(key);
     @memcpy(Recorder.mesh_key[0..k.len], k);
     Recorder.mesh_key_len = k.len;
-    Recorder.vertex_count = vertices_size / @sizeOf(Vertex);
+    Recorder.vertex_count = vertex_count;
     Recorder.index_count = idx_count;
     Recorder.mesh_calls += 1;
     out.* = .{ .bits = 42 };

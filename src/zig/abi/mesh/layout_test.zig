@@ -24,9 +24,10 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_vertex, translated("ke_vertex"));
+    try expectSameLayout(abi.c.ke_mesh_vertex, translated("ke_mesh_vertex"));
 }
 
-extern const layout_values: [14]c_ulonglong;
+extern const layout_values: [19]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -44,6 +45,11 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_vertex, "ty"),
         @offsetOf(abi.c.ke_vertex, "tz"),
         @offsetOf(abi.c.ke_vertex, "tw"),
+        @sizeOf(abi.c.ke_mesh_vertex),
+        @offsetOf(abi.c.ke_mesh_vertex, "position"),
+        @offsetOf(abi.c.ke_mesh_vertex, "normal"),
+        @offsetOf(abi.c.ke_mesh_vertex, "uv"),
+        @offsetOf(abi.c.ke_mesh_vertex, "tangent"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

@@ -14,5 +14,10 @@ const unsigned long long layout_values[] = {
     offsetof(ke_vertex, ty),
     offsetof(ke_vertex, tz),
     offsetof(ke_vertex, tw),
+    sizeof(ke_mesh_vertex),
+    offsetof(ke_mesh_vertex, position),
+    offsetof(ke_mesh_vertex, normal),
+    offsetof(ke_mesh_vertex, uv),
+    offsetof(ke_mesh_vertex, tangent),
     0,
 };

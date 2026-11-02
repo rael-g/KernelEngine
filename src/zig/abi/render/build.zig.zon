@@ -6,6 +6,7 @@
     .dependencies = .{
         .abi_ecs = .{ .path = "../ecs" },
         .abi_math = .{ .path = "../math" },
+        .abi_mesh = .{ .path = "../mesh" },
         .abi_render_components = .{ .path = "../render_components" },
         .abi_render_contract = .{ .path = "../render_contract" },
         .abi_render_gpu = .{ .path = "../render_gpu" },

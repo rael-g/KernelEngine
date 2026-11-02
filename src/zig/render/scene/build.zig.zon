@@ -10,6 +10,7 @@
         .abi_ui_components = .{ .path = "../../abi/ui_components" },
         .abi_scene_loader = .{ .path = "../../abi/scene_loader" },
         .abi_render_handles = .{ .path = "../../abi/render_handles" },
+        .abi_mesh = .{ .path = "../../abi/mesh" },
         .abi_render_components = .{ .path = "../../abi/render_components" },
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_math = @import("math");
+const abi_mesh = @import("mesh");
 const abi_render_components = @import("render_components");
 const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
@@ -129,9 +130,9 @@ pub const RenderService = struct {
                 }
             }.call,
             .upload_mesh = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: ?*const anyopaque, a2: usize, a3: ?[*]const u16, a4: u32, a5: ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: ?[*]const abi_mesh.c.ke_mesh_vertex, a2: u32, a3: ?[*]const u16, a4: u32, a5: ?*abi_render_handles.c.ke_mesh_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.uploadMesh(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2, if (a3) |items| items[0..a4] else &.{}) catch |failure| return resultOf(failure);
+                    const value = T.uploadMesh(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |items| items[0..a2] else &.{}, if (a3) |items| items[0..a4] else &.{}) catch |failure| return resultOf(failure);
                     (a5 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
@@ -442,9 +443,9 @@ pub const RenderService = struct {
     }
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
-    pub fn uploadMesh(self: RenderService, key: [:0]const u8, vertices: ?*const anyopaque, vertices_size: usize, indices: []const u16) Error!abi_render_handles.c.ke_mesh_handle {
+    pub fn uploadMesh(self: RenderService, key: [:0]const u8, vertices: []const abi_mesh.c.ke_mesh_vertex, indices: []const u16) Error!abi_render_handles.c.ke_mesh_handle {
         var written: abi_render_handles.c.ke_mesh_handle = undefined;
-        try checkResult(self.ptr.upload_mesh.?(self.ptr, key.ptr, vertices, vertices_size, indices.ptr, @intCast(indices.len), &written));
+        try checkResult(self.ptr.upload_mesh.?(self.ptr, key.ptr, vertices.ptr, @intCast(vertices.len), indices.ptr, @intCast(indices.len), &written));
         return written;
     }
 

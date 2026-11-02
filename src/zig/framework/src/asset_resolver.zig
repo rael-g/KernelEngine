@@ -371,7 +371,6 @@ fn meshInto(core: *abi_render.c.ke_render_service, path: [*:0]const u8) R.Error!
     defer mesh_shape.ke_mesh_shape_free_internal(&shape);
 
     const float_count = @as(usize, shape.vertex_count) * gpu_floats_per_vertex;
-    const byte_count = float_count * @sizeOf(f32);
     const gpu_verts = heap.gpa.alloc(f32, float_count) catch return error.OutOfMemory;
     defer heap.gpa.free(gpu_verts);
 
@@ -392,7 +391,7 @@ fn meshInto(core: *abi_render.c.ke_render_service, path: [*:0]const u8) R.Error!
     }
 
     var h: abi_render_handles.c.ke_mesh_handle = abi_render_handles.c.KE_MESH_NONE;
-    try R.check(core.upload_mesh.?(core, path, gpu_verts.ptr, byte_count, shape.indices, shape.index_count, &h));
+    try R.check(core.upload_mesh.?(core, path, @ptrCast(gpu_verts.ptr), shape.vertex_count, shape.indices, shape.index_count, &h));
     return h;
 }
 

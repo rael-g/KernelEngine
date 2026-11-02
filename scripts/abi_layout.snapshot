@@ -1115,6 +1115,11 @@ ke_vertex size=48 align=4
   ty 36
   tz 40
   tw 44
+ke_mesh_vertex size=44 align=4
+  position 0
+  normal 12
+  uv 24
+  tangent 32
 
 [math]
 ke_vec2 size=8 align=4

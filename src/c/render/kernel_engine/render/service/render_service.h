@@ -7,6 +7,7 @@
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
+#include <kernel_engine/render/mesh.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -188,10 +189,11 @@ struct ke_render_service
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
     /** @param key [utf8] Dedup cache key; required.
+     *  @param vertices [array_of:vertex_count] Interleaved vertices.
      *  @param indices [array_of:index_count] Triangle list indices.
      *  @param out_mesh [out] Receives the handle of the uploaded mesh. */
     ke_result (*upload_mesh)(struct ke_render_service *self, const char *key,
-                             const void *vertices, size_t vertices_size,
+                             const ke_mesh_vertex *vertices, uint32_t vertex_count,
                              const uint16_t *indices, uint32_t index_count,
                              ke_mesh_handle *out_mesh);
     /// [try] Resolves a mesh handle to its GPU buffers. Returns false for a
