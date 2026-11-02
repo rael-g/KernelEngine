@@ -39,13 +39,13 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 2f, 15f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mat = resources.CreateMaterial("grid_quad", Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         for (int x = -5; x <= 5; x += 2)
             for (int y = -5; y <= 5; y += 2)
             {
-                var n = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
+                var n = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
                 n.Position = new Vector3(x, y, 0f);
             }
 

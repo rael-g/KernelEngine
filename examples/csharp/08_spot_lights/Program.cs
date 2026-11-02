@@ -39,19 +39,19 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 5f, 15f);
 
-        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string planeMesh = "plane";
+        const string cubeMesh = "cube";
 
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
         var cubeMat = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(30f, 1f, 30f);
 
         for (int x = -4; x <= 4; x += 4)
             for (int z = -4; z <= 4; z += 4)
             {
-                var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+                var n = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
                 n.Position = new Vector3(x, 1f, z);
             }
 

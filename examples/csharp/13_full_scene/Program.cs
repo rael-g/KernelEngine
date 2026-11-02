@@ -57,9 +57,9 @@ var services = new ServiceCollection()
             Intensity = 4f,
         }, "Sun");
 
-        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
+        const string planeMesh = "plane";
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(50f, 1f, 50f);
 
         try

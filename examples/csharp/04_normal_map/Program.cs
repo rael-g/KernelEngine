@@ -62,12 +62,12 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 3f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
 
-        var left = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matPlain }, "PlainQuad");
+        var left = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = matPlain }, "PlainQuad");
         left.Position = new Vector3(-1.2f, 0f, 0f);
 
-        var right = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matNormal }, "NormalQuad");
+        var right = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = matNormal }, "NormalQuad");
         right.Position = new Vector3(1.2f, 0f, 0f);
     }));
 

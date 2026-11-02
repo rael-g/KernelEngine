@@ -56,8 +56,8 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 3f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, "Quad");
+        const string quad = "quad";
+        tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat }, "Quad");
     }));
 
 using var sp = services.BuildServiceProvider();

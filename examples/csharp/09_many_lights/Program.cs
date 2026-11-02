@@ -47,26 +47,26 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 70f, NearPlane = 0.1f, FarPlane = CorridorLength + 50f }, "Camera");
         cam.Position = new Vector3(0f, 0f, -3f);
 
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string cubeMesh = "cube";
         var wallMat = resources.CreateMaterial("wall", new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
 
         float halfW = CorridorWidth / 2f;
         float halfH = CorridorHeight / 2f;
         float halfL = CorridorLength / 2f;
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "Floor");
         floor.Position = new Vector3(0f, -halfH, halfL);
         floor.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
-        var ceiling = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
+        var ceiling = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
         ceiling.Position = new Vector3(0f, halfH, halfL);
         ceiling.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
-        var wallLeft = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
+        var wallLeft = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
         wallLeft.Position = new Vector3(-halfW, 0f, halfL);
         wallLeft.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
-        var wallRight = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallRight");
+        var wallRight = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "WallRight");
         wallRight.Position = new Vector3(halfW, 0f, halfL);
         wallRight.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 

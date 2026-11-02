@@ -2230,7 +2230,6 @@
           "name": "primitive",
           "type": "char[32]",
           "tags": [
-            "idiom",
             "name:mesh"
           ],
           "doc": "Resolved into \u0060mesh\u0060 by the engine; a node authoring \u0060mesh\u0060 directly would have the value overwritten."

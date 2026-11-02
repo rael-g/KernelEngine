@@ -22,6 +22,10 @@ public partial class MeshRenderer : Node3D
     [NativeField("Material", Component = typeof(MeshComponent))]
     public partial MaterialHandle MaterialHandle { get; set; }
 
+    /// <summary>Resolved into `mesh` by the engine; a node authoring `mesh` directly would have the value overwritten.</summary>
+    [NativeField("Primitive", Component = typeof(MeshComponent))]
+    public partial string Mesh { get; set; }
+
     [NativeField("BaseColor", Component = typeof(MeshComponent))]
     public partial System.Numerics.Vector4 Color { get; set; }
 

@@ -80,7 +80,7 @@ extern "C"
         ke_mesh_handle     mesh;
         /// [name:material_handle]
         ke_material_handle material;
-        /// [idiom,name:mesh] Resolved into `mesh` by the engine; a node authoring
+        /// [name:mesh] Resolved into `mesh` by the engine; a node authoring
         /// `mesh` directly would have the value overwritten.
         char               primitive[32];
 

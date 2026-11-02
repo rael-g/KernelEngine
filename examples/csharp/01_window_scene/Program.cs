@@ -47,9 +47,9 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 5f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var orange = resources.CreateMaterial("orange", new Vector4(1f, 0.5f, 0f, 1f));
-        tree.AddNode(new SpinningQuad { MeshHandle = quad, MaterialHandle = orange }, "Spinner");
+        tree.AddNode(new SpinningQuad { Mesh = quad, MaterialHandle = orange }, "Spinner");
         #endregion
     }));
 

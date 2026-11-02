@@ -44,22 +44,22 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 1.0f, 5.0f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mat0 = resources.CreateMaterial("mat0", Vector4.One, metal0, rough0);
         var mat1 = resources.CreateMaterial("mat1", Vector4.One, metal1, rough1);
         var mat2 = resources.CreateMaterial("mat2", Vector4.One, metal2, rough2, shader: "stripes");
         var mat3 = resources.CreateMaterial("mat3", Vector4.One, metal3, rough3, shader: "checker");
 
-        var n0 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat0 }, "QuadDielectric");
+        var n0 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat0 }, "QuadDielectric");
         n0.Position = new Vector3(-3f, 0f, 0f);
 
-        var n1 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat1 }, "QuadMetal");
+        var n1 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat1 }, "QuadMetal");
         n1.Position = new Vector3(-1f, 0f, 0f);
 
-        var n2 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat2 }, "QuadStripes");
+        var n2 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat2 }, "QuadStripes");
         n2.Position = new Vector3(1f, 0f, 0f);
 
-        var n3 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat3 }, "QuadChecker");
+        var n3 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat3 }, "QuadChecker");
         n3.Position = new Vector3(3f, 0f, 0f);
     }));
 

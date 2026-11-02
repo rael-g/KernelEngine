@@ -38,7 +38,6 @@ var ecs = sp.GetRequiredService<INativeEcs>();
 runtime.LoadModules(sp);
 
 var renderService = sp.GetRequiredService<IRenderService>();
-var cube = MeshPrimitives.Cube(renderService);
 var orange = renderService.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
@@ -65,7 +64,8 @@ entT = TransformComponent.Default;
 ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
 entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
-entM = MeshComponent.Default with { Mesh = cube, Material = orange };
+entM = MeshComponent.Default with { Material = orange };
+System.Text.Encoding.ASCII.GetBytes("cube", System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref entM.Primitive.e0, 32)));
 
 var sun = reg.CreateEntity();
 ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0];

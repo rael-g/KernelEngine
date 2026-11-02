@@ -62,9 +62,9 @@ var services = new ServiceCollection()
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mirrorMat = resources.CreateMaterial("mirror", Vector4.One, metallic: 0.8f, roughness: 0.1f);
-        tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
+        tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight
         {

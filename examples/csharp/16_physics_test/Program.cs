@@ -54,11 +54,11 @@ var services = new ServiceCollection()
             Intensity = 5f,
         }, "Sun");
 
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string cubeMesh = "cube";
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.4f, 0.4f, 0.45f, 1f), roughness: 0.9f);
         var ballMat = resources.CreateMaterial("ball", new Vector4(0.9f, 0.3f, 0.2f, 1f), metallic: 0.1f, roughness: 0.4f);
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Position = new Vector3(0f, FloorY, 0f);
         floor.Scale = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
         var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
@@ -97,7 +97,7 @@ sealed class PhysicsScene : Node
     private const int KeyEscape = 256;
 
     private readonly IPhysics2D _physics;
-    private readonly MeshHandle _ballMesh;
+    private readonly string _ballMesh;
     private readonly MaterialHandle _ballMat;
     private readonly List<(MeshRenderer Node, KernelEngine.Physics.Body2d Body)> _balls = new();
 
@@ -106,7 +106,7 @@ sealed class PhysicsScene : Node
     private bool _prevEsc;
     private bool _initialDropped;
 
-    public PhysicsScene(IPhysics2D physics, MeshHandle ballMesh, MaterialHandle ballMat)
+    public PhysicsScene(IPhysics2D physics, string ballMesh, MaterialHandle ballMat)
     {
         _physics = physics;
         _ballMesh = ballMesh;
@@ -161,7 +161,7 @@ sealed class PhysicsScene : Node
     private void Spawn(Vector2 at)
     {
         var node = AddChild(
-            new MeshRenderer { MeshHandle = _ballMesh, MaterialHandle = _ballMat },
+            new MeshRenderer { Mesh = _ballMesh, MaterialHandle = _ballMat },
             $"Ball_{_balls.Count}");
         node.Position = new Vector3(at.X, at.Y, 0f);
 
