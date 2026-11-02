@@ -19,7 +19,7 @@ public partial struct InputActionEvent
     public int ActionId;
 
     [NativeTypeName("ke_action_type")]
-    public NativeActionType Type;
+    public ActionType Type;
 
     [NativeTypeName("ke_action_phase")]
     public ActionPhase Phase;
