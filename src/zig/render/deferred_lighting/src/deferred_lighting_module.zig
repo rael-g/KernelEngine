@@ -412,6 +412,22 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     try heap.expectNoLeaks();
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
+test "a missing scene is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
 test "a deferred lighting pass the runtime refuses to register releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();

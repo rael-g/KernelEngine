@@ -699,6 +699,14 @@ test "a ui pass the runtime refuses to register releases what it had created" {
     try heap.expectNoLeaks();
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_ui.c.ke_render_ui_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_ui_create(&.{ .frame = null, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), }, &h)));
+}
+
 test "a ui pass the runtime refuses its second system takes the first one back" {
     var rig: Rig = undefined;
     try rig.init();

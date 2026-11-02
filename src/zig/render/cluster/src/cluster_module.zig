@@ -589,6 +589,26 @@ test "a given grid value wins over the store and the store over the default" {
     try testing.expectEqual(@as(u32, 3), setting(&p, 0, "k", 3));
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h)));
+}
+
+test "a missing scene is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .output = "clusters", .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &h)));
+}
+
 test "a cluster pass the runtime refuses to register releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();

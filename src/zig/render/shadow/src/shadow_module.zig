@@ -468,6 +468,24 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     try heap.expectNoLeaks();
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .output = "shadow" }, &h)));
+}
+
+test "a missing scene is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .output = "shadow" }, &h)));
+}
+
 test "a shadow pass the runtime refuses to register releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();

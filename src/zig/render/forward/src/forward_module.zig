@@ -763,6 +763,22 @@ test "a forward pass whose shader fails to load releases what it had created" {
     try heap.expectNoLeaks();
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
+test "a missing scene is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
 test "a forward pass the runtime refuses to register releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();
