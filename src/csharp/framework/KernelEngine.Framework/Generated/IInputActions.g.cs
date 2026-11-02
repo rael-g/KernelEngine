@@ -23,7 +23,7 @@ public interface IInputActions : IDisposable
     /// <exception cref="Exception">The native call failed.</exception>
     void Load(string path);
     int GetActionId(string name);
-    int AddAction(string name, ActionType type);
+    int AddAction(string name, NativeActionType type);
     /// <summary>Adds a key binding to an action.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void BindKey(int actionId, Key key);

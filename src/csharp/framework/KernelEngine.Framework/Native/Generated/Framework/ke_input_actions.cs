@@ -24,7 +24,7 @@ public unsafe partial struct ke_input_actions
     public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int> get_action_id;
 
     [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *, ke_action_type)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, ActionType, int> add_action;
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, NativeActionType, int> add_action;
 
     [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, global::KernelEngine.Input.Key, KernelEngine.Result.Native.Result> bind_key;

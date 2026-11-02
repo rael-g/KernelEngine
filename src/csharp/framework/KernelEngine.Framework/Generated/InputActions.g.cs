@@ -90,7 +90,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     }
 
 
-    public int AddAction(string name, ActionType type)
+    public int AddAction(string name, NativeActionType type)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -98,7 +98,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            return Handle->add_action(Handle, (sbyte*)namePtr, (ActionType)type);
+            return Handle->add_action(Handle, (sbyte*)namePtr, (NativeActionType)type);
         }
     }
 

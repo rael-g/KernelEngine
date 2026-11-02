@@ -14,7 +14,7 @@ using KernelEngine.Text.Native;
 namespace KernelEngine.Framework.Native;
 
 [NativeTypeName("unsigned int")]
-public enum ActionType : uint
+public enum NativeActionType : uint
 {
     Button = 0,
     Axis1d = 1,
