@@ -13,8 +13,8 @@ extern "C"
 #endif
 
     /** Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid". */
-    typedef uint32_t ke_body_2d;
-#define KE_BODY_2D_INVALID ((ke_body_2d)0)
+    typedef struct ke_body_2d { uint32_t bits; } ke_body_2d;
+#define KE_BODY_2D_INVALID ((ke_body_2d){ 0 })
 
     typedef enum ke_body_type_2d
     {

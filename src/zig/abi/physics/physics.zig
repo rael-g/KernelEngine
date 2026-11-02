@@ -176,6 +176,7 @@ pub const Physics2d = struct {
 
 };
 
+pub const Body2d = c.ke_body_2d;
 pub const CollisionFilter2d = c.ke_collision_filter_2d;
 pub const BodyState2d = c.ke_body_state_2d;
 pub const Physics2dHandle = c.ke_physics_2d_handle;

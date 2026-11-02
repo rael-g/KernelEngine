@@ -25,7 +25,6 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_physics_body2d_module_params, translated("ke_physics_body2d_module_params"));
     try expectSameLayout(abi.c.ke_physics_body2d_module_handle, translated("ke_physics_body2d_module_handle"));
-    if (@hasDecl(c, "ke_body_2d")) try expectSameLayout(abi.c.ke_body_2d, c.ke_body_2d);
     if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);

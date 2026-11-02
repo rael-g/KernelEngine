@@ -5,8 +5,6 @@ const abi_math = @import("math");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 
-pub const ke_body_2d = u32;
-
 pub const ke_shape_kind_2d = c_uint;
 /// Axis-aligned box, sized by half_extents.
 pub const KE_SHAPE_KIND_2D_BOX: ke_shape_kind_2d = 0;
@@ -29,7 +27,7 @@ pub const ke_body2d_component = extern struct {
     /// created.
     fixed_rotation: bool = std.mem.zeroes(bool),
     /// The body for this entity, assigned when the component is reconciled. Callers do not write it.
-    body: ke_body_2d = std.mem.zeroes(ke_body_2d),
+    body: abi_physics.c.ke_body_2d = std.mem.zeroes(abi_physics.c.ke_body_2d),
 };
 
 /// One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component.

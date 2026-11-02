@@ -5,8 +5,6 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_physics_components = @import("physics_components");
 const abi_result = @import("result");
 
-pub const ke_body_2d = u32;
-
 pub const KE_COMPONENT_NAME_BODY2D = "body2d";
 pub const KE_COMPONENT_NAME_COLLIDER2D = "collider2d";
 

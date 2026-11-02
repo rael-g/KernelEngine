@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    if (@hasDecl(c, "ke_body_2d")) try expectSameLayout(abi.c.ke_body_2d, c.ke_body_2d);
 }
 
 test "every constant is the header's value" {

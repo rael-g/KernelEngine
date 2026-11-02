@@ -340,6 +340,19 @@
       "external": true
     },
     {
+      "name": "ke_body_2d",
+      "doc": "Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as \u0022invalid\u0022.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
       "name": "ke_collision_filter_2d",
       "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
       "tags": [],
@@ -781,14 +794,17 @@
   "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {
-    "ke_body_2d": "uint32_t"
-  },
+  "type_aliases": {},
   "constants": [
     {
       "name": "KE_BODY_2D_INVALID",
       "type": "ke_body_2d",
-      "value": "0"
+      "fields": [
+        {
+          "name": "bits",
+          "value": "0"
+        }
+      ]
     }
   ]
 }

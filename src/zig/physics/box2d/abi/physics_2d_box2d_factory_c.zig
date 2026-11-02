@@ -5,7 +5,6 @@ const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 
-pub const ke_body_2d = u32;
 pub const ke_configuration_subscription = u32;
 
 /// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at

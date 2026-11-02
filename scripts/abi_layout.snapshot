@@ -597,6 +597,8 @@ ke_audio_handle size=16 align=8
   destroy 8
 
 [physics]
+ke_body_2d size=4 align=4
+  bits 0
 ke_collision_filter_2d size=8 align=4
   layer 0
   mask 4

@@ -25,7 +25,6 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_body2d_component, translated("ke_body2d_component"));
     try expectSameLayout(abi.c.ke_collider2d_component, translated("ke_collider2d_component"));
-    if (@hasDecl(c, "ke_body_2d")) try expectSameLayout(abi.c.ke_body_2d, c.ke_body_2d);
 }
 
 test "every enum value is the header's value" {

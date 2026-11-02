@@ -12,5 +12,5 @@ public partial struct Body2dComponent
     public float GravityScale;
 
     public bool FixedRotation;
-    public uint Body;
+    public Body2d Body;
 }

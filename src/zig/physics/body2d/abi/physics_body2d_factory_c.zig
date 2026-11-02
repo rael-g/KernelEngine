@@ -12,7 +12,6 @@ const abi_scene_tree = @import("scene_tree");
 
 pub const ke_physics_body2d_module = opaque {};
 
-pub const ke_body_2d = u32;
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_module_id = u64;

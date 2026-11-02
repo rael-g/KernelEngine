@@ -66,8 +66,8 @@ const log = std.log.scoped(.physics_2d_box2d);
 /// Every operation on an existing body resolves its id here. A null result means the operation
 /// does nothing or reports that the body was not found.
 fn lookup(s: *State, id: abi_physics.c.ke_body_2d) ?b2.b2BodyId {
-    if (id == abi_physics.c.KE_BODY_2D_INVALID) return null;
-    const idx = id - 1;
+    if (id.bits == 0) return null;
+    const idx = id.bits - 1;
     if (idx >= s.body_count) return null;
     const entry = s.bodies.?[idx];
     return if (entry.live) entry.body else null;
@@ -99,7 +99,7 @@ fn createBody(
     out_body: ?*abi_physics.c.ke_body_2d,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_body orelse return R.code(error.InvalidArgument);
-    out.* = abi_physics.c.KE_BODY_2D_INVALID;
+    out.* = abi_physics.c.ke_body_2d{ .bits = 0 };
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
@@ -131,7 +131,7 @@ fn createBody(
 
     s.bodies.?[s.body_count] = .{ .body = body, .live = true };
     s.body_count += 1;
-    out.* = @intCast(s.body_count);
+    out.* = .{ .bits = @intCast(s.body_count) };
     return R.ok;
 }
 
@@ -143,7 +143,7 @@ fn destroyBody(self_in: ?*abi_physics.c.ke_physics_2d, id: abi_physics.c.ke_body
     const s = stateOf(self);
     const body = lookup(s, id) orelse return;
     b2.b2DestroyBody(body);
-    s.bodies.?[id - 1].live = false;
+    s.bodies.?[id.bits - 1].live = false;
 }
 
 /// A null filter leaves Box2D's default filter, which collides with everything; otherwise the
@@ -401,7 +401,7 @@ test "creating a body returns a handle that is not the invalid sentinel" {
     defer h.destroy.?(h.ref);
 
     const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
-    try testing.expect(body != abi_physics.c.KE_BODY_2D_INVALID);
+    try testing.expect(body.bits != 0);
 }
 
 test "a box fixture attaches to an existing body" {
@@ -505,11 +505,11 @@ test "a rotation locked box never picks up spin when it bounces off a wall" {
     defer h.destroy.?(h.ref);
 
     const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
-    try testing.expect(wall != abi_physics.c.KE_BODY_2D_INVALID);
+    try testing.expect(wall.bits != 0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, .{ .x = 0.25, .y = 4.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, null));
 
     const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
-    try testing.expect(ball != abi_physics.c.KE_BODY_2D_INVALID);
+    try testing.expect(ball.bits != 0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, ball, .{ .x = 0.18, .y = 0.18 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, null));
     h.ref.?.set_body_fixed_rotation.?(h.ref, ball, true);
     h.ref.?.set_body_velocity.?(h.ref, ball, .{ .x = 6.0, .y = 0.0 });

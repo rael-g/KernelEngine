@@ -23,11 +23,11 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_body_2d, translated("ke_body_2d"));
     try expectSameLayout(abi.c.ke_collision_filter_2d, translated("ke_collision_filter_2d"));
     try expectSameLayout(abi.c.ke_body_state_2d, translated("ke_body_state_2d"));
     try expectSameLayout(abi.c.ke_physics_2d, translated("ke_physics_2d"));
     try expectSameLayout(abi.c.ke_physics_2d_handle, translated("ke_physics_2d_handle"));
-    if (@hasDecl(c, "ke_body_2d")) try expectSameLayout(abi.c.ke_body_2d, c.ke_body_2d);
 }
 
 test "every enum value is the header's value" {
@@ -39,14 +39,16 @@ test "every enum value is the header's value" {
 
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i128, c.KE_BODY_2D_INVALID), @as(i128, abi.c.KE_BODY_2D_INVALID));
+    try std.testing.expectEqual(std.mem.toBytes(c.KE_BODY_2D_INVALID), std.mem.toBytes(abi.c.KE_BODY_2D_INVALID));
 }
 
-extern const layout_values: [28]c_ulonglong;
+extern const layout_values: [30]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_body_2d),
+        @offsetOf(abi.c.ke_body_2d, "bits"),
         @sizeOf(abi.c.ke_collision_filter_2d),
         @offsetOf(abi.c.ke_collision_filter_2d, "layer"),
         @offsetOf(abi.c.ke_collision_filter_2d, "mask"),

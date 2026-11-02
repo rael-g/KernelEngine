@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <kernel_engine/physics/physics_2d.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_body_2d),
+    offsetof(ke_body_2d, bits),
     sizeof(ke_collision_filter_2d),
     offsetof(ke_collision_filter_2d, layer),
     offsetof(ke_collision_filter_2d, mask),

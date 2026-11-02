@@ -4,9 +4,7 @@ const std = @import("std");
 const abi_math = @import("math");
 const abi_result = @import("result");
 
-pub const ke_body_2d = u32;
-
-pub const KE_BODY_2D_INVALID: ke_body_2d = 0;
+pub const KE_BODY_2D_INVALID: ke_body_2d = .{ .bits = 0 };
 
 pub const ke_body_type_2d = c_uint;
 /// Never moves; infinite mass. Floors, walls.
@@ -15,6 +13,11 @@ pub const KE_BODY_TYPE_STATIC: ke_body_type_2d = 0;
 pub const KE_BODY_TYPE_KINEMATIC: ke_body_type_2d = 1;
 /// Driven by forces, collisions, gravity.
 pub const KE_BODY_TYPE_DYNAMIC: ke_body_type_2d = 2;
+
+/// Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid".
+pub const ke_body_2d = extern struct {
+    bits: u32 = std.mem.zeroes(u32),
+};
 
 /// Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures
 /// touch only when each one's layer bit is set in the other's mask, so a mask written on one

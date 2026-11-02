@@ -88,11 +88,11 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
         while (i < segs.?[s].count) : (i += 1) {
             const b = &bodies[i];
             const pose = tcs0[i];
-            if (b.body == abi_physics.c.KE_BODY_2D_INVALID) {
+            if (b.body.bits == 0) {
                 if (p.create_body.?(p, b.type, .{ .x = pose.position.x, .y = pose.position.y }, &b.body) != R.ok) continue;
                 m.tracked.put(gpa, segs.?[s].entities.?[i], .{ .body = b.body, .seen = m.update }) catch {
                     p.destroy_body.?(p, b.body);
-                    b.body = abi_physics.c.KE_BODY_2D_INVALID;
+                    b.body = abi_physics.c.ke_body_2d{ .bits = 0 };
                     continue;
                 };
                 m.body_generation +%= 1;
@@ -127,7 +127,7 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             const b = &bodies[i];
-            if (b.body == abi_physics.c.KE_BODY_2D_INVALID) continue;
+            if (b.body.bits == 0) continue;
 
             var st: abi_physics.c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
@@ -218,7 +218,7 @@ fn colliderSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32
         const bs: [*c]abi_physics_components.c.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
-            if (bs[i].body == abi_physics.c.KE_BODY_2D_INVALID) continue;
+            if (bs[i].body.bits == 0) continue;
             bodies.put(segs.?[s].entities.?[i], bs[i].body) catch {
                 log.warn("collider pass: body index allocation failed", .{});
                 return R.code(error.OutOfMemory);
@@ -500,18 +500,18 @@ test "a body2d module the runtime refuses a system of fails the create and leave
 }
 
 const FakeWorld = struct {
-    var next_body: abi_physics.c.ke_body_2d = 1;
+    var next_body: abi_physics.c.ke_body_2d = .{ .bits = 1 };
     var destroyed: [4]abi_physics.c.ke_body_2d = undefined;
     var destroyed_count: usize = 0;
 
     fn reset() void {
-        next_body = 1;
+        next_body = .{ .bits = 1 };
         destroyed_count = 0;
     }
 
     fn createBody(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_type_2d, _: abi_math.c.ke_vec2, out_body: [*c]abi_physics.c.ke_body_2d) callconv(.c) abi_result.c.ke_result {
-        next_body += 1;
-        out_body.* = next_body - 1;
+        next_body.bits += 1;
+        out_body.* = .{ .bits = next_body.bits - 1 };
         return R.ok;
     }
 
@@ -583,7 +583,7 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     const body = BodyView.bodies[0].body;
-    try testing.expect(body != abi_physics.c.KE_BODY_2D_INVALID);
+    try testing.expect(body.bits != 0);
     try testing.expectEqual(@as(usize, 0), FakeWorld.destroyed_count);
 
     BodyView.live = 0;
