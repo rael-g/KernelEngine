@@ -38,6 +38,16 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
     /// </summary>
     private readonly Dictionary<ComponentId, GCHandle> _retainedApply = new();
 
+    /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath engine code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the engine called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
+
     private ke_world* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(World));
 
@@ -96,6 +106,58 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
         uint outCountLocal = 0;
         var front = Handle->get_component_fields(Handle, cid, &outCountLocal);
         return front == null ? default : new ReadOnlySpan<ComponentField>(front, (int)outCountLocal);
+    }
+
+    /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>
+    /// <param name="cid">The component the callback answers for.</param>
+    /// <param name="apply">Consulted after the field table.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void RegisterComponentApply(ComponentId cid, ComponentApply? apply)
+    {
+        var applyHandle = apply is null ? default : GCHandle.Alloc(apply);
+        s_parkedCallbackException = null;
+        KernelEngine.Result.Native.Result rc;
+        bool ok;
+        try
+        {
+            ok = (rc = Handle->register_component_apply(Handle, cid, apply is null ? null : (delegate* unmanaged[Cdecl]<void*, void*, VariantTableEntry*, uint, KernelEngine.Result.Native.Result>)&RegisterComponentApplyTrampoline, (void*)GCHandle.ToIntPtr(applyHandle))) == KernelEngine.Result.Native.Result.Ok;
+        }
+        catch
+        {
+            if (applyHandle.IsAllocated) applyHandle.Free();
+            throw;
+        }
+        if (s_parkedCallbackException is { } parked)
+        {
+            s_parkedCallbackException = null;
+            throw parked;
+        }
+        if (!ok)
+        {
+            if (applyHandle.IsAllocated) applyHandle.Free();
+            throw KernelEngine.NativeResults.FromCode(rc, "register_component_apply");
+        }
+        if (_retainedApply.Remove(cid, out var replacedApply)) replacedApply.Free();
+        _retainedApply[cid] = applyHandle;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static KernelEngine.Result.Native.Result RegisterComponentApplyTrampoline(void* ctx, void* arg1, VariantTableEntry* arg2, uint arg3)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is ComponentApply handler)
+            {
+                handler((nint)arg1, (nint)arg2, arg3);
+                return KernelEngine.Result.Native.Result.Ok;
+            }
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_component_apply_fn: no handler is registered"));
+        }
+        catch (Exception ex)
+        {
+            s_raisedCallbackFailures.Enqueue(ex);
+            return KernelEngine.NativeResults.ToCode(ex);
+        }
     }
 
     /// <summary>Callback registered for `cid`, or NULL, and the context it was registered with.</summary>

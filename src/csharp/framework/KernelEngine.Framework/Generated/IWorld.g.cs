@@ -14,6 +14,12 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework;
 
+/// <summary>Fills a component from a scene block's keys. Entries are mutable so the callback can mark what it took: a key it accepted must have `consumed` set, or the loader will report it as one nothing in the engine wanted.</summary>
+/// <param name="component">The component's memory, already added to the entity.</param>
+/// <param name="entries">The block's keys, one per key the scene declared.</param>
+/// <param name="count">Number of entries.</param>
+public delegate void ComponentApply(nint component, nint entries, uint count);
+
 /// <summary>The world contract game code depends on, so a caller names a capability rather than the <see cref="World"/> that carries it.</summary>
 public interface IWorld : IDisposable
 {
@@ -29,6 +35,11 @@ public interface IWorld : IDisposable
     void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields);
     /// <summary>Field table registered for `cid`, or NULL.</summary>
     ReadOnlySpan<ComponentField> GetComponentFields(ComponentId cid);
+    /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>
+    /// <param name="cid">The component the callback answers for.</param>
+    /// <param name="apply">Consulted after the field table.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void RegisterComponentApply(ComponentId cid, ComponentApply? apply);
     /// <summary>Callback registered for `cid`, or NULL, and the context it was registered with.</summary>
     nint GetComponentApply(ComponentId cid, out nint outCtx);
     /// <summary>Lets a scene name the component registered as `name` by `alias` as well. The alias answers only while it is unambiguous: a second name registered under the same alias, or a component registered under the alias itself, makes it ambiguous, and a scene must then write the full name. Registering the same pair twice changes nothing.</summary>
