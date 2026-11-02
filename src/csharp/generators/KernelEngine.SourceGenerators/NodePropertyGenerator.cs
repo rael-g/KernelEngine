@@ -486,9 +486,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         sb.AppendLine();
         sb.AppendLine("    /// <summary>Registers this node's component and the scene-file apply for it.</summary>");
         sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.World world,"
-            + " global::KernelEngine.Ecs.EcsRegistry ecs)");
+            + " global::KernelEngine.Ecs.INativeEcs ecs)");
         sb.AppendLine("    {");
-        sb.AppendLine($"        _ = ecs.RegisterLaidOutComponent<{slot.TypeName}>({slot.NameExpression});");
+        sb.AppendLine($"        _ = global::KernelEngine.Ecs.ComponentLayoutRegistration.RegisterLaidOutComponent<{slot.TypeName}>(ecs, {slot.NameExpression});");
         sb.AppendLine("        world.RegisterComponentAlias(GeneratedComponentAlias, GeneratedComponentName);");
         sb.AppendLine("    }");
     }
