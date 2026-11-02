@@ -188,7 +188,7 @@ int main(void)
     check("upload_mesh", core->upload_mesh(core, "example:cube", (const ke_mesh_vertex *)cube, sizeof(cube) / sizeof(cube[0]), cube_idx,
                                               sizeof(cube_idx) / sizeof(cube_idx[0]), &cube_h));
 
-    const float orange[4] = { 0.85f, 0.35f, 0.2f, 1.0f };
+    const ke_vec4 orange = { 0.85f, 0.35f, 0.2f, 1.0f };
     ke_material_handle mat = { 0 };
     check("create_material", core->create_material(core, "example:orange", orange, 0.0f, 0.5f, KE_TEXTURE_NONE, KE_TEXTURE_NONE,
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &mat));

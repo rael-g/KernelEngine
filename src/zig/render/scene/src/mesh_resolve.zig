@@ -3,6 +3,7 @@
 const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
 const abi_mesh = @import("abi_mesh");
+const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -181,7 +182,7 @@ fn resolveMaterial(core: *abi_render.c.ke_render_service, m: [*c]abi_render_comp
     const made = core.create_material.?(
         core,
         k,
-        @ptrCast(&mc.base_color),
+        mc.base_color,
         0,
         mc.roughness,
         abi_render_handles.c.KE_TEXTURE_NONE,
@@ -273,7 +274,7 @@ fn recordUploadMesh(
 fn recordCreateMaterial(
     _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    _: [*c]const f32,
+    _: abi_math.c.ke_vec4,
     _: f32,
     roughness: f32,
     _: abi_render_handles.c.ke_texture_handle,

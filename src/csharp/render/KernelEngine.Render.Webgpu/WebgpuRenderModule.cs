@@ -206,11 +206,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        var albedoH = albedo ?? new TextureHandle { Bits = uint.MaxValue };
-        var normalH = normalMap ?? new TextureHandle { Bits = uint.MaxValue };
-        var h = _renderService.CreateMaterial(key, (nint)(&baseColor.X), metallic, roughness, albedoH, normalH,
+        return _renderService.CreateMaterial(key, baseColor, metallic, roughness, albedo ?? default, normalMap ?? default,
             alphaMode, alphaCutoff, ior, distortionStrength, shader ?? "");
-        return h;
     }
 
     /// <summary>

@@ -55,10 +55,12 @@ public interface IRenderService : IDisposable
     /// <exception cref="Exception">The native call failed.</exception>
     TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba);
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="albedo">KE_TEXTURE_NONE selects the white texture.</param>
+    /// <param name="normal">KE_TEXTURE_NONE selects a flat normal.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
     /// <returns>Receives the handle of the material.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    MaterialHandle CreateMaterial(string key, nint baseColor, float metallic, float roughness, TextureHandle albedo, TextureHandle normal, AlphaMode alphaMode, float alphaCutoff, float ior, float distortionStrength, string shader);
+    MaterialHandle CreateMaterial(string key, System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default, TextureHandle normal = default, AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f, float ior = 1.5f, float distortionStrength = 0.05f, string shader = "");
     /// <summary>What the service's resource binder holds for a material handle, the argument a pass gives its bind_material; an unknown handle resolves to the built-in white material.</summary>
     ulong MaterialBinding(MaterialHandle h);
     /// <summary>The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.</summary>

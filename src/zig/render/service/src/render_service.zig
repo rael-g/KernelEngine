@@ -12,6 +12,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const abi_ecs = @import("abi_ecs");
 pub const abi_io = @import("abi_io");
+const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_render_service_factory = @import("abi_render_service_factory");
 const abi_resource_cache = @import("abi_resource_cache");
@@ -521,8 +522,8 @@ fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c
     try R.check(asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, flat_normal_px.len, &st.default_normal));
     const black_cube_px = [_]u8{0} ** (4 * 6);
     try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, black_cube_px.len, &st.default_cubemap));
-    const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
-    try R.check(asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
+    const white_color = abi_math.c.ke_vec4{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 };
+    try R.check(asset_upload.createMaterial(core, "__ke_white_material", white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
 
     st.api = core;
     try st.blit.prepare(core, st.binder);

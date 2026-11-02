@@ -237,10 +237,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="albedo">KE_TEXTURE_NONE selects the white texture.</param>
+    /// <param name="normal">KE_TEXTURE_NONE selects a flat normal.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
     /// <returns>Receives the handle of the material.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public MaterialHandle CreateMaterial(string key, nint baseColor, float metallic, float roughness, TextureHandle albedo, TextureHandle normal, AlphaMode alphaMode, float alphaCutoff, float ior, float distortionStrength, string shader)
+    public MaterialHandle CreateMaterial(string key, System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default, TextureHandle normal = default, AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f, float ior = 1.5f, float distortionStrength = 0.05f, string shader = "")
     {
         var keyText = key ?? "";
         var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
@@ -255,7 +257,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
             fixed (byte* shaderPtr = shaderBytes)
             {
                 MaterialHandle resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (sbyte*)keyPtr, (float*)baseColor, metallic, roughness, albedo, normal, (AlphaMode)alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &resultOut), "create_material");
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (sbyte*)keyPtr, baseColor, metallic, roughness, albedo, normal, (AlphaMode)alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &resultOut), "create_material");
                 return resultOut;
             }
         }

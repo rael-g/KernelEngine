@@ -6,6 +6,7 @@ const abi_render_gpu = @import("abi_render_gpu");
 const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
 const rc = @import("render_service.zig");
+const abi_math = @import("abi_math");
 const abi_mesh = @import("abi_mesh");
 const abi_render = @import("abi_render");
 const abi_resource_cache = @import("abi_resource_cache");
@@ -186,10 +187,10 @@ fn srgbToLinear(cs: f32) f32 {
 /// writes the cached handle. An empty or null key, or a shader name that does not fit the buffer,
 /// fails as an invalid argument. A material the binder cannot keep fails with the binder's code,
 /// and a full store as out of memory, giving the binder's back.
-pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, base_color: [*c]const f32, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_material: [*c]abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
+pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [*c]const u8, out_material: [*c]abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_material orelse return R.code(error.InvalidArgument);
     out.* = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
-    if (self == null or !keyValid(key) or base_color == null) return R.code(error.InvalidArgument);
+    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
 
     const shader_span: []const u8 = if (shader != null and shader[0] != 0) std.mem.span(shader) else rc.DEFAULT_MATERIAL_SHADER;
@@ -209,7 +210,7 @@ pub fn createMaterial(self: [*c]abi_render.c.ke_render_service, key: [*c]const u
     const alb: abi_render_handles.c.ke_texture_handle = if (st.textureAt(albedo) != null) albedo else st.white_texture_h;
     const nrm: abi_render_handles.c.ke_texture_handle = if (st.textureAt(normal) != null) normal else st.default_normal;
     const data = abi_render_gpu.c.ke_render_material_data{
-        .base_color = .{ srgbToLinear(base_color[0]), srgbToLinear(base_color[1]), srgbToLinear(base_color[2]), base_color[3] },
+        .base_color = .{ srgbToLinear(base_color.x), srgbToLinear(base_color.y), srgbToLinear(base_color.z), base_color.w },
         .metallic = metallic,
         .roughness = roughness,
         .alpha_cutoff = if (alpha_mode == abi_render_handles.c.KE_ALPHA_MODE_MASK) alpha_cutoff else 0.0,

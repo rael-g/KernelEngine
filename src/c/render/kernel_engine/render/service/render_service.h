@@ -218,11 +218,19 @@ struct ke_render_service
                                 ke_texture_handle *out_texture);
     /**
      * @param key [utf8] Dedup cache key; required.
-     * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
+     * @param metallic [default:0]
+     * @param roughness [default:0.5]
+     * @param albedo [default:none] KE_TEXTURE_NONE selects the white texture.
+     * @param normal [default:none] KE_TEXTURE_NONE selects a flat normal.
+     * @param alpha_mode [default:KE_ALPHA_MODE_OPAQUE]
+     * @param alpha_cutoff [default:0.5]
+     * @param ior [default:1.5]
+     * @param distortion_strength [default:0.05]
+     * @param shader [utf8,nullable,default:none] Authored material name; NULL/empty selects the engine default.
      * @param out_material [out] Receives the handle of the material.
      */
     ke_result (*create_material)(struct ke_render_service *self, const char *key,
-                                 const float *base_color,
+                                 ke_vec4 base_color,
                                  float metallic, float roughness,
                                  ke_texture_handle albedo,
                                  ke_texture_handle normal,

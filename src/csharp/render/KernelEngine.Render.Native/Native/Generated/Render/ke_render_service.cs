@@ -51,8 +51,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, uint32_t, const uint8_t *, size_t, ke_texture_handle *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, uint, byte*, nuint, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> upload_texture;
 
-    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_material_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, float*, float, float, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.AlphaMode, float, float, float, sbyte*, global::KernelEngine.Render.MaterialHandle*, KernelEngine.Result.Native.Result> create_material;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_vec4, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_material_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, System.Numerics.Vector4, float, float, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.AlphaMode, float, float, float, sbyte*, global::KernelEngine.Render.MaterialHandle*, KernelEngine.Result.Native.Result> create_material;
 
     [NativeTypeName("ke_render_material_binding (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.MaterialHandle, ulong> material_binding;

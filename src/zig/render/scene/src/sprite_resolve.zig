@@ -5,6 +5,7 @@ const abi_render_components = @import("abi_render_components");
 const abi_render_handles = @import("abi_render_handles");
 const abi_ecs = @import("abi_ecs");
 const abi_mesh = @import("abi_mesh");
+const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -104,7 +105,7 @@ fn materialFor(st: *State, sp: *abi_render_components.c.ke_sprite2d_component) a
     const made = core.create_material.?(
         core,
         k,
-        @ptrCast(&sp.color),
+        sp.color,
         0,
         1,
         tex,
@@ -396,7 +397,7 @@ fn refUploadMesh(
 fn refCreateMaterial(
     _: [*c]abi_render.c.ke_render_service,
     _: [*c]const u8,
-    _: [*c]const f32,
+    _: abi_math.c.ke_vec4,
     _: f32,
     _: f32,
     _: abi_render_handles.c.ke_texture_handle,

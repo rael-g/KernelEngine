@@ -2887,56 +2887,72 @@
             },
             {
               "name": "base_color",
-              "type": "const float *",
+              "type": "ke_vec4",
               "tags": [],
               "doc": null
             },
             {
               "name": "metallic",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0"
+              ],
               "doc": null
             },
             {
               "name": "roughness",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.5"
+              ],
               "doc": null
             },
             {
               "name": "albedo",
               "type": "ke_texture_handle",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "default:none"
+              ],
+              "doc": "KE_TEXTURE_NONE selects the white texture."
             },
             {
               "name": "normal",
               "type": "ke_texture_handle",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "default:none"
+              ],
+              "doc": "KE_TEXTURE_NONE selects a flat normal."
             },
             {
               "name": "alpha_mode",
               "type": "ke_alpha_mode",
-              "tags": [],
+              "tags": [
+                "default:KE_ALPHA_MODE_OPAQUE"
+              ],
               "doc": null
             },
             {
               "name": "alpha_cutoff",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.5"
+              ],
               "doc": null
             },
             {
               "name": "ior",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:1.5"
+              ],
               "doc": null
             },
             {
               "name": "distortion_strength",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.05"
+              ],
               "doc": null
             },
             {
@@ -2944,7 +2960,8 @@
               "type": "const char *",
               "tags": [
                 "utf8",
-                "nullable"
+                "nullable",
+                "default:none"
               ],
               "doc": "Authored material name; NULL/empty selects the engine default."
             },

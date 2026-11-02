@@ -158,7 +158,7 @@ pub const RenderService = struct {
                 }
             }.call,
             .create_material = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: ?*const f32, a2: f32, a3: f32, a4: abi_render_handles.c.ke_texture_handle, a5: abi_render_handles.c.ke_texture_handle, a6: abi_render_handles.c.ke_alpha_mode, a7: f32, a8: f32, a9: f32, a10: ?[*:0]const u8, a11: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: abi_math.c.ke_vec4, a2: f32, a3: f32, a4: abi_render_handles.c.ke_texture_handle, a5: abi_render_handles.c.ke_texture_handle, a6: abi_render_handles.c.ke_alpha_mode, a7: f32, a8: f32, a9: f32, a10: ?[*:0]const u8, a11: ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createMaterial(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2, a3, a4, a5, a6, a7, a8, a9, std.mem.span(a10 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
                     (a11 orelse return resultOf(error.Failed)).* = value;
@@ -466,7 +466,7 @@ pub const RenderService = struct {
         return written;
     }
 
-    pub fn createMaterial(self: RenderService, key: [:0]const u8, base_color: ?*const f32, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
+    pub fn createMaterial(self: RenderService, key: [:0]const u8, base_color: abi_math.c.ke_vec4, metallic: f32, roughness: f32, albedo: abi_render_handles.c.ke_texture_handle, normal: abi_render_handles.c.ke_texture_handle, alpha_mode: abi_render_handles.c.ke_alpha_mode, alpha_cutoff: f32, ior: f32, distortion_strength: f32, shader: [:0]const u8) Error!abi_render_handles.c.ke_material_handle {
         var written: abi_render_handles.c.ke_material_handle = undefined;
         try checkResult(self.ptr.create_material.?(self.ptr, key.ptr, base_color, metallic, roughness, albedo, normal, alpha_mode, alpha_cutoff, ior, distortion_strength, shader.ptr, &written));
         return written;

@@ -202,7 +202,7 @@ pub const ke_render_service = extern struct {
     /// The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
     set_clear_color: ?*const fn (?*ke_render_service, f32, f32, f32, f32) callconv(.c) void = null,
     upload_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
-    create_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*const f32, f32, f32, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_alpha_mode, f32, f32, f32, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
+    create_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, abi_math.c.ke_vec4, f32, f32, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_alpha_mode, f32, f32, f32, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
     /// What the service's resource binder holds for a material handle, the argument a pass gives its
     /// bind_material; an unknown handle resolves to the built-in white material.
     material_binding: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) ke_render_material_binding = null,

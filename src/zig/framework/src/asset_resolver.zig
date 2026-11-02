@@ -425,7 +425,7 @@ fn materialInto(s: *State, core: *abi_render.c.ke_render_service, path: [*:0]con
     try R.check(core.create_material.?(
         core,
         path,
-        &spec.base_color[0],
+        .{ .x = spec.base_color[0], .y = spec.base_color[1], .z = spec.base_color[2], .w = spec.base_color[3] },
         spec.metallic,
         spec.roughness,
         albedo,
