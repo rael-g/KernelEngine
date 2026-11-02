@@ -11,6 +11,11 @@ namespace KernelEngine.Render.Gpu;
 /// <summary>The gpucommandencoder contract game code depends on, so a caller names a capability rather than the <see cref="GpuCommandEncoder"/> that carries it.</summary>
 public interface IGpuCommandEncoder : IDisposable
 {
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    nint BeginRenderPass(string label, ReadOnlySpan<GpuColorAttachment> colorAttachments, GpuDepthStencilAttachment depthStencilAttachment);
+    /// <summary>Begins a compute pass. p may be NULL, which begins it unlabeled.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    nint BeginComputePass(string label);
     void CopyBufferToBuffer(ulong src, nuint srcOffset, ulong dst, nuint dstOffset, nuint size);
     /// <summary>Copies tightly described rows of texels from a buffer into a texture. Fails with KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.</summary>
     /// <exception cref="Exception">The native call failed.</exception>

@@ -48,6 +48,43 @@ public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEn
         _borrowed = borrowed;
     }
 
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    public nint BeginRenderPass(string label, ReadOnlySpan<GpuColorAttachment> colorAttachments, GpuDepthStencilAttachment depthStencilAttachment)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            fixed (GpuColorAttachment* colorAttachmentsPtr = colorAttachments)
+            {
+                ke_gpu_render_pass_params p = default;
+                p.label = (sbyte*)labelPtr;
+                p.color_attachments = colorAttachmentsPtr;
+                p.color_attachment_count = (uint)colorAttachments.Length;
+                p.depth_stencil_attachment = (GpuDepthStencilAttachment*)&depthStencilAttachment;
+                return (nint)Handle->begin_render_pass(Handle, &p);
+            }
+        }
+    }
+
+    /// <summary>Begins a compute pass. p may be NULL, which begins it unlabeled.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    public nint BeginComputePass(string label)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_compute_pass_params p = default;
+            p.label = (sbyte*)labelPtr;
+            return (nint)Handle->begin_compute_pass(Handle, &p);
+        }
+    }
+
 
     public void CopyBufferToBuffer(ulong src, nuint srcOffset, ulong dst, nuint dstOffset, nuint size)
     {
