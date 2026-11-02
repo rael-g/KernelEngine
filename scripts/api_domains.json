@@ -18,17 +18,6 @@
     "resultOk": "Ok",
     "resultManagedType": "KernelEngine.Result.Native.Result",
     "resultHelperClass": "KernelEngine.NativeResults",
-    "resultCodesOut": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",
-    "resultCodes": [
-      { "code": "KE_RESULT_GENERAL", "managed": "InvalidOperationException" },
-      { "code": "KE_RESULT_NOT_FOUND", "managed": "KeyNotFoundException" },
-      { "code": "KE_RESULT_IO", "managed": "IOException" },
-      { "code": "KE_RESULT_OUT_OF_MEMORY", "managed": "OutOfMemoryException" },
-      { "code": "KE_RESULT_INVALID_ARGUMENT", "managed": "ArgumentException" },
-      { "code": "KE_RESULT_NOT_INITIALIZED", "managed": "InvalidOperationException" },
-      { "code": "KE_RESULT_NOT_SUPPORTED", "managed": "NotSupportedException" },
-      { "code": "KE_RESULT_ALREADY_EXISTS", "managed": "InvalidOperationException" }
-    ],
     "commonManagedNamespace": "KernelEngine.Common",
     "handleTypes": {
       "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
@@ -921,6 +910,20 @@
     { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] }
   ],
   "extensions": {
+    "resultCodes": {
+      "out": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",
+      "general": "InvalidOperationException",
+      "codes": [
+        { "code": "KE_RESULT_GENERAL", "managed": "InvalidOperationException" },
+        { "code": "KE_RESULT_NOT_FOUND", "managed": "KeyNotFoundException" },
+        { "code": "KE_RESULT_IO", "managed": "IOException" },
+        { "code": "KE_RESULT_OUT_OF_MEMORY", "managed": "OutOfMemoryException" },
+        { "code": "KE_RESULT_INVALID_ARGUMENT", "managed": "ArgumentException" },
+        { "code": "KE_RESULT_NOT_INITIALIZED", "managed": "InvalidOperationException" },
+        { "code": "KE_RESULT_NOT_SUPPORTED", "managed": "NotSupportedException" },
+        { "code": "KE_RESULT_ALREADY_EXISTS", "managed": "InvalidOperationException" }
+      ]
+    },
     "nodes": {},
     "fieldTables": {},
     "factories": { "bindings": ["Assimp", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
