@@ -909,6 +909,30 @@
     { "name": "render_material", "headers": [ "src/c/render/kernel_engine/render/material_file.h" ], "includeDirs": [ "src/c/render", "src/c/math", "src/c/result", "src/zig/common/include" ] },
     { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] }
   ],
+  "coverageExclusions": {
+      "common/export.h": "visibility macros, no declarations",
+      "resource_cache/default/resource_cache_default_create.h": "created natively by plugins, no managed caller",
+      "resource_cache/default/resource_cache_default_log.h": "log of a library with no managed caller",
+      "render/gpu/gpu_commands.h": "L4 command surface, rebuilt per backend rather than bound once (named debt)",
+      "render/service/pass_context.h": "pass-internal; a pass is native, no managed caller",
+      "framework/scene_hierarchy.h": "systems registered by the framework itself, nothing to call",
+      "framework/scene_hierarchy_create.h": "created by the framework itself, no managed caller",
+      "render/cluster/cluster_create.h": "render pass factory, called only by render_module",
+      "render/deferred_lighting/deferred_lighting_create.h": "render pass factory, called only by render_module",
+      "render/forward/forward_create.h": "render pass factory, called only by render_module",
+      "render/gbuffer/gbuffer_create.h": "render pass factory, called only by render_module",
+      "render/service/render_service_create.h": "created by render_module, which hands back the borrowed service",
+      "render/binder_grouped/resource_binder_grouped_create.h": "created by render_module when the host passes no binder, no managed caller",
+      "render/shadow/shadow_create.h": "render pass factory, called only by render_module",
+      "render/skybox/skybox_create.h": "render pass factory, called only by render_module",
+      "render/tonemap/tonemap_create.h": "render pass factory, called only by render_module",
+      "render/camera.h": "consumed only by render passes, no managed caller",
+      "render/camera/camera_create.h": "created natively by render_module, no managed caller",
+      "render/texture_target/gpu_render_target_texture_create.h": "render target over a caller-owned texture, no managed caller",
+      "render/renderdoc_target/gpu_render_target_renderdoc_create.h": "render target that has RenderDoc capture chosen frames, no managed caller",
+      "render/renderdoc_target/gpu_render_target_renderdoc_log.h": "log of a library with no managed caller",
+      "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
+  },
   "extensions": {
     "resultCodes": {
       "out": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",

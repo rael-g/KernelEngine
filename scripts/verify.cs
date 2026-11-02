@@ -81,7 +81,7 @@ List<Step> ManagedWindowsTests()
 
 List<Step> Gates() =>
 [
-    .. new[] { "drift", "bindings", "reconstruction", "zig" }
+    .. new[] { "drift", "bindings", "api-coverage", "reconstruction", "zig" }
         .Select(name => new Step($"kabic check {name}", "dotnet", ["run", "--project", "src/csharp/generators/KernelEngine.Kabic", "--", "check", name])),
     .. Directory.EnumerateFiles(Path.Combine(rootDir, "scripts"), "check_*.cs").Order()
         .Select(f => new Step(Path.GetFileName(f), "dotnet", ["run", f])),
