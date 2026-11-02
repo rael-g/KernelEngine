@@ -130,7 +130,7 @@ pub fn build(b: *std.Build) void {
         .plugins_step = b.step("plugins", "Build every native plugin into the shared prefix"),
         .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
-        .docs_step = b.step("docs", "Write the documentation of the native sources and of kabic"),
+        .docs_step = b.step("docs", "Write the documentation of the native sources"),
     };
 
     const docir_exe = b.dependency("docir", .{ .target = b.graph.host, .optimize = .ReleaseSafe }).artifact("docir");
@@ -143,11 +143,6 @@ pub fn build(b: *std.Build) void {
         .pages = true,
         .excluded_dirs = &.{ b.path("src/csharp"), b.path("src/shaders") },
         .excluded_names = &.{ "build.zig", "third_party" },
-    }));
-    ctx.docs_step.dependOn(docir.addSourceDocs(b, docir_exe, b.path("src/csharp/kabic"), .{
-        .name = "kabic",
-        .title = "Kabic",
-        .pages = true,
     }));
 
     ctx.moduleTests("ke_abi", .{ .target = target, .optimize = optimize });
