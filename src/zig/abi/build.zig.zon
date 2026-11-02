@@ -32,6 +32,7 @@
         .abi_render_gpu = .{ .path = "render_gpu" },
         .abi_render_handles = .{ .path = "render_handles" },
         .abi_render_material = .{ .path = "render_material" },
+        .abi_render_ui = .{ .path = "render_ui" },
         .abi_resource_cache = .{ .path = "resource_cache" },
         .abi_result = .{ .path = "result" },
         .abi_runtime = .{ .path = "runtime" },

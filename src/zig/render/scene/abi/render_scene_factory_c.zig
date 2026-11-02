@@ -7,7 +7,7 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_ui_factory = @import("render_ui_factory");
+const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -69,10 +69,11 @@ pub const ke_render_label_resolve_params = extern struct {
     /// Uploads the glyph atlas; borrowed, must outlive it.
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
     /// Registers the font; borrowed, must outlive it.
-    ui: ?*abi_render_ui_factory.c.ke_render_ui = std.mem.zeroes(?*abi_render_ui_factory.c.ke_render_ui),
+    ui: ?*abi_render_ui.c.ke_render_ui = std.mem.zeroes(?*abi_render_ui.c.ke_render_ui),
     /// Reads the font a label names; optional, borrowed. Without it every label is reported.
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
-    label_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// Names the label component; borrowed.
+    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
 };
 
 /// What the scene resolve needs to register the components and upload what they name.

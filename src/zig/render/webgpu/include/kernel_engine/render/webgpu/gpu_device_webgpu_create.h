@@ -34,7 +34,7 @@ typedef struct ke_gpu_device_webgpu_params
     /// Optional, borrowed. When non-NULL, this device dispatches the compile of
     /// create_render_pipeline_async onto this task pool's worker pool. When NULL,
     /// the compile runs synchronously and the callback is invoked before returning.
-    struct ke_task_pool *task_pool;
+    struct ke_task_pool *task_pool; ///< [borrowed,optional]
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool                 debug_labels;

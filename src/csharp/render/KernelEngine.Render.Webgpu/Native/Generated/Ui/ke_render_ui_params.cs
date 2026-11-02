@@ -26,9 +26,6 @@ public unsafe partial struct ke_render_ui_params
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* device;
 
-    [NativeTypeName("ke_ndc_convention")]
-    public global::KernelEngine.Render.NdcConvention ndc;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId frame_cid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* frame;
 }

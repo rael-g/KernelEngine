@@ -16,7 +16,7 @@ extern "C"
         float depth_from_view_z;
     } ke_view_space_params;
 
-    /**
+    /** [interface]
      * How the engine lays out view space: which way the camera faces along z,
      * and with it the shape of the view and projection matrices. Independent of
      * `ke_ndc_convention`, which reports the clip space of the device.

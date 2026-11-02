@@ -48,7 +48,7 @@ const SkyboxModule = struct {
     system: abi_framework.c.ke_system_id = 0,
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
-    camera: *abi_render_contract.c.ke_render_camera = undefined,
+    camera: *abi_render.c.ke_render_camera = undefined,
 
     camera_cid: abi_asset_resolver.c.ke_component_id = undefined,
     world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
@@ -148,13 +148,13 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skyb
     sm.core = core;
     sm.device = dev;
     sm.camera = p.camera.?;
-    sm.camera_cid = p.camera_cid;
-    sm.world_transform_cid = p.world_transform_cid;
-    sm.skybox_cid = p.skybox_cid;
-    const camera_cid = p.camera_cid;
-    const world_transform_cid = p.world_transform_cid;
-    const skybox_cid = p.skybox_cid;
-    const frame_cid = p.frame_cid;
+    sm.camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
+    sm.world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
+    sm.skybox_cid = p.scene.?.component_ids.?(p.scene).?.skybox;
+    const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
+    const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
+    const skybox_cid = p.scene.?.component_ids.?(p.scene).?.skybox;
+    const frame_cid = p.frame.?.frame_cid.?(p.frame);
 
     sm.io.name = "render.skybox";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_SKY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &sm.io.chain));
@@ -242,7 +242,7 @@ export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.c
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.camera == null)
+    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.camera == null)
         return R.code(error.InvalidArgument);
 
     const sm = gpa.create(SkyboxModule) catch |err| return R.code(err);
@@ -279,6 +279,21 @@ export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.c
 
 
 const testing = std.testing;
+
+const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
+
+fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+    return &test_ids;
+}
+
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
+
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 11;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
 
 const zsub = @import("zsub");
 
@@ -329,9 +344,9 @@ test "creating and destroying the skybox pass leaves no block allocated and no G
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try R.check(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h));
+    try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -341,9 +356,9 @@ test "destroying the skybox pass unregisters every system it registered" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try R.check(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h));
+    try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
@@ -355,9 +370,9 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expect(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h) != R.ok);
+    try testing.expect(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -368,9 +383,9 @@ test "a skybox pass the runtime refuses to register releases what it had created
     try rig.init();
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var camera = std.mem.zeroes(abi_render_contract.c.ke_render_camera);
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expect(ke_render_skybox_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4 }, &h) != R.ok);
+    try testing.expect(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

@@ -2,7 +2,6 @@ using System.Numerics;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
-using global::KernelEngine.Render;
 
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
@@ -25,20 +24,11 @@ public unsafe partial struct ke_render_shadow_params
     [NativeTypeName("ke_view_space *")]
     public KernelEngine.View.Native.ke_view_space* view_space;
 
-    [NativeTypeName("ke_ndc_convention")]
-    public global::KernelEngine.Render.NdcConvention ndc;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId mesh_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId world_transform_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId light_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId frame_cid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* frame;
 
     [NativeTypeName("const char *")]
     public sbyte* output;

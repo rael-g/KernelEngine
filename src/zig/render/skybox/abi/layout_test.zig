@@ -53,7 +53,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [13]c_ulonglong;
+extern const layout_values: [11]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -63,10 +63,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_skybox_params, "service"),
         @offsetOf(abi.c.ke_render_skybox_params, "device"),
         @offsetOf(abi.c.ke_render_skybox_params, "camera"),
-        @offsetOf(abi.c.ke_render_skybox_params, "camera_cid"),
-        @offsetOf(abi.c.ke_render_skybox_params, "world_transform_cid"),
-        @offsetOf(abi.c.ke_render_skybox_params, "skybox_cid"),
-        @offsetOf(abi.c.ke_render_skybox_params, "frame_cid"),
+        @offsetOf(abi.c.ke_render_skybox_params, "scene"),
+        @offsetOf(abi.c.ke_render_skybox_params, "frame"),
         @sizeOf(abi.c.ke_render_skybox_handle),
         @offsetOf(abi.c.ke_render_skybox_handle, "ref"),
         @offsetOf(abi.c.ke_render_skybox_handle, "destroy"),

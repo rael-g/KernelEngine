@@ -1,7 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_TEXT_FONT_H_
 #define KERNEL_ENGINE_TEXT_FONT_H_
 
-#include <kernel_engine/common/export.h>
 #include <kernel_engine/result/result.h>
 #include <stdint.h>
 

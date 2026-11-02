@@ -66,11 +66,10 @@ pub const ke_render_shadow_params = extern struct {
     device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
     /// Builds the light's view and projection; borrowed.
     view_space: ?*abi_view.c.ke_view_space = std.mem.zeroes(?*abi_view.c.ke_view_space),
-    ndc: abi_render_gpu.c.ke_ndc_convention = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention),
-    mesh_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    frame_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// Names the components the pass reads; borrowed.
+    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+    /// The pass runs inside its frame; borrowed.
+    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
     /// The shadow group it writes: the map under the group's own name, and the light and depth under
     /// the suffixes of kernel_engine/render/resource_groups.h.
     output: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),

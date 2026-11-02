@@ -22,17 +22,11 @@ public unsafe partial struct RenderDeferredLightingParams
 
     public bool IblEnabled;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId CameraCid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* Scene;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId WorldTransformCid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId SkyboxCid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId FrameCid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* Frame;
 
     [NativeTypeName("const char *")]
     public sbyte* Gbuffer;

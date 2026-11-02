@@ -4,7 +4,9 @@
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -44,7 +46,7 @@ extern "C"
         ke_render_ui      *ui;        ///< Registers the font; borrowed, must outlive it.
         /// Reads the font a label names; optional, borrowed. Without it every label is reported.
         ke_asset_resolver *resolver;
-        ke_component_id    label_cid;
+        ke_render_scene_resolve *scene; ///< Names the label component; borrowed.
     } ke_render_label_resolve_params;
 
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's

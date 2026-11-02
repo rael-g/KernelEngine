@@ -52,7 +52,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [10]c_ulonglong;
+extern const layout_values: [7]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -62,10 +62,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_frame_params, "ecs"),
         @offsetOf(abi.c.ke_render_frame_params, "service"),
         @offsetOf(abi.c.ke_render_frame_params, "camera"),
-        @offsetOf(abi.c.ke_render_frame_params, "camera_cid"),
-        @offsetOf(abi.c.ke_render_frame_params, "world_transform_cid"),
-        @offsetOf(abi.c.ke_render_frame_params, "directional_light_cid"),
-        @offsetOf(abi.c.ke_render_frame_params, "ambient_light_cid"),
+        @offsetOf(abi.c.ke_render_frame_params, "scene"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

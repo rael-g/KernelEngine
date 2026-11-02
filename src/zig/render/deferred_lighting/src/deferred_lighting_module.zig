@@ -164,10 +164,10 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// frame's color.
 fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
-    const camera_cid = p.camera_cid;
-    const world_transform_cid = p.world_transform_cid;
-    const skybox_cid = p.skybox_cid;
-    const frame_cid = p.frame_cid;
+    const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
+    const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
+    const skybox_cid = p.scene.?.component_ids.?(p.scene).?.skybox;
+    const frame_cid = p.frame.?.frame_cid.?(p.frame);
     dl.core = core;
     dl.device = p.device.?;
     dl.ibl_enabled = p.ibl_enabled;
@@ -273,7 +273,7 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_defer
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.gbuffer == null)
+    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.gbuffer == null)
         return R.code(error.InvalidArgument);
 
     const dl = gpa.create(DeferredLightingModule) catch |err| return R.code(err);
@@ -314,6 +314,21 @@ fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
 
 
 const testing = std.testing;
+
+const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
+
+fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+    return &test_ids;
+}
+
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
+
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 11;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
 
 const zsub = @import("zsub");
 
@@ -367,7 +382,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -378,7 +393,7 @@ test "destroying the deferred lighting pass unregisters every system it register
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
@@ -391,7 +406,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -403,7 +418,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

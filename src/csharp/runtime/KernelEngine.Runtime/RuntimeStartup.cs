@@ -64,3 +64,19 @@ public static class RuntimeStartup
         return sorted;
     }
 }
+
+/// <summary>
+/// Resolves <typeparamref name="T"/> when the modules load, for a service whose construction is
+/// its work, such as a render pass that registers its systems. The container owns the instance.
+/// </summary>
+public sealed class ResolveOnLoadModule<T> : IRuntimeModule where T : notnull
+{
+    /// <inheritdoc/>
+    public string Name => typeof(T).FullName!;
+
+    /// <inheritdoc/>
+    public void Configure(IServiceCollection services) { }
+
+    /// <inheritdoc/>
+    public void OnLoad(IRuntime runtime, IServiceProvider services) => services.GetRequiredService<T>();
+}

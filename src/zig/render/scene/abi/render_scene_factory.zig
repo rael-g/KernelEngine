@@ -7,7 +7,7 @@ const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_ui_factory = @import("render_ui_factory");
+const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 

@@ -24,15 +24,6 @@ public unsafe partial struct ke_render_frame_params
     [NativeTypeName("ke_render_camera *")]
     public KernelEngine.Render.Native.ke_render_camera* camera;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId camera_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId world_transform_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId directional_light_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId ambient_light_cid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 }

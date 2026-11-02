@@ -127,7 +127,7 @@ fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_to
 
     tm.access = .{
         .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
-        .{ .cid = p.frame_cid, .access = abi_runtime.c.KE_ACCESS_READ },
+        .{ .cid = p.frame.?.frame_cid.?(p.frame), .access = abi_runtime.c.KE_ACCESS_READ },
     };
 }
 
@@ -158,7 +158,7 @@ export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null) return R.code(error.InvalidArgument);
+    if (p.service == null or p.device == null or p.frame == null) return R.code(error.InvalidArgument);
 
     const tm = gpa.create(TonemapModule) catch |err| return R.code(err);
     tm.* = .{};
@@ -231,8 +231,14 @@ fn chainFormat(args: zsub.For(abi_render.c.ke_render_service).Args(.chain_format
     return if (args[1] >= abi_render.c.KE_RENDER_STAGE_TONEMAP) abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
 }
 
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 1;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
 fn testParams(rig: *Rig) abi_render_tonemap_factory.c.ke_render_tonemap_params {
-    return .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .frame_cid = 1 };
+    return .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .frame = &test_frame };
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {

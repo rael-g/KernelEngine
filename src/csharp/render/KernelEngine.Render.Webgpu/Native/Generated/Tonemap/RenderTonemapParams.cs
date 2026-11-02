@@ -20,6 +20,6 @@ public unsafe partial struct RenderTonemapParams
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* Device;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId FrameCid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* Frame;
 }

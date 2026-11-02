@@ -16,6 +16,7 @@
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_render = .{ .path = "../../abi/render" },
         .abi_render_ui_factory = .{ .path = "../ui/abi" },
+        .abi_render_ui = .{ .path = "../../abi/render_ui" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_runtime = .{ .path = "../../abi/runtime" },
         .abi_spatial = .{ .path = "../../abi/spatial" },

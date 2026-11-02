@@ -17,6 +17,7 @@ const abi_framework = @import("abi_framework");
 const abi_render = @import("abi_render");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
+const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
@@ -206,10 +207,11 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     const core = p.service orelse return R.code(error.InvalidArgument);
     const ui = p.ui orelse return R.code(error.InvalidArgument);
+    if (p.scene == null) return R.code(error.InvalidArgument);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
-    st.terms = .{.{ .cid = p.label_cid, .access = abi_runtime.c.KE_ACCESS_WRITE }};
+    st.terms = .{.{ .cid = p.scene.?.component_ids.?(p.scene).?.label, .access = abi_runtime.c.KE_ACCESS_WRITE }};
     st.queries = .{.{ .terms = st.terms[0..].ptr, .term_count = 1 }};
     var label = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     label.name = "render.label.resolve";
@@ -233,6 +235,14 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
 }
 
 const testing = std.testing;
+
+const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .label = 9 });
+
+fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+    return &test_ids;
+}
+
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
 
 const zsub = @import("zsub");
 
@@ -314,8 +324,8 @@ test "the label resolve registers its system, and fails when the runtime refuses
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var ui = std.mem.zeroes(abi_render_ui_factory.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
+    var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
+    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
     try R.check(ke_render_label_resolve_create(&p, &h));
     try rig.rt.received(.register_system).times(1);
@@ -330,8 +340,8 @@ test "destroying the label resolve unregisters its system" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var ui = std.mem.zeroes(abi_render_ui_factory.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .label_cid = 7 };
+    var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
+    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
     try R.check(ke_render_label_resolve_create(&p, &h));
     h.destroy.?(h.ref);
@@ -344,7 +354,7 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .label_cid = 7 };
+    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .scene = &test_scene};
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, &h)));
     try testing.expect(h.ref == null);

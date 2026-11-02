@@ -20,17 +20,11 @@ public unsafe partial struct ke_render_gbuffer_params
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* device;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId mesh_cid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId world_transform_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId camera_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId frame_cid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* frame;
 
     [NativeTypeName("const char *")]
     public sbyte* output;

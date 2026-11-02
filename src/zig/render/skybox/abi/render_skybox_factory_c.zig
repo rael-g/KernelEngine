@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -63,12 +62,12 @@ pub const ke_render_skybox_params = extern struct {
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
     /// Borrowed.
     device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// Gives the view and projection; borrowed.
-    camera: ?*abi_render_contract.c.ke_render_camera = std.mem.zeroes(?*abi_render_contract.c.ke_render_camera),
-    camera_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    skybox_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    frame_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// Names the components the pass reads; borrowed.
+    camera: ?*abi_render.c.ke_render_camera = std.mem.zeroes(?*abi_render.c.ke_render_camera),
+    /// Names the components the pass reads; borrowed.
+    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+    /// The pass runs inside its frame; borrowed.
+    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
 };
 
 pub const ke_render_skybox_handle = extern struct {

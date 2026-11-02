@@ -3,6 +3,8 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
@@ -41,11 +43,8 @@ extern "C"
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the frame's color and depth; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
-        ke_render_camera  *camera;  ///< Gives the view and projection; borrowed.
-        ke_component_id    camera_cid;
-        ke_component_id    world_transform_cid;
-        ke_component_id    skybox_cid;
-        ke_component_id    frame_cid;
+        ke_render_camera  *camera;        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
+        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
     } ke_render_skybox_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or camera

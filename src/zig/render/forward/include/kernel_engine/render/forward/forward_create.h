@@ -4,6 +4,8 @@
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -43,11 +45,8 @@ extern "C"
         ke_render_service *service; ///< Holds the frame's color and the groups; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
         bool               ibl_enabled;
-        ke_component_id    mesh_cid;
-        ke_component_id    world_transform_cid;
-        ke_component_id    camera_cid;
-        ke_component_id    skybox_cid;
-        ke_component_id    frame_cid;
+        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
+        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
         /// [utf8] Optional shadow group; without one the shadow is the neutral one.
         const char *shadow;
         /// [utf8] Optional cluster group; without one no clustered light is bound.

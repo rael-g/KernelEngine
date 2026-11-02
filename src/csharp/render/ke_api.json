@@ -1755,6 +1755,560 @@
       ]
     },
     {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "table",
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "table",
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_component",
+      "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
+      "tags": [
+        "table",
+        "node:Camera",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fov",
+          "type": "float",
+          "tags": [
+            "default:60"
+          ],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [
+            "default:0.1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [
+            "default:1000"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic_size",
+          "type": "float",
+          "tags": [
+            "default:5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "cull_mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_directional_light_component",
+      "doc": "Directional light node. Its properties give the light\u0027s direction, color, intensity and ambient term.",
+      "tags": [
+        "table",
+        "node:DirectionalLight",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 1 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ambient",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 0.2 0.2"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_point_light_component",
+      "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:PointLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:10"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_spot_light_component",
+      "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:SpotLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0 -1 0"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "range",
+          "type": "float",
+          "tags": [
+            "default:20"
+          ],
+          "doc": null
+        },
+        {
+          "name": "inner_angle",
+          "type": "float",
+          "tags": [
+            "default:25"
+          ],
+          "doc": null
+        },
+        {
+          "name": "outer_angle",
+          "type": "float",
+          "tags": [
+            "default:35"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ambient_light_component",
+      "doc": "Scene-wide ambient light node. First entity with this component wins.",
+      "tags": [
+        "table",
+        "node:AmbientLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.05 0.05 0.05"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_skybox_component",
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
+      "tags": [
+        "node:Skybox",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "cubemap",
+          "type": "ke_texture_handle",
+          "tags": [
+            "name:cubemap_handle"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_component",
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060 and \u0060material\u0060 double as output: the engine fills them, at KE_PHASE_UPDATE, whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves \u0060primitive\u0060 empty; the engine only acts where a handle is still invalid.",
+      "tags": [
+        "table",
+        "node:MeshRenderer",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_mesh_handle",
+          "tags": [
+            "name:mesh_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "material",
+          "type": "ke_material_handle",
+          "tags": [
+            "name:material_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "primitive",
+          "type": "char[32]",
+          "tags": [
+            "idiom",
+            "name:mesh"
+          ],
+          "doc": "Resolved into \u0060mesh\u0060 by the engine; a node authoring \u0060mesh\u0060 directly would have the value overwritten."
+        },
+        {
+          "name": "base_color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1",
+            "name:color"
+          ],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [
+            "default:1.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [
+            "default:0.05"
+          ],
+          "doc": null
+        },
+        {
+          "name": "layers",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sprite2d_component",
+      "doc": "A textured quad in the plane, resolved into geometry and a material by the engine.",
+      "tags": [
+        "table",
+        "node:Sprite2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "texture",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Image to sample. Empty draws the plain tinted quad."
+        },
+        {
+          "name": "region",
+          "type": "ke_vec4",
+          "tags": [
+            "default:0 0 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "pivot",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_h",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_v",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "texture_handle",
+          "type": "ke_texture_handle",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "The image resolved from \u0060texture\u0060."
+        },
+        {
+          "name": "attached",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_frustum",
+      "doc": "The perspective frustum a camera\u0027s field of view describes.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "tan_half_fov_y",
+          "type": "float",
+          "tags": [],
+          "doc": "Tangent of half the vertical field of view."
+        },
+        {
+          "name": "aspect",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
       "name": "ke_render_scene_component_ids",
       "doc": "The ids the ecs gave the scene\u0027s render components, which the passes are created with.",
       "tags": [
@@ -2936,6 +3490,195 @@
           "return_doc": null,
           "params": [],
           "receiver": "ke_render_service *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_camera",
+      "doc": "The matrices and projection that a camera component and its world transform describe. Every slot is callable at any time and tolerates a null \u0060self\u0060, a null input or a null output by writing nothing.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "view",
+          "returns": "void",
+          "tags": [],
+          "doc": "World-to-view for a camera placed by \u0060camera_world\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera_world",
+              "type": "const ke_mat4 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera\u0027s world transform."
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "view_rotation",
+          "returns": "void",
+          "tags": [],
+          "doc": "The view matrix of \u0060view\u0060 with its translation removed, leaving only the rotation.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera_world",
+              "type": "const ke_mat4 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera\u0027s world transform."
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "projection",
+          "returns": "void",
+          "tags": [],
+          "doc": "The projection the camera describes. \u0060orthographic\u0060 picks the kind, \u0060orthographic_size\u0060 is half the visible height, and \u0060fov\u0060 is the vertical field of view in degrees.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "perspective_projection",
+          "returns": "void",
+          "tags": [],
+          "doc": "A perspective projection from the camera\u0027s field of view, whatever its \u0060orthographic\u0060 flag says.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "perspective_frustum",
+          "returns": "void",
+          "tags": [],
+          "doc": "The perspective frustum the camera\u0027s field of view describes, whatever its \u0060orthographic\u0060 flag says.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_frustum",
+              "type": "ke_camera_frustum *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the frustum."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_camera_handle",
+      "doc": "Owning wrapper: \u0060ref\u0060 borrows for the lifetime, \u0060destroy\u0060 ends it.",
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_camera *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_camera *"
         }
       ]
     },

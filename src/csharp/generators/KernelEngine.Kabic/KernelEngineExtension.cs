@@ -50,8 +50,8 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append("    /// <param name=\"logger\">Receives every line the library logs.</param>\n");
         foreach (var a in f.Arguments)
             o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
-        o.Append($"    public {f.ClassName}(KernelEngine.Logger.ILogger logger{(parameters.Length > 0 ? ", " + parameters : "")}) : base(CreateLogged(logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
-        o.Append($"    private static {f.Contract.Spec.NativeNamespace}.{f.HandleType} CreateLogged(KernelEngine.Logger.ILogger logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
+        o.Append($"    public {f.ClassName}(KernelEngine.Logger.ILogger logger{(parameters.Length > 0 ? ", " + parameters : "")}) : {(f.Contract is null ? "this" : "base")}(CreateLogged(logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
+        o.Append($"    private static {(f.Contract is null ? f.Job.Namespace : f.Contract.Spec.NativeNamespace)}.{f.HandleType} CreateLogged(KernelEngine.Logger.ILogger logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
         o.Append("        ArgumentNullException.ThrowIfNull(logger);\n");
         o.Append($"        {f.Job.Namespace}.{f.Job.MethodsClass}.{setter}(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));\n");
         o.Append($"        return Create({FactoriesExtension.Names(f)});\n    }}\n}}\n");
@@ -60,7 +60,8 @@ public sealed class KernelEngineExtension : IKabicExtension
 
     private static string Registration(Factory f, Convention convention)
     {
-        var contractName = f.ContractClass[(f.ContractClass.LastIndexOf('.') + 1)..];
+        if (f.Contract is null) return PassRegistration(f);
+        var contractName = f.ContractClass![(f.ContractClass!.LastIndexOf('.') + 1)..];
         var vtable = CType.Of(f.Contract.Model.Structs.First(s => s.Name == f.HandleType).Fields[0].Type).Name;
         var contractInterface = $"{f.Contract.Spec.Namespace}.{Idioms.NativeInterface(vtable, convention)}";
         var managedInterface = f.Contract.Model.Structs.First(s => s.Name == vtable).Has("interface") || f.Contract.Spec.AbstractionsOutDir is not null
@@ -86,6 +87,25 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append($"        services.AddSingleton<{contractInterface}>(sp => sp.GetRequiredService<{f.ClassName}>());\n");
         if (managedInterface is not null)
             o.Append($"        services.AddSingleton<{managedInterface}>(sp => sp.GetRequiredService<{f.ClassName}>());\n");
+        o.Append("        return services;\n    }\n}\n");
+        return o.ToString();
+    }
+
+    private static string PassRegistration(Factory f)
+    {
+        var args = string.Join(", ", f.Arguments.Select(a => a.IsRequiredProvider ? $"sp.GetRequiredService<{a.ManagedType}>()"
+            : a.IsOptionalProvider ? $"sp.GetService<{a.ManagedType.TrimEnd('?')}>()" : a.Name));
+        var values = string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative"))
+            .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = default"));
+        var o = new StringBuilder(Header(f));
+        o.Append("using Microsoft.Extensions.DependencyInjection;\n\n");
+        o.Append($"/// <summary>Registers <see cref=\"{f.ClassName}\"/> with a service collection.</summary>\n");
+        o.Append($"public static class {f.ClassName}Registration\n{{\n");
+        o.Append($"    /// <summary>Registers one <see cref=\"{f.ClassName}\"/>, created when the modules load with its providers from the container.</summary>\n");
+        o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services{values})\n    {{\n");
+        o.Append($"        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is {{ }} logger\n");
+        o.Append($"            ? new {f.ClassName}(logger, {args})\n            : new {f.ClassName}({args}));\n");
+        o.Append($"        services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<{f.ClassName}>());\n");
         o.Append("        return services;\n    }\n}\n");
         return o.ToString();
     }

@@ -53,7 +53,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [16]c_ulonglong;
+extern const layout_values: [13]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -63,11 +63,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_forward_params, "service"),
         @offsetOf(abi.c.ke_render_forward_params, "device"),
         @offsetOf(abi.c.ke_render_forward_params, "ibl_enabled"),
-        @offsetOf(abi.c.ke_render_forward_params, "mesh_cid"),
-        @offsetOf(abi.c.ke_render_forward_params, "world_transform_cid"),
-        @offsetOf(abi.c.ke_render_forward_params, "camera_cid"),
-        @offsetOf(abi.c.ke_render_forward_params, "skybox_cid"),
-        @offsetOf(abi.c.ke_render_forward_params, "frame_cid"),
+        @offsetOf(abi.c.ke_render_forward_params, "scene"),
+        @offsetOf(abi.c.ke_render_forward_params, "frame"),
         @offsetOf(abi.c.ke_render_forward_params, "shadow"),
         @offsetOf(abi.c.ke_render_forward_params, "clusters"),
         @sizeOf(abi.c.ke_render_forward_handle),

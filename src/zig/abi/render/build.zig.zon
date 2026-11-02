@@ -5,6 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_ecs = .{ .path = "../ecs" },
+        .abi_math = .{ .path = "../math" },
+        .abi_render_components = .{ .path = "../render_components" },
         .abi_render_contract = .{ .path = "../render_contract" },
         .abi_render_gpu = .{ .path = "../render_gpu" },
         .abi_render_handles = .{ .path = "../render_handles" },

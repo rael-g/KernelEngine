@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");

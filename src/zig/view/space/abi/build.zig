@@ -33,10 +33,10 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/runtime"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/task_pool"));
-    translated.addIncludePath(b.path("../../../../c/text"));
     translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../../../../c/window"));
     translated.addIncludePath(b.path("../include"));
+    translated.addIncludePath(b.path("../../../../c/text"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -66,9 +66,9 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
-    tests.root_module.addIncludePath(b.path("../../../../c/text"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../../c/window"));
     tests.root_module.addIncludePath(b.path("../include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/text"));
     b.step("test", "Check the view_space_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

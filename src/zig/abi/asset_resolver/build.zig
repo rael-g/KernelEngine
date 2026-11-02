@@ -25,6 +25,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/spatial"));
+    translated.addIncludePath(b.path("../../../c/view"));
     translated.addIncludePath(b.path("../../../c/audio"));
     translated.addIncludePath(b.path("../../../c/configuration"));
     translated.addIncludePath(b.path("../../../c/file_system"));
@@ -36,7 +37,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/resource_cache"));
     translated.addIncludePath(b.path("../../../c/runtime"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
-    translated.addIncludePath(b.path("../../../c/view"));
     translated.addIncludePath(b.path("../../../c/window"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -57,6 +57,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
+    tests.root_module.addIncludePath(b.path("../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../c/file_system"));
@@ -68,7 +69,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/resource_cache"));
     tests.root_module.addIncludePath(b.path("../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
-    tests.root_module.addIncludePath(b.path("../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../c/window"));
     b.step("test", "Check the asset_resolver ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

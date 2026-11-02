@@ -1,0 +1,13 @@
+.{
+    .name = .abi_render_ui,
+    .version = "0.1.0",
+    .fingerprint = 0xe46e502673a0074e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_result = .{ .path = "../result" },
+        .abi_text = .{ .path = "../text" },
+        .abi_ui_components = .{ .path = "../ui_components" },
+    },
+    .paths = .{"."},
+}

@@ -31,7 +31,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/runtime"));
     translated.addIncludePath(b.path("../../../c/spatial"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
-    translated.addIncludePath(b.path("../../../c/text"));
     translated.addIncludePath(b.path("../../../c/view"));
     translated.addIncludePath(b.path("../../../c/window"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -63,7 +62,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
-    tests.root_module.addIncludePath(b.path("../../../c/text"));
     tests.root_module.addIncludePath(b.path("../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../c/window"));
     b.step("test", "Check the view ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

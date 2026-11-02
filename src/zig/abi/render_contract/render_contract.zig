@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
-const abi_math = @import("math");
 const abi_render_components = @import("render_components");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
@@ -15,80 +14,6 @@ pub const c = @import("render_contract_c.zig");
 pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
-
-pub const RenderCamera = struct {
-    ptr: *c.ke_render_camera,
-    owner: ?c.ke_render_camera_handle = null,
-
-    pub fn deinit(self: RenderCamera) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// The vtable whose slots call the methods of T, which embeds it as the named field.
-    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_camera {
-        return .{
-            .view = &struct {
-                fn call(self: ?*c.ke_render_camera, a0: ?*const abi_math.c.ke_mat4, a1: ?*abi_math.c.ke_mat4) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.view(state, a0, a1);
-                }
-            }.call,
-            .view_rotation = &struct {
-                fn call(self: ?*c.ke_render_camera, a0: ?*const abi_math.c.ke_mat4, a1: ?*abi_math.c.ke_mat4) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.viewRotation(state, a0, a1);
-                }
-            }.call,
-            .projection = &struct {
-                fn call(self: ?*c.ke_render_camera, a0: ?*const abi_render_components.c.ke_camera_component, a1: f32, a2: ?*abi_math.c.ke_mat4) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.projection(state, a0, a1, a2);
-                }
-            }.call,
-            .perspective_projection = &struct {
-                fn call(self: ?*c.ke_render_camera, a0: ?*const abi_render_components.c.ke_camera_component, a1: f32, a2: ?*abi_math.c.ke_mat4) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.perspectiveProjection(state, a0, a1, a2);
-                }
-            }.call,
-            .perspective_frustum = &struct {
-                fn call(self: ?*c.ke_render_camera, a0: ?*const abi_render_components.c.ke_camera_component, a1: f32, a2: ?*c.ke_camera_frustum) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.perspectiveFrustum(state, a0, a1, a2);
-                }
-            }.call,
-        };
-    }
-
-    /// World-to-view for a camera placed by `camera_world`.
-    pub fn view(self: RenderCamera, camera_world: ?*const abi_math.c.ke_mat4, out_view: ?*abi_math.c.ke_mat4) void {
-        return self.ptr.view.?(self.ptr, camera_world, out_view);
-    }
-
-    /// The view matrix of `view` with its translation removed, leaving only the rotation.
-    pub fn viewRotation(self: RenderCamera, camera_world: ?*const abi_math.c.ke_mat4, out_view: ?*abi_math.c.ke_mat4) void {
-        return self.ptr.view_rotation.?(self.ptr, camera_world, out_view);
-    }
-
-    /// The projection the camera describes. `orthographic` picks the kind, `orthographic_size` is
-    /// half the visible height, and `fov` is the vertical field of view in degrees.
-    pub fn projection(self: RenderCamera, camera: ?*const abi_render_components.c.ke_camera_component, aspect: f32, out_proj: ?*abi_math.c.ke_mat4) void {
-        return self.ptr.projection.?(self.ptr, camera, aspect, out_proj);
-    }
-
-    /// A perspective projection from the camera's field of view, whatever its `orthographic` flag
-    /// says.
-    pub fn perspectiveProjection(self: RenderCamera, camera: ?*const abi_render_components.c.ke_camera_component, aspect: f32, out_proj: ?*abi_math.c.ke_mat4) void {
-        return self.ptr.perspective_projection.?(self.ptr, camera, aspect, out_proj);
-    }
-
-    /// The perspective frustum the camera's field of view describes, whatever its `orthographic`
-    /// flag says.
-    pub fn perspectiveFrustum(self: RenderCamera, camera: ?*const abi_render_components.c.ke_camera_component, aspect: f32, out_frustum: ?*c.ke_camera_frustum) void {
-        return self.ptr.perspective_frustum.?(self.ptr, camera, aspect, out_frustum);
-    }
-
-};
 
 pub const RenderPassCtx = struct {
     ptr: *c.ke_render_pass_ctx,
@@ -182,6 +107,3 @@ pub const RenderPassCtx = struct {
     }
 
 };
-
-pub const CameraFrustum = c.ke_camera_frustum;
-pub const RenderCameraHandle = c.ke_render_camera_handle;

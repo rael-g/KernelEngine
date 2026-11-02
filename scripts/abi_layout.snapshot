@@ -424,6 +424,29 @@ ke_render_resource_binder_handle size=16 align=8
   ref 0
   destroy 8
 
+[view]
+ke_view_space_params size=4 align=4
+  depth_from_view_z 0
+ke_view_space size=56 align=8
+  handle 0
+  params 8
+  look_to 16
+  look_at 24
+  view_from_transform 32
+  perspective 40
+  orthographic 48
+ke_view_space_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[render_ui]
+ke_render_ui size=16 align=8
+  handle 0
+  load_font 8
+ke_render_ui_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [io]
 ke_io_dir_entry size=16 align=8
   name 0
@@ -690,6 +713,11 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   chain 36
   depth 40
+ke_camera_frustum size=16 align=4
+  tan_half_fov_y 0
+  aspect 4
+  near_plane 8
+  far_plane 12
 ke_render_scene_component_ids size=40 align=4
   mesh 0
   camera 4
@@ -753,6 +781,16 @@ ke_render_service size=400 align=8
   leave_chain 384
   chain_format 392
 ke_render_service_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_camera size=48 align=8
+  handle 0
+  view 8
+  view_rotation 16
+  projection 24
+  perspective_projection 32
+  perspective_frustum 40
+ke_render_camera_handle size=16 align=8
   ref 0
   destroy 8
 ke_render_frame size=16 align=8

@@ -6,7 +6,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_tonemap_params, runtime),
     offsetof(ke_render_tonemap_params, service),
     offsetof(ke_render_tonemap_params, device),
-    offsetof(ke_render_tonemap_params, frame_cid),
+    offsetof(ke_render_tonemap_params, frame),
     sizeof(ke_render_tonemap_handle),
     offsetof(ke_render_tonemap_handle, ref),
     offsetof(ke_render_tonemap_handle, destroy),

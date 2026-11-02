@@ -4,7 +4,6 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -61,17 +60,15 @@ pub const ke_render_frame_params = extern struct {
     /// The frame begins and ends on it; borrowed, must outlive it.
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
     /// Turns the camera entity into matrices; borrowed, must outlive it.
-    camera: ?*abi_render_contract.c.ke_render_camera = std.mem.zeroes(?*abi_render_contract.c.ke_render_camera),
-    camera_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    directional_light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    ambient_light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    camera: ?*abi_render.c.ke_render_camera = std.mem.zeroes(?*abi_render.c.ke_render_camera),
+    /// Names the components the frame reads; borrowed.
+    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
 };
 
 /// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
 /// begins the frame and publishes the frame globals and the scene's light, and
-/// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
-/// the handle's ref is NULL on failure.
+/// "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid
+/// argument; the handle's ref is NULL on failure.
 pub extern fn ke_render_frame_create(params: ?*const ke_render_frame_params, out_frame: ?*abi_render.c.ke_render_frame_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_frame logs to callback, with ctx; a NULL callback sends them back

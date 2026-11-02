@@ -23,9 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
-    try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
-    try expectSameLayout(abi.c.ke_render_camera_handle, translated("ke_render_camera_handle"));
     try expectSameLayout(abi.c.ke_render_pass_ctx, translated("ke_render_pass_ctx"));
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
@@ -68,26 +65,11 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.c.KE_COMPONENT_NAME_LABEL);
 }
 
-extern const layout_values: [26]c_ulonglong;
+extern const layout_values: [11]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_camera_frustum),
-        @offsetOf(abi.c.ke_camera_frustum, "tan_half_fov_y"),
-        @offsetOf(abi.c.ke_camera_frustum, "aspect"),
-        @offsetOf(abi.c.ke_camera_frustum, "near_plane"),
-        @offsetOf(abi.c.ke_camera_frustum, "far_plane"),
-        @sizeOf(abi.c.ke_render_camera),
-        @offsetOf(abi.c.ke_render_camera, "handle"),
-        @offsetOf(abi.c.ke_render_camera, "view"),
-        @offsetOf(abi.c.ke_render_camera, "view_rotation"),
-        @offsetOf(abi.c.ke_render_camera, "projection"),
-        @offsetOf(abi.c.ke_render_camera, "perspective_projection"),
-        @offsetOf(abi.c.ke_render_camera, "perspective_frustum"),
-        @sizeOf(abi.c.ke_render_camera_handle),
-        @offsetOf(abi.c.ke_render_camera_handle, "ref"),
-        @offsetOf(abi.c.ke_render_camera_handle, "destroy"),
         @sizeOf(abi.c.ke_render_pass_ctx),
         @offsetOf(abi.c.ke_render_pass_ctx, "handle"),
         @offsetOf(abi.c.ke_render_pass_ctx, "read"),

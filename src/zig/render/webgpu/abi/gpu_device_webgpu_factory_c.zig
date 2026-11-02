@@ -43,9 +43,6 @@ pub const ke_gpu_device_webgpu_params = extern struct {
     /// When non-zero, asks the underlying graphics API to validate every call, which takes effect
     /// only where that API's validation layers are installed.
     enable_validation: bool = std.mem.zeroes(bool),
-    /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this task pool's worker pool. When NULL, the compile runs
-    /// synchronously and the callback is invoked before returning.
     task_pool: ?*abi_task_pool.c.ke_task_pool = std.mem.zeroes(?*abi_task_pool.c.ke_task_pool),
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying
     /// graphics API, where capture tools read them.

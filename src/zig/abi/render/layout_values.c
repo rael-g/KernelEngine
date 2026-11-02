@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/camera.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/scene_resolve.h>
 const unsigned long long layout_values[] = {
@@ -37,6 +38,11 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_pass_io, writes_count),
     offsetof(ke_render_pass_io, chain),
     offsetof(ke_render_pass_io, depth),
+    sizeof(ke_camera_frustum),
+    offsetof(ke_camera_frustum, tan_half_fov_y),
+    offsetof(ke_camera_frustum, aspect),
+    offsetof(ke_camera_frustum, near_plane),
+    offsetof(ke_camera_frustum, far_plane),
     sizeof(ke_render_scene_component_ids),
     offsetof(ke_render_scene_component_ids, mesh),
     offsetof(ke_render_scene_component_ids, camera),
@@ -102,6 +108,16 @@ const unsigned long long layout_values[] = {
     sizeof(ke_render_service_handle),
     offsetof(ke_render_service_handle, ref),
     offsetof(ke_render_service_handle, destroy),
+    sizeof(ke_render_camera),
+    offsetof(ke_render_camera, handle),
+    offsetof(ke_render_camera, view),
+    offsetof(ke_render_camera, view_rotation),
+    offsetof(ke_render_camera, projection),
+    offsetof(ke_render_camera, perspective_projection),
+    offsetof(ke_render_camera, perspective_frustum),
+    sizeof(ke_render_camera_handle),
+    offsetof(ke_render_camera_handle, ref),
+    offsetof(ke_render_camera_handle, destroy),
     sizeof(ke_render_frame),
     offsetof(ke_render_frame, handle),
     offsetof(ke_render_frame, frame_cid),

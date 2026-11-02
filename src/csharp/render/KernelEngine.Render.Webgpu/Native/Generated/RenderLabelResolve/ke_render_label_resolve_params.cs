@@ -4,8 +4,6 @@ using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Asset.Native;
-using KernelEngine.Ecs.Native;
-using KernelEngine.Framework.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -25,6 +23,6 @@ public unsafe partial struct ke_render_label_resolve_params
     [NativeTypeName("ke_asset_resolver *")]
     public KernelEngine.Asset.Native.ke_asset_resolver* resolver;
 
-    [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId label_cid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 }

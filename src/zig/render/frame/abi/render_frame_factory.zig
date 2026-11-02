@@ -4,7 +4,6 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -17,8 +16,8 @@ const resultOf = abi_result.resultOf;
 
 /// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
 /// begins the frame and publishes the frame globals and the scene's light, and
-/// "render.end_frame". A missing runtime, ecs, service or camera fails as an invalid argument;
-/// the handle's ref is NULL on failure.
+/// "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid
+/// argument; the handle's ref is NULL on failure.
 pub fn renderFrameCreate(params: ?*const c.ke_render_frame_params) Error!abi_render.c.ke_render_frame_handle {
     var written: abi_render.c.ke_render_frame_handle = undefined;
     try checkResult(c.ke_render_frame_create(params, &written));

@@ -86,21 +86,18 @@ int main(void)
     check("render service", ke_render_service_create(&(ke_render_service_params){
         .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &service));
 
-    ke_ndc_convention ndc = gpu.ref->get_ndc_convention(gpu.ref);
     ke_view_space_handle view_space = { 0 };
     ke_result made_view = ke_view_space_rh_create(&view_space);
     if (made_view != KE_OK) die_result("view space", made_view);
     ke_render_camera_handle camera = { 0 };
-    check("camera", ke_render_camera_create(view_space.ref, &ndc, &camera));
+    check("camera", ke_render_camera_create(view_space.ref, gpu.ref, &camera));
 
     ke_render_scene_resolve_handle scene = { 0 };
     check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt.ref, .ecs = ecs.ref, .service = service.ref }, &scene));
-    const ke_render_scene_component_ids *ids = scene.ref->component_ids(scene.ref);
     ke_render_frame_handle frame = { 0 };
     check("frame", ke_render_frame_create(&(ke_render_frame_params){
         .runtime = rt.ref, .ecs = ecs.ref, .service = service.ref, .camera = camera.ref,
-        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform,
-        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &frame));
+        .scene = scene.ref }, &frame));
 
     printf("Clearing the screen through the runtime each tick. Close to exit.\n");
     double prev = now_seconds();

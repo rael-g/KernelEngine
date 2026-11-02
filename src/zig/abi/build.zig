@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
         "abi_render_gpu",
         "abi_render_handles",
         "abi_render_material",
+        "abi_render_ui",
         "abi_resource_cache",
         "abi_result",
         "abi_runtime",

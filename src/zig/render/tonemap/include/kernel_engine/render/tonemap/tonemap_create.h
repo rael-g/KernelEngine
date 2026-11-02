@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_TONEMAP_TONEMAP_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -38,10 +39,7 @@ extern "C"
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the frame's color; borrowed, must outlive it.
-        ke_gpu_device     *device;  ///< Borrowed.
-        /// The tag the system that begins the frame writes; the pass reads it, so it runs once
-        /// the frame has begun.
-        ke_component_id    frame_cid;
+        ke_gpu_device     *device;        ke_render_frame   *frame;   ///< The pass runs inside its frame; borrowed.
     } ke_render_tonemap_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails as an

@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_logger = .{ .path = "../../../abi/logger" },
-        .abi_render_contract = .{ .path = "../../../abi/render_contract" },
+        .abi_render = .{ .path = "../../../abi/render" },
         .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_view = .{ .path = "../../../abi/view" },

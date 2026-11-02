@@ -5,11 +5,9 @@ const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
 const abi_render_gpu = @import("render_gpu");
-const abi_render_handles = @import("render_handles");
+const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_text = @import("text");
-const abi_ui_components = @import("ui_components");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -65,23 +63,8 @@ pub const ke_render_ui_params = extern struct {
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
     /// Borrowed.
     device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    ndc: abi_render_gpu.c.ke_ndc_convention = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention),
-    /// The tag the system that begins the frame writes; the pass reads it, so it runs once the frame
-    /// has begun.
-    frame_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-};
-
-pub const ke_render_ui = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Registers a font's glyph table, deduped by `key`: a resident key retains and returns the
-    /// existing handle without copying `glyphs` again. `glyphs` is copied; the caller may free its
-    /// own copy after this returns.
-    load_font: ?*const fn (?*ke_render_ui, ?[*:0]const u8, abi_render_handles.c.ke_texture_handle, ?[*]const abi_text.c.ke_glyph_metrics, u32, f32, f32, ?*abi_ui_components.c.ke_ui_font_handle) callconv(.c) abi_result.c.ke_result = null,
-};
-
-pub const ke_render_ui_handle = extern struct {
-    ref: ?*ke_render_ui = std.mem.zeroes(?*ke_render_ui),
-    destroy: ?*const fn (?*ke_render_ui) callconv(.c) void = null,
+    /// The pass runs inside its frame; borrowed.
+    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
 };
 
 /// Sends every line ke_render_ui logs to callback, with ctx; a NULL callback sends them back to
@@ -90,4 +73,4 @@ pub extern fn ke_render_ui_set_log_callback(callback: ke_log_callback, ctx: ?*an
 
 /// Registers the pass's update-phase label system and render-phase system. A missing runtime,
 /// ecs, service or device fails as an invalid argument.
-pub extern fn ke_render_ui_create(params: ?*const ke_render_ui_params, out_ui: ?*ke_render_ui_handle) abi_result.c.ke_result;
+pub extern fn ke_render_ui_create(params: ?*const ke_render_ui_params, out_ui: ?*abi_render_ui.c.ke_render_ui_handle) abi_result.c.ke_result;

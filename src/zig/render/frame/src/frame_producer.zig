@@ -17,7 +17,7 @@ const log = std.log.scoped(.render_frame);
 /// a camera entity into matrices, and the seconds elapsed since the first frame.
 pub const State = struct {
     core: *abi_render.c.ke_render_service,
-    camera: *abi_render_contract.c.ke_render_camera,
+    camera: *abi_render.c.ke_render_camera,
     time: f64 = 0,
 };
 

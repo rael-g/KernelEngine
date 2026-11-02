@@ -62,7 +62,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_tonemap_params, "runtime"),
         @offsetOf(abi.c.ke_render_tonemap_params, "service"),
         @offsetOf(abi.c.ke_render_tonemap_params, "device"),
-        @offsetOf(abi.c.ke_render_tonemap_params, "frame_cid"),
+        @offsetOf(abi.c.ke_render_tonemap_params, "frame"),
         @sizeOf(abi.c.ke_render_tonemap_handle),
         @offsetOf(abi.c.ke_render_tonemap_handle, "ref"),
         @offsetOf(abi.c.ke_render_tonemap_handle, "destroy"),

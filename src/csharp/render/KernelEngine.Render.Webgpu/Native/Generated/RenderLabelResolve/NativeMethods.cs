@@ -1,0 +1,22 @@
+using System.Numerics;
+using System.Runtime.InteropServices;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
+using KernelEngine.Asset.Native;
+using KernelEngine.Render.Native;
+using KernelEngine.Result.Native;
+using KernelEngine.Runtime.Native;
+
+namespace KernelEngine.Render.Webgpu.Native;
+
+public static unsafe partial class NativeMethods
+{
+    [DllImport("ke_render_scene", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_label_resolve_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result render_label_resolve_create([NativeTypeName("const ke_render_label_resolve_params *")] ke_render_label_resolve_params* @params, ke_render_label_resolve_handle* out_resolve);
+
+    [DllImport("ke_render_scene", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_scene_set_log_callback", ExactSpelling = true)]
+    public static extern void render_scene_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);
+}

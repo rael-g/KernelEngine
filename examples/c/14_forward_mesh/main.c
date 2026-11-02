@@ -105,37 +105,28 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
         .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .io = io, .binder = r->binder.ref }, &r->service));
     ke_render_service *core = r->service.ref;
 
-    ke_ndc_convention ndc = gpu->get_ndc_convention(gpu);
     ke_result made_view = ke_view_space_rh_create(&r->view_space);
     if (made_view != KE_OK) die_result("view space", made_view);
-    check("camera", ke_render_camera_create(r->view_space.ref, &ndc, &r->camera));
+    check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
 
     check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
-    const ke_render_scene_component_ids *ids = r->scene.ref->component_ids(r->scene.ref);
 
     check("frame", ke_render_frame_create(&(ke_render_frame_params){
         .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
-        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform,
-        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &r->frame));
-    ke_component_id frame_cid = r->frame.ref->frame_cid(r->frame.ref);
+        .scene = r->scene.ref }, &r->frame));
 
     check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
-        .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .ndc = ndc,
-        .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform, .light_cid = ids->directional_light,
-        .frame_cid = frame_cid, .output = "shadow" }, &r->shadow));
+        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .output = "shadow" }, &r->shadow));
     check("cluster pass", ke_render_cluster_create(&(ke_render_cluster_params){
-        .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .camera = r->camera.ref,
-        .point_light_cid = ids->point_light, .spot_light_cid = ids->spot_light, .world_transform_cid = ids->world_transform,
-        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "clusters" }, &r->cluster));
+        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .camera = r->camera.ref,
+        .output = "clusters" }, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
-        .runtime = rt, .service = core, .device = gpu, .mesh_cid = ids->mesh, .world_transform_cid = ids->world_transform,
-        .camera_cid = ids->camera, .frame_cid = frame_cid, .output = "gbuffer" }, &r->gbuffer));
+        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .output = "gbuffer" }, &r->gbuffer));
     check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
-        .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
-        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform, .skybox_cid = ids->skybox, .frame_cid = frame_cid,
+        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
         .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){
-        .runtime = rt, .service = core, .device = gpu, .frame_cid = frame_cid }, &r->tonemap));
+        .runtime = rt, .service = core, .device = gpu, .frame = r->frame.ref }, &r->tonemap));
 }
 
 static void renderer_destroy(renderer *r)

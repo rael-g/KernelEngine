@@ -3,6 +3,8 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
@@ -42,12 +44,8 @@ extern "C"
         ke_render_service *service;    ///< Receives the published buffers; borrowed.
         ke_gpu_device     *device;     ///< Borrowed.
         ke_view_space     *view_space; ///< Builds the cluster frusta; borrowed.
-        ke_render_camera  *camera;     ///< Gives the camera's projection; borrowed.
-        ke_component_id    point_light_cid;
-        ke_component_id    spot_light_cid;
-        ke_component_id    world_transform_cid;
-        ke_component_id    camera_cid;
-        ke_component_id    frame_cid;
+        ke_render_camera  *camera;        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
+        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
         /// [utf8] The cluster group it writes: a tag under the group's own name, and the light
         /// lists and grid under the suffixes of kernel_engine/render/resource_groups.h.
         const char *output;

@@ -27,9 +27,12 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_frame_globals, translated("ke_render_frame_globals"));
     try expectSameLayout(abi.c.ke_render_lighting, translated("ke_render_lighting"));
     try expectSameLayout(abi.c.ke_render_pass_io, translated("ke_render_pass_io"));
+    try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
     try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_render_service, translated("ke_render_service"));
     try expectSameLayout(abi.c.ke_render_service_handle, translated("ke_render_service_handle"));
+    try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
+    try expectSameLayout(abi.c.ke_render_camera_handle, translated("ke_render_camera_handle"));
     try expectSameLayout(abi.c.ke_render_frame, translated("ke_render_frame"));
     try expectSameLayout(abi.c.ke_render_frame_handle, translated("ke_render_frame_handle"));
     try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
@@ -84,7 +87,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.c.KE_RENDER_CHAIN_NONE));
 }
 
-extern const layout_values: [112]c_ulonglong;
+extern const layout_values: [127]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -123,6 +126,11 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_pass_io, "writes_count"),
         @offsetOf(abi.c.ke_render_pass_io, "chain"),
         @offsetOf(abi.c.ke_render_pass_io, "depth"),
+        @sizeOf(abi.c.ke_camera_frustum),
+        @offsetOf(abi.c.ke_camera_frustum, "tan_half_fov_y"),
+        @offsetOf(abi.c.ke_camera_frustum, "aspect"),
+        @offsetOf(abi.c.ke_camera_frustum, "near_plane"),
+        @offsetOf(abi.c.ke_camera_frustum, "far_plane"),
         @sizeOf(abi.c.ke_render_scene_component_ids),
         @offsetOf(abi.c.ke_render_scene_component_ids, "mesh"),
         @offsetOf(abi.c.ke_render_scene_component_ids, "camera"),
@@ -188,6 +196,16 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_render_service_handle),
         @offsetOf(abi.c.ke_render_service_handle, "ref"),
         @offsetOf(abi.c.ke_render_service_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_camera),
+        @offsetOf(abi.c.ke_render_camera, "handle"),
+        @offsetOf(abi.c.ke_render_camera, "view"),
+        @offsetOf(abi.c.ke_render_camera, "view_rotation"),
+        @offsetOf(abi.c.ke_render_camera, "projection"),
+        @offsetOf(abi.c.ke_render_camera, "perspective_projection"),
+        @offsetOf(abi.c.ke_render_camera, "perspective_frustum"),
+        @sizeOf(abi.c.ke_render_camera_handle),
+        @offsetOf(abi.c.ke_render_camera_handle, "ref"),
+        @offsetOf(abi.c.ke_render_camera_handle, "destroy"),
         @sizeOf(abi.c.ke_render_frame),
         @offsetOf(abi.c.ke_render_frame, "handle"),
         @offsetOf(abi.c.ke_render_frame, "frame_cid"),

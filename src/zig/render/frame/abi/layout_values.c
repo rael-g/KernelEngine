@@ -7,9 +7,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_frame_params, ecs),
     offsetof(ke_render_frame_params, service),
     offsetof(ke_render_frame_params, camera),
-    offsetof(ke_render_frame_params, camera_cid),
-    offsetof(ke_render_frame_params, world_transform_cid),
-    offsetof(ke_render_frame_params, directional_light_cid),
-    offsetof(ke_render_frame_params, ambient_light_cid),
+    offsetof(ke_render_frame_params, scene),
     0,
 };

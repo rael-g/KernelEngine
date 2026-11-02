@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
-    abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));
@@ -25,10 +24,10 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/render"));
-    translated.addIncludePath(b.path("../include"));
-    translated.addIncludePath(b.path("../../../../c/runtime"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/view"));
+    translated.addIncludePath(b.path("../include"));
+    translated.addIncludePath(b.path("../../../../c/runtime"));
     translated.addIncludePath(b.path("../../../../c/asset"));
     translated.addIncludePath(b.path("../../../../c/audio"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
@@ -59,10 +58,10 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
-    tests.root_module.addIncludePath(b.path("../include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
+    tests.root_module.addIncludePath(b.path("../include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));

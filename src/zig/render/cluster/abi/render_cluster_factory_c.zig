@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -65,13 +64,12 @@ pub const ke_render_cluster_params = extern struct {
     device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
     /// Builds the cluster frusta; borrowed.
     view_space: ?*abi_view.c.ke_view_space = std.mem.zeroes(?*abi_view.c.ke_view_space),
-    /// Gives the camera's projection; borrowed.
-    camera: ?*abi_render_contract.c.ke_render_camera = std.mem.zeroes(?*abi_render_contract.c.ke_render_camera),
-    point_light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    spot_light_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    world_transform_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    camera_cid: ke_component_id = std.mem.zeroes(ke_component_id),
-    frame_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// Names the components the pass reads; borrowed.
+    camera: ?*abi_render.c.ke_render_camera = std.mem.zeroes(?*abi_render.c.ke_render_camera),
+    /// Names the components the pass reads; borrowed.
+    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+    /// The pass runs inside its frame; borrowed.
+    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
     /// The cluster group it writes: a tag under the group's own name, and the light lists and grid
     /// under the suffixes of kernel_engine/render/resource_groups.h.
     output: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),

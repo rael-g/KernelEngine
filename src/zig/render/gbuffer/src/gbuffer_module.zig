@@ -214,10 +214,10 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 fn setup(gb: *GBufferModule, p: *const abi_render_gbuffer_factory.c.ke_render_gbuffer_params) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const mesh_cid = p.mesh_cid;
-    const world_transform_cid = p.world_transform_cid;
-    const camera_cid = p.camera_cid;
-    const frame_cid = p.frame_cid;
+    const mesh_cid = p.scene.?.component_ids.?(p.scene).?.mesh;
+    const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
+    const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
+    const frame_cid = p.frame.?.frame_cid.?(p.frame);
     gb.core = core;
     gb.device = dev;
     gb.mesh_cid = mesh_cid;
@@ -344,7 +344,7 @@ export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.output == null) return R.code(error.InvalidArgument);
+    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.output == null) return R.code(error.InvalidArgument);
 
     const gb = gpa.create(GBufferModule) catch |err| return R.code(err);
     gb.* = .{};
@@ -379,6 +379,21 @@ export fn ke_render_gbuffer_create(params_in: ?*const abi_render_gbuffer_factory
 
 
 const testing = std.testing;
+
+const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
+
+fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+    return &test_ids;
+}
+
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
+
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 11;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
 
 fn opaqueUnlessZero(_: [*c]abi_render.c.ke_render_service, m: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
     return if (m.bits == 0) abi_render_handles.c.KE_ALPHA_MODE_BLEND else abi_render_handles.c.KE_ALPHA_MODE_OPAQUE;
@@ -551,7 +566,7 @@ test "creating and destroying the gbuffer pass leaves no block allocated and no 
     try rig.init();
     defer rig.deinit();
     var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
+    try R.check(ke_render_gbuffer_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -562,7 +577,7 @@ test "destroying the gbuffer pass unregisters every system it registered" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
-    try R.check(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h));
+    try R.check(ke_render_gbuffer_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .output = "gbuffer" }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
@@ -575,7 +590,7 @@ test "a gbuffer pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
-    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
+    try testing.expect(ke_render_gbuffer_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -587,7 +602,7 @@ test "a gbuffer pass the runtime refuses to register releases what it had create
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
-    try testing.expect(ke_render_gbuffer_create(&.{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .mesh_cid = 1, .world_transform_cid = 2, .camera_cid = 3, .frame_cid = 4, .output = "gbuffer" }, &h) != R.ok);
+    try testing.expect(ke_render_gbuffer_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .output = "gbuffer" }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

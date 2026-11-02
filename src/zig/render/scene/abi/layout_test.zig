@@ -65,7 +65,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_label_resolve_params, "service"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "ui"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "resolver"),
-        @offsetOf(abi.c.ke_render_label_resolve_params, "label_cid"),
+        @offsetOf(abi.c.ke_render_label_resolve_params, "scene"),
         @sizeOf(abi.c.ke_render_scene_resolve_params),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "runtime"),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "ecs"),

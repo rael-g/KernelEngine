@@ -6,6 +6,8 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
+    abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
+    abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
@@ -13,6 +15,7 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/service/render_service.h>
+        \\#include <kernel_engine/render/camera.h>
         \\#include <kernel_engine/render/frame.h>
         \\#include <kernel_engine/render/scene_resolve.h>
     );
@@ -23,6 +26,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/spatial"));
+    translated.addIncludePath(b.path("../../../c/view"));
     translated.addIncludePath(b.path("../../../c/asset"));
     translated.addIncludePath(b.path("../../../c/audio"));
     translated.addIncludePath(b.path("../../../c/configuration"));
@@ -36,7 +40,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/runtime"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../c/text"));
-    translated.addIncludePath(b.path("../../../c/view"));
     translated.addIncludePath(b.path("../../../c/window"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -55,6 +58,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
+    tests.root_module.addIncludePath(b.path("../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../../c/configuration"));
@@ -68,7 +72,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/runtime"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../c/text"));
-    tests.root_module.addIncludePath(b.path("../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../c/window"));
     b.step("test", "Check the render ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

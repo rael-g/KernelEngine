@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
-const abi_math = @import("math");
 const abi_render_components = @import("render_components");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
@@ -57,41 +56,6 @@ pub const KE_RENDER_CLUSTER_SPOT_COUNTS = ".spot_counts";
 pub const KE_RENDER_CLUSTER_GRID = ".grid";
 pub const KE_COMPONENT_NAME_UI_QUAD = "ui_quad";
 pub const KE_COMPONENT_NAME_LABEL = "label";
-
-/// The perspective frustum a camera's field of view describes.
-pub const ke_camera_frustum = extern struct {
-    /// Tangent of half the vertical field of view.
-    tan_half_fov_y: f32 = std.mem.zeroes(f32),
-    aspect: f32 = std.mem.zeroes(f32),
-    near_plane: f32 = std.mem.zeroes(f32),
-    far_plane: f32 = std.mem.zeroes(f32),
-};
-
-/// The matrices and projection that a camera component and its world transform describe. Every
-/// slot is callable at any time and tolerates a null `self`, a null input or a null output by
-/// writing nothing.
-pub const ke_render_camera = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// World-to-view for a camera placed by `camera_world`.
-    view: ?*const fn (?*ke_render_camera, ?*const abi_math.c.ke_mat4, ?*abi_math.c.ke_mat4) callconv(.c) void = null,
-    /// The view matrix of `view` with its translation removed, leaving only the rotation.
-    view_rotation: ?*const fn (?*ke_render_camera, ?*const abi_math.c.ke_mat4, ?*abi_math.c.ke_mat4) callconv(.c) void = null,
-    /// The projection the camera describes. `orthographic` picks the kind, `orthographic_size` is
-    /// half the visible height, and `fov` is the vertical field of view in degrees.
-    projection: ?*const fn (?*ke_render_camera, ?*const abi_render_components.c.ke_camera_component, f32, ?*abi_math.c.ke_mat4) callconv(.c) void = null,
-    /// A perspective projection from the camera's field of view, whatever its `orthographic` flag
-    /// says.
-    perspective_projection: ?*const fn (?*ke_render_camera, ?*const abi_render_components.c.ke_camera_component, f32, ?*abi_math.c.ke_mat4) callconv(.c) void = null,
-    /// The perspective frustum the camera's field of view describes, whatever its `orthographic`
-    /// flag says.
-    perspective_frustum: ?*const fn (?*ke_render_camera, ?*const abi_render_components.c.ke_camera_component, f32, ?*ke_camera_frustum) callconv(.c) void = null,
-};
-
-/// Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it.
-pub const ke_render_camera_handle = extern struct {
-    ref: ?*ke_render_camera = std.mem.zeroes(?*ke_render_camera),
-    destroy: ?*const fn (?*ke_render_camera) callconv(.c) void = null,
-};
 
 pub const ke_render_pass_ctx = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),

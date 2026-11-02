@@ -60,11 +60,10 @@ pub const ke_render_tonemap_params = extern struct {
     runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
     /// Holds the frame's color; borrowed, must outlive it.
     service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Borrowed.
+    /// The pass runs inside its frame; borrowed.
     device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// The tag the system that begins the frame writes; the pass reads it, so it runs once the frame
-    /// has begun.
-    frame_cid: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The pass runs inside its frame; borrowed.
+    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
 };
 
 pub const ke_render_tonemap_handle = extern struct {
