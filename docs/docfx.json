@@ -14,7 +14,7 @@
       },
       {
         "src": "../build/native/docs",
-        "files": ["engine/**", "kabic/**"],
+        "files": ["engine/**"],
         "dest": "reference"
       }
     ],
