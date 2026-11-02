@@ -35,7 +35,9 @@ if (windows && (rebuildImage || !Succeeds("docker", "image", "inspect", WineImag
 }
 
 const string CheckoutPrefix = "ke-ci-";
-foreach (var orphan in Directory.EnumerateDirectories(Path.GetTempPath(), CheckoutPrefix + "*"))
+var checkoutRoot = Path.Combine(rootDir, "build", "ci");
+Directory.CreateDirectory(checkoutRoot);
+foreach (var orphan in Directory.EnumerateDirectories(checkoutRoot, CheckoutPrefix + "*"))
 {
     var owner = Path.GetFileName(orphan)[CheckoutPrefix.Length..].Split('-')[0];
     if (int.TryParse(owner, out var pid) && IsRunning(pid)) continue;
@@ -43,7 +45,7 @@ foreach (var orphan in Directory.EnumerateDirectories(Path.GetTempPath(), Checko
     Remove(orphan);
 }
 
-var checkout = Path.Combine(Path.GetTempPath(), $"{CheckoutPrefix}{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}");
+var checkout = Path.Combine(checkoutRoot, $"{CheckoutPrefix}{Environment.ProcessId}-{Guid.NewGuid().ToString("N")[..8]}");
 try
 {
     Console.WriteLine($"--- fresh checkout of {(workingTree ? "the working tree" : "HEAD")} in {checkout}");
