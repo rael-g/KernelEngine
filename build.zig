@@ -475,6 +475,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_c, "physics" }),
+            b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),

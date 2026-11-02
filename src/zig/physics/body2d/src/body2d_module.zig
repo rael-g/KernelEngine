@@ -14,6 +14,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
+const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_physics_body2d_factory = @import("abi_physics_body2d_factory");
 const abi_result = @import("abi_result");
@@ -88,15 +89,15 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
             const b = &bodies[i];
             const pose = tcs0[i];
             if (b.body == abi_physics.c.KE_BODY_2D_INVALID) {
-                if (p.create_body.?(p, b.type, pose.position.x, pose.position.y, &b.body) != R.ok) continue;
+                if (p.create_body.?(p, b.type, .{ .x = pose.position.x, .y = pose.position.y }, &b.body) != R.ok) continue;
                 m.tracked.put(gpa, segs.?[s].entities.?[i], .{ .body = b.body, .seen = m.update }) catch {
                     p.destroy_body.?(p, b.body);
                     b.body = abi_physics.c.KE_BODY_2D_INVALID;
                     continue;
                 };
                 m.body_generation +%= 1;
-                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
-                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
+                p.set_body_position.?(p, b.body, .{ .x = pose.position.x, .y = pose.position.y }, pose.rotation);
+                p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
                 log.info(
@@ -110,9 +111,9 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
             var st: abi_physics.c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
             if (pose.position.x != st.x or pose.position.y != st.y or pose.rotation != st.angle)
-                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
+                p.set_body_position.?(p, b.body, .{ .x = pose.position.x, .y = pose.position.y }, pose.rotation);
             if (b.velocity.x != st.velocity_x or b.velocity.y != st.velocity_y)
-                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
+                p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
         }
     }
 
@@ -245,8 +246,8 @@ fn colliderSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32
             const angle = tcs[i].rotation;
             const filter = abi_physics.c.ke_collision_filter_2d{ .layer = col.layer, .mask = col.mask };
             const ok = R.ok == switch (col.kind) {
-                abi_physics_components.c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, &filter),
-                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, &filter),
+                abi_physics_components.c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, .{ .x = off.x, .y = off.y }, col.density, col.friction, col.restitution, &filter),
+                else => p.add_box_fixture.?(p, body, .{ .x = col.half_extents.x, .y = col.half_extents.y }, .{ .x = off.x, .y = off.y }, angle, col.density, col.friction, col.restitution, &filter),
             };
             col.attached = ok;
             const shape_fmt = "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}";
@@ -508,7 +509,7 @@ const FakeWorld = struct {
         destroyed_count = 0;
     }
 
-    fn createBody(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_type_2d, _: f32, _: f32, out_body: [*c]abi_physics.c.ke_body_2d) callconv(.c) abi_result.c.ke_result {
+    fn createBody(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_type_2d, _: abi_math.c.ke_vec2, out_body: [*c]abi_physics.c.ke_body_2d) callconv(.c) abi_result.c.ke_result {
         next_body += 1;
         out_body.* = next_body - 1;
         return R.ok;
@@ -523,8 +524,8 @@ const FakeWorld = struct {
         out.* = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     }
 
-    fn setBodyPosition(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: f32, _: f32, _: f32) callconv(.c) void {}
-    fn setBodyVelocity(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: f32, _: f32) callconv(.c) void {}
+    fn setBodyPosition(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: abi_math.c.ke_vec2, _: f32) callconv(.c) void {}
+    fn setBodyVelocity(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: abi_math.c.ke_vec2) callconv(.c) void {}
     fn setBodyFixedRotation(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: bool) callconv(.c) void {}
     fn setBodyGravityScale(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: f32) callconv(.c) void {}
     fn step(_: [*c]abi_physics.c.ke_physics_2d, _: f32) callconv(.c) void {}

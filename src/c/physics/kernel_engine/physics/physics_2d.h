@@ -1,6 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 #define KERNEL_ENGINE_PHYSICS_PHYSICS_2D_H_
 
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
@@ -56,9 +57,8 @@ extern "C"
 
         /**
          * Sets world gravity (m/s^2). Default is (0, -9.81).
-         * @param x [vector2:gravity]
          */
-        void (*set_gravity)(struct ke_physics_2d *self, float x, float y);
+        void (*set_gravity)(struct ke_physics_2d *self, ke_vec2 gravity);
 
         /**
          * Advances the simulation by dt seconds. Variable steps are accepted, but
@@ -68,12 +68,11 @@ extern "C"
 
         /**
          * Creates a body at the given world position.
-         * @param x [vector2:position]
          * @param out_body [out] Receives the body; KE_BODY_2D_INVALID on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null out_body, or
          *         KE_RESULT_OUT_OF_MEMORY.
          */
-        ke_result (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, float x, float y, ke_body_2d *out_body);
+        ke_result (*create_body)(struct ke_physics_2d *self, ke_body_type_2d type, ke_vec2 position, ke_body_2d *out_body);
 
         /** Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID. */
         void (*destroy_body)(struct ke_physics_2d *self, ke_body_2d body);
@@ -81,29 +80,26 @@ extern "C"
         /**
          * Attaches a box fixture, sized by its half-extents and placed at the given offset
          * from the body origin.
-         * @param half_w [vector2:half_extents]
-         * @param offset_x [vector2:offset]
          * @param offset_angle Radians, CCW positive, about the offset center.
          * @param filter [optional] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
          * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
         ke_result (*add_box_fixture)(struct ke_physics_2d *self, ke_body_2d body,
-                                     float half_w, float half_h,
-                                     float offset_x, float offset_y, float offset_angle,
+                                     ke_vec2 half_extents,
+                                     ke_vec2 offset, float offset_angle,
                                      float density, float friction, float restitution,
                                      const ke_collision_filter_2d *filter);
 
         /**
          * Attaches a circle fixture at the given offset from the body origin.
-         * @param offset_x [vector2:offset]
          * @param filter [optional] Layers the fixture occupies and tests against. NULL
          *               leaves it colliding with everything.
          * @return KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.
          */
         ke_result (*add_circle_fixture)(struct ke_physics_2d *self, ke_body_2d body,
                                         float radius,
-                                        float offset_x, float offset_y,
+                                        ke_vec2 offset,
                                         float density, float friction, float restitution,
                                         const ke_collision_filter_2d *filter);
 
@@ -115,21 +111,18 @@ extern "C"
 
         /**
          * Teleports the body and skips collision response.
-         * @param x [vector2:position]
          */
-        void (*set_body_position)(struct ke_physics_2d *self, ke_body_2d body, float x, float y, float angle);
+        void (*set_body_position)(struct ke_physics_2d *self, ke_body_2d body, ke_vec2 position, float angle);
 
         /**
          * Sets linear velocity directly (m/s).
-         * @param vx [vector2:velocity]
          */
-        void (*set_body_velocity)(struct ke_physics_2d *self, ke_body_2d body, float vx, float vy);
+        void (*set_body_velocity)(struct ke_physics_2d *self, ke_body_2d body, ke_vec2 velocity);
 
         /**
          * Applies a linear impulse (kg*m/s) at the body center.
-         * @param impulse_x [vector2:impulse]
          */
-        void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, float impulse_x, float impulse_y);
+        void (*apply_impulse)(struct ke_physics_2d *self, ke_body_2d body, ke_vec2 impulse);
 
         /**
          * Locks or unlocks the body's rotation. A locked body keeps its current angle and

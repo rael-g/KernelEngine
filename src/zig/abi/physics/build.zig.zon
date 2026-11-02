@@ -4,6 +4,7 @@
     .fingerprint = 0x1654c251f4d5ab00,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_math = .{ .path = "../math" },
         .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},

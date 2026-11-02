@@ -11,32 +11,32 @@ namespace KernelEngine.Physics;
 public interface IPhysics2D : IDisposable
 {
     /// <summary>Sets world gravity (m/s^2). Default is (0, -9.81).</summary>
-    void SetGravity(float x, float y);
+    void SetGravity(System.Numerics.Vector2 gravity);
     /// <summary>Advances the simulation by dt seconds. Variable steps are accepted, but deterministic replay requires the caller to supply a fixed one.</summary>
     void Step(float dt);
     /// <summary>Creates a body at the given world position.</summary>
     /// <returns>Receives the body; KE_BODY_2D_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    uint CreateBody(BodyType2D type, float x, float y);
+    uint CreateBody(BodyType2D type, System.Numerics.Vector2 position);
     /// <summary>Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.</summary>
     void DestroyBody(uint body);
     /// <summary>Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.</summary>
     /// <param name="offsetAngle">Radians, CCW positive, about the offset center.</param>
     /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    void AddBoxFixture(uint body, float halfW, float halfH, float offsetX, float offsetY, float offsetAngle, float density, float friction, float restitution, CollisionFilter2d? filter);
+    void AddBoxFixture(uint body, System.Numerics.Vector2 halfExtents, System.Numerics.Vector2 offset, float offsetAngle, float density, float friction, float restitution, CollisionFilter2d? filter);
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
     /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    void AddCircleFixture(uint body, float radius, float offsetX, float offsetY, float density, float friction, float restitution, CollisionFilter2d? filter);
+    void AddCircleFixture(uint body, float radius, System.Numerics.Vector2 offset, float density, float friction, float restitution, CollisionFilter2d? filter);
     /// <summary>Reads the body's current pose and motion.</summary>
     BodyState2d GetBodyState(uint body);
     /// <summary>Teleports the body and skips collision response.</summary>
-    void SetBodyPosition(uint body, float x, float y, float angle);
+    void SetBodyPosition(uint body, System.Numerics.Vector2 position, float angle);
     /// <summary>Sets linear velocity directly (m/s).</summary>
-    void SetBodyVelocity(uint body, float vx, float vy);
+    void SetBodyVelocity(uint body, System.Numerics.Vector2 velocity);
     /// <summary>Applies a linear impulse (kg*m/s) at the body center.</summary>
-    void ApplyImpulse(uint body, float impulseX, float impulseY);
+    void ApplyImpulse(uint body, System.Numerics.Vector2 impulse);
     /// <summary>Locks or unlocks the body's rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.</summary>
     void SetBodyFixedRotation(uint body, bool @fixed);
     /// <summary>Scales world gravity for this body alone. 1 leaves it at the world's value, 0 makes the body weightless, and a negative value makes it fall upward.</summary>

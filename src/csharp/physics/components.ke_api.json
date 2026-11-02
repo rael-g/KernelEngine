@@ -662,16 +662,8 @@
           "return_doc": null,
           "params": [
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:gravity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "gravity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -708,16 +700,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -762,30 +746,14 @@
               "doc": null
             },
             {
-              "name": "half_w",
-              "type": "float",
-              "tags": [
-                "vector2:half_extents"
-              ],
-              "doc": null
-            },
-            {
-              "name": "half_h",
-              "type": "float",
+              "name": "half_extents",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -844,16 +812,8 @@
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -924,16 +884,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -960,16 +912,8 @@
               "doc": null
             },
             {
-              "name": "vx",
-              "type": "float",
-              "tags": [
-                "vector2:velocity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "vy",
-              "type": "float",
+              "name": "velocity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -990,16 +934,8 @@
               "doc": null
             },
             {
-              "name": "impulse_x",
-              "type": "float",
-              "tags": [
-                "vector2:impulse"
-              ],
-              "doc": null
-            },
-            {
-              "name": "impulse_y",
-              "type": "float",
+              "name": "impulse",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }

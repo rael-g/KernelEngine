@@ -49,9 +49,9 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     }
 
     /// <summary>Sets world gravity (m/s^2). Default is (0, -9.81).</summary>
-    public void SetGravity(float x, float y)
+    public void SetGravity(System.Numerics.Vector2 gravity)
     {
-        Handle->set_gravity(Handle, x, y);
+        Handle->set_gravity(Handle, gravity);
     }
 
     /// <summary>Advances the simulation by dt seconds. Variable steps are accepted, but deterministic replay requires the caller to supply a fixed one.</summary>
@@ -63,10 +63,10 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     /// <summary>Creates a body at the given world position.</summary>
     /// <returns>Receives the body; KE_BODY_2D_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint CreateBody(BodyType2D type, float x, float y)
+    public uint CreateBody(BodyType2D type, System.Numerics.Vector2 position)
     {
         uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (BodyType2D)type, x, y, &resultOut), "create_body");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (BodyType2D)type, position, &resultOut), "create_body");
         return resultOut;
     }
 
@@ -80,17 +80,17 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     /// <param name="offsetAngle">Radians, CCW positive, about the offset center.</param>
     /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void AddBoxFixture(uint body, float halfW, float halfH, float offsetX, float offsetY, float offsetAngle, float density, float friction, float restitution, CollisionFilter2d? filter)
+    public void AddBoxFixture(uint body, System.Numerics.Vector2 halfExtents, System.Numerics.Vector2 offset, float offsetAngle, float density, float friction, float restitution, CollisionFilter2d? filter)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfW, halfH, offsetX, offsetY, offsetAngle, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_box_fixture");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfExtents, offset, offsetAngle, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_box_fixture");
     }
 
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
     /// <param name="filter">Layers the fixture occupies and tests against. NULL leaves it colliding with everything.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void AddCircleFixture(uint body, float radius, float offsetX, float offsetY, float density, float friction, float restitution, CollisionFilter2d? filter)
+    public void AddCircleFixture(uint body, float radius, System.Numerics.Vector2 offset, float density, float friction, float restitution, CollisionFilter2d? filter)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offsetX, offsetY, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_circle_fixture");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offset, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_circle_fixture");
     }
 
     /// <summary>Reads the body's current pose and motion.</summary>
@@ -102,21 +102,21 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     }
 
     /// <summary>Teleports the body and skips collision response.</summary>
-    public void SetBodyPosition(uint body, float x, float y, float angle)
+    public void SetBodyPosition(uint body, System.Numerics.Vector2 position, float angle)
     {
-        Handle->set_body_position(Handle, body, x, y, angle);
+        Handle->set_body_position(Handle, body, position, angle);
     }
 
     /// <summary>Sets linear velocity directly (m/s).</summary>
-    public void SetBodyVelocity(uint body, float vx, float vy)
+    public void SetBodyVelocity(uint body, System.Numerics.Vector2 velocity)
     {
-        Handle->set_body_velocity(Handle, body, vx, vy);
+        Handle->set_body_velocity(Handle, body, velocity);
     }
 
     /// <summary>Applies a linear impulse (kg*m/s) at the body center.</summary>
-    public void ApplyImpulse(uint body, float impulseX, float impulseY)
+    public void ApplyImpulse(uint body, System.Numerics.Vector2 impulse)
     {
-        Handle->apply_impulse(Handle, body, impulseX, impulseY);
+        Handle->apply_impulse(Handle, body, impulse);
     }
 
     /// <summary>Locks or unlocks the body's rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.</summary>

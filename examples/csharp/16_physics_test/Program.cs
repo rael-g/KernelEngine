@@ -61,8 +61,8 @@ var services = new ServiceCollection()
         var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Position = new Vector3(0f, FloorY, 0f);
         floor.Scale = new Vector3(FloorHalfW * 2f, FloorHalfH * 2f, 1f);
-        var floorBody = physics.CreateBody(BodyType2D.Static, 0f, FloorY);
-        physics.AddBoxFixture(floorBody, FloorHalfW, FloorHalfH, 0, 0, 0, 1f, 0.5f, 0f, null);
+        var floorBody = physics.CreateBody(BodyType2D.Static, new Vector2(0f, FloorY));
+        physics.AddBoxFixture(floorBody, new Vector2(FloorHalfW, FloorHalfH), default, 0, 1f, 0.5f, 0f, null);
 
         tree.AddNode(new PhysicsScene(physics, cubeMesh, ballMat), "PhysicsScene");
     }));
@@ -165,8 +165,8 @@ sealed class PhysicsScene : Node
             $"Ball_{_balls.Count}");
         node.Position = new Vector3(at.X, at.Y, 0f);
 
-        var body = _physics.CreateBody(BodyType2D.Dynamic, at.X, at.Y);
-        _physics.AddBoxFixture(body, 0.5f, 0.5f, 0, 0, 0, 1f, 0.3f, 0.5f, null);
+        var body = _physics.CreateBody(BodyType2D.Dynamic, new Vector2(at.X, at.Y));
+        _physics.AddBoxFixture(body, new Vector2(0.5f, 0.5f), default, 0, 1f, 0.3f, 0.5f, null);
 
         _balls.Add((node, body));
         Console.WriteLine($"Spawned at ({at.X:F2}, {at.Y:F2}); total={_balls.Count}");

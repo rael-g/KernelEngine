@@ -21,9 +21,9 @@ public class Physics2DTests
     private static bool LastResult = true;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe void MockSetGravity(ke_physics_2d* self, float x, float y)
+    private static unsafe void MockSetGravity(ke_physics_2d* self, System.Numerics.Vector2 g)
     {
-        LastGravity = new Vector2(x, y);
+        LastGravity = new Vector2(g.X, g.Y);
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -33,10 +33,10 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe global::KernelEngine.Result.Native.Result MockCreateBody(ke_physics_2d* self, BodyType2D type, float x, float y, uint* outBody)
+    private static unsafe global::KernelEngine.Result.Native.Result MockCreateBody(ke_physics_2d* self, BodyType2D type, System.Numerics.Vector2 p, uint* outBody)
     {
         LastBodyType = type;
-        LastPosition = new Vector2(x, y);
+        LastPosition = new Vector2(p.X, p.Y);
         *outBody = LastResult ? 42u : 0u;
         return LastResult ? global::KernelEngine.Result.Native.Result.Ok : global::KernelEngine.Result.Native.Result.OutOfMemory;
     }
@@ -48,14 +48,14 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe global::KernelEngine.Result.Native.Result MockAddBoxFixture(ke_physics_2d* self, uint id, float hx, float hy, float ox, float oy, float oa, float d, float f, float r, CollisionFilter2d* filter)
+    private static unsafe global::KernelEngine.Result.Native.Result MockAddBoxFixture(ke_physics_2d* self, uint id, System.Numerics.Vector2 h, System.Numerics.Vector2 o, float oa, float d, float f, float r, CollisionFilter2d* filter)
     {
         LastBodyId = id;
         return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe global::KernelEngine.Result.Native.Result MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, float ox, float oy, float d, float f, float r, CollisionFilter2d* filter)
+    private static unsafe global::KernelEngine.Result.Native.Result MockAddCircleFixture(ke_physics_2d* self, uint id, float rad, System.Numerics.Vector2 o, float d, float f, float r, CollisionFilter2d* filter)
     {
         LastBodyId = id;
         return global::KernelEngine.Result.Native.Result.Ok;
@@ -74,25 +74,25 @@ public class Physics2DTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe void MockSetBodyPosition(ke_physics_2d* self, uint id, float x, float y, float a)
+    private static unsafe void MockSetBodyPosition(ke_physics_2d* self, uint id, System.Numerics.Vector2 p, float a)
     {
         LastBodyId = id;
-        LastPosition = new Vector2(x, y);
+        LastPosition = new Vector2(p.X, p.Y);
         LastAngle = a;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe void MockSetBodyVelocity(ke_physics_2d* self, uint id, float vx, float vy)
+    private static unsafe void MockSetBodyVelocity(ke_physics_2d* self, uint id, System.Numerics.Vector2 v)
     {
         LastBodyId = id;
-        LastVelocity = new Vector2(vx, vy);
+        LastVelocity = new Vector2(v.X, v.Y);
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe void MockApplyImpulse(ke_physics_2d* self, uint id, float ix, float iy)
+    private static unsafe void MockApplyImpulse(ke_physics_2d* self, uint id, System.Numerics.Vector2 i)
     {
         LastBodyId = id;
-        LastImpulse = new Vector2(ix, iy);
+        LastImpulse = new Vector2(i.X, i.Y);
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -128,7 +128,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetGravity(0, -10);
+        physics.SetGravity(new System.Numerics.Vector2(0, -10));
         Assert.Equal(0, LastGravity.X);
         Assert.Equal(-10, LastGravity.Y);
         NativeMemory.Free(h.@ref);
@@ -149,7 +149,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.CreateBody(BodyType2D.Dynamic, 0, 0);
+        physics.CreateBody(BodyType2D.Dynamic, new System.Numerics.Vector2(0, 0));
         Assert.Equal(BodyType2D.Dynamic, LastBodyType);
         NativeMemory.Free(h.@ref);
     }
@@ -159,7 +159,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.CreateBody(BodyType2D.Static, 1, 0);
+        physics.CreateBody(BodyType2D.Static, new System.Numerics.Vector2(1, 0));
         Assert.Equal(1, LastPosition.X);
         NativeMemory.Free(h.@ref);
     }
@@ -169,7 +169,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.CreateBody(BodyType2D.Static, 0, 2);
+        physics.CreateBody(BodyType2D.Static, new System.Numerics.Vector2(0, 2));
         Assert.Equal(2, LastPosition.Y);
         NativeMemory.Free(h.@ref);
     }
@@ -179,7 +179,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        var handle = physics.CreateBody(BodyType2D.Static, 0, 0);
+        var handle = physics.CreateBody(BodyType2D.Static, new System.Numerics.Vector2(0, 0));
         Assert.Equal(42u, handle);
         NativeMemory.Free(h.@ref);
     }
@@ -190,7 +190,7 @@ public class Physics2DTests
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
         LastResult = false;
-        Assert.Throws<OutOfMemoryException>(() => physics.CreateBody(BodyType2D.Dynamic, 1, 2));
+        Assert.Throws<OutOfMemoryException>(() => physics.CreateBody(BodyType2D.Dynamic, new System.Numerics.Vector2(1, 2)));
         LastResult = true;
         NativeMemory.Free(h.@ref);
     }
@@ -210,7 +210,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.AddBoxFixture(123, 1, 1, 0, 0, 0, 1f, 0.3f, 0f, default);
+        physics.AddBoxFixture(123, new System.Numerics.Vector2(1, 1), new System.Numerics.Vector2(0, 0), 0, 1f, 0.3f, 0f, default);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
     }
@@ -220,7 +220,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.AddCircleFixture(123, 1f, 0, 0, 1f, 0.3f, 0f, default);
+        physics.AddCircleFixture(123, 1f, new System.Numerics.Vector2(0, 0), 1f, 0.3f, 0f, default);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
     }
@@ -270,7 +270,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetBodyPosition(123, 0, 0, 0);
+        physics.SetBodyPosition(123, new System.Numerics.Vector2(0, 0), 0);
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
     }
@@ -280,7 +280,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetBodyPosition(1, 1, 2, 0);
+        physics.SetBodyPosition(1, new System.Numerics.Vector2(1, 2), 0);
         Assert.Equal(1, LastPosition.X);
         Assert.Equal(2, LastPosition.Y);
         NativeMemory.Free(h.@ref);
@@ -291,7 +291,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetBodyPosition(1, 0, 0, 0.5f);
+        physics.SetBodyPosition(1, new System.Numerics.Vector2(0, 0), 0.5f);
         Assert.Equal(0.5f, LastAngle);
         NativeMemory.Free(h.@ref);
     }
@@ -301,7 +301,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetBodyVelocity(123, 0, 0);
+        physics.SetBodyVelocity(123, new System.Numerics.Vector2(0, 0));
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
     }
@@ -311,7 +311,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.SetBodyVelocity(1, 1, 2);
+        physics.SetBodyVelocity(1, new System.Numerics.Vector2(1, 2));
         Assert.Equal(1, LastVelocity.X);
         Assert.Equal(2, LastVelocity.Y);
         NativeMemory.Free(h.@ref);
@@ -322,7 +322,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.ApplyImpulse(123, 0, 0);
+        physics.ApplyImpulse(123, new System.Numerics.Vector2(0, 0));
         Assert.Equal(123u, LastBodyId);
         NativeMemory.Free(h.@ref);
     }
@@ -332,7 +332,7 @@ public class Physics2DTests
     {
         var h = CreateMockHandle();
         IPhysics2D physics = new Physics2D(h);
-        physics.ApplyImpulse(1, 1, 2);
+        physics.ApplyImpulse(1, new System.Numerics.Vector2(1, 2));
         Assert.Equal(1, LastImpulse.X);
         Assert.Equal(2, LastImpulse.Y);
         NativeMemory.Free(h.@ref);

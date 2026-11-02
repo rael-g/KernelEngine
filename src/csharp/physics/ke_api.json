@@ -178,6 +178,168 @@
   ],
   "structs": [
     {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_collision_filter_2d",
       "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
       "tags": [],
@@ -262,16 +424,8 @@
           "return_doc": null,
           "params": [
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:gravity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "gravity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -308,16 +462,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -362,30 +508,14 @@
               "doc": null
             },
             {
-              "name": "half_w",
-              "type": "float",
-              "tags": [
-                "vector2:half_extents"
-              ],
-              "doc": null
-            },
-            {
-              "name": "half_h",
-              "type": "float",
+              "name": "half_extents",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -444,16 +574,8 @@
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -524,16 +646,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -560,16 +674,8 @@
               "doc": null
             },
             {
-              "name": "vx",
-              "type": "float",
-              "tags": [
-                "vector2:velocity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "vy",
-              "type": "float",
+              "name": "velocity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -590,16 +696,8 @@
               "doc": null
             },
             {
-              "name": "impulse_x",
-              "type": "float",
-              "tags": [
-                "vector2:impulse"
-              ],
-              "doc": null
-            },
-            {
-              "name": "impulse_y",
-              "type": "float",
+              "name": "impulse",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }

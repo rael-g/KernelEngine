@@ -10,6 +10,7 @@
         .ke_common = .{ .path = "../../common" },
         .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_physics = .{ .path = "../../abi/physics" },
+        .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_physics_2d_box2d_factory = .{ .path = "abi" },
     },
