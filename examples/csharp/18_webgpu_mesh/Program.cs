@@ -45,8 +45,8 @@ unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
 var transformCid = reg.RegisterComponent<TransformComponent>("transform");
 var worldCid = reg.RegisterComponent<WorldTransformComponent>("world_transform");
-var cameraCid = reg.RegisterComponent<CameraComponent>("camera");
-var meshCid = reg.RegisterComponent<MeshComponent>("mesh");
+var cameraCid = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
+var meshCid = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
 var lightCid = reg.RegisterComponent<DirectionalLightComponent>("directional_light");
 
 var cam = reg.CreateEntity();
