@@ -3,6 +3,7 @@ using KernelEngine.Ecs;
 using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace KernelEngine.Runtime;
 
@@ -31,8 +32,8 @@ public static class ServiceCollectionExtensions
         where TImpl : class, TContract
     {
         services.AddSingleton<TContract, TImpl>();
-        if (typeof(TContract) == typeof(IRuntime))
-            services.AddSingleton<INativeRuntime>(sp => (INativeRuntime)sp.GetRequiredService<IRuntime>());
+        foreach (var native in typeof(TImpl).GetInterfaces().Where(i => i.Name.StartsWith("INative", StringComparison.Ordinal)))
+            services.TryAddSingleton(native, sp => sp.GetRequiredService<TContract>());
         return services;
     }
 
