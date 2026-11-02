@@ -516,11 +516,11 @@ fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c
     try st.globals.create(st.device);
     try st.globals.provideTo(st.binder);
     const white_px = [_]u8{ 255, 255, 255, 255 };
-    try R.check(asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, &st.white_texture_h));
+    try R.check(asset_upload.uploadTexture(core, "__ke_white_texture", 1, 1, &white_px, white_px.len, &st.white_texture_h));
     const flat_normal_px = [_]u8{ 128, 128, 255, 255 };
-    try R.check(asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, &st.default_normal));
+    try R.check(asset_upload.uploadTexture(core, "__ke_default_normal", 1, 1, &flat_normal_px, flat_normal_px.len, &st.default_normal));
     const black_cube_px = [_]u8{0} ** (4 * 6);
-    try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, &st.default_cubemap));
+    try R.check(asset_upload.uploadCubemap(core, "__ke_default_cubemap", 1, &black_cube_px, black_cube_px.len, &st.default_cubemap));
     const white_color = [_]f32{ 1.0, 1.0, 1.0, 1.0 };
     try R.check(asset_upload.createMaterial(core, "__ke_white_material", &white_color, 0.0, 0.5, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE }, abi_render_handles.c.KE_ALPHA_MODE_OPAQUE, 0.5, 1.5, 0.05, null, &st.white_material));
 

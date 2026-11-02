@@ -186,11 +186,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("UploadTexture called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        fixed (byte* p = rgba)
-        {
-            var h = _renderService.UploadTexture(key, width, height, (nint)p);
-            return h;
-        }
+        return _renderService.UploadTexture(key, width, height, rgba);
     }
 
     /// <inheritdoc/>
@@ -200,11 +196,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
         ArgumentException.ThrowIfNullOrEmpty(key);
 
-        fixed (byte* p = faces)
-        {
-            var h = _renderService.UploadCubemap(key, faceSize, (nint)p);
-            return h;
-        }
+        return _renderService.UploadCubemap(key, faceSize, faces);
     }
 
     /// <inheritdoc/>

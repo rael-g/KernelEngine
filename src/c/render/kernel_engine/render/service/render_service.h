@@ -208,10 +208,12 @@ struct ke_render_service
     void (*set_clear_color)(struct ke_render_service *self, float r, float g, float b, float a);
 
     /** @param key [utf8] Dedup cache key; required.
+     *  @param rgba [array_of:rgba_size] RGBA8 pixels in row order; width by height by four bytes.
      *  @param out_texture [out] Receives the handle of the uploaded texture. */
     ke_result (*upload_texture)(struct ke_render_service *self, const char *key,
                                 uint32_t width, uint32_t height,
-                                const void *rgba, ke_texture_handle *out_texture);
+                                const uint8_t *rgba, size_t rgba_size,
+                                ke_texture_handle *out_texture);
     /**
      * @param key [utf8] Dedup cache key; required.
      * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
@@ -238,9 +240,10 @@ struct ke_render_service
     float (*material_alpha_cutoff)(struct ke_render_service *self, ke_material_handle h);
 
     /** @param key [utf8] Dedup cache key; required.
+     *  @param faces [array_of:faces_size] Six square RGBA8 faces, in the order +X, -X, +Y, -Y, +Z, -Z.
      *  @param out_cubemap [out] Receives the handle of the uploaded cubemap. */
     ke_result (*upload_cubemap)(struct ke_render_service *self, const char *key,
-                                uint32_t face_size, const void *faces,
+                                uint32_t face_size, const uint8_t *faces, size_t faces_size,
                                 ke_texture_handle *out_cubemap);
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);

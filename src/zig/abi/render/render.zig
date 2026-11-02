@@ -149,10 +149,10 @@ pub const RenderService = struct {
                 }
             }.call,
             .upload_texture = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: u32, a2: u32, a3: ?*const anyopaque, a4: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: u32, a2: u32, a3: ?[*]const u8, a4: usize, a5: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.uploadTexture(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2, a3) catch |failure| return resultOf(failure);
-                    (a4 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.uploadTexture(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2, if (a3) |items| items[0..a4] else &.{}) catch |failure| return resultOf(failure);
+                    (a5 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -183,10 +183,10 @@ pub const RenderService = struct {
                 }
             }.call,
             .upload_cubemap = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: u32, a2: ?*const anyopaque, a3: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: u32, a2: ?[*]const u8, a3: usize, a4: ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.uploadCubemap(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2) catch |failure| return resultOf(failure);
-                    (a3 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.uploadCubemap(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, if (a2) |items| items[0..a3] else &.{}) catch |failure| return resultOf(failure);
+                    (a4 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -459,9 +459,9 @@ pub const RenderService = struct {
         return self.ptr.set_clear_color.?(self.ptr, r, g, b, a);
     }
 
-    pub fn uploadTexture(self: RenderService, key: [:0]const u8, width: u32, height: u32, rgba: ?*const anyopaque) Error!abi_render_handles.c.ke_texture_handle {
+    pub fn uploadTexture(self: RenderService, key: [:0]const u8, width: u32, height: u32, rgba: []const u8) Error!abi_render_handles.c.ke_texture_handle {
         var written: abi_render_handles.c.ke_texture_handle = undefined;
-        try checkResult(self.ptr.upload_texture.?(self.ptr, key.ptr, width, height, rgba, &written));
+        try checkResult(self.ptr.upload_texture.?(self.ptr, key.ptr, width, height, rgba.ptr, @intCast(rgba.len), &written));
         return written;
     }
 
@@ -487,9 +487,9 @@ pub const RenderService = struct {
         return self.ptr.material_alpha_cutoff.?(self.ptr, h);
     }
 
-    pub fn uploadCubemap(self: RenderService, key: [:0]const u8, face_size: u32, faces: ?*const anyopaque) Error!abi_render_handles.c.ke_texture_handle {
+    pub fn uploadCubemap(self: RenderService, key: [:0]const u8, face_size: u32, faces: []const u8) Error!abi_render_handles.c.ke_texture_handle {
         var written: abi_render_handles.c.ke_texture_handle = undefined;
-        try checkResult(self.ptr.upload_cubemap.?(self.ptr, key.ptr, face_size, faces, &written));
+        try checkResult(self.ptr.upload_cubemap.?(self.ptr, key.ptr, face_size, faces.ptr, @intCast(faces.len), &written));
         return written;
     }
 

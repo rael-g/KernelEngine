@@ -66,7 +66,7 @@ fn bake(st: *State, l: *abi_ui_components.c.ke_label_component) abi_ui_component
     defer resolver.free_font.?(resolver, d);
 
     var atlas: abi_render_handles.c.ke_texture_handle = abi_render_handles.c.KE_TEXTURE_NONE;
-    if (st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, d.atlas_rgba, &atlas) != abi_result.c.KE_OK) {
+    if (st.core.upload_texture.?(st.core, key.ptr, d.atlas_width, d.atlas_height, @ptrCast(d.atlas_rgba), @as(usize, d.atlas_width) * d.atlas_height * 4, &atlas) != abi_result.c.KE_OK) {
         reportUnresolved(path, "its glyph atlas could not be uploaded");
         return abi_ui_components.c.KE_UI_FONT_FAILED;
     }

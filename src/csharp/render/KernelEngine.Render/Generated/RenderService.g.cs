@@ -212,9 +212,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="rgba">RGBA8 pixels in row order; width by height by four bytes.</param>
     /// <returns>Receives the handle of the uploaded texture.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public TextureHandle UploadTexture(string key, uint width, uint height, nint rgba)
+    public TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba)
     {
         var keyText = key ?? "";
         var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
@@ -222,9 +223,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-            TextureHandle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, (void*)rgba, &resultOut), "upload_texture");
-            return resultOut;
+            fixed (byte* rgbaPtr = rgba)
+            {
+                TextureHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, rgbaPtr, (nuint)rgba.Length, &resultOut), "upload_texture");
+                return resultOut;
+            }
         }
     }
 
@@ -272,9 +276,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="faces">Six square RGBA8 faces, in the order +X, -X, +Y, -Y, +Z, -Z.</param>
     /// <returns>Receives the handle of the uploaded cubemap.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public TextureHandle UploadCubemap(string key, uint faceSize, nint faces)
+    public TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces)
     {
         var keyText = key ?? "";
         var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
@@ -282,9 +287,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-            TextureHandle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, (void*)faces, &resultOut), "upload_cubemap");
-            return resultOut;
+            fixed (byte* facesPtr = faces)
+            {
+                TextureHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, facesPtr, (nuint)faces.Length, &resultOut), "upload_cubemap");
+                return resultOut;
+            }
         }
     }
 

@@ -2435,7 +2435,15 @@
             },
             {
               "name": "rgba",
-              "type": "const void *",
+              "type": "const uint8_t *",
+              "tags": [
+                "array_of:rgba_size"
+              ],
+              "doc": "RGBA8 pixels in row order; width by height by four bytes."
+            },
+            {
+              "name": "rgba_size",
+              "type": "size_t",
               "tags": [],
               "doc": null
             },
@@ -2610,7 +2618,15 @@
             },
             {
               "name": "faces",
-              "type": "const void *",
+              "type": "const uint8_t *",
+              "tags": [
+                "array_of:faces_size"
+              ],
+              "doc": "Six square RGBA8 faces, in the order \u002BX, -X, \u002BY, -Y, \u002BZ, -Z."
+            },
+            {
+              "name": "faces_size",
+              "type": "size_t",
               "tags": [],
               "doc": null
             },

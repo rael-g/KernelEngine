@@ -200,7 +200,7 @@ pub const ke_render_service = extern struct {
     mesh_buffers: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_mesh_handle, ?*ke_gpu_buffer, ?*ke_gpu_buffer, ?*u32) callconv(.c) bool = null,
     /// The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
     set_clear_color: ?*const fn (?*ke_render_service, f32, f32, f32, f32) callconv(.c) void = null,
-    upload_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, u32, ?*const anyopaque, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
+    upload_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
     create_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*const f32, f32, f32, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_texture_handle, abi_render_handles.c.ke_alpha_mode, f32, f32, f32, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) abi_result.c.ke_result = null,
     /// What the service's resource binder holds for a material handle, the argument a pass gives its
     /// bind_material; an unknown handle resolves to the built-in white material.
@@ -209,7 +209,7 @@ pub const ke_render_service = extern struct {
     material_alpha_mode: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode = null,
     /// The MASK discard threshold for a material handle.
     material_alpha_cutoff: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) f32 = null,
-    upload_cubemap: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, ?*const anyopaque, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
+    upload_cubemap: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
     /// The GPU view for a texture/cubemap handle.
     texture_view: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_texture_handle) callconv(.c) ke_gpu_texture_view = null,
     /// The GPU view of a declared transient resource, by name.

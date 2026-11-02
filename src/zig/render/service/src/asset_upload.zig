@@ -96,10 +96,10 @@ pub fn setClearColor(self: [*c]abi_render.c.ke_render_service, r: f32, g: f32, b
 /// writes the cached handle. An empty or null key fails as an invalid argument. A texture or view
 /// the device cannot create fails with the device's code, and a full store as out of memory,
 /// destroying what was made first.
-pub fn uploadTexture(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, width: u32, height: u32, rgba: ?*const anyopaque, out_texture: [*c]abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
+pub fn uploadTexture(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, width: u32, height: u32, rgba: [*c]const u8, rgba_size: usize, out_texture: [*c]abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_texture orelse return R.code(error.InvalidArgument);
     out.* = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
-    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
+    if (self == null or !keyValid(key) or rgba_size != pixelBytes(width, height, 1)) return R.code(error.InvalidArgument);
     out.* = .{ .bits = texture(rc.coreOf(self), key, width, height, 1, abi_render_gpu.c.KE_GPU_TEXTURE_DIM_2D, rgba) catch |err| return R.code(err) };
     return R.ok;
 }
@@ -107,12 +107,16 @@ pub fn uploadTexture(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8
 /// Creates a sampled RGBA cube texture and its view for the key, from six faces of the size given,
 /// and stores it in `texture_store` beside the 2D textures, so a cubemap handle is a texture
 /// handle. The failures are those of `uploadTexture`.
-pub fn uploadCubemap(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, face_size: u32, faces: ?*const anyopaque, out_cubemap: [*c]abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
+pub fn uploadCubemap(self: [*c]abi_render.c.ke_render_service, key: [*c]const u8, face_size: u32, faces: [*c]const u8, faces_size: usize, out_cubemap: [*c]abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_cubemap orelse return R.code(error.InvalidArgument);
     out.* = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
-    if (self == null or !keyValid(key)) return R.code(error.InvalidArgument);
+    if (self == null or !keyValid(key) or faces_size != pixelBytes(face_size, face_size, 6)) return R.code(error.InvalidArgument);
     out.* = .{ .bits = texture(rc.coreOf(self), key, face_size, face_size, 6, abi_render_gpu.c.KE_GPU_TEXTURE_DIM_CUBE, faces) catch |err| return R.code(err) };
     return R.ok;
+}
+
+fn pixelBytes(width: u32, height: u32, layers: u32) u64 {
+    return @as(u64, width) * height * layers * 4;
 }
 
 fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers: u8, dimension: abi_render_gpu.c.ke_gpu_texture_dimension, pixels: ?*const anyopaque) R.Error!u32 {

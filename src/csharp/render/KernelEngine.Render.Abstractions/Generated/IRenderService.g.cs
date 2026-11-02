@@ -49,9 +49,10 @@ public interface IRenderService : IDisposable
     /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>
     void SetClearColor(float r, float g, float b, float a);
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="rgba">RGBA8 pixels in row order; width by height by four bytes.</param>
     /// <returns>Receives the handle of the uploaded texture.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    TextureHandle UploadTexture(string key, uint width, uint height, nint rgba);
+    TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba);
     /// <param name="key">Dedup cache key; required.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
     /// <returns>Receives the handle of the material.</returns>
@@ -64,9 +65,10 @@ public interface IRenderService : IDisposable
     /// <summary>The MASK discard threshold for a material handle.</summary>
     float MaterialAlphaCutoff(MaterialHandle h);
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="faces">Six square RGBA8 faces, in the order +X, -X, +Y, -Y, +Z, -Z.</param>
     /// <returns>Receives the handle of the uploaded cubemap.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    TextureHandle UploadCubemap(string key, uint faceSize, nint faces);
+    TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces);
     /// <summary>The GPU view for a texture/cubemap handle.</summary>
     ulong TextureView(TextureHandle h);
     /// <summary>The GPU view of a declared transient resource, by name.</summary>

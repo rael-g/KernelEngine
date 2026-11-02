@@ -342,7 +342,7 @@ fn textureInto(s: *State, core: *abi_render.c.ke_render_service, path: [*:0]cons
     const d = try resolveTexture(s, path);
     defer vtFreeTexture(&s.api, d);
     var h: abi_render_handles.c.ke_texture_handle = abi_render_handles.c.KE_TEXTURE_NONE;
-    try R.check(core.upload_texture.?(core, path, d.width, d.height, d.pixels, &h));
+    try R.check(core.upload_texture.?(core, path, d.width, d.height, @ptrCast(d.pixels), @as(usize, d.width) * d.height * 4, &h));
     return h;
 }
 

@@ -48,8 +48,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, float, float, float, float)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, float, float, float, float, void> set_clear_color;
 
-    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, uint32_t, const void *, ke_texture_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, uint, void*, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> upload_texture;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, uint32_t, const uint8_t *, size_t, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, uint, byte*, nuint, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> upload_texture;
 
     [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, const float *, float, float, ke_texture_handle, ke_texture_handle, ke_alpha_mode, float, float, float, const char *, ke_material_handle *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, float*, float, float, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.TextureHandle, global::KernelEngine.Render.AlphaMode, float, float, float, sbyte*, global::KernelEngine.Render.MaterialHandle*, KernelEngine.Result.Native.Result> create_material;
@@ -63,8 +63,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("float (*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.MaterialHandle, float> material_alpha_cutoff;
 
-    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, const void *, ke_texture_handle *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, void*, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> upload_cubemap;
+    [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, uint32_t, const uint8_t *, size_t, ke_texture_handle *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, uint, byte*, nuint, global::KernelEngine.Render.TextureHandle*, KernelEngine.Result.Native.Result> upload_cubemap;
 
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.TextureHandle, ulong> texture_view;
