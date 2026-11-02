@@ -3,13 +3,13 @@ using System.Numerics;
 namespace KernelEngine.Render;
 
 /// <summary>
-/// Procedural meshes. Each call uploads through an <see cref="IRenderResources"/> and returns the
+/// Procedural meshes. Each call uploads through an <see cref="IRenderService"/> and returns the
 /// handle; the tangent of every vertex points along the U direction.
 /// </summary>
 public static class MeshPrimitives
 {
     /// <summary>Unit XY quad centered at the origin, facing +Z.</summary>
-    public static MeshHandle Quad(IRenderResources resources)
+    public static MeshHandle Quad(IRenderService resources)
     {
         var t = new Vector3(1, 0, 0);
         ReadOnlySpan<MeshVertex> verts = stackalloc MeshVertex[]
@@ -24,7 +24,7 @@ public static class MeshPrimitives
     }
 
     /// <summary>Unit XZ plane centered at the origin, facing +Y (a floor).</summary>
-    public static MeshHandle Plane(IRenderResources resources)
+    public static MeshHandle Plane(IRenderService resources)
     {
         var n = new Vector3(0, 1, 0);
         var t = new Vector3(1, 0, 0);
@@ -40,7 +40,7 @@ public static class MeshPrimitives
     }
 
     /// <summary>Unit cube centered at the origin, 24 verts (4 per face).</summary>
-    public static MeshHandle Cube(IRenderResources resources)
+    public static MeshHandle Cube(IRenderService resources)
     {
         const float h = 0.5f;
         Span<MeshVertex> verts = stackalloc MeshVertex[24];
@@ -71,7 +71,7 @@ public static class MeshPrimitives
     }
 
     /// <summary>UV sphere of the given radius, centered at the origin.</summary>
-    public static MeshHandle UvSphere(IRenderResources resources, float radius = 0.5f, int rings = 24, int segments = 32)
+    public static MeshHandle UvSphere(IRenderService resources, float radius = 0.5f, int rings = 24, int segments = 32)
     {
         int vertCount = (rings + 1) * (segments + 1);
         int idxCount = rings * segments * 6;

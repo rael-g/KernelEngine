@@ -4,7 +4,7 @@ namespace KernelEngine.Render;
 
 /// <summary>
 /// One interleaved mesh vertex: object-space position, normal, texture coordinates and tangent,
-/// laid out sequentially as <see cref="IRenderResources.UploadMesh"/> uploads them.
+/// laid out sequentially as <see cref="IRenderService.UploadMesh"/> uploads them.
 /// </summary>
 public partial struct MeshVertex
 {

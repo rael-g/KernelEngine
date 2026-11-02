@@ -35,7 +35,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 03_pbr_directional");
         Console.WriteLine("[KernelEngine] Features: pbr_ggx, directional_light, orbiting_light");
 

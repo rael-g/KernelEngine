@@ -20,7 +20,7 @@ public static class ModelExtensions
     public static IReadOnlyList<MeshRenderer> AddModel(
         this ScriptHost scriptHost,
         ModelData model,
-        IRenderResources resources,
+        IRenderService resources,
         string rootName = "Model")
     {
         var sourceTextures = model.Textures;
@@ -38,7 +38,7 @@ public static class ModelExtensions
         {
             var m = sourceMaterials[i];
             var albedo = m.AlbedoTextureIndex >= 0 ? textures[m.AlbedoTextureIndex] : default;
-            var normal = m.NormalMapTextureIndex >= 0 ? (TextureHandle?)textures[m.NormalMapTextureIndex] : null;
+            var normal = m.NormalMapTextureIndex >= 0 ? textures[m.NormalMapTextureIndex] : default;
             var baseColor = new Vector4(m.BaseColorR, m.BaseColorG, m.BaseColorB, m.BaseColorA);
             materials[i] = resources.CreateMaterial($"{rootName}#mat{i}", baseColor, m.Metallic, m.Roughness, albedo, normal);
         }

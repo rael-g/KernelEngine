@@ -30,7 +30,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
         Console.WriteLine("[KernelEngine] Features: spot_lights, multi_light_accumulation, cone_falloff");
 

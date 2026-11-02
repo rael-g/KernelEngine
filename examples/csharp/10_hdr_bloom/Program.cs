@@ -30,7 +30,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 10_hdr_tonemapping");
         Console.WriteLine("[KernelEngine] Features: hdr_intermediate, aces_tonemapping");
 

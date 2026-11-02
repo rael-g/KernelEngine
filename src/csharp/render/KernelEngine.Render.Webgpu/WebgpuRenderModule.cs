@@ -161,20 +161,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             (float)config.GetDouble("render", "clear_color_a", defaultA));
     }
 
-    /// <summary>
-    /// Uploads an interleaved mesh (position and normal vertices, 16-bit indices) to GPU buffers
-    /// owned by the render service and returns the handle a <see cref="MeshComponent"/> refers to.
-    /// Throws <see cref="InvalidOperationException"/> before the module is loaded.
-    /// </summary>
-    public MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
-    {
-        if (_renderService == null)
-            throw new InvalidOperationException("UploadMesh called before the render module was loaded");
-        ArgumentException.ThrowIfNullOrEmpty(key);
-
-        return _renderService.UploadMesh(key, vertices, indices);
-    }
-
     /// <inheritdoc/>
     public TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba)
     {
@@ -185,83 +171,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         return _renderService.UploadTexture(key, width, height, rgba);
     }
 
-    /// <inheritdoc/>
-    public TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces)
-    {
-        if (_renderService == null)
-            throw new InvalidOperationException("UploadCubemap called before the render module was loaded");
-        ArgumentException.ThrowIfNullOrEmpty(key);
-
-        return _renderService.UploadCubemap(key, faceSize, faces);
-    }
-
-    /// <inheritdoc/>
-    public MaterialHandle CreateMaterial(string key, System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f,
-                                         TextureHandle? albedo = null, TextureHandle? normalMap = null,
-                                         AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f,
-                                         float ior = 1.5f, float distortionStrength = 0.05f,
-                                         string? shader = null)
-    {
-        if (_renderService == null)
-            throw new InvalidOperationException("CreateMaterial called before the render module was loaded");
-        ArgumentException.ThrowIfNullOrEmpty(key);
-
-        return _renderService.CreateMaterial(key, baseColor, metallic, roughness, albedo ?? default, normalMap ?? default,
-            alphaMode, alphaCutoff, ior, distortionStrength, shader ?? "");
-    }
-
     /// <summary>
     /// The render service pointer, untyped, for native calls that cross into another plugin.
     /// </summary>
     void* INativeRenderResources.Native => _core;
-
-    /// <inheritdoc/>
-    public TextureHandle WhiteTexture
-    {
-        get
-        {
-            if (_renderService == null)
-                throw new InvalidOperationException("WhiteTexture read before the render module was loaded");
-            return _renderService.WhiteTexture();
-        }
-    }
-
-    /// <inheritdoc/>
-    public void RetainMesh(MeshHandle h) => _renderService!.RetainMesh(h);
-    /// <inheritdoc/>
-    public void ReleaseMesh(MeshHandle h) => _renderService!.ReleaseMesh(h);
-    /// <inheritdoc/>
-    public void RetainTexture(TextureHandle h) => _renderService!.RetainTexture(h);
-    /// <inheritdoc/>
-    public void ReleaseTexture(TextureHandle h) => _renderService!.ReleaseTexture(h);
-    /// <inheritdoc/>
-    public void RetainMaterial(MaterialHandle h) => _renderService!.RetainMaterial(h);
-    /// <inheritdoc/>
-    public void ReleaseMaterial(MaterialHandle h) => _renderService!.ReleaseMaterial(h);
-
-    /// <inheritdoc/>
-    public bool TryGetMesh(string key, out MeshHandle handle)
-    {
-        var found = _renderService!.TryGetMesh(key, out var h);
-        handle = h;
-        return found;
-    }
-
-    /// <inheritdoc/>
-    public bool TryGetTexture(string key, out TextureHandle handle)
-    {
-        var found = _renderService!.TryGetTexture(key, out var h);
-        handle = h;
-        return found;
-    }
-
-    /// <inheritdoc/>
-    public bool TryGetMaterial(string key, out MaterialHandle handle)
-    {
-        var found = _renderService!.TryGetMaterial(key, out var h);
-        handle = h;
-        return found;
-    }
 
     /// <inheritdoc/>
     public FontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<FontGlyph> glyphs,

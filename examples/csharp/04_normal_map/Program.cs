@@ -30,7 +30,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 04_normal_map");
         Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
 
@@ -53,7 +53,7 @@ var services = new ServiceCollection()
         var nm = resources.UploadTexture("bumps_normal", w, h, pixels);
 
         var matPlain = resources.CreateMaterial("plain", Vector4.One, roughness: 0.3f);
-        var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normalMap: nm);
+        var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normal: nm);
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
