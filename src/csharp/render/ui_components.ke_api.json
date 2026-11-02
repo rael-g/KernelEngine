@@ -349,7 +349,7 @@
       "name": "ke_ui_font_handle",
       "doc": null,
       "tags": [
-        "owner"
+        "value"
       ],
       "fields": [
         {

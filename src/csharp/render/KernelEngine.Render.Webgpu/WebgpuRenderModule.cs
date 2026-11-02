@@ -307,10 +307,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         }
 
         var texH = atlas;
-        KernelEngine.Render.Native.ke_ui_font_handle h;
+        UiFontHandle h;
         fixed (byte* k = keyBytes)
             KernelEngine.NativeResults.ThrowIfFailed(_ui->load_font(_ui, (sbyte*)k, texH, native, (uint)glyphs.Length, lineHeight, ascent, &h), "load_font");
-        return new FontHandle(h.bits);
+        return new FontHandle(h.Bits);
     }
 
     /// <summary>

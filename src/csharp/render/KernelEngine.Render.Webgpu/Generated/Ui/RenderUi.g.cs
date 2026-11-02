@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Render.Webgpu.Native;
+using KernelEngine.Text;
 
 namespace KernelEngine.Render.Webgpu;
 
@@ -46,6 +47,26 @@ public unsafe partial class RenderUi : IDisposable, INativeRenderUi, IRenderUi
         _native = native;
         _destroy = null;
         _borrowed = borrowed;
+    }
+
+    /// <summary>Registers a font's glyph table, deduped by `key`: a resident key retains and returns the existing handle without copying `glyphs` again. `glyphs` is copied; the caller may free its own copy after this returns.</summary>
+    /// <returns>Receives the font; KE_UI_FONT_NONE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public UiFontHandle LoadFont(string key, TextureHandle atlas, ReadOnlySpan<GlyphMetrics> glyphs, float lineHeight, float ascent)
+    {
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
+        fixed (byte* keyPtr = keyBytes)
+        {
+            fixed (GlyphMetrics* glyphsPtr = glyphs)
+            {
+                UiFontHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->load_font(Handle, (sbyte*)keyPtr, atlas, glyphsPtr, (uint)glyphs.Length, lineHeight, ascent, &resultOut), "load_font");
+                return resultOut;
+            }
+        }
     }
 
     /// <summary>Releases the native renderui.</summary>

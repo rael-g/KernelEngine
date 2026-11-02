@@ -8,7 +8,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.View.Native;
 
-public partial struct ke_view_space_params
+public partial struct ViewSpaceParams
 {
-    public float depth_from_view_z;
+    public float DepthFromViewZ;
 }

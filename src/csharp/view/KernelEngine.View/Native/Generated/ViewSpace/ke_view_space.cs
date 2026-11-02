@@ -13,7 +13,7 @@ public unsafe partial struct ke_view_space
     public void* handle;
 
     [NativeTypeName("ke_view_space_params (*)(struct ke_view_space *)")]
-    public delegate* unmanaged[Cdecl]<ke_view_space*, ke_view_space_params> @params;
+    public delegate* unmanaged[Cdecl]<ke_view_space*, ViewSpaceParams> @params;
 
     [NativeTypeName("void (*)(struct ke_view_space *, const ke_vec3 *, const ke_vec3 *, const ke_vec3 *, ke_mat4 *)")]
     public delegate* unmanaged[Cdecl]<ke_view_space*, System.Numerics.Vector3*, System.Numerics.Vector3*, System.Numerics.Vector3*, System.Numerics.Matrix4x4*, void> look_to;

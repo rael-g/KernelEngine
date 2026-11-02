@@ -49,6 +49,12 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
         _borrowed = borrowed;
     }
 
+    /// <summary>The numbers to hand to consumers that cannot call this interface.</summary>
+    public ViewSpaceParams Params()
+    {
+        return Handle->@params(Handle);
+    }
+
     /// <summary>World-to-view for a camera at `eye` facing `forward` with `up` above.</summary>
     /// <param name="forward">Need not be normalized.</param>
     public System.Numerics.Matrix4x4 LookTo(System.Numerics.Vector3 eye, System.Numerics.Vector3 forward, System.Numerics.Vector3 up)

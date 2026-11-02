@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-    /** [bag] The view space as plain data, for consumers that cannot call this interface. */
+    /** [value] The view space as plain data, for consumers that cannot call this interface. */
     typedef struct ke_view_space_params
     {
         /// Multiplies a view-space z into a distance in front of the camera.

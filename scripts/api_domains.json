@@ -2,7 +2,7 @@
   "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (kabic generate); each `bindings` entry configures ClangSharp (kabic bindings). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
   "convention": {
     "format": { "csharp": "../.editorconfig" },
-    "unprojected": [ "ke_view_space.params", "ke_render_ui.load_font", "ke_gpu_command_encoder.finish", "ke_gpu_device.create_command_encoder", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_world.resolve_component" ],
+    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_gpu_device.create_command_encoder", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_world.resolve_component" ],
     "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_field_write", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
     "names": { "factory": [ { "match": "^(.*)_create$", "replace": "$1" } ], "csharp-type": [ { "match": "^ke_task$", "replace": "NativeTask" }, { "match": "^ke_action_type$", "replace": "NativeActionType" }, { "match": "^ke_ecs$", "replace": "EcsRegistry" }, { "match": "^ke_physics_2d$", "replace": "Physics2D" }, { "match": "^ke_body_type_2d$", "replace": "BodyType2D" }, { "match": "^ke_phase$", "replace": "RuntimePhase" }, { "match": "^ke_access$", "replace": "RuntimeAccess" } ] },
     "types": { "csharp": { "ke_vec2": "System.Numerics.Vector2", "ke_vec3": "System.Numerics.Vector3", "ke_vec4": "System.Numerics.Vector4", "ke_quat": "System.Numerics.Quaternion", "ke_mat4": "System.Numerics.Matrix4x4" } },
@@ -248,7 +248,8 @@
       "apiJson": "src/csharp/render/render_ui.ke_api.json",
       "namespace": "KernelEngine.Render.Webgpu",
       "nativeNamespace": "KernelEngine.Render.Webgpu.Native",
-      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Generated/Ui"
+      "outDir": "src/csharp/render/KernelEngine.Render.Webgpu/Generated/Ui",
+      "usings": [ "KernelEngine.Text" ]
     },
     {
       "name": "io",

@@ -10,7 +10,7 @@ extern "C"
 {
 #endif
 
-    /// [owner]
+    /// [value]
     typedef struct ke_ui_font_handle
     {
         uint32_t bits;
