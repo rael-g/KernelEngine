@@ -11,6 +11,13 @@ namespace KernelEngine.Render;
 /// <summary>The renderservice contract game code depends on, so a caller names a capability rather than the <see cref="RenderService"/> that carries it.</summary>
 public interface IRenderService : IDisposable
 {
+    /// <summary>Declares a transient resource the service allocates and recycles.</summary>
+    /// <param name="width">Read when size_mode is ABSOLUTE.</param>
+    /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
+    /// <param name="clearValue">Per-resource clear color.</param>
+    /// <returns>Receives the tag-component cid to place in a pass's access_list.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue);
     /// <summary>Imports an externally-owned texture under `name`.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

@@ -93,7 +93,7 @@ fn declareTarget(core: [*c]abi_render.c.ke_render_service, name: [*:0]const u8, 
         .height = 0,
         .scale_x = 1.0,
         .scale_y = 1.0,
-        .clear_value = .{ 0, 0, 0, 0 },
+        .clear_value = .{ .x = 0, .y = 0, .z = 0, .w = 0 },
     }, &cid));
 }
 

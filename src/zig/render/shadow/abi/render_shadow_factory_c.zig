@@ -40,6 +40,12 @@ pub const ke_system_id = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+pub const ke_gpu_pipeline_ready_func = ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
+
+/// Receives the outcome of mapping a buffer for reading.
+pub const ke_gpu_buffer_mapped_func = ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;

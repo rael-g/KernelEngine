@@ -212,6 +212,104 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         }
     }
 
+    /// <summary>Creates a render pipeline. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="vertexEntry">NULL → "main"</param>
+    /// <param name="fragmentEntry">NULL → "main"</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateRenderPipeline(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            var vertexEntryText = vertexEntry ?? "";
+            var vertexEntrySize = System.Text.Encoding.UTF8.GetMaxByteCount(vertexEntryText.Length) + 1;
+            Span<byte> vertexEntryBytes = vertexEntrySize <= 512 ? stackalloc byte[512] : new byte[vertexEntrySize];
+            vertexEntryBytes[System.Text.Encoding.UTF8.GetBytes(vertexEntryText, vertexEntryBytes)] = 0;
+            fixed (byte* vertexEntryPtr = vertexEntryBytes)
+            {
+                var fragmentEntryText = fragmentEntry ?? "";
+                var fragmentEntrySize = System.Text.Encoding.UTF8.GetMaxByteCount(fragmentEntryText.Length) + 1;
+                Span<byte> fragmentEntryBytes = fragmentEntrySize <= 512 ? stackalloc byte[512] : new byte[fragmentEntrySize];
+                fragmentEntryBytes[System.Text.Encoding.UTF8.GetBytes(fragmentEntryText, fragmentEntryBytes)] = 0;
+                fixed (byte* fragmentEntryPtr = fragmentEntryBytes)
+                {
+                    fixed (GpuVertexBufferLayout* vertexBuffersPtr = vertexBuffers)
+                    {
+                        fixed (ulong* bindGroupLayoutsPtr = bindGroupLayouts)
+                        {
+                            fixed (GpuTextureFormat* colorTargetFormatsPtr = colorTargetFormats)
+                            {
+                                ke_gpu_render_pipeline_params p = default;
+                                p.label = (sbyte*)labelPtr;
+                                p.vertex_module = vertexModule;
+                                p.fragment_module = fragmentModule;
+                                p.vertex_entry = (sbyte*)vertexEntryPtr;
+                                p.fragment_entry = (sbyte*)fragmentEntryPtr;
+                                p.primitive_topology = (GpuPrimitiveTopology)primitiveTopology;
+                                p.cull_mode = (GpuCullMode)cullMode;
+                                p.front_face = (GpuFrontFace)frontFace;
+                                p.vertex_buffer_count = (uint)vertexBuffers.Length;
+                                p.vertex_buffers = vertexBuffersPtr;
+                                p.blend_state = blendState;
+                                p.depth_stencil = depthStencil;
+                                if (bindGroupLayouts.Length > 4) throw new ArgumentOutOfRangeException(nameof(bindGroupLayouts));
+                                for (var bindGroupLayoutsAt = 0; bindGroupLayoutsAt < bindGroupLayouts.Length; bindGroupLayoutsAt++) p.bind_group_layouts[bindGroupLayoutsAt] = (bindGroupLayoutsPtr)[bindGroupLayoutsAt];
+                                p.bind_group_layout_count = (uint)bindGroupLayouts.Length;
+                                p.alpha_to_coverage_enabled = alphaToCoverageEnabled;
+                                if (colorTargetFormats.Length > 8) throw new ArgumentOutOfRangeException(nameof(colorTargetFormats));
+                                for (var colorTargetFormatsAt = 0; colorTargetFormatsAt < colorTargetFormats.Length; colorTargetFormatsAt++) p.color_target_formats[colorTargetFormatsAt] = (colorTargetFormatsPtr)[colorTargetFormatsAt];
+                                p.color_target_count = (uint)colorTargetFormats.Length;
+                                ulong resultOut = default;
+                                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_render_pipeline(Handle, &p, &resultOut), "create_render_pipeline");
+                                return resultOut;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>Creates a compute pipeline. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ulong CreateComputePipeline(string label, ulong computeModule, string computeEntry, ReadOnlySpan<ulong> bindGroupLayouts)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            var computeEntryText = computeEntry ?? "";
+            var computeEntrySize = System.Text.Encoding.UTF8.GetMaxByteCount(computeEntryText.Length) + 1;
+            Span<byte> computeEntryBytes = computeEntrySize <= 512 ? stackalloc byte[512] : new byte[computeEntrySize];
+            computeEntryBytes[System.Text.Encoding.UTF8.GetBytes(computeEntryText, computeEntryBytes)] = 0;
+            fixed (byte* computeEntryPtr = computeEntryBytes)
+            {
+                fixed (ulong* bindGroupLayoutsPtr = bindGroupLayouts)
+                {
+                    ke_gpu_compute_pipeline_params p = default;
+                    p.label = (sbyte*)labelPtr;
+                    p.compute_module = computeModule;
+                    p.compute_entry = (sbyte*)computeEntryPtr;
+                    if (bindGroupLayouts.Length > 4) throw new ArgumentOutOfRangeException(nameof(bindGroupLayouts));
+                    for (var bindGroupLayoutsAt = 0; bindGroupLayoutsAt < bindGroupLayouts.Length; bindGroupLayoutsAt++) p.bind_group_layouts[bindGroupLayoutsAt] = (bindGroupLayoutsPtr)[bindGroupLayoutsAt];
+                    p.bind_group_layout_count = (uint)bindGroupLayouts.Length;
+                    ulong resultOut = default;
+                    KernelEngine.NativeResults.ThrowIfFailed(Handle->create_compute_pipeline(Handle, &p, &resultOut), "create_compute_pipeline");
+                    return resultOut;
+                }
+            }
+        }
+    }
+
     /// <summary>Creates a bind group layout. The backend's reason for a rejection is logged.</summary>
     /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
     /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
@@ -366,10 +464,75 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         return Handle->get_ndc_convention(Handle);
     }
 
+    /// <summary>Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready` fires later (during this device's normal event pump, e.g. at queue_poll) with the finished pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="vertexEntry">NULL → "main"</param>
+    /// <param name="fragmentEntry">NULL → "main"</param>
+    public void CreateRenderPipelineAsync(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats, nint onReady, nint user)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            var vertexEntryText = vertexEntry ?? "";
+            var vertexEntrySize = System.Text.Encoding.UTF8.GetMaxByteCount(vertexEntryText.Length) + 1;
+            Span<byte> vertexEntryBytes = vertexEntrySize <= 512 ? stackalloc byte[512] : new byte[vertexEntrySize];
+            vertexEntryBytes[System.Text.Encoding.UTF8.GetBytes(vertexEntryText, vertexEntryBytes)] = 0;
+            fixed (byte* vertexEntryPtr = vertexEntryBytes)
+            {
+                var fragmentEntryText = fragmentEntry ?? "";
+                var fragmentEntrySize = System.Text.Encoding.UTF8.GetMaxByteCount(fragmentEntryText.Length) + 1;
+                Span<byte> fragmentEntryBytes = fragmentEntrySize <= 512 ? stackalloc byte[512] : new byte[fragmentEntrySize];
+                fragmentEntryBytes[System.Text.Encoding.UTF8.GetBytes(fragmentEntryText, fragmentEntryBytes)] = 0;
+                fixed (byte* fragmentEntryPtr = fragmentEntryBytes)
+                {
+                    fixed (GpuVertexBufferLayout* vertexBuffersPtr = vertexBuffers)
+                    {
+                        fixed (ulong* bindGroupLayoutsPtr = bindGroupLayouts)
+                        {
+                            fixed (GpuTextureFormat* colorTargetFormatsPtr = colorTargetFormats)
+                            {
+                                ke_gpu_render_pipeline_params p = default;
+                                p.label = (sbyte*)labelPtr;
+                                p.vertex_module = vertexModule;
+                                p.fragment_module = fragmentModule;
+                                p.vertex_entry = (sbyte*)vertexEntryPtr;
+                                p.fragment_entry = (sbyte*)fragmentEntryPtr;
+                                p.primitive_topology = (GpuPrimitiveTopology)primitiveTopology;
+                                p.cull_mode = (GpuCullMode)cullMode;
+                                p.front_face = (GpuFrontFace)frontFace;
+                                p.vertex_buffer_count = (uint)vertexBuffers.Length;
+                                p.vertex_buffers = vertexBuffersPtr;
+                                p.blend_state = blendState;
+                                p.depth_stencil = depthStencil;
+                                if (bindGroupLayouts.Length > 4) throw new ArgumentOutOfRangeException(nameof(bindGroupLayouts));
+                                for (var bindGroupLayoutsAt = 0; bindGroupLayoutsAt < bindGroupLayouts.Length; bindGroupLayoutsAt++) p.bind_group_layouts[bindGroupLayoutsAt] = (bindGroupLayoutsPtr)[bindGroupLayoutsAt];
+                                p.bind_group_layout_count = (uint)bindGroupLayouts.Length;
+                                p.alpha_to_coverage_enabled = alphaToCoverageEnabled;
+                                if (colorTargetFormats.Length > 8) throw new ArgumentOutOfRangeException(nameof(colorTargetFormats));
+                                for (var colorTargetFormatsAt = 0; colorTargetFormatsAt < colorTargetFormats.Length; colorTargetFormatsAt++) p.color_target_formats[colorTargetFormatsAt] = (colorTargetFormatsPtr)[colorTargetFormatsAt];
+                                p.color_target_count = (uint)colorTargetFormats.Length;
+                                Handle->create_render_pipeline_async(Handle, &p, (delegate* unmanaged[Cdecl]<ulong, void*, void>)onReady, (void*)user);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// <summary>Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its on_ready callback. Call before destroying anything an in-flight callback might still write into. A no-op if nothing is pending.</summary>
     public void FlushPipelineCompiles()
     {
         Handle->flush_pipeline_compiles(Handle);
+    }
+
+    /// <summary>Starts mapping [offset, offset + size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's normal event pump (queue_poll, queue_wait_idle), with `ok` true when the range is readable through map_buffer until unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer before calling.</summary>
+    public void MapBufferRead(ulong h, nuint offset, nuint size, nint onReady, nint user)
+    {
+        Handle->map_buffer_read(Handle, h, offset, size, (delegate* unmanaged[Cdecl]<ulong, bool, void*, void>)onReady, (void*)user);
     }
 
     /// <summary>Releases a pipeline made by create_compute_pipeline.</summary>

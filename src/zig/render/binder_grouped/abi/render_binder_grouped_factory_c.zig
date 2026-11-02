@@ -30,6 +30,12 @@ pub const ke_render_shader_layout = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+pub const ke_gpu_pipeline_ready_func = ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
+
+/// Receives the outcome of mapping a buffer for reading.
+pub const ke_gpu_buffer_mapped_func = ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void;
+
 /// What a grouped resource binder is built on.
 pub const ke_render_resource_binder_grouped_params = extern struct {
     /// Borrowed; must outlive the binder.

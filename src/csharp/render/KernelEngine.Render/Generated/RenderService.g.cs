@@ -50,6 +50,36 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         _borrowed = borrowed;
     }
 
+    /// <summary>Declares a transient resource the service allocates and recycles.</summary>
+    /// <param name="width">Read when size_mode is ABSOLUTE.</param>
+    /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
+    /// <param name="clearValue">Per-resource clear color.</param>
+    /// <returns>Receives the tag-component cid to place in a pass's access_list.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ke_render_resource_params @params = default;
+            @params.name = (sbyte*)namePtr;
+            @params.type = (RenderResourceType)type;
+            @params.format = (GpuTextureFormat)format;
+            @params.size_mode = (RenderSizeMode)sizeMode;
+            @params.width = width;
+            @params.height = height;
+            @params.scale_x = scaleX;
+            @params.scale_y = scaleY;
+            @params.clear_value = clearValue;
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->declare(Handle, &@params, &resultOut), "declare");
+            return resultOut;
+        }
+    }
+
     /// <summary>Imports an externally-owned texture under `name`.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

@@ -102,13 +102,13 @@ public unsafe partial struct ke_gpu_device
     [NativeTypeName("ke_ndc_convention (*)(struct ke_gpu_device *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, global::KernelEngine.Render.NdcConvention> get_ndc_convention;
 
-    [NativeTypeName("void (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *, void (*)(ke_gpu_pipeline, void *), void *)")]
+    [NativeTypeName("void (*)(struct ke_gpu_device *, const ke_gpu_render_pipeline_params *, ke_gpu_pipeline_ready_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ke_gpu_render_pipeline_params*, delegate* unmanaged[Cdecl]<ulong, void*, void>, void*, void> create_render_pipeline_async;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, void> flush_pipeline_compiles;
 
-    [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer, size_t, size_t, void (*)(ke_gpu_buffer, bool, void *), void *)")]
+    [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_buffer, size_t, size_t, ke_gpu_buffer_mapped_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_device*, ulong, nuint, nuint, delegate* unmanaged[Cdecl]<ulong, bool, void*, void>, void*, void> map_buffer_read;
 
     [NativeTypeName("void (*)(struct ke_gpu_device *, ke_gpu_pipeline)")]

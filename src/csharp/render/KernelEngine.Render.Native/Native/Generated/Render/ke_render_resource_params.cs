@@ -1,5 +1,4 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Render;
@@ -33,12 +32,6 @@ public unsafe partial struct ke_render_resource_params
 
     public float scale_y;
 
-    [NativeTypeName("float[4]")]
-    public _clear_value_e__FixedBuffer clear_value;
-
-    [InlineArray(4)]
-    public partial struct _clear_value_e__FixedBuffer
-    {
-        public float e0;
-    }
+    [NativeTypeName("ke_vec4")]
+    public System.Numerics.Vector4 clear_value;
 }

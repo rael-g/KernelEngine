@@ -3,6 +3,7 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
@@ -42,7 +43,7 @@ typedef struct ke_render_resource_params
     float                   scale_x; ///< Read when size_mode is RELATIVE_TO_BACKBUFFER.
     float                   scale_y;
     /// Per-resource clear color.
-    float                   clear_value[4];
+    ke_vec4                 clear_value;
 } ke_render_resource_params;
 
 /// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices are

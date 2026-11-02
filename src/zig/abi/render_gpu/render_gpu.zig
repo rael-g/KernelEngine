@@ -401,7 +401,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_render_pipeline_async = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_params, a1: ?*const fn (c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, a2: ?*anyopaque) callconv(.c) void {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_params, a1: c.ke_gpu_pipeline_ready_func, a2: ?*anyopaque) callconv(.c) void {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
                     return T.createRenderPipelineAsync(state, a0, a1, a2);
                 }
@@ -413,7 +413,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .map_buffer_read = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: c.ke_gpu_buffer, a1: usize, a2: usize, a3: ?*const fn (c.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, a4: ?*anyopaque) callconv(.c) void {
+                fn call(self: ?*c.ke_gpu_device, a0: c.ke_gpu_buffer, a1: usize, a2: usize, a3: c.ke_gpu_buffer_mapped_func, a4: ?*anyopaque) callconv(.c) void {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
                     return T.mapBufferRead(state, a0, a1, a2, a3, a4);
                 }
@@ -587,8 +587,8 @@ pub const GpuDevice = struct {
     /// Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready`
     /// fires later (during this device's normal event pump, e.g. at queue_poll) with the finished
     /// pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
-    pub fn createRenderPipelineAsync(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_params, arg2: ?*const fn (c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) void {
-        return self.ptr.create_render_pipeline_async.?(self.ptr, p, arg2, user);
+    pub fn createRenderPipelineAsync(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_params, on_ready: c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) void {
+        return self.ptr.create_render_pipeline_async.?(self.ptr, p, on_ready, user);
     }
 
     /// Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its
@@ -603,8 +603,8 @@ pub const GpuDevice = struct {
     /// queue_wait_idle), with `ok` true when the range is readable through map_buffer until
     /// unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer
     /// before calling.
-    pub fn mapBufferRead(self: GpuDevice, h: c.ke_gpu_buffer, offset: usize, size: usize, arg4: ?*const fn (c.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) void {
-        return self.ptr.map_buffer_read.?(self.ptr, h, offset, size, arg4, user);
+    pub fn mapBufferRead(self: GpuDevice, h: c.ke_gpu_buffer, offset: usize, size: usize, on_ready: c.ke_gpu_buffer_mapped_func, user: ?*anyopaque) void {
+        return self.ptr.map_buffer_read.?(self.ptr, h, offset, size, on_ready, user);
     }
 
     /// Releases a pipeline made by create_compute_pipeline.

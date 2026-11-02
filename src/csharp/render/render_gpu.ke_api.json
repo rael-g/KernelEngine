@@ -1633,7 +1633,9 @@
         {
           "name": "bind_group_layouts",
           "type": "ke_gpu_bind_group_layout[4]",
-          "tags": [],
+          "tags": [
+            "array_of:bind_group_layout_count"
+          ],
           "doc": null
         },
         {
@@ -1651,7 +1653,9 @@
         {
           "name": "color_target_formats",
           "type": "ke_gpu_texture_format[8]",
-          "tags": [],
+          "tags": [
+            "array_of:color_target_count"
+          ],
           "doc": null
         },
         {
@@ -1690,7 +1694,9 @@
         {
           "name": "bind_group_layouts",
           "type": "ke_gpu_bind_group_layout[4]",
-          "tags": [],
+          "tags": [
+            "array_of:bind_group_layout_count"
+          ],
           "doc": null
         },
         {
@@ -2699,8 +2705,8 @@
               "doc": null
             },
             {
-              "name": "arg2",
-              "type": "void (*)(ke_gpu_pipeline, void *)",
+              "name": "on_ready",
+              "type": "ke_gpu_pipeline_ready_func",
               "tags": [],
               "doc": null
             },
@@ -2748,8 +2754,8 @@
               "doc": null
             },
             {
-              "name": "arg4",
-              "type": "void (*)(ke_gpu_buffer, bool, void *)",
+              "name": "on_ready",
+              "type": "ke_gpu_buffer_mapped_func",
               "tags": [],
               "doc": null
             },
@@ -4077,7 +4083,52 @@
     }
   ],
   "functions": [],
-  "callbacks": [],
+  "callbacks": [
+    {
+      "name": "ke_gpu_pipeline_ready_func",
+      "returns": "void",
+      "doc": "Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_pipeline",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_buffer_mapped_func",
+      "returns": "void",
+      "doc": "Receives the outcome of mapping a buffer for reading.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg3",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
   "id_types": [],
   "foreign_id_types": [],
   "type_aliases": {
@@ -4094,6 +4145,8 @@
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
     "ke_gpu_queue": "uint64_t",
+    "ke_gpu_pipeline_ready_func": "void (*)(ke_gpu_pipeline, void *)",
+    "ke_gpu_buffer_mapped_func": "void (*)(ke_gpu_buffer, bool, void *)",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
     "ke_render_material_binding": "uint64_t"

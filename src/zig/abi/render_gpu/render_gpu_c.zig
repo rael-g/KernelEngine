@@ -196,6 +196,12 @@ pub const KE_RENDER_BINDING_HINT_DEPTH: ke_render_binding_hint_flags = 1;
 /// The buffer is bound with a dynamic offset given when its set is bound.
 pub const KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET: ke_render_binding_hint_flags = 2;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+pub const ke_gpu_pipeline_ready_func = ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
+
+/// Receives the outcome of mapping a buffer for reading.
+pub const ke_gpu_buffer_mapped_func = ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void;
+
 pub const ke_ndc_convention = extern struct {
     /// True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL).
     z_zero_to_one: bool = std.mem.zeroes(bool),
@@ -549,7 +555,7 @@ pub const ke_gpu_device = extern struct {
     /// Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready`
     /// fires later (during this device's normal event pump, e.g. at queue_poll) with the finished
     /// pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
-    create_render_pipeline_async: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_params, ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, ?*anyopaque) callconv(.c) void = null,
+    create_render_pipeline_async: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_params, ke_gpu_pipeline_ready_func, ?*anyopaque) callconv(.c) void = null,
     /// Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its
     /// on_ready callback. Call before destroying anything an in-flight callback might still write
     /// into. A no-op if nothing is pending.
@@ -559,7 +565,7 @@ pub const ke_gpu_device = extern struct {
     /// queue_wait_idle), with `ok` true when the range is readable through map_buffer until
     /// unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer
     /// before calling.
-    map_buffer_read: ?*const fn (?*ke_gpu_device, ke_gpu_buffer, usize, usize, ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, ?*anyopaque) callconv(.c) void = null,
+    map_buffer_read: ?*const fn (?*ke_gpu_device, ke_gpu_buffer, usize, usize, ke_gpu_buffer_mapped_func, ?*anyopaque) callconv(.c) void = null,
     /// Releases a pipeline made by create_compute_pipeline.
     destroy_compute_pipeline: ?*const fn (?*ke_gpu_device, ke_gpu_pipeline) callconv(.c) void = null,
 };

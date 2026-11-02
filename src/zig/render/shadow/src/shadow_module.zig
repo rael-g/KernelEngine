@@ -234,7 +234,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.c.ke_render_shad
         .height = sh.params.resolution,
         .scale_x = 1.0,
         .scale_y = 1.0,
-        .clear_value = .{ 1.0, 1.0, 1.0, 1.0 },
+        .clear_value = .{ .x = 1.0, .y = 1.0, .z = 1.0, .w = 1.0 },
     }, &shadow_map_cid));
     var shadow_depth_cid: abi_asset_resolver.c.ke_component_id = undefined;
     try R.check(core.*.declare.?(core, &abi_render.c.ke_render_resource_params{

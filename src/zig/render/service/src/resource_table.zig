@@ -50,7 +50,7 @@ fn declareResource(st: *rc.CoreState, params: abi_render.c.ke_render_resource_pa
     r.texture = made.texture;
     r.view = made.view;
     r.is_transient = true;
-    r.clear_value = params.clear_value;
+    r.clear_value = .{ params.clear_value.x, params.clear_value.y, params.clear_value.z, params.clear_value.w };
     r.relative = params.size_mode == abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     r.scale_x = params.scale_x;
     r.scale_y = params.scale_y;

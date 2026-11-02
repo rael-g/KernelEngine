@@ -202,6 +202,12 @@ typedef struct ke_gpu_bind_group_params
     const ke_gpu_bind_group_entry *entries; ///< [array_of:entry_count]
 } ke_gpu_bind_group_params;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+typedef void (*ke_gpu_pipeline_ready_func)(ke_gpu_pipeline pso, void *user);
+
+/// Receives the outcome of mapping a buffer for reading.
+typedef void (*ke_gpu_buffer_mapped_func)(ke_gpu_buffer buffer, bool ok, void *user);
+
 /// [bag]
 typedef struct ke_gpu_render_pipeline_params
 {
@@ -218,10 +224,10 @@ typedef struct ke_gpu_render_pipeline_params
     const ke_gpu_vertex_buffer_layout *vertex_buffers; ///< [array_of:vertex_buffer_count]
     ke_gpu_blend_state               blend_state;
     ke_gpu_depth_stencil_state       depth_stencil;
-    ke_gpu_bind_group_layout         bind_group_layouts[4];
+    ke_gpu_bind_group_layout         bind_group_layouts[4]; ///< [array_of:bind_group_layout_count]
     uint32_t                         bind_group_layout_count;
     bool                             alpha_to_coverage_enabled;
-    ke_gpu_texture_format            color_target_formats[8];
+    ke_gpu_texture_format            color_target_formats[8]; ///< [array_of:color_target_count]
     uint32_t                         color_target_count;
 } ke_gpu_render_pipeline_params;
 
@@ -232,7 +238,7 @@ typedef struct ke_gpu_compute_pipeline_params
     const char *label;
     ke_gpu_shader_module     compute_module;
     const char              *compute_entry;
-    ke_gpu_bind_group_layout bind_group_layouts[4];
+    ke_gpu_bind_group_layout bind_group_layouts[4]; ///< [array_of:bind_group_layout_count]
     uint32_t                 bind_group_layout_count;
 } ke_gpu_compute_pipeline_params;
 
@@ -393,7 +399,7 @@ typedef struct ke_gpu_device
     /// KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
                                          const ke_gpu_render_pipeline_params *p,
-                                         void (*on_ready)(ke_gpu_pipeline pso, void *user),
+                                         ke_gpu_pipeline_ready_func on_ready,
                                          void *user);
 
     /// Blocks until every pipeline compile kicked via
@@ -409,7 +415,7 @@ typedef struct ke_gpu_device
     /// Submit the work that writes the buffer before calling.
     void (*map_buffer_read)(struct ke_gpu_device *self, ke_gpu_buffer h,
                             size_t offset, size_t size,
-                            void (*on_ready)(ke_gpu_buffer buffer, bool ok, void *user),
+                            ke_gpu_buffer_mapped_func on_ready,
                             void *user);
 
     /// Releases a pipeline made by create_compute_pipeline.

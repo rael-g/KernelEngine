@@ -46,6 +46,18 @@ public interface IGpuDevice : IDisposable
     /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong CreateShaderModule(string label, nint code, nuint byteSize);
+    /// <summary>Creates a render pipeline. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="vertexEntry">NULL → "main"</param>
+    /// <param name="fragmentEntry">NULL → "main"</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ulong CreateRenderPipeline(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats);
+    /// <summary>Creates a compute pipeline. The backend's reason for a rejection is logged.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ulong CreateComputePipeline(string label, ulong computeModule, string computeEntry, ReadOnlySpan<ulong> bindGroupLayouts);
     /// <summary>Creates a bind group layout. The backend's reason for a rejection is logged.</summary>
     /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
     /// <returns>Receives the object; KE_GPU_INVALID_HANDLE on failure.</returns>
@@ -76,8 +88,15 @@ public interface IGpuDevice : IDisposable
     GpuShaderLanguage ShaderLanguage();
     /// <summary>Clip-space convention this backend expects projections built in.</summary>
     NdcConvention GetNdcConvention();
+    /// <summary>Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready` fires later (during this device's normal event pump, e.g. at queue_poll) with the finished pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <param name="vertexEntry">NULL → "main"</param>
+    /// <param name="fragmentEntry">NULL → "main"</param>
+    void CreateRenderPipelineAsync(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats, nint onReady, nint user);
     /// <summary>Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its on_ready callback. Call before destroying anything an in-flight callback might still write into. A no-op if nothing is pending.</summary>
     void FlushPipelineCompiles();
+    /// <summary>Starts mapping [offset, offset + size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's normal event pump (queue_poll, queue_wait_idle), with `ok` true when the range is readable through map_buffer until unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer before calling.</summary>
+    void MapBufferRead(ulong h, nuint offset, nuint size, nint onReady, nint user);
     /// <summary>Releases a pipeline made by create_compute_pipeline.</summary>
     void DestroyComputePipeline(ulong h);
 }

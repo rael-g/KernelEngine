@@ -76,6 +76,12 @@ pub const KE_RENDER_DEPTH_TEST: ke_render_depth_mode = 1;
 /// Attached, tested against and written.
 pub const KE_RENDER_DEPTH_WRITE: ke_render_depth_mode = 2;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+pub const ke_gpu_pipeline_ready_func = ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
+
+/// Receives the outcome of mapping a buffer for reading.
+pub const ke_gpu_buffer_mapped_func = ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void;
+
 pub const ke_render_resource_params = extern struct {
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     @"type": ke_render_resource_type = std.mem.zeroes(ke_render_resource_type),
@@ -88,7 +94,7 @@ pub const ke_render_resource_params = extern struct {
     scale_x: f32 = std.mem.zeroes(f32),
     scale_y: f32 = std.mem.zeroes(f32),
     /// Per-resource clear color.
-    clear_value: [4]f32 = std.mem.zeroes([4]f32),
+    clear_value: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
 };
 
 /// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices
