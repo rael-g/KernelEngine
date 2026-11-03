@@ -18,6 +18,7 @@ pub fn build(b: *std.Build) void {
     if (built.extra[0].resolved_target.?.result.os.tag == .windows) {
         const beside = b.addWriteFiles();
         options.addOptionPath("probe_exe_path", beside.addCopyFile(probe_exe.getEmittedBin(), probe_exe.out_filename));
+        _ = beside.addCopyFile(probe_exe.getEmittedPdb(), b.fmt("{s}.pdb", .{probe_exe.name}));
     } else {
         options.addOptionPath("probe_exe_path", probe_exe.getEmittedBin());
     }
