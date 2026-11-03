@@ -33,17 +33,17 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
 
     /// <summary>
     /// Keeps every registered handler reachable, one per key the slot registers against.
-    /// The engine holds only an opaque pointer to it, which stops nothing on this
-    /// side from collecting or moving the object before the engine calls back into it.
+    /// The native side holds only an opaque pointer to it, which stops nothing on this
+    /// side from collecting or moving the object before the native side calls back into it.
     /// </summary>
     private readonly Dictionary<ComponentId, GCHandle> _retainedApply = new();
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
-    /// underneath engine code that has no way to carry an exception, so throwing
+    /// underneath native code that has no way to carry an exception, so throwing
     /// through it would tear down the process; the trampoline parks it here and
     /// the call rethrows once the native stack has unwound. Per-thread, because
-    /// a handler runs on whichever thread the engine called it from.
+    /// a handler runs on whichever thread the native side called it from.
     /// </summary>
     [ThreadStatic]
     private static Exception? s_parkedCallbackException;
@@ -206,7 +206,7 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
 
     partial void OnDispose();
 
-    /// <summary>What retained handlers threw and no call has reported yet, from any thread the engine ran them on.</summary>
+    /// <summary>What retained handlers threw and no call has reported yet, from any thread the native side ran them on.</summary>
     private static readonly System.Collections.Concurrent.ConcurrentQueue<Exception> s_raisedCallbackFailures = new();
 
     /// <summary>Throws what retained handlers raised, or returns <paramref name="code"/> when they raised nothing.</summary>

@@ -31,10 +31,10 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
-    /// underneath engine code that has no way to carry an exception, so throwing
+    /// underneath native code that has no way to carry an exception, so throwing
     /// through it would tear down the process; the trampoline parks it here and
     /// the call rethrows once the native stack has unwound. Per-thread, because
-    /// a handler runs on whichever thread the engine called it from.
+    /// a handler runs on whichever thread the native side called it from.
     /// </summary>
     [ThreadStatic]
     private static Exception? s_parkedCallbackException;

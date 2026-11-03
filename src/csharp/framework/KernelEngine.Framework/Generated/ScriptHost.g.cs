@@ -30,7 +30,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
 
     /// <summary>
     /// Keeps alive every managed object handed to the native side as an opaque
-    /// pointer. The engine stores the pointer and never dereferences it, so nothing
+    /// pointer. The native side stores the pointer and never dereferences it, so nothing
     /// over there stops the collector from moving or reclaiming the object; the
     /// handle is what makes the pointer mean anything by the time it comes back.
     /// </summary>
