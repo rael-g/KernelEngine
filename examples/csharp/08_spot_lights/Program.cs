@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -18,15 +20,17 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 08 Spot Lights"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.01f, 0.01f, 0.01f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 08_spot_lights");
         Console.WriteLine("[KernelEngine] Features: spot_lights, multi_light_accumulation, cone_falloff");
 
@@ -35,19 +39,19 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 5f, 15f);
 
-        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string planeMesh = "plane";
+        const string cubeMesh = "cube";
 
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.3f, 0.3f, 0.3f, 1f), roughness: 0.8f);
         var cubeMat = resources.CreateMaterial("cube", new Vector4(0.8f, 0.8f, 0.8f, 1f), metallic: 0.1f, roughness: 0.5f);
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(30f, 1f, 30f);
 
         for (int x = -4; x <= 4; x += 4)
             for (int z = -4; z <= 4; z += 4)
             {
-                var n = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
+                var n = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = cubeMat }, $"Cube_{x}_{z}");
                 n.Position = new Vector3(x, 1f, z);
             }
 

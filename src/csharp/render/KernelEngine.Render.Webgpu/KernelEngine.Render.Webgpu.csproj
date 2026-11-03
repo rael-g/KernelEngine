@@ -40,10 +40,11 @@
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
-    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
+    <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool\KernelEngine.TaskPool.csproj" />
+    <ProjectReference Include="..\..\io\KernelEngine.Io\KernelEngine.Io.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- World, for register_component_apply -->
     <ProjectReference Include="..\..\asset\KernelEngine.Asset\KernelEngine.Asset.csproj" /> <!-- ModelExtensions -->
-    <ProjectReference Include="..\..\text\KernelEngine.Text.Abstractions\KernelEngine.Text.Abstractions.csproj" /> <!-- IFontLoader, for Font/Label -->
+    <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
     <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

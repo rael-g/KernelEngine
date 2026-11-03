@@ -25,7 +25,7 @@ plugin did not ask for is not on its include path. All libraries are installed u
 `--prefix` given to the root build.
 
 **Layer 3 is generated from the headers.** ClangSharp produces the raw struct and function
-surface; kabic (`src/csharp/kabic/`) produces the idiomatic projection from the doc tags of the
+surface; kabic (the kabic repository) produces the idiomatic projection from the doc tags of the
 same headers, driven by `scripts/api_domains.json`. Neither output is edited by hand.
 
 **Layer 4 reaches native code through layer 3.** The managed projects copy the plugin libraries
@@ -34,18 +34,12 @@ dependency injection from its own `Program.cs`.
 
 ## Source the plugins share
 
-Behavior two plugins both need is a Zig file the root build passes to each consumer as an option
-named after the file, and the consumer imports it by that name.
+Behavior two plugins both need is a module of the `ke_common` package (`src/zig/common/`), which a
+plugin names in the `common` list of its build description and imports by that name.
 
-| file | option | gives |
+| file | module | gives |
 |---|---|---|
-| `src/zig/common/heap.zig` | "heap-src" | `gpa`, the allocator of every plugin, with `leaks` and `expectNoLeaks` |
-| `src/zig/common/component_fields.zig` | "component-fields-src" | `Fields`, which writes a variant into a component |
-| `src/zig/common/stubs.zig` | "stubs-src" | `Stubs`, fakes of device, target, render service, runtime, ecs and world for a plugin's tests |
-| `src/zig/render/common/handle.zig` | | `Handles`, the packing of render handles |
-
-A shared file that touches C types is a function of the importing plugin's own translated C
-namespace, as in `Result(c, .{})`.
+| `src/zig/common/heap.zig` | `heap` | `gpa`, the allocator of every plugin, with `leaks` and `expectNoLeaks` |
 
 ## What decides which directory a file goes in
 

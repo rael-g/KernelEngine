@@ -1,12 +1,12 @@
 .{
-    .name = .abi_resource_cache_default,
+    .name = .abi_resource_cache_default_facto,
     .version = "0.1.0",
-    .fingerprint = 0x60b82c23a89bcf41,
+    .fingerprint = 0x1025a480e6c578b0,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_resource_cache = .{ .path = "../../../abi/resource_cache" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_resource_cache = .{ .path = "../../../abi/resource_cache" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

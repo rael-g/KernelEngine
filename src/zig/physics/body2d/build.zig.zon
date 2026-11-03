@@ -4,9 +4,16 @@
     .fingerprint = 0x5ffee1f64f597ee6,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .abi_ecs = .{ .path = "../../abi/ecs" },
+        .abi_framework_components = .{ .path = "../../abi/framework_components" },
+        .abi_spatial_contract = .{ .path = "../../abi/spatial_contract" },
+        .abi_physics_contract = .{ .path = "../../abi/physics_contract" },
         .abi_framework = .{ .path = "../../abi/framework" },
+        .abi_scene_tree = .{ .path = "../../abi/scene_tree" },
+        .abi_physics_components = .{ .path = "../../abi/physics_components" },
+        .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
+        .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_physics = .{ .path = "../../abi/physics" },
+        .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_runtime = .{ .path = "../../abi/runtime" },
         .abi_spatial = .{ .path = "../../abi/spatial" },
@@ -15,6 +22,10 @@
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
     },
     .paths = .{"."},
 }

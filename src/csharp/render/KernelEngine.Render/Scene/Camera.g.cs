@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.</summary>

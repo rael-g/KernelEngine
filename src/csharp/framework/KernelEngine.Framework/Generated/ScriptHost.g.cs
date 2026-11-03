@@ -5,9 +5,13 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Framework.Native;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -18,7 +22,7 @@ public unsafe interface INativeScriptHost
 }
 
 
-public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
+public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScriptHost
 {
     private ke_script_host* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_script_host*, void> _destroy;
@@ -30,7 +34,7 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     /// over there stops the collector from moving or reclaiming the object; the
     /// handle is what makes the pointer mean anything by the time it comes back.
     /// </summary>
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, GCHandle> _rooted = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<Entity, GCHandle> _rooted = new();
 
     private ke_script_host* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ScriptHost));
@@ -57,39 +61,45 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
 
     /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails as already existing when it does not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint RegisterType(string name, ReadOnlySpan<uint> components, ScriptReach reach)
+    public uint RegisterType(string name, ReadOnlySpan<ComponentId> components, ScriptReach reach)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (uint* componentsPtr = components)
+            fixed (ComponentId* componentsPtr = components)
             {
                 uint resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, componentsPtr, (uint)components.Length, (ke_script_reach)reach, &resultOut), "register_type");
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->register_type(Handle, (sbyte*)namePtr, componentsPtr, (uint)components.Length, (ScriptReach)reach, &resultOut), "register_type");
                 return resultOut;
             }
         }
     }
 
     /// <summary>Resolves a type by name without registering it. An undeclared name fails.</summary>
-    public bool TryTypeLookup(string name, out uint id)
+    public bool TryTypeLookup(string name, out uint outId)
     {
-        uint idLocal;
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        uint outIdLocal;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            var found = Handle->type_lookup(Handle, (sbyte*)namePtr, &idLocal);
-            id = idLocal;
+            var found = Handle->type_lookup(Handle, (sbyte*)namePtr, &outIdLocal);
+            outId = outIdLocal;
             return found;
         }
     }
 
     /// <summary>The components a registered type's instances carry, in registration order.</summary>
-    public ReadOnlySpan<uint> TypeComponents(uint type)
+    public ReadOnlySpan<ComponentId> TypeComponents(uint type)
     {
-        uint countLocal = 0;
-        var front = Handle->type_components(Handle, type, &countLocal);
-        return front == null ? default : new ReadOnlySpan<uint>(front, (int)countLocal);
+        uint outCountLocal = 0;
+        var front = Handle->type_components(Handle, type, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<ComponentId>(front, (int)outCountLocal);
     }
 
     /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id.</summary>
@@ -99,24 +109,24 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The tag component every bound instance of a registered type carries, so a query can match the instances of one type; 0 for an id that was never registered. No entity carries two of these tags, since an entity holds one instance at most.</summary>
-    public uint TypeTag(uint type)
+    public ComponentId TypeTag(uint type)
     {
         return Handle->type_tag(Handle, type);
     }
 
     /// <summary>The component no entity carries that names the group the type tags form: every tag of this host is a member of it, and no entity holds two members. A runtime is told so with declare_exclusive(group, tag).</summary>
-    public uint TypeTagGroup()
+    public ComponentId TypeTagGroup()
     {
         return Handle->type_tag_group(Handle);
     }
 
     /// <summary>Binds `instance` to `entity` as an instance of `type`. The pointer is stored and never dereferenced. Binding an entity that already carries an instance fails as already existing rather than replacing it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Bind(ulong entity, uint type, object instance)
+    public void Bind(Entity entity, uint type, object instance)
     {
         var instanceHandle = System.Runtime.InteropServices.GCHandle.Alloc(instance);
-        KernelEngine.Result.Native.ke_result rc;
-        if ((rc = Handle->bind(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle))) != KernelEngine.Result.Native.ke_result.KE_OK)
+        KernelEngine.Result.Native.Result rc;
+        if ((rc = Handle->bind(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle))) != KernelEngine.Result.Native.Result.Ok)
         {
             instanceHandle.Free();
             throw KernelEngine.NativeResults.FromCode(rc, "bind");
@@ -126,20 +136,41 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
 
     /// <summary>Drops the binding for `entity`, if any. The instance itself is the binding runtime's to release.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Unbind(ulong entity)
+    public void Unbind(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->unbind(Handle, entity), "unbind");
         if (_rooted.TryRemove(entity, out var freed)) freed.Free();
     }
 
-    /// <summary>The instance bound to `entity`. False when none is, which is a normal answer, not a failure.</summary>
-    public bool TryInstanceOf(ulong entity, out uint type, out object? instance)
+    /// <summary>Records bind into `commands`; the binding takes effect when `commands` is applied. A bind that fails at that point is dropped.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void BindDeferred(Entity entity, uint type, object instance, INativeEcsCommands commands)
     {
-        uint typeLocal;
-        nint instanceLocal;
-        var found = Handle->instance_of(Handle, entity, &typeLocal, (void**)&instanceLocal);
-        type = typeLocal;
-        instance = instanceLocal == 0 ? null : System.Runtime.InteropServices.GCHandle.FromIntPtr(instanceLocal).Target;
+        var instanceHandle = System.Runtime.InteropServices.GCHandle.Alloc(instance);
+        KernelEngine.Result.Native.Result rc;
+        if ((rc = Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle), commands.Native)) != KernelEngine.Result.Native.Result.Ok)
+        {
+            instanceHandle.Free();
+            throw KernelEngine.NativeResults.FromCode(rc, "bind_deferred");
+        }
+        _rooted[entity] = instanceHandle;
+    }
+
+    /// <summary>Records unbind into `commands`; the binding is dropped when `commands` is applied.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void UnbindDeferred(Entity entity, INativeEcsCommands commands)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->unbind_deferred(Handle, entity, commands.Native), "unbind_deferred");
+    }
+
+    /// <summary>The instance bound to `entity`. False when none is, which is a normal answer, not a failure.</summary>
+    public bool TryInstanceOf(Entity entity, out uint outType, out object? outInstance)
+    {
+        uint outTypeLocal;
+        nint outInstanceLocal;
+        var found = Handle->instance_of(Handle, entity, &outTypeLocal, (void**)&outInstanceLocal);
+        outType = outTypeLocal;
+        outInstance = outInstanceLocal == 0 ? null : System.Runtime.InteropServices.GCHandle.FromIntPtr(outInstanceLocal).Target;
         return found;
     }
 
@@ -150,22 +181,25 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost
     }
 
     /// <summary>The entities bound as instances of `type`, in binding order. The slice belongs to the host and is invalidated by the next bind or unbind of that type.</summary>
-    public ReadOnlySpan<ulong> Instances(uint type)
+    public ReadOnlySpan<Entity> Instances(uint type)
     {
-        uint countLocal = 0;
-        var front = Handle->instances(Handle, type, &countLocal);
-        return front == null ? default : new ReadOnlySpan<ulong>(front, (int)countLocal);
+        uint outCountLocal = 0;
+        var front = Handle->instances(Handle, type, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<Entity>(front, (int)outCountLocal);
     }
 
     /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
-    public ulong Resolve(ulong owner, uint type, string name, ScriptBorrow reach, out ScriptResolve why)
+    public Entity Resolve(Entity owner, uint type, string name, ScriptBorrow reach, out ScriptResolve outWhy)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            ScriptResolve whyLocal;
-            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ke_script_borrow)reach, (ke_script_resolve*)&whyLocal);
-            why = whyLocal;
+            ScriptResolve outWhyLocal;
+            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ScriptBorrow)reach, &outWhyLocal);
+            outWhy = outWhyLocal;
             return result;
         }
     }

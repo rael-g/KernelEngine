@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -25,8 +27,10 @@ const float CorridorLength = 300f;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
@@ -34,7 +38,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 09_many_lights");
         Console.WriteLine($"[KernelEngine] Features: clustered_forward, {LightCount} point_lights, corridor length {CorridorLength:F0}");
 
@@ -43,26 +47,26 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 70f, NearPlane = 0.1f, FarPlane = CorridorLength + 50f }, "Camera");
         cam.Position = new Vector3(0f, 0f, -3f);
 
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string cubeMesh = "cube";
         var wallMat = resources.CreateMaterial("wall", new Vector4(0.6f, 0.6f, 0.65f, 1f), metallic: 0.1f, roughness: 0.7f);
 
         float halfW = CorridorWidth / 2f;
         float halfH = CorridorHeight / 2f;
         float halfL = CorridorLength / 2f;
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "Floor");
         floor.Position = new Vector3(0f, -halfH, halfL);
         floor.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
-        var ceiling = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
+        var ceiling = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "Ceiling");
         ceiling.Position = new Vector3(0f, halfH, halfL);
         ceiling.Scale = new Vector3(CorridorWidth, 1f, CorridorLength);
 
-        var wallLeft = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
+        var wallLeft = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "WallLeft");
         wallLeft.Position = new Vector3(-halfW, 0f, halfL);
         wallLeft.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 
-        var wallRight = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = wallMat }, "WallRight");
+        var wallRight = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = wallMat }, "WallRight");
         wallRight.Position = new Vector3(halfW, 0f, halfL);
         wallRight.Scale = new Vector3(1f, CorridorHeight, CorridorLength);
 

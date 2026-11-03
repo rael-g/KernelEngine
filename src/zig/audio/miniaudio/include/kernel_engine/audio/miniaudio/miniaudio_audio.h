@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_AUDIO_MINIAUDIO_MINIAUDIO_AUDIO_H_
 
 #include <kernel_engine/audio/audio.h>
+#include <kernel_engine/io/io.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_AUDIO_MINIAUDIO_EXPORT
@@ -20,12 +21,14 @@ extern "C" {
 #endif
 
 /**
- * @brief Creates a ke_audio backend for the audio output device.
+ * @brief Creates a ke_audio backend for the audio output device, reading each sound file through
+ *        @p io and decoding it from memory.
+ * @param io [borrowed] The io it reads through; borrowed for the lifetime of the backend.
  * @param out_audio [out] Receives the backend; left zeroed on failure.
- * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_audio; KE_RESULT_OUT_OF_MEMORY;
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p io or @p out_audio; KE_RESULT_OUT_OF_MEMORY;
  *         KE_RESULT_GENERAL when the audio engine cannot start.
  */
-KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(ke_audio_handle *out_audio);
+KE_AUDIO_MINIAUDIO_API ke_result ke_audio_miniaudio_create(ke_io *io, ke_audio_handle *out_audio);
 
 #ifdef __cplusplus
 }

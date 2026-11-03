@@ -3,6 +3,7 @@
 
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/asset/image_loader.h>
+#include <kernel_engine/io/io.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/result/result.h>
 
@@ -32,13 +33,16 @@ extern "C"
     /// The resolver does NOT take ownership of either loader.
     /// @p project_root may be NULL — res:// resolution is
     /// then disabled; only absolute or CWD-relative paths work.
+    /// @param io [borrowed] What every file the resolver opens is read through; must outlive the
+    ///        resolver.
     /// @param out_resolver [out] Receives the resolver; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_resolver, or
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p io or @p out_resolver, or
     ///         KE_RESULT_OUT_OF_MEMORY.
     KE_FRAMEWORK_API ke_result ke_asset_resolver_create(
         ke_image_loader          *image_loader,
         ke_font_loader           *font_loader,
         const char               *project_root,
+        ke_io                    *io,
         ke_asset_resolver_handle *out_resolver);
 
 #ifdef __cplusplus

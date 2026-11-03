@@ -3,14 +3,16 @@ using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
@@ -24,13 +26,17 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .AddBox2D()
-    .AddMiniAudio()
-    .AddTextStbTrueType()
+    .AddBox2dPhysics2D()
+    .AddMiniaudioAudio()
+    .AddAudioScene()
+    .AddAudioComponentsNodeTypes()
+    .AddStbFontLoader()
     .AddAssetResolver()
     .AddInputActions<PongAction>()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir))

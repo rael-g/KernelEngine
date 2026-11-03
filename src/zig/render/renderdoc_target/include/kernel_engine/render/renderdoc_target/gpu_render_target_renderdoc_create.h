@@ -21,7 +21,7 @@ extern "C"
 {
 #endif
 
-/// Which of a render target's frames RenderDoc captures.
+/// [bag] Which of a render target's frames RenderDoc captures.
 typedef struct ke_gpu_render_target_renderdoc_params
 {
     /// The first frame captured, counting from zero the frames the target presented.

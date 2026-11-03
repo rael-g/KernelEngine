@@ -1,7 +1,1167 @@
 {
-  "enums": [],
-  "structs": [],
+  "enums": [
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "_Bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "_Bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        },
+        {
+          "name": "enum_names",
+          "type": "const char *const *",
+          "tags": [
+            "borrowed",
+            "optional"
+          ],
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. NULL leaves the field numeric."
+        },
+        {
+          "name": "enum_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060enum_names\u0060."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_segment",
+      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "entities",
+          "type": "const ke_entity *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": "The entities this segment matched."
+        },
+        {
+          "name": "count",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "columns",
+          "type": "void **",
+          "tags": [
+            "array_of:column_count"
+          ],
+          "doc": "One base pointer per query term."
+        },
+        {
+          "name": "column_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_hierarchy_component",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "parent",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "first_child",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "last_child",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "next_sibling",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "prev_sibling",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_name_component",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "char[64]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
   "vtables": [
+    {
+      "name": "ke_ecs",
+      "doc": "Entity lifetime and component storage.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "entity_create",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a fresh entity with no components. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the entity; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_destroy",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Destroys an entity and all its components; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_component_params *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The name, size, alignment and field table of the type."
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id; KE_COMPONENT_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_lookup",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Looks up a previously registered component by name.",
+          "return_doc": "false if no component of that name is registered.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Component name to find."
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size, and field metadata."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_add",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive, the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_data",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_remove",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Detaches a component from an entity; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component. The pointer is valid until the next structural change on this ecs.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_size",
+          "returns": "size_t",
+          "tags": [],
+          "doc": "Byte size of a registered component\u0027s element; 0 for a tag or unknown cid.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_field_write",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Writes value into component at the place field describes, converted to the field\u0027s type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field\u0027s width; a string is cut to the field\u0027s size and stays NUL-terminated.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does not convert to the field\u0027s type or a size the type cannot have, writing nothing.",
+          "params": [
+            {
+              "name": "component",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The component\u0027s memory."
+            },
+            {
+              "name": "field",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Where in the component, and of which type and size."
+            },
+            {
+              "name": "value",
+              "type": "const ke_variant *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The value to write."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a query over a component tuple (entities matching ALL cids).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than the backend\u0027s queries hold, or one the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "cids",
+              "type": "const ke_component_id *",
+              "tags": [
+                "borrowed",
+                "array_of:cid_count"
+              ],
+              "doc": "Component tuple to match."
+            },
+            {
+              "name": "cid_count",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Number of components in the tuple."
+            },
+            {
+              "name": "out_query",
+              "type": "ke_query_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the query; KE_QUERY_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_resolve",
+          "returns": "ke_result",
+          "tags": [
+            "raw"
+          ],
+          "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "query",
+              "type": "ke_query_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_segments",
+              "type": "ke_ecs_segment *",
+              "tags": [
+                "out",
+                "array_of:max_segments"
+              ],
+              "doc": "Receives the matched segments."
+            },
+            {
+              "name": "max_segments",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Capacity of out_segments."
+            },
+            {
+              "name": "out_columns",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the cid_count entries starting at index i * cid_count, cid_count being the length of the tuple the query was registered with."
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them; zero on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_reserve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve was handed out.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_materialize",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_commands",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_ENTITY_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "attach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, when \u0060size\u0060 is neither 0 nor the registered size of \u0060cid\u0060.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "detach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "despawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records destroying \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "defer",
+          "returns": "ke_result",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:user_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_scene_tree",
       "doc": null,
@@ -236,7 +1396,9 @@
     {
       "name": "ke_scene_tree_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -259,9 +1421,36 @@
     }
   ],
   "functions": [],
-  "callbacks": [],
+  "callbacks": [
+    {
+      "name": "ke_defer_fn",
+      "returns": "ke_result",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world. A failure is returned, and the queue stops there: the operations recorded after it are dropped.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "id_types": [],
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
-    "ke_component_id": "uint32_t"
+    "ke_component_id": "uint32_t",
+    "ke_query_id": "uint64_t",
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)"
   }
 }

@@ -13,13 +13,13 @@ extern "C"
     /// that order once, so a parent's world matrix is final before its children are
     /// reached.
     ///
-    /// The system declares its component access, so the scheduler orders it against
+    /// The system declares its component access, so the runtime orders it against
     /// other systems that touch transforms.
     typedef struct ke_scene_hierarchy ke_scene_hierarchy;
 
     /// Owner wrapper: destroy releases the ordering buffers. The system is
     /// registered for the runtime's lifetime, so destroy the hierarchy only once
-    /// the runtime it was created against is done ticking.
+    /// [owner] the runtime it was created against is done ticking.
     typedef struct ke_scene_hierarchy_handle
     {
         ke_scene_hierarchy *ref;

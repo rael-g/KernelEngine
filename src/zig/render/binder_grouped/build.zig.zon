@@ -4,14 +4,20 @@
     .fingerprint = 0xe5888eb2b813613c,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
+        .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_render_binder_grouped_factory = .{ .path = "abi" },
+        .abi_io = .{ .path = "../../abi/io" },
         .abi_render = .{ .path = "../../abi/render" },
         .ke_common = .{ .path = "../../common" },
-        .ke_render_common = .{ .path = "../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
     },
     .paths = .{"."},
 }

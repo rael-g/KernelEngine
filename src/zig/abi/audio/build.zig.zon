@@ -1,12 +1,10 @@
 .{
-    .name = .ke_abi_audio,
+    .name = .abi_audio,
     .version = "0.1.0",
-    .fingerprint = 0xaff6a96b8dc6455a,
+    .fingerprint = 0x0276541312805ff0,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_ecs = .{ .path = "../ecs" },
-        .ke_abi_result = .{ .path = "../result" },
-        .ke_abi_spatial = .{ .path = "../spatial" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

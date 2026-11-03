@@ -1,14 +1,17 @@
 using System.Numerics;
 
+using KernelEngine.Common;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -19,8 +22,10 @@ var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 18 Webgpu Mesh (v2)"))
     .Add<IRuntimeModule>(render);
@@ -32,17 +37,17 @@ var ecs = sp.GetRequiredService<INativeEcs>();
 
 runtime.LoadModules(sp);
 
-var cube = MeshPrimitives.Cube(render);
-var orange = render.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
+var renderService = sp.GetRequiredService<IRenderService>();
+var orange = renderService.CreateMaterial("orange", new Vector4(0.85f, 0.35f, 0.2f, 1.0f));
 
 EcsRegistry reg;
 unsafe { reg = EcsRegistry.Borrow(((INativeEcs)ecs).Native); }
 
-var transformCid = reg.RegisterComponent<TransformComponent>(TransformComponent.Name);
-var worldCid = reg.RegisterComponent<WorldTransformComponent>(WorldTransformComponent.Name);
+var transformCid = reg.RegisterComponent<TransformComponent>("transform");
+var worldCid = reg.RegisterComponent<WorldTransformComponent>("world_transform");
 var cameraCid = reg.RegisterComponent<CameraComponent>(CameraComponent.Name);
 var meshCid = reg.RegisterComponent<MeshComponent>(MeshComponent.Name);
-var lightCid = reg.RegisterComponent<DirectionalLightComponent>(DirectionalLightComponent.Name);
+var lightCid = reg.RegisterComponent<DirectionalLightComponent>("directional_light");
 
 var cam = reg.CreateEntity();
 ref var camT = ref reg.AddComponent<TransformComponent>(cam, transformCid)[0];
@@ -59,7 +64,8 @@ entT = TransformComponent.Default;
 ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
 entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
-entM = MeshComponent.Default with { Mesh = cube, Material = orange };
+entM = MeshComponent.Default with { Material = orange };
+System.Text.Encoding.ASCII.GetBytes("cube", System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref entM.Primitive.e0, 32)));
 
 var sun = reg.CreateEntity();
 ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0];

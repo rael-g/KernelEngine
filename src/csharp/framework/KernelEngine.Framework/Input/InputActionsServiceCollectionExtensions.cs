@@ -11,7 +11,8 @@ public static class InputActionsServiceCollectionExtensions
     /// Registers the <see cref="InputActionMap{TEnum}"/> built from the TOML file at
     /// <paramref name="path"/> (default <c>actions.input</c>, a relative path resolved against
     /// the application base directory) as itself, as <see cref="IInputActionMap{TEnum}"/> and as
-    /// <see cref="IActionEvaluator"/>. The file is loaded when the map is first requested.
+    /// <see cref="IActionEvaluator"/>. The file is loaded when the map is first requested, through
+    /// the registered <see cref="KernelEngine.Io.INativeIo"/>.
     /// </summary>
     public static IServiceCollection AddInputActions<TEnum>(
         this IServiceCollection services, string? path = null)
@@ -21,7 +22,7 @@ public static class InputActionsServiceCollectionExtensions
             ? Path.Combine(AppContext.BaseDirectory, "actions.input")
             : (Path.IsPathRooted(path) ? path : Path.Combine(AppContext.BaseDirectory, path));
 
-        services.AddSingleton(_ => InputActionMap<TEnum>.LoadFromFile(resolvedPath));
+        services.AddSingleton(sp => InputActionMap<TEnum>.LoadFromFile(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), resolvedPath));
         services.AddSingleton<IInputActionMap<TEnum>>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
         services.AddSingleton<IActionEvaluator>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
         return services;

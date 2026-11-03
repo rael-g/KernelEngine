@@ -5,6 +5,9 @@
 
 using System.Runtime.InteropServices;
 
+using KernelEngine.Asset.Native;
+using KernelEngine.Render;
+
 namespace KernelEngine.Asset;
 
 /// <summary>Decoded RGBA8 texture data returned by ke_asset_loader::load_model.</summary>

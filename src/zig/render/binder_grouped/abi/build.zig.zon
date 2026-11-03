@@ -1,12 +1,13 @@
 .{
-    .name = .abi_render_binder_grouped,
+    .name = .abi_render_binder_grouped_factor,
     .version = "0.1.0",
-    .fingerprint = 0x52c3b41aa6715628,
+    .fingerprint = 0x994fcc426faf1072,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_render = .{ .path = "../../../abi/render" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

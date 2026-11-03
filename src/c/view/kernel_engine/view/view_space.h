@@ -9,14 +9,14 @@ extern "C"
 {
 #endif
 
-    /** The view space as plain data, for consumers that cannot call this interface. */
+    /** [value] The view space as plain data, for consumers that cannot call this interface. */
     typedef struct ke_view_space_params
     {
         /// Multiplies a view-space z into a distance in front of the camera.
         float depth_from_view_z;
     } ke_view_space_params;
 
-    /**
+    /** [interface]
      * How the engine lays out view space: which way the camera faces along z,
      * and with it the shape of the view and projection matrices. Independent of
      * `ke_ndc_convention`, which reports the clip space of the device.
@@ -93,7 +93,7 @@ extern "C"
                              ke_mat4                   *out_proj);
     } ke_view_space;
 
-    /** Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
+    /** [owner] Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
     typedef struct ke_view_space_handle
     {
         ke_view_space *ref;

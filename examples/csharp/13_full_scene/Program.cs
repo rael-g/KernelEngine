@@ -5,13 +5,15 @@ using KernelEngine.Asset;
 using KernelEngine.Asset.Assimp;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -23,15 +25,17 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddAssimpAssetLoader()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 13 Full Scene"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 13_full_scene");
         Console.WriteLine("[KernelEngine] Renderer: webgpu/render-v2");
         Console.WriteLine("[KernelEngine] Features: aces_tonemapping, model_loading, 8_orbiting_point_lights");
@@ -53,9 +57,9 @@ var services = new ServiceCollection()
             Intensity = 4f,
         }, "Sun");
 
-        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
+        const string planeMesh = "plane";
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.2f, 0.2f, 0.2f, 1f), roughness: 0.9f);
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(50f, 1f, 50f);
 
         try

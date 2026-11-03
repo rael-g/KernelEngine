@@ -1,5 +1,5 @@
 ﻿using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -63,4 +63,30 @@ public static class RuntimeStartup
         foreach (var m in modules) Visit(m);
         return sorted;
     }
+}
+
+/// <summary>A service created when the modules load, which a module can create earlier.</summary>
+public interface IResolveOnLoad
+{
+    /// <summary>Creates the service now, in its order of registration.</summary>
+    void Resolve(IServiceProvider services);
+}
+
+/// <summary>
+/// Resolves <typeparamref name="T"/> when the modules load, for a service whose construction is
+/// its work, such as a render pass that registers its systems. The container owns the instance.
+/// </summary>
+public sealed class ResolveOnLoadModule<T> : IRuntimeModule, IResolveOnLoad where T : notnull
+{
+    /// <inheritdoc/>
+    public void Resolve(IServiceProvider services) => services.GetRequiredService<T>();
+
+    /// <inheritdoc/>
+    public string Name => typeof(T).FullName!;
+
+    /// <inheritdoc/>
+    public void Configure(IServiceCollection services) { }
+
+    /// <inheritdoc/>
+    public void OnLoad(IRuntime runtime, IServiceProvider services) => services.GetRequiredService<T>();
 }

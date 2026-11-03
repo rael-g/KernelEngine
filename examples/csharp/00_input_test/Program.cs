@@ -1,12 +1,14 @@
 ﻿using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -16,8 +18,10 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 160, "KernelEngine — 00 Input Test (click window, then type)"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.05f, 0.05f, 0.08f, 1.0f)))

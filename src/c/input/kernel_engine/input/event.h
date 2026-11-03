@@ -1,7 +1,11 @@
 #ifndef KERNEL_ENGINE_INPUT_EVENT_H_
 #define KERNEL_ENGINE_INPUT_EVENT_H_
 
+#include <stdbool.h>
 #include <stdint.h>
+
+#include <kernel_engine/input/key.h>
+#include <kernel_engine/math/math.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -32,18 +36,21 @@ extern "C"
     /**
      * @brief One discrete input event captured during the input poll.
      *
-     * Field interpretation depends on @c kind:
-     *   - KEY_DOWN / KEY_UP:           code = a ke_key value
-     *   - MOUSE_BUTTON_DOWN/UP:        code = button index
-     *   - MOUSE_MOVE:                  x, y = absolute cursor position
-     *   - MOUSE_SCROLL:                x, y = scroll delta x, y
+     * Field meaning depends on @c kind:
+     *   - KEY_DOWN / KEY_UP:           key
+     *   - MOUSE_BUTTON_DOWN/UP:        button
+     *   - MOUSE_MOVE:                  position, the absolute cursor position
+     *   - MOUSE_SCROLL:                scroll, the wheel delta
+     * A handler sets @c handled to stop further propagation.
      */
     typedef struct ke_input_event
     {
         ke_input_event_kind kind;
-        int32_t             code;
-        float               x;
-        float               y;
+        ke_key              key;
+        ke_mouse_button     button;
+        ke_vec2             scroll;
+        ke_vec2             position;
+        bool                handled;
     } ke_input_event;
 
 #ifdef __cplusplus

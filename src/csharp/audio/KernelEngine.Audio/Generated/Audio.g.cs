@@ -5,9 +5,10 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
+using KernelEngine.Audio.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Audio.Native;
 
 namespace KernelEngine.Audio;
 
@@ -18,7 +19,7 @@ public unsafe interface INativeAudio
 }
 
 /// <summary>Audio playback. Every slot is safe to call from a system body.</summary>
-public unsafe partial class Audio : IDisposable, INativeAudio
+public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
 {
     private ke_audio* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_audio*, void> _destroy;
@@ -48,12 +49,15 @@ public unsafe partial class Audio : IDisposable, INativeAudio
     }
 
     /// <summary>Loads a sound for repeated playback; the backend autodetects the format.</summary>
-    /// <param name="path">Filesystem path to the audio file.</param>
+    /// <param name="path">The audio file, read through the io the backend was created with.</param>
     /// <returns>Receives the sound; KE_AUDIO_SOUND_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public uint LoadSound(string path)
     {
-        var pathBytes = System.Text.Encoding.UTF8.GetBytes(path + '\0');
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
             uint resultOut = default;

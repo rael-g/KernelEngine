@@ -1,12 +1,13 @@
 .{
-    .name = .abi_physics_2d_box2d,
+    .name = .abi_physics_2d_box2d_factory,
     .version = "0.1.0",
-    .fingerprint = 0x2c6e2e201e72ca69,
+    .fingerprint = 0xdf45733cef72489a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_physics = .{ .path = "../../../abi/physics" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_configuration = .{ .path = "../../../abi/configuration" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_physics = .{ .path = "../../../abi/physics" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

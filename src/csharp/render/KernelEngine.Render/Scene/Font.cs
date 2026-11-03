@@ -28,18 +28,18 @@ public sealed class Font
 
     /// <summary>
     /// Bakes <paramref name="path"/> at <paramref name="pixelSize"/> through <paramref name="loader"/>,
-    /// waiting for it to finish, uploads the atlas and registers the glyph table through
+    /// uploads the atlas and registers the glyph table through
     /// <paramref name="resources"/>. It must run on the thread that owns GPU resource creation.
     /// </summary>
     public static Font Load(IRenderResources resources, IFontLoader loader, string path, float pixelSize,
                             uint atlasSize = 512, uint firstCodepoint = 32, uint codepointCount = 95)
     {
-        using var data = loader.LoadFontAsync(path, pixelSize, atlasSize, firstCodepoint, codepointCount)
-                               .GetAwaiter().GetResult();
+        using var baked = loader.LoadFont(path, pixelSize, firstCodepoint, codepointCount, atlasSize);
+        var data = baked.Data;
         var key = $"font:{path}:{pixelSize}:{atlasSize}:{firstCodepoint}:{codepointCount}";
         var atlas = resources.UploadTexture(key, data.AtlasWidth, data.AtlasHeight, data.AtlasRgba);
 
-        var glyphs = data.Glyphs;
+        var glyphs = data.Glyphs.ToArray();
         var nativeGlyphs = new FontGlyph[glyphs.Length];
         for (int i = 0; i < glyphs.Length; i++)
         {

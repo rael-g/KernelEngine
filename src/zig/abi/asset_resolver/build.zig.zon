@@ -1,0 +1,16 @@
+.{
+    .name = .abi_asset_resolver,
+    .version = "0.1.0",
+    .fingerprint = 0xe6a0d71abc097b1a,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_image_loader = .{ .path = "../image_loader" },
+        .abi_mesh_data = .{ .path = "../mesh_data" },
+        .abi_render = .{ .path = "../render" },
+        .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_render_material = .{ .path = "../render_material" },
+        .abi_result = .{ .path = "../result" },
+        .abi_text = .{ .path = "../text" },
+    },
+    .paths = .{"."},
+}

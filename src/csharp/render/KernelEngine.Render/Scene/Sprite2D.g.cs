@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>A textured quad in the plane, resolved into geometry and a material by the engine.</summary>
@@ -17,13 +21,13 @@ public partial class Sprite2D : Node2D
     public partial string Texture { get; set; }
 
     [NativeField("Region", Component = typeof(Sprite2dComponent))]
-    public partial Vector4 Region { get; set; }
+    public partial System.Numerics.Vector4 Region { get; set; }
 
     [NativeField("Size", Component = typeof(Sprite2dComponent))]
-    public partial Vector2 Size { get; set; }
+    public partial System.Numerics.Vector2 Size { get; set; }
 
     [NativeField("Pivot", Component = typeof(Sprite2dComponent))]
-    public partial Vector2 Pivot { get; set; }
+    public partial System.Numerics.Vector2 Pivot { get; set; }
 
     [NativeField("FlipH", Component = typeof(Sprite2dComponent))]
     public partial bool FlipH { get; set; }
@@ -32,7 +36,7 @@ public partial class Sprite2D : Node2D
     public partial bool FlipV { get; set; }
 
     [NativeField("Color", Component = typeof(Sprite2dComponent))]
-    public partial Vector4 Color { get; set; }
+    public partial System.Numerics.Vector4 Color { get; set; }
 
     /// <summary>ke_alpha_mode.</summary>
     [NativeField("AlphaMode", Component = typeof(Sprite2dComponent))]

@@ -5,9 +5,11 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Input.Native;
+using KernelEngine.Logger;
 using KernelEngine.Logger.Native;
 
 namespace KernelEngine.Input;
@@ -19,7 +21,7 @@ public unsafe interface INativeInput
 }
 
 /// <summary>Live keyboard and mouse state for one window.</summary>
-public unsafe partial class Input : IDisposable, INativeInput
+public unsafe partial class Input : IDisposable, INativeInput, IInput
 {
     private ke_input* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_input*, void> _destroy;
@@ -35,7 +37,7 @@ public unsafe partial class Input : IDisposable, INativeInput
     public Input()
     {
         ke_input_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Input.Native.NativeMethods.input_create(&handle), "ke_input_create");
+        KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Input.Native.NativeMethods.input_create(&handle), "ke_input_create");
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
@@ -78,9 +80,9 @@ public unsafe partial class Input : IDisposable, INativeInput
     }
 
     /// <summary>Captures a frozen copy of the current state, safe to read from another thread while this instance keeps updating.</summary>
-    public ke_input_snapshot GetSnapshot()
+    public InputSnapshot GetSnapshot()
     {
-        ke_input_snapshot result;
+        InputSnapshot result;
         Handle->get_snapshot(Handle, &result);
         return result;
     }
@@ -88,60 +90,92 @@ public unsafe partial class Input : IDisposable, INativeInput
     /// <summary>Returns true while the key is held down in a snapshot.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public bool SnapshotIsKeyDown(ke_input_snapshot* snapshot, Key key)
+    public bool SnapshotIsKeyDown(InputSnapshot snapshot, Key key)
     {
-        return Handle->snapshot_is_key_down(Handle, snapshot, (int)key);
+        return Handle->snapshot_is_key_down(Handle, (InputSnapshot*)&snapshot, (int)key);
     }
 
     /// <summary>Returns true if the key transitioned to down during the snapshot's frame.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public bool SnapshotIsKeyPressed(ke_input_snapshot* snapshot, Key key)
+    public bool SnapshotIsKeyPressed(InputSnapshot snapshot, Key key)
     {
-        return Handle->snapshot_is_key_pressed(Handle, snapshot, (int)key);
+        return Handle->snapshot_is_key_pressed(Handle, (InputSnapshot*)&snapshot, (int)key);
     }
 
     /// <summary>Returns true if the key transitioned to up during the snapshot's frame.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="key">Key to query. Out-of-range codes read as false.</param>
-    public bool SnapshotIsKeyReleased(ke_input_snapshot* snapshot, Key key)
+    public bool SnapshotIsKeyReleased(InputSnapshot snapshot, Key key)
     {
-        return Handle->snapshot_is_key_released(Handle, snapshot, (int)key);
+        return Handle->snapshot_is_key_released(Handle, (InputSnapshot*)&snapshot, (int)key);
     }
 
     /// <summary>Returns true while the mouse button is held down in a snapshot.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public bool SnapshotIsMouseButtonDown(ke_input_snapshot* snapshot, MouseButton button)
+    public bool SnapshotIsMouseButtonDown(InputSnapshot snapshot, MouseButton button)
     {
-        return Handle->snapshot_is_mouse_button_down(Handle, snapshot, (int)button);
+        return Handle->snapshot_is_mouse_button_down(Handle, (InputSnapshot*)&snapshot, (int)button);
     }
 
     /// <summary>Returns true if the mouse button transitioned to down during the snapshot's frame.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public bool SnapshotIsMouseButtonPressed(ke_input_snapshot* snapshot, MouseButton button)
+    public bool SnapshotIsMouseButtonPressed(InputSnapshot snapshot, MouseButton button)
     {
-        return Handle->snapshot_is_mouse_button_pressed(Handle, snapshot, (int)button);
+        return Handle->snapshot_is_mouse_button_pressed(Handle, (InputSnapshot*)&snapshot, (int)button);
     }
 
     /// <summary>Returns true if the mouse button transitioned to up during the snapshot's frame.</summary>
     /// <param name="snapshot">Snapshot to read.</param>
     /// <param name="button">Button to query. Out-of-range indices read as false.</param>
-    public bool SnapshotIsMouseButtonReleased(ke_input_snapshot* snapshot, MouseButton button)
+    public bool SnapshotIsMouseButtonReleased(InputSnapshot snapshot, MouseButton button)
     {
-        return Handle->snapshot_is_mouse_button_released(Handle, snapshot, (int)button);
+        return Handle->snapshot_is_mouse_button_released(Handle, (InputSnapshot*)&snapshot, (int)button);
     }
 
     /// <summary>Moves the oldest pending discrete events, as many as the buffer holds, out of the queue; the rest stay queued for the next call. Must run on the same thread as the sinks below.</summary>
     /// <param name="outBuf">Receives the drained events.</param>
     /// <returns>Number of events written.</returns>
-    public uint DrainEventsRaw(Span<ke_input_event> outBuf)
+    public uint DrainEvents(Span<InputEvent> outBuf)
     {
-        fixed (ke_input_event* outBufPtr = outBuf)
+        fixed (InputEvent* outBufPtr = outBuf)
         {
             return Handle->drain_events(Handle, outBufPtr, (uint)outBuf.Length);
         }
+    }
+
+    /// <summary>Reports a key transition from the window backend.</summary>
+    /// <param name="key">Key that changed.</param>
+    /// <param name="action">Whether the key went down or up.</param>
+    public void OnKey(Key key, InputAction action)
+    {
+        Handle->on_key(Handle, (int)key, (int)action);
+    }
+
+    /// <summary>Reports an absolute cursor position from the window backend.</summary>
+    /// <param name="x">Cursor position on the horizontal axis, in pixels.</param>
+    /// <param name="y">Cursor position on the vertical axis, in pixels.</param>
+    public void OnMouseMove(float x, float y)
+    {
+        Handle->on_mouse_move(Handle, x, y);
+    }
+
+    /// <summary>Reports a mouse-button transition from the window backend.</summary>
+    /// <param name="button">Button that changed.</param>
+    /// <param name="action">Whether the button went down or up.</param>
+    public void OnMouseButton(MouseButton button, InputAction action)
+    {
+        Handle->on_mouse_button(Handle, (int)button, (int)action);
+    }
+
+    /// <summary>Reports a scroll-wheel delta from the window backend.</summary>
+    /// <param name="dx">Horizontal scroll delta.</param>
+    /// <param name="dy">Vertical scroll delta.</param>
+    public void OnMouseScroll(float dx, float dy)
+    {
+        Handle->on_mouse_scroll(Handle, dx, dy);
     }
 
     /// <summary>Releases the native input.</summary>

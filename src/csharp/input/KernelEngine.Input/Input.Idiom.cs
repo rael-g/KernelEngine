@@ -14,49 +14,14 @@ public sealed unsafe partial class Input : IInput
     /// <inheritdoc/>
     public IInputReader CaptureSnapshot() => new SnapshotReader(this, GetSnapshot());
 
-    /// <inheritdoc/>
-    public int DrainEvents(Span<InputEvent> buffer)
-    {
-        if (buffer.IsEmpty) return 0;
-
-        Span<ke_input_event> native = stackalloc ke_input_event[buffer.Length];
-        int count = (int)DrainEventsRaw(native);
-
-        for (int i = 0; i < count; i++)
-        {
-            ref readonly var n = ref native[i];
-            ref var dst = ref buffer[i];
-            dst = default;
-            dst.Kind = (InputEventKind)n.kind;
-            switch (dst.Kind)
-            {
-                case InputEventKind.KeyDown:
-                case InputEventKind.KeyUp:
-                    dst.Key = (Key)n.code;
-                    break;
-                case InputEventKind.MouseButtonDown:
-                case InputEventKind.MouseButtonUp:
-                    dst.Button = (MouseButton)n.code;
-                    break;
-                case InputEventKind.MouseMove:
-                    dst.Position = new Vector2(n.x, n.y);
-                    break;
-                case InputEventKind.MouseScroll:
-                    dst.Scroll = new Vector2(n.x, n.y);
-                    break;
-            }
-        }
-        return count;
-    }
-
     /// <summary>An <see cref="IInputReader"/> over one captured native snapshot; it never changes
     /// after capture.</summary>
     private sealed class SnapshotReader : IInputReader, INativeInputReader
     {
         private readonly Input _owner;
-        private ke_input_snapshot _data;
+        private InputSnapshot _data;
 
-        public SnapshotReader(Input owner, ke_input_snapshot data)
+        public SnapshotReader(Input owner, InputSnapshot data)
         {
             _owner = owner;
             _data = data;
@@ -64,28 +29,28 @@ public sealed unsafe partial class Input : IInput
 
         public bool IsKeyDown(Key key)
         {
-            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyDown(p, key);
+            return _owner.SnapshotIsKeyDown(_data, key);
         }
 
         public bool IsKeyPressed(Key key)
         {
-            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyPressed(p, key);
+            return _owner.SnapshotIsKeyPressed(_data, key);
         }
 
         public bool IsKeyReleased(Key key)
         {
-            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsKeyReleased(p, key);
+            return _owner.SnapshotIsKeyReleased(_data, key);
         }
 
         public bool IsMouseButtonDown(MouseButton button)
         {
-            fixed (ke_input_snapshot* p = &_data) return _owner.SnapshotIsMouseButtonDown(p, button);
+            return _owner.SnapshotIsMouseButtonDown(_data, button);
         }
 
-        public Vector2 MousePosition => new(_data.mouse_x, _data.mouse_y);
-        public Vector2 MouseDelta => new(_data.mouse_dx, _data.mouse_dy);
-        public Vector2 ScrollDelta => new(_data.scroll_dx, _data.scroll_dy);
+        public Vector2 MousePosition => new(_data.MouseX, _data.MouseY);
+        public Vector2 MouseDelta => new(_data.MouseDx, _data.MouseDy);
+        public Vector2 ScrollDelta => new(_data.ScrollDx, _data.ScrollDy);
 
-        ke_input_snapshot INativeInputReader.Native => _data;
+        InputSnapshot INativeInputReader.Native => _data;
     }
 }

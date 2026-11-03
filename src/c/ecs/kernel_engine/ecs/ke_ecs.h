@@ -12,10 +12,11 @@ extern "C"
 #endif
 
     /** A component tuple registered once and resolved into archetype segments. */
+    /// [id]
     typedef uint64_t ke_query_id;
 #define KE_QUERY_INVALID ((ke_query_id)0)
 
-    /**
+    /** [view]
      * One archetype's slice of a query match: the matched entities, plus one
      * column base pointer per query term in the order query_register received
      * them, each aligned 1:1 with `entities`. A tag term's column is NULL.
@@ -114,6 +115,22 @@ extern "C"
         size_t (*component_size)(struct ke_ecs *self, ke_component_id cid);
 
         /**
+         * Writes @p value into @p component at the place @p field describes, converted to the
+         * field's type: an integer and a float convert to each other, a boolean to an integer, and
+         * a vector widens or narrows to the field's width; a string is cut to the field's size and
+         * stays NUL-terminated.
+         * @param component [borrowed] The component's memory.
+         * @param field     [borrowed] Where in the component, and of which type and size.
+         * @param value     [borrowed] The value to write.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does
+         *         not convert to the field's type or a size the type cannot have, writing nothing.
+         */
+        ke_result (*component_field_write)(struct ke_ecs                 *self,
+                                           void                          *component,
+                                           const ke_component_field      *field,
+                                           const ke_variant              *value);
+
+        /**
          * Registers a query over a component tuple (entities matching ALL cids).
          * @param cids [borrowed,array_of:cid_count] Component tuple to match.
          * @param cid_count Number of components in the tuple.
@@ -174,6 +191,7 @@ extern "C"
 
     } ke_ecs;
 
+    /// [owner]
     typedef struct ke_ecs_handle
     {
         ke_ecs *ref;

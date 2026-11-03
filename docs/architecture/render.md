@@ -8,7 +8,7 @@ plugins under `src/zig/render/`.
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| device | `ke_gpu_device` | webgpu | optionally a `ke_scheduler` and a `ke_logger` | GPU objects, command encoders, the clip-space convention |
+| device | `ke_gpu_device` | webgpu | optionally a `ke_task_pool` and a `ke_logger` | GPU objects, command encoders, the clip-space convention |
 | target | `ke_gpu_render_target` | webgpu, texture_target, renderdoc_target | the device, and a `ke_window` for the window target; the capture target wraps another target | the texture a frame ends in, and its presentation |
 | service | `ke_render_service` | service | device, target, `ke_ecs` | named resources, passes, uploads, materials, pipelines |
 | camera | `ke_render_camera` | camera | `ke_view_space`, the clip-space convention | view and projection matrices from a camera component |

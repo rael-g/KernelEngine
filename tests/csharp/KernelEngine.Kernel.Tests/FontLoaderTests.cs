@@ -14,25 +14,26 @@ public class FontLoaderTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** out_font)
+    private static unsafe global::KernelEngine.Result.Native.Result MockLoadFont(ke_font_loader* self, sbyte* path, float pixelSize, uint first, uint count, uint atlasSize, ke_font_data** out_font)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
 
         *out_font = null;
-        if (!LastResult) return ke_result.KE_RESULT_GENERAL;
+        if (!LastResult) return global::KernelEngine.Result.Native.Result.General;
 
         var data = (ke_font_data*)NativeMemory.Alloc((nuint)sizeof(ke_font_data));
         data->atlas_width = 10;
         data->atlas_height = 10;
         data->atlas_rgba = (byte*)NativeMemory.Alloc(400);
+        data->atlas_byte_count = 400;
         data->glyph_count = 1;
-        data->glyphs = (ke_glyph_metrics*)NativeMemory.Alloc((nuint)sizeof(ke_glyph_metrics));
-        data->glyphs[0].codepoint = 65;
+        data->glyphs = (KernelEngine.Text.GlyphMetrics*)NativeMemory.Alloc((nuint)sizeof(KernelEngine.Text.GlyphMetrics));
+        data->glyphs[0].Codepoint = 65;
         data->line_height = 12;
         data->ascent = 10;
 
         *out_font = data;
-        return ke_result.KE_OK;
+        return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -71,7 +72,7 @@ public class FontLoaderTests
     }
 
     [Fact]
-    public async Task LoadFontAsync_CallsNative()
+    public void LoadFont_CallsNative()
     {
         ke_font_loader_handle h;
         unsafe { h = CreateMockHandle(); }
@@ -83,17 +84,19 @@ public class FontLoaderTests
         FreeFontCalled = false;
         LastResult = true;
 
-        var data = await loader.LoadFontAsync("test.ttf", 16);
+        var baked = loader.LoadFont("test.ttf", 16, 32, 95, 512);
+        var width = baked.Data.AtlasWidth;
+        baked.Dispose();
 
         Assert.Equal("test.ttf", LastPath);
-        Assert.Equal(10u, data.AtlasWidth);
+        Assert.Equal(10u, width);
         Assert.True(FreeFontCalled);
 
         unsafe { NativeMemory.Free(h.@ref); }
     }
 
     [Fact]
-    public async Task LoadFontAsync_Throws_WhenNativeFails()
+    public void LoadFont_Throws_WhenNativeFails()
     {
         ke_font_loader_handle h;
         unsafe { h = CreateMockHandle(); }
@@ -103,7 +106,7 @@ public class FontLoaderTests
 
         LastResult = false;
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => loader.LoadFontAsync("test.ttf", 16));
+        Assert.Throws<InvalidOperationException>(() => loader.LoadFont("test.ttf", 16, 32, 95, 512));
 
         LastResult = true;
         unsafe { NativeMemory.Free(h.@ref); }

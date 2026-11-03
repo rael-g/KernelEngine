@@ -1,0 +1,461 @@
+{
+  "enums": [],
+  "structs": [
+    {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_view_space_params",
+      "doc": "The view space as plain data, for consumers that cannot call this interface.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "depth_from_view_z",
+          "type": "float",
+          "tags": [],
+          "doc": "Multiplies a view-space z into a distance in front of the camera."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_view_space",
+      "doc": "How the engine lays out view space: which way the camera faces along z, and with it the shape of the view and projection matrices. Independent of \u0060ke_ndc_convention\u0060, which reports the clip space of the device. Every slot is callable at any time. No slot\u0027s result is documented as constant; a consumer that caches one is making its own choice.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "params",
+          "returns": "ke_view_space_params",
+          "tags": [],
+          "doc": "The numbers to hand to consumers that cannot call this interface.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_view_space *"
+        },
+        {
+          "name": "look_to",
+          "returns": "void",
+          "tags": [],
+          "doc": "World-to-view for a camera at \u0060eye\u0060 facing \u0060forward\u0060 with \u0060up\u0060 above.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "eye",
+              "type": "const ke_vec3 *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "forward",
+              "type": "const ke_vec3 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Need not be normalized."
+            },
+            {
+              "name": "up",
+              "type": "const ke_vec3 *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_view_space *"
+        },
+        {
+          "name": "look_at",
+          "returns": "void",
+          "tags": [],
+          "doc": "World-to-view for a camera at \u0060eye\u0060 aimed at \u0060target\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "eye",
+              "type": "const ke_vec3 *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "target",
+              "type": "const ke_vec3 *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "up",
+              "type": "const ke_vec3 *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_view_space *"
+        },
+        {
+          "name": "view_from_transform",
+          "returns": "void",
+          "tags": [],
+          "doc": "World-to-view for a camera placed by \u0060camera_world\u0060, whose rotation basis gives the camera\u0027s local axes. Which of them the camera faces along is the view space\u0027s to decide, so the same transform yields opposite facings under the two handednesses. A basis carrying no rotation aims at the world origin.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera_world",
+              "type": "const ke_mat4 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera\u0027s world transform."
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_view_space *"
+        },
+        {
+          "name": "perspective",
+          "returns": "void",
+          "tags": [],
+          "doc": "Perspective projection into \u0060clip\u0060\u0027s conventions.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "fov_y",
+              "type": "float",
+              "tags": [],
+              "doc": "Vertical field of view, in radians."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "near_plane",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "far_plane",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "clip",
+              "type": "const ke_ndc_convention *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The device\u0027s clip space, from get_ndc_convention."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_view_space *"
+        },
+        {
+          "name": "orthographic",
+          "returns": "void",
+          "tags": [],
+          "doc": "Orthographic projection into \u0060clip\u0060\u0027s conventions.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "width",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "near_plane",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "far_plane",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "clip",
+              "type": "const ke_ndc_convention *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The device\u0027s clip space, from get_ndc_convention."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_view_space *"
+        }
+      ]
+    },
+    {
+      "name": "ke_view_space_handle",
+      "doc": "Owning wrapper: \u0060ref\u0060 borrows for the lifetime, \u0060destroy\u0060 ends it.",
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_view_space *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_view_space *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [],
+  "type_aliases": {}
+}

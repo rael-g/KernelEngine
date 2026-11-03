@@ -17,8 +17,8 @@ namespace KernelEngine.Framework;
 public unsafe partial class ScriptHost
 {
     private World _world = null!;
-    private IEcsRegistry _ecs = null!;
-    private uint _nameCid;
+    private EcsRegistry _ecs = null!;
+    private ComponentId _nameCid;
 
     private readonly HashSet<Type> _announcedBehaviors = new();
 
@@ -82,7 +82,7 @@ public unsafe partial class ScriptHost
         if (first) BehaviorTypeAdded?.Invoke(type, node);
     }
 
-    private uint _nativeTransformCid;
+    private ComponentId _nativeTransformCid;
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, (int Stamp, uint[] Ids)> _assignableTypes = new();
 
@@ -127,7 +127,7 @@ public unsafe partial class ScriptHost
         {
             var entity = Resolve(owner.Entity, id, name, reach, out var why);
             if (why == ScriptResolve.Ambiguous) return null;
-            if (entity == 0 || NodeOf(entity) is not { } node) continue;
+            if (entity == default || NodeOf(entity) is not { } node) continue;
             if (found is not null) return null;
             found = node;
         }
@@ -157,12 +157,12 @@ public unsafe partial class ScriptHost
     /// Hands one delivery to the node it names. A delivery whose target is no longer bound, or
     /// whose signal this world has no payload type for, is dropped.
     /// </summary>
-    internal unsafe void Deliver(in KernelEngine.Framework.Native.ke_signal_delivery delivery)
+    internal unsafe void Deliver(in KernelEngine.Framework.Native.SignalDelivery delivery)
     {
-        if (_signals!.SignalIdTypeOf(delivery.signal_id) is not { } type) return;
-        if (NodeOf(delivery.target) is not { } node) return;
+        if (_signals!.SignalIdTypeOf(delivery.SignalId) is not { } type) return;
+        if (NodeOf(delivery.Target) is not { } node) return;
         node.GeneratedDeliverSignal(type,
-            new ReadOnlySpan<byte>((void*)delivery.payload, (int)delivery.payload_size));
+            new ReadOnlySpan<byte>((void*)delivery.Payload, (int)delivery.PayloadSize));
     }
 
     /// <summary>
@@ -183,7 +183,7 @@ public unsafe partial class ScriptHost
     public bool Disconnect<T>(Node source, Node target) where T : unmanaged =>
         _signals is not null && _signals.Disconnect(source.Entity, SignalIdOf<T>(), target.Entity, 0);
 
-    internal Emit<T> EmitFor<T>(ulong source) where T : unmanaged =>
+    internal Emit<T> EmitFor<T>(Entity source) where T : unmanaged =>
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
@@ -192,7 +192,7 @@ public unsafe partial class ScriptHost
     /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(World world, IEcsRegistry ecs, SignalBus? signals = null)
+    internal ScriptHost Compose(World world, EcsRegistry ecs, SignalBus? signals = null)
     {
         _signals = signals;
         _world = world;
@@ -207,12 +207,12 @@ public unsafe partial class ScriptHost
     /// Creates the entity of a node under <paramref name="parent"/>, deferred when a system
     /// context is current.
     /// </summary>
-    private ulong CreateEntity(string name, Node? parent)
+    private Entity CreateEntity(string name, Node? parent)
     {
-        var parentEntity = parent?.Entity ?? 0;
+        var parentEntity = parent?.Entity ?? default;
         return _commands is { } commands
-            ? _world.SceneTree.CreateNodeDeferred(name, parentEntity, CommandsHandle(commands))
-            : _world.SceneTree.CreateNode(name, parentEntity);
+            ? _world.Tree.CreateNodeDeferred(name, parentEntity, commands)
+            : _world.Tree.CreateNode(name, parentEntity);
     }
 
     private static unsafe nint CommandsHandle(KernelEngine.Ecs.EcsCommands commands) =>
@@ -279,7 +279,7 @@ public unsafe partial class ScriptHost
         var uses = new List<NodeComponentUse>();
         node.CollectBehaviorComponents(uses);
 
-        var cids = new List<uint>();
+        var cids = new List<ComponentId>();
         foreach (var use in uses)
             if (use.Owned && _ecs.TryLookupComponent(use.Name, out var cid) && !cids.Contains(cid))
                 cids.Add(cid);
@@ -294,7 +294,7 @@ public unsafe partial class ScriptHost
     /// The tag component every bound instance of <paramref name="type"/> carries, or 0 for a
     /// node type no instance was bound under yet.
     /// </summary>
-    internal uint TagOf(Type type) => _scriptTypes.TryGetValue(type, out var id) ? TypeTag(id) : 0;
+    internal ComponentId TagOf(Type type) => _scriptTypes.TryGetValue(type, out var id) ? TypeTag(id) : default;
 
     private void BindScript(Node node)
     {
@@ -304,12 +304,12 @@ public unsafe partial class ScriptHost
         AnnounceBehavior(node);
     }
 
-    private void BindDeferred(ulong entity, uint type, Node node, KernelEngine.Ecs.EcsCommands commands)
+    private void BindDeferred(Entity entity, uint type, Node node, KernelEngine.Ecs.EcsCommands commands)
     {
         var handle = System.Runtime.InteropServices.GCHandle.Alloc(node);
         var bound = Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(handle),
             (KernelEngine.Ecs.Native.ke_ecs_commands*)CommandsHandle(commands));
-        if (bound != KernelEngine.Result.Native.ke_result.KE_OK)
+        if (bound != KernelEngine.Result.Native.Result.Ok)
         {
             handle.Free();
             KernelEngine.NativeResults.ThrowIfFailed(bound, "bind_deferred");
@@ -317,7 +317,7 @@ public unsafe partial class ScriptHost
         _rooted[entity] = handle;
     }
 
-    private void UnbindScript(ulong entity)
+    private void UnbindScript(Entity entity)
     {
         if (_commands is not { } commands)
         {
@@ -339,14 +339,14 @@ public unsafe partial class ScriptHost
     /// <summary>
     /// The node bound to <paramref name="entity"/>, or null when none is.
     /// </summary>
-    internal Node? NodeOf(ulong entity) =>
+    internal Node? NodeOf(Entity entity) =>
         TryInstanceOf(entity, out _, out var instance) ? instance as Node : null;
 
     /// <summary>Finds a node by its name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)
     {
-        var entity = _world.SceneTree.FindNode(name);
-        return entity != 0 ? NodeOf(entity) : null;
+        var entity = _world.Tree.FindNode(name);
+        return entity != default ? NodeOf(entity) : null;
     }
 
     /// <summary>Finds a node by name and casts it to <typeparamref name="T"/>.</summary>
@@ -376,9 +376,9 @@ public unsafe partial class ScriptHost
         UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
         if (_commands is { } commands)
-            _world.SceneTree.DestroyNodeDeferred(node.Entity, CommandsHandle(commands));
+            _world.Tree.DestroyNodeDeferred(node.Entity, commands);
         else
-            _world.SceneTree.DestroyNode(node.Entity);
+            _world.Tree.DestroyNode(node.Entity);
         node.UnbindFromScene();
     }
 
@@ -395,7 +395,7 @@ public unsafe partial class ScriptHost
     /// Binds a node to an entity that already exists, such as one made by the native scene
     /// loader, and calls <see cref="Node.OnBind"/>.
     /// </summary>
-    internal void BindNativeEntity(Node node, ulong entity)
+    internal void BindNativeEntity(Node node, Entity entity)
     {
         node.BindToScene(this, entity);
         BindScript(node);
@@ -405,11 +405,11 @@ public unsafe partial class ScriptHost
     /// Reads the name of <paramref name="entity"/> from <c>ke_name_component</c>; empty for an
     /// entity with no name.
     /// </summary>
-    internal string GetName(ulong entity)
+    internal string GetName(Entity entity)
     {
-        var nsp = _ecs.GetComponent<Native.ke_name_component>(entity, _nameCid);
+        var nsp = _ecs.GetComponent<Native.NameComponent>(entity, _nameCid);
         if (nsp.IsEmpty) return "";
-        ReadOnlySpan<sbyte> chars = nsp[0].name;
+        ReadOnlySpan<sbyte> chars = nsp[0].Name;
         var bytes = System.Runtime.InteropServices.MemoryMarshal.Cast<sbyte, byte>(chars);
         var end = bytes.IndexOf((byte)0);
         return Encoding.UTF8.GetString(end >= 0 ? bytes[..end] : bytes);
@@ -419,21 +419,21 @@ public unsafe partial class ScriptHost
     /// Resolves the parent node of <paramref name="entity"/>. Null when the entity has no parent,
     /// or when the parent entity has no managed <see cref="Node"/> bound to it.
     /// </summary>
-    internal Node? GetParent(ulong entity)
+    internal Node? GetParent(Entity entity)
     {
-        var parent = _world.SceneTree.Parent(entity);
-        return parent == 0 ? null : NodeOf(parent);
+        var parent = _world.Tree.Parent(entity);
+        return parent == default ? null : NodeOf(parent);
     }
 
     /// <summary>
     /// The children of <paramref name="entity"/> in creation order, walked through the scene
     /// tree. Skips any child with no managed <see cref="Node"/> bound to it.
     /// </summary>
-    internal IReadOnlyList<Node> GetChildren(ulong entity)
+    internal IReadOnlyList<Node> GetChildren(Entity entity)
     {
         var result = new List<Node>();
-        var tree = _world.SceneTree;
-        for (var child = tree.FirstChild(entity); child != 0; child = tree.NextSibling(child))
+        var tree = _world.Tree;
+        for (var child = tree.FirstChild(entity); child != default; child = tree.NextSibling(child))
             if (NodeOf(child) is { } node) result.Add(node);
         return result;
     }
@@ -442,7 +442,7 @@ public unsafe partial class ScriptHost
     /// Reads a component by its ECS registration name. Returns false if the name is
     /// unknown or the entity lacks it.
     /// </summary>
-    public bool TryGetComponent<T>(ulong entity, string componentName, out T value) where T : unmanaged
+    public bool TryGetComponent<T>(Entity entity, string componentName, out T value) where T : unmanaged
     {
         if (!_ecs.TryLookupComponent(componentName, out var cid))
         {
@@ -460,7 +460,7 @@ public unsafe partial class ScriptHost
     /// <paramref name="cid"/>, attaching it when the entity does not carry it yet. Inside a
     /// system, an attach is recorded and applies at the wave barrier.
     /// </summary>
-    public void SetByCid<T>(ulong entity, uint cid, in T value) where T : unmanaged
+    public void SetByCid<T>(Entity entity, ComponentId cid, in T value) where T : unmanaged
     {
         if (_commands is { } commands)
         {
@@ -477,19 +477,19 @@ public unsafe partial class ScriptHost
     /// Registers <typeparamref name="T"/> under <paramref name="name"/> with the field table it
     /// states, or returns the existing cid if that name is already registered with an agreeing one.
     /// </summary>
-    public uint RegisterComponent<T>(string name) where T : unmanaged, IComponentLayout => _ecs.RegisterComponent<T>(name);
+    public ComponentId RegisterComponent<T>(string name) where T : unmanaged => _ecs.RegisterComponent<T>(name);
 
     /// <summary>
     /// Attaches component <paramref name="cid"/> to <paramref name="entity"/> with
     /// <paramref name="value"/> through the command queue of <paramref name="view"/>, so it
     /// applies at the wave barrier.
     /// </summary>
-    public void Attach<T>(in View view, ulong entity, uint cid, in T value) where T : unmanaged =>
+    public void Attach<T>(in View view, Entity entity, ComponentId cid, in T value) where T : unmanaged =>
         view.Commands.Attach(entity, cid, in value);
 
     /// <summary>Returns the cid registered under the name.</summary>
     /// <exception cref="InvalidOperationException">No component has that name.</exception>
-    public uint CidOfName(string name) =>
+    public ComponentId CidOfName(string name) =>
         _ecs.TryLookupComponent(name, out var cid)
             ? cid
             : throw new InvalidOperationException($"Component '{name}' is not registered.");
@@ -498,7 +498,7 @@ public unsafe partial class ScriptHost
     /// Reads a copy of the component registered under <paramref name="cid"/>; false when the
     /// entity does not carry it.
     /// </summary>
-    public bool TryGetByCid<T>(ulong entity, uint cid, out T value) where T : unmanaged
+    public bool TryGetByCid<T>(Entity entity, ComponentId cid, out T value) where T : unmanaged
     {
         var sp = _ecs.GetComponent<T>(entity, cid);
         if (sp.IsEmpty) { value = default; return false; }
@@ -510,7 +510,7 @@ public unsafe partial class ScriptHost
     /// The component's live storage rather than a copy. Empty when the entity does not carry the
     /// component, including while an attach is still queued behind a wave barrier.
     /// </summary>
-    internal Span<T> StorageByCid<T>(ulong entity, uint cid) where T : unmanaged =>
+    internal Span<T> StorageByCid<T>(Entity entity, ComponentId cid) where T : unmanaged =>
         _ecs.GetComponent<T>(entity, cid);
 
     /// <summary>

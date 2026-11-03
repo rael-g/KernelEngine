@@ -1,12 +1,12 @@
 .{
-    .name = .abi_gpu_render_target_texture,
+    .name = .abi_gpu_render_target_texture_fa,
     .version = "0.1.0",
-    .fingerprint = 0xc7d08e245bb740ff,
+    .fingerprint = 0x8d24a49a7bc478aa,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_render = .{ .path = "../../../abi/render" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

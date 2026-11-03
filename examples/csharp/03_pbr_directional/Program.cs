@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -23,15 +25,17 @@ const float metal3 = 0.2f; const float rough3 = 0.6f;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 03 PBR Directional"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.05f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 03_pbr_directional");
         Console.WriteLine("[KernelEngine] Features: pbr_ggx, directional_light, orbiting_light");
 
@@ -40,22 +44,22 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 1.0f, 5.0f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mat0 = resources.CreateMaterial("mat0", Vector4.One, metal0, rough0);
         var mat1 = resources.CreateMaterial("mat1", Vector4.One, metal1, rough1);
         var mat2 = resources.CreateMaterial("mat2", Vector4.One, metal2, rough2, shader: "stripes");
         var mat3 = resources.CreateMaterial("mat3", Vector4.One, metal3, rough3, shader: "checker");
 
-        var n0 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat0 }, "QuadDielectric");
+        var n0 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat0 }, "QuadDielectric");
         n0.Position = new Vector3(-3f, 0f, 0f);
 
-        var n1 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat1 }, "QuadMetal");
+        var n1 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat1 }, "QuadMetal");
         n1.Position = new Vector3(-1f, 0f, 0f);
 
-        var n2 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat2 }, "QuadStripes");
+        var n2 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat2 }, "QuadStripes");
         n2.Position = new Vector3(1f, 0f, 0f);
 
-        var n3 = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat3 }, "QuadChecker");
+        var n3 = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat3 }, "QuadChecker");
         n3.Position = new Vector3(3f, 0f, 0f);
     }));
 

@@ -1,0 +1,11 @@
+.{
+    .name = .abi_io,
+    .version = "0.1.0",
+    .fingerprint = 0xd964245299aacfff,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_file_system = .{ .path = "../file_system" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

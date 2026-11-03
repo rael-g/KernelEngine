@@ -1,5 +1,9 @@
 //! Gives each mesh component a built-in mesh and a material while its handles are still empty.
 
+const abi_render_components = @import("abi_render_components");
+const abi_render_handles = @import("abi_render_handles");
+const abi_mesh = @import("abi_mesh");
+const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -21,7 +25,7 @@ const Vertex = extern struct {
 };
 
 /// A unit square in the plane facing the positive z axis, uploaded under the key of the quad.
-fn quad(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) abi_result.ke_result {
+fn quad(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mesh_handle) abi_result.c.ke_result {
     const t = [3]f32{ 1, 0, 0 };
     const verts = [4]Vertex{
         .{ .position = .{ -0.5, -0.5, 0 }, .normal = .{ 0, 0, 1 }, .uv = .{ 0, 1 }, .tangent = t },
@@ -30,11 +34,11 @@ fn quad(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) ab
         .{ .position = .{ -0.5, 0.5, 0 }, .normal = .{ 0, 0, 1 }, .uv = .{ 0, 0 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:quad", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:quad", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 /// A unit square lying flat with its normal along the positive y axis, uploaded under its own key.
-fn plane(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) abi_result.ke_result {
+fn plane(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mesh_handle) abi_result.c.ke_result {
     const n = [3]f32{ 0, 1, 0 };
     const t = [3]f32{ 1, 0, 0 };
     const verts = [4]Vertex{
@@ -44,7 +48,7 @@ fn plane(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) a
         .{ .position = .{ -0.5, 0, 0.5 }, .normal = n, .uv = .{ 0, 1 }, .tangent = t },
     };
     const idx = [6]u16{ 0, 1, 2, 0, 2, 3 };
-    return core.upload_mesh.?(core, "primitive:plane", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:plane", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 fn sub(a: [3]f32, b: [3]f32) [3]f32 {
@@ -58,7 +62,7 @@ fn normalize(v: [3]f32) [3]f32 {
 
 /// Gives each face vertices of its own, carrying that face's normal, so no vertex is shared between
 /// two faces. The tangent of a face runs along the edge from its first vertex to its second.
-fn cube(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) abi_result.ke_result {
+fn cube(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mesh_handle) abi_result.c.ke_result {
     const h = 0.5;
     var verts: [24]Vertex = undefined;
     var idx: [36]u16 = undefined;
@@ -87,7 +91,7 @@ fn cube(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) ab
         idx[i + 4] = @intCast(v + 2);
         idx[i + 5] = @intCast(v + 3);
     }
-    return core.upload_mesh.?(core, "primitive:cube", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:cube", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 const sphere_rings = 24;
@@ -95,7 +99,7 @@ const sphere_segments = 32;
 
 /// Builds a grid with one more vertex per ring than it has cells. The extra vertex repeats the
 /// position of the first one in its ring, with the texture coordinate at the far edge.
-fn uvSphere(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle) abi_result.ke_result {
+fn uvSphere(core: *abi_render.c.ke_render_service, out: *abi_render_handles.c.ke_mesh_handle) abi_result.c.ke_result {
     const radius = 0.5;
     const vert_count = (sphere_rings + 1) * (sphere_segments + 1);
     const idx_count = sphere_rings * sphere_segments * 6;
@@ -141,16 +145,16 @@ fn uvSphere(core: *abi_render.ke_render_service, out: *abi_render.ke_mesh_handle
             ii += 6;
         }
     }
-    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, out);
+    return core.upload_mesh.?(core, "primitive:sphere:0.5:24:32", @ptrCast(&verts), verts.len, &idx, idx.len, out);
 }
 
 /// Maps the name in the component's primitive field to one of the built-in shapes, uploaded
 /// under a key that names the shape, so components of one shape share one upload. Leaves the
 /// component alone when it has a mesh or names no primitive, and stores no handle for a name
 /// that is none of the built-in shapes or a shape whose upload fails.
-fn resolveMesh(core: *abi_render.ke_render_service, m: [*c]abi_render.ke_mesh_component) void {
-    const mc: *abi_render.ke_mesh_component = @ptrCast(m);
-    if (mc.mesh.bits != abi_render.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
+fn resolveMesh(core: *abi_render.c.ke_render_service, m: [*c]abi_render_components.c.ke_mesh_component) void {
+    const mc: *abi_render_components.c.ke_mesh_component = @ptrCast(m);
+    if (mc.mesh.bits != abi_render_handles.c.KE_HANDLE_NONE or mc.primitive[0] == 0) return;
     const name = std.mem.sliceTo(&mc.primitive, 0);
     const shapes = .{ .{ "quad", quad }, .{ "plane", plane }, .{ "cube", cube }, .{ "sphere", uvSphere } };
     inline for (shapes) |shape| {
@@ -163,9 +167,9 @@ fn resolveMesh(core: *abi_render.ke_render_service, m: [*c]abi_render.ke_mesh_co
 
 /// The key spells every value this call varies, so a material's key changes whenever one of the
 /// values that shade it does. The textures passed are always none.
-fn resolveMaterial(core: *abi_render.ke_render_service, m: [*c]abi_render.ke_mesh_component) void {
-    const mc: *abi_render.ke_mesh_component = @ptrCast(m);
-    if (mc.material.bits != abi_render.KE_HANDLE_NONE) return;
+fn resolveMaterial(core: *abi_render.c.ke_render_service, m: [*c]abi_render_components.c.ke_mesh_component) void {
+    const mc: *abi_render_components.c.ke_mesh_component = @ptrCast(m);
+    if (mc.material.bits != abi_render_handles.c.KE_HANDLE_NONE) return;
     const bc = mc.base_color;
 
     var key: cache_key.Key("inline", 9) = .{};
@@ -178,11 +182,11 @@ fn resolveMaterial(core: *abi_render.ke_render_service, m: [*c]abi_render.ke_mes
     const made = core.create_material.?(
         core,
         k,
-        @ptrCast(&mc.base_color),
+        mc.base_color,
         0,
         mc.roughness,
-        abi_render.KE_TEXTURE_NONE,
-        abi_render.KE_TEXTURE_NONE,
+        abi_render_handles.c.KE_TEXTURE_NONE,
+        abi_render_handles.c.KE_TEXTURE_NONE,
         mc.alpha_mode,
         mc.alpha_cutoff,
         mc.ior,
@@ -196,14 +200,14 @@ fn resolveMaterial(core: *abi_render.ke_render_service, m: [*c]abi_render.ke_mes
 /// Runs in the update phase over the mesh view. For every component it runs `resolveMesh` and
 /// then `resolveMaterial`, each only while its handle is still empty. It always succeeds: a failed
 /// upload or creation is logged, leaves the handle empty and is attempted again on the next pass.
-pub fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
-    const core: *abi_render.ke_render_service = @ptrCast(@alignCast(user.?));
+pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const core: *abi_render.c.ke_render_service = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const meshes: [*c]abi_render.ke_mesh_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const meshes: [*c]abi_render_components.c.ke_mesh_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             resolveMesh(core, meshes + i);
@@ -226,7 +230,7 @@ const Recorder = struct {
     var material_key_len: usize = 0;
     var material_calls: u32 = 0;
     var material_roughness: f32 = 0;
-    var material_alpha_mode: abi_render.ke_alpha_mode = 0;
+    var material_alpha_mode: abi_render_handles.c.ke_alpha_mode = 0;
 
     fn reset() void {
         mesh_key_len = 0;
@@ -249,18 +253,18 @@ const Recorder = struct {
 };
 
 fn recordUploadMesh(
-    _: [*c]abi_render.ke_render_service,
+    _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    _: ?*const anyopaque,
-    vertices_size: usize,
+    _: [*c]const abi_mesh.c.ke_mesh_vertex,
+    vertex_count: u32,
     _: [*c]const u16,
     idx_count: u32,
-    out: [*c]abi_render.ke_mesh_handle,
-) callconv(.c) abi_result.ke_result {
+    out: [*c]abi_render_handles.c.ke_mesh_handle,
+) callconv(.c) abi_result.c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Recorder.mesh_key[0..k.len], k);
     Recorder.mesh_key_len = k.len;
-    Recorder.vertex_count = vertices_size / @sizeOf(Vertex);
+    Recorder.vertex_count = vertex_count;
     Recorder.index_count = idx_count;
     Recorder.mesh_calls += 1;
     out.* = .{ .bits = 42 };
@@ -268,20 +272,20 @@ fn recordUploadMesh(
 }
 
 fn recordCreateMaterial(
-    _: [*c]abi_render.ke_render_service,
+    _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    _: [*c]const f32,
+    _: abi_math.c.ke_vec4,
     _: f32,
     roughness: f32,
-    _: abi_render.ke_texture_handle,
-    _: abi_render.ke_texture_handle,
-    alpha_mode: abi_render.ke_alpha_mode,
+    _: abi_render_handles.c.ke_texture_handle,
+    _: abi_render_handles.c.ke_texture_handle,
+    alpha_mode: abi_render_handles.c.ke_alpha_mode,
     _: f32,
     _: f32,
     _: f32,
     _: [*c]const u8,
-    out: [*c]abi_render.ke_material_handle,
-) callconv(.c) abi_result.ke_result {
+    out: [*c]abi_render_handles.c.ke_material_handle,
+) callconv(.c) abi_result.c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Recorder.material_key[0..k.len], k);
     Recorder.material_key_len = k.len;
@@ -292,15 +296,15 @@ fn recordCreateMaterial(
     return R.ok;
 }
 
-fn recordingService() abi_render.ke_render_service {
-    var svc = std.mem.zeroes(abi_render.ke_render_service);
+fn recordingService() abi_render.c.ke_render_service {
+    var svc = std.mem.zeroes(abi_render.c.ke_render_service);
     svc.upload_mesh = recordUploadMesh;
     svc.create_material = recordCreateMaterial;
     return svc;
 }
 
-fn meshNamed(primitive: []const u8) abi_render.ke_mesh_component {
-    var m = std.mem.zeroes(abi_render.ke_mesh_component);
+fn meshNamed(primitive: []const u8) abi_render_components.c.ke_mesh_component {
+    var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     @memcpy(m.primitive[0..primitive.len], primitive);
     return m;
 }
@@ -370,13 +374,13 @@ test "a primitive nobody implements resolves to no mesh rather than a wrong one"
     var m = meshNamed("torus");
     resolveMesh(&svc, &m);
     try testing.expectEqual(@as(u32, 0), Recorder.mesh_calls);
-    try testing.expectEqual(@as(u32, abi_render.KE_HANDLE_NONE), m.mesh.bits);
+    try testing.expectEqual(@as(u32, abi_render_handles.c.KE_HANDLE_NONE), m.mesh.bits);
 }
 
 test "a mesh naming no primitive is left alone" {
     Recorder.reset();
     var svc = recordingService();
-    var m = std.mem.zeroes(abi_render.ke_mesh_component);
+    var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     resolveMesh(&svc, &m);
     try testing.expectEqual(@as(u32, 0), Recorder.mesh_calls);
 }
@@ -394,28 +398,28 @@ test "a mesh that already carries a handle is not uploaded again" {
 test "a mesh without a material gets one built from the values authored on it" {
     Recorder.reset();
     var svc = recordingService();
-    var m = std.mem.zeroes(abi_render.ke_mesh_component);
+    var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     m.base_color = .{ .x = 1, .y = 0, .z = 0, .w = 1 };
     m.roughness = 0.25;
-    m.alpha_mode = abi_render.KE_ALPHA_MODE_BLEND;
+    m.alpha_mode = abi_render_handles.c.KE_ALPHA_MODE_BLEND;
     resolveMaterial(&svc, &m);
     try testing.expectEqual(@as(u32, 1), Recorder.material_calls);
     try testing.expectEqual(@as(f32, 0.25), Recorder.material_roughness);
-    try testing.expectEqual(@as(abi_render.ke_alpha_mode, abi_render.KE_ALPHA_MODE_BLEND), Recorder.material_alpha_mode);
+    try testing.expectEqual(@as(abi_render_handles.c.ke_alpha_mode, abi_render_handles.c.KE_ALPHA_MODE_BLEND), Recorder.material_alpha_mode);
     try testing.expectEqual(@as(u32, 43), m.material.bits);
 }
 
 test "the material cache key is spelled out of every value that changes the shading" {
     Recorder.reset();
     var svc = recordingService();
-    var m = std.mem.zeroes(abi_render.ke_mesh_component);
+    var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     m.roughness = 0.25;
     resolveMaterial(&svc, &m);
     var first: [192]u8 = undefined;
     const first_len = Recorder.material_key_len;
     @memcpy(first[0..first_len], Recorder.materialKey());
 
-    var other = std.mem.zeroes(abi_render.ke_mesh_component);
+    var other = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     other.roughness = 0.75;
     resolveMaterial(&svc, &other);
     try testing.expect(!std.mem.eql(u8, first[0..first_len], Recorder.materialKey()));
@@ -424,7 +428,7 @@ test "the material cache key is spelled out of every value that changes the shad
 test "a mesh that already carries a material keeps it" {
     Recorder.reset();
     var svc = recordingService();
-    var m = std.mem.zeroes(abi_render.ke_mesh_component);
+    var m = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
     m.material = .{ .bits = 8 };
     resolveMaterial(&svc, &m);
     try testing.expectEqual(@as(u32, 0), Recorder.material_calls);

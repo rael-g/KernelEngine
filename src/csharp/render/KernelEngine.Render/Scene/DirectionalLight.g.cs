@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Directional light node. Its properties give the light's direction, color, intensity and ambient term.</summary>
@@ -13,15 +17,15 @@ public partial class DirectionalLight : Node3D
 {
 
     [NativeField("Direction", Component = typeof(DirectionalLightComponent))]
-    public partial Vector3 Direction { get; set; }
+    public partial System.Numerics.Vector3 Direction { get; set; }
 
     /// <summary>Linear RGB.</summary>
     [NativeField("Color", Component = typeof(DirectionalLightComponent))]
-    public partial Vector3 Color { get; set; }
+    public partial System.Numerics.Vector3 Color { get; set; }
 
     [NativeField("Intensity", Component = typeof(DirectionalLightComponent))]
     public partial float Intensity { get; set; }
 
     [NativeField("Ambient", Component = typeof(DirectionalLightComponent))]
-    public partial Vector3 Ambient { get; set; }
+    public partial System.Numerics.Vector3 Ambient { get; set; }
 }

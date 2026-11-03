@@ -3,14 +3,16 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -20,15 +22,17 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 05 Skybox & IBL (FreeLook)"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.05f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 05_skybox_ibl");
         Console.WriteLine("[KernelEngine] Features: skybox_cubemap, ibl_env_map, pbr_ggx, freelook_camera");
 
@@ -58,9 +62,9 @@ var services = new ServiceCollection()
 
         tree.AddNode(new Skybox { CubemapHandle = cubemap }, "Skybox");
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mirrorMat = resources.CreateMaterial("mirror", Vector4.One, metallic: 0.8f, roughness: 0.1f);
-        tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
+        tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mirrorMat }, "MirrorQuad");
 
         tree.AddNode(new DirectionalLight
         {

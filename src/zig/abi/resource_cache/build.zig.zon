@@ -1,10 +1,10 @@
 .{
-    .name = .ke_abi_resource_cache,
+    .name = .abi_resource_cache,
     .version = "0.1.0",
-    .fingerprint = 0x4fb632454084d795,
+    .fingerprint = 0x4d37bad1179e16d1,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_result = .{ .path = "../result" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

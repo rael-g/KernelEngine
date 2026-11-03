@@ -1,8 +1,9 @@
 ﻿
 using KernelEngine.Ecs;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace KernelEngine.Runtime;
 
@@ -30,7 +31,10 @@ public static class ServiceCollectionExtensions
         where TContract : class
         where TImpl : class, TContract
     {
-        return services.AddSingleton<TContract, TImpl>();
+        services.AddSingleton<TContract, TImpl>();
+        foreach (var native in typeof(TImpl).GetInterfaces().Where(i => i.Name.StartsWith("INative", StringComparison.Ordinal)))
+            services.TryAddSingleton(native, sp => sp.GetRequiredService<TContract>());
+        return services;
     }
 
     /// <summary>

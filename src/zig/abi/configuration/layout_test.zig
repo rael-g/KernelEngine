@@ -3,6 +3,8 @@ const abi = @import("abi");
 const c = @import("c");
 
 fn expectSameLayout(comptime A: type, comptime C: type) !void {
+    @setEvalBranchQuota(100_000_000);
+    if (@typeInfo(C) == .@"opaque") return;
     try std.testing.expectEqual(@sizeOf(C), @sizeOf(A));
     try std.testing.expectEqual(@alignOf(C), @alignOf(A));
     switch (@typeInfo(A)) {
@@ -20,14 +22,65 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_configuration, translated("ke_configuration"));
-    try expectSameLayout(abi.ke_configuration_handle, translated("ke_configuration_handle"));
-    try expectSameLayout(abi.ke_configuration_source, translated("ke_configuration_source"));
-    try expectSameLayout(abi.ke_configuration_source_handle, translated("ke_configuration_source_handle"));
-    try expectSameLayout(abi.ke_configuration_change_func, c.ke_configuration_change_func);
-    try expectSameLayout(abi.ke_configuration_subscription, c.ke_configuration_subscription);
+    @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_config_value, translated("ke_config_value"));
+    try expectSameLayout(abi.c.ke_config_field, translated("ke_config_field"));
+    try expectSameLayout(abi.c.ke_configuration, translated("ke_configuration"));
+    try expectSameLayout(abi.c.ke_configuration_handle, translated("ke_configuration_handle"));
+    try expectSameLayout(abi.c.ke_configuration_source, translated("ke_configuration_source"));
+    try expectSameLayout(abi.c.ke_configuration_source_handle, translated("ke_configuration_source_handle"));
+    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
+    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
+}
+
+test "every enum value is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_INT), @as(i64, abi.c.KE_CONFIG_INT));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_FLOAT), @as(i64, abi.c.KE_CONFIG_FLOAT));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_DOUBLE), @as(i64, abi.c.KE_CONFIG_DOUBLE));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_BOOL), @as(i64, abi.c.KE_CONFIG_BOOL));
+    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_STRING), @as(i64, abi.c.KE_CONFIG_STRING));
 }
 
 test "every constant is the header's value" {
-    try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.KE_CONFIGURATION_SUBSCRIPTION_NONE));
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.c.KE_CONFIGURATION_SUBSCRIPTION_NONE));
+}
+
+extern const layout_values: [30]c_ulonglong;
+
+test "every size and offset is the one C computes" {
+    @setEvalBranchQuota(100_000_000);
+    const expected = [_]usize{
+        @sizeOf(abi.c.ke_config_value),
+        @sizeOf(abi.c.ke_config_field),
+        @offsetOf(abi.c.ke_config_field, "key"),
+        @offsetOf(abi.c.ke_config_field, "type"),
+        @offsetOf(abi.c.ke_config_field, "offset"),
+        @offsetOf(abi.c.ke_config_field, "size"),
+        @offsetOf(abi.c.ke_config_field, "default_value"),
+        @sizeOf(abi.c.ke_configuration),
+        @offsetOf(abi.c.ke_configuration, "handle"),
+        @offsetOf(abi.c.ke_configuration, "get_int"),
+        @offsetOf(abi.c.ke_configuration, "get_double"),
+        @offsetOf(abi.c.ke_configuration, "get_bool"),
+        @offsetOf(abi.c.ke_configuration, "get_string"),
+        @offsetOf(abi.c.ke_configuration, "set_int"),
+        @offsetOf(abi.c.ke_configuration, "set_double"),
+        @offsetOf(abi.c.ke_configuration, "set_bool"),
+        @offsetOf(abi.c.ke_configuration, "set_string"),
+        @offsetOf(abi.c.ke_configuration, "subscribe"),
+        @offsetOf(abi.c.ke_configuration, "unsubscribe"),
+        @offsetOf(abi.c.ke_configuration, "fill"),
+        @sizeOf(abi.c.ke_configuration_handle),
+        @offsetOf(abi.c.ke_configuration_handle, "ref"),
+        @offsetOf(abi.c.ke_configuration_handle, "destroy"),
+        @sizeOf(abi.c.ke_configuration_source),
+        @offsetOf(abi.c.ke_configuration_source, "handle"),
+        @offsetOf(abi.c.ke_configuration_source, "load"),
+        @sizeOf(abi.c.ke_configuration_source_handle),
+        @offsetOf(abi.c.ke_configuration_source_handle, "ref"),
+        @offsetOf(abi.c.ke_configuration_source_handle, "destroy"),
+    };
+    for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

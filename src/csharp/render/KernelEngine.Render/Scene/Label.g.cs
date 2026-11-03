@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>A screen-space text label. Text, anchor, offset, color and font are the caller's input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick.</summary>
@@ -21,14 +25,14 @@ public partial class Label : Node3D
 
     /// <summary>Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.</summary>
     [NativeField("Anchor", Component = typeof(LabelComponent))]
-    public partial Vector2 Anchor { get; set; }
+    public partial System.Numerics.Vector2 Anchor { get; set; }
 
     /// <summary>Pixel offset applied AFTER anchor positioning.</summary>
     [NativeField("Offset", Component = typeof(LabelComponent))]
-    public partial Vector2 Offset { get; set; }
+    public partial System.Numerics.Vector2 Offset { get; set; }
 
     [NativeField("Color", Component = typeof(LabelComponent))]
-    public partial Vector4 Color { get; set; }
+    public partial System.Numerics.Vector4 Color { get; set; }
 
     [NativeField("Text", Component = typeof(LabelComponent))]
     public partial string Text { get; set; }

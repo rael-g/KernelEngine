@@ -15,10 +15,10 @@ public unsafe class WindowTests
     private static int _shouldCloseCalled = 0;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInitialize(ke_window* window)
+    private static global::KernelEngine.Result.Native.Result MockInitialize(ke_window* window)
     {
         _initializeCalled++;
-        return ke_result.KE_OK;
+        return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]

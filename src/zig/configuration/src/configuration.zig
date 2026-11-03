@@ -40,7 +40,7 @@ const Entry = struct {
 const Sub = struct {
     id: u32,
     section: [:0]u8,
-    cb: abi_configuration.ke_configuration_change_func,
+    cb: abi_configuration.c.ke_configuration_change_func,
     ctx: ?*anyopaque,
     active: bool,
 };
@@ -51,13 +51,13 @@ const Sub = struct {
 /// are never repeated. Nothing is locked: every call, and every subscriber, runs on the thread
 /// that makes the call.
 const State = struct {
-    api: abi_configuration.ke_configuration,
+    api: abi_configuration.c.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
     subs: std.ArrayListUnmanaged(Sub),
     next_sub_id: u32,
 };
 
-fn state(self: [*c]abi_configuration.ke_configuration) *State {
+fn state(self: [*c]abi_configuration.c.ke_configuration) *State {
     return @ptrCast(@alignCast(self.*.handle));
 }
 
@@ -101,7 +101,7 @@ fn upsert(st: *State, section: []const u8, key: []const u8) error{OutOfMemory}!*
 }
 
 /// Stores `value` under the key through `upsert`, then runs the section's subscribers.
-fn store(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: Value) abi_result.ke_result {
+fn store(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: Value) abi_result.c.ke_result {
     const st = state(self);
     const e = upsert(st, std.mem.span(section), std.mem.span(key)) catch {
         log.warn("storing {s}.{s} failed: out of memory", .{ section, key });
@@ -126,7 +126,7 @@ fn notify(st: *State, section_c: [*c]const u8) void {
 
 /// Returns the integer stored at this section and key, or the fallback when an argument is null,
 /// the key is missing, or it holds another type.
-fn getInt(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
+fn getInt(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -139,7 +139,7 @@ fn getInt(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, k
 
 /// Returns the double stored at this section and key, or the fallback. The one getter that
 /// converts: an integer entry is returned as a double.
-fn getDouble(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
+fn getDouble(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -153,7 +153,7 @@ fn getDouble(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8
 
 /// Returns the boolean stored at this section and key, or the fallback when an argument is null,
 /// the key is missing, or it holds another type.
-fn getBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
+fn getBool(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -166,7 +166,7 @@ fn getBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, 
 
 /// Returns the string stored at this key, or the fallback. It is the entry's own string, not a
 /// copy, so the pointer stops being valid at the next write to its key or at `destroy`.
-fn getString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
+fn getString(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
     if (section == null or key == null) return fallback;
     if (findEntry(state(self), std.mem.span(section), std.mem.span(key))) |e| {
         switch (e.value) {
@@ -180,19 +180,19 @@ fn getString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8
 /// Fails with invalid argument when an argument is null, and out of memory when the entry cannot be
 /// created; the store is then as it was. Otherwise the new value is stored and the subscribers of
 /// the section run, seeing it, before it returns.
-fn setInt(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64) callconv(.c) abi_result.ke_result {
+fn setInt(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64) callconv(.c) abi_result.c.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .int = value });
 }
 
 /// As `setInt`, for a double.
-fn setDouble(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: f64) callconv(.c) abi_result.ke_result {
+fn setDouble(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: f64) callconv(.c) abi_result.c.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .double = value });
 }
 
 /// As `setInt`, for a boolean.
-fn setBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: bool) callconv(.c) abi_result.ke_result {
+fn setBool(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: bool) callconv(.c) abi_result.c.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .boolean = value });
 }
@@ -201,7 +201,7 @@ fn setBool(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, 
 /// before the entry is looked up, so a failed copy or entry creation leaves the store unchanged. A
 /// successful write frees the previous string, which makes the pointer an earlier `getString`
 /// returned for this key invalid.
-fn setString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8) callconv(.c) abi_result.ke_result {
+fn setString(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: [*c]const u8) callconv(.c) abi_result.c.ke_result {
     if (self == null or section == null or key == null or value == null) return R.code(error.InvalidArgument);
     const copy = gpa.dupeZ(u8, std.mem.span(value)) catch {
         log.warn("storing {s}.{s} failed: out of memory", .{ section, key });
@@ -215,7 +215,7 @@ fn setString(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8
 /// Stores the subscription in the first inactive slot, or appends a slot, and returns the id taken
 /// from `next_sub_id`. A reused slot takes the new id, so the id of its previous subscription no
 /// longer matches it. On failure it returns `NONE` and changes neither `subs` nor `next_sub_id`.
-fn subscribe(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8, cb: abi_configuration.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) abi_configuration.ke_configuration_subscription {
+fn subscribe(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, cb: abi_configuration.c.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) abi_configuration.c.ke_configuration_subscription {
     if (self == null or section == null or cb == null) return NONE;
     const st = state(self);
     const sec = std.mem.span(section);
@@ -245,7 +245,7 @@ fn subscribe(self: [*c]abi_configuration.ke_configuration, section: [*c]const u8
 }
 
 /// Deactivates the slot with this id, if one is active, and clears its callback.
-fn unsubscribe(self: [*c]abi_configuration.ke_configuration, sub: abi_configuration.ke_configuration_subscription) callconv(.c) void {
+fn unsubscribe(self: [*c]abi_configuration.c.ke_configuration, sub: abi_configuration.c.ke_configuration_subscription) callconv(.c) void {
     if (self == null or sub == NONE) return;
     const st = state(self);
     for (st.subs.items) |*s| {
@@ -259,7 +259,7 @@ fn unsubscribe(self: [*c]abi_configuration.ke_configuration, sub: abi_configurat
 
 /// After it returns, the `State`, the handle's `ref` and every pointer from `getString` are
 /// invalid.
-fn destroy(self: [*c]abi_configuration.ke_configuration) callconv(.c) void {
+fn destroy(self: [*c]abi_configuration.c.ke_configuration) callconv(.c) void {
     if (self == null) return;
     const st = state(self);
     for (st.entries.items) |*e| {
@@ -273,9 +273,102 @@ fn destroy(self: [*c]abi_configuration.ke_configuration) callconv(.c) void {
     gpa.destroy(st);
 }
 
+/// Writes `value` into the integer field at `at`, whose width is `size`; false for a width no
+/// integer has.
+fn writeInt(at: [*]u8, size: u32, value: i64) bool {
+    switch (size) {
+        1 => std.mem.writeInt(u8, at[0..1], @truncate(@as(u64, @bitCast(value))), .little),
+        2 => std.mem.writeInt(u16, at[0..2], @truncate(@as(u64, @bitCast(value))), .little),
+        4 => std.mem.writeInt(u32, at[0..4], @truncate(@as(u64, @bitCast(value))), .little),
+        8 => std.mem.writeInt(u64, at[0..8], @bitCast(value), .little),
+        else => return false,
+    }
+    return true;
+}
+
+/// Writes `value` into the float or double field at `at`; false when the field's size is neither.
+fn writeReal(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: f64) bool {
+    if (field.type == abi_configuration.c.KE_CONFIG_FLOAT and field.size == @sizeOf(f32)) {
+        const v: f32 = @floatCast(value);
+        @memcpy(at[0..@sizeOf(f32)], std.mem.asBytes(&v));
+        return true;
+    }
+    if (field.type == abi_configuration.c.KE_CONFIG_DOUBLE and field.size == @sizeOf(f64)) {
+        @memcpy(at[0..@sizeOf(f64)], std.mem.asBytes(&value));
+        return true;
+    }
+    return false;
+}
+
+fn writeBool(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: bool) bool {
+    if (field.size != @sizeOf(bool)) return false;
+    at[0] = @intFromBool(value);
+    return true;
+}
+
+fn writeString(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: [*c]const u8) bool {
+    if (field.size != @sizeOf([*c]const u8)) return false;
+    @memcpy(at[0..@sizeOf([*c]const u8)], std.mem.asBytes(&value));
+    return true;
+}
+
+fn writeDefault(at: [*]u8, field: *const abi_configuration.c.ke_config_field) bool {
+    const d = field.default_value;
+    return switch (field.type) {
+        abi_configuration.c.KE_CONFIG_INT => writeInt(at, field.size, d.i),
+        abi_configuration.c.KE_CONFIG_FLOAT, abi_configuration.c.KE_CONFIG_DOUBLE => writeReal(at, field, d.d),
+        abi_configuration.c.KE_CONFIG_BOOL => writeBool(at, field, d.b),
+        abi_configuration.c.KE_CONFIG_STRING => writeString(at, field, d.s),
+        else => false,
+    };
+}
+
+/// Writes the entry's value over the default, or logs and keeps the default when the field cannot
+/// take that type.
+fn writeStored(at: [*]u8, field: *const abi_configuration.c.ke_config_field, section: []const u8, value: Value) void {
+    const written = switch (field.type) {
+        abi_configuration.c.KE_CONFIG_INT => switch (value) {
+            .int => |v| writeInt(at, field.size, v),
+            else => false,
+        },
+        abi_configuration.c.KE_CONFIG_FLOAT, abi_configuration.c.KE_CONFIG_DOUBLE => switch (value) {
+            .double => |v| writeReal(at, field, v),
+            .int => |v| writeReal(at, field, @floatFromInt(v)),
+            else => false,
+        },
+        abi_configuration.c.KE_CONFIG_BOOL => switch (value) {
+            .boolean => |v| writeBool(at, field, v),
+            else => false,
+        },
+        abi_configuration.c.KE_CONFIG_STRING => switch (value) {
+            .string => |v| writeString(at, field, v.ptr),
+            else => false,
+        },
+        else => false,
+    };
+    if (!written) log.warn("{s}.{s} holds a {t}, which the field cannot take; the default stands", .{ section, field.key.?, value });
+}
+
+/// Slot `fill`. Reads the store and writes only into `out_config`, so no subscriber runs.
+fn fill(self: [*c]abi_configuration.c.ke_configuration, section_c: [*c]const u8, fields: [*c]const abi_configuration.c.ke_config_field, field_count: u32, out_config: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    if (self == null or section_c == null or out_config == null) return R.code(error.InvalidArgument);
+    if (fields == null and field_count != 0) return R.code(error.InvalidArgument);
+    const st = state(self);
+    const section = std.mem.span(section_c);
+    const base: [*]u8 = @ptrCast(out_config.?);
+    for (0..field_count) |i| {
+        const field: *const abi_configuration.c.ke_config_field = @ptrCast(fields + i);
+        const at = base + field.offset;
+        const key = field.key orelse return R.code(error.InvalidArgument);
+        if (!writeDefault(at, field)) return R.code(error.InvalidArgument);
+        if (findEntry(st, section, std.mem.span(key))) |e| writeStored(at, field, section, e.value);
+    }
+    return R.ok;
+}
+
 /// Allocates a store and writes a handle whose `ref` is its `api` table and whose `destroy` frees
 /// it. Fails with out of memory, leaving the handle zeroed.
-export fn ke_configuration_create(out_store: ?*abi_configuration.ke_configuration_handle) callconv(.c) abi_result.ke_result {
+export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configuration_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_store orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const st = gpa.create(State) catch {
@@ -295,6 +388,7 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.ke_configuratio
             .set_string = setString,
             .subscribe = subscribe,
             .unsubscribe = unsubscribe,
+            .fill = fill,
         },
         .entries = .empty,
         .subs = .empty,
@@ -303,6 +397,20 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.ke_configuratio
     out.* = .{ .ref = &st.api, .destroy = destroy };
     return R.ok;
 }
+
+const FilledConfig = extern struct {
+    count: u32,
+    scale: f32,
+    enabled: bool,
+    title: [*c]const u8,
+};
+
+const filled_fields = [_]abi_configuration.c.ke_config_field{
+    .{ .key = "count", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "count"), .size = 4, .default_value = .{ .i = 3 } },
+    .{ .key = "scale", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "scale"), .size = 4, .default_value = .{ .d = -9.5 } },
+    .{ .key = "enabled", .type = abi_configuration.c.KE_CONFIG_BOOL, .offset = @offsetOf(FilledConfig, "enabled"), .size = 1, .default_value = .{ .b = true } },
+    .{ .key = "title", .type = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(FilledConfig, "title"), .size = @sizeOf([*c]const u8), .default_value = .{ .s = "untitled" } },
+};
 
 const TestProbe = struct {
     calls: u32 = 0,
@@ -315,8 +423,8 @@ fn testCb(section: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
     p.last = std.mem.span(section);
 }
 
-fn madeStore() !abi_configuration.ke_configuration_handle {
-    var h: abi_configuration.ke_configuration_handle = undefined;
+fn madeStore() !abi_configuration.c.ke_configuration_handle {
+    var h: abi_configuration.c.ke_configuration_handle = undefined;
     try R.check(ke_configuration_create(&h));
     return h;
 }
@@ -425,6 +533,49 @@ test "null args rejected on write" {
     const c = h.ref;
     try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_int.?(c, null, "k", 1)));
     try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_string.?(c, "s", "k", null)));
+}
+
+test "filling from an empty section writes every default" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    var config: FilledConfig = undefined;
+    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
+    try std.testing.expectEqual(@as(u32, 3), config.count);
+    try std.testing.expectEqual(@as(f32, -9.5), config.scale);
+    try std.testing.expect(config.enabled);
+    try std.testing.expectEqualStrings("untitled", std.mem.span(config.title));
+}
+
+test "filling lays the stored values over the defaults and an integer reaches a float field" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    try R.check(h.ref.?.set_int.?(h.ref, "app", "scale", 2));
+    try R.check(h.ref.?.set_bool.?(h.ref, "app", "enabled", false));
+    try R.check(h.ref.?.set_string.?(h.ref, "app", "title", "pong"));
+    var config: FilledConfig = undefined;
+    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
+    try std.testing.expectEqual(@as(u32, 3), config.count);
+    try std.testing.expectEqual(@as(f32, 2.0), config.scale);
+    try std.testing.expect(!config.enabled);
+    try std.testing.expectEqualStrings("pong", std.mem.span(config.title));
+}
+
+test "a key of a type its field cannot take leaves the default" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    try R.check(h.ref.?.set_string.?(h.ref, "app", "count", "many"));
+    var config: FilledConfig = undefined;
+    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
+    try std.testing.expectEqual(@as(u32, 3), config.count);
+}
+
+test "filling with a null section, table or struct is refused" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    var config: FilledConfig = undefined;
+    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, null, &filled_fields, filled_fields.len, &config)));
+    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", null, 1, &config)));
+    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, null)));
 }
 
 test "creating, filling and destroying a configuration leaves no block allocated" {

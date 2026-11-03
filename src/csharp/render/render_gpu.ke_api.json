@@ -1,0 +1,4276 @@
+{
+  "enums": [
+    {
+      "name": "ke_gpu_index_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT16",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT32",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_texture_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_INVALID",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R32_FLOAT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R16_FLOAT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D16_UNORM",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RG32_FLOAT",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R8_UNORM",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM",
+          "value": 17,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_texture_dimension",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_DIM_1D",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_2D",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_3D",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_CUBE",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_load_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_LOAD_OP_LOAD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_CLEAR",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_DONT_CARE",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_store_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STORE_OP_STORE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STORE_OP_DONT_CARE",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FILTER_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FILTER_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_sampler_mipmap_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_address_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_ADDRESS_MODE_REPEAT",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_compare_function",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_COMPARE_UNDEFINED",
+          "value": 0,
+          "doc": "No comparison (default for samplers without shadow compare)"
+        },
+        {
+          "name": "KE_GPU_COMPARE_NEVER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_EQUAL",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS_EQUAL",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_NOT_EQUAL",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER_EQUAL",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_ALWAYS",
+          "value": 8,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_primitive_topology",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST",
+          "value": 4,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_cull_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_CULL_MODE_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_FRONT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_BACK",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_front_face",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FRONT_FACE_CCW",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FRONT_FACE_CW",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_blend_factor",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ZERO",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_ALPHA",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_ALPHA",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_COLOR",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_COLOR",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR",
+          "value": 9,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_blend_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_OP_ADD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_SUBTRACT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_REVERSE_SUBTRACT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MIN",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MAX",
+          "value": 4,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_stencil_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STENCIL_OP_KEEP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_ZERO",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_REPLACE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INVERT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INCREMENT_CLAMP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_DECREMENT_CLAMP",
+          "value": 5,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_vertex_step_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_VERTEX",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_INSTANCE",
+          "value": 1,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_vertex_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X2",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X3",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X4",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X2",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X4",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4",
+          "value": 6,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_binding_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BINDING_TYPE_BUFFER",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_SAMPLER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_TEXTURE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_BUFFER",
+          "value": 3,
+          "doc": "read-write storage (compute only)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_TEXTURE",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER",
+          "value": 5,
+          "doc": "read-only storage (usable in fragment)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_DEPTH_TEXTURE",
+          "value": 6,
+          "doc": "depth-format texture, sampled or texel-fetched"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_shader_language",
+      "doc": "Shader source language a device accepts. Query via \u0060ke_gpu_device::shader_language\u0060.",
+      "values": [
+        {
+          "name": "KE_GPU_SHADER_LANG_WGSL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_SPIRV",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_MSL",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_DXIL",
+          "value": 3,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_binding_hint_flags",
+      "doc": "What a pass states about a shader binding that the shader\u0027s reflection does not carry.",
+      "values": [
+        {
+          "name": "KE_RENDER_BINDING_HINT_DEPTH",
+          "value": 1,
+          "doc": "The texture is bound to a depth-format view."
+        },
+        {
+          "name": "KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET",
+          "value": 2,
+          "doc": "The buffer is bound with a dynamic offset given when its set is bound."
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_clear_value",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "depth",
+                "type": "float",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "stencil",
+                "type": "uint8_t",
+                "tags": [],
+                "doc": null
+              }
+            ]
+          }
+        }
+      ],
+      "union": true
+    },
+    {
+      "name": "ke_gpu_capabilities",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "max_texture_dimension_2d",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_texture_array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_bind_groups",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_attributes",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_buffers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_uniform_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_storage_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_x",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_y",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_z",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_bindless",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_mesh_shaders",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_ray_tracing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "copy_bytes_per_row_alignment",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Byte multiple a texture/buffer copy\u0027s bytes_per_row must be a multiple of; 1 when the backend imposes none."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_buffer_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "initial_data",
+          "type": "const void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "usage",
+          "type": "ke_gpu_buffer_usage",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mapped_at_creation",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_texture_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_or_array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dimension",
+          "type": "ke_gpu_texture_dimension",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "usage",
+          "type": "ke_gpu_texture_usage",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mip_level_count",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sample_count",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "initial_data",
+          "type": "const void *",
+          "tags": [],
+          "doc": "Optional. Tightly-packed RGBA8 pixels (mip 0 only)."
+        },
+        {
+          "name": "initial_data_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Byte size of initial_data."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_texture_view_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dimension",
+          "type": "ke_gpu_texture_dimension",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "aspect",
+          "type": "ke_gpu_texture_aspect",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_mip_level",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mip_level_count",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_array_layer",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "array_layer_count",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_sampler_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "min_filter",
+          "type": "ke_gpu_filter",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mag_filter",
+          "type": "ke_gpu_filter",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mipmap_filter",
+          "type": "ke_gpu_sampler_mipmap_filter",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "address_mode_u",
+          "type": "ke_gpu_address_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "address_mode_v",
+          "type": "ke_gpu_address_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "address_mode_w",
+          "type": "ke_gpu_address_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "lod_min_clamp",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "lod_max_clamp",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "compare",
+          "type": "ke_gpu_compare_function",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_anisotropy",
+          "type": "uint16_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_shader_module_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "code",
+          "type": "const void *",
+          "tags": [],
+          "doc": "shader bytes in the device\u0027s accepted language (query ke_gpu_device::shader_language); WGSL text or SPIR-V binary etc."
+        },
+        {
+          "name": "byte_size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "size in bytes (excluding any text terminator)"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_vertex_attribute",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "shader_location",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "format",
+          "type": "ke_gpu_vertex_format",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_vertex_buffer_layout",
+      "doc": "One vertex buffer of a pipeline.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "stride",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "step_mode",
+          "type": "ke_gpu_vertex_step_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "attribute_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "attributes",
+          "type": "const ke_gpu_vertex_attribute *",
+          "tags": [
+            "array_of:attribute_count"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_blend_state",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "blend_enabled",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "src_color",
+          "type": "ke_gpu_blend_factor",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_color",
+          "type": "ke_gpu_blend_factor",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "color_op",
+          "type": "ke_gpu_blend_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "src_alpha",
+          "type": "ke_gpu_blend_factor",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_alpha",
+          "type": "ke_gpu_blend_factor",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_op",
+          "type": "ke_gpu_blend_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "write_mask",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": "bitmask: bit 0=R, 1=G, 2=B, 3=A"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_depth_stencil_state",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "depth_test_enabled",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_write_enabled",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_compare",
+          "type": "ke_gpu_compare_function",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_test_enabled",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_front_fail",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_front_depth_fail",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_front_pass",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_front_compare",
+          "type": "ke_gpu_compare_function",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_back_fail",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_back_depth_fail",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_back_pass",
+          "type": "ke_gpu_stencil_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_back_compare",
+          "type": "ke_gpu_compare_function",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_read_mask",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_write_mask",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_bind_group_layout_entry",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "binding",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "visibility",
+          "type": "ke_gpu_shader_stage",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_gpu_binding_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "has_dynamic_offset",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "view_dimension",
+          "type": "ke_gpu_texture_dimension",
+          "tags": [],
+          "doc": "For TEXTURE bindings: KE_GPU_TEXTURE_DIM_CUBE selects a cubemap binding; any other value (incl. zero-init) is a 2D texture."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_bind_group_layout_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "entry_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_gpu_bind_group_layout_entry *",
+          "tags": [
+            "array_of:entry_count"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_bind_group_entry",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "binding",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_gpu_binding_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_offset",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "texture_view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sampler",
+          "type": "ke_gpu_sampler",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_bind_group_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "layout",
+          "type": "ke_gpu_bind_group_layout",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entry_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_gpu_bind_group_entry *",
+          "tags": [
+            "array_of:entry_count"
+          ],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_pipeline_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "vertex_module",
+          "type": "ke_gpu_shader_module",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "fragment_module",
+          "type": "ke_gpu_shader_module",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "vertex_entry",
+          "type": "const char *",
+          "tags": [],
+          "doc": "NULL \u2192 \u0022main\u0022"
+        },
+        {
+          "name": "fragment_entry",
+          "type": "const char *",
+          "tags": [],
+          "doc": "NULL \u2192 \u0022main\u0022"
+        },
+        {
+          "name": "primitive_topology",
+          "type": "ke_gpu_primitive_topology",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "cull_mode",
+          "type": "ke_gpu_cull_mode",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "front_face",
+          "type": "ke_gpu_front_face",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "vertex_buffer_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "vertex_buffers",
+          "type": "const ke_gpu_vertex_buffer_layout *",
+          "tags": [
+            "array_of:vertex_buffer_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "blend_state",
+          "type": "ke_gpu_blend_state",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil",
+          "type": "ke_gpu_depth_stencil_state",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "bind_group_layouts",
+          "type": "ke_gpu_bind_group_layout[4]",
+          "tags": [
+            "array_of:bind_group_layout_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "bind_group_layout_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_to_coverage_enabled",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "color_target_formats",
+          "type": "ke_gpu_texture_format[8]",
+          "tags": [
+            "array_of:color_target_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color_target_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_compute_pipeline_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "compute_module",
+          "type": "ke_gpu_shader_module",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "compute_entry",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "bind_group_layouts",
+          "type": "ke_gpu_bind_group_layout[4]",
+          "tags": [
+            "array_of:bind_group_layout_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "bind_group_layout_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_color_attachment",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "load_op",
+          "type": "ke_gpu_load_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "store_op",
+          "type": "ke_gpu_store_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "clear_value",
+          "type": "ke_gpu_clear_value",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_depth_stencil_attachment",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_load_op",
+          "type": "ke_gpu_load_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_store_op",
+          "type": "ke_gpu_store_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_store_op",
+          "type": "ke_gpu_store_op",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "clear_depth",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "clear_stencil",
+          "type": "uint8_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_read_only",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "stencil_read_only",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_pass_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "color_attachments",
+          "type": "const ke_gpu_color_attachment *",
+          "tags": [
+            "array_of:color_attachment_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color_attachment_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil_attachment",
+          "type": "const ke_gpu_depth_stencil_attachment *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_command_encoder_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_compute_pass_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "label",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_command_buffer",
+      "doc": "Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_binding_hint",
+      "doc": "A hint for the binding a shader declares under \u0060name\u0060.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "flags",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_shader_binding",
+      "doc": "What one named parameter of a shader is bound to; only the field its type reads is used.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": "The parameter\u0027s name; the uniform data of a block is named after the block."
+        },
+        {
+          "name": "buffer",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_offset",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "buffer_size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "texture_view",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sampler",
+          "type": "ke_gpu_sampler",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_shader_layout_params",
+      "doc": "The compiled shader a layout is built for.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "shader",
+          "type": "const char *",
+          "tags": [],
+          "doc": "Logical name the shader was compiled under, as a render service\u0027s load_shader takes it."
+        },
+        {
+          "name": "stages",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Bitwise OR of the KE_GPU_SHADER_STAGE_* stages the shader is compiled for."
+        },
+        {
+          "name": "hints",
+          "type": "const ke_render_binding_hint *",
+          "tags": [
+            "array_of:hint_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "hint_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_material_data",
+      "doc": "The data of one material, as the \u0060mat\u0060 parameter block of a material shader reads it.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "base_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "Linear RGBA."
+        },
+        {
+          "name": "metallic",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [],
+          "doc": "The discard threshold; 0 draws every fragment."
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "albedo",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal_map",
+          "type": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_gpu_command_encoder_handle",
+      "doc": "Owns a command encoder: destroy releases it, whether or not it was finished.",
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_gpu_command_encoder *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_gpu_command_encoder *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_command_buffer_handle",
+      "doc": "Owns a finished command buffer: destroy releases it, after it was submitted or instead.",
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_gpu_command_buffer *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_gpu_command_buffer *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_device",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "get_default_queue",
+          "returns": "ke_gpu_queue",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "queue_submit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Submits the command buffers to the queue, in order.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "q",
+              "type": "ke_gpu_queue",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cmds",
+              "type": "ke_gpu_command_buffer *const *",
+              "tags": [
+                "array_of:cmd_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "cmd_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "queue_poll",
+          "returns": "void",
+          "tags": [],
+          "doc": "Runs this device\u0027s event pump without blocking: delivers the callbacks of work that has completed since the last pump (create_render_pipeline_async, map_buffer_read).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "q",
+              "type": "ke_gpu_queue",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "queue_wait_idle",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "q",
+              "type": "ke_gpu_queue",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_buffer",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a buffer. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_buffer_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_buffer",
+              "type": "ke_gpu_buffer *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a texture. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_texture_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_texture",
+              "type": "ke_gpu_texture *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_texture_view",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a view of \u0060tex\u0060. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "tex",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "p",
+              "type": "const ke_gpu_texture_view_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_view",
+              "type": "ke_gpu_texture_view *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_sampler",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a sampler. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_sampler_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_sampler",
+              "type": "ke_gpu_sampler *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_shader_module",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a shader module. The backend\u0027s reason for rejecting the source is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_shader_module_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_module",
+              "type": "ke_gpu_shader_module *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_render_pipeline",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a render pipeline. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a color target without a format, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_render_pipeline_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_pipeline",
+              "type": "ke_gpu_pipeline *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_compute_pipeline",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a compute pipeline. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_compute_pipeline_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_pipeline",
+              "type": "ke_gpu_pipeline *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_bind_group_layout",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a bind group layout. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_bind_group_layout_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_layout",
+              "type": "ke_gpu_bind_group_layout *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_bind_group",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a bind group. The backend\u0027s reason for a rejection is logged.",
+          "return_doc": "KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.",
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_bind_group_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_group",
+              "type": "ke_gpu_bind_group *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the object; KE_GPU_INVALID_HANDLE on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_texture",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_texture_view",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_texture_view",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_sampler",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_sampler",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_shader_module",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_shader_module",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_pipeline",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a pipeline made by create_render_pipeline or create_render_pipeline_async.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_pipeline",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_bind_group_layout",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_bind_group_layout",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_bind_group",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_bind_group",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_command_encoder",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a command encoder. p may be NULL, which creates it unlabeled.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_command_encoder_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_encoder",
+              "type": "ke_gpu_command_encoder_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the encoder; left zeroed on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "write_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "map_buffer",
+          "returns": "void *",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "map_buffer_write",
+          "returns": "void *",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "unmap_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "get_capabilities",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out",
+              "type": "ke_gpu_capabilities *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "query_extension",
+          "returns": "const void *",
+          "tags": [],
+          "doc": "Returns a typed extension vtable by name, or NULL if unsupported.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "shader_language",
+          "returns": "ke_gpu_shader_language",
+          "tags": [],
+          "doc": "Shader source language this device accepts in create_shader_module.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "get_ndc_convention",
+          "returns": "ke_ndc_convention",
+          "tags": [],
+          "doc": "Clip-space convention this backend expects projections built in.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "create_render_pipeline_async",
+          "returns": "void",
+          "tags": [],
+          "doc": "Kicks a background pipeline compile \u2014 the driver compiles off the caller\u0027s thread; \u0060on_ready\u0060 fires later (during this device\u0027s normal event pump, e.g. at queue_poll) with the finished pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_render_pipeline_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "on_ready",
+              "type": "ke_gpu_pipeline_ready_func",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "flush_pipeline_compiles",
+          "returns": "void",
+          "tags": [],
+          "doc": "Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its on_ready callback. Call before destroying anything an in-flight callback might still write into. A no-op if nothing is pending.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "map_buffer_read",
+          "returns": "void",
+          "tags": [],
+          "doc": "Starts mapping [offset, offset \u002B size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. \u0060on_ready\u0060 fires later, during this device\u0027s normal event pump (queue_poll, queue_wait_idle), with \u0060ok\u0060 true when the range is readable through map_buffer until unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer before calling.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "on_ready",
+              "type": "ke_gpu_buffer_mapped_func",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        },
+        {
+          "name": "destroy_compute_pipeline",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a pipeline made by create_compute_pipeline.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "h",
+              "type": "ke_gpu_pipeline",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_device *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_device_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_gpu_device *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_gpu_device *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_pass",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "set_pipeline",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pipe",
+              "type": "ke_gpu_pipeline",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "set_bind_group",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "group_index",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "bg",
+              "type": "ke_gpu_bind_group",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [
+                "array_of:dyn_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "dyn_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "set_vertex_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "slot",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "b",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "set_index_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "b",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fmt",
+              "type": "ke_gpu_index_format",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "set_viewport",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "w",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "h",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "min_depth",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "max_depth",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "set_scissor",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "w",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "h",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "draw",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "vert_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "inst_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_vert",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_inst",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "draw_indexed",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "idx_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "inst_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_idx",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "base_vert",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "first_inst",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "draw_indirect",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "indirect_buf",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "end",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "push_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Opens a named group that capture tools nest the following commands under, until the matching pop_debug_group. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "pop_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Closes the group the last unmatched push_debug_group opened.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_render_pass *"
+        },
+        {
+          "name": "insert_debug_marker",
+          "returns": "void",
+          "tags": [],
+          "doc": "Marks a single named point in the command stream. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_pass *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_compute_pass",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "set_pipeline",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pipe",
+              "type": "ke_gpu_pipeline",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "set_bind_group",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "group_index",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "bg",
+              "type": "ke_gpu_bind_group",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [
+                "array_of:dyn_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "dyn_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "dispatch",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "x",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "y",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "z",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "dispatch_indirect",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "indirect_buf",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "end",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "push_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Opens a named group that capture tools nest the following commands under, until the matching pop_debug_group. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "pop_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Closes the group the last unmatched push_debug_group opened.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_compute_pass *"
+        },
+        {
+          "name": "insert_debug_marker",
+          "returns": "void",
+          "tags": [],
+          "doc": "Marks a single named point in the command stream. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_compute_pass *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_command_encoder",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "begin_render_pass",
+          "returns": "struct ke_gpu_render_pass *",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_render_pass_params *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "begin_compute_pass",
+          "returns": "struct ke_gpu_compute_pass *",
+          "tags": [],
+          "doc": "Begins a compute pass. p may be NULL, which begins it unlabeled.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "p",
+              "type": "const ke_gpu_compute_pass_params *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "copy_buffer_to_buffer",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "src",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "src_offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst_offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "copy_buffer_to_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Copies tightly described rows of texels from a buffer into a texture. Fails with KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "src",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "src_offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "bytes_per_row",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst_x",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst_y",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst_z",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "copy_texture_to_texture",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [
+            {
+              "name": "src",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "finish",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Ends recording and returns the commands as a buffer to submit. The encoder records nothing more and is still released by its own handle.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_buffer",
+              "type": "ke_gpu_command_buffer_handle *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the command buffer; left zeroed on failure."
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "copy_texture_to_buffer",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Copies a texture region into a buffer created with KE_GPU_BUFFER_USAGE_COPY_DST; the texture needs KE_GPU_TEXTURE_USAGE_COPY_SRC. Fails with KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of ke_gpu_capabilities::copy_bytes_per_row_alignment.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "src",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "src_x",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "src_y",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "src_z",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dst_offset",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "bytes_per_row",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "push_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Opens a named group that capture tools nest the following commands under, until the matching pop_debug_group. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "pop_debug_group",
+          "returns": "void",
+          "tags": [],
+          "doc": "Closes the group the last unmatched push_debug_group opened.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_command_encoder *"
+        },
+        {
+          "name": "insert_debug_marker",
+          "returns": "void",
+          "tags": [],
+          "doc": "Marks a single named point in the command stream. The label is copied by the call.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_command_encoder *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_target",
+      "doc": "The surface a frame is drawn into. A frame is one acquire followed, once the frame\u0027s command buffers were submitted, by one present.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "acquire",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Begins a frame and writes the view to draw into, owned by the target and valid until present. Succeeds writing KE_GPU_INVALID_HANDLE when the target has nothing to draw into this frame, and fails writing it when acquiring failed.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_view",
+              "type": "ke_gpu_texture_view *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view."
+            }
+          ],
+          "receiver": "struct ke_gpu_render_target *"
+        },
+        {
+          "name": "present",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Ends the frame begun by acquire. Fails with KE_RESULT_INVALID_ARGUMENT when no frame is acquired.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_render_target *"
+        },
+        {
+          "name": "size",
+          "returns": "void",
+          "tags": [],
+          "doc": "Size in pixels of the view the last acquire returned, or of the next one before any acquire.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_width",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_height",
+              "type": "uint32_t *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_gpu_render_target *"
+        },
+        {
+          "name": "format",
+          "returns": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Texel format of every view acquire returns.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_gpu_render_target *"
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_target_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_gpu_render_target *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_gpu_render_target *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_resource_binder",
+      "doc": "Brings the resources of a frame to the shaders that read them. A pass names a shader\u0027s parameters and never learns how they reach it: in groups, in tables indexed per draw, or any other way the implementation chooses.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "provide",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Makes \u0060binding\u0060 the resource of every shader parameter of its name that a resource set leaves out. The name is copied.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the binding has no name, or KE_RESULT_OUT_OF_MEMORY when it cannot be kept.",
+          "params": [
+            {
+              "name": "binding",
+              "type": "const ke_render_shader_binding *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_shader_layout",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Builds the layout of a compiled shader from what the build recorded about it.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the shader\u0027s record is missing, or KE_RESULT_INVALID_ARGUMENT when it cannot be read or a hint names no parameter of the shader, the reason logged.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_render_shader_layout_params *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_layout",
+              "type": "ke_render_shader_layout *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the layout; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_shader_layout",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a layout; the invalid one is ignored. A set created against it must be destroyed first.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "pipeline_layouts",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Fills the bind group layouts a pipeline running the shader of \u0060layout\u0060 declares.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT when the layout is unknown or the shader needs more than \u0060capacity\u0060 layouts.",
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_layouts",
+              "type": "ke_gpu_bind_group_layout *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the layouts in the order the pipeline takes them; they stay owned by the binder and live as long as \u0060layout\u0060."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "The number of entries \u0060out_layouts\u0060 holds."
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of layouts written."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_set",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Binds resources to one group of a shader by the names its parameters carry. A parameter left out is bound to what \u0060provide\u0060 gave under its name.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the shader declares no such block, or KE_RESULT_INVALID_ARGUMENT when a binding names no parameter of the group, a parameter is bound twice or a parameter has no resource, the reason logged.",
+          "params": [
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "block",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Name of a parameter block the shader declares; NULL selects its parameters declared outside any block."
+            },
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Name shown by capture and validation tools."
+            },
+            {
+              "name": "bindings",
+              "type": "const ke_render_shader_binding *",
+              "tags": [
+                "array_of:binding_count"
+              ],
+              "doc": "The resources bound, each to the parameter it names."
+            },
+            {
+              "name": "binding_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_set",
+              "type": "ke_render_resource_set *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the set; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a set; the invalid one is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_render_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes the resources of \u0060set\u0060 those the next draws of \u0060pass\u0060 read, with one dynamic offset per binding hinted KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET, in the order the shader declares them.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_render_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [
+                "array_of:dynamic_offset_count"
+              ],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offset_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_compute_set",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes the resources of \u0060set\u0060 those the next dispatches of \u0060pass\u0060 read, as bind_render_set does.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_compute_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "set",
+              "type": "ke_render_resource_set",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offsets",
+              "type": "const uint32_t *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "dynamic_offset_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "create_material",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Keeps the data of one material for the shaders that draw with it. The texture views are borrowed and must outlive the binding.",
+          "return_doc": "KE_OK, or the device\u0027s code.",
+          "params": [
+            {
+              "name": "data",
+              "type": "const ke_render_material_data *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_material",
+              "type": "ke_render_material_binding *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the binding; KE_RENDER_BINDING_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "destroy_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys a material binding; the invalid one is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "material",
+              "type": "ke_render_material_binding",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        },
+        {
+          "name": "bind_material",
+          "returns": "void",
+          "tags": [],
+          "doc": "Makes \u0060material\u0060 the one the next draws of \u0060pass\u0060 with the shader of \u0060layout\u0060 read. An unknown material or a shader that declares no material binds nothing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "struct ke_gpu_render_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "layout",
+              "type": "ke_render_shader_layout",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "material",
+              "type": "ke_render_material_binding",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_render_resource_binder *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_resource_binder_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_resource_binder *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_resource_binder *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_gpu_pipeline_ready_func",
+      "returns": "void",
+      "doc": "Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_pipeline",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_buffer_mapped_func",
+      "returns": "void",
+      "doc": "Receives the outcome of mapping a buffer for reading.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg3",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "id_types": [],
+  "foreign_id_types": [],
+  "type_aliases": {
+    "ke_gpu_texture_aspect": "uint32_t",
+    "ke_gpu_texture_usage": "uint32_t",
+    "ke_gpu_buffer_usage": "uint32_t",
+    "ke_gpu_shader_stage": "uint32_t",
+    "ke_gpu_buffer": "uint64_t",
+    "ke_gpu_texture": "uint64_t",
+    "ke_gpu_texture_view": "uint64_t",
+    "ke_gpu_sampler": "uint64_t",
+    "ke_gpu_shader_module": "uint64_t",
+    "ke_gpu_pipeline": "uint64_t",
+    "ke_gpu_bind_group_layout": "uint64_t",
+    "ke_gpu_bind_group": "uint64_t",
+    "ke_gpu_queue": "uint64_t",
+    "ke_gpu_pipeline_ready_func": "void (*)(ke_gpu_pipeline, void *)",
+    "ke_gpu_buffer_mapped_func": "void (*)(ke_gpu_buffer, bool, void *)",
+    "ke_render_shader_layout": "uint64_t",
+    "ke_render_resource_set": "uint64_t",
+    "ke_render_material_binding": "uint64_t"
+  },
+  "constants": [
+    {
+      "name": "KE_GPU_TEXTURE_ASPECT_COLOR",
+      "type": "unsigned int",
+      "value": "1"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_ASPECT_DEPTH",
+      "type": "unsigned int",
+      "value": "2"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_ASPECT_STENCIL",
+      "type": "unsigned int",
+      "value": "4"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_COPY_SRC",
+      "type": "unsigned int",
+      "value": "1"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_COPY_DST",
+      "type": "unsigned int",
+      "value": "2"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_SAMPLED",
+      "type": "unsigned int",
+      "value": "4",
+      "doc": "Bound for sampling"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_STORAGE",
+      "type": "unsigned int",
+      "value": "8",
+      "doc": "Bound as storage"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_COLOR_ATTACH",
+      "type": "unsigned int",
+      "value": "16",
+      "doc": "Written as a color attachment"
+    },
+    {
+      "name": "KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH",
+      "type": "unsigned int",
+      "value": "32",
+      "doc": "Written as a depth attachment"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_MAP_READ",
+      "type": "unsigned int",
+      "value": "1"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_MAP_WRITE",
+      "type": "unsigned int",
+      "value": "2"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_COPY_SRC",
+      "type": "unsigned int",
+      "value": "4"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_COPY_DST",
+      "type": "unsigned int",
+      "value": "8"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_INDEX",
+      "type": "unsigned int",
+      "value": "16"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_VERTEX",
+      "type": "unsigned int",
+      "value": "32"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_UNIFORM",
+      "type": "unsigned int",
+      "value": "64"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_STORAGE",
+      "type": "unsigned int",
+      "value": "128"
+    },
+    {
+      "name": "KE_GPU_BUFFER_USAGE_INDIRECT",
+      "type": "unsigned int",
+      "value": "256"
+    },
+    {
+      "name": "KE_GPU_SHADER_STAGE_VERTEX",
+      "type": "unsigned int",
+      "value": "1"
+    },
+    {
+      "name": "KE_GPU_SHADER_STAGE_FRAGMENT",
+      "type": "unsigned int",
+      "value": "2"
+    },
+    {
+      "name": "KE_GPU_SHADER_STAGE_COMPUTE",
+      "type": "unsigned int",
+      "value": "4"
+    },
+    {
+      "name": "KE_GPU_INVALID_HANDLE",
+      "type": "unsigned long",
+      "value": "18446744073709551615"
+    },
+    {
+      "name": "KE_RENDER_BINDING_INVALID",
+      "type": "unsigned int",
+      "value": "0",
+      "doc": "The value no shader layout, resource set or material binding takes."
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ﻿using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool.Enki;
 
 using Xunit;
 
@@ -8,26 +8,26 @@ namespace KernelEngine.Runtime.Tests;
 
 public class RuntimeTests : IDisposable
 {
-    private readonly EnkiScheduler _taskScheduler = new();
-    private readonly FlecsEcs _ecs = new();
+    private readonly EnkiTaskPool _taskPool = new();
+    private readonly FlecsEcsRegistry _ecs = new();
 
     public void Dispose()
     {
         _ecs.Dispose();
-        _taskScheduler.Dispose();
+        _taskPool.Dispose();
     }
 
     [Fact]
     public void Create_Tick_Destroy_NoSystems()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         runtime.Tick(1f / 60f);
     }
 
     [Fact]
     public void RegisterModule_InvokesOnLoad_Once()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         var loadCount = 0;
         var id = runtime.RegisterModule("TestModule", _ => loadCount++);
         Assert.NotEqual(0u, id);
@@ -37,7 +37,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_InvokesOnUnload_WhenRuntimeIsDisposed()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskPool);
         var unloadCount = 0;
         runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
         Assert.Equal(0, unloadCount);
@@ -50,7 +50,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_UnloadsInReverseRegistrationOrder()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskPool);
         var order = new List<string>();
         runtime.RegisterModule("First", _ => { }, _ => order.Add("First"));
         runtime.RegisterModule("Second", _ => { }, _ => order.Add("Second"));
@@ -63,7 +63,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisteredSystem_FiresOncePerTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         var tickCount = 0;
         runtime.RegisterModule("TickModule", rt =>
         {
@@ -79,7 +79,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterSystem_DirectlyFromCallerCode_Works()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         var calls = 0;
         runtime.RegisterSystem("Bare", RuntimePhase.Update, (_, _) => calls++);
         runtime.Tick(0.016f);
@@ -90,7 +90,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_PropagatesAtTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         runtime.RegisterSystem("Boom", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("kaboom"));
 
@@ -103,7 +103,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_StopsTheRestOfTheTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         var laterRan = false;
         runtime.RegisterSystem("Boom", RuntimePhase.PreUpdate,
             (_, _) => throw new InvalidOperationException("kaboom"));
@@ -117,7 +117,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RenderSystemException_SurvivesTheTickThatDispatchedIt()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         using var released = new ManualResetEventSlim(false);
 
         runtime.RegisterSystem("BoomRender", RuntimePhase.Render, (_, _) =>
@@ -136,7 +136,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void EverySystemThatThrowsIsReported_NotJustTheLast()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        using IRuntime runtime = new Runtime(_ecs, _taskPool);
         runtime.RegisterSystem("BoomA", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("a"));
         runtime.RegisterSystem("BoomB", RuntimePhase.Update,
@@ -150,7 +150,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Dispose_IsIdempotent()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskPool);
         runtime.Dispose();
         runtime.Dispose();
     }
@@ -158,7 +158,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void OperationsAfterDispose_Throw()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskScheduler);
+        IRuntime runtime = new Runtime(_ecs, _taskPool);
         runtime.Dispose();
         Assert.Throws<ObjectDisposedException>(() => runtime.Tick(0.016f));
     }
@@ -166,7 +166,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Constructor_NullEcs_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new Runtime(null!, _taskScheduler));
+        Assert.Throws<ArgumentNullException>(() => new Runtime(null!, _taskPool));
     }
 
     [Fact]

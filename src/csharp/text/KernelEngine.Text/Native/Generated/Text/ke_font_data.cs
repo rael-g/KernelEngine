@@ -1,3 +1,7 @@
+using System.Numerics;
+
+using global::KernelEngine.Text;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Text.Native;
@@ -8,12 +12,16 @@ public unsafe partial struct ke_font_data
     public byte* atlas_rgba;
 
     [NativeTypeName("uint32_t")]
+    public uint atlas_byte_count;
+
+    [NativeTypeName("uint32_t")]
     public uint atlas_width;
 
     [NativeTypeName("uint32_t")]
     public uint atlas_height;
 
-    public ke_glyph_metrics* glyphs;
+    [NativeTypeName("ke_glyph_metrics *")]
+    public global::KernelEngine.Text.GlyphMetrics* glyphs;
 
     [NativeTypeName("uint32_t")]
     public uint glyph_count;

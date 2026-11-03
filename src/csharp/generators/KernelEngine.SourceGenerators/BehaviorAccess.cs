@@ -13,7 +13,7 @@ namespace KernelEngine.SourceGenerators;
 /// methods of its class it calls. A component is a generated property of the hook's own node,
 /// reached through <c>this</c>, or of a node it borrows, reached through the borrow's
 /// <c>Node</c> or <c>Value</c>. A node the body creates is not in the world until the wave ends,
-/// so touching it reaches nothing. Any other node is one the scheduler cannot see, which is an
+/// so touching it reaches nothing. Any other node is one the runtime cannot see, which is an
 /// error. The result is null whenever the body does something the reading cannot follow, and the
 /// caller then declares everything the type carries.
 /// </summary>
@@ -183,7 +183,7 @@ static class BehaviorAccess
                 return null;
             }
             if (IsNodeMember(property))
-                return writes ? new($"it writes '{property.Name}', which the scheduler cannot see", at) : null;
+                return writes ? new($"it writes '{property.Name}', which the runtime cannot see", at) : null;
             if (!property.DeclaringSyntaxReferences.Any())
                 return new($"it uses '{property.Name}', which is not a generated component property", at);
             if (IsAutoProperty(property)) return null;

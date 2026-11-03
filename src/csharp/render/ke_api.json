@@ -1,6 +1,857 @@
 {
   "enums": [
     {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_index_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT16",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT32",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_INVALID",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R32_FLOAT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R16_FLOAT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D16_UNORM",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RG32_FLOAT",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R8_UNORM",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_dimension",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_DIM_1D",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_2D",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_3D",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_CUBE",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_load_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_LOAD_OP_LOAD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_CLEAR",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_DONT_CARE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_store_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STORE_OP_STORE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STORE_OP_DONT_CARE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FILTER_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FILTER_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_sampler_mipmap_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_address_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_ADDRESS_MODE_REPEAT",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_compare_function",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_COMPARE_UNDEFINED",
+          "value": 0,
+          "doc": "No comparison (default for samplers without shadow compare)"
+        },
+        {
+          "name": "KE_GPU_COMPARE_NEVER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_EQUAL",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS_EQUAL",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_NOT_EQUAL",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER_EQUAL",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_ALWAYS",
+          "value": 8,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_primitive_topology",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_cull_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_CULL_MODE_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_FRONT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_BACK",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_front_face",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FRONT_FACE_CCW",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FRONT_FACE_CW",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_factor",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ZERO",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_ALPHA",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_ALPHA",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_COLOR",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_COLOR",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_OP_ADD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_SUBTRACT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_REVERSE_SUBTRACT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MIN",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MAX",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_stencil_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STENCIL_OP_KEEP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_ZERO",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_REPLACE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INVERT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INCREMENT_CLAMP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_DECREMENT_CLAMP",
+          "value": 5,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_step_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_VERTEX",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_INSTANCE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X2",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X3",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X4",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X2",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X4",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4",
+          "value": 6,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_binding_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BINDING_TYPE_BUFFER",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_SAMPLER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_TEXTURE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_BUFFER",
+          "value": 3,
+          "doc": "read-write storage (compute only)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_TEXTURE",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER",
+          "value": 5,
+          "doc": "read-only storage (usable in fragment)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_DEPTH_TEXTURE",
+          "value": 6,
+          "doc": "depth-format texture, sampled or texel-fetched"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_shader_language",
+      "doc": "Shader source language a device accepts. Query via \u0060ke_gpu_device::shader_language\u0060.",
+      "values": [
+        {
+          "name": "KE_GPU_SHADER_LANG_WGSL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_SPIRV",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_MSL",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_DXIL",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_render_resource_type",
       "doc": null,
       "values": [
@@ -123,9 +974,694 @@
   ],
   "structs": [
     {
-      "name": "ke_render_resource_params",
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
       "doc": null,
       "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        },
+        {
+          "name": "enum_names",
+          "type": "const char *const *",
+          "tags": [
+            "borrowed",
+            "optional"
+          ],
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. NULL leaves the field numeric."
+        },
+        {
+          "name": "enum_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060enum_names\u0060."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_clear_value",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "depth",
+                "type": "float",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "stencil",
+                "type": "uint8_t",
+                "tags": [],
+                "doc": null
+              }
+            ]
+          }
+        }
+      ],
+      "external": true,
+      "union": true
+    },
+    {
+      "name": "ke_gpu_capabilities",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "max_texture_dimension_2d",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_texture_array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_bind_groups",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_attributes",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_buffers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_uniform_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_storage_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_x",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_y",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_z",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_bindless",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_mesh_shaders",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_ray_tracing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "copy_bytes_per_row_alignment",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Byte multiple a texture/buffer copy\u0027s bytes_per_row must be a multiple of; 1 when the backend imposes none."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vertex",
+      "doc": "Per-vertex data of a mesh, as authored.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space position"
+        },
+        {
+          "name": "nx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "ny",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "nz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space normal (normalized)"
+        },
+        {
+          "name": "u",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "v",
+          "type": "float",
+          "tags": [],
+          "doc": "UV texture coordinates"
+        },
+        {
+          "name": "tx",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "ty",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tz",
+          "type": "float",
+          "tags": [],
+          "doc": "Object-space tangent (normalized)"
+        },
+        {
+          "name": "tw",
+          "type": "float",
+          "tags": [],
+          "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_vertex",
+      "doc": "One interleaved vertex as a mesh is uploaded to the device.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "uv",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "tangent",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_resource_params",
+      "doc": null,
+      "tags": [
+        "bag"
+      ],
       "fields": [
         {
           "name": "name",
@@ -177,7 +1713,7 @@
         },
         {
           "name": "clear_value",
-          "type": "float[4]",
+          "type": "ke_vec4",
           "tags": [],
           "doc": "Per-resource clear color."
         }
@@ -331,6 +1867,628 @@
           "type": "ke_render_depth_mode",
           "tags": [],
           "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
+        }
+      ]
+    },
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "table",
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "table",
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_component",
+      "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
+      "tags": [
+        "table",
+        "node:Camera",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fov",
+          "type": "float",
+          "tags": [
+            "default:60"
+          ],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [
+            "default:0.1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [
+            "default:1000"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic_size",
+          "type": "float",
+          "tags": [
+            "default:5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "cull_mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_directional_light_component",
+      "doc": "Directional light node. Its properties give the light\u0027s direction, color, intensity and ambient term.",
+      "tags": [
+        "table",
+        "node:DirectionalLight",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 1 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ambient",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 0.2 0.2"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_point_light_component",
+      "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:PointLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:10"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_spot_light_component",
+      "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:SpotLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0 -1 0"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "range",
+          "type": "float",
+          "tags": [
+            "default:20"
+          ],
+          "doc": null
+        },
+        {
+          "name": "inner_angle",
+          "type": "float",
+          "tags": [
+            "default:25"
+          ],
+          "doc": null
+        },
+        {
+          "name": "outer_angle",
+          "type": "float",
+          "tags": [
+            "default:35"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ambient_light_component",
+      "doc": "Scene-wide ambient light node. First entity with this component wins.",
+      "tags": [
+        "table",
+        "node:AmbientLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.05 0.05 0.05"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_skybox_component",
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
+      "tags": [
+        "node:Skybox",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "cubemap",
+          "type": "ke_texture_handle",
+          "tags": [
+            "name:cubemap_handle"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_component",
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060 and \u0060material\u0060 double as output: the engine fills them, at KE_PHASE_UPDATE, whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves \u0060primitive\u0060 empty; the engine only acts where a handle is still invalid.",
+      "tags": [
+        "table",
+        "node:MeshRenderer",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_mesh_handle",
+          "tags": [
+            "name:mesh_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "material",
+          "type": "ke_material_handle",
+          "tags": [
+            "name:material_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "primitive",
+          "type": "char[32]",
+          "tags": [
+            "name:mesh"
+          ],
+          "doc": "Resolved into \u0060mesh\u0060 by the engine; a node authoring \u0060mesh\u0060 directly would have the value overwritten."
+        },
+        {
+          "name": "base_color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1",
+            "name:color"
+          ],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [
+            "default:1.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [
+            "default:0.05"
+          ],
+          "doc": null
+        },
+        {
+          "name": "layers",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sprite2d_component",
+      "doc": "A textured quad in the plane, resolved into geometry and a material by the engine.",
+      "tags": [
+        "table",
+        "node:Sprite2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "texture",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Image to sample. Empty draws the plain tinted quad."
+        },
+        {
+          "name": "region",
+          "type": "ke_vec4",
+          "tags": [
+            "default:0 0 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "pivot",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_h",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_v",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "uint32_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "ke_alpha_mode."
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "texture_handle",
+          "type": "ke_texture_handle",
+          "tags": [
+            "idiom"
+          ],
+          "doc": "The image resolved from \u0060texture\u0060."
+        },
+        {
+          "name": "attached",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_frustum",
+      "doc": "The perspective frustum a camera\u0027s field of view describes.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "tan_half_fov_y",
+          "type": "float",
+          "tags": [],
+          "doc": "Tangent of half the vertical field of view."
+        },
+        {
+          "name": "aspect",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_scene_component_ids",
+      "doc": "The ids the ecs gave the scene\u0027s render components, which the passes are created with.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "camera",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "directional_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "point_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "spot_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ambient_light",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "skybox",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sprite2d",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "label",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "world_transform",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
         }
       ]
     }
@@ -546,13 +2704,15 @@
             },
             {
               "name": "vertices",
-              "type": "const void *",
-              "tags": [],
-              "doc": null
+              "type": "const ke_mesh_vertex *",
+              "tags": [
+                "array_of:vertex_count"
+              ],
+              "doc": "Interleaved vertices."
             },
             {
-              "name": "vertices_size",
-              "type": "size_t",
+              "name": "vertex_count",
+              "type": "uint32_t",
               "tags": [],
               "doc": null
             },
@@ -686,7 +2846,15 @@
             },
             {
               "name": "rgba",
-              "type": "const void *",
+              "type": "const uint8_t *",
+              "tags": [
+                "array_of:rgba_size"
+              ],
+              "doc": "RGBA8 pixels in row order; width by height by four bytes."
+            },
+            {
+              "name": "rgba_size",
+              "type": "size_t",
               "tags": [],
               "doc": null
             },
@@ -718,56 +2886,72 @@
             },
             {
               "name": "base_color",
-              "type": "const float *",
+              "type": "ke_vec4",
               "tags": [],
               "doc": null
             },
             {
               "name": "metallic",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0"
+              ],
               "doc": null
             },
             {
               "name": "roughness",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.5"
+              ],
               "doc": null
             },
             {
               "name": "albedo",
               "type": "ke_texture_handle",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "default:none"
+              ],
+              "doc": "KE_TEXTURE_NONE selects the white texture."
             },
             {
               "name": "normal",
               "type": "ke_texture_handle",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "default:none"
+              ],
+              "doc": "KE_TEXTURE_NONE selects a flat normal."
             },
             {
               "name": "alpha_mode",
               "type": "ke_alpha_mode",
-              "tags": [],
+              "tags": [
+                "default:KE_ALPHA_MODE_OPAQUE"
+              ],
               "doc": null
             },
             {
               "name": "alpha_cutoff",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.5"
+              ],
               "doc": null
             },
             {
               "name": "ior",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:1.5"
+              ],
               "doc": null
             },
             {
               "name": "distortion_strength",
               "type": "float",
-              "tags": [],
+              "tags": [
+                "default:0.05"
+              ],
               "doc": null
             },
             {
@@ -775,7 +2959,8 @@
               "type": "const char *",
               "tags": [
                 "utf8",
-                "nullable"
+                "nullable",
+                "default:none"
               ],
               "doc": "Authored material name; NULL/empty selects the engine default."
             },
@@ -861,7 +3046,15 @@
             },
             {
               "name": "faces",
-              "type": "const void *",
+              "type": "const uint8_t *",
+              "tags": [
+                "array_of:faces_size"
+              ],
+              "doc": "Six square RGBA8 faces, in the order \u002BX, -X, \u002BY, -Y, \u002BZ, -Z."
+            },
+            {
+              "name": "faces_size",
+              "type": "size_t",
               "tags": [],
               "doc": null
             },
@@ -1427,7 +3620,9 @@
     {
       "name": "ke_render_service_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -1447,10 +3642,353 @@
           "receiver": "ke_render_service *"
         }
       ]
+    },
+    {
+      "name": "ke_render_camera",
+      "doc": "The matrices and projection that a camera component and its world transform describe. Every slot is callable at any time and tolerates a null \u0060self\u0060, a null input or a null output by writing nothing.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "view",
+          "returns": "void",
+          "tags": [],
+          "doc": "World-to-view for a camera placed by \u0060camera_world\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera_world",
+              "type": "const ke_mat4 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera\u0027s world transform."
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "view_rotation",
+          "returns": "void",
+          "tags": [],
+          "doc": "The view matrix of \u0060view\u0060 with its translation removed, leaving only the rotation.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera_world",
+              "type": "const ke_mat4 *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera\u0027s world transform."
+            },
+            {
+              "name": "out_view",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "projection",
+          "returns": "void",
+          "tags": [],
+          "doc": "The projection the camera describes. \u0060orthographic\u0060 picks the kind, \u0060orthographic_size\u0060 is half the visible height, and \u0060fov\u0060 is the vertical field of view in degrees.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "perspective_projection",
+          "returns": "void",
+          "tags": [],
+          "doc": "A perspective projection from the camera\u0027s field of view, whatever its \u0060orthographic\u0060 flag says.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_proj",
+              "type": "ke_mat4 *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the projection matrix."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        },
+        {
+          "name": "perspective_frustum",
+          "returns": "void",
+          "tags": [],
+          "doc": "The perspective frustum the camera\u0027s field of view describes, whatever its \u0060orthographic\u0060 flag says.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "camera",
+              "type": "const ke_camera_component *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The camera component."
+            },
+            {
+              "name": "aspect",
+              "type": "float",
+              "tags": [],
+              "doc": "Width over height of the surface drawn into."
+            },
+            {
+              "name": "out_frustum",
+              "type": "ke_camera_frustum *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the frustum."
+            }
+          ],
+          "receiver": "struct ke_render_camera *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_camera_handle",
+      "doc": "Owning wrapper: \u0060ref\u0060 borrows for the lifetime, \u0060destroy\u0060 ends it.",
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_camera *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_camera *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_frame",
+      "doc": "The systems that begin and end a frame on the render service.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "frame_cid",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "The tag the system that begins the frame writes and the system that ends it reads. A pass that reads it runs inside the frame.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_frame *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_frame_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_frame *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_frame *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_scene_resolve",
+      "doc": "The scene\u0027s render components and the update-phase systems that give a mesh and a sprite the GPU resources they name.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "component_ids",
+          "returns": "const ke_render_scene_component_ids *",
+          "tags": [],
+          "doc": "The ids of the components the scene resolve registered; valid while it lives.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_scene_resolve *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_scene_resolve_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_scene_resolve *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_scene_resolve *"
+        }
+      ]
     }
   ],
   "functions": [],
-  "callbacks": [],
+  "callbacks": [
+    {
+      "name": "ke_gpu_pipeline_ready_func",
+      "returns": "void",
+      "doc": "Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_pipeline",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_buffer_mapped_func",
+      "returns": "void",
+      "doc": "Receives the outcome of mapping a buffer for reading.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg3",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "id_types": [],
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
@@ -1467,6 +4005,8 @@
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
     "ke_gpu_queue": "uint64_t",
+    "ke_gpu_pipeline_ready_func": "void (*)(ke_gpu_pipeline, void *)",
+    "ke_gpu_buffer_mapped_func": "void (*)(ke_gpu_buffer, bool, void *)",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
     "ke_render_material_binding": "uint64_t",

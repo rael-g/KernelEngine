@@ -1,12 +1,12 @@
 .{
-    .name = .abi_configuration,
+    .name = .abi_configuration_factory,
     .version = "0.1.0",
-    .fingerprint = 0x6c080ba6ef39c7a0,
+    .fingerprint = 0x51ca5d54e6939ee0,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_configuration = .{ .path = "../../abi/configuration" },
-        .ke_abi_logger = .{ .path = "../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../abi/result" },
+        .abi_configuration = .{ .path = "../../abi/configuration" },
+        .abi_logger = .{ .path = "../../abi/logger" },
+        .abi_result = .{ .path = "../../abi/result" },
     },
     .paths = .{"."},
 }

@@ -1,11 +1,12 @@
 .{
-    .name = .ke_abi_view,
+    .name = .abi_view,
     .version = "0.1.0",
-    .fingerprint = 0xc83e6ef0fac4e646,
+    .fingerprint = 0x2f4b509a033ae900,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_math = .{ .path = "../math" },
-        .ke_abi_render = .{ .path = "../render" },
+        .abi_math = .{ .path = "../math" },
+        .abi_render_gpu = .{ .path = "../render_gpu" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

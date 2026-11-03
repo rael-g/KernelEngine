@@ -16,11 +16,11 @@ public class AudioTests
     private static string? LastPath = null;
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockLoadSound(ke_audio* self, sbyte* path, uint* outSound)
+    private static unsafe global::KernelEngine.Result.Native.Result MockLoadSound(ke_audio* self, sbyte* path, uint* outSound)
     {
         LastPath = Marshal.PtrToStringAnsi((IntPtr)path);
         *outSound = LastResult ? 42u : 0u;
-        return LastResult ? ke_result.KE_OK : ke_result.KE_RESULT_NOT_FOUND;
+        return LastResult ? global::KernelEngine.Result.Native.Result.Ok : global::KernelEngine.Result.Native.Result.NotFound;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -30,12 +30,12 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe ke_result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
+    private static unsafe global::KernelEngine.Result.Native.Result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
     {
         LastSoundId = soundId;
         LastVolume = volume;
         LastLoop = loop;
-        return ke_result.KE_OK;
+        return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -83,7 +83,7 @@ public class AudioTests
         var handle = audio.LoadSound("test.wav");
 
         Assert.Equal("test.wav", LastPath);
-        Assert.Equal(42u, handle.Value);
+        Assert.Equal(42u, handle);
         NativeMemory.Free(h.@ref);
     }
 
@@ -106,7 +106,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.UnloadSound(new SoundHandle(123));
+        audio.UnloadSound(123u);
 
         Assert.Equal(123u, LastSoundId);
         NativeMemory.Free(h.@ref);
@@ -119,7 +119,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Play(new SoundHandle(123), 0.5f, true);
+        audio.Play(123u, 0.5f, true);
 
         Assert.Equal(123u, LastSoundId);
         Assert.Equal(0.5f, LastVolume);
@@ -134,7 +134,7 @@ public class AudioTests
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Stop(new SoundHandle(123));
+        audio.Stop(123u);
 
         Assert.Equal(123u, LastSoundId);
         NativeMemory.Free(h.@ref);

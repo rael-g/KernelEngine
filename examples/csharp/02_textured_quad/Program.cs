@@ -2,13 +2,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -17,15 +19,17 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 02 Textured Quad"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.05f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
 
         const uint width = 128;
         const uint height = 128;
@@ -52,8 +56,8 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 3f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
-        tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, "Quad");
+        const string quad = "quad";
+        tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat }, "Quad");
     }));
 
 using var sp = services.BuildServiceProvider();

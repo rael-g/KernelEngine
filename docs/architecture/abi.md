@@ -10,7 +10,7 @@ on the generated page of its header, under `src/c/`.
 |---|---|---|---|
 | contract struct | one header per contract in `src/c/<domain>/` | a call through a slot, with the struct as first argument | a `ke_result`, and a value through a last `out_` parameter |
 | owner | `ke_<name>_handle`, beside its contract, for example `ke_window_handle` | nothing | the borrowed contract pointer (`ref`) and the function that destroys it (`destroy`) |
-| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | a `_params` struct, such as `ke_window_glfw_params`, and the `out_` handle | `KE_OK` and an owner through the output |
+| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | a `_params` struct, such as `ke_window_glfw_config`, and the `out_` handle | `KE_OK` and an owner through the output |
 | result code | `ke_result` in `kernel_engine/result/result.h` | nothing | `KE_OK`, or the code of the failure |
 | result helper | `Result` in `src/zig/result/result.zig` | the plugin's own translated C namespace | `R.ok`, `R.code`, `R.check` and `R.Error`, the conversions between a Zig error and a code |
 | managed translation | `NativeResults` in `src/csharp/result` | a `ke_result` | a .NET exception, or a `ke_result` written from one |
@@ -57,8 +57,8 @@ A resource is named by a number, and the number that means "none" differs per ki
 
 A render handle is a one-member struct, one struct type per kind, so a mesh passed where a texture
 belongs does not compile in C. Its bits pack an index and a generation, sized by
-`KE_HANDLE_INDEX_BITS` and `KE_HANDLE_GENERATION_BITS`; the plugins that pack and unpack share
-`Handles` in `src/zig/render/common/handle.zig`.
+`KE_HANDLE_INDEX_BITS` and `KE_HANDLE_GENERATION_BITS`. Only the producers pack and unpack them:
+the render service's `src/zig/render/service/src/slot_map.zig` and the ui pass's font table.
 
 ## What the parts agree on without a contract
 

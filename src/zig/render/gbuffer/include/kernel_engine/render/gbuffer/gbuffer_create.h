@@ -3,6 +3,8 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -26,22 +28,20 @@ extern "C"
 
     typedef struct ke_render_gbuffer ke_render_gbuffer;
 
+    /// [owner]
     typedef struct ke_render_gbuffer_handle
     {
         ke_render_gbuffer *ref;
         void (*destroy)(ke_render_gbuffer *self);
     } ke_render_gbuffer_handle;
 
-    /// What the gbuffer pass writes, besides the frame's depth. The names are copied.
+    /// [bag] What the gbuffer pass writes, besides the frame's depth. The names are copied.
     typedef struct ke_render_gbuffer_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the resources it writes; borrowed.
-        ke_gpu_device     *device;  ///< Borrowed.
-        ke_component_id    mesh_cid;
-        ke_component_id    world_transform_cid;
-        ke_component_id    camera_cid;
-        ke_component_id    frame_cid;
+        ke_gpu_device     *device;        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
+        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
         /// [utf8] The group it writes: albedo, normal and emissive under the suffixes of
         /// kernel_engine/render/resource_groups.h, each declared the size of the backbuffer.
         const char *output;

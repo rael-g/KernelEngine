@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Renders a mesh with a material. `mesh` and `material` double as output: the engine fills them, at KE_PHASE_UPDATE, whenever `primitive` names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves `primitive` empty; the engine only acts where a handle is still invalid.</summary>
@@ -13,13 +17,17 @@ public partial class MeshRenderer : Node3D
 {
 
     [NativeField("Mesh", Component = typeof(MeshComponent))]
-    public partial KernelEngine.Render.MeshHandle MeshHandle { get; set; }
+    public partial MeshHandle MeshHandle { get; set; }
 
     [NativeField("Material", Component = typeof(MeshComponent))]
-    public partial KernelEngine.Render.MaterialHandle MaterialHandle { get; set; }
+    public partial MaterialHandle MaterialHandle { get; set; }
+
+    /// <summary>Resolved into `mesh` by the engine; a node authoring `mesh` directly would have the value overwritten.</summary>
+    [NativeField("Primitive", Component = typeof(MeshComponent))]
+    public partial string Mesh { get; set; }
 
     [NativeField("BaseColor", Component = typeof(MeshComponent))]
-    public partial Vector4 Color { get; set; }
+    public partial System.Numerics.Vector4 Color { get; set; }
 
     [NativeField("Roughness", Component = typeof(MeshComponent))]
     public partial float Roughness { get; set; }

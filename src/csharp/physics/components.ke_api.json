@@ -1,6 +1,160 @@
 {
   "enums": [
     {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_body_type_2d",
       "doc": null,
       "values": [
@@ -203,6 +357,20 @@
       "external": true
     },
     {
+      "name": "ke_body_2d",
+      "doc": "Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as \u0022invalid\u0022.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_collision_filter_2d",
       "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
       "tags": [],
@@ -270,6 +438,7 @@
       "name": "ke_transform_component",
       "doc": "An entity\u0027s authored 3D pose.",
       "tags": [
+        "table",
         "node:Node3D",
         "value"
       ],
@@ -303,6 +472,7 @@
       "name": "ke_transform2d_component",
       "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
       "tags": [
+        "table",
         "node:Node2D"
       ],
       "fields": [
@@ -357,6 +527,7 @@
       "name": "ke_body2d_component",
       "doc": "A 2D rigid body. Holds the motion of its entity; its pose is the entity\u0027s ke_transform2d_component, which the body is created at, which moves it when written, and which the simulation writes each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.",
       "tags": [
+        "table",
         "node:Body2D",
         "base:Node2D"
       ],
@@ -407,6 +578,7 @@
       "name": "ke_collider2d_component",
       "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. The fixture is attached by reconciling this component against the hierarchy. A caller never names a body.",
       "tags": [
+        "table",
         "node:Collider2D",
         "base:Node2D"
       ],
@@ -504,16 +676,8 @@
           "return_doc": null,
           "params": [
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:gravity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "gravity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -550,16 +714,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -604,30 +760,14 @@
               "doc": null
             },
             {
-              "name": "half_w",
-              "type": "float",
-              "tags": [
-                "vector2:half_extents"
-              ],
-              "doc": null
-            },
-            {
-              "name": "half_h",
-              "type": "float",
+              "name": "half_extents",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -659,7 +799,7 @@
               "name": "filter",
               "type": "const ke_collision_filter_2d *",
               "tags": [
-                "opt"
+                "optional"
               ],
               "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
             }
@@ -686,16 +826,8 @@
               "doc": null
             },
             {
-              "name": "offset_x",
-              "type": "float",
-              "tags": [
-                "vector2:offset"
-              ],
-              "doc": null
-            },
-            {
-              "name": "offset_y",
-              "type": "float",
+              "name": "offset",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -721,7 +853,7 @@
               "name": "filter",
               "type": "const ke_collision_filter_2d *",
               "tags": [
-                "opt"
+                "optional"
               ],
               "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
             }
@@ -766,16 +898,8 @@
               "doc": null
             },
             {
-              "name": "x",
-              "type": "float",
-              "tags": [
-                "vector2:position"
-              ],
-              "doc": null
-            },
-            {
-              "name": "y",
-              "type": "float",
+              "name": "position",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             },
@@ -802,16 +926,8 @@
               "doc": null
             },
             {
-              "name": "vx",
-              "type": "float",
-              "tags": [
-                "vector2:velocity"
-              ],
-              "doc": null
-            },
-            {
-              "name": "vy",
-              "type": "float",
+              "name": "velocity",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -832,16 +948,8 @@
               "doc": null
             },
             {
-              "name": "impulse_x",
-              "type": "float",
-              "tags": [
-                "vector2:impulse"
-              ],
-              "doc": null
-            },
-            {
-              "name": "impulse_y",
-              "type": "float",
+              "name": "impulse",
+              "type": "ke_vec2",
               "tags": [],
               "doc": null
             }
@@ -898,7 +1006,9 @@
     {
       "name": "ke_physics_2d_handle",
       "doc": null,
-      "tags": [],
+      "tags": [
+        "owner"
+      ],
       "fields": [
         {
           "name": "ref",
@@ -923,7 +1033,7 @@
   ],
   "functions": [],
   "callbacks": [],
-  "type_aliases": {
-    "ke_body_2d": "uint32_t"
-  }
+  "id_types": [],
+  "foreign_id_types": [],
+  "type_aliases": {}
 }

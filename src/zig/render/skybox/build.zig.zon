@@ -4,6 +4,12 @@
     .fingerprint = 0x90672eda067b9222,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
+        .abi_render_contract = .{ .path = "../../abi/render_contract" },
+        .abi_framework = .{ .path = "../../abi/framework" },
+        .abi_render_handles = .{ .path = "../../abi/render_handles" },
+        .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
+        .abi_render_components = .{ .path = "../../abi/render_components" },
+        .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_render = .{ .path = "../../abi/render" },
@@ -18,6 +24,10 @@
         .zmath = .{
             .url = "https://github.com/zig-gamedev/zmath/archive/9e42b04a24c970a297b365f3d3022f92dbf3219d.tar.gz",
             .hash = "zmath-0.11.0-dev-wjwivTwtAwDOjG2_KGP-HLtHrONfsFfHttalmxFAGVAK",
+        },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
         },
     },
     .paths = .{"."},

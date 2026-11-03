@@ -5,8 +5,11 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
 using KernelEngine.Render.Native;
 
 namespace KernelEngine.Render;
@@ -18,7 +21,7 @@ public unsafe interface INativeRenderService
 }
 
 
-public unsafe partial class RenderService : IDisposable, INativeRenderService
+public unsafe partial class RenderService : IDisposable, INativeRenderService, IRenderService
 {
     private ke_render_service* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_render_service*, void> _destroy;
@@ -48,61 +51,109 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Declares a transient resource the service allocates and recycles.</summary>
+    /// <param name="width">Read when size_mode is ABSOLUTE.</param>
+    /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
+    /// <param name="clearValue">Per-resource clear color.</param>
     /// <returns>Receives the tag-component cid to place in a pass's access_list.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint Declare(ke_render_resource_params* @params)
+    public ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue)
     {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->declare(Handle, @params, &resultOut), "declare");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ke_render_resource_params @params = default;
+            @params.name = (sbyte*)namePtr;
+            @params.type = (RenderResourceType)type;
+            @params.format = (GpuTextureFormat)format;
+            @params.size_mode = (RenderSizeMode)sizeMode;
+            @params.width = width;
+            @params.height = height;
+            @params.scale_x = scaleX;
+            @params.scale_y = scaleY;
+            @params.clear_value = clearValue;
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->declare(Handle, &@params, &resultOut), "declare");
+            return resultOut;
+        }
     }
 
     /// <summary>Imports an externally-owned texture under `name`.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint ImportTexture(sbyte* name, ulong tex)
+    public ComponentId ImportTexture(string name, ulong tex)
     {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_texture(Handle, name, tex, &resultOut), "import_texture");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_texture(Handle, (sbyte*)namePtr, tex, &resultOut), "import_texture");
+            return resultOut;
+        }
     }
 
     /// <summary>Mints a tag cid under `name` with no GPU payload.</summary>
     /// <returns>Receives the cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint ImportTag(sbyte* name)
+    public ComponentId ImportTag(string name)
     {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_tag(Handle, name, &resultOut), "import_tag");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_tag(Handle, (sbyte*)namePtr, &resultOut), "import_tag");
+            return resultOut;
+        }
     }
 
     /// <summary>Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint ImportBuffer(sbyte* name, ulong buffer, ulong size)
+    public ComponentId ImportBuffer(string name, ulong buffer, ulong size)
     {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->import_buffer(Handle, name, buffer, size, &resultOut), "import_buffer");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_buffer(Handle, (sbyte*)namePtr, buffer, size, &resultOut), "import_buffer");
+            return resultOut;
+        }
     }
 
     /// <returns>The tag cid minted for `name`, or KE_COMPONENT_INVALID.</returns>
-    public uint Cid(sbyte* name)
+    public ComponentId Cid(string name)
     {
-        return Handle->cid(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->cid(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>Opens a pass's recording context, from inside a render system's body.</summary>
-    public ke_render_pass_ctx* BeginPass(ke_render_pass_io* io)
+    public RenderPassCtx BeginPass(RenderPassIo io)
     {
-        return Handle->begin_pass(Handle, io);
+        return new RenderPassCtx((nint)Handle->begin_pass(Handle, (RenderPassIo*)&io));
     }
 
     /// <summary>Closes a recording context opened by begin_pass.</summary>
-    public void EndPass(ke_render_pass_ctx* ctx)
+    public void EndPass(RenderPassCtx ctx)
     {
-        Handle->end_pass(Handle, ctx);
+        Handle->end_pass(Handle, (ke_render_pass_ctx*)ctx.Address);
     }
 
     /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer"), clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
@@ -121,33 +172,40 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="vertices">Interleaved vertices.</param>
     /// <param name="indices">Triangle list indices.</param>
     /// <returns>Receives the handle of the uploaded mesh.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_mesh_handle UploadMesh(string key, void* vertices, nuint verticesSize, ReadOnlySpan<ushort> indices)
+    public MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices)
     {
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-            fixed (ushort* indicesPtr = indices)
+            fixed (MeshVertex* verticesPtr = vertices)
             {
-                ke_mesh_handle resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_mesh(Handle, (sbyte*)keyPtr, vertices, verticesSize, indicesPtr, (uint)indices.Length, &resultOut), "upload_mesh");
-                return resultOut;
+                fixed (ushort* indicesPtr = indices)
+                {
+                    MeshHandle resultOut = default;
+                    KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_mesh(Handle, (sbyte*)keyPtr, verticesPtr, (uint)vertices.Length, indicesPtr, (uint)indices.Length, &resultOut), "upload_mesh");
+                    return resultOut;
+                }
             }
         }
     }
 
     /// <summary>Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.</summary>
-    public bool TryMeshBuffers(ke_mesh_handle h, out ulong vbo, out ulong ibo, out uint indexCount)
+    public bool TryMeshBuffers(MeshHandle h, out ulong outVbo, out ulong outIbo, out uint outIndexCount)
     {
-        ulong vboLocal;
-        ulong iboLocal;
-        uint indexCountLocal;
-        var found = Handle->mesh_buffers(Handle, h, &vboLocal, &iboLocal, &indexCountLocal);
-        vbo = vboLocal;
-        ibo = iboLocal;
-        indexCount = indexCountLocal;
+        ulong outVboLocal;
+        ulong outIboLocal;
+        uint outIndexCountLocal;
+        var found = Handle->mesh_buffers(Handle, h, &outVboLocal, &outIboLocal, &outIndexCountLocal);
+        outVbo = outVboLocal;
+        outIbo = outIboLocal;
+        outIndexCount = outIndexCountLocal;
         return found;
     }
 
@@ -158,159 +216,209 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="rgba">RGBA8 pixels in row order; width by height by four bytes.</param>
     /// <returns>Receives the handle of the uploaded texture.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_texture_handle UploadTexture(string key, uint width, uint height, void* rgba)
+    public TextureHandle UploadTexture(string key, uint width, uint height, ReadOnlySpan<byte> rgba)
     {
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_texture_handle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, rgba, &resultOut), "upload_texture");
-            return resultOut;
+            fixed (byte* rgbaPtr = rgba)
+            {
+                TextureHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_texture(Handle, (sbyte*)keyPtr, width, height, rgbaPtr, (nuint)rgba.Length, &resultOut), "upload_texture");
+                return resultOut;
+            }
         }
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="albedo">KE_TEXTURE_NONE selects the white texture.</param>
+    /// <param name="normal">KE_TEXTURE_NONE selects a flat normal.</param>
     /// <param name="shader">Authored material name; NULL/empty selects the engine default.</param>
     /// <returns>Receives the handle of the material.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_material_handle CreateMaterial(string key, float* baseColor, float metallic, float roughness, ke_texture_handle albedo, ke_texture_handle normal, ke_alpha_mode alphaMode, float alphaCutoff, float ior, float distortionStrength, string shader)
+    public MaterialHandle CreateMaterial(string key, System.Numerics.Vector4 baseColor, float metallic = 0f, float roughness = 0.5f, TextureHandle albedo = default, TextureHandle normal = default, AlphaMode alphaMode = AlphaMode.Opaque, float alphaCutoff = 0.5f, float ior = 1.5f, float distortionStrength = 0.05f, string shader = "")
     {
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-        var shaderBytes = System.Text.Encoding.UTF8.GetBytes(shader + '\0');
-        fixed (byte* shaderPtr = shaderBytes)
-        {
-                ke_material_handle resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (sbyte*)keyPtr, baseColor, metallic, roughness, albedo, normal, alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &resultOut), "create_material");
+            var shaderText = shader ?? "";
+            var shaderSize = System.Text.Encoding.UTF8.GetMaxByteCount(shaderText.Length) + 1;
+            Span<byte> shaderBytes = shaderSize <= 512 ? stackalloc byte[512] : new byte[shaderSize];
+            shaderBytes[System.Text.Encoding.UTF8.GetBytes(shaderText, shaderBytes)] = 0;
+            fixed (byte* shaderPtr = shaderBytes)
+            {
+                MaterialHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (sbyte*)keyPtr, baseColor, metallic, roughness, albedo, normal, (AlphaMode)alphaMode, alphaCutoff, ior, distortionStrength, (sbyte*)shaderPtr, &resultOut), "create_material");
                 return resultOut;
             }
         }
     }
 
     /// <summary>What the service's resource binder holds for a material handle, the argument a pass gives its bind_material; an unknown handle resolves to the built-in white material.</summary>
-    public ulong MaterialBinding(ke_material_handle h)
+    public ulong MaterialBinding(MaterialHandle h)
     {
         return Handle->material_binding(Handle, h);
     }
 
     /// <summary>The pass bucket for a material handle, resolved from CPU-side storage — no GPU state touched.</summary>
-    public ke_alpha_mode MaterialAlphaMode(ke_material_handle h)
+    public AlphaMode MaterialAlphaMode(MaterialHandle h)
     {
-        return Handle->material_alpha_mode(Handle, h);
+        return (AlphaMode)Handle->material_alpha_mode(Handle, h);
     }
 
     /// <summary>The MASK discard threshold for a material handle.</summary>
-    public float MaterialAlphaCutoff(ke_material_handle h)
+    public float MaterialAlphaCutoff(MaterialHandle h)
     {
         return Handle->material_alpha_cutoff(Handle, h);
     }
 
     /// <param name="key">Dedup cache key; required.</param>
+    /// <param name="faces">Six square RGBA8 faces, in the order +X, -X, +Y, -Y, +Z, -Z.</param>
     /// <returns>Receives the handle of the uploaded cubemap.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ke_texture_handle UploadCubemap(string key, uint faceSize, void* faces)
+    public TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces)
     {
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
-            ke_texture_handle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, faces, &resultOut), "upload_cubemap");
-            return resultOut;
+            fixed (byte* facesPtr = faces)
+            {
+                TextureHandle resultOut = default;
+                KernelEngine.NativeResults.ThrowIfFailed(Handle->upload_cubemap(Handle, (sbyte*)keyPtr, faceSize, facesPtr, (nuint)faces.Length, &resultOut), "upload_cubemap");
+                return resultOut;
+            }
         }
     }
 
     /// <summary>The GPU view for a texture/cubemap handle.</summary>
-    public ulong TextureView(ke_texture_handle h)
+    public ulong TextureView(TextureHandle h)
     {
         return Handle->texture_view(Handle, h);
     }
 
     /// <summary>The GPU view of a declared transient resource, by name.</summary>
-    public ulong ResourceView(sbyte* name)
+    public ulong ResourceView(string name)
     {
-        return Handle->resource_view(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->resource_view(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.</summary>
-    public ulong ResourceTexture(sbyte* name)
+    public ulong ResourceTexture(string name)
     {
-        return Handle->resource_texture(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->resource_texture(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>The GPU buffer published under `name` via import_buffer.</summary>
-    public ulong ResourceBuffer(sbyte* name)
+    public ulong ResourceBuffer(string name)
     {
-        return Handle->resource_buffer(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->resource_buffer(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>The size (bytes) of the buffer published under `name`.</summary>
-    public ulong ResourceBufferSize(sbyte* name)
+    public ulong ResourceBufferSize(string name)
     {
-        return Handle->resource_buffer_size(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->resource_buffer_size(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
-    public (uint W, uint H) BackbufferSize()
+    public (uint OutW, uint OutH) BackbufferSize()
     {
-        uint w;
-        uint h;
-        Handle->backbuffer_size(Handle, &w, &h);
-        return (w, h);
+        uint outW;
+        uint outH;
+        Handle->backbuffer_size(Handle, &outW, &outH);
+        return (outW, outH);
     }
 
     /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit).</summary>
-    public void Upload(ulong buffer, ulong offset, void* data, nuint size)
+    public void Upload(ulong buffer, ulong offset, nint data, nuint size)
     {
-        Handle->upload(Handle, buffer, offset, data, size);
+        Handle->upload(Handle, buffer, offset, (void*)data, size);
     }
 
     /// <summary>Returns the pipeline for this exact params state, compiling it on first request.</summary>
-    public ulong GetOrCreatePipeline(ke_gpu_render_pipeline_params* @params)
+    public ulong GetOrCreatePipeline(nint @params)
     {
-        return Handle->get_or_create_pipeline(Handle, @params);
+        return Handle->get_or_create_pipeline(Handle, (ke_gpu_render_pipeline_params*)@params);
     }
 
     /// <summary>The authored-material shader name a material handle was created with (see create_material's `shader`).</summary>
-    public sbyte* MaterialShader(ke_material_handle h)
+    public string MaterialShader(MaterialHandle h)
     {
-        return Handle->material_shader(Handle, h);
+        return Marshal.PtrToStringUTF8((nint)Handle->material_shader(Handle, h)) ?? "";
     }
 
     /// <summary>Adds a reference to a mesh, keeping it resident.</summary>
-    public void RetainMesh(ke_mesh_handle h)
+    public void RetainMesh(MeshHandle h)
     {
         Handle->retain_mesh(Handle, h);
     }
 
     /// <summary>Drops a reference to a mesh, freeing it at zero.</summary>
-    public void ReleaseMesh(ke_mesh_handle h)
+    public void ReleaseMesh(MeshHandle h)
     {
         Handle->release_mesh(Handle, h);
     }
 
     /// <summary>Adds a reference to a texture, keeping it resident.</summary>
-    public void RetainTexture(ke_texture_handle h)
+    public void RetainTexture(TextureHandle h)
     {
         Handle->retain_texture(Handle, h);
     }
 
     /// <summary>Drops a reference to a texture, freeing it at zero.</summary>
-    public void ReleaseTexture(ke_texture_handle h)
+    public void ReleaseTexture(TextureHandle h)
     {
         Handle->release_texture(Handle, h);
     }
 
     /// <summary>Adds a reference to a material, keeping it resident.</summary>
-    public void RetainMaterial(ke_material_handle h)
+    public void RetainMaterial(MaterialHandle h)
     {
         Handle->retain_material(Handle, h);
     }
 
     /// <summary>Drops a reference to a material, freeing it at zero.</summary>
-    public void ReleaseMaterial(ke_material_handle h)
+    public void ReleaseMaterial(MaterialHandle h)
     {
         Handle->release_material(Handle, h);
     }
@@ -318,10 +426,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Path-keyed probe for a resident mesh upload: on a hit, retains and writes the resident handle to `out`. try_get_texture also serves cubemaps (shared cache).</summary>
     /// <param name="key">Dedup cache key.</param>
     /// <param name="@out">Receives the resident handle on a cache hit.</param>
-    public bool TryGetMesh(string key, out ke_mesh_handle @out)
+    public bool TryGetMesh(string key, out MeshHandle @out)
     {
-        ke_mesh_handle @outLocal;
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        MeshHandle @outLocal;
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
             var found = Handle->try_get_mesh(Handle, (sbyte*)keyPtr, &@outLocal);
@@ -333,10 +444,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Path-keyed probe for a resident texture upload.</summary>
     /// <param name="key">Dedup cache key.</param>
     /// <param name="@out">Receives the resident handle on a cache hit.</param>
-    public bool TryGetTexture(string key, out ke_texture_handle @out)
+    public bool TryGetTexture(string key, out TextureHandle @out)
     {
-        ke_texture_handle @outLocal;
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        TextureHandle @outLocal;
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
             var found = Handle->try_get_texture(Handle, (sbyte*)keyPtr, &@outLocal);
@@ -348,10 +462,13 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Path-keyed probe for a resident material.</summary>
     /// <param name="key">Dedup cache key.</param>
     /// <param name="@out">Receives the resident handle on a cache hit.</param>
-    public bool TryGetMaterial(string key, out ke_material_handle @out)
+    public bool TryGetMaterial(string key, out MaterialHandle @out)
     {
-        ke_material_handle @outLocal;
-        var keyBytes = System.Text.Encoding.UTF8.GetBytes(key + '\0');
+        MaterialHandle @outLocal;
+        var keyText = key ?? "";
+        var keySize = System.Text.Encoding.UTF8.GetMaxByteCount(keyText.Length) + 1;
+        Span<byte> keyBytes = keySize <= 512 ? stackalloc byte[512] : new byte[keySize];
+        keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
         fixed (byte* keyPtr = keyBytes)
         {
             var found = Handle->try_get_material(Handle, (sbyte*)keyPtr, &@outLocal);
@@ -361,7 +478,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>The built-in 1×1 white texture, resolvable everywhere a neutral albedo is wanted.</summary>
-    public ke_texture_handle WhiteTexture()
+    public TextureHandle WhiteTexture()
     {
         return Handle->white_texture(Handle);
     }
@@ -369,53 +486,67 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
     /// <returns>Receives the module.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong LoadShader(sbyte* name, uint stage)
+    public ulong LoadShader(string name, uint stage)
     {
-        ulong resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->load_shader(Handle, name, stage, &resultOut), "load_shader");
-        return resultOut;
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ulong resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->load_shader(Handle, (sbyte*)namePtr, stage, &resultOut), "load_shader");
+            return resultOut;
+        }
     }
 
     /// <summary>Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.</summary>
-    public void SetFrameGlobals(ke_render_frame_globals* globals)
+    public void SetFrameGlobals(RenderFrameGlobals globals)
     {
-        Handle->set_frame_globals(Handle, globals);
+        Handle->set_frame_globals(Handle, (RenderFrameGlobals*)&globals);
     }
 
     /// <summary>The frame globals last set, zero before the first.</summary>
-    public ke_render_frame_globals* FrameGlobals()
+    public RenderFrameGlobals FrameGlobals()
     {
-        return Handle->frame_globals(Handle);
+        return *(RenderFrameGlobals*)Handle->frame_globals(Handle);
     }
 
     /// <summary>Replaces the scene's light and records its upload; a shader reads it as `ke_lighting`.</summary>
-    public void SetLighting(ke_render_lighting* lighting)
+    public void SetLighting(RenderLighting lighting)
     {
-        Handle->set_lighting(Handle, lighting);
+        Handle->set_lighting(Handle, (RenderLighting*)&lighting);
     }
 
     /// <summary>The scene's light last set, zero before the first.</summary>
-    public ke_render_lighting* Lighting()
+    public RenderLighting Lighting()
     {
-        return Handle->lighting(Handle);
+        return *(RenderLighting*)Handle->lighting(Handle);
     }
 
     /// <summary>The resource binder the service was created with, through which a pass brings its resources to its shaders; the service has given it `ke_frame`, `ke_lighting` and the `ke_samp_*` samplers.</summary>
-    public ke_render_resource_binder* ResourceBinder()
+    public nint ResourceBinder()
     {
-        return Handle->resource_binder(Handle);
+        return (nint)Handle->resource_binder(Handle);
     }
 
     /// <summary>Texel format of the backbuffer, the format a pipeline drawing into it declares.</summary>
-    public ke_gpu_texture_format BackbufferFormat()
+    public GpuTextureFormat BackbufferFormat()
     {
-        return Handle->backbuffer_format(Handle);
+        return (GpuTextureFormat)Handle->backbuffer_format(Handle);
     }
 
     /// <summary>Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.</summary>
-    public ke_gpu_texture_format ResourceFormat(sbyte* name)
+    public GpuTextureFormat ResourceFormat(string name)
     {
-        return Handle->resource_format(Handle, name);
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return (GpuTextureFormat)Handle->resource_format(Handle, (sbyte*)namePtr);
+        }
     }
 
     /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>
@@ -430,7 +561,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     public uint JoinChain(RenderStage stage, RenderChainMode mode)
     {
         uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->join_chain(Handle, (ke_render_stage)stage, (ke_render_chain_mode)mode, &resultOut), "join_chain");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->join_chain(Handle, (RenderStage)stage, (RenderChainMode)mode, &resultOut), "join_chain");
         return resultOut;
     }
 
@@ -441,9 +572,9 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService
     }
 
     /// <summary>Texel format of the color a pass of stage draws into, the format its pipeline declares.</summary>
-    public ke_gpu_texture_format ChainFormat(RenderStage stage)
+    public GpuTextureFormat ChainFormat(RenderStage stage)
     {
-        return Handle->chain_format(Handle, (ke_render_stage)stage);
+        return (GpuTextureFormat)Handle->chain_format(Handle, (RenderStage)stage);
     }
 
     /// <summary>Releases the native renderservice.</summary>

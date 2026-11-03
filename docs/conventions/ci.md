@@ -49,13 +49,13 @@ Three more stages exist for the Windows target and are run only when named: `cro
 compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
-The eleven gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `out-params`,
+The eleven gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction`, `out-params` and `zig`,
 and the engine's scripts `check_abi_layout`, `check_component_fields`, `check_docs`, `check_engine_rules`, `check_generator_contract` and
 `check_managed_handwritten`. `check_docs` checks that a map or a guide names only what the sources declare, that no document
 cites a line, and that every document is in the index. `check_engine_rules` checks the rules of `CLAUDE.md` that can be read off the tracked files, each
 against a ceiling that can only go down. The scripts are found by `verify.cs` rather than
 listed in the workflow, so a gate added under `scripts/` runs without the workflow being edited.
-What each one fails on is stated by the check itself, in `src/csharp/kabic/Kabic.Cli/` and in the
+What each one fails on is stated by the check itself, in the kabic repository, `src/Kabic.Cli/` and in the
 scripts. They are Linux-only: they compare generated text against headers and
 read no compiler or linker output, so the answer cannot differ by runner.
 

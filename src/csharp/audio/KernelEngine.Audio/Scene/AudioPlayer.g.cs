@@ -4,7 +4,11 @@
 #nullable enable
 
 using System.Numerics;
+
 using KernelEngine.Audio;
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 

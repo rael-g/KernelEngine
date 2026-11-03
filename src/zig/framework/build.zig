@@ -5,10 +5,10 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_framework",
         .root = "src/framework_root.zig",
-        .abi = &.{ "abi_asset", "abi_audio", "abi_ecs", "abi_framework", "abi_framework_factory", "abi_input", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
-        .common = &.{ "component_fields", "heap" },
-        .render_common = &.{"handle"},
+        .abi = &.{ "abi_framework_components", "abi_spatial_contract", "abi_render_contract", "abi_physics_contract", "abi_framework", "abi_audio_contract", "abi_world", "abi_ui_components", "abi_signal_bus", "abi_script_host", "abi_scene_tree", "abi_scene_loader", "abi_render_material", "abi_render_handles", "abi_render_components", "abi_physics_components", "abi_mesh_data", "abi_mesh", "abi_input_actions", "abi_image_loader", "abi_ecs_variant", "abi_audio_components", "abi_asset_resolver", "abi_audio", "abi_ecs", "abi_framework_factory", "abi_input", "abi_io", "abi_math", "abi_physics", "abi_render", "abi_result", "abi_runtime", "abi_spatial", "abi_text" },
+        .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,
         .tests = "Run unit tests",
     });

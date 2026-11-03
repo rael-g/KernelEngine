@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_FRAMEWORK_INPUT_ACTIONS_CREATE_H_
 
 #include <kernel_engine/framework/input_actions.h>
+#include <kernel_engine/io/io.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -25,10 +26,12 @@ extern "C"
 #endif
 
     /// Creates an empty action map.
+    /// @param io [borrowed] What load reads its file through; must outlive the map.
     /// @param out_actions [out] Receives the map; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_actions, or
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p io or @p out_actions, or
     ///         KE_RESULT_OUT_OF_MEMORY.
     KE_FRAMEWORK_API ke_result ke_input_actions_create(
+        ke_io                   *io,
         ke_input_actions_handle *out_actions);
 
 #ifdef __cplusplus

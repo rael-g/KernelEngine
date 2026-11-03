@@ -12,8 +12,10 @@
 #include <kernel_engine/render/frame/frame_create.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/scheduler/scheduler.h>
-#include <kernel_engine/scheduler/enki/enki_scheduler.h>
+#include <kernel_engine/task_pool/task_pool.h>
+#include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/file_system/std/file_system_std_create.h>
+#include <kernel_engine/io/pool/io_pool_create.h>
 #include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/runtime/runtime_create.h>
 
@@ -45,12 +47,11 @@ static double now_seconds(void)
 int main(void)
 {
     printf("--- c_demo_13: clear screen via runtime-driven render passes ---\n");
-    ke_window_glfw_params wp = {
-        .input = NULL,
+    ke_window_glfw_config wp = {
         .title = "c_demo_13 runtime clear", .width = 1024, .height = 640,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(&wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window", made_window);
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init", window_ready);
@@ -62,41 +63,41 @@ int main(void)
     ke_gpu_render_target_handle target = { 0 };
     check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
 
-    ke_ecs_flecs_params ep = { .world_id_base = 0 };
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(&ep, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(NULL, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
-    ke_scheduler_handle sched = { 0 };
-    ke_result made = ke_scheduler_enki_create(NULL, &sched);
-    if (made != KE_OK) die_result("scheduler", made);
+    ke_task_pool_handle pool = { 0 };
+    ke_result made = ke_task_pool_enki_create(NULL, &pool);
+    if (made != KE_OK) die_result("task pool", made);
 
     ke_runtime_params rp = { 0 };
     ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, sched.ref, &rp, &rt);
+    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &rp, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
+    ke_file_system_handle files = { 0 };
+    check("file system", ke_file_system_std_create(NULL, &files));
+    ke_io_handle file_io = { 0 };
+    check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     ke_render_resource_binder_handle binder = { 0 };
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders" }, &binder));
+    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
     ke_render_service_handle service = { 0 };
     check("render service", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .binder = binder.ref }, &service));
+        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &service));
 
-    ke_ndc_convention ndc = gpu.ref->get_ndc_convention(gpu.ref);
     ke_view_space_handle view_space = { 0 };
     ke_result made_view = ke_view_space_rh_create(&view_space);
     if (made_view != KE_OK) die_result("view space", made_view);
     ke_render_camera_handle camera = { 0 };
-    check("camera", ke_render_camera_create(view_space.ref, &ndc, &camera));
+    check("camera", ke_render_camera_create(view_space.ref, gpu.ref, &camera));
 
     ke_render_scene_resolve_handle scene = { 0 };
     check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt.ref, .ecs = ecs.ref, .service = service.ref }, &scene));
-    const ke_render_scene_component_ids *ids = scene.ref->component_ids(scene.ref);
     ke_render_frame_handle frame = { 0 };
     check("frame", ke_render_frame_create(&(ke_render_frame_params){
         .runtime = rt.ref, .ecs = ecs.ref, .service = service.ref, .camera = camera.ref,
-        .camera_cid = ids->camera, .world_transform_cid = ids->world_transform,
-        .directional_light_cid = ids->directional_light, .ambient_light_cid = ids->ambient_light }, &frame));
+        .scene = scene.ref }, &frame));
 
     printf("Clearing the screen through the runtime each tick. Close to exit.\n");
     double prev = now_seconds();
@@ -118,7 +119,9 @@ int main(void)
     binder.destroy(binder.ref);
     view_space.destroy(view_space.ref);
     rt.destroy(rt.ref);
-    sched.destroy(sched.ref);
+    file_io.destroy(file_io.ref);
+    files.destroy(files.ref);
+    pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);

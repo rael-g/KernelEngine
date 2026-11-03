@@ -10,13 +10,15 @@ extern "C"
 {
 #endif
 
+    /// [id]
     typedef uint64_t ke_entity;
 #define KE_ENTITY_INVALID 0
 
+    /// [id]
     typedef uint32_t ke_component_id;
 #define KE_COMPONENT_INVALID 0
 
-    /// What a component type is registered with.
+    /// [bag] What a component type is registered with.
     typedef struct ke_component_params
     {
         const char               *name;        ///< [borrowed,utf8] Unique component name.

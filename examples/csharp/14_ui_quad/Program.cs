@@ -2,14 +2,16 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Native;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.Window;
@@ -20,10 +22,12 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .AddTextStbTrueType()
+    .AddStbFontLoader()
     .AddAssetResolver()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
@@ -98,7 +102,7 @@ Console.WriteLine("[14_ui_quad] Exited cleanly.");
 
 sealed class BackgroundQuad : Node
 {
-    private uint _quadCid;
+    private ComponentId _quadCid;
 
     protected override void OnBind(ScriptHost scriptHost) =>
         _quadCid = scriptHost.CidOfName("ui_quad");
@@ -107,22 +111,22 @@ sealed class BackgroundQuad : Node
 
     protected override void OnUpdate(in View view)
     {
-        var quad = new ke_ui_quad_component
+        var quad = new UiQuadComponent
         {
-            texture_bits = TextureHandle.None.Value,
-            dst_x = 360,
-            dst_y = 220,
-            dst_w = 240,
-            dst_h = 100,
-            u0 = 0,
-            v0 = 0,
-            u1 = 1,
-            v1 = 1,
+            TextureBits = uint.MaxValue,
+            DstX = 360,
+            DstY = 220,
+            DstW = 240,
+            DstH = 100,
+            U0 = 0,
+            V0 = 0,
+            U1 = 1,
+            V1 = 1,
         };
-        quad.color[0] = 0.20f * 0.5f;
-        quad.color[1] = 0.85f * 0.5f;
-        quad.color[2] = 0.30f * 0.5f;
-        quad.color[3] = 0.5f;
+        quad.Color[0] = 0.20f * 0.5f;
+        quad.Color[1] = 0.85f * 0.5f;
+        quad.Color[2] = 0.30f * 0.5f;
+        quad.Color[3] = 0.5f;
         Attach(in view, _quadCid, in quad);
     }
 }

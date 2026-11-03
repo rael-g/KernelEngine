@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -18,15 +20,17 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 07 Point Lights"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.02f, 0.02f, 0.02f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 07_point_lights");
         Console.WriteLine("[KernelEngine] Features: point_lights, multi_light_accumulation");
 
@@ -35,13 +39,13 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 2f, 15f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var mat = resources.CreateMaterial("grid_quad", Vector4.One, metallic: 0.1f, roughness: 0.5f);
 
         for (int x = -5; x <= 5; x += 2)
             for (int y = -5; y <= 5; y += 2)
             {
-                var n = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
+                var n = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = mat }, $"Quad_{x}_{y}");
                 n.Position = new Vector3(x, y, 0f);
             }
 

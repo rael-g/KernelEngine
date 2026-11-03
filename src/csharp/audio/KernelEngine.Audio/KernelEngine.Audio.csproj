@@ -8,7 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Audio.Abstractions\KernelEngine.Audio.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
@@ -25,4 +24,7 @@
 
   <Import Project="../../NativeDependencies.targets" />
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
 </Project>

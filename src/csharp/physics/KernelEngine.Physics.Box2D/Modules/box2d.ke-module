@@ -1,5 +1,5 @@
 id          = "KernelEngine.Physics.Box2D"
 using       = "KernelEngine.Physics.Box2D"
-extension   = "AddBox2D"
+extension   = "AddBox2dPhysics2D"
 csproj-ref  = "src/csharp/KernelEngine.Physics.Box2D/KernelEngine.Physics.Box2D.csproj"
 depends-on  = ["KernelEngine.Configuration"]

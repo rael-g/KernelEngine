@@ -25,7 +25,7 @@
 extern "C" {
 #endif
 
-/// @brief Construction parameters for the 2D body reconciliation system.
+/// [bag] @brief Construction parameters for the 2D body reconciliation system.
 typedef struct ke_physics_body2d_module_params
 {
     ke_runtime    *runtime;      ///< Registers the system; borrowed, must outlive the module.
@@ -36,6 +36,7 @@ typedef struct ke_physics_body2d_module_params
 
 typedef struct ke_physics_body2d_module ke_physics_body2d_module;
 
+/// [owner]
 typedef struct ke_physics_body2d_module_handle
 {
     ke_physics_body2d_module *ref;

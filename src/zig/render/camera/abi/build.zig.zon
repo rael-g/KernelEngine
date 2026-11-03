@@ -1,13 +1,14 @@
 .{
-    .name = .abi_render_camera,
+    .name = .abi_render_camera_factory,
     .version = "0.1.0",
-    .fingerprint = 0xd1aba7ee529a6be8,
+    .fingerprint = 0x5c6692f3eb3f5147,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_render = .{ .path = "../../../abi/render" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_view = .{ .path = "../../../abi/view" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_render = .{ .path = "../../../abi/render" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_view = .{ .path = "../../../abi/view" },
     },
     .paths = .{"."},
 }

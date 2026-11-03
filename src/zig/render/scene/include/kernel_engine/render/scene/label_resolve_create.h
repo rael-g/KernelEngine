@@ -4,7 +4,9 @@
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
+#include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
 #include <kernel_engine/runtime/runtime.h>
 
@@ -29,21 +31,22 @@ extern "C"
 
     typedef struct ke_render_label_resolve ke_render_label_resolve;
 
+    /// [owner]
     typedef struct ke_render_label_resolve_handle
     {
         ke_render_label_resolve *ref;
         void (*destroy)(ke_render_label_resolve *self);
     } ke_render_label_resolve_handle;
 
-    /// What the label resolve needs to give a label the font it names.
+    /// [bag] What the label resolve needs to give a label the font it names.
     typedef struct ke_render_label_resolve_params
     {
         ke_runtime        *runtime;   ///< Registers the system; borrowed, must outlive it.
         ke_render_service *service;   ///< Uploads the glyph atlas; borrowed, must outlive it.
         ke_render_ui      *ui;        ///< Registers the font; borrowed, must outlive it.
         /// Reads the font a label names; optional, borrowed. Without it every label is reported.
-        ke_asset_resolver *resolver;
-        ke_component_id    label_cid;
+        ke_asset_resolver *resolver; ///< [optional]
+        ke_render_scene_resolve *scene; ///< Names the label component; borrowed.
     } ke_render_label_resolve_params;
 
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's

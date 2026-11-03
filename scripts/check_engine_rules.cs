@@ -24,11 +24,10 @@ var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"std\.debug\.assert|\bassert\(|@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
-var pinning = new Regex(@"pinnedThread:|\.DispatchPinned\(|dispatch_pinned\.\?\(|\.pinned_thread = [1-9]");
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
 var errorLane = new Regex(@"\bke_error\s*\*\s*\*");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
-var bagName = new Regex(@"\bke_[a-z0-9_]*_(desc|descriptor|info|config)\b");
+var bagName = new Regex(@"\bke_[a-z0-9_]*_(params|descriptor|info)\b");
 var implName = new Regex(@"(?<![A-Za-z0-9])impl_[a-z]|[a-z0-9]Impl\b|[a-z0-9]_impl\b");
 var slashComment = new Regex(@"^\s*//(?![/!])");
 var hashComment = new Regex(@"^\s*#(?!!)");
@@ -65,12 +64,8 @@ var rules = new List<Rule>
         Lines(zig, l => abort.IsMatch(l), outsideTests: true).Concat(Lines(native, l => abort.IsMatch(l)))),
     new("no failure turned into a crash with `catch unreachable` or `orelse unreachable`", 4,
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
-    new("no mutex, condition variable or raw thread in a plugin; the scheduler synchronises", 0,
+    new("no mutex, condition variable or raw thread in a plugin; the task pool synchronises", 0,
         Lines(zig, l => threading.IsMatch(l), outsideTests: true)),
-    new("no system or task is pinned to a worker", 0,
-        Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(zig|cs)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)
-            && !s.Key.Contains("/scheduler/", StringComparison.Ordinal) && s.Key != "src/zig/runtime/src/runtime.zig"),
-            l => pinning.IsMatch(l), outsideTests: true)),
     new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
         tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)
                 && !p.StartsWith("src/zig/result/", StringComparison.Ordinal))
@@ -114,7 +109,7 @@ var rules = new List<Rule>
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("a parameter bag is named _params, never _desc, _descriptor, _info or _config", 0,
+    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 43,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
@@ -124,7 +119,7 @@ var rules = new List<Rule>
         Lines(sources.Where(s => s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
     new("no comment in C besides a doc comment", 10,
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
-    new("no comment in C# besides a doc comment", 6,
+    new("no comment in C# besides a doc comment", 0,
         Lines(managed, l => slashComment.IsMatch(l))),
     new("a shader in the engine leaves its binding numbers to the compiler", 0,
         Lines(sources.Where(s => s.Key.StartsWith("src/", StringComparison.Ordinal) && s.Key.EndsWith(".slang", StringComparison.Ordinal)), l => shaderBindingNumber.IsMatch(l))),

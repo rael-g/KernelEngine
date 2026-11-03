@@ -4,6 +4,7 @@
 #include <kernel_engine/framework/scene_loader.h>
 #include <kernel_engine/framework/world.h>
 #include <kernel_engine/asset/asset_resolver.h>
+#include <kernel_engine/io/io.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -34,12 +35,15 @@ extern "C"
     /// String lifetime: a value a block authors into a char field is copied into
     /// the component, but the parsed entries themselves come from an arena freed
     /// at loader.destroy(). Nothing the loader wrote outlives it by reference.
+    /// @param io [borrowed] What every scene file is read through; must outlive the loader.
     /// @param out_loader [out] Receives the loader; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p world or @p out_loader, or
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p world, @p assets, @p io or
+    ///         @p out_loader, or
     ///         KE_RESULT_OUT_OF_MEMORY.
     KE_FRAMEWORK_API ke_result ke_scene_loader_create(
         struct ke_world        *world,
         ke_asset_resolver      *assets,
+        ke_io                  *io,
         ke_scene_loader_handle *out_loader);
 
 #ifdef __cplusplus

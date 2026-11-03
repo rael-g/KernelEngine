@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_CONFIGURATION_TOML_CONFIGURATION_TOML_H_
 
 #include <kernel_engine/configuration/configuration_source.h>
+#include <kernel_engine/io/io.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_CONFIGURATION_TOML_EXPORT
@@ -20,13 +21,15 @@ extern "C"
 {
 #endif
 
-    /// Creates a configuration source that reads a TOML file: each table becomes a section named
-    /// by its path joined with dots, arrays are skipped, and every other key is written as an
-    /// integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.
+    /// Creates a configuration source that reads a TOML file through @p io: each table
+    /// becomes a section named by its path joined with dots, arrays are skipped, and every other
+    /// key is written as an integer, a double, a boolean or a string, tried in that order. A parse
+    /// error writes nothing.
+    /// @param io [borrowed] The io it reads through; borrowed for the lifetime of the source.
     /// @param out_source [out] Receives the source; left zeroed on failure.
-    /// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_source, or
+    /// @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p io or @p out_source, or
     ///         KE_RESULT_OUT_OF_MEMORY.
-    KE_CONFIGURATION_TOML_API ke_result ke_configuration_toml_create(ke_configuration_source_handle *out_source);
+    KE_CONFIGURATION_TOML_API ke_result ke_configuration_toml_create(ke_io *io, ke_configuration_source_handle *out_source);
 
 #ifdef __cplusplus
 }

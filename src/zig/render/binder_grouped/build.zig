@@ -5,11 +5,11 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_render_binder_grouped",
         .root = "src/resource_binder_grouped.zig",
-        .abi = &.{ "abi_render", "abi_render_binder_grouped_factory", "abi_result" },
-        .common = &.{ "heap", "stubs" },
-        .render_common = &.{"shader_files"},
+        .abi = &.{ "abi_render_gpu", "abi_asset_resolver", "abi_io", "abi_render", "abi_render_binder_grouped_factory", "abi_result" },
+        .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
         .third_party = materialParams,
+        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .tests = "Run the grouped resource binder unit tests",
     });
 }

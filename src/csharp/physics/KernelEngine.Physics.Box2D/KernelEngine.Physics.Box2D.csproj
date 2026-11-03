@@ -12,6 +12,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
   </ItemGroup>
@@ -20,4 +21,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
 </Project>

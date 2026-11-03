@@ -1,3 +1,7 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
@@ -6,7 +10,7 @@ namespace KernelEngine.Ecs.Native;
 public unsafe partial struct ke_ecs_segment
 {
     [NativeTypeName("const ke_entity *")]
-    public ulong* entities;
+    public global::KernelEngine.Ecs.Entity* entities;
 
     [NativeTypeName("size_t")]
     public nuint count;

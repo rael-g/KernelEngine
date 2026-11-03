@@ -87,7 +87,7 @@ extern "C"
                                     ke_camera_frustum         *out_frustum);
     } ke_render_camera;
 
-    /** Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
+    /** [owner] Owning wrapper: `ref` borrows for the lifetime, `destroy` ends it. */
     typedef struct ke_render_camera_handle
     {
         ke_render_camera *ref;

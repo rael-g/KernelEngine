@@ -1,6 +1,9 @@
 //! The render camera: view and projection matrices for a camera component, delegated to the view
 //! space the camera is created over.
 
+const abi_render_contract = @import("abi_render_contract");
+const abi_render_components = @import("abi_render_components");
+const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_camera").logFn };
@@ -18,17 +21,17 @@ const R = @import("result").Result(.{});
 /// `view_space` is kept by pointer, so the view space must outlive the camera; `clip` is a value
 /// copied at creation.
 const State = struct {
-    api: abi_render.ke_render_camera,
-    view_space: *abi_view.ke_view_space,
-    clip: abi_render.ke_ndc_convention,
+    api: abi_render.c.ke_render_camera,
+    view_space: *abi_view.c.ke_view_space,
+    clip: abi_render_gpu.c.ke_ndc_convention,
 };
 
-fn stateOf(self: *abi_render.ke_render_camera) *State {
+fn stateOf(self: *abi_render.c.ke_render_camera) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
 /// Leaves the output untouched when the view space has no `view_from_transform`.
-fn viewOf(s: *State, camera_world: [*c]const abi_math.ke_mat4, out_view: [*c]abi_math.ke_mat4) void {
+fn viewOf(s: *State, camera_world: [*c]const abi_math.c.ke_mat4, out_view: [*c]abi_math.c.ke_mat4) void {
     const from_transform = s.view_space.view_from_transform orelse return;
     from_transform(s.view_space, camera_world, out_view);
 }
@@ -36,9 +39,9 @@ fn viewOf(s: *State, camera_world: [*c]const abi_math.ke_mat4, out_view: [*c]abi
 /// Writes the view of the camera's world transform, as the view space derives it. Writes nothing
 /// when self, the transform or the output is null, or when the view space cannot derive a view.
 fn cameraView(
-    self_in: ?*abi_render.ke_render_camera,
-    camera_world: [*c]const abi_math.ke_mat4,
-    out_view: [*c]abi_math.ke_mat4,
+    self_in: ?*abi_render.c.ke_render_camera,
+    camera_world: [*c]const abi_math.c.ke_mat4,
+    out_view: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera_world == null or out_view == null) return;
@@ -48,9 +51,9 @@ fn cameraView(
 /// Like `cameraView`, then clears the translation column, so only the rotation remains. The
 /// column is cleared even when the view space wrote nothing.
 fn cameraViewRotation(
-    self_in: ?*abi_render.ke_render_camera,
-    camera_world: [*c]const abi_math.ke_mat4,
-    out_view: [*c]abi_math.ke_mat4,
+    self_in: ?*abi_render.c.ke_render_camera,
+    camera_world: [*c]const abi_math.c.ke_mat4,
+    out_view: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera_world == null or out_view == null) return;
@@ -64,7 +67,7 @@ fn cameraViewRotation(
 /// Reached from `cameraProjection` for a component that is not orthographic, and from
 /// `cameraPerspectiveProjection` for any component. The clip convention passed on is the copy
 /// made at creation, not a pointer the caller supplied.
-fn perspective(s: *State, camera: [*c]const abi_render.ke_camera_component, aspect: f32, out_proj: [*c]abi_math.ke_mat4) void {
+fn perspective(s: *State, camera: [*c]const abi_render_components.c.ke_camera_component, aspect: f32, out_proj: [*c]abi_math.c.ke_mat4) void {
     const build = s.view_space.perspective orelse return;
     const fov_y = camera.*.fov * std.math.rad_per_deg;
     build(s.view_space, fov_y, aspect, camera.*.near_plane, camera.*.far_plane, &s.clip, out_proj);
@@ -74,10 +77,10 @@ fn perspective(s: *State, camera: [*c]const abi_render.ke_camera_component, aspe
 /// and the aspect times that wide, when its orthographic flag is set; perspective otherwise.
 /// Writes nothing on a null argument or when the view space lacks the function it needs.
 fn cameraProjection(
-    self_in: ?*abi_render.ke_render_camera,
-    camera: [*c]const abi_render.ke_camera_component,
+    self_in: ?*abi_render.c.ke_render_camera,
+    camera: [*c]const abi_render_components.c.ke_camera_component,
     aspect: f32,
-    out_proj: [*c]abi_math.ke_mat4,
+    out_proj: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera == null or out_proj == null) return;
@@ -95,10 +98,10 @@ fn cameraProjection(
 /// Writes the perspective projection whatever the orthographic flag says. Writes nothing on a
 /// null argument or when the view space has no `perspective`.
 fn cameraPerspectiveProjection(
-    self_in: ?*abi_render.ke_render_camera,
-    camera: [*c]const abi_render.ke_camera_component,
+    self_in: ?*abi_render.c.ke_render_camera,
+    camera: [*c]const abi_render_components.c.ke_camera_component,
     aspect: f32,
-    out_proj: [*c]abi_math.ke_mat4,
+    out_proj: [*c]abi_math.c.ke_mat4,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera == null or out_proj == null) return;
@@ -108,10 +111,10 @@ fn cameraPerspectiveProjection(
 /// The one slot computed here rather than by the view space. It needs no view space function, so
 /// it answers even when the view space has no `perspective`, and it reports the planes as given.
 fn cameraPerspectiveFrustum(
-    self_in: ?*abi_render.ke_render_camera,
-    camera: [*c]const abi_render.ke_camera_component,
+    self_in: ?*abi_render.c.ke_render_camera,
+    camera: [*c]const abi_render_components.c.ke_camera_component,
     aspect: f32,
-    out_frustum: [*c]abi_render.ke_camera_frustum,
+    out_frustum: [*c]abi_render.c.ke_camera_frustum,
 ) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null or camera == null or out_frustum == null) return;
@@ -124,7 +127,7 @@ fn cameraPerspectiveFrustum(
 }
 
 /// Frees the `State` only. The view space it points to was borrowed at creation and is left alone.
-fn destroy(self_in: ?*abi_render.ke_render_camera) callconv(.c) void {
+fn destroy(self_in: ?*abi_render.c.ke_render_camera) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     heap.gpa.destroy(stateOf(self));
@@ -137,17 +140,17 @@ fn destroy(self_in: ?*abi_render.ke_render_camera) callconv(.c) void {
 /// A missing view space or clip convention fails as an invalid argument and a failed allocation
 /// as out of memory, the handle left zeroed and nothing allocated.
 export fn ke_render_camera_create(
-    view_space: ?*abi_view.ke_view_space,
-    clip: [*c]const abi_render.ke_ndc_convention,
-    out_camera: [*c]abi_render.ke_render_camera_handle,
-) callconv(.c) abi_result.ke_result {
+    view_space: ?*abi_view.c.ke_view_space,
+    device: ?*abi_render_gpu.c.ke_gpu_device,
+    out_camera: [*c]abi_render.c.ke_render_camera_handle,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_camera orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_render.ke_render_camera_handle);
+    out.* = std.mem.zeroes(abi_render.c.ke_render_camera_handle);
     const vs = view_space orelse return R.code(error.InvalidArgument);
-    if (clip == null) return R.code(error.InvalidArgument);
+    const gpu = device orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
-    s.* = .{ .api = std.mem.zeroes(abi_render.ke_render_camera), .view_space = vs, .clip = clip.* };
+    s.* = .{ .api = std.mem.zeroes(abi_render.c.ke_render_camera), .view_space = vs, .clip = gpu.get_ndc_convention.?(gpu) };
     s.api.handle = s;
     s.api.view = cameraView;
     s.api.view_rotation = cameraViewRotation;
@@ -167,47 +170,55 @@ const Recorded = struct {
     second: f32 = 0,
     near: f32 = 0,
     far: f32 = 0,
-    clip_seen: abi_render.ke_ndc_convention = std.mem.zeroes(abi_render.ke_ndc_convention),
+    clip_seen: abi_render_gpu.c.ke_ndc_convention = std.mem.zeroes(abi_render_gpu.c.ke_ndc_convention),
 };
 
 var orthographic_call: Recorded = .{};
 var perspective_call: Recorded = .{};
-var view_world_seen: abi_math.ke_mat4 = std.mem.zeroes(abi_math.ke_mat4);
+var view_world_seen: abi_math.c.ke_mat4 = std.mem.zeroes(abi_math.c.ke_mat4);
 var view_calls: u32 = 0;
 
-fn fakeOrthographic(_: ?*abi_view.ke_view_space, width: f32, height: f32, near_plane: f32, far_plane: f32, clip: [*c]const abi_render.ke_ndc_convention, _: [*c]abi_math.ke_mat4) callconv(.c) void {
+fn fakeOrthographic(_: ?*abi_view.c.ke_view_space, width: f32, height: f32, near_plane: f32, far_plane: f32, clip: [*c]const abi_render_gpu.c.ke_ndc_convention, _: [*c]abi_math.c.ke_mat4) callconv(.c) void {
     orthographic_call = .{ .calls = orthographic_call.calls + 1, .first = width, .second = height, .near = near_plane, .far = far_plane, .clip_seen = clip.* };
 }
 
-fn fakePerspective(_: ?*abi_view.ke_view_space, fov_y: f32, aspect: f32, near_plane: f32, far_plane: f32, clip: [*c]const abi_render.ke_ndc_convention, _: [*c]abi_math.ke_mat4) callconv(.c) void {
+fn fakePerspective(_: ?*abi_view.c.ke_view_space, fov_y: f32, aspect: f32, near_plane: f32, far_plane: f32, clip: [*c]const abi_render_gpu.c.ke_ndc_convention, _: [*c]abi_math.c.ke_mat4) callconv(.c) void {
     perspective_call = .{ .calls = perspective_call.calls + 1, .first = fov_y, .second = aspect, .near = near_plane, .far = far_plane, .clip_seen = clip.* };
 }
 
-fn fakeViewFromTransform(_: ?*abi_view.ke_view_space, camera_world: [*c]const abi_math.ke_mat4, out_view: [*c]abi_math.ke_mat4) callconv(.c) void {
+fn fakeViewFromTransform(_: ?*abi_view.c.ke_view_space, camera_world: [*c]const abi_math.c.ke_mat4, out_view: [*c]abi_math.c.ke_mat4) callconv(.c) void {
     view_calls += 1;
     view_world_seen = camera_world.*;
     const m: *[16]f32 = &out_view.*.m;
     for (m, 0..) |*slot, i| slot.* = @floatFromInt(i + 1);
 }
 
+fn fakeNdc(_: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) abi_render_gpu.c.ke_ndc_convention {
+    return .{ .z_zero_to_one = true, .y_flip = true };
+}
+
 const Fixture = struct {
-    view_space: abi_view.ke_view_space,
-    clip: abi_render.ke_ndc_convention,
-    handle: abi_render.ke_render_camera_handle,
+    view_space: abi_view.c.ke_view_space,
+    clip: abi_render_gpu.c.ke_ndc_convention,
+    handle: abi_render.c.ke_render_camera_handle,
+
+    device: abi_render_gpu.c.ke_gpu_device = undefined,
 
     fn init(self: *Fixture) void {
         orthographic_call = .{};
         perspective_call = .{};
         view_calls = 0;
-        self.view_space = std.mem.zeroes(abi_view.ke_view_space);
+        self.view_space = std.mem.zeroes(abi_view.c.ke_view_space);
         self.view_space.orthographic = &fakeOrthographic;
         self.view_space.perspective = &fakePerspective;
         self.view_space.view_from_transform = &fakeViewFromTransform;
         self.clip = .{ .z_zero_to_one = true, .y_flip = true };
-        _ = ke_render_camera_create(&self.view_space, &self.clip, &self.handle);
+        self.device = std.mem.zeroes(abi_render_gpu.c.ke_gpu_device);
+        self.device.get_ndc_convention = &fakeNdc;
+        _ = ke_render_camera_create(&self.view_space, &self.device, &self.handle);
     }
 
-    fn api(self: *Fixture) *abi_render.ke_render_camera {
+    fn api(self: *Fixture) *abi_render.c.ke_render_camera {
         return self.handle.ref.?;
     }
 
@@ -216,8 +227,8 @@ const Fixture = struct {
     }
 };
 
-fn makeCamera(fov: f32, orthographic: bool, size: f32) abi_render.ke_camera_component {
-    var cam = std.mem.zeroes(abi_render.ke_camera_component);
+fn makeCamera(fov: f32, orthographic: bool, size: f32) abi_render_components.c.ke_camera_component {
+    var cam = std.mem.zeroes(abi_render_components.c.ke_camera_component);
     cam.fov = fov;
     cam.near_plane = 0.5;
     cam.far_plane = 50;
@@ -231,7 +242,7 @@ test "an orthographic camera asks for a box twice its size tall and aspect times
     f.init();
     defer f.deinit();
     var cam = makeCamera(60, true, 5);
-    var proj: abi_math.ke_mat4 = undefined;
+    var proj: abi_math.c.ke_mat4 = undefined;
     f.api().projection.?(f.api(), &cam, 2, &proj);
 
     try testing.expectEqual(@as(u32, 1), orthographic_call.calls);
@@ -247,7 +258,7 @@ test "a perspective camera hands its field of view over in radians" {
     f.init();
     defer f.deinit();
     var cam = makeCamera(90, false, 5);
-    var proj: abi_math.ke_mat4 = undefined;
+    var proj: abi_math.c.ke_mat4 = undefined;
     f.api().projection.?(f.api(), &cam, 1.5, &proj);
 
     try testing.expectEqual(@as(u32, 0), orthographic_call.calls);
@@ -261,7 +272,7 @@ test "the perspective projection ignores a camera's orthographic flag" {
     f.init();
     defer f.deinit();
     var cam = makeCamera(90, true, 5);
-    var proj: abi_math.ke_mat4 = undefined;
+    var proj: abi_math.c.ke_mat4 = undefined;
     f.api().perspective_projection.?(f.api(), &cam, 1, &proj);
 
     try testing.expectEqual(@as(u32, 0), orthographic_call.calls);
@@ -274,7 +285,7 @@ test "projections are built in the clip convention the camera was created with" 
     defer f.deinit();
     f.clip.y_flip = false;
     var cam = makeCamera(60, false, 5);
-    var proj: abi_math.ke_mat4 = undefined;
+    var proj: abi_math.c.ke_mat4 = undefined;
     f.api().projection.?(f.api(), &cam, 1, &proj);
 
     try testing.expect(perspective_call.clip_seen.y_flip);
@@ -284,9 +295,9 @@ test "the view is the view space's view of the camera's world transform" {
     var f: Fixture = undefined;
     f.init();
     defer f.deinit();
-    var world = std.mem.zeroes(abi_math.ke_mat4);
+    var world = std.mem.zeroes(abi_math.c.ke_mat4);
     world.m[12] = 4;
-    var view: abi_math.ke_mat4 = undefined;
+    var view: abi_math.c.ke_mat4 = undefined;
     f.api().view.?(f.api(), &world, &view);
 
     try testing.expectEqual(@as(u32, 1), view_calls);
@@ -298,8 +309,8 @@ test "the rotation-only view drops the translation and keeps the rest" {
     var f: Fixture = undefined;
     f.init();
     defer f.deinit();
-    var world = std.mem.zeroes(abi_math.ke_mat4);
-    var view: abi_math.ke_mat4 = undefined;
+    var world = std.mem.zeroes(abi_math.c.ke_mat4);
+    var view: abi_math.c.ke_mat4 = undefined;
     f.api().view_rotation.?(f.api(), &world, &view);
 
     try testing.expectEqual(@as(f32, 0), view.m[12]);
@@ -314,7 +325,7 @@ test "the perspective frustum of a ninety degree camera has a half-angle tangent
     f.init();
     defer f.deinit();
     var cam = makeCamera(90, true, 5);
-    var frustum: abi_render.ke_camera_frustum = undefined;
+    var frustum: abi_render.c.ke_camera_frustum = undefined;
     f.api().perspective_frustum.?(f.api(), &cam, 2, &frustum);
 
     try testing.expectApproxEqAbs(@as(f32, 1), frustum.tan_half_fov_y, 1e-6);
@@ -329,9 +340,9 @@ test "every slot tolerates a null self, a null input and a null output" {
     defer f.deinit();
     const api = f.api();
     var cam = makeCamera(60, false, 5);
-    var world = std.mem.zeroes(abi_math.ke_mat4);
-    var mat = std.mem.zeroes(abi_math.ke_mat4);
-    var frustum = std.mem.zeroes(abi_render.ke_camera_frustum);
+    var world = std.mem.zeroes(abi_math.c.ke_mat4);
+    var mat = std.mem.zeroes(abi_math.c.ke_mat4);
+    var frustum = std.mem.zeroes(abi_render.c.ke_camera_frustum);
 
     api.view.?(null, &world, &mat);
     api.view.?(api, null, &mat);
@@ -356,13 +367,13 @@ test "every slot tolerates a null self, a null input and a null output" {
 }
 
 test "creation without a view space or a clip convention fails with no handle" {
-    var vs = std.mem.zeroes(abi_view.ke_view_space);
-    var clip = std.mem.zeroes(abi_render.ke_ndc_convention);
+    var vs = std.mem.zeroes(abi_view.c.ke_view_space);
+    var device = std.mem.zeroes(abi_render_gpu.c.ke_gpu_device);
 
-    var no_view_space: abi_render.ke_render_camera_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_camera_create(null, &clip, &no_view_space)));
+    var no_view_space: abi_render.c.ke_render_camera_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_camera_create(null, &device, &no_view_space)));
     try testing.expect(no_view_space.ref == null);
-    var no_clip: abi_render.ke_render_camera_handle = undefined;
+    var no_clip: abi_render.c.ke_render_camera_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_camera_create(&vs, null, &no_clip)));
     try testing.expect(no_clip.ref == null);
 }

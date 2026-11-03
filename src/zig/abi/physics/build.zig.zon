@@ -1,13 +1,11 @@
 .{
-    .name = .ke_abi_physics,
+    .name = .abi_physics,
     .version = "0.1.0",
-    .fingerprint = 0x32be128e5d5f995f,
+    .fingerprint = 0x1654c251f4d5ab00,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_ecs = .{ .path = "../ecs" },
-        .ke_abi_math = .{ .path = "../math" },
-        .ke_abi_result = .{ .path = "../result" },
-        .ke_abi_spatial = .{ .path = "../spatial" },
+        .abi_math = .{ .path = "../math" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

@@ -71,6 +71,7 @@ typedef ke_result (*ke_module_load_fn)(ke_runtime *runtime, void *user_data);
 /// @param user_data [context] Opaque context forwarded from register_module.
 typedef void (*ke_module_unload_fn)(ke_runtime *runtime, void *user_data);
 
+/// [bag]
 typedef struct ke_runtime_module_params {
     /// [utf8] Identifies the module in diagnostics.
     const char *name;
@@ -101,6 +102,7 @@ typedef struct ke_runtime_module_params {
 /// @return KE_OK, or the code of the work the body could not finish; the tick fails with it.
 typedef ke_result (*ke_system_execute_fn)(ke_system_ctx *ctx, void *user_data, float dt);
 
+/// [bag]
 typedef struct ke_runtime_system_params {
     /// [utf8] Identifies the system in diagnostics and in the failure a body raises.
     const char *name;
@@ -126,9 +128,6 @@ typedef struct ke_runtime_system_params {
     /// component storage declares it here.
     const ke_component_access *access_list;
     uint32_t                   access_count;
-
-    /// [default:0] The worker the body must run on, or 0 to let any wave thread take it.
-    uint32_t pinned_thread;
 
     /// [default:false] The body's work on one entity is independent of every other entity
     /// it visits. The runtime may then run it as several concurrent slices of the
@@ -222,6 +221,7 @@ typedef struct ke_runtime {
     ke_result (*flush_render)(ke_runtime *self);
 } ke_runtime;
 
+/// [owner]
 typedef struct ke_runtime_handle {
     ke_runtime *ref;
     void (*destroy)(ke_runtime *self);

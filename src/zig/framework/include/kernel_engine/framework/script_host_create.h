@@ -25,7 +25,7 @@ extern "C"
 #endif
 
     /// Sizing for one script host. The defaults are conveniences, not ceilings.
-    /// Instances need no sizing.
+    /// [bag] Instances need no sizing.
     typedef struct ke_script_host_params
     {
         uint32_t max_types; ///< Distinct script types; 0 uses the default.

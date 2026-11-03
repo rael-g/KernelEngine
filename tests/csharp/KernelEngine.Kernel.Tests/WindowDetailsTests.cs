@@ -9,7 +9,7 @@ namespace EngineTests;
 public unsafe class WindowDetailsTests
 {
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static ke_result MockInit(ke_window* self) => ke_result.KE_OK;
+    private static global::KernelEngine.Result.Native.Result MockInit(ke_window* self) => global::KernelEngine.Result.Native.Result.Ok;
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static void MockGetSize(ke_window* self, int* w, int* h)

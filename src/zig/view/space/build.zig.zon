@@ -4,10 +4,11 @@
     .fingerprint = 0x15221fda6bde5b67,
     .minimum_zig_version = "0.14.0",
     .dependencies = .{
+        .abi_view = .{ .path = "../../abi/view" },
+        .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_render = .{ .path = "../../abi/render" },
         .abi_result = .{ .path = "../../abi/result" },
-        .abi_view = .{ .path = "../../abi/view" },
         .ke_common = .{ .path = "../../common" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },

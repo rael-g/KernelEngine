@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -18,15 +20,17 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 19 Transparency"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 19_transparency");
         Console.WriteLine("[KernelEngine] Features: transparent_forward, back_to_front_sort, blend, refraction");
 
@@ -65,27 +69,27 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 6f);
 
-        var cube = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string cube = "cube";
         var gray = resources.CreateMaterial("gray", new Vector4(0.6f, 0.6f, 0.6f, 1f));
-        var back = tree.AddNode(new MeshRenderer { MeshHandle = cube, MaterialHandle = gray }, "OpaqueCube");
+        var back = tree.AddNode(new MeshRenderer { Mesh = cube, MaterialHandle = gray }, "OpaqueCube");
         back.Position = new Vector3(0f, 0f, -2f);
         back.Scale = new Vector3(1.5f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
         var red = resources.CreateMaterial("red", new Vector4(1f, 0.15f, 0.15f, 0.5f), alphaMode: AlphaMode.Blend);
         var blue = resources.CreateMaterial("blue", new Vector4(0.15f, 0.35f, 1f, 0.5f), alphaMode: AlphaMode.Blend);
 
-        var far = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = red }, "FarQuad");
+        var far = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = red }, "FarQuad");
         far.Position = new Vector3(-0.4f, 0f, 0f);
         far.Scale = new Vector3(2f);
 
-        var near = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = blue }, "NearQuad");
+        var near = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = blue }, "NearQuad");
         near.Position = new Vector3(0.4f, 0f, 1f);
         near.Scale = new Vector3(2f);
 
         var glass = resources.CreateMaterial("glass", new Vector4(1f, 1f, 1f, 0.15f), alphaMode: AlphaMode.Blend,
             ior: 1.5f, distortionStrength: 0.25f);
-        var glassNode = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = glass }, "GlassQuad");
+        var glassNode = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = glass }, "GlassQuad");
         glassNode.Position = new Vector3(2.5f, 0f, 2f);
         glassNode.Scale = new Vector3(2f);
     }));

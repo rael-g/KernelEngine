@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -18,20 +20,22 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 06 Shadow Map"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.1f, 0.1f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 06_shadow_map");
         Console.WriteLine("[KernelEngine] Features: shadow_map_directional, ortho_light_frustum, animated_sun");
 
-        var planeMesh = KernelEngine.Render.MeshPrimitives.Plane(resources);
-        var cubeMesh = KernelEngine.Render.MeshPrimitives.Cube(resources);
+        const string planeMesh = "plane";
+        const string cubeMesh = "cube";
 
         var floorMat = resources.CreateMaterial("floor", new Vector4(0.5f, 0.5f, 0.5f, 1f), roughness: 0.8f);
         var redMat = resources.CreateMaterial("red", new Vector4(0.8f, 0.2f, 0.2f, 1f), metallic: 0.2f, roughness: 0.3f);
@@ -46,10 +50,10 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 5f, 10f);
 
-        var floor = tree.AddNode(new MeshRenderer { MeshHandle = planeMesh, MaterialHandle = floorMat }, "Floor");
+        var floor = tree.AddNode(new MeshRenderer { Mesh = planeMesh, MaterialHandle = floorMat }, "Floor");
         floor.Scale = new Vector3(20f, 1f, 20f);
 
-        var caster = tree.AddNode(new MeshRenderer { MeshHandle = cubeMesh, MaterialHandle = redMat }, "Caster");
+        var caster = tree.AddNode(new MeshRenderer { Mesh = cubeMesh, MaterialHandle = redMat }, "Caster");
         caster.Position = new Vector3(0f, 1f, 0f);
     }));
 

@@ -49,7 +49,7 @@ typedef struct ke_render_shader_binding
     ke_gpu_sampler      sampler;
 } ke_render_shader_binding;
 
-/// The compiled shader a layout is built for.
+/// [bag] The compiled shader a layout is built for.
 typedef struct ke_render_shader_layout_params
 {
     /// Logical name the shader was compiled under, as a render service's load_shader takes it.
@@ -165,6 +165,7 @@ typedef struct ke_render_resource_binder
                           ke_render_shader_layout layout, ke_render_material_binding material);
 } ke_render_resource_binder;
 
+/// [owner]
 typedef struct ke_render_resource_binder_handle
 {
     ke_render_resource_binder *ref;

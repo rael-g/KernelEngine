@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Scene-wide ambient light node. First entity with this component wins.</summary>
@@ -13,5 +17,5 @@ public partial class AmbientLight : Node3D
 {
 
     [NativeField("Color", Component = typeof(AmbientLightComponent))]
-    public partial Vector3 Color { get; set; }
+    public partial System.Numerics.Vector3 Color { get; set; }
 }

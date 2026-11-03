@@ -1,12 +1,13 @@
 .{
-    .name = .abi_asset_stb_image,
+    .name = .abi_asset_stb_image_factory,
     .version = "0.1.0",
-    .fingerprint = 0x0fa387f0cb2b2ddc,
+    .fingerprint = 0x207ccb23a2b884cc,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_asset = .{ .path = "../../../abi/asset" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_image_loader = .{ .path = "../../../abi/image_loader" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

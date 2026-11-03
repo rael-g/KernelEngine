@@ -192,7 +192,7 @@ extern "C"
                              ke_script_resolve     *out_why);
     };
 
-    /// Owner wrapper: destroy releases the type table and the bindings. The
+    /// [owner] Owner wrapper: destroy releases the type table and the bindings. The
     /// instances are not touched — this host never owned them.
     typedef struct ke_script_host_handle
     {

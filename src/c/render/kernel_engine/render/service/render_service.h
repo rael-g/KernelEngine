@@ -3,9 +3,11 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/handles.h>
+#include <kernel_engine/render/mesh.h>
 #include <stdint.h>
 
 #ifdef __cplusplus
@@ -30,6 +32,7 @@ typedef enum ke_render_size_mode
     KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER = 1,
 } ke_render_size_mode;
 
+/// [bag]
 typedef struct ke_render_resource_params
 {
     const char             *name;
@@ -41,7 +44,7 @@ typedef struct ke_render_resource_params
     float                   scale_x; ///< Read when size_mode is RELATIVE_TO_BACKBUFFER.
     float                   scale_y;
     /// Per-resource clear color.
-    float                   clear_value[4];
+    ke_vec4                 clear_value;
 } ke_render_resource_params;
 
 /// What every shader reads about the frame being drawn, under the parameter `ke_frame`. Matrices are
@@ -186,10 +189,11 @@ struct ke_render_service
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
     /** @param key [utf8] Dedup cache key; required.
+     *  @param vertices [array_of:vertex_count] Interleaved vertices.
      *  @param indices [array_of:index_count] Triangle list indices.
      *  @param out_mesh [out] Receives the handle of the uploaded mesh. */
     ke_result (*upload_mesh)(struct ke_render_service *self, const char *key,
-                             const void *vertices, size_t vertices_size,
+                             const ke_mesh_vertex *vertices, uint32_t vertex_count,
                              const uint16_t *indices, uint32_t index_count,
                              ke_mesh_handle *out_mesh);
     /// [try] Resolves a mesh handle to its GPU buffers. Returns false for a
@@ -206,17 +210,27 @@ struct ke_render_service
     void (*set_clear_color)(struct ke_render_service *self, float r, float g, float b, float a);
 
     /** @param key [utf8] Dedup cache key; required.
+     *  @param rgba [array_of:rgba_size] RGBA8 pixels in row order; width by height by four bytes.
      *  @param out_texture [out] Receives the handle of the uploaded texture. */
     ke_result (*upload_texture)(struct ke_render_service *self, const char *key,
                                 uint32_t width, uint32_t height,
-                                const void *rgba, ke_texture_handle *out_texture);
+                                const uint8_t *rgba, size_t rgba_size,
+                                ke_texture_handle *out_texture);
     /**
      * @param key [utf8] Dedup cache key; required.
-     * @param shader [utf8,nullable] Authored material name; NULL/empty selects the engine default.
+     * @param metallic [default:0]
+     * @param roughness [default:0.5]
+     * @param albedo [default:none] KE_TEXTURE_NONE selects the white texture.
+     * @param normal [default:none] KE_TEXTURE_NONE selects a flat normal.
+     * @param alpha_mode [default:KE_ALPHA_MODE_OPAQUE]
+     * @param alpha_cutoff [default:0.5]
+     * @param ior [default:1.5]
+     * @param distortion_strength [default:0.05]
+     * @param shader [utf8,nullable,default:none] Authored material name; NULL/empty selects the engine default.
      * @param out_material [out] Receives the handle of the material.
      */
     ke_result (*create_material)(struct ke_render_service *self, const char *key,
-                                 const float *base_color,
+                                 ke_vec4 base_color,
                                  float metallic, float roughness,
                                  ke_texture_handle albedo,
                                  ke_texture_handle normal,
@@ -236,9 +250,10 @@ struct ke_render_service
     float (*material_alpha_cutoff)(struct ke_render_service *self, ke_material_handle h);
 
     /** @param key [utf8] Dedup cache key; required.
+     *  @param faces [array_of:faces_size] Six square RGBA8 faces, in the order +X, -X, +Y, -Y, +Z, -Z.
      *  @param out_cubemap [out] Receives the handle of the uploaded cubemap. */
     ke_result (*upload_cubemap)(struct ke_render_service *self, const char *key,
-                                uint32_t face_size, const void *faces,
+                                uint32_t face_size, const uint8_t *faces, size_t faces_size,
                                 ke_texture_handle *out_cubemap);
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
@@ -356,6 +371,7 @@ struct ke_render_service
     ke_gpu_texture_format (*chain_format)(struct ke_render_service *self, ke_render_stage stage);
 };
 
+/// [owner]
 typedef struct ke_render_service_handle
 {
     ke_render_service *ref;

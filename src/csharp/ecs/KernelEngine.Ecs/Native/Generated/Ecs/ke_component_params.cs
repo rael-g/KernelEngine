@@ -1,3 +1,7 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+
 using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
@@ -15,7 +19,7 @@ public unsafe partial struct ke_component_params
     public nuint alignment;
 
     [NativeTypeName("const ke_component_field *")]
-    public ke_component_field* fields;
+    public ComponentField* fields;
 
     [NativeTypeName("uint32_t")]
     public uint field_count;

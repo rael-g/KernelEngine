@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Spot light node — emits a cone of light from this entity's world position.</summary>
@@ -13,11 +17,11 @@ public partial class SpotLight : Node3D
 {
 
     [NativeField("Direction", Component = typeof(SpotLightComponent))]
-    public partial Vector3 Direction { get; set; }
+    public partial System.Numerics.Vector3 Direction { get; set; }
 
     /// <summary>Linear RGB.</summary>
     [NativeField("Color", Component = typeof(SpotLightComponent))]
-    public partial Vector3 Color { get; set; }
+    public partial System.Numerics.Vector3 Color { get; set; }
 
     [NativeField("Intensity", Component = typeof(SpotLightComponent))]
     public partial float Intensity { get; set; }

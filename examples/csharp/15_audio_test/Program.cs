@@ -2,13 +2,15 @@
 using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -21,9 +23,13 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
-    .AddMiniAudio()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddMiniaudioAudio()
+    .AddAudioScene()
+    .AddAudioComponentsNodeTypes()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.05f, 0.08f, 0.10f, 1.0f)))
@@ -36,7 +42,7 @@ var services = new ServiceCollection()
         var audio = sp.GetRequiredService<IAudio>();
         var beep = audio.LoadSound(beepPath);
         var bass = audio.LoadSound(bassPath);
-        Console.WriteLine($"[Audio] beep={beep.Value} bass={bass.Value}");
+        Console.WriteLine($"[Audio] beep={beep} bass={bass}");
 
         tree.AddNode(new AudioController(audio, beep, bass), "AudioController");
     }));
@@ -104,15 +110,15 @@ sealed class AudioController : Node
     private const int KeyEscape = 256;
 
     private readonly IAudio _audio;
-    private readonly SoundHandle _beep;
-    private readonly SoundHandle _bass;
+    private readonly uint _beep;
+    private readonly uint _bass;
 
     private bool _bassLooping;
     private bool _prevSpace;
     private bool _prevL;
     private bool _prevEsc;
 
-    public AudioController(IAudio audio, SoundHandle beep, SoundHandle bass)
+    public AudioController(IAudio audio, uint beep, uint bass)
     {
         _audio = audio;
         _beep = beep;
@@ -129,7 +135,7 @@ sealed class AudioController : Node
 
         if (space && !_prevSpace)
         {
-            _audio.Play(_beep, volume: 0.6f);
+            _audio.Play(_beep, volume: 0.6f, loop: false);
             Console.WriteLine("BEEP");
         }
         if (l && !_prevL)

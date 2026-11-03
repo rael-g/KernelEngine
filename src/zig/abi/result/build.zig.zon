@@ -1,7 +1,7 @@
 .{
-    .name = .ke_abi_result,
+    .name = .abi_result,
     .version = "0.1.0",
-    .fingerprint = 0x49d895971824a541,
+    .fingerprint = 0x17abec642eb8a9ad,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
     },

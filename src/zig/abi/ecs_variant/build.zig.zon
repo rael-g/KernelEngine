@@ -1,0 +1,11 @@
+.{
+    .name = .abi_ecs_variant,
+    .version = "0.1.0",
+    .fingerprint = 0xb4783803ec538a35,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_math = .{ .path = "../math" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

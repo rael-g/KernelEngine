@@ -1,14 +1,15 @@
 .{
-    .name = .abi_render_gbuffer,
+    .name = .abi_render_gbuffer_factory,
     .version = "0.1.0",
-    .fingerprint = 0x64d770fd8d37e404,
+    .fingerprint = 0x64f1d32ea84afd78,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_ecs = .{ .path = "../../../abi/ecs" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_render = .{ .path = "../../../abi/render" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_runtime = .{ .path = "../../../abi/runtime" },
+        .abi_ecs = .{ .path = "../../../abi/ecs" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_render = .{ .path = "../../../abi/render" },
+        .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_runtime = .{ .path = "../../../abi/runtime" },
     },
     .paths = .{"."},
 }

@@ -44,7 +44,7 @@ build/native/bin/c_demo_01
 ```
 
 The smallest C# host is [00_runtime_minimal](https://github.com/rael-g/KernelEngine/tree/main/examples/csharp/00_runtime_minimal).
-It registers the ECS, the scheduler, the runtime and a window module, loads the modules
+It registers the ECS, the task pool, the runtime and a window module, loads the modules
 and ticks the loop.
 
 ```bash

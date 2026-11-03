@@ -1,10 +1,11 @@
 //! Converts an Assimp mesh and an Assimp material into the loader's `ke_mesh_data` and
 //! `ke_material_data` records.
 
+const abi_mesh = @import("abi_mesh");
+const abi_mesh_data = @import("abi_mesh_data");
 const std = @import("std");
 
 const c = @import("c");
-const abi_asset = @import("abi_asset");
 const abi_render = @import("abi_render");
 const strings = @import("strings.zig");
 
@@ -61,7 +62,7 @@ fn fallbackTangent(nx: f32, ny: f32, nz: f32) [3]f32 {
 /// Releases the vertex and index arrays of a converted mesh through the allocator that made
 /// them. The record's counts are the lengths of those allocations, so they must be unchanged
 /// since conversion. A null array is skipped.
-pub fn freeMesh(gpa: std.mem.Allocator, md: *const abi_asset.ke_mesh_data) void {
+pub fn freeMesh(gpa: std.mem.Allocator, md: *const abi_mesh_data.c.ke_mesh_data) void {
     if (md.vertices) |v| gpa.free(v[0..md.vertex_count]);
     if (md.indices) |i| gpa.free(i[0..md.index_count]);
 }
@@ -73,15 +74,15 @@ pub fn freeMesh(gpa: std.mem.Allocator, md: *const abi_asset.ke_mesh_data) void 
 /// and a tangent derived by `fallbackTangent`; when the mesh has tangents, each tangent's sign
 /// records the side its bitangent lies on. Faces are cut to at most three indices, and the index
 /// count is the number copied.
-pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *abi_asset.ke_mesh_data) bool {
-    md.* = std.mem.zeroes(abi_asset.ke_mesh_data);
+pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *abi_mesh_data.c.ke_mesh_data) bool {
+    md.* = std.mem.zeroes(abi_mesh_data.c.ke_mesh_data);
     strings.copyString(&md.name, &am.mName.data);
     md.vertex_count = am.mNumVertices;
 
     var index_count: usize = 0;
     for (0..am.mNumFaces) |fi| index_count += @min(3, am.mFaces[fi].mNumIndices);
 
-    const vertices = gpa.alloc(abi_render.ke_vertex, am.mNumVertices) catch return false;
+    const vertices = gpa.alloc(abi_mesh.c.ke_vertex, am.mNumVertices) catch return false;
     const indices = gpa.alloc(u16, index_count) catch {
         gpa.free(vertices);
         return false;
@@ -91,7 +92,7 @@ pub fn convertMesh(gpa: std.mem.Allocator, am: *const c.aiMesh, md: *abi_asset.k
 
     for (0..am.mNumVertices) |vi| {
         const v = &vertices[vi];
-        v.* = std.mem.zeroes(abi_render.ke_vertex);
+        v.* = std.mem.zeroes(abi_mesh.c.ke_vertex);
         v.x = am.mVertices[vi].x;
         v.y = am.mVertices[vi].y;
         v.z = am.mVertices[vi].z;
@@ -169,8 +170,8 @@ fn getFloat(am: *const c.aiMaterial, k: MatKey, out: *f32) bool {
 /// roughness from the slots the material has, with the base colour slot read before the diffuse
 /// one. A slot the material lacks keeps opaque white, zero metallic and a mid roughness. The two
 /// texture index fields are left zero for the caller to set.
-pub fn convertMaterial(am: *const c.aiMaterial, md: *abi_asset.ke_material_data) void {
-    md.* = std.mem.zeroes(abi_asset.ke_material_data);
+pub fn convertMaterial(am: *const c.aiMaterial, md: *abi_mesh_data.c.ke_material_data) void {
+    md.* = std.mem.zeroes(abi_mesh_data.c.ke_material_data);
 
     var name: c.aiString = undefined;
     const k = MatKey.name;
@@ -261,7 +262,7 @@ test "base colour is read from the glTF slot" {
     var color = c.aiColor4D{ .r = 1.0, .g = 0.5, .b = 0.2, .a = 1.0 };
     f.add(prop("$clr.base", c.aiPTI_Float, bytesOf(c.aiColor4D, &color)));
 
-    var md: abi_asset.ke_material_data = undefined;
+    var md: abi_mesh_data.c.ke_material_data = undefined;
     converter.convertMaterial(&f.mat, &md);
     try testing.expectApproxEqAbs(@as(f32, 1.0), md.base_color_r, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.5), md.base_color_g, 1e-6);
@@ -274,7 +275,7 @@ test "base colour falls back to the diffuse slot" {
     var color = c.aiColor4D{ .r = 0.25, .g = 0.5, .b = 0.75, .a = 1.0 };
     f.add(prop("$clr.diffuse", c.aiPTI_Float, bytesOf(c.aiColor4D, &color)));
 
-    var md: abi_asset.ke_material_data = undefined;
+    var md: abi_mesh_data.c.ke_material_data = undefined;
     converter.convertMaterial(&f.mat, &md);
     try testing.expectApproxEqAbs(@as(f32, 0.25), md.base_color_r, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.75), md.base_color_b, 1e-6);
@@ -286,7 +287,7 @@ test "alpha survives the conversion" {
     var color = c.aiColor4D{ .r = 1, .g = 1, .b = 1, .a = 0.35 };
     f.add(prop("$clr.base", c.aiPTI_Float, bytesOf(c.aiColor4D, &color)));
 
-    var md: abi_asset.ke_material_data = undefined;
+    var md: abi_mesh_data.c.ke_material_data = undefined;
     converter.convertMaterial(&f.mat, &md);
     try testing.expectApproxEqAbs(@as(f32, 0.35), md.base_color_a, 1e-6);
 }
@@ -299,7 +300,7 @@ test "metallic and roughness factors are read" {
     f.add(prop("$mat.metallicFactor", c.aiPTI_Float, bytesOf(f32, &metallic)));
     f.add(prop("$mat.roughnessFactor", c.aiPTI_Float, bytesOf(f32, &roughness)));
 
-    var md: abi_asset.ke_material_data = undefined;
+    var md: abi_mesh_data.c.ke_material_data = undefined;
     converter.convertMaterial(&f.mat, &md);
     try testing.expectApproxEqAbs(@as(f32, 0.8), md.metallic, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.2), md.roughness, 1e-6);
@@ -310,7 +311,7 @@ test "a material without PBR factors keeps the engine defaults" {
     f.init();
     f.mat = std.mem.zeroes(c.aiMaterial);
 
-    var md: abi_asset.ke_material_data = undefined;
+    var md: abi_mesh_data.c.ke_material_data = undefined;
     converter.convertMaterial(&f.mat, &md);
     try testing.expectApproxEqAbs(@as(f32, 0.0), md.metallic, 1e-6);
     try testing.expectApproxEqAbs(@as(f32, 0.5), md.roughness, 1e-6);
@@ -333,7 +334,7 @@ test "a triangle converts with its vertices and indices" {
     am.mNumFaces = 1;
     am.mFaces = &face;
 
-    var md: abi_asset.ke_mesh_data = undefined;
+    var md: abi_mesh_data.c.ke_mesh_data = undefined;
     try testing.expect(converter.convertMesh(testing.allocator, &am, &md));
     defer converter.freeMesh(testing.allocator, &md);
 
@@ -357,7 +358,7 @@ test "a mesh without normals gets a unit normal and a perpendicular tangent" {
     am.mNumFaces = 1;
     am.mFaces = &face;
 
-    var md: abi_asset.ke_mesh_data = undefined;
+    var md: abi_mesh_data.c.ke_mesh_data = undefined;
     try testing.expect(converter.convertMesh(testing.allocator, &am, &md));
     defer converter.freeMesh(testing.allocator, &md);
 

@@ -1,3 +1,5 @@
+using System.Numerics;
+
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Window.Native;

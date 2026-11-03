@@ -5,11 +5,14 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.Runtime.Native;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Runtime;
 
@@ -20,7 +23,7 @@ public unsafe interface INativeSystemCtx
 }
 
 /// <summary>What one call of a system body is given to work with: the entities its queries resolved to, which share of them it owns, and the queue it records structural changes into. It exists for the duration of the call and means nothing outside it. `handle` is runtime-private.</summary>
-public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx
+public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx, ISystemCtx
 {
     private ke_system_ctx* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_system_ctx*, void> _destroy;
@@ -42,20 +45,31 @@ public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx
     }
 
     /// <summary>The system body's only path to component memory. Returns the resolved archetype segments for the system's query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call. Returns NULL for an out-of-range index or a system that declared no queries.</summary>
-    public ReadOnlySpan<ke_ecs_segment> View(uint queryIndex)
+    private ReadOnlySpan<ke_ecs_segment> ViewNative(uint queryIndex)
     {
-        nuint countLocal = 0;
-        var front = Handle->view(Handle, queryIndex, &countLocal);
-        return front == null ? default : new ReadOnlySpan<ke_ecs_segment>(front, (int)countLocal);
+        nuint outCountLocal = 0;
+        var front = Handle->view(Handle, queryIndex, &outCountLocal);
+        return front == null ? default : new ReadOnlySpan<ke_ecs_segment>(front, (int)outCountLocal);
+    }
+
+    /// <summary>How many elements <see cref="ViewAt"/> reads.</summary>
+    public int ViewCount(uint queryIndex)
+        => ViewNative(queryIndex).Length;
+
+    /// <summary>One element of the sequence.</summary>
+    public EcsSegment ViewAt(uint queryIndex, int index)
+    {
+        fixed (ke_ecs_segment* reading = &ViewNative(queryIndex)[index])
+            return new EcsSegment(new ReadOnlySpan<Entity>((Entity*)reading->entities, (int)reading->count), new ReadOnlySpan<nint>((nint*)reading->columns, (int)reading->column_count));
     }
 
     /// <summary>Reports which share of its entity set this body call owns: *out_index in [0, *out_count). A system that did not declare per_entity always gets index 0 of count 1.</summary>
-    public (uint Index, uint Count) Slice()
+    public (uint OutIndex, uint OutCount) Slice()
     {
-        uint index;
-        uint count;
-        Handle->slice(Handle, &index, &count);
-        return (index, count);
+        uint outIndex;
+        uint outCount;
+        Handle->slice(Handle, &outIndex, &outCount);
+        return (outIndex, outCount);
     }
 
     /// <summary>Releases the native systemctx.</summary>

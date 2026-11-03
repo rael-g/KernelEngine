@@ -1,4 +1,5 @@
 ﻿
+using KernelEngine.Configuration;
 using KernelEngine.Runtime;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -38,10 +39,8 @@ public sealed class GlfwWindowModule : IRuntimeModule
 
     public void Configure(IServiceCollection services)
     {
-        if (_width is { } w && _height is { } h && _title is { } t)
-            services.AddGlfwWindow(w, h, t);
-        else
-            services.AddGlfwWindow();
+        services.TryAddConfigurationSingleton();
+        services.AddGlfwWindow(_title, _width ?? 0, _height ?? 0);
     }
 
     public void OnLoad(IRuntime runtime, IServiceProvider services) { }

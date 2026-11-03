@@ -5,6 +5,9 @@
 
 using System.Runtime.InteropServices;
 
+using KernelEngine.Asset.Native;
+using KernelEngine.Render;
+
 namespace KernelEngine.Asset;
 
 /// <summary>Complete model data returned by ke_asset_loader::load_model. Owned by the loader; free with ke_asset_loader::free_model.</summary>

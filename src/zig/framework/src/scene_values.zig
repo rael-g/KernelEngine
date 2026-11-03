@@ -1,6 +1,7 @@
 //! Turns the tables of a scene file into engine variants, in memory owned by an arena that lives as
 //! long as the loader reading them.
 
+const abi_ecs_variant = @import("abi_ecs_variant");
 const std = @import("std");
 
 const c = @import("c");
@@ -34,38 +35,38 @@ pub const Arena = struct {
     }
 };
 
-pub fn variantNull() abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
+pub fn variantNull() abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_NULL, .unnamed_0 = .{ .i = 0 } };
 }
-fn variantBool(b: bool) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = b } };
+fn variantBool(b: bool) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = b } };
 }
-fn variantInt(i: i64) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
+fn variantInt(i: i64) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
 }
-fn variantFloat(f: f64) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
+fn variantFloat(f: f64) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
 }
-fn variantString(s: ?[*:0]const u8) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_STRING, .unnamed_0 = .{ .s = s } };
+fn variantString(s: ?[*:0]const u8) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = s } };
 }
-fn variantVec2(x: f32, y: f32) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = x, .y = y } } };
+fn variantVec2(x: f32, y: f32) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = x, .y = y } } };
 }
-fn variantVec3(x: f32, y: f32, z: f32) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = x, .y = y, .z = z } } };
+fn variantVec3(x: f32, y: f32, z: f32) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = x, .y = y, .z = z } } };
 }
-fn variantVec4(x: f32, y: f32, z: f32, w: f32) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = x, .y = y, .z = z, .w = w } } };
+fn variantVec4(x: f32, y: f32, z: f32, w: f32) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = x, .y = y, .z = z, .w = w } } };
 }
-fn variantTable(t: *const abi_ecs.ke_variant_table) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
+fn variantTable(t: *const abi_ecs_variant.c.ke_variant_table) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_TABLE, .unnamed_0 = .{ .t = t } };
 }
 
 /// A one-element or empty array becomes null. A longer one becomes a vector variant sized by its
 /// length, up to the widest vector, so elements beyond that are dropped. An element that is not a
 /// number stays zero, and nothing reports it.
-fn variantFromArray(arr: *c.toml_array_t) abi_ecs.ke_variant {
+fn variantFromArray(arr: *c.toml_array_t) abi_ecs_variant.c.ke_variant {
     const n = c.toml_array_nelem(arr);
     var comps = [_]f32{ 0, 0, 0, 0 };
     const len = @min(n, @as(c_int, comps.len));
@@ -85,10 +86,10 @@ fn variantFromArray(arr: *c.toml_array_t) abi_ecs.ke_variant {
     return variantNull();
 }
 
-fn variantFromTable(arena: *Arena, tbl: *c.toml_table_t) abi_ecs.ke_variant {
+fn variantFromTable(arena: *Arena, tbl: *c.toml_table_t) abi_ecs_variant.c.ke_variant {
     const n: usize = @intCast(c.toml_table_nkval(tbl) + c.toml_table_ntab(tbl) + c.toml_table_narr(tbl));
-    const entries = arena.allocArray(abi_ecs.ke_variant_table_entry, n) orelse return variantNull();
-    const vtbl_mem = arena.allocArray(abi_ecs.ke_variant_table, 1) orelse return variantNull();
+    const entries = arena.allocArray(abi_ecs_variant.c.ke_variant_table_entry, n) orelse return variantNull();
+    const vtbl_mem = arena.allocArray(abi_ecs_variant.c.ke_variant_table, 1) orelse return variantNull();
 
     var count: usize = 0;
     var k: c_int = 0;
@@ -108,7 +109,7 @@ fn variantFromTable(arena: *Arena, tbl: *c.toml_table_t) abi_ecs.ke_variant {
 /// Reads the value of `key` in `tbl` by trying the TOML kinds in turn: string, integer, float,
 /// boolean, array, table. A string is copied into the arena and its TOML buffer freed here. A value
 /// of any other kind, such as a date, reads as null, and nothing reports it.
-pub fn readVarIn(arena: *Arena, tbl: *c.toml_table_t, key: [*c]const u8) abi_ecs.ke_variant {
+pub fn readVarIn(arena: *Arena, tbl: *c.toml_table_t, key: [*c]const u8) abi_ecs_variant.c.ke_variant {
     const ds = c.toml_string_in(tbl, key);
     if (ds.ok != 0) {
         const v = variantString(arena.dupeZ(ds.u.s));
@@ -133,10 +134,10 @@ pub fn tableEntryCount(tbl: *c.toml_table_t) usize {
 /// Reads every entry of a component table into arena memory and returns them, or null when the
 /// table has no entries or the arena cannot hold them. The caller treats both as an unreadable
 /// block.
-pub fn buildEntries(arena: *Arena, tbl: *c.toml_table_t) ?[]abi_ecs.ke_variant_table_entry {
+pub fn buildEntries(arena: *Arena, tbl: *c.toml_table_t) ?[]abi_ecs_variant.c.ke_variant_table_entry {
     const n = tableEntryCount(tbl);
     if (n == 0) return null;
-    const entries = arena.allocArray(abi_ecs.ke_variant_table_entry, n) orelse return null;
+    const entries = arena.allocArray(abi_ecs_variant.c.ke_variant_table_entry, n) orelse return null;
     var count: usize = 0;
     var k: c_int = 0;
     while (count < n) : (k += 1) {

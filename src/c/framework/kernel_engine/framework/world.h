@@ -34,6 +34,7 @@ extern "C"
 
     typedef struct ke_world ke_world;
 
+    /// [bag]
     typedef struct ke_world_params
     {
         /// The ecs the world registers scene components on; required, borrowed.
@@ -122,6 +123,7 @@ extern "C"
 
     };
 
+    /// [owner]
     typedef struct ke_world_handle
     {
         ke_world *ref;

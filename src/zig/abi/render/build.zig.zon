@@ -1,13 +1,17 @@
 .{
-    .name = .ke_abi_render,
+    .name = .abi_render,
     .version = "0.1.0",
-    .fingerprint = 0xceeecdee9f12fd38,
+    .fingerprint = 0x909db41da98ef1d4,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_ecs = .{ .path = "../ecs" },
-        .ke_abi_math = .{ .path = "../math" },
-        .ke_abi_result = .{ .path = "../result" },
-        .ke_abi_spatial = .{ .path = "../spatial" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_math = .{ .path = "../math" },
+        .abi_mesh = .{ .path = "../mesh" },
+        .abi_render_components = .{ .path = "../render_components" },
+        .abi_render_contract = .{ .path = "../render_contract" },
+        .abi_render_gpu = .{ .path = "../render_gpu" },
+        .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

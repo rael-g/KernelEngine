@@ -1,0 +1,15 @@
+.{
+    .name = .abi_render_contract,
+    .version = "0.1.0",
+    .fingerprint = 0x5b0511fd5b5fb851,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_render_components = .{ .path = "../render_components" },
+        .abi_render_gpu = .{ .path = "../render_gpu" },
+        .abi_result = .{ .path = "../result" },
+        .abi_ui_components = .{ .path = "../ui_components" },
+    },
+    .paths = .{"."},
+}

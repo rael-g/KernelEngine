@@ -11,6 +11,7 @@ extern "C"
 
 #define KE_AUDIO_PLAYER_MAX_PATH 256
 
+    /// [table]
     /// [node:AudioPlayer,base:Node3D]
     /// A single audio clip, loaded from the path the scene declares and played on
     /// demand. Each node holds its own clip: two AudioPlayer children under the same

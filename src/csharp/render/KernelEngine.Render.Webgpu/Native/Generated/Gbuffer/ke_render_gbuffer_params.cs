@@ -1,4 +1,8 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -16,17 +20,11 @@ public unsafe partial struct ke_render_gbuffer_params
     [NativeTypeName("ke_gpu_device *")]
     public KernelEngine.Render.Native.ke_gpu_device* device;
 
-    [NativeTypeName("ke_component_id")]
-    public uint mesh_cid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 
-    [NativeTypeName("ke_component_id")]
-    public uint world_transform_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public uint camera_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public uint frame_cid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* frame;
 
     [NativeTypeName("const char *")]
     public sbyte* output;

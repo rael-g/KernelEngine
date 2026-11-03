@@ -1,12 +1,13 @@
 .{
-    .name = .abi_audio_miniaudio,
+    .name = .abi_audio_miniaudio_factory,
     .version = "0.1.0",
-    .fingerprint = 0xfdb763dd393fc9f1,
+    .fingerprint = 0x1f537d109d9732ff,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_audio = .{ .path = "../../../abi/audio" },
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
+        .abi_audio = .{ .path = "../../../abi/audio" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
     },
     .paths = .{"."},
 }

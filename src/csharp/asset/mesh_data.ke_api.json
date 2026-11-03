@@ -1,9 +1,290 @@
 {
-  "enums": [],
+  "enums": [
+    {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_primitive",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_MESH_PRIMITIVE_QUAD",
+          "value": 0,
+          "doc": "1x1 quad in XY plane (normal \u002BZ)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_PLANE",
+          "value": 1,
+          "doc": "1x1 plane in XZ plane (normal \u002BY)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_CUBE",
+          "value": 2,
+          "doc": "Unit cube, 24 vertices (per-face normals)"
+        },
+        {
+          "name": "KE_MESH_PRIMITIVE_SPHERE",
+          "value": 3,
+          "doc": "UV sphere of unit diameter"
+        }
+      ]
+    }
+  ],
   "structs": [
     {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_vertex",
-      "doc": "Per-vertex data of a mesh, as uploaded.",
+      "doc": "Per-vertex data of a mesh, as authored.",
       "tags": [
         "value"
       ],
@@ -79,6 +360,40 @@
           "type": "float",
           "tags": [],
           "doc": "Bitangent sign: \u002B1 or -1 (bitangent = cross(N,T)*tw)"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_vertex",
+      "doc": "One interleaved vertex as a mesh is uploaded to the device.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "normal",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "uv",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "tangent",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
         }
       ],
       "external": true
@@ -286,10 +601,49 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_mesh_shape_data",
+      "doc": "The vertices and indices of a baked mesh shape.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "vertices",
+          "type": "ke_vertex *",
+          "tags": [
+            "array_of:vertex_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "vertex_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "indices",
+          "type": "uint16_t *",
+          "tags": [
+            "array_of:index_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "index_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
     }
   ],
   "vtables": [],
   "functions": [],
   "callbacks": [],
+  "id_types": [],
+  "foreign_id_types": [],
   "type_aliases": {}
 }

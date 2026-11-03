@@ -2,6 +2,12 @@
 //! colour with one full-screen draw over the frame's color, at the chain's opaque stage. It also owns the creation and
 //! teardown of that pass, behind the one factory it exports.
 
+const abi_framework = @import("abi_framework");
+const abi_render_contract = @import("abi_render_contract");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_components = @import("abi_render_components");
+const abi_render_gpu = @import("abi_render_gpu");
+const abi_render_handles = @import("abi_render_handles");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_deferred_lighting").logFn };
@@ -17,11 +23,11 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 const Features = @import("feature_bindings");
 
-const depth_hint = [_]abi_render.ke_render_binding_hint{.{ .name = "g_depth", .flags = abi_render.KE_RENDER_BINDING_HINT_DEPTH }};
+const depth_hint = [_]abi_render_gpu.c.ke_render_binding_hint{.{ .name = "g_depth", .flags = abi_render_gpu.c.KE_RENDER_BINDING_HINT_DEPTH }};
 
-const shader_layout = abi_render.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
     .shader = "deferred_lighting",
-    .stages = abi_render.KE_GPU_SHADER_STAGE_VERTEX | abi_render.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = &depth_hint,
     .hint_count = depth_hint.len,
 };
@@ -30,14 +36,17 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
 /// `destroyHandle`. A handle field stays invalid until `setup` or `system` creates it, and
 /// `system` replaces `gbuffer_set` each tick. `queries`, `access` and `io`
 /// are handed to the runtime and to `begin_pass` by address, so the block is never copied.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const DeferredLightingModule = struct {
-    core: *abi_render.ke_render_service = undefined,
-    device: *abi_render.ke_gpu_device = undefined,
+    runtime: *abi_runtime.c.ke_runtime = undefined,
+    system: abi_framework.c.ke_system_id = 0,
+    core: *abi_render.c.ke_render_service = undefined,
+    device: *abi_render_gpu.c.ke_gpu_device = undefined,
     ibl_enabled: bool = true,
 
-    camera_cid: abi_ecs.ke_component_id = undefined,
-    world_transform_cid: abi_ecs.ke_component_id = undefined,
-    skybox_cid: abi_ecs.ke_component_id = undefined,
+    camera_cid: abi_asset_resolver.c.ke_component_id = undefined,
+    world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
+    skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
 
     albedo: ?[:0]u8 = null,
     normal: ?[:0]u8 = null,
@@ -45,17 +54,17 @@ const DeferredLightingModule = struct {
     shadow: ?[:0]u8 = null,
     clusters: ?[:0]u8 = null,
 
-    pipeline_params: abi_render.ke_gpu_render_pipeline_params = undefined,
-    binder: *abi_render.ke_render_resource_binder = undefined,
-    layout: abi_render.ke_render_shader_layout = abi_render.KE_RENDER_BINDING_INVALID,
-    frame_set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID,
-    gbuffer_set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID,
-    env_cubemap: abi_render.ke_texture_handle = .{ .bits = abi_render.KE_HANDLE_NONE },
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
+    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    gbuffer_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    env_cubemap: abi_render_handles.c.ke_texture_handle = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
 
-    io: abi_render.ke_render_pass_io = std.mem.zeroes(abi_render.ke_render_pass_io),
-    access: [13]abi_runtime.ke_component_access = undefined,
-    queries_terms: [3]abi_runtime.ke_component_access = undefined,
-    queries: [2]abi_runtime.ke_query_decl = undefined,
+    io: abi_render.c.ke_render_pass_io = std.mem.zeroes(abi_render.c.ke_render_pass_io),
+    access: [13]abi_runtime.c.ke_component_access = undefined,
+    queries_terms: [3]abi_runtime.c.ke_component_access = undefined,
+    queries: [2]abi_runtime.c.ke_query_decl = undefined,
     access_count: u32 = 0,
 };
 
@@ -74,11 +83,11 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
 fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     const core = dl.core;
     const env_view = core.*.texture_view.?(core, dl.env_cubemap);
-    const black_cube_view = core.*.texture_view.?(core, .{ .bits = abi_render.KE_HANDLE_NONE });
+    const black_cube_view = core.*.texture_view.?(core, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE });
 
     const ibl_view = if (dl.ibl_enabled) env_view else black_cube_view;
 
-    var bindings: [Features.count]abi_render.ke_render_shader_binding = undefined;
+    var bindings: [Features.count]abi_render_gpu.c.ke_render_shader_binding = undefined;
     Features.fill(core, ibl_view, nameOf(dl.shadow), nameOf(dl.clusters), &bindings);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     if (dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &dl.frame_set) != R.ok)
@@ -92,7 +101,7 @@ fn rebuildFrameSet(dl: *DeferredLightingModule) void {
 /// The camera and the light come from the frame globals the service holds; the sky selects the
 /// environment. The G-buffer views are wrapped in a fresh set every tick, because the
 /// targets can be recreated.
-fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
+fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const dl = moduleOf(user);
     const core = dl.core;
 
@@ -110,10 +119,10 @@ fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 
     var sky_segc: usize = 0;
     const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
-    const want_env: abi_render.ke_texture_handle = if (sky_segc != 0 and sky_segs.?[0].count != 0)
-        (@as(*const abi_render.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
+    const want_env: abi_render_handles.c.ke_texture_handle = if (sky_segc != 0 and sky_segs.?[0].count != 0)
+        (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
     else
-        .{ .bits = abi_render.KE_HANDLE_NONE };
+        .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
     if (want_env.bits != dl.env_cubemap.bits) {
         dl.env_cubemap = want_env;
         rebuildFrameSet(dl);
@@ -122,8 +131,8 @@ fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
     const albedo_view = pc.?.read.?(pc, dl.albedo.?.ptr);
     const normal_view = pc.?.read.?(pc, dl.normal.?.ptr);
     const emissive_view = pc.?.read.?(pc, dl.emissive.?.ptr);
-    const depth_view = pc.?.read.?(pc, abi_render.KE_RENDER_FRAME_DEPTH);
-    const gbuffer_bindings = [4]abi_render.ke_render_shader_binding{
+    const depth_view = pc.?.read.?(pc, abi_render.c.KE_RENDER_FRAME_DEPTH);
+    const gbuffer_bindings = [4]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "g_albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = albedo_view, .sampler = 0 },
         .{ .name = "g_normal", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = normal_view, .sampler = 0 },
         .{ .name = "g_emissive", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = emissive_view, .sampler = 0 },
@@ -153,56 +162,56 @@ fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 /// release through `destroyModule`.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.ke_render_deferred_lighting_params) R.Error!void {
-    const core: *abi_render.ke_render_service = p.service.?;
-    const camera_cid = p.camera_cid;
-    const world_transform_cid = p.world_transform_cid;
-    const skybox_cid = p.skybox_cid;
-    const frame_cid = p.frame_cid;
+fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params) R.Error!void {
+    const core: *abi_render.c.ke_render_service = p.service.?;
+    const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
+    const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
+    const skybox_cid = p.scene.?.component_ids.?(p.scene).?.skybox;
+    const frame_cid = p.frame.?.frame_cid.?(p.frame);
     dl.core = core;
     dl.device = p.device.?;
     dl.ibl_enabled = p.ibl_enabled;
     dl.camera_cid = camera_cid;
     dl.world_transform_cid = world_transform_cid;
     dl.skybox_cid = skybox_cid;
-    dl.env_cubemap = .{ .bits = abi_render.KE_HANDLE_NONE };
+    dl.env_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
 
     const group = std.mem.span(p.gbuffer.?);
-    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return error.OutOfMemory;
-    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render.KE_RENDER_GBUFFER_NORMAL }, 0) catch return error.OutOfMemory;
-    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return error.OutOfMemory;
+    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return error.OutOfMemory;
+    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return error.OutOfMemory;
+    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return error.OutOfMemory;
     dl.io.name = "render.deferred_lighting";
-    try R.check(core.*.join_chain.?(core, abi_render.KE_RENDER_STAGE_OPAQUE, abi_render.KE_RENDER_CHAIN_DRAW_OVER, &dl.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR)));
+    try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_OPAQUE, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &dl.io.chain));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
     if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow.?)) catch return error.OutOfMemory;
     if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters.?)) catch return error.OutOfMemory;
 
     dl.binder = core.*.resource_binder.?(core).?;
     try R.check(dl.binder.create_shader_layout.?(dl.binder, &shader_layout, &dl.layout));
 
-    var vs: abi_render.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: abi_render.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
+    var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+    var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
-    var pp = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
     pp.label = "deferred_lighting.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
-    pp.primitive_topology = abi_render.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    pp.cull_mode = abi_render.KE_GPU_CULL_MODE_NONE;
-    pp.front_face = abi_render.KE_GPU_FRONT_FACE_CCW;
+    pp.primitive_topology = abi_render_gpu.c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    pp.cull_mode = abi_render_gpu.c.KE_GPU_CULL_MODE_NONE;
+    pp.front_face = abi_render_gpu.c.KE_GPU_FRONT_FACE_CCW;
     pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = false;
     pp.depth_stencil.depth_write_enabled = false;
-    pp.depth_stencil.depth_compare = abi_render.KE_GPU_COMPARE_ALWAYS;
+    pp.depth_stencil.depth_compare = abi_render_gpu.c.KE_GPU_COMPARE_ALWAYS;
     try R.check(dl.binder.pipeline_layouts.?(dl.binder, dl.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count));
-    pp.color_target_formats[0] = core.*.chain_format.?(core, abi_render.KE_RENDER_STAGE_OPAQUE);
+    pp.color_target_formats[0] = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_OPAQUE);
     pp.color_target_count = 1;
     dl.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == abi_render.KE_GPU_INVALID_HANDLE) {
+    if (core.*.get_or_create_pipeline.?(core, &dl.pipeline_params) == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) {
         log.warn("deferred lighting: render pipeline creation failed", .{});
         return error.NotInitialized;
     }
@@ -210,26 +219,26 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_fac
     rebuildFrameSet(dl);
 
     var ac: u32 = 0;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR), .access = abi_runtime.KE_ACCESS_WRITE };
+    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE };
     ac += 1;
     for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| {
         const n = name orelse continue;
-        dl.access[ac] = .{ .cid = core.*.cid.?(core, n.ptr), .access = abi_runtime.KE_ACCESS_READ };
+        dl.access[ac] = .{ .cid = core.*.cid.?(core, n.ptr), .access = abi_runtime.c.KE_ACCESS_READ };
         ac += 1;
     }
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
-    dl.access[ac] = .{ .cid = camera_cid, .access = abi_runtime.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = camera_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
-    dl.access[ac] = .{ .cid = world_transform_cid, .access = abi_runtime.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = world_transform_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
-    dl.access[ac] = .{ .cid = skybox_cid, .access = abi_runtime.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = skybox_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
-    dl.access[ac] = .{ .cid = frame_cid, .access = abi_runtime.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = frame_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
     dl.access_count = ac;
 
-    const rd = abi_runtime.KE_ACCESS_READ;
+    const rd = abi_runtime.c.KE_ACCESS_READ;
     dl.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd } };
     dl.queries = .{ .{ .terms = dl.queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = dl.queries_terms[2..].ptr, .term_count = 1 } };
 }
@@ -238,9 +247,9 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_fac
 /// absent skipped. It leaves the pipeline and the shader modules alone, and does not free the
 /// block, so it can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
-    if (dl.io.chain != abi_render.KE_RENDER_CHAIN_NONE) dl.core.*.leave_chain.?(dl.core, dl.io.chain);
+    if (dl.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) dl.core.*.leave_chain.?(dl.core, dl.io.chain);
     for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| if (name) |n| gpa.free(n);
-    if (dl.layout == abi_render.KE_RENDER_BINDING_INVALID) return;
+    if (dl.layout == abi_render_gpu.c.KE_RENDER_BINDING_INVALID) return;
     dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     dl.binder.destroy_shader_layout.?(dl.binder, dl.layout);
@@ -248,22 +257,23 @@ fn destroyModule(dl: *const DeferredLightingModule) void {
 
 /// The `destroy` slot of the handle that `ke_render_deferred_lighting_create` returns. It releases
 /// the GPU objects and then frees the block.
-fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.ke_render_deferred_lighting) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting) callconv(.c) void {
     const dl: *DeferredLightingModule = @ptrCast(@alignCast(self orelse return));
+    _ = dl.runtime.unregister_system.?(dl.runtime, dl.system);
     destroyModule(dl);
     gpa.destroy(dl);
 }
 
-/// Builds the pass and registers its system in the render phase, with `pinned_thread` set to zero.
+/// Builds the pass and registers its system in the render phase.
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
 /// runtime, service, device or gbuffer fails as an invalid argument. A failed setup or a refused
 /// registration fails with its code and leaves the handle zeroed, after the block is released.
-export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_deferred_lighting_factory.ke_render_deferred_lighting_params, out_lighting: [*c]abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle) callconv(.c) abi_result.ke_result {
+export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params, out_lighting: [*c]abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_lighting orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null or p.gbuffer == null)
+    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.gbuffer == null)
         return R.code(error.InvalidArgument);
 
     const dl = gpa.create(DeferredLightingModule) catch |err| return R.code(err);
@@ -274,23 +284,24 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_defer
         return R.code(err);
     };
 
-    var params = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
+    var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     params.name = "render.deferred_lighting";
-    params.phase = abi_runtime.KE_PHASE_RENDER;
+    params.phase = abi_runtime.c.KE_PHASE_RENDER;
     params.queries = &dl.queries;
     params.query_count = dl.queries.len;
     params.access_list = &dl.access;
     params.access_count = dl.access_count;
-    params.pinned_thread = 0;
     params.user_data = dl;
     params.execute = system;
-    var system_id: abi_runtime.ke_system_id = 0;
+    var system_id: abi_framework.c.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &params, &system_id);
     if (registered != R.ok) {
         destroyModule(dl);
         gpa.destroy(dl);
         return registered;
     }
+    dl.runtime = rt;
+    dl.system = system_id;
 
     out.* = .{ .ref = @ptrCast(dl), .destroy = destroyHandle };
     return R.ok;
@@ -304,48 +315,127 @@ fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
 
 const testing = std.testing;
 
-const Stubs = @import("stubs");
+const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
+
+fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+    return &test_ids;
+}
+
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
+
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 11;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
+
+const zsub = @import("zsub");
+
+const Rig = struct {
+    dev: zsub.For(abi_render_gpu.c.ke_gpu_device),
+    binder: zsub.For(abi_render_gpu.c.ke_render_resource_binder),
+    core: zsub.For(abi_render.c.ke_render_service),
+    rt: zsub.For(abi_runtime.c.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.resource_view).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
+        _ = self.core.when(.resource_buffer).returnsFresh();
+        _ = self.core.when(.resource_buffer_size).returns(256);
+        _ = self.core.when(.join_chain).writesFresh(3);
+        _ = self.core.when(.chain_format).does(chainFormat);
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
+    }
+};
+
+fn chainFormat(args: zsub.For(abi_render.c.ke_render_service).Args(.chain_format)) abi_render_gpu.c.ke_gpu_texture_format {
+    return if (args[1] >= abi_render.c.KE_RENDER_STAGE_TONEMAP) abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+}
 
 test "creating and destroying the deferred lighting pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "destroying the deferred lighting pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
 test "a deferred lighting pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
+test "a missing frame is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
+test "a missing scene is refused" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+}
+
 test "a deferred lighting pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
-    var h: abi_render_deferred_lighting_factory.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .ibl_enabled = false, .camera_cid = 1, .world_transform_cid = 2, .skybox_cid = 3, .frame_cid = 4, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
+    var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
+    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }

@@ -5,10 +5,14 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Framework.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Framework.Native;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -19,7 +23,7 @@ public unsafe interface INativeSceneTree
 }
 
 
-public unsafe partial class SceneTree : IDisposable, INativeSceneTree
+public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTree
 {
     private ke_scene_tree* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroy;
@@ -49,20 +53,23 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
     }
 
     /// <summary>The tree's root entity. Valid for the whole lifetime of the tree.</summary>
-    public ulong Root
+    public Entity Root()
     {
-        get => Handle->root(Handle);
+        return Handle->root(Handle);
     }
 
     /// <summary>Creates a node attached under `parent`, or under the root when `parent` is KE_ENTITY_INVALID. The node exists when the call returns. Fails as an invalid argument for a null tree or out_node, and as general when the ecs refuses the node.</summary>
     /// <returns>Receives the node.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong CreateNode(string name, ulong parent)
+    public Entity CreateNode(string name, Entity parent)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            ulong resultOut = default;
+            Entity resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node(Handle, (sbyte*)namePtr, parent, &resultOut), "create_node");
             return resultOut;
         }
@@ -71,29 +78,32 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
     /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body. Fails as an invalid argument for a null tree, commands or out_node, and with the queue's code when it refuses the recording.</summary>
     /// <returns>Receives the reserved id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong CreateNodeDeferred(string name, ulong parent, nint commands)
+    public Entity CreateNodeDeferred(string name, Entity parent, INativeEcsCommands commands)
     {
-        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name + '\0');
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, (ke_ecs_commands*)commands, &resultOut), "create_node_deferred");
+            Entity resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, commands.Native, &resultOut), "create_node_deferred");
             return resultOut;
         }
     }
 
     /// <summary>Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns. Fails as an invalid argument for a null tree or the invalid entity, and as not found for an entity that is not a node.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void DestroyNode(ulong entity)
+    public void DestroyNode(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node(Handle, entity), "destroy_node");
     }
 
     /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an invalid argument for a null commands, and with the queue's code when it refuses the recording.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void DestroyNodeDeferred(ulong entity, nint commands)
+    public void DestroyNodeDeferred(Entity entity, INativeEcsCommands commands)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, (ke_ecs_commands*)commands), "destroy_node_deferred");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, commands.Native), "destroy_node_deferred");
     }
 
     /// <summary>Destroys every child of the root and leaves the root. Keeps going past a subtree the ecs refuses and returns the first failure.</summary>
@@ -104,9 +114,12 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
     }
 
     /// <summary>The node a name or a slash-separated path from the root names, or KE_ENTITY_INVALID when none does.</summary>
-    public ulong FindNode(string nameOrPath)
+    public Entity FindNode(string nameOrPath)
     {
-        var nameOrPathBytes = System.Text.Encoding.UTF8.GetBytes(nameOrPath + '\0');
+        var nameOrPathText = nameOrPath ?? "";
+        var nameOrPathSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameOrPathText.Length) + 1;
+        Span<byte> nameOrPathBytes = nameOrPathSize <= 512 ? stackalloc byte[512] : new byte[nameOrPathSize];
+        nameOrPathBytes[System.Text.Encoding.UTF8.GetBytes(nameOrPathText, nameOrPathBytes)] = 0;
         fixed (byte* nameOrPathPtr = nameOrPathBytes)
         {
             return Handle->find_node(Handle, (sbyte*)nameOrPathPtr);
@@ -114,19 +127,19 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree
     }
 
     /// <summary>The entity `entity` hangs from, or KE_ENTITY_INVALID when it is a root.</summary>
-    public ulong Parent(ulong entity)
+    public Entity Parent(Entity entity)
     {
         return Handle->parent(Handle, entity);
     }
 
     /// <summary>The first of `entity`'s children, or KE_ENTITY_INVALID when it has none. Paired with next_sibling this walks the child list one entry at a time.</summary>
-    public ulong FirstChild(ulong entity)
+    public Entity FirstChild(Entity entity)
     {
         return Handle->first_child(Handle, entity);
     }
 
     /// <summary>The next child of `entity`'s parent, or KE_ENTITY_INVALID at the end of the list. Children come back in the order they were added.</summary>
-    public ulong NextSibling(ulong entity)
+    public Entity NextSibling(Entity entity)
     {
         return Handle->next_sibling(Handle, entity);
     }

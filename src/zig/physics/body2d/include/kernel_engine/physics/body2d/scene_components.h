@@ -21,10 +21,12 @@
 extern "C" {
 #endif
 
-/// @brief Returns the set of physics's scene components: the 2D body and the 2D collider, with
-///        their field tables, so [entity.body2d] and [entity.collider2d] blocks apply. The set
-///        holds no state.
-KE_PHYSICS_BODY2D_API ke_scene_component_set_handle ke_physics_scene_components_create(void);
+/// @brief Adds physics's scene components to @p set: the 2D body and the 2D collider, with their
+///        field tables, so [entity.body2d] and [entity.collider2d] blocks apply.
+/// @param set [borrowed] The set the components are added to.
+/// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p set, or the code of the set that refused
+///         a component, after the components added before it.
+KE_PHYSICS_BODY2D_API ke_result ke_physics_scene_components_create(ke_scene_component_set *set);
 
 #ifdef __cplusplus
 }

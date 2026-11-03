@@ -3,7 +3,7 @@
 
 #include <kernel_engine/asset/mesh_data.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/task_pool/task_pool.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -39,21 +39,22 @@ extern "C"
          * or hand-built ke_model_data is not a valid argument. A null @p data is ignored. */
         void (*free_model)(struct ke_asset_loader *self, ke_model_data *data);
 
-        /** Asynchronously loads a 3D model, calling @p on_complete on a scheduler thread
+        /** Asynchronously loads a 3D model, calling @p on_complete on a task pool thread
          * once the load has finished or failed.
-         * @param scheduler [provider] Non-null task scheduler.
+         * @param task_pool [provider] Non-null task pool.
          * @param path [utf8] File path (copied internally; caller may free after return).
          * @param on_complete [completion:user_data] Callback invoked with the result; must not be NULL.
          * @param user_data  Forwarded unchanged to @p on_complete.
          * @return A ke_task* that can be waited on. */
         ke_task *(*load_model_async)(struct ke_asset_loader *self,
-                                     ke_scheduler *scheduler,
+                                     ke_task_pool *task_pool,
                                      const char *path,
                                      ke_load_model_complete_func on_complete,
                                      void *user_data);
 
     } ke_asset_loader;
 
+    /// [owner]
     typedef struct ke_asset_loader_handle
     {
         ke_asset_loader *ref;

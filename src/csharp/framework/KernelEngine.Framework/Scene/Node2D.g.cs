@@ -4,7 +4,11 @@
 #nullable enable
 
 using System.Numerics;
+
+using KernelEngine.Common;
 using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -14,14 +18,14 @@ public partial class Node2D : Node
 {
 
     [NativeField("Position", Component = typeof(Transform2dComponent))]
-    public partial Vector2 Position { get; set; }
+    public partial System.Numerics.Vector2 Position { get; set; }
 
     /// <summary>Radians, CCW positive.</summary>
     [NativeField("Rotation", Component = typeof(Transform2dComponent))]
     public partial float Rotation { get; set; }
 
     [NativeField("Scale", Component = typeof(Transform2dComponent))]
-    public partial Vector2 Scale { get; set; }
+    public partial System.Numerics.Vector2 Scale { get; set; }
 
     /// <summary>Where the plane sits along Z.</summary>
     [NativeField("Depth", Component = typeof(Transform2dComponent))]

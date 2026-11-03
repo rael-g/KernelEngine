@@ -11,16 +11,16 @@
 #define KE_COMPONENT_NAME_WORLD_TRANSFORM "world_transform"
 
 static const ke_component_field ke_transform_component_fields[] = {
-    { "position", KE_VARIANT_VEC3, offsetof(ke_transform_component, position), sizeof(((ke_transform_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
-    { "rotation", KE_VARIANT_QUAT, offsetof(ke_transform_component, rotation), sizeof(((ke_transform_component *)0)->rotation), { KE_VARIANT_QUAT, { .q = { 0.0f, 0.0f, 0.0f, 1.0f } } } },
-    { "scale", KE_VARIANT_VEC3, offsetof(ke_transform_component, scale), sizeof(((ke_transform_component *)0)->scale), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } } },
+    { "position", KE_VARIANT_VEC3, offsetof(ke_transform_component, position), sizeof(((ke_transform_component *)0)->position), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "rotation", KE_VARIANT_QUAT, offsetof(ke_transform_component, rotation), sizeof(((ke_transform_component *)0)->rotation), { KE_VARIANT_QUAT, { .q = { 0.0f, 0.0f, 0.0f, 1.0f } } }, NULL, 0 },
+    { "scale", KE_VARIANT_VEC3, offsetof(ke_transform_component, scale), sizeof(((ke_transform_component *)0)->scale), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
 };
 
 static const ke_component_field ke_transform2d_component_fields[] = {
-    { "position", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, position), sizeof(((ke_transform2d_component *)0)->position), { KE_VARIANT_NULL, { 0 } } },
-    { "rotation", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, rotation), sizeof(((ke_transform2d_component *)0)->rotation), { KE_VARIANT_NULL, { 0 } } },
-    { "scale", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, scale), sizeof(((ke_transform2d_component *)0)->scale), { KE_VARIANT_VEC2, { .v2 = { 1.0f, 1.0f } } } },
-    { "depth", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, depth), sizeof(((ke_transform2d_component *)0)->depth), { KE_VARIANT_NULL, { 0 } } },
+    { "position", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, position), sizeof(((ke_transform2d_component *)0)->position), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "rotation", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, rotation), sizeof(((ke_transform2d_component *)0)->rotation), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "scale", KE_VARIANT_VEC2, offsetof(ke_transform2d_component, scale), sizeof(((ke_transform2d_component *)0)->scale), { KE_VARIANT_VEC2, { .v2 = { 1.0f, 1.0f } } }, NULL, 0 },
+    { "depth", KE_VARIANT_FLOAT, offsetof(ke_transform2d_component, depth), sizeof(((ke_transform2d_component *)0)->depth), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
 #endif /* KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_ */

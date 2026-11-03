@@ -2,8 +2,8 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -20,9 +20,12 @@ bool breakBorrow = Environment.GetCommandLineArgs().Contains("--break-borrow");
 ScriptHost? churnWorld = null;
 var coupled = new List<Coupled>();
 
+using var pool = new EnkiTaskPool(workers);
+
 var services = new ServiceCollection()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler>(new EnkiScheduler(workers))
+    .AddFlecsEcsRegistry()
+    .Add<ITaskPool>(pool)
+    .Add<INativeTaskPool>(pool)
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new FrameworkModule(new SignalBusCapacities(
         MaxConnections: (uint)instances + 64,
@@ -50,7 +53,6 @@ var services = new ServiceCollection()
 
 using var sp = services.BuildServiceProvider();
 var runtime = sp.GetRequiredService<IRuntime>();
-var scheduler = sp.GetRequiredService<IScheduler>();
 
 runtime.LoadModules(sp);
 
@@ -69,7 +71,6 @@ if (churn > 0)
         + $"({perNode:F1} bytes retained per node created)");
     Console.WriteLine("[19_node_stress] a node whose handle is never freed cannot be collected, "
         + "so a real leak grows with rounds instead of settling");
-    runtime.Dispose();
     return 0;
 }
 
@@ -81,7 +82,7 @@ static void RunChurn(ScriptHost world, int count)
 }
 
 var spawned = instances * (kind == "both" ? 2 : 1);
-Console.WriteLine($"[19_node_stress] type={kind}, {spawned} instances, {ticks} ticks, {scheduler.NumWorkers} workers");
+Console.WriteLine($"[19_node_stress] type={kind}, {spawned} instances, {ticks} ticks, {pool.GetNumWorkers()} workers");
 Console.WriteLine("[19_node_stress] Mover reaches only itself; Anchored borrows, so only Mover may be sliced");
 
 const float dt = 1f / 60f;
@@ -100,7 +101,6 @@ foreach (var line in failures) Console.WriteLine($"[19_node_stress] FAIL {line}"
 if (failures.Count == 0 && coupled.Count > 0)
     Console.WriteLine($"[19_node_stress] borrows and signals held across {coupled.Count} parents");
 
-runtime.Dispose();
 return failures.Count;
 
 /// <summary>

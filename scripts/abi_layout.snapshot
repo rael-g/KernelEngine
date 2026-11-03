@@ -16,11 +16,13 @@ ke_input_snapshot size=232 align=8
   mouse_buttons_pressed 220
   mouse_buttons_released 224
   events_dropped 228
-ke_input_event size=16 align=4
+ke_input_event size=32 align=4
   kind 0
-  code 4
-  x 8
-  y 12
+  key 4
+  button 8
+  scroll 12
+  position 20
+  handled 28
 ke_input size=136 align=8
   handle 0
   update 8
@@ -58,16 +60,424 @@ ke_window_handle size=16 align=8
 
 [logger]
 
-[scheduler]
-ke_scheduler size=56 align=8
+[task_pool]
+ke_task_pool size=48 align=8
   handle 0
   dispatch 8
   dispatch_on_complete 16
   wait 24
   is_completed 32
-  dispatch_pinned 40
-  get_num_workers 48
-ke_scheduler_handle size=16 align=8
+  get_num_workers 40
+ke_task_pool_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[file_system]
+ke_file_stat size=16 align=8
+  kind 0
+  size 8
+ke_file_system size=48 align=8
+  handle 0
+  open 8
+  size 16
+  read_at 24
+  close 32
+  stat 40
+ke_file_system_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[configuration]
+ke_config_value size=8 align=8
+  i 0
+  d 0
+  b 0
+  s 0
+ke_config_field size=32 align=8
+  key 0
+  type 8
+  offset 12
+  size 16
+  default_value 24
+ke_configuration size=96 align=8
+  handle 0
+  get_int 8
+  get_double 16
+  get_bool 24
+  get_string 32
+  set_int 40
+  set_double 48
+  set_bool 56
+  set_string 64
+  subscribe 72
+  unsubscribe 80
+  fill 88
+ke_configuration_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_configuration_source size=16 align=8
+  handle 0
+  load 8
+ke_configuration_source_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[render_gpu]
+ke_ndc_convention size=2 align=1
+  z_zero_to_one 0
+  y_flip 1
+ke_gpu_clear_value size=16 align=4
+  color 0
+  depth_stencil 0
+ke_gpu_capabilities size=48 align=4
+  max_texture_dimension_2d 0
+  max_texture_array_layers 4
+  max_bind_groups 8
+  max_vertex_attributes 12
+  max_vertex_buffers 16
+  max_uniform_buffer_size 20
+  max_storage_buffer_size 24
+  max_compute_workgroup_size_x 28
+  max_compute_workgroup_size_y 32
+  max_compute_workgroup_size_z 36
+  supports_bindless 40
+  supports_mesh_shaders 41
+  supports_ray_tracing 42
+  copy_bytes_per_row_alignment 44
+ke_gpu_buffer_params size=32 align=8
+  label 0
+  initial_data 8
+  size 16
+  usage 24
+  mapped_at_creation 28
+ke_gpu_texture_params size=56 align=8
+  label 0
+  width 8
+  height 12
+  depth_or_array_layers 16
+  format 20
+  dimension 24
+  usage 28
+  mip_level_count 32
+  sample_count 33
+  initial_data 40
+  initial_data_size 48
+ke_gpu_texture_view_params size=24 align=8
+  label 0
+  format 8
+  dimension 12
+  aspect 16
+  base_mip_level 20
+  mip_level_count 21
+  base_array_layer 22
+  array_layer_count 23
+ke_gpu_sampler_params size=48 align=8
+  label 0
+  min_filter 8
+  mag_filter 12
+  mipmap_filter 16
+  address_mode_u 20
+  address_mode_v 24
+  address_mode_w 28
+  lod_min_clamp 32
+  lod_max_clamp 36
+  compare 40
+  max_anisotropy 44
+ke_gpu_shader_module_params size=24 align=8
+  label 0
+  code 8
+  byte_size 16
+ke_gpu_vertex_attribute size=16 align=8
+  shader_location 0
+  format 4
+  offset 8
+ke_gpu_vertex_buffer_layout size=24 align=8
+  stride 0
+  step_mode 8
+  attribute_count 12
+  attributes 16
+ke_gpu_blend_state size=32 align=4
+  blend_enabled 0
+  src_color 4
+  dst_color 8
+  color_op 12
+  src_alpha 16
+  dst_alpha 20
+  alpha_op 24
+  write_mask 28
+ke_gpu_depth_stencil_state size=48 align=4
+  depth_test_enabled 0
+  depth_write_enabled 1
+  depth_compare 4
+  stencil_test_enabled 8
+  stencil_front_fail 12
+  stencil_front_depth_fail 16
+  stencil_front_pass 20
+  stencil_front_compare 24
+  stencil_back_fail 28
+  stencil_back_depth_fail 32
+  stencil_back_pass 36
+  stencil_back_compare 40
+  stencil_read_mask 44
+  stencil_write_mask 45
+ke_gpu_bind_group_layout_entry size=20 align=4
+  binding 0
+  visibility 4
+  type 8
+  has_dynamic_offset 12
+  view_dimension 16
+ke_gpu_bind_group_layout_params size=24 align=8
+  label 0
+  entry_count 8
+  entries 16
+ke_gpu_bind_group_entry size=48 align=8
+  binding 0
+  type 4
+  buffer 8
+  buffer_offset 16
+  buffer_size 24
+  texture_view 32
+  sampler 40
+ke_gpu_bind_group_params size=32 align=8
+  label 0
+  layout 8
+  entry_count 16
+  entries 24
+ke_gpu_render_pipeline_params size=224 align=8
+  label 0
+  vertex_module 8
+  fragment_module 16
+  vertex_entry 24
+  fragment_entry 32
+  primitive_topology 40
+  cull_mode 44
+  front_face 48
+  vertex_buffer_count 52
+  vertex_buffers 56
+  blend_state 64
+  depth_stencil 96
+  bind_group_layouts 144
+  bind_group_layout_count 176
+  alpha_to_coverage_enabled 180
+  color_target_formats 184
+  color_target_count 216
+ke_gpu_compute_pipeline_params size=64 align=8
+  label 0
+  compute_module 8
+  compute_entry 16
+  bind_group_layouts 24
+  bind_group_layout_count 56
+ke_gpu_color_attachment size=32 align=8
+  view 0
+  load_op 8
+  store_op 12
+  clear_value 16
+ke_gpu_depth_stencil_attachment size=32 align=8
+  view 0
+  depth_load_op 8
+  depth_store_op 12
+  stencil_store_op 16
+  clear_depth 20
+  clear_stencil 24
+  depth_read_only 25
+  stencil_read_only 26
+ke_gpu_render_pass_params size=32 align=8
+  label 0
+  color_attachments 8
+  color_attachment_count 16
+  depth_stencil_attachment 24
+ke_gpu_command_encoder_params size=8 align=8
+  label 0
+ke_gpu_compute_pass_params size=8 align=8
+  label 0
+ke_gpu_command_buffer size=8 align=8
+  handle 0
+ke_render_binding_hint size=16 align=8
+  name 0
+  flags 8
+ke_render_shader_binding size=48 align=8
+  name 0
+  buffer 8
+  buffer_offset 16
+  buffer_size 24
+  texture_view 32
+  sampler 40
+ke_render_shader_layout_params size=32 align=8
+  shader 0
+  stages 8
+  hints 16
+  hint_count 24
+ke_render_material_data size=56 align=8
+  base_color 0
+  metallic 16
+  roughness 20
+  alpha_cutoff 24
+  ior 28
+  distortion_strength 32
+  albedo 40
+  normal_map 48
+ke_gpu_command_encoder_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_gpu_command_buffer_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_gpu_device size=280 align=8
+  handle 0
+  get_default_queue 8
+  queue_submit 16
+  queue_poll 24
+  queue_wait_idle 32
+  create_buffer 40
+  create_texture 48
+  create_texture_view 56
+  create_sampler 64
+  create_shader_module 72
+  create_render_pipeline 80
+  create_compute_pipeline 88
+  create_bind_group_layout 96
+  create_bind_group 104
+  destroy_buffer 112
+  destroy_texture 120
+  destroy_texture_view 128
+  destroy_sampler 136
+  destroy_shader_module 144
+  destroy_pipeline 152
+  destroy_bind_group_layout 160
+  destroy_bind_group 168
+  create_command_encoder 176
+  write_buffer 184
+  map_buffer 192
+  map_buffer_write 200
+  unmap_buffer 208
+  get_capabilities 216
+  query_extension 224
+  shader_language 232
+  get_ndc_convention 240
+  create_render_pipeline_async 248
+  flush_pipeline_compiles 256
+  map_buffer_read 264
+  destroy_compute_pipeline 272
+ke_gpu_device_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_gpu_render_pass size=112 align=8
+  handle 0
+  set_pipeline 8
+  set_bind_group 16
+  set_vertex_buffer 24
+  set_index_buffer 32
+  set_viewport 40
+  set_scissor 48
+  draw 56
+  draw_indexed 64
+  draw_indirect 72
+  end 80
+  push_debug_group 88
+  pop_debug_group 96
+  insert_debug_marker 104
+ke_gpu_compute_pass size=72 align=8
+  handle 0
+  set_pipeline 8
+  set_bind_group 16
+  dispatch 24
+  dispatch_indirect 32
+  end 40
+  push_debug_group 48
+  pop_debug_group 56
+  insert_debug_marker 64
+ke_gpu_command_encoder size=88 align=8
+  handle 0
+  begin_render_pass 8
+  begin_compute_pass 16
+  copy_buffer_to_buffer 24
+  copy_buffer_to_texture 32
+  copy_texture_to_texture 40
+  finish 48
+  copy_texture_to_buffer 56
+  push_debug_group 64
+  pop_debug_group 72
+  insert_debug_marker 80
+ke_gpu_render_target size=40 align=8
+  handle 0
+  acquire 8
+  present 16
+  size 24
+  format 32
+ke_gpu_render_target_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_resource_binder size=96 align=8
+  handle 0
+  provide 8
+  create_shader_layout 16
+  destroy_shader_layout 24
+  pipeline_layouts 32
+  create_set 40
+  destroy_set 48
+  bind_render_set 56
+  bind_compute_set 64
+  create_material 72
+  destroy_material 80
+  bind_material 88
+ke_render_resource_binder_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[view]
+ke_view_space_params size=4 align=4
+  depth_from_view_z 0
+ke_view_space size=56 align=8
+  handle 0
+  params 8
+  look_to 16
+  look_at 24
+  view_from_transform 32
+  perspective 40
+  orthographic 48
+ke_view_space_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[render_ui]
+ke_render_ui size=16 align=8
+  handle 0
+  load_font 8
+ke_render_ui_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[io]
+ke_io_dir_entry size=16 align=8
+  name 0
+  kind 8
+ke_io_result size=64 align=8
+  file 0
+  bytes 8
+  size 16
+  stat 24
+  exists 40
+  entries 48
+  entry_count 56
+ke_io size=136 align=8
+  handle 0
+  read_file 8
+  open 16
+  read_at 24
+  stat 32
+  file_exists 40
+  dir_exists 48
+  list_dir 56
+  write_file 64
+  make_dir 72
+  remove 80
+  rename 88
+  is_completed 96
+  wait 104
+  close 112
+  free_bytes 120
+  free_entries 128
+ke_io_handle size=16 align=8
   ref 0
   destroy 8
 
@@ -83,7 +493,7 @@ ke_runtime_module_params size=32 align=8
   user_data 8
   on_load 16
   on_unload 24
-ke_runtime_system_params size=104 align=8
+ke_runtime_system_params size=96 align=8
   name 0
   phase 8
   user_data 16
@@ -92,13 +502,12 @@ ke_runtime_system_params size=104 align=8
   query_count 40
   access_list 48
   access_count 56
-  pinned_thread 60
-  per_entity 64
-  after 72
-  after_count 80
-  before 88
-  before_count 96
-  exclusive 100
+  per_entity 60
+  after 64
+  after_count 72
+  before 80
+  before_count 88
+  exclusive 92
 ke_runtime_params size=12 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
@@ -124,12 +533,14 @@ ke_system_ctx size=32 align=8
   slice 24
 
 [ecs]
-ke_component_field size=48 align=8
+ke_component_field size=64 align=8
   name 0
   type 8
   offset 12
   size 16
   default_value 24
+  enum_names 48
+  enum_count 56
 ke_component_params size=40 align=8
   name 0
   size 8
@@ -147,7 +558,7 @@ ke_ecs_segment size=32 align=8
   count 8
   columns 16
   column_count 24
-ke_ecs size=104 align=8
+ke_ecs size=112 align=8
   handle 0
   entity_create 8
   entity_destroy 16
@@ -157,10 +568,11 @@ ke_ecs size=104 align=8
   component_remove 48
   component_get 56
   component_size 64
-  query_register 72
-  query_resolve 80
-  entity_reserve 88
-  entity_materialize 96
+  component_field_write 72
+  query_register 80
+  query_resolve 88
+  entity_reserve 96
+  entity_materialize 104
 ke_ecs_handle size=16 align=8
   ref 0
   destroy 8
@@ -185,6 +597,8 @@ ke_audio_handle size=16 align=8
   destroy 8
 
 [physics]
+ke_body_2d size=4 align=4
+  bits 0
 ke_collision_filter_2d size=8 align=4
   layer 0
   mask 4
@@ -249,14 +663,15 @@ ke_glyph_metrics size=40 align=4
   width 28
   height 32
   advance_x 36
-ke_font_data size=40 align=8
+ke_font_data size=48 align=8
   atlas_rgba 0
-  atlas_width 8
-  atlas_height 12
-  glyphs 16
-  glyph_count 24
-  line_height 28
-  ascent 32
+  atlas_byte_count 8
+  atlas_width 12
+  atlas_height 16
+  glyphs 24
+  glyph_count 32
+  line_height 36
+  ascent 40
 ke_font_loader size=24 align=8
   handle 0
   load_font 8
@@ -300,6 +715,22 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   chain 36
   depth 40
+ke_camera_frustum size=16 align=4
+  tan_half_fov_y 0
+  aspect 4
+  near_plane 8
+  far_plane 12
+ke_render_scene_component_ids size=40 align=4
+  mesh 0
+  camera 4
+  directional_light 8
+  point_light 12
+  spot_light 16
+  ambient_light 20
+  skybox 24
+  sprite2d 28
+  label 32
+  world_transform 36
 ke_render_service size=400 align=8
   handle 0
   declare 8
@@ -354,6 +785,28 @@ ke_render_service size=400 align=8
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
+ke_render_camera size=48 align=8
+  handle 0
+  view 8
+  view_rotation 16
+  projection 24
+  perspective_projection 32
+  perspective_frustum 40
+ke_render_camera_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_frame size=16 align=8
+  handle 0
+  frame_cid 8
+ke_render_frame_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_render_scene_resolve size=16 align=8
+  handle 0
+  component_ids 8
+ke_render_scene_resolve_handle size=16 align=8
+  ref 0
+  destroy 8
 
 [asset_loader]
 ke_asset_loader size=32 align=8
@@ -396,6 +849,11 @@ ke_model_data size=48 align=8
   material_count 24
   textures 32
   texture_count 40
+ke_mesh_shape_data size=32 align=8
+  vertices 0
+  vertex_count 8
+  indices 16
+  index_count 24
 
 [image_loader]
 ke_image_loader size=24 align=8
@@ -657,6 +1115,11 @@ ke_vertex size=48 align=4
   ty 36
   tz 40
   tw 44
+ke_mesh_vertex size=44 align=4
+  position 0
+  normal 12
+  uv 24
+  tangent 32
 
 [math]
 ke_vec2 size=8 align=4

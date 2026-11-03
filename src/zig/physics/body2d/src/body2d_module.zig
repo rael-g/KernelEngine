@@ -2,12 +2,19 @@
 //! world, through two fixed-post-update-phase systems. It also exports the set of those components
 //! a scene file can author.
 
+const abi_framework_components = @import("abi_framework_components");
+const abi_physics_contract = @import("abi_physics_contract");
+const abi_spatial_contract = @import("abi_spatial_contract");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_physics_components = @import("abi_physics_components");
+const abi_scene_tree = @import("abi_scene_tree");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_physics_body2d").logFn };
 
 const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
+const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_physics_body2d_factory = @import("abi_physics_body2d_factory");
 const abi_result = @import("abi_result");
@@ -19,7 +26,7 @@ var gpa = heap.gpa;
 
 /// A body the module created, and the update in which its entity was last seen holding it.
 const Tracked = struct {
-    body: abi_physics.ke_body_2d,
+    body: abi_physics.c.ke_body_2d,
     seen: u64,
 };
 
@@ -28,19 +35,19 @@ const Tracked = struct {
 /// fixed while the two systems are registered. `physics` is borrowed from the params. `tracked` holds every body the module created, by entity, and
 /// `update` counts the body system's runs, so a body whose entity no longer holds it is found.
 const Module = struct {
-    physics: *abi_physics.ke_physics_2d,
-    runtime: *abi_runtime.ke_runtime,
-    tree: *abi_framework.ke_scene_tree,
+    physics: *abi_physics.c.ke_physics_2d,
+    runtime: *abi_runtime.c.ke_runtime,
+    tree: *abi_scene_tree.c.ke_scene_tree,
     body_generation: u64 = 0,
     attempt: ?Attempt = null,
-    body_system: abi_runtime.ke_system_id = 0,
-    collider_system: abi_runtime.ke_system_id = 0,
-    tracked: std.AutoHashMapUnmanaged(abi_ecs.ke_entity, Tracked) = .empty,
+    body_system: abi_framework.c.ke_system_id = 0,
+    collider_system: abi_framework.c.ke_system_id = 0,
+    tracked: std.AutoHashMapUnmanaged(abi_asset_resolver.c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
-    body_queries_terms: [2]abi_runtime.ke_component_access = undefined,
-    body_queries: [1]abi_runtime.ke_query_decl = undefined,
-    collider_queries_terms: [4]abi_runtime.ke_component_access = undefined,
-    collider_queries: [3]abi_runtime.ke_query_decl = undefined,
+    body_queries_terms: [2]abi_runtime.c.ke_component_access = undefined,
+    body_queries: [1]abi_runtime.c.ke_query_decl = undefined,
+    collider_queries_terms: [4]abi_runtime.c.ke_component_access = undefined,
+    collider_queries: [3]abi_runtime.c.ke_query_decl = undefined,
 };
 
 /// What the collider system last tried to attach against: the tree's hierarchy generation, the
@@ -65,7 +72,7 @@ const R = @import("result").Result(.{});
 /// on the next update; nothing is written to the error output and the system still returns true.
 /// Before the step, a recorded body whose entity no longer holds it, destroyed or stripped of the
 /// component, is destroyed.
-fn bodySystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.ke_result {
+fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
     const m = moduleOf(user);
     const p = m.physics;
     m.update += 1;
@@ -75,22 +82,22 @@ fn bodySystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) call
 
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const bodies: [*c]abi_physics.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
-        const tcs0: [*c]abi_spatial.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+        const bodies: [*c]abi_physics_components.c.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const tcs0: [*c]abi_spatial.c.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             const b = &bodies[i];
             const pose = tcs0[i];
-            if (b.body == abi_physics.KE_BODY_2D_INVALID) {
-                if (p.create_body.?(p, b.type, pose.position.x, pose.position.y, &b.body) != R.ok) continue;
+            if (b.body.bits == 0) {
+                if (p.create_body.?(p, b.type, .{ .x = pose.position.x, .y = pose.position.y }, &b.body) != R.ok) continue;
                 m.tracked.put(gpa, segs.?[s].entities.?[i], .{ .body = b.body, .seen = m.update }) catch {
                     p.destroy_body.?(p, b.body);
-                    b.body = abi_physics.KE_BODY_2D_INVALID;
+                    b.body = abi_physics.c.ke_body_2d{ .bits = 0 };
                     continue;
                 };
                 m.body_generation +%= 1;
-                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
-                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
+                p.set_body_position.?(p, b.body, .{ .x = pose.position.x, .y = pose.position.y }, pose.rotation);
+                p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
                 log.info(
@@ -101,12 +108,12 @@ fn bodySystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) call
 
             if (m.tracked.getPtr(segs.?[s].entities.?[i])) |t| t.seen = m.update;
 
-            var st: abi_physics.ke_body_state_2d = undefined;
+            var st: abi_physics.c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
             if (pose.position.x != st.x or pose.position.y != st.y or pose.rotation != st.angle)
-                p.set_body_position.?(p, b.body, pose.position.x, pose.position.y, pose.rotation);
+                p.set_body_position.?(p, b.body, .{ .x = pose.position.x, .y = pose.position.y }, pose.rotation);
             if (b.velocity.x != st.velocity_x or b.velocity.y != st.velocity_y)
-                p.set_body_velocity.?(p, b.body, b.velocity.x, b.velocity.y);
+                p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
         }
     }
 
@@ -115,14 +122,14 @@ fn bodySystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) call
 
     s = 0;
     while (s < segc) : (s += 1) {
-        const bodies: [*c]abi_physics.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
-        const tcs: [*c]abi_spatial.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+        const bodies: [*c]abi_physics_components.c.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const tcs: [*c]abi_spatial.c.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             const b = &bodies[i];
-            if (b.body == abi_physics.KE_BODY_2D_INVALID) continue;
+            if (b.body.bits == 0) continue;
 
-            var st: abi_physics.ke_body_state_2d = undefined;
+            var st: abi_physics.c.ke_body_state_2d = undefined;
             p.get_body_state.?(p, b.body, &st);
 
             b.velocity = .{ .x = st.velocity_x, .y = st.velocity_y };
@@ -150,14 +157,14 @@ fn destroyUnseen(m: *Module) void {
 
 /// Counts the colliders and those still unattached, so `colliderSystem` can return before it
 /// builds any index.
-fn countColliders(ctx: ?*abi_runtime.ke_system_ctx) struct { total: usize, unattached: usize } {
+fn countColliders(ctx: ?*abi_runtime.c.ke_system_ctx) struct { total: usize, unattached: usize } {
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
     var total: usize = 0;
     var unattached: usize = 0;
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const cols: [*c]abi_physics.ke_collider2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const cols: [*c]abi_physics_components.c.ke_collider2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         total += segs.?[s].count;
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
@@ -176,7 +183,7 @@ fn countColliders(ctx: ?*abi_runtime.ke_system_ctx) struct { total: usize, unatt
 /// before the first fixture is added, so an out-of-memory failure, reported through the error
 /// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
 /// world refuses, is logged and stays unattached; neither is reported through the error output.
-fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.ke_result {
+fn colliderSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
@@ -186,16 +193,16 @@ fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) 
     const attempt: Attempt = .{ .hierarchy = m.tree.hierarchy_generation.?(m.tree), .bodies = m.body_generation, .colliders = counted.total };
     if (m.attempt) |last| if (std.meta.eql(last, attempt)) return R.ok;
 
-    var parents = std.AutoHashMap(abi_ecs.ke_entity, abi_ecs.ke_entity).init(gpa);
+    var parents = std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_asset_resolver.c.ke_entity).init(gpa);
     defer parents.deinit();
-    var bodies = std.AutoHashMap(abi_ecs.ke_entity, abi_physics.ke_body_2d).init(gpa);
+    var bodies = std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_physics.c.ke_body_2d).init(gpa);
     defer bodies.deinit();
 
     var segc: usize = 0;
     var segs = ctx.?.view.?(ctx, 2, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const hs: [*c]abi_framework.ke_hierarchy_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const hs: [*c]abi_framework_components.c.ke_hierarchy_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             parents.put(segs.?[s].entities.?[i], hs[i].parent) catch {
@@ -208,10 +215,10 @@ fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) 
     segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
-        const bs: [*c]abi_physics.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const bs: [*c]abi_physics_components.c.ke_body2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
-            if (bs[i].body == abi_physics.KE_BODY_2D_INVALID) continue;
+            if (bs[i].body.bits == 0) continue;
             bodies.put(segs.?[s].entities.?[i], bs[i].body) catch {
                 log.warn("collider pass: body index allocation failed", .{});
                 return R.code(error.OutOfMemory);
@@ -222,8 +229,8 @@ fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) 
     segs = ctx.?.view.?(ctx, 0, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
-        const cols: [*c]abi_physics.ke_collider2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
-        const tcs: [*c]abi_spatial.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+        const cols: [*c]abi_physics_components.c.ke_collider2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const tcs: [*c]abi_spatial.c.ke_transform2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             const col = &cols[i];
@@ -237,10 +244,10 @@ fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) 
 
             const off = tcs[i].position;
             const angle = tcs[i].rotation;
-            const filter = abi_physics.ke_collision_filter_2d{ .layer = col.layer, .mask = col.mask };
+            const filter = abi_physics.c.ke_collision_filter_2d{ .layer = col.layer, .mask = col.mask };
             const ok = R.ok == switch (col.kind) {
-                abi_physics.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, off.x, off.y, col.density, col.friction, col.restitution, &filter),
-                else => p.add_box_fixture.?(p, body, col.half_extents.x, col.half_extents.y, off.x, off.y, angle, col.density, col.friction, col.restitution, &filter),
+                abi_physics_components.c.KE_SHAPE_KIND_2D_CIRCLE => p.add_circle_fixture.?(p, body, col.radius, .{ .x = off.x, .y = off.y }, col.density, col.friction, col.restitution, &filter),
+                else => p.add_box_fixture.?(p, body, .{ .x = col.half_extents.x, .y = col.half_extents.y }, .{ .x = off.x, .y = off.y }, angle, col.density, col.friction, col.restitution, &filter),
             };
             col.attached = ok;
             const shape_fmt = "shape on entity {d}: kind={d} half=({d:.3},{d:.3}) r={d:.3} off=({d:.3},{d:.3}) angle={d:.4} density={d:.3} friction={d:.3} restitution={d:.3} attached={}";
@@ -256,10 +263,10 @@ fn colliderSystem(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, dt: f32) 
 /// on that chain, or null when the chain ends first. The shape's own entity is not checked, only
 /// its ancestors. The steps are bounded by the size of the parent index, so a cycle ends the walk.
 fn findBody(
-    parents: *std.AutoHashMap(abi_ecs.ke_entity, abi_ecs.ke_entity),
-    bodies: *std.AutoHashMap(abi_ecs.ke_entity, abi_physics.ke_body_2d),
-    start: abi_ecs.ke_entity,
-) ?abi_physics.ke_body_2d {
+    parents: *std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_asset_resolver.c.ke_entity),
+    bodies: *std.AutoHashMap(abi_asset_resolver.c.ke_entity, abi_physics.c.ke_body_2d),
+    start: abi_asset_resolver.c.ke_entity,
+) ?abi_physics.c.ke_body_2d {
     var e = parents.get(start) orelse return null;
     var steps: usize = 0;
     while (e != 0 and steps <= parents.count()) : (steps += 1) {
@@ -273,7 +280,7 @@ fn findBody(
 /// of that handle. Its two systems are unregistered from the runtime and the bodies the module
 /// created are destroyed with it, so the runtime and the physics world it was given must still be
 /// alive.
-fn destroyHandle(self: ?*abi_physics_body2d_factory.ke_physics_body2d_module) callconv(.c) void {
+fn destroyHandle(self: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
     _ = m.runtime.unregister_system.?(m.runtime, m.collider_system);
     _ = m.runtime.unregister_system.?(m.runtime, m.body_system);
@@ -288,9 +295,9 @@ fn destroyHandle(self: ?*abi_physics_body2d_factory.ke_physics_body2d_module) ca
 /// argument for a missing argument, out of memory for a failed allocation, and the runtime's code
 /// for a system it refuses. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
-    params: ?*const abi_physics_body2d_factory.ke_physics_body2d_module_params,
-    out_module: ?*abi_physics_body2d_factory.ke_physics_body2d_module_handle,
-) callconv(.c) abi_result.ke_result {
+    params: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_params,
+    out_module: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module_handle,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const pr = params orelse return R.code(error.InvalidArgument);
@@ -301,7 +308,7 @@ export fn ke_physics_body2d_module_create(
     return R.ok;
 }
 
-fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params) R.Error!abi_physics_body2d_factory.ke_physics_body2d_module_handle {
+fn create(pr: *const abi_physics_body2d_factory.c.ke_physics_body2d_module_params) R.Error!abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
     const rt = pr.runtime orelse return error.InvalidArgument;
     const ecs = pr.ecs orelse return error.InvalidArgument;
     const physics = pr.physics orelse return error.InvalidArgument;
@@ -311,26 +318,25 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     errdefer gpa.destroy(m);
     m.* = .{ .physics = physics, .runtime = rt, .tree = tree };
 
-    var body_cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.ke_component_params{ .name = abi_physics.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics.ke_body2d_component), .alignment = @alignOf(abi_physics.ke_body2d_component), .fields = &abi_physics.ke_body2d_component_fields, .field_count = abi_physics.ke_body2d_component_fields.len }, &body_cid));
-    var transform_cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.ke_component_params{ .name = abi_spatial.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(abi_spatial.ke_transform2d_component), .alignment = @alignOf(abi_spatial.ke_transform2d_component), .fields = &abi_spatial.ke_transform2d_component_fields, .field_count = abi_spatial.ke_transform2d_component_fields.len }, &transform_cid));
-    var collider_cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.ke_component_params{ .name = abi_physics.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics.ke_collider2d_component), .alignment = @alignOf(abi_physics.ke_collider2d_component), .fields = &abi_physics.ke_collider2d_component_fields, .field_count = abi_physics.ke_collider2d_component_fields.len }, &collider_cid));
-    var hierarchy_cid: abi_ecs.ke_component_id = abi_ecs.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.ke_component_params{ .name = abi_framework.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(abi_framework.ke_hierarchy_component), .alignment = @alignOf(abi_framework.ke_hierarchy_component), .fields = null, .field_count = 0 }, &hierarchy_cid));
+    var body_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics_components.c.ke_body2d_component), .alignment = @alignOf(abi_physics_components.c.ke_body2d_component), .fields = &abi_physics_contract.c.ke_body2d_component_fields, .field_count = abi_physics_contract.c.ke_body2d_component_fields.len }, &body_cid));
+    var transform_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, .size = @sizeOf(abi_spatial.c.ke_transform2d_component), .alignment = @alignOf(abi_spatial.c.ke_transform2d_component), .fields = &abi_spatial_contract.c.ke_transform2d_component_fields, .field_count = abi_spatial_contract.c.ke_transform2d_component_fields.len }, &transform_cid));
+    var collider_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics_components.c.ke_collider2d_component), .alignment = @alignOf(abi_physics_components.c.ke_collider2d_component), .fields = &abi_physics_contract.c.ke_collider2d_component_fields, .field_count = abi_physics_contract.c.ke_collider2d_component_fields.len }, &collider_cid));
+    var hierarchy_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(abi_framework_components.c.ke_hierarchy_component), .alignment = @alignOf(abi_framework_components.c.ke_hierarchy_component), .fields = null, .field_count = 0 }, &hierarchy_cid));
 
-    const rd = abi_runtime.KE_ACCESS_READ;
-    const wr = abi_runtime.KE_ACCESS_WRITE;
+    const rd = abi_runtime.c.KE_ACCESS_READ;
+    const wr = abi_runtime.c.KE_ACCESS_WRITE;
     m.body_queries_terms = .{ .{ .cid = body_cid, .access = wr }, .{ .cid = transform_cid, .access = wr } };
     m.body_queries = .{ .{ .terms = m.body_queries_terms[0..].ptr, .term_count = 2 } };
 
-    var sp = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
+    var sp = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     sp.name = "physics.body2d";
-    sp.phase = abi_runtime.KE_PHASE_FIXED_POST_UPDATE;
+    sp.phase = abi_runtime.c.KE_PHASE_FIXED_POST_UPDATE;
     sp.queries = &m.body_queries;
     sp.query_count = m.body_queries.len;
-    sp.pinned_thread = 0;
     sp.user_data = m;
     sp.execute = bodySystem;
     m.body_system = 0;
@@ -339,12 +345,11 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     m.collider_queries_terms = .{ .{ .cid = collider_cid, .access = wr }, .{ .cid = transform_cid, .access = rd }, .{ .cid = body_cid, .access = rd }, .{ .cid = hierarchy_cid, .access = rd } };
     m.collider_queries = .{ .{ .terms = m.collider_queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = m.collider_queries_terms[2..].ptr, .term_count = 1 }, .{ .terms = m.collider_queries_terms[3..].ptr, .term_count = 1 } };
 
-    var cp = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
+    var cp = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     cp.name = "physics.collider2d";
-    cp.phase = abi_runtime.KE_PHASE_FIXED_POST_UPDATE;
+    cp.phase = abi_runtime.c.KE_PHASE_FIXED_POST_UPDATE;
     cp.queries = &m.collider_queries;
     cp.query_count = m.collider_queries.len;
-    cp.pinned_thread = 0;
     cp.user_data = m;
     cp.execute = colliderSystem;
     m.collider_system = 0;
@@ -353,56 +358,106 @@ fn create(pr: *const abi_physics_body2d_factory.ke_physics_body2d_module_params)
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
-const Components = @import("scene_components").Set(&.{
-    .{ .name = abi_physics.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics.ke_body2d_component), .alignment = @alignOf(abi_physics.ke_body2d_component), .fields = &abi_physics.ke_body2d_component_fields },
-    .{ .name = abi_physics.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics.ke_collider2d_component), .alignment = @alignOf(abi_physics.ke_collider2d_component), .fields = &abi_physics.ke_collider2d_component_fields },
-});
+const components = [_]abi_ecs.c.ke_component_params{
+    .{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics_components.c.ke_body2d_component), .alignment = @alignOf(abi_physics_components.c.ke_body2d_component), .fields = &abi_physics_contract.c.ke_body2d_component_fields, .field_count = abi_physics_contract.c.ke_body2d_component_fields.len },
+    .{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics_components.c.ke_collider2d_component), .alignment = @alignOf(abi_physics_components.c.ke_collider2d_component), .fields = &abi_physics_contract.c.ke_collider2d_component_fields, .field_count = abi_physics_contract.c.ke_collider2d_component_fields.len },
+};
 
-/// The factory of the scene component set. The set holds no state, so it cannot fail.
-export fn ke_physics_scene_components_create() callconv(.c) abi_framework.ke_scene_component_set_handle {
-    return Components.handle();
+/// The factory of the scene components. Adds them in order and stops at the first one the set
+/// refuses.
+export fn ke_physics_scene_components_create(set_in: ?*abi_framework.c.ke_scene_component_set) callconv(.c) abi_result.c.ke_result {
+    const set = set_in orelse return R.code(error.InvalidArgument);
+    for (&components) |*component| {
+        const added = set.add.?(set, component, null);
+        if (added != R.ok) return added;
+    }
+    return R.ok;
 }
 
 const testing = std.testing;
 
-fn made(params: ?*const abi_physics_body2d_factory.ke_physics_body2d_module_params) !abi_physics_body2d_factory.ke_physics_body2d_module_handle {
-    var h: abi_physics_body2d_factory.ke_physics_body2d_module_handle = undefined;
+fn made(params: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_params) !abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
+    var h: abi_physics_body2d_factory.c.ke_physics_body2d_module_handle = undefined;
     try R.check(ke_physics_body2d_module_create(params, &h));
     return h;
 }
 
-const Stubs = @import("stubs");
+const zsub = @import("zsub");
+
+const EcsSub = zsub.For(abi_ecs.c.ke_ecs);
+const RuntimeSub = zsub.For(abi_runtime.c.ke_runtime);
+
+fn substituteEcs(ecs: *EcsSub) !void {
+    try ecs.init();
+    _ = ecs.when(.component_register).writesFresh(2);
+}
+
+fn substituteRuntime(rt: *RuntimeSub) !void {
+    try rt.init();
+    _ = rt.when(.register_system).writesFresh(2);
+}
+
+const refusals = [_][]const abi_result.c.ke_result{
+    &.{abi_result.c.KE_RESULT_OUT_OF_MEMORY},
+    &.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY },
+};
+
+/// Fake scene tree. Answers `generation` as its hierarchy generation, which a test moves by
+/// hand.
+const Tree = struct {
+    vtable: abi_scene_tree.c.ke_scene_tree,
+    generation: u64,
+
+    pub fn init(self: *Tree) void {
+        self.* = .{ .vtable = std.mem.zeroes(abi_scene_tree.c.ke_scene_tree), .generation = 0 };
+        self.vtable.handle = self;
+        self.vtable.hierarchy_generation = &hierarchyGeneration;
+    }
+
+    pub fn api(self: *Tree) *abi_scene_tree.c.ke_scene_tree {
+        return &self.vtable;
+    }
+
+    fn hierarchyGeneration(self: ?*abi_scene_tree.c.ke_scene_tree) callconv(.c) u64 {
+        const t: *Tree = @ptrCast(@alignCast(self.?.handle));
+        return t.generation;
+    }
+};
 
 test "creating and destroying the body2d module leaves no block allocated and no system registered" {
-    var ecs: Stubs.Ecs = undefined;
-    ecs.init();
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
+    var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
-    var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+    var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
     params.runtime = rt.api();
     params.ecs = ecs.api();
     params.physics = &physics;
-    var tree: Stubs.Tree = undefined;
+    var tree: Tree = undefined;
     tree.init();
     params.scene_tree = tree.api();
 
     const h = try made(&params);
-    try testing.expectEqual(@as(u32, 2), rt.registered);
+    try rt.received(.register_system).times(2);
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(u32, 0), rt.live_count);
+    try rt.received(.unregister_system).sameAs(rt.received(.register_system));
     try heap.expectNoLeaks();
 }
 
 test "a body2d module missing its runtime, ecs, physics or scene tree is refused" {
-    var ecs: Stubs.Ecs = undefined;
-    ecs.init();
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
+    var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
-    var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+    var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
     try testing.expect(std.meta.isError(made(null)));
     try testing.expect(std.meta.isError(made(&params)));
     params.runtime = rt.api();
@@ -411,7 +466,7 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
     try testing.expect(std.meta.isError(made(&params)));
     params.physics = &physics;
     try testing.expect(std.meta.isError(made(&params)));
-    var tree: Stubs.Tree = undefined;
+    var tree: Tree = undefined;
     tree.init();
     params.scene_tree = tree.api();
     const h = try made(&params);
@@ -420,61 +475,63 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
 }
 
 test "a body2d module the runtime refuses a system of fails the create and leaves no system registered" {
-    var ecs: Stubs.Ecs = undefined;
-    ecs.init();
-    var physics = std.mem.zeroes(abi_physics.ke_physics_2d);
+    var ecs: EcsSub = undefined;
+    try substituteEcs(&ecs);
+    defer ecs.deinit();
+    var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
-    for ([_]u32{ 0, 1 }) |limit| {
-        var rt: Stubs.Runtime = undefined;
-        rt.init();
-        rt.limit = limit;
-        var params = std.mem.zeroes(abi_physics_body2d_factory.ke_physics_body2d_module_params);
+    for (refusals) |answers| {
+        var rt: RuntimeSub = undefined;
+        try substituteRuntime(&rt);
+        defer rt.deinit();
+        _ = rt.when(.register_system).returnsSeq(answers);
+        var params = std.mem.zeroes(abi_physics_body2d_factory.c.ke_physics_body2d_module_params);
         params.runtime = rt.api();
         params.ecs = ecs.api();
         params.physics = &physics;
-        var tree: Stubs.Tree = undefined;
+        var tree: Tree = undefined;
         tree.init();
         params.scene_tree = tree.api();
 
         try testing.expect(std.meta.isError(made(&params)));
-        try testing.expectEqual(@as(u32, 0), rt.live_count);
+        try rt.received(.unregister_system).times(@intCast(answers.len - 1));
         try heap.expectNoLeaks();
     }
 }
 
 const FakeWorld = struct {
-    var next_body: abi_physics.ke_body_2d = 1;
-    var destroyed: [4]abi_physics.ke_body_2d = undefined;
+    var next_body: abi_physics.c.ke_body_2d = .{ .bits = 1 };
+    var destroyed: [4]abi_physics.c.ke_body_2d = undefined;
     var destroyed_count: usize = 0;
 
     fn reset() void {
-        next_body = 1;
+        next_body = .{ .bits = 1 };
         destroyed_count = 0;
     }
 
-    fn createBody(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_type_2d, _: f32, _: f32, out_body: [*c]abi_physics.ke_body_2d) callconv(.c) abi_result.ke_result {
-        next_body += 1;
-        out_body.* = next_body - 1;
+    fn createBody(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_type_2d, _: abi_math.c.ke_vec2, out_body: [*c]abi_physics.c.ke_body_2d) callconv(.c) abi_result.c.ke_result {
+        next_body.bits += 1;
+        out_body.* = .{ .bits = next_body.bits - 1 };
         return R.ok;
     }
 
-    fn destroyBody(_: [*c]abi_physics.ke_physics_2d, body: abi_physics.ke_body_2d) callconv(.c) void {
+    fn destroyBody(_: [*c]abi_physics.c.ke_physics_2d, body: abi_physics.c.ke_body_2d) callconv(.c) void {
         destroyed[destroyed_count] = body;
         destroyed_count += 1;
     }
 
-    fn getBodyState(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_2d, out: [*c]abi_physics.ke_body_state_2d) callconv(.c) void {
-        out.* = std.mem.zeroes(abi_physics.ke_body_state_2d);
+    fn getBodyState(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, out: [*c]abi_physics.c.ke_body_state_2d) callconv(.c) void {
+        out.* = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     }
 
-    fn setBodyPosition(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_2d, _: f32, _: f32, _: f32) callconv(.c) void {}
-    fn setBodyVelocity(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_2d, _: f32, _: f32) callconv(.c) void {}
-    fn setBodyFixedRotation(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_2d, _: bool) callconv(.c) void {}
-    fn setBodyGravityScale(_: [*c]abi_physics.ke_physics_2d, _: abi_physics.ke_body_2d, _: f32) callconv(.c) void {}
-    fn step(_: [*c]abi_physics.ke_physics_2d, _: f32) callconv(.c) void {}
+    fn setBodyPosition(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: abi_math.c.ke_vec2, _: f32) callconv(.c) void {}
+    fn setBodyVelocity(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: abi_math.c.ke_vec2) callconv(.c) void {}
+    fn setBodyFixedRotation(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: bool) callconv(.c) void {}
+    fn setBodyGravityScale(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, _: f32) callconv(.c) void {}
+    fn step(_: [*c]abi_physics.c.ke_physics_2d, _: f32) callconv(.c) void {}
 
-    fn api() abi_physics.ke_physics_2d {
-        var p = std.mem.zeroes(abi_physics.ke_physics_2d);
+    fn api() abi_physics.c.ke_physics_2d {
+        var p = std.mem.zeroes(abi_physics.c.ke_physics_2d);
         p.create_body = createBody;
         p.destroy_body = destroyBody;
         p.get_body_state = getBodyState;
@@ -488,15 +545,15 @@ const FakeWorld = struct {
 };
 
 const BodyView = struct {
-    var bodies: [1]abi_physics.ke_body2d_component = undefined;
-    var transforms: [1]abi_spatial.ke_transform2d_component = undefined;
-    var entities: [1]abi_ecs.ke_entity = .{7};
+    var bodies: [1]abi_physics_components.c.ke_body2d_component = undefined;
+    var transforms: [1]abi_spatial.c.ke_transform2d_component = undefined;
+    var entities: [1]abi_asset_resolver.c.ke_entity = .{7};
     var columns: [2]?*anyopaque = undefined;
-    var segment: abi_ecs.ke_ecs_segment = undefined;
+    var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var live: usize = 1;
 
-    fn view(_: [*c]abi_runtime.ke_system_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.ke_ecs_segment {
-        segment = std.mem.zeroes(abi_ecs.ke_ecs_segment);
+    fn view(_: [*c]abi_runtime.c.ke_system_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+        segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
         segment.count = live;
         segment.entities = &entities;
         columns = .{ &bodies, &transforms };
@@ -510,22 +567,23 @@ const BodyView = struct {
 test "a body whose entity no longer holds it is destroyed on the next update" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
     const m = try gpa.create(Module);
-    var tree: Stubs.Tree = undefined;
+    var tree: Tree = undefined;
     tree.init();
     m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.ke_system_ctx);
+    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
     ctx.view = BodyView.view;
 
-    BodyView.bodies[0] = std.mem.zeroes(abi_physics.ke_body2d_component);
-    BodyView.transforms[0] = std.mem.zeroes(abi_spatial.ke_transform2d_component);
+    BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);
+    BodyView.transforms[0] = std.mem.zeroes(abi_spatial.c.ke_transform2d_component);
     BodyView.live = 1;
     try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
     const body = BodyView.bodies[0].body;
-    try testing.expect(body != abi_physics.KE_BODY_2D_INVALID);
+    try testing.expect(body.bits != 0);
     try testing.expectEqual(@as(usize, 0), FakeWorld.destroyed_count);
 
     BodyView.live = 0;
@@ -539,16 +597,16 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
 }
 
 const OrphanView = struct {
-    var colliders: [1]abi_physics.ke_collider2d_component = undefined;
-    var transforms: [1]abi_spatial.ke_transform2d_component = undefined;
-    var hierarchies: [1]abi_framework.ke_hierarchy_component = undefined;
-    var entities: [1]abi_ecs.ke_entity = .{9};
+    var colliders: [1]abi_physics_components.c.ke_collider2d_component = undefined;
+    var transforms: [1]abi_spatial.c.ke_transform2d_component = undefined;
+    var hierarchies: [1]abi_framework_components.c.ke_hierarchy_component = undefined;
+    var entities: [1]abi_asset_resolver.c.ke_entity = .{9};
     var columns: [2]?*anyopaque = undefined;
-    var segment: abi_ecs.ke_ecs_segment = undefined;
+    var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var hierarchy_reads: usize = 0;
 
-    fn view(_: [*c]abi_runtime.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.ke_ecs_segment {
-        segment = std.mem.zeroes(abi_ecs.ke_ecs_segment);
+    fn view(_: [*c]abi_runtime.c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+        segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
         segment.entities = &entities;
         segment.count = 1;
         switch (index) {
@@ -567,17 +625,18 @@ const OrphanView = struct {
 
 test "a collider with no body above it is retried only once the hierarchy has moved" {
     var physics = FakeWorld.api();
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var tree: Stubs.Tree = undefined;
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
+    var tree: Tree = undefined;
     tree.init();
     const m = try gpa.create(Module);
     m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.ke_system_ctx);
+    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
     ctx.view = OrphanView.view;
 
-    OrphanView.colliders[0] = std.mem.zeroes(abi_physics.ke_collider2d_component);
-    OrphanView.hierarchies[0] = std.mem.zeroes(abi_framework.ke_hierarchy_component);
+    OrphanView.colliders[0] = std.mem.zeroes(abi_physics_components.c.ke_collider2d_component);
+    OrphanView.hierarchies[0] = std.mem.zeroes(abi_framework_components.c.ke_hierarchy_component);
     OrphanView.hierarchy_reads = 0;
 
     try testing.expect(colliderSystem(&ctx, m, 0.0) == R.ok);
@@ -596,16 +655,17 @@ test "a collider with no body above it is retried only once the hierarchy has mo
 test "destroying the module destroys the bodies it created" {
     FakeWorld.reset();
     var physics = FakeWorld.api();
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
     const m = try gpa.create(Module);
-    var tree: Stubs.Tree = undefined;
+    var tree: Tree = undefined;
     tree.init();
     m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.ke_system_ctx);
+    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
     ctx.view = BodyView.view;
 
-    BodyView.bodies[0] = std.mem.zeroes(abi_physics.ke_body2d_component);
+    BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);
     BodyView.live = 1;
     try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
 

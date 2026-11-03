@@ -10,6 +10,7 @@ extern "C"
 {
 #endif
 
+    /// [value]
     typedef struct ke_ui_font_handle
     {
         uint32_t bits;
@@ -34,6 +35,7 @@ extern "C"
 #define KE_LABEL_MAX_TEXT 256
 #define KE_LABEL_MAX_GLYPHS 256
 
+    /// [table]
     /// A single screen-space UI quad. A quad of zero size is skipped.
     typedef struct ke_ui_quad_component
     {
@@ -44,6 +46,7 @@ extern "C"
         float    color[4]; ///< [default:1 1 1 1] Premultiplied alpha RGBA.
     } ke_ui_quad_component;
 
+    /// [table]
     /// [node:Label,base:Node3D]
     /// A screen-space text label. Text, anchor, offset, color and font are the
     /// caller's input; glyph_count and glyphs[] are output, written each

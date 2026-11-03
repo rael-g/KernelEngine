@@ -3,13 +3,15 @@ using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
+using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Enki;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Enki;
 using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
@@ -18,15 +20,17 @@ using Microsoft.Extensions.DependencyInjection;
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 04 Normal Map"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.05f, 0.05f, 0.05f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {
-        var resources = sp.GetRequiredService<IRenderResources>();
+        var resources = sp.GetRequiredService<IRenderService>();
         Console.WriteLine("[KernelEngine] Example: 04_normal_map");
         Console.WriteLine("[KernelEngine] Features: normal_map, tbn, tangent_space, pbr_ggx");
 
@@ -49,7 +53,7 @@ var services = new ServiceCollection()
         var nm = resources.UploadTexture("bumps_normal", w, h, pixels);
 
         var matPlain = resources.CreateMaterial("plain", Vector4.One, roughness: 0.3f);
-        var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normalMap: nm);
+        var matNormal = resources.CreateMaterial("normal_mapped", Vector4.One, roughness: 0.3f, normal: nm);
 
         tree.AddNode(
             new DirectionalLight { Direction = Vector3.Normalize(new(0.5f, 1f, 0.5f)), Intensity = 2f },
@@ -58,12 +62,12 @@ var services = new ServiceCollection()
         var cam = tree.AddNode(new Camera { Fov = 60f, NearPlane = 0.1f, FarPlane = 1000f }, "Camera");
         cam.Position = new Vector3(0f, 0f, 3f);
 
-        var quad = KernelEngine.Render.MeshPrimitives.Quad(resources);
+        const string quad = "quad";
 
-        var left = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matPlain }, "PlainQuad");
+        var left = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = matPlain }, "PlainQuad");
         left.Position = new Vector3(-1.2f, 0f, 0f);
 
-        var right = tree.AddNode(new MeshRenderer { MeshHandle = quad, MaterialHandle = matNormal }, "NormalQuad");
+        var right = tree.AddNode(new MeshRenderer { Mesh = quad, MaterialHandle = matNormal }, "NormalQuad");
         right.Position = new Vector3(1.2f, 0f, 0f);
     }));
 

@@ -1,4 +1,9 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+
+using KernelEngine.Configuration.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -23,20 +28,11 @@ public unsafe partial struct ke_render_cluster_params
     [NativeTypeName("ke_render_camera *")]
     public KernelEngine.Render.Native.ke_render_camera* camera;
 
-    [NativeTypeName("ke_component_id")]
-    public uint point_light_cid;
+    [NativeTypeName("ke_render_scene_resolve *")]
+    public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
 
-    [NativeTypeName("ke_component_id")]
-    public uint spot_light_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public uint world_transform_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public uint camera_cid;
-
-    [NativeTypeName("ke_component_id")]
-    public uint frame_cid;
+    [NativeTypeName("ke_render_frame *")]
+    public KernelEngine.Render.Native.ke_render_frame* frame;
 
     [NativeTypeName("const char *")]
     public sbyte* output;
@@ -52,4 +48,7 @@ public unsafe partial struct ke_render_cluster_params
 
     [NativeTypeName("uint32_t")]
     public uint max_lights_per_cluster;
+
+    [NativeTypeName("ke_configuration *")]
+    public KernelEngine.Configuration.Native.ke_configuration* configuration;
 }

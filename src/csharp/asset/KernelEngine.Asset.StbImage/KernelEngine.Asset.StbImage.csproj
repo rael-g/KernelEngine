@@ -11,7 +11,6 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Asset.Abstractions\KernelEngine.Asset.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Asset\KernelEngine.Asset.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
@@ -21,4 +20,7 @@
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.3" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
 </Project>

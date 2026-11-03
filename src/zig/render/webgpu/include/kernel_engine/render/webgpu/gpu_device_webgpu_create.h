@@ -1,10 +1,11 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
-struct ke_scheduler;
+struct ke_task_pool;
 
 #ifndef KE_GPU_WEBGPU_API
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -25,19 +26,21 @@ extern "C"
 {
 #endif
 
-/// @brief Parameters for the WebGPU GPU device.
+/// [bag] @brief Parameters for the WebGPU GPU device.
 typedef struct ke_gpu_device_webgpu_params
 {
     /// When non-zero, asks the underlying graphics API to validate every call, which takes
     /// effect only where that API's validation layers are installed.
     bool                 enable_validation;
     /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this scheduler's worker pool. When NULL,
+    /// create_render_pipeline_async onto this task pool's worker pool. When NULL,
     /// the compile runs synchronously and the callback is invoked before returning.
-    struct ke_scheduler *scheduler;
+    struct ke_task_pool *task_pool; ///< [borrowed,optional]
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool                 debug_labels;
+    /// Optional, borrowed. Read once at creation.
+    ke_configuration    *configuration; ///< [optional]
 } ke_gpu_device_webgpu_params;
 
 /**

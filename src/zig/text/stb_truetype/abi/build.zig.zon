@@ -1,12 +1,13 @@
 .{
-    .name = .abi_text_stb_truetype,
+    .name = .abi_text_stb_truetype_factory,
     .version = "0.1.0",
-    .fingerprint = 0x5e77cccd5145291d,
+    .fingerprint = 0xf464144ecbe125a8,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_logger = .{ .path = "../../../abi/logger" },
-        .ke_abi_result = .{ .path = "../../../abi/result" },
-        .ke_abi_text = .{ .path = "../../../abi/text" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_text = .{ .path = "../../../abi/text" },
     },
     .paths = .{"."},
 }

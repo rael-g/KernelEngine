@@ -32,7 +32,8 @@ extern "C"
     /// are reused).
     /// `runtime` may be NULL, in which case no systems are registered and the
     /// caller is responsible for calling propagate_transforms itself. Passing one
-    /// registers the hierarchy maintenance that keeps world matrices current.
+    /// registers the hierarchy maintenance that keeps world matrices current, and
+    /// that runtime must outlive the tree, whose destroy unregisters it.
     /// @param out_tree [out] Receives the tree; left zeroed on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs or @p out_tree,
     ///         KE_RESULT_OUT_OF_MEMORY, or the code of the ecs or the runtime that refused.

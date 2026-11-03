@@ -2,6 +2,9 @@
 //! with its tonemapped copy, at the chain's tonemap stage. It also owns the creation and teardown
 //! of that pass, behind the one factory it exports.
 
+const abi_framework = @import("abi_framework");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_tonemap").logFn };
@@ -15,9 +18,9 @@ const R = @import("result").Result(.{});
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-const shader_layout = abi_render.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
     .shader = "tonemap",
-    .stages = abi_render.KE_GPU_SHADER_STAGE_FRAGMENT,
+    .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = null,
     .hint_count = 0,
 };
@@ -25,17 +28,20 @@ const shader_layout = abi_render.ke_render_shader_layout_params{
 /// The state of one tonemap pass. The factory allocates it and `destroyHandle` frees it. The
 /// runtime receives it as the context of `system` at registration. `io` carries the link the pass
 /// holds in the chain, given back when the module is destroyed.
+/// `destroyHandle` unregisters the system the factory registered before it frees the module.
 pub const TonemapModule = struct {
-    core: *abi_render.ke_render_service = undefined,
-    device: *abi_render.ke_gpu_device = undefined,
+    runtime: *abi_runtime.c.ke_runtime = undefined,
+    system: abi_framework.c.ke_system_id = 0,
+    core: *abi_render.c.ke_render_service = undefined,
+    device: *abi_render_gpu.c.ke_gpu_device = undefined,
 
-    pipeline_params: abi_render.ke_gpu_render_pipeline_params = undefined,
-    binder: *abi_render.ke_render_resource_binder = undefined,
-    layout: abi_render.ke_render_shader_layout = abi_render.KE_RENDER_BINDING_INVALID,
-    set: abi_render.ke_render_resource_set = abi_render.KE_RENDER_BINDING_INVALID,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
+    layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
+    set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
 
-    io: abi_render.ke_render_pass_io = std.mem.zeroes(abi_render.ke_render_pass_io),
-    access: [2]abi_runtime.ke_component_access = undefined,
+    io: abi_render.c.ke_render_pass_io = std.mem.zeroes(abi_render.c.ke_render_pass_io),
+    access: [2]abi_runtime.c.ke_component_access = undefined,
 };
 
 const log = std.log.scoped(.render_tonemap);
@@ -50,7 +56,7 @@ inline fn moduleOf(user: ?*anyopaque) *TonemapModule {
 /// Each frame it draws one full-screen triangle with no vertex input and no depth test, sampling
 /// the color source of its link through the shader named "tonemap". It recreates the set every
 /// frame, because the source's view is read from the pass each time.
-fn system(_: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
+fn system(_: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const tm = moduleOf(user);
     const core = tm.core;
 
@@ -58,7 +64,7 @@ fn system(_: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c
     if (pc == null) return R.ok;
 
     const hdr_view = pc.?.color_source.?(pc);
-    const bindings = [1]abi_render.ke_render_shader_binding{
+    const bindings = [1]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "t_hdr", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = hdr_view, .sampler = 0 },
     };
     tm.binder.destroy_set.?(tm.binder, tm.set);
@@ -86,24 +92,24 @@ fn system(_: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c
 /// failure surfaces at creation.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_tonemap_params) R.Error!void {
-    const core: *abi_render.ke_render_service = p.service.?;
+fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_tonemap_params) R.Error!void {
+    const core: *abi_render.c.ke_render_service = p.service.?;
     tm.core = core;
     tm.device = p.device.?;
 
     tm.io.name = "render.tonemap";
-    try R.check(core.*.join_chain.?(core, abi_render.KE_RENDER_STAGE_TONEMAP, abi_render.KE_RENDER_CHAIN_REPLACE, &tm.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR)));
-    const format = core.*.chain_format.?(core, abi_render.KE_RENDER_STAGE_TONEMAP);
+    try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP, abi_render.c.KE_RENDER_CHAIN_REPLACE, &tm.io.chain));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    const format = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP);
 
-    var vs: abi_render.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "tonemap", abi_render.KE_GPU_SHADER_STAGE_VERTEX, &vs));
-    var fs: abi_render.ke_gpu_shader_module = undefined;
-    try R.check(core.*.load_shader.?(core, "tonemap", abi_render.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
+    var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "tonemap", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
+    var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    try R.check(core.*.load_shader.?(core, "tonemap", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
     tm.binder = core.*.resource_binder.?(core).?;
     try R.check(tm.binder.create_shader_layout.?(tm.binder, &shader_layout, &tm.layout));
-    var pp = std.mem.zeroes(abi_render.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
     pp.label = "tonemap.pipeline";
     pp.vertex_module   = vs;
     pp.vertex_entry    = "vs_main";
@@ -115,29 +121,30 @@ fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_tone
     pp.blend_state.write_mask = 0x0F;
     pp.depth_stencil.depth_test_enabled = false;
     pp.depth_stencil.depth_write_enabled = false;
-    pp.depth_stencil.depth_compare = abi_render.KE_GPU_COMPARE_ALWAYS;
+    pp.depth_stencil.depth_compare = abi_render_gpu.c.KE_GPU_COMPARE_ALWAYS;
     tm.pipeline_params = pp;
-    if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == abi_render.KE_GPU_INVALID_HANDLE) return error.General;
+    if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return error.General;
 
     tm.access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.KE_RENDER_FRAME_COLOR), .access = abi_runtime.KE_ACCESS_WRITE },
-        .{ .cid = p.frame_cid, .access = abi_runtime.KE_ACCESS_READ },
+        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .cid = p.frame.?.frame_cid.?(p.frame), .access = abi_runtime.c.KE_ACCESS_READ },
     };
 }
 
 /// Gives the link back and releases the set of the last frame and the layout, each only when it is
 /// valid. Runs from `destroyHandle` and from the failure paths of `ke_render_tonemap_create`.
 fn destroyModule(tm: *const TonemapModule) void {
-    if (tm.io.chain != abi_render.KE_RENDER_CHAIN_NONE) tm.core.*.leave_chain.?(tm.core, tm.io.chain);
-    if (tm.layout == abi_render.KE_RENDER_BINDING_INVALID) return;
+    if (tm.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) tm.core.*.leave_chain.?(tm.core, tm.io.chain);
+    if (tm.layout == abi_render_gpu.c.KE_RENDER_BINDING_INVALID) return;
     tm.binder.destroy_set.?(tm.binder, tm.set);
     tm.binder.destroy_shader_layout.?(tm.binder, tm.layout);
 }
 
 /// The `destroy` slot of the handle `ke_render_tonemap_create` returns. It releases the GPU objects
 /// and frees the module; a null argument is ignored.
-fn destroyHandle(self: ?*abi_render_tonemap_factory.ke_render_tonemap) callconv(.c) void {
+fn destroyHandle(self: ?*abi_render_tonemap_factory.c.ke_render_tonemap) callconv(.c) void {
     const tm: *TonemapModule = @ptrCast(@alignCast(self orelse return));
+    _ = tm.runtime.unregister_system.?(tm.runtime, tm.system);
     destroyModule(tm);
     gpa.destroy(tm);
 }
@@ -146,12 +153,12 @@ fn destroyHandle(self: ?*abi_render_tonemap_factory.ke_render_tonemap) callconv(
 /// invalid argument and a failed allocation as out of memory. A failure in `setup`, or the runtime
 /// refusing `system`, fails with its code and leaves the handle zeroed. On success the runtime
 /// holds the module as the context of `system`, and the handle frees it.
-export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory.ke_render_tonemap_params, out_tonemap: [*c]abi_render_tonemap_factory.ke_render_tonemap_handle) callconv(.c) abi_result.ke_result {
+export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory.c.ke_render_tonemap_params, out_tonemap: [*c]abi_render_tonemap_factory.c.ke_render_tonemap_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_tonemap orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.service == null or p.device == null) return R.code(error.InvalidArgument);
+    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    if (p.service == null or p.device == null or p.frame == null) return R.code(error.InvalidArgument);
 
     const tm = gpa.create(TonemapModule) catch |err| return R.code(err);
     tm.* = .{};
@@ -164,83 +171,130 @@ export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory
     return R.ok;
 }
 
-fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.ke_render_tonemap_params, rt: *abi_runtime.ke_runtime) R.Error!void {
+fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_tonemap_params, rt: *abi_runtime.c.ke_runtime) R.Error!void {
     try setup(tm, p);
-    var params = std.mem.zeroes(abi_runtime.ke_runtime_system_params);
+    var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     params.name = "render.tonemap";
-    params.phase = abi_runtime.KE_PHASE_RENDER;
+    params.phase = abi_runtime.c.KE_PHASE_RENDER;
     params.access_list = &tm.access;
     params.access_count = tm.access.len;
-    params.pinned_thread = 0;
     params.user_data = tm;
     params.execute = system;
-    var system_id: abi_runtime.ke_system_id = 0;
+    var system_id: abi_framework.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &params, &system_id));
+    tm.runtime = rt;
+    tm.system = system_id;
 }
 
 const testing = std.testing;
 
-const Stubs = @import("stubs");
+const zsub = @import("zsub");
 
-fn testParams(rt: *Stubs.Runtime, core: *Stubs.Core, dev: *Stubs.Device) abi_render_tonemap_factory.ke_render_tonemap_params {
-    return .{ .runtime = rt.api(), .service = core.api(), .device = dev.api(), .frame_cid = 1 };
+const Rig = struct {
+    dev: zsub.For(abi_render_gpu.c.ke_gpu_device),
+    binder: zsub.For(abi_render_gpu.c.ke_render_resource_binder),
+    core: zsub.For(abi_render.c.ke_render_service),
+    rt: zsub.For(abi_runtime.c.ke_runtime),
+
+    fn init(self: *Rig) !void {
+        try self.dev.init();
+        try self.binder.init();
+        _ = self.binder.when(.create_shader_layout).writesFresh(2);
+        _ = self.binder.when(.create_set).writesFresh(6);
+        try self.core.init();
+        _ = self.core.when(.resource_binder).returns(self.binder.api());
+        _ = self.core.when(.load_shader).writesFresh(3);
+        _ = self.core.when(.get_or_create_pipeline).returnsFresh();
+        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.texture_view).returnsFresh();
+        _ = self.core.when(.join_chain).writesFresh(3);
+        _ = self.core.when(.chain_format).does(chainFormat);
+        try self.rt.init();
+        _ = self.rt.when(.register_system).writesFresh(2);
+    }
+
+    fn deinit(self: *Rig) void {
+        self.rt.deinit();
+        self.core.deinit();
+        self.binder.deinit();
+        self.dev.deinit();
+    }
+
+    fn expectReleased(self: *Rig) !void {
+        try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
+        try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
+        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
+    }
+};
+
+fn chainFormat(args: zsub.For(abi_render.c.ke_render_service).Args(.chain_format)) abi_render_gpu.c.ke_gpu_texture_format {
+    return if (args[1] >= abi_render.c.KE_RENDER_STAGE_TONEMAP) abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+}
+
+fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
+    return 1;
+}
+
+var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
+
+fn testParams(rig: *Rig) abi_render_tonemap_factory.c.ke_render_tonemap_params {
+    return .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .frame = &test_frame };
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
-    try R.check(ke_render_tonemap_create(&testParams(&rt, &core, &dev), &h));
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_tonemap_factory.c.ke_render_tonemap_handle = undefined;
+    try R.check(ke_render_tonemap_create(&testParams(&rig), &h));
     h.destroy.?(h.ref);
-    try testing.expectEqual(@as(i64, 0), dev.live);
-    try testing.expectEqual(@as(i64, 0), core.links);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
+test "destroying the tonemap pass unregisters every system it registered" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var h: abi_render_tonemap_factory.c.ke_render_tonemap_handle = undefined;
+    try R.check(ke_render_tonemap_create(&testParams(&rig), &h));
+    h.destroy.?(h.ref);
+    try rig.rt.received(.register_system).atLeast(1);
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
+}
+
 test "a tonemap pass whose shader fails to load releases what it had created" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    core.shader_loads_fail = true;
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
-    try testing.expect(ke_render_tonemap_create(&testParams(&rt, &core, &dev), &h) != R.ok);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
+    var h: abi_render_tonemap_factory.c.ke_render_tonemap_handle = undefined;
+    try testing.expect(ke_render_tonemap_create(&testParams(&rig), &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a tonemap pass the runtime refuses to register releases what it had created" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    rt.limit = 0;
-    var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
-    try testing.expect(ke_render_tonemap_create(&testParams(&rt, &core, &dev), &h) != R.ok);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
+    var h: abi_render_tonemap_factory.c.ke_render_tonemap_handle = undefined;
+    try testing.expect(ke_render_tonemap_create(&testParams(&rig), &h) != R.ok);
     try testing.expect(h.ref == null);
-    try testing.expectEqual(@as(i64, 0), dev.live);
+    try rig.expectReleased();
     try heap.expectNoLeaks();
 }
 
 test "a tonemap pass missing its device is refused as an invalid argument" {
-    var dev: Stubs.Device = undefined;
-    dev.init();
-    var core: Stubs.Core = undefined;
-    core.init(dev.api());
-    var rt: Stubs.Runtime = undefined;
-    rt.init();
-    var p = testParams(&rt, &core, &dev);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var p = testParams(&rig);
     p.device = null;
-    var h: abi_render_tonemap_factory.ke_render_tonemap_handle = undefined;
+    var h: abi_render_tonemap_factory.c.ke_render_tonemap_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_tonemap_create(&p, &h)));
     try testing.expect(h.ref == null);
     try heap.expectNoLeaks();

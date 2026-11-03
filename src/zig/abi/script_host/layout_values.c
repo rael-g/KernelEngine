@@ -1,0 +1,24 @@
+#include <stddef.h>
+#include <kernel_engine/framework/script_host.h>
+const unsigned long long layout_values[] = {
+    sizeof(ke_script_host),
+    offsetof(ke_script_host, handle),
+    offsetof(ke_script_host, register_type),
+    offsetof(ke_script_host, type_lookup),
+    offsetof(ke_script_host, type_components),
+    offsetof(ke_script_host, type_reach),
+    offsetof(ke_script_host, type_tag),
+    offsetof(ke_script_host, type_tag_group),
+    offsetof(ke_script_host, bind),
+    offsetof(ke_script_host, unbind),
+    offsetof(ke_script_host, bind_deferred),
+    offsetof(ke_script_host, unbind_deferred),
+    offsetof(ke_script_host, instance_of),
+    offsetof(ke_script_host, instance_count),
+    offsetof(ke_script_host, instances),
+    offsetof(ke_script_host, resolve),
+    sizeof(ke_script_host_handle),
+    offsetof(ke_script_host_handle, ref),
+    offsetof(ke_script_host_handle, destroy),
+    0,
+};

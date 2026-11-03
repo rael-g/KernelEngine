@@ -1,11 +1,11 @@
 .{
-    .name = .ke_abi_ecs,
+    .name = .abi_ecs,
     .version = "0.1.0",
-    .fingerprint = 0xf60e4091d4ea15bd,
+    .fingerprint = 0x3b1d2d9f933a3c21,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_math = .{ .path = "../math" },
-        .ke_abi_result = .{ .path = "../result" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

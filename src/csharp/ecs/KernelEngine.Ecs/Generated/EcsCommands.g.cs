@@ -5,6 +5,7 @@
 
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
@@ -18,7 +19,7 @@ public unsafe interface INativeEcsCommands
 }
 
 /// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.</summary>
-public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
+public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsCommands
 {
     private ke_ecs_commands* _native;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs_commands*, void> _destroy;
@@ -42,16 +43,16 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
     /// <summary>Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.</summary>
     /// <returns>Receives the id; KE_ENTITY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong Spawn()
+    public Entity Spawn()
     {
-        ulong resultOut = default;
+        Entity resultOut = default;
         KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn(Handle, &resultOut), "spawn");
         return resultOut;
     }
 
     /// <summary>Records giving `entity` the component `cid`, initialised from `size` bytes of `data`. The bytes are copied, so the caller's buffer need not outlive the call. `size` must equal the registered size of `cid`, or be 0 to attach the component without copying bytes into it.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Attach<TData>(ulong entity, uint cid, in TData data) where TData : unmanaged
+    public void Attach<TData>(Entity entity, ComponentId cid, in TData data) where TData : unmanaged
     {
         fixed (TData* dataPtr = &data)
         {
@@ -61,16 +62,26 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands
 
     /// <summary>Records removing component `cid` from `entity`.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Detach(ulong entity, uint cid)
+    public void Detach(Entity entity, ComponentId cid)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->detach(Handle, entity, cid), "detach");
     }
 
     /// <summary>Records destroying `entity`.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Despawn(ulong entity)
+    public void Despawn(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->despawn(Handle, entity), "despawn");
+    }
+
+    /// <summary>Records a structural operation for work the fixed verbs above cannot express. `fn` runs when the queue is applied, in order with the other operations. `user_size` bytes of `user` are copied, so the caller's buffer need not outlive the call.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void Defer<TUser>(nint fn, in TUser user) where TUser : unmanaged
+    {
+        fixed (TUser* userPtr = &user)
+        {
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->defer(Handle, (delegate* unmanaged[Cdecl]<ke_ecs*, void*, KernelEngine.Result.Native.Result>)fn, (void*)userPtr, (nuint)sizeof(TUser)), "defer");
+        }
     }
 
     /// <summary>Releases the native ecscommands.</summary>

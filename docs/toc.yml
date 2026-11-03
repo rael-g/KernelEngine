@@ -15,6 +15,3 @@
   - name: Engine
     href: ../build/native/docs/engine/
     homepage: ../build/native/docs/engine/index.md
-  - name: Kabic
-    href: ../build/native/docs/kabic/
-    homepage: ../build/native/docs/kabic/index.md

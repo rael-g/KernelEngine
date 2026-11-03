@@ -59,12 +59,12 @@ public sealed class FrameworkModule : IRuntimeModule
         {
             unsafe
             {
-                ke_signal_bus_params sp = default;
-                sp.max_signals = _signalCapacities.MaxSignals;
-                sp.max_connections = _signalCapacities.MaxConnections;
-                sp.max_events = _signalCapacities.MaxEvents;
-                sp.max_deliveries = _signalCapacities.MaxDeliveries;
-                sp.payload_capacity = _signalCapacities.PayloadCapacity;
+                SignalBusParams sp = default;
+                sp.MaxSignals = _signalCapacities.MaxSignals;
+                sp.MaxConnections = _signalCapacities.MaxConnections;
+                sp.MaxEvents = _signalCapacities.MaxEvents;
+                sp.MaxDeliveries = _signalCapacities.MaxDeliveries;
+                sp.PayloadCapacity = _signalCapacities.PayloadCapacity;
                 ke_signal_bus_handle h;
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.signal_bus_create(&sp, &h), "ke_signal_bus_create");
                 return new SignalBus(h);
@@ -90,7 +90,7 @@ public sealed class FrameworkModule : IRuntimeModule
                 p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
                 ke_world_handle w;
                 var made = KernelEngine.Framework.Native.NativeMethods.world_create(&p, &w);
-                if (made != KernelEngine.Result.Native.ke_result.KE_OK)
+                if (made != KernelEngine.Result.Native.Result.Ok)
                 {
                     tree.destroy(tree.@ref);
                     KernelEngine.NativeResults.ThrowIfFailed(made, "ke_world_create");

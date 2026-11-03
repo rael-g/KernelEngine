@@ -1,11 +1,11 @@
 .{
-    .name = .ke_abi_spatial,
+    .name = .abi_spatial,
     .version = "0.1.0",
-    .fingerprint = 0x9eaa0368f14b88b9,
+    .fingerprint = 0xba40d3b758c1bae6,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
-        .ke_abi_ecs = .{ .path = "../ecs" },
-        .ke_abi_math = .{ .path = "../math" },
+        .abi_math = .{ .path = "../math" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

@@ -9,7 +9,7 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
-| native interface | `INative<Domain>`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
+| native interface | `INativeRuntime`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
 | idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
 | result translation | `NativeResults` | a `ke_result`, or a managed exception | the matching exception, or a `ke_result` |
 | module | `IRuntimeModule` | `IRuntime` and `IServiceProvider` | components and systems registered into the runtime |
@@ -20,7 +20,7 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 **A wrapper owns one pointer.** It keeps the pointer and the factory's destroy function, disposes
 an owned wrapper by calling it, and a wrapper made by `Borrow` never destroys.
 
-**A pointer crosses assemblies through an interface.** The wrapper implements `INative<Domain>`
+**A pointer crosses assemblies through an interface.** The wrapper implements `INativeRuntime`
 explicitly, so `Native` is not a member of the class. A consumer in another assembly names the
 interface to read the pointer; no assembly grants another access to its internals.
 
@@ -33,9 +33,8 @@ written to the result code, queued on the wrapper, or held for the call that ret
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
 what was queued, or the exception `NativeResults.FromCode` makes for the code.
 
-**The scheduler has its own channel.** The dispatch methods that are not generated return a
-`Task`, except `DispatchPinned`, whose failures are raised through
-`Scheduler.UnobservedDispatchFailure`.
+**The task pool has its own channel.** The dispatch methods that are not generated return a
+`Task`, which the body's failure faults.
 
 **A module is the unit a game is loaded in.** `LoadModules` sorts the `IRuntimeModule` services
 by their `Dependencies` over the order they were added, and registers each with its `Name`; a
@@ -46,4 +45,4 @@ before any module loads.
 
 - A module's `Dependencies` are concrete module types, matched by `GetType()`; the native
   runtime sees only the sorted order and the name.
-- The `Native` property of `INative<Domain>` is the only way the pointer leaves a wrapper.
+- The `Native` property of `INativeRuntime` is the only way the pointer leaves a wrapper.

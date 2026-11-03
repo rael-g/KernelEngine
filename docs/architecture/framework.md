@@ -11,17 +11,17 @@ only through its vtable.
 
 | piece | contract | factory | receives | hands on |
 |---|---|---|---|---|
-| input actions | `ke_input_actions` | `ke_input_actions_create` | nothing; a `ke_input_snapshot` at each `evaluate` | named actions, polled |
+| input actions | `ke_input_actions` | `ke_input_actions_create` | a `ke_io`; a `ke_input_snapshot` at each `evaluate` | named actions, polled |
 | signal bus | `ke_signal_bus` | `ke_signal_bus_create` | `ke_signal_bus_params` | signal ids, connections, the deliveries of a frame |
 | script host | `ke_script_host` | `ke_script_host_create` | `ke_ecs`, `ke_script_host_params` | script types, bindings, `resolve` of a borrow |
 | scene hierarchy | `ke_scene_hierarchy` | `ke_scene_hierarchy_create` | `ke_runtime`, `ke_ecs` | world matrices, through one runtime system |
 | scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs`, `ke_runtime` | nodes as entities, and the hierarchy it owns |
-| asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root | textures, meshes, materials, fonts; render service handles |
-| world | `ke_world` | `ke_world_create` | `ke_world_params`: scheduler, ecs, runtime, scene tree, project root, logger, signal bus | the registry of how a scene fills a component |
-| scene loader | `ke_scene_loader` | `ke_scene_loader_create` | a `ke_world`, a project root | nodes, components and connections built from a scene file |
+| asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root, a `ke_io` | textures, meshes, materials, fonts; render service handles |
+| world | `ke_world` | `ke_world_create` | `ke_world_params`: ecs, runtime, scene tree, signal bus | the registry of how a scene fills a component |
+| scene loader | `ke_scene_loader` | `ke_scene_loader_create` | a `ke_world`, a `ke_asset_resolver`, a `ke_io` | nodes, components and connections built from a scene file |
 
 The managed side mirrors them as `World`, `SceneTree`, `ScriptHost`, `SignalBus`, `SceneLoader`,
-`NativeAssetResolver` and `NativeInputActions`, and composes them in three runtime modules:
+`AssetResolver` and `InputActions`, and composes them in three runtime modules:
 `FrameworkModule` (signal bus, world and the tree it owns), `SceneNodesModule` (script host,
 input, signal delivery, one behavior system per node type) and `SceneRouterModule` (scene
 switching). Each depends on the one before it.
@@ -36,7 +36,7 @@ runtime, and owns it; the hierarchy is destroyed only after the runtime has fini
 the slots of `ke_world`, and the logger and the signal bus through functions of the plugin that
 are not slots. For each component the world holds a field table (`ke_component_field`) and a
 callback (`ke_component_apply_fn`); a scene block is written through the table first, then the
-callback gets the entries. The world stores a scheduler and a project root that nothing reads.
+callback gets the entries.
 
 **A typed entity ends in a script factory.** The loader creates the entity and applies its
 blocks, then hands the entity and the normalized "type" string to the `ke_script_factory_func`

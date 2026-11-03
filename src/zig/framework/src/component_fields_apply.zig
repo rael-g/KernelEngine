@@ -1,14 +1,27 @@
 //! The generic path from authored table entries to component memory, driven by a component's field
-//! table.
+//! table and written through the ecs.
 
+const abi_ecs_variant = @import("abi_ecs_variant");
 const std = @import("std");
 
 const abi_ecs = @import("abi_ecs");
-const abi_math = @import("abi_math");
-const fields_rt = @import("component_fields");
+const abi_result = @import("abi_result");
 
-fn writeField(base: [*]u8, field: *const abi_ecs.ke_component_field, v: *const abi_ecs.ke_variant) bool {
-    return fields_rt.write(base, field, v);
+fn writeField(ecs: *abi_ecs.c.ke_ecs, component: *anyopaque, field: *const abi_ecs.c.ke_component_field, v: *const abi_ecs_variant.c.ke_variant) bool {
+    return ecs.component_field_write.?(ecs, component, field, v) == abi_result.c.KE_OK;
+}
+
+/// Turns a string written for a field with enum names into the integer it stands for. Returns
+/// false for a name the field does not declare; any other value passes unchanged.
+fn namedValue(field: *const abi_ecs.c.ke_component_field, value: *abi_ecs_variant.c.ke_variant) bool {
+    if (field.enum_names == null or value.type != abi_ecs_variant.c.KE_VARIANT_STRING) return true;
+    const names: [*]const ?[*:0]const u8 = @ptrCast(field.enum_names);
+    for (names[0..field.enum_count], 0..) |name, index| {
+        if (!keyIs(value.unnamed_0.s, name)) continue;
+        value.* = .{ .type = abi_ecs_variant.c.KE_VARIANT_INT, .unnamed_0 = .{ .i = @intCast(index) } };
+        return true;
+    }
+    return false;
 }
 
 fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
@@ -17,186 +30,141 @@ fn keyIs(key: [*c]const u8, name: [*c]const u8) bool {
 }
 
 /// Writes each entry whose key names a field, marks it consumed so that a caller can find the keys
-/// nothing understood, and returns null; or returns the field whose value the writer refused. It
+/// nothing understood, and returns null; or returns the field whose value the ecs refused. It
 /// stops at that value: the entries before it stay written, and the entries after it are not marked
 /// consumed. A key given twice is written twice, so the later value is what the field holds.
 pub fn apply(
+    ecs: *abi_ecs.c.ke_ecs,
     component: ?*anyopaque,
-    entries: [*c]abi_ecs.ke_variant_table_entry,
+    entries: [*c]abi_ecs_variant.c.ke_variant_table_entry,
     count: u32,
-    fields: [*]const abi_ecs.ke_component_field,
+    fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
-) ?*const abi_ecs.ke_component_field {
-    const base: [*]u8 = @ptrCast(component orelse return null);
+) ?*const abi_ecs.c.ke_component_field {
+    const base = component orelse return null;
     if (entries == null or count == 0) return null;
 
     for (entries[0..count]) |*entry| {
         for (fields[0..field_count]) |*field| {
             if (!keyIs(entry.key, field.name)) continue;
             entry.consumed = true;
-            if (!writeField(base, field, &entry.value)) return field;
+            var value = entry.value;
+            if (!namedValue(field, &value)) return field;
+            if (!writeField(ecs, base, field, &value)) return field;
             break;
         }
     }
     return null;
 }
 
-/// Seeds the declared default of each field. It reports no failure: a default the writer refuses
-/// is not returned to the caller.
+/// Seeds the declared default of each field that has one. It reports no failure: a default the ecs
+/// refuses is not returned to the caller.
 pub fn seedDefaults(
+    ecs: *abi_ecs.c.ke_ecs,
     component: ?*anyopaque,
-    fields: [*]const abi_ecs.ke_component_field,
+    fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 ) void {
-    fields_rt.seedDefaults(component, fields, field_count);
+    const base = component orelse return;
+    for (fields[0..field_count]) |*field| {
+        if (field.default_value.type == abi_ecs_variant.c.KE_VARIANT_NULL) continue;
+        _ = writeField(ecs, base, field, &field.default_value);
+    }
 }
 
 const testing = std.testing;
 
-const Probe = extern struct {
-    flag: u8,
-    count: i32,
-    amount: f32,
-    tint: abi_math.ke_vec4,
-    where: abi_math.ke_vec3,
-    label: [8]u8,
+const FakeEcs = struct {
+    api: abi_ecs.c.ke_ecs,
+    refused: ?[*:0]const u8 = null,
+    written: [8]struct { field: [*:0]const u8, value: i64 } = undefined,
+    count: usize = 0,
+
+    fn init(self: *FakeEcs) void {
+        self.* = .{ .api = std.mem.zeroes(abi_ecs.c.ke_ecs) };
+        self.api.handle = self;
+        self.api.component_field_write = &componentFieldWrite;
+    }
+
+    fn componentFieldWrite(self: ?*abi_ecs.c.ke_ecs, _: ?*anyopaque, field: ?*const abi_ecs.c.ke_component_field, value: ?*const abi_ecs_variant.c.ke_variant) callconv(.c) abi_result.c.ke_result {
+        const e: *FakeEcs = @ptrCast(@alignCast(self.?.handle));
+        const name = field.?.name.?;
+        if (e.refused) |r| if (std.mem.orderZ(u8, r, name) == .eq) return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
+        e.written[e.count] = .{ .field = name, .value = value.?.unnamed_0.i };
+        e.count += 1;
+        return abi_result.c.KE_OK;
+    }
 };
 
-const probe_fields = [_]abi_ecs.ke_component_field{
-    .{ .name = "flag", .type = abi_ecs.KE_VARIANT_BOOL, .offset = @offsetOf(Probe, "flag"), .size = 1 },
-    .{ .name = "count", .type = abi_ecs.KE_VARIANT_INT, .offset = @offsetOf(Probe, "count"), .size = 4 },
-    .{ .name = "amount", .type = abi_ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(Probe, "amount"), .size = 4 },
-    .{ .name = "tint", .type = abi_ecs.KE_VARIANT_VEC4, .offset = @offsetOf(Probe, "tint"), .size = 16 },
-    .{ .name = "where", .type = abi_ecs.KE_VARIANT_VEC3, .offset = @offsetOf(Probe, "where"), .size = 12 },
-    .{ .name = "label", .type = abi_ecs.KE_VARIANT_STRING, .offset = @offsetOf(Probe, "label"), .size = 8 },
+fn vInt(i: i64) abi_ecs_variant.c.ke_variant {
+    return .{ .type = abi_ecs_variant.c.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
+}
+
+const table = [_]abi_ecs.c.ke_component_field{
+    .{ .name = "count", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = 0, .size = 4, .default_value = vInt(5) },
+    .{ .name = "amount", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = 4, .size = 4 },
 };
 
-fn applyRefused(p: *Probe, list: []const abi_ecs.ke_variant_table_entry) ?*const abi_ecs.ke_component_field {
-    var buf: [8]abi_ecs.ke_variant_table_entry = undefined;
-    @memcpy(buf[0..list.len], list);
-    return apply(p, &buf, @intCast(list.len), &probe_fields, probe_fields.len);
-}
+var storage: [8]u8 = undefined;
 
-fn applyTo(p: *Probe, list: []const abi_ecs.ke_variant_table_entry) void {
-    _ = applyRefused(p, list);
-}
-
-fn vFloat(f: f64) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = f } };
-}
-
-fn vInt(i: i64) abi_ecs.ke_variant {
-    return .{ .type = abi_ecs.KE_VARIANT_INT, .unnamed_0 = .{ .i = i } };
-}
-
-const seeded_fields = [_]abi_ecs.ke_component_field{
-    .{ .name = "amount", .type = abi_ecs.KE_VARIANT_FLOAT, .offset = @offsetOf(Probe, "amount"), .size = 4, .default_value = vFloat(1.0) },
-    .{ .name = "tint", .type = abi_ecs.KE_VARIANT_VEC4, .offset = @offsetOf(Probe, "tint"), .size = 16, .default_value = .{ .type = abi_ecs.KE_VARIANT_VEC4, .unnamed_0 = .{ .v4 = .{ .x = 1, .y = 1, .z = 1, .w = 1 } } } },
-    .{ .name = "count", .type = abi_ecs.KE_VARIANT_INT, .offset = @offsetOf(Probe, "count"), .size = 4 },
-};
-
-test "a field the header gives a default starts there, not at zero" {
-    var p = std.mem.zeroes(Probe);
-    seedDefaults(&p, &seeded_fields, seeded_fields.len);
-
-    try testing.expectEqual(@as(f32, 1.0), p.amount);
-    try testing.expectEqual(@as(f32, 1.0), p.tint.w);
-    try testing.expectEqual(@as(i32, 0), p.count);
-}
-
-test "an authored value overrides the default it was seeded with" {
-    var p = std.mem.zeroes(Probe);
-    seedDefaults(&p, &seeded_fields, seeded_fields.len);
-    var one = [_]abi_ecs.ke_variant_table_entry{
-        .{ .key = "amount", .value = vFloat(0.25) },
+test "each entry whose key names a field is written through the ecs and marked consumed" {
+    var ecs: FakeEcs = undefined;
+    ecs.init();
+    var entries = [_]abi_ecs_variant.c.ke_variant_table_entry{
+        .{ .key = "amount", .value = vInt(2) },
+        .{ .key = "nonesuch", .value = vInt(1) },
     };
-    _ = apply(&p, &one, one.len, &seeded_fields, seeded_fields.len);
-
-    try testing.expectEqual(@as(f32, 0.25), p.amount);
-    try testing.expectEqual(@as(f32, 1.0), p.tint.w);
+    try testing.expectEqual(@as(?*const abi_ecs.c.ke_component_field, null), apply(&ecs.api, &storage, &entries, entries.len, &table, table.len));
+    try testing.expectEqual(@as(usize, 1), ecs.count);
+    try testing.expectEqualStrings("amount", std.mem.span(ecs.written[0].field));
+    try testing.expect(entries[0].consumed);
+    try testing.expect(!entries[1].consumed);
 }
 
-test "writes each described field at its own offset" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "flag", .value = .{ .type = abi_ecs.KE_VARIANT_BOOL, .unnamed_0 = .{ .b = true } } },
-        .{ .key = "count", .value = vInt(7) },
-        .{ .key = "amount", .value = vFloat(2.5) },
-    });
-    try testing.expectEqual(@as(u8, 1), p.flag);
-    try testing.expectEqual(@as(i32, 7), p.count);
-    try testing.expectEqual(@as(f32, 2.5), p.amount);
+test "a value the ecs refuses is returned by its field, and the entries after it are left alone" {
+    var ecs: FakeEcs = undefined;
+    ecs.init();
+    ecs.refused = "count";
+    var entries = [_]abi_ecs_variant.c.ke_variant_table_entry{
+        .{ .key = "count", .value = vInt(1) },
+        .{ .key = "amount", .value = vInt(2) },
+    };
+    const refusing = apply(&ecs.api, &storage, &entries, entries.len, &table, table.len);
+    try testing.expectEqualStrings("count", std.mem.span(refusing.?.name.?));
+    try testing.expectEqual(@as(usize, 0), ecs.count);
+    try testing.expect(!entries[1].consumed);
 }
 
-test "an integer authored for a float field is coerced, and the reverse" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "amount", .value = vInt(3) },
-        .{ .key = "count", .value = vFloat(9.0) },
-    });
-    try testing.expectEqual(@as(f32, 3.0), p.amount);
-    try testing.expectEqual(@as(i32, 9), p.count);
-}
-
-test "a float that is not a number authored for an integer field writes zero" {
-    var p = std.mem.zeroes(Probe);
-    p.count = 7;
-    applyTo(&p, &.{
-        .{ .key = "count", .value = vFloat(std.math.nan(f64)) },
-    });
-    try testing.expectEqual(@as(i32, 0), p.count);
-}
-
-test "a color authored with three components is opaque, not transparent" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "tint", .value = .{ .type = abi_ecs.KE_VARIANT_VEC3, .unnamed_0 = .{ .v3 = .{ .x = 1, .y = 0.5, .z = 0.25 } } } },
-    });
-    try testing.expectEqual(@as(f32, 1), p.tint.w);
-}
-
-test "a vec2 widens into a vec3 field, leaving z at zero for the domain to correct" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "where", .value = .{ .type = abi_ecs.KE_VARIANT_VEC2, .unnamed_0 = .{ .v2 = .{ .x = 4, .y = 5 } } } },
-    });
-    try testing.expectEqual(@as(f32, 4), p.where.x);
-    try testing.expectEqual(@as(f32, 0), p.where.z);
-}
-
-test "a string longer than the field still leaves it NUL-terminated" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "label", .value = .{ .type = abi_ecs.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "abcdefghijkl" } } },
-    });
-    try testing.expectEqual(@as(u8, 0), p.label[7]);
-    try testing.expectEqualStrings("abcdefg", std.mem.sliceTo(&p.label, 0));
-}
-
-test "a key the table does not describe leaves the component untouched" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
-        .{ .key = "nonesuch", .value = vFloat(1) },
-    });
-    try testing.expectEqual(std.mem.zeroes(Probe), p);
-}
-
-test "a value whose type cannot be coerced is refused by name, not written as garbage" {
-    var p = std.mem.zeroes(Probe);
-    p.amount = 1.5;
-    const refused = applyRefused(&p, &.{
-        .{ .key = "amount", .value = .{ .type = abi_ecs.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "nope" } } },
-    });
-    try testing.expectEqual(@as(f32, 1.5), p.amount);
-    try testing.expect(refused != null);
-    try testing.expectEqualStrings("amount", std.mem.span(refused.?.name.?));
-}
-
-test "the last value authored for a duplicated key wins" {
-    var p = std.mem.zeroes(Probe);
-    applyTo(&p, &.{
+test "a key given twice is written twice, the later value last" {
+    var ecs: FakeEcs = undefined;
+    ecs.init();
+    var entries = [_]abi_ecs_variant.c.ke_variant_table_entry{
         .{ .key = "count", .value = vInt(1) },
         .{ .key = "count", .value = vInt(2) },
-    });
-    try testing.expectEqual(@as(i32, 2), p.count);
+    };
+    _ = apply(&ecs.api, &storage, &entries, entries.len, &table, table.len);
+    try testing.expectEqual(@as(usize, 2), ecs.count);
+    try testing.expectEqual(@as(i64, 2), ecs.written[1].value);
+}
+
+test "only the fields that declare a default are seeded" {
+    var ecs: FakeEcs = undefined;
+    ecs.init();
+    seedDefaults(&ecs.api, &storage, &table, table.len);
+    try testing.expectEqual(@as(usize, 1), ecs.count);
+    try testing.expectEqualStrings("count", std.mem.span(ecs.written[0].field));
+    try testing.expectEqual(@as(i64, 5), ecs.written[0].value);
+}
+
+test "a name a field declares is written as its index, and an unknown one is refused" {
+    var fake: FakeEcs = undefined;
+    fake.init();
+    var slot: u32 = 0;
+    const names = [_]?[*:0]const u8{ "Left", "Right" };
+    const fields = [_]abi_ecs.c.ke_component_field{.{ .name = "action", .type = abi_ecs_variant.c.KE_VARIANT_INT, .enum_names = @ptrCast(&names), .enum_count = names.len }};
+    var entries = [_]abi_ecs_variant.c.ke_variant_table_entry{.{ .key = "action", .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "Right" } } }};
+    try testing.expect(apply(&fake.api, &slot, &entries, 1, &fields, 1) == null);
+    try testing.expectEqual(@as(i64, 1), fake.written[0].value);
+    entries[0].value.unnamed_0.s = "Up";
+    try testing.expect(apply(&fake.api, &slot, &entries, 1, &fields, 1) != null);
 }

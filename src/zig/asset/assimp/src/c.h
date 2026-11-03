@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_ASSET_ASSIMP_C_H_
 #define KERNEL_ENGINE_ASSET_ASSIMP_C_H_
 
+#include <assimp/cfileio.h>
 #include <assimp/cimport.h>
 #include <assimp/scene.h>
 #include <assimp/mesh.h>

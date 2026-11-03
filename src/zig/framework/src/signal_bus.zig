@@ -1,10 +1,11 @@
 //! The signal bus: signal names, the wires between emitters and reactors, and the emissions of
 //! the frame, behind the signal bus vtable.
 
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_signal_bus = @import("abi_signal_bus");
 const std = @import("std");
 
 const abi_ecs = @import("abi_ecs");
-const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
@@ -12,7 +13,7 @@ const heap = @import("heap");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
-const unknown_size: u32 = abi_framework.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
+const unknown_size: u32 = abi_signal_bus.c.KE_SIGNAL_PAYLOAD_SIZE_UNKNOWN;
 
 const default_max_signals = 64;
 const default_max_connections = 512;
@@ -27,16 +28,16 @@ const Signal = struct {
 };
 
 const Connection = struct {
-    source: abi_ecs.ke_entity,
+    source: abi_asset_resolver.c.ke_entity,
     signal_id: u32,
-    target: abi_ecs.ke_entity,
+    target: abi_asset_resolver.c.ke_entity,
     handler_id: u32,
 };
 
 /// `payload_offset` indexes `payloads`. A zero-size event keeps an offset but has no bytes behind
 /// it.
 const Event = struct {
-    source: abi_ecs.ke_entity,
+    source: abi_asset_resolver.c.ke_entity,
     signal_id: u32,
     payload_offset: u32,
     payload_size: u32,
@@ -57,7 +58,7 @@ const Event = struct {
 /// join, which stops filling its buffer and reports what fit. Nothing here locks, so a bus
 /// belongs to one thread at a time.
 const State = struct {
-    api: abi_framework.ke_signal_bus,
+    api: abi_signal_bus.c.ke_signal_bus,
 
     signals: []Signal,
     signal_count: u32,
@@ -71,18 +72,18 @@ const State = struct {
     payloads: []u8,
     payload_used: u32,
 
-    deliveries: []abi_framework.ke_signal_delivery,
+    deliveries: []abi_signal_bus.c.ke_signal_delivery,
     delivery_count: u32,
     joined: bool,
 };
 
 /// Logs `msg` and returns the code of `err`, for a failure whose reason the code does not carry.
-fn failed(err: R.Error, comptime msg: []const u8) abi_result.ke_result {
+fn failed(err: R.Error, comptime msg: []const u8) abi_result.c.ke_result {
     log.warn(msg, .{});
     return R.code(err);
 }
 
-fn stateOf(self: *abi_framework.ke_signal_bus) *State {
+fn stateOf(self: *abi_signal_bus.c.ke_signal_bus) *State {
     return @ptrCast(@alignCast(self.handle));
 }
 
@@ -97,11 +98,11 @@ fn orDefault(v: u32, d: u32) u32 {
 /// invalid argument; a full table fails as out of memory. A failed call leaves the table as it
 /// was.
 fn signalId(
-    self_in: ?*abi_framework.ke_signal_bus,
+    self_in: ?*abi_signal_bus.c.ke_signal_bus,
     name_in: [*c]const u8,
     payload_size: u32,
     out_id: [*c]u32,
-) callconv(.c) abi_result.ke_result {
+) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (name_in == null or out_id == null) {
         return failed(error.InvalidArgument, "signal name and out_id are required");
@@ -140,7 +141,7 @@ fn signalId(
 /// Slot `signal_lookup`. Like `signalId` but read-only: nothing is registered, and a miss returns
 /// false without an error.
 fn signalLookup(
-    self_in: ?*abi_framework.ke_signal_bus,
+    self_in: ?*abi_signal_bus.c.ke_signal_bus,
     name_in: [*c]const u8,
     out_id: [*c]u32,
 ) callconv(.c) bool {
@@ -161,12 +162,12 @@ fn signalLookup(
 /// however often it was connected. A null bus fails as an invalid argument, an id never
 /// registered as not found, and a full table as out of memory.
 fn connect(
-    self_in: ?*abi_framework.ke_signal_bus,
-    source: abi_ecs.ke_entity,
+    self_in: ?*abi_signal_bus.c.ke_signal_bus,
+    source: abi_asset_resolver.c.ke_entity,
     signal_id: u32,
-    target: abi_ecs.ke_entity,
+    target: abi_asset_resolver.c.ke_entity,
     handler_id: u32,
-) callconv(.c) abi_result.ke_result {
+) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const s = stateOf(self);
     if (signal_id >= s.signal_count) {
@@ -199,10 +200,10 @@ fn removeConnectionAt(s: *State, i: u32) void {
 /// Slot `disconnect`. Removes the wire with exactly this source, signal, target and handler, and
 /// returns whether one existed. Events and a join already taken are left alone.
 fn disconnect(
-    self_in: ?*abi_framework.ke_signal_bus,
-    source: abi_ecs.ke_entity,
+    self_in: ?*abi_signal_bus.c.ke_signal_bus,
+    source: abi_asset_resolver.c.ke_entity,
     signal_id: u32,
-    target: abi_ecs.ke_entity,
+    target: abi_asset_resolver.c.ke_entity,
     handler_id: u32,
 ) callconv(.c) bool {
     const self = self_in orelse return false;
@@ -223,7 +224,7 @@ fn disconnect(
 /// Slot `forget_entity`. Removes every wire the entity is the source or the target of. Only
 /// `connections` changes. Events and a join already taken are left alone, so the removal shows in
 /// `deliveries` from the next join on.
-fn forgetEntity(self_in: ?*abi_framework.ke_signal_bus, entity: abi_ecs.ke_entity) callconv(.c) void {
+fn forgetEntity(self_in: ?*abi_signal_bus.c.ke_signal_bus, entity: abi_asset_resolver.c.ke_entity) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
     var i: u32 = 0;
@@ -246,12 +247,12 @@ fn forgetEntity(self_in: ?*abi_framework.ke_signal_bus, entity: abi_ecs.ke_entit
 /// whose payload size was never declared is not initialized; a full event buffer or payload
 /// storage is out of memory.
 fn emit(
-    self_in: ?*abi_framework.ke_signal_bus,
-    source: abi_ecs.ke_entity,
+    self_in: ?*abi_signal_bus.c.ke_signal_bus,
+    source: abi_asset_resolver.c.ke_entity,
     signal_id: u32,
     payload: ?*const anyopaque,
     payload_size: u32,
-) callconv(.c) abi_result.ke_result {
+) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const s = stateOf(self);
     if (signal_id >= s.signal_count) {
@@ -294,7 +295,7 @@ fn emit(
 /// event with every connection of its source and signal; later calls return the result already
 /// there, valid until the next emit or `clearFrame`. Filling the `deliveries` buffer stops the
 /// walk without an error, so the count is what fit. A null bus reports a count of zero.
-fn deliveries(self_in: ?*abi_framework.ke_signal_bus, out_count: [*c]u32) callconv(.c) [*c]const abi_framework.ke_signal_delivery {
+fn deliveries(self_in: ?*abi_signal_bus.c.ke_signal_bus, out_count: [*c]u32) callconv(.c) [*c]const abi_signal_bus.c.ke_signal_delivery {
     const self = self_in orelse {
         if (out_count != null) out_count.* = 0;
         return null;
@@ -325,7 +326,7 @@ fn deliveries(self_in: ?*abi_framework.ke_signal_bus, out_count: [*c]u32) callco
 
 /// Slot `clear_frame`. Ends the frame: its events and payload bytes are dropped, and `joined` is
 /// set so the next `deliveries` call reports nothing. Connections are not touched.
-fn clearFrame(self_in: ?*abi_framework.ke_signal_bus) callconv(.c) void {
+fn clearFrame(self_in: ?*abi_signal_bus.c.ke_signal_bus) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
     s.event_count = 0;
@@ -336,7 +337,7 @@ fn clearFrame(self_in: ?*abi_framework.ke_signal_bus) callconv(.c) void {
 
 /// The destroy of the handle that `ke_signal_bus_create` returns, not a slot. Frees the arrays
 /// and the state.
-fn destroy(self_in: ?*abi_framework.ke_signal_bus) callconv(.c) void {
+fn destroy(self_in: ?*abi_signal_bus.c.ke_signal_bus) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
     for (s.signals[0..s.signal_count]) |sig| heap.gpa.free(sig.name);
@@ -353,16 +354,16 @@ fn destroy(self_in: ?*abi_framework.ke_signal_bus) callconv(.c) void {
 /// argument; a failed allocation frees what was allocated before it, fails as out of memory and
 /// leaves the handle zeroed.
 pub export fn ke_signal_bus_create(
-    params: [*c]const abi_framework_factory.ke_signal_bus_params,
-    out_bus: ?*abi_framework.ke_signal_bus_handle,
-) callconv(.c) abi_result.ke_result {
+    params: [*c]const abi_framework_factory.c.ke_signal_bus_params,
+    out_bus: ?*abi_signal_bus.c.ke_signal_bus_handle,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_bus orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_framework.ke_signal_bus_handle);
-    out.* = create(if (params != null) params.* else std.mem.zeroes(abi_framework_factory.ke_signal_bus_params)) catch |err| return R.code(err);
+    out.* = std.mem.zeroes(abi_signal_bus.c.ke_signal_bus_handle);
+    out.* = create(if (params != null) params.* else std.mem.zeroes(abi_framework_factory.c.ke_signal_bus_params)) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn create(params: abi_framework_factory.ke_signal_bus_params) error{OutOfMemory}!abi_framework.ke_signal_bus_handle {
+fn create(params: abi_framework_factory.c.ke_signal_bus_params) error{OutOfMemory}!abi_signal_bus.c.ke_signal_bus_handle {
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
     s.signals = try heap.gpa.alloc(Signal, orDefault(params.max_signals, default_max_signals));
@@ -373,7 +374,7 @@ fn create(params: abi_framework_factory.ke_signal_bus_params) error{OutOfMemory}
     errdefer heap.gpa.free(s.events);
     s.payloads = try heap.gpa.alloc(u8, orDefault(params.payload_capacity, default_payload_capacity));
     errdefer heap.gpa.free(s.payloads);
-    s.deliveries = try heap.gpa.alloc(abi_framework.ke_signal_delivery, orDefault(params.max_deliveries, default_max_deliveries));
+    s.deliveries = try heap.gpa.alloc(abi_signal_bus.c.ke_signal_delivery, orDefault(params.max_deliveries, default_max_deliveries));
 
     s.signal_count = 0;
     s.connection_count = 0;
@@ -401,8 +402,8 @@ const testing = std.testing;
 
 const Payload = extern struct { left_scored: u8 };
 
-fn makeBus() abi_framework.ke_signal_bus_handle {
-    var h = std.mem.zeroes(abi_framework.ke_signal_bus_handle);
+fn makeBus() abi_signal_bus.c.ke_signal_bus_handle {
+    var h = std.mem.zeroes(abi_signal_bus.c.ke_signal_bus_handle);
     _ = ke_signal_bus_create(null, &h);
     return h;
 }
@@ -410,7 +411,7 @@ fn makeBus() abi_framework.ke_signal_bus_handle {
 test "an emission reaches every node connected to it and nobody else" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var goal: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &goal));
@@ -425,9 +426,9 @@ test "an emission reaches every node connected to it and nobody else" {
     var count: u32 = 0;
     const list = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 2), count);
-    try testing.expectEqual(@as(abi_ecs.ke_entity, 2), list.?[0].target);
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_entity, 2), list.?[0].target);
     try testing.expectEqual(@as(u32, 7), list.?[0].handler_id);
-    try testing.expectEqual(@as(abi_ecs.ke_entity, 3), list.?[1].target);
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_entity, 3), list.?[1].target);
 
     const got: *const Payload = @ptrCast(@alignCast(list.?[0].payload.?));
     try testing.expectEqual(@as(u8, 1), got.left_scored);
@@ -436,7 +437,7 @@ test "an emission reaches every node connected to it and nobody else" {
 test "calling deliveries twice joins once, and a later emission still lands" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
@@ -457,7 +458,7 @@ test "calling deliveries twice joins once, and a later emission still lands" {
 test "clearing a frame drops emissions and keeps connections" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
@@ -477,7 +478,7 @@ test "clearing a frame drops emissions and keeps connections" {
 test "the same signal name under a different payload size is rejected" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var a: u32 = 0;
     var b: u32 = 0;
@@ -490,7 +491,7 @@ test "the same signal name under a different payload size is rejected" {
 test "connecting the same wire twice delivers once" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
@@ -506,7 +507,7 @@ test "connecting the same wire twice delivers once" {
 test "forgetting an entity removes every wire it is either end of" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "Ping", 0, &sig));
@@ -521,13 +522,13 @@ test "forgetting an entity removes every wire it is either end of" {
     var count: u32 = 0;
     const list = bus.deliveries.?(bus, &count);
     try testing.expectEqual(@as(u32, 1), count);
-    try testing.expectEqual(@as(abi_ecs.ke_entity, 3), list.?[0].target);
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_entity, 3), list.?[0].target);
 }
 
 test "emitting a payload of the wrong size fails instead of writing it" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var sig: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", @sizeOf(Payload), &sig));
@@ -544,14 +545,14 @@ test "emitting a payload of the wrong size fails instead of writing it" {
 test "emitting an unregistered signal fails" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
     try testing.expectEqual(R.code(error.NotFound), bus.emit.?(bus, 1, 42, null, 0));
 }
 
 test "a signal wired by name before its layout is declared still resolves to one id" {
     const h = makeBus();
     defer h.destroy.?(h.ref);
-    const bus: *abi_framework.ke_signal_bus = @ptrCast(h.ref);
+    const bus: *abi_signal_bus.c.ke_signal_bus = @ptrCast(h.ref);
 
     var wired: u32 = 0;
     try testing.expectEqual(R.ok, bus.signal_id.?(bus, "GoalScored", unknown_size, &wired));

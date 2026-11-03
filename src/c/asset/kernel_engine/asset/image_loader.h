@@ -9,7 +9,7 @@ extern "C"
 {
 #endif
 
-    /** Decodes 2D images (PNG/JPG/...) from disk into RGBA8.
+    /** [interface] Decodes 2D images (PNG/JPG/...) from disk into RGBA8.
      * Async dispatch is the caller's responsibility. */
     typedef struct ke_image_loader
     {
@@ -26,11 +26,13 @@ extern "C"
                                 const char *path,
                                 ke_texture_data **out_image);
 
-        /** Frees a ke_texture_data previously returned by load_image. */
+        /** [releases:Image] Frees a ke_texture_data previously returned by load_image. A null
+         * @p data is ignored. */
         void (*free_image)(struct ke_image_loader *self, ke_texture_data *data);
 
     } ke_image_loader;
 
+    /// [owner]
     typedef struct ke_image_loader_handle
     {
         ke_image_loader *ref;

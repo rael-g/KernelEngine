@@ -1,0 +1,10 @@
+.{
+    .name = .abi_render_handles,
+    .version = "0.1.0",
+    .fingerprint = 0xd3a2a9e2890b05e2,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

@@ -3,6 +3,7 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/common/export.h>
+#include <kernel_engine/io/io.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -19,20 +20,22 @@ extern "C"
 #  endif
 #endif
 
-/// What a grouped resource binder is built on.
+/// [bag] What a grouped resource binder is built on.
 typedef struct ke_render_resource_binder_grouped_params
 {
     /// Borrowed; must outlive the binder.
     ke_gpu_device *device;
     /// [utf8] Directory the build wrote each compiled shader's reflection into; copied.
     const char    *shader_dir;
+    /// [provider] Borrowed; must outlive the binder. The reflection is read through it.
+    ke_io         *io;
 } ke_render_resource_binder_grouped_params;
 
 /**
  * Creates a resource binder that gives every group of a shader one bind group and every material
  * one bind group of its own.
  * @return KE_OK, or on failure, with the error filled: invalid argument when
- *         @p params, its device or its shader directory is NULL.
+ *         @p params, its device, its shader directory or its io is NULL.
  * @param out_binder [out] Receives the handle; left zeroed on failure.
  */
 KE_RENDER_BINDER_GROUPED_API ke_result ke_render_resource_binder_grouped_create(

@@ -5,6 +5,10 @@
 
 using System.Numerics;
 
+using KernelEngine.Ecs;
+using KernelEngine.Input;
+using KernelEngine.Render;
+
 namespace KernelEngine.Framework;
 
 /// <summary>Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.</summary>
@@ -13,5 +17,5 @@ public partial class Skybox : Node3D
 {
 
     [NativeField("Cubemap", Component = typeof(SkyboxComponent))]
-    public partial KernelEngine.Render.TextureHandle CubemapHandle { get; set; }
+    public partial TextureHandle CubemapHandle { get; set; }
 }

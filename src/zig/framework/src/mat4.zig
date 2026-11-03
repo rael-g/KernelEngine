@@ -6,7 +6,7 @@ const abi_math = @import("abi_math");
 /// Writes `a` times `b` to `out`. Vectors are row vectors, so the first factor applies first. The
 /// product is finished in a temporary before the output is written, so the output may be the same
 /// matrix as either input. Cannot fail.
-pub fn mul(out: *abi_math.ke_mat4, a: *const abi_math.ke_mat4, b: *const abi_math.ke_mat4) void {
+pub fn mul(out: *abi_math.c.ke_mat4, a: *const abi_math.c.ke_mat4, b: *const abi_math.c.ke_mat4) void {
     var res: [16]f32 = undefined;
     for (0..4) |i| {
         for (0..4) |j| {
@@ -24,10 +24,10 @@ pub fn mul(out: *abi_math.ke_mat4, a: *const abi_math.ke_mat4, b: *const abi_mat
 /// last row. The quaternion is used as given and never normalized, so one that is not of unit
 /// length makes the rotation block non-orthogonal.
 pub fn fromTransform(
-    out: *abi_math.ke_mat4,
-    pos: *const abi_math.ke_vec3,
-    rot: *const abi_math.ke_quat,
-    scale: *const abi_math.ke_vec3,
+    out: *abi_math.c.ke_mat4,
+    pos: *const abi_math.c.ke_vec3,
+    rot: *const abi_math.c.ke_quat,
+    scale: *const abi_math.c.ke_vec3,
 ) void {
     const qx = rot.x;
     const qy = rot.y;
@@ -55,10 +55,10 @@ pub fn fromTransform(
 /// Writes the matrix of a 2D pose in the same layout as `fromTransform`: the rotation turns about
 /// the z axis, and depth lands in the z translation. The z scale is one.
 pub fn fromTransform2d(
-    out: *abi_math.ke_mat4,
-    pos: *const abi_math.ke_vec2,
+    out: *abi_math.c.ke_mat4,
+    pos: *const abi_math.c.ke_vec2,
     rotation: f32,
-    scale: *const abi_math.ke_vec2,
+    scale: *const abi_math.c.ke_vec2,
     depth: f32,
 ) void {
     const cs = @cos(rotation);
@@ -75,9 +75,9 @@ pub fn fromTransform2d(
 const std = @import("std");
 
 test "a 2d pose lands in the same row-major layout a 3d one produces" {
-    var m: abi_math.ke_mat4 = undefined;
-    const pos = abi_math.ke_vec2{ .x = 3.0, .y = 4.0 };
-    const scale = abi_math.ke_vec2{ .x = 1.0, .y = 1.0 };
+    var m: abi_math.c.ke_mat4 = undefined;
+    const pos = abi_math.c.ke_vec2{ .x = 3.0, .y = 4.0 };
+    const scale = abi_math.c.ke_vec2{ .x = 1.0, .y = 1.0 };
     fromTransform2d(&m, &pos, 0.0, &scale, 7.0);
 
     try std.testing.expectEqual(@as(f32, 3.0), m.m[12]);
@@ -88,24 +88,24 @@ test "a 2d pose lands in the same row-major layout a 3d one produces" {
 
 test "a quarter turn in 2d maps x onto y, the same sense a z quaternion does" {
     const half = @sqrt(2.0) / 2.0;
-    var flat: abi_math.ke_mat4 = undefined;
-    const pos2 = abi_math.ke_vec2{ .x = 0.0, .y = 0.0 };
-    const scale2 = abi_math.ke_vec2{ .x = 1.0, .y = 1.0 };
+    var flat: abi_math.c.ke_mat4 = undefined;
+    const pos2 = abi_math.c.ke_vec2{ .x = 0.0, .y = 0.0 };
+    const scale2 = abi_math.c.ke_vec2{ .x = 1.0, .y = 1.0 };
     fromTransform2d(&flat, &pos2, std.math.pi / 2.0, &scale2, 0.0);
 
-    var spatial: abi_math.ke_mat4 = undefined;
-    const pos3 = abi_math.ke_vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
-    const rot = abi_math.ke_quat{ .x = 0.0, .y = 0.0, .z = half, .w = half };
-    const scale3 = abi_math.ke_vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
+    var spatial: abi_math.c.ke_mat4 = undefined;
+    const pos3 = abi_math.c.ke_vec3{ .x = 0.0, .y = 0.0, .z = 0.0 };
+    const rot = abi_math.c.ke_quat{ .x = 0.0, .y = 0.0, .z = half, .w = half };
+    const scale3 = abi_math.c.ke_vec3{ .x = 1.0, .y = 1.0, .z = 1.0 };
     fromTransform(&spatial, &pos3, &rot, &scale3);
 
     for (0..16) |i| try std.testing.expectApproxEqAbs(spatial.m[i], flat.m[i], 1e-6);
 }
 
 test "2d scale reaches only the plane, leaving depth unscaled" {
-    var m: abi_math.ke_mat4 = undefined;
-    const pos = abi_math.ke_vec2{ .x = 0.0, .y = 0.0 };
-    const scale = abi_math.ke_vec2{ .x = 2.0, .y = 3.0 };
+    var m: abi_math.c.ke_mat4 = undefined;
+    const pos = abi_math.c.ke_vec2{ .x = 0.0, .y = 0.0 };
+    const scale = abi_math.c.ke_vec2{ .x = 2.0, .y = 3.0 };
     fromTransform2d(&m, &pos, 0.0, &scale, 0.0);
 
     try std.testing.expectEqual(@as(f32, 2.0), m.m[0]);

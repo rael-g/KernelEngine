@@ -1,7 +1,7 @@
 ﻿using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Runtime;
-using KernelEngine.Scheduler;
+using KernelEngine.TaskPool;
 
 using Microsoft.Extensions.DependencyInjection;
 
@@ -72,7 +72,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                 KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.script_host_create(ecs.Native, null, &handle), "ke_script_host_create");
                 return new ScriptHost(handle).Compose(
                     sp.GetRequiredService<World>(),
-                    sp.GetRequiredService<IEcsRegistry>(),
+                    (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>());
             }
         });
@@ -87,7 +87,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     {
         var scriptHost = services.GetRequiredService<ScriptHost>();
         var world = services.GetRequiredService<World>();
-        var sceneTree = world.SceneTree;
+        var sceneTree = world.Tree;
         var input = services.GetService<IInput>();
         var evaluator = services.GetService<IActionEvaluator>();
 
@@ -98,7 +98,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         {
             scriptHost.ReleaseRetired();
             input?.Update();
-            _inputSnapshot = input?.CaptureSnapshot();
+            _inputSnapshot = (input as KernelEngine.Input.Input)?.CaptureSnapshot();
             evaluator?.Evaluate(_inputSnapshot);
         }, accessList: []);
 
@@ -128,8 +128,8 @@ public sealed class SceneNodesModule : IRuntimeModule
                 var uses = new List<NodeComponentUse>();
                 if (!probe.CollectHookComponents(uses, fixedStep)) probe.CollectBehaviorComponents(uses);
 
-                var owned = new Dictionary<uint, bool>();
-                var reached = new Dictionary<uint, bool>();
+                var owned = new Dictionary<ComponentId, bool>();
+                var reached = new Dictionary<ComponentId, bool>();
                 foreach (var use in uses)
                 {
                     var cid = scriptHost.CidOfName(use.Name);
@@ -158,16 +158,17 @@ public sealed class SceneNodesModule : IRuntimeModule
                     var view = new View(scriptHost, dt, _inputSnapshot, ctx);
                     using (scriptHost.EnterSystem(ctx))
                     {
-                        var segments = KernelEngine.Runtime.SystemCtx.Of(ctx).View(0);
+                        var system = KernelEngine.Runtime.SystemCtx.Of(ctx);
+                        var segments = system.ViewCount(0);
                         var total = 0;
-                        for (int s = 0; s < segments.Length; s++)
-                            total += segments[s].Entities.Length;
+                        for (int s = 0; s < segments; s++)
+                            total += system.ViewAt(0, s).Entities.Length;
 
                         var (first, last) = SliceOf(ctx, total);
                         var seen = 0;
-                        for (int s = 0; s < segments.Length && seen < last; s++)
+                        for (int s = 0; s < segments && seen < last; s++)
                         {
-                            var entities = segments[s].Entities;
+                            var entities = system.ViewAt(0, s).Entities;
                             for (int e = 0; e < entities.Length; e++, seen++)
                             {
                                 if (seen < first) continue;
@@ -194,6 +195,6 @@ public sealed class SceneNodesModule : IRuntimeModule
         else node.OnUpdate(in view);
     }
 
-    private static ComponentAccess Touches(uint cid, bool writes) =>
+    private static ComponentAccess Touches(ComponentId cid, bool writes) =>
         new() { Cid = cid, Access = writes ? RuntimeAccess.Write : RuntimeAccess.Read };
 }

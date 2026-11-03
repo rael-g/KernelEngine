@@ -4,7 +4,11 @@
 #nullable enable
 
 using System.Numerics;
+
+using KernelEngine.Ecs;
+using KernelEngine.Input;
 using KernelEngine.Physics;
+using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
@@ -18,7 +22,7 @@ public partial class Body2D : Node2D
     public partial BodyType2D Type { get; set; }
 
     [NativeField("Velocity", Component = typeof(Body2dComponent))]
-    public partial Vector2 Velocity { get; set; }
+    public partial System.Numerics.Vector2 Velocity { get; set; }
 
     /// <summary>Radians per second, CCW positive.</summary>
     [NativeField("AngularVelocity", Component = typeof(Body2dComponent))]

@@ -3,6 +3,8 @@ const abi = @import("abi");
 const c = @import("c");
 
 fn expectSameLayout(comptime A: type, comptime C: type) !void {
+    @setEvalBranchQuota(100_000_000);
+    if (@typeInfo(C) == .@"opaque") return;
     try std.testing.expectEqual(@sizeOf(C), @sizeOf(A));
     try std.testing.expectEqual(@alignOf(C), @alignOf(A));
     switch (@typeInfo(A)) {
@@ -20,309 +22,204 @@ fn translated(comptime name: []const u8) type {
 }
 
 test "every record is laid out as the header lays it out" {
-    try expectSameLayout(abi.ke_gpu_clear_value, translated("ke_gpu_clear_value"));
-    try expectSameLayout(abi.ke_gpu_capabilities, translated("ke_gpu_capabilities"));
-    try expectSameLayout(abi.ke_ndc_convention, translated("ke_ndc_convention"));
-    try expectSameLayout(abi.ke_gpu_buffer_params, translated("ke_gpu_buffer_params"));
-    try expectSameLayout(abi.ke_gpu_texture_params, translated("ke_gpu_texture_params"));
-    try expectSameLayout(abi.ke_gpu_texture_view_params, translated("ke_gpu_texture_view_params"));
-    try expectSameLayout(abi.ke_gpu_sampler_params, translated("ke_gpu_sampler_params"));
-    try expectSameLayout(abi.ke_gpu_shader_module_params, translated("ke_gpu_shader_module_params"));
-    try expectSameLayout(abi.ke_gpu_vertex_attribute, translated("ke_gpu_vertex_attribute"));
-    try expectSameLayout(abi.ke_gpu_vertex_buffer_layout, translated("ke_gpu_vertex_buffer_layout"));
-    try expectSameLayout(abi.ke_gpu_blend_state, translated("ke_gpu_blend_state"));
-    try expectSameLayout(abi.ke_gpu_depth_stencil_state, translated("ke_gpu_depth_stencil_state"));
-    try expectSameLayout(abi.ke_gpu_bind_group_layout_entry, translated("ke_gpu_bind_group_layout_entry"));
-    try expectSameLayout(abi.ke_gpu_bind_group_layout_params, translated("ke_gpu_bind_group_layout_params"));
-    try expectSameLayout(abi.ke_gpu_bind_group_entry, translated("ke_gpu_bind_group_entry"));
-    try expectSameLayout(abi.ke_gpu_bind_group_params, translated("ke_gpu_bind_group_params"));
-    try expectSameLayout(abi.ke_gpu_render_pipeline_params, translated("ke_gpu_render_pipeline_params"));
-    try expectSameLayout(abi.ke_gpu_compute_pipeline_params, translated("ke_gpu_compute_pipeline_params"));
-    try expectSameLayout(abi.ke_gpu_color_attachment, translated("ke_gpu_color_attachment"));
-    try expectSameLayout(abi.ke_gpu_depth_stencil_attachment, translated("ke_gpu_depth_stencil_attachment"));
-    try expectSameLayout(abi.ke_gpu_render_pass_params, translated("ke_gpu_render_pass_params"));
-    try expectSameLayout(abi.ke_gpu_command_encoder_params, translated("ke_gpu_command_encoder_params"));
-    try expectSameLayout(abi.ke_gpu_compute_pass_params, translated("ke_gpu_compute_pass_params"));
-    try expectSameLayout(abi.ke_render_binding_hint, translated("ke_render_binding_hint"));
-    try expectSameLayout(abi.ke_render_shader_binding, translated("ke_render_shader_binding"));
-    try expectSameLayout(abi.ke_render_shader_layout_params, translated("ke_render_shader_layout_params"));
-    try expectSameLayout(abi.ke_render_material_data, translated("ke_render_material_data"));
-    try expectSameLayout(abi.ke_mesh_handle, translated("ke_mesh_handle"));
-    try expectSameLayout(abi.ke_texture_handle, translated("ke_texture_handle"));
-    try expectSameLayout(abi.ke_material_handle, translated("ke_material_handle"));
-    try expectSameLayout(abi.ke_cubemap_handle, translated("ke_cubemap_handle"));
-    try expectSameLayout(abi.ke_shadow_map_handle, translated("ke_shadow_map_handle"));
-    try expectSameLayout(abi.ke_camera_component, translated("ke_camera_component"));
-    try expectSameLayout(abi.ke_directional_light_component, translated("ke_directional_light_component"));
-    try expectSameLayout(abi.ke_point_light_component, translated("ke_point_light_component"));
-    try expectSameLayout(abi.ke_spot_light_component, translated("ke_spot_light_component"));
-    try expectSameLayout(abi.ke_ambient_light_component, translated("ke_ambient_light_component"));
-    try expectSameLayout(abi.ke_skybox_component, translated("ke_skybox_component"));
-    try expectSameLayout(abi.ke_mesh_component, translated("ke_mesh_component"));
-    try expectSameLayout(abi.ke_sprite2d_component, translated("ke_sprite2d_component"));
-    try expectSameLayout(abi.ke_camera_frustum, translated("ke_camera_frustum"));
-    try expectSameLayout(abi.ke_gpu_command_buffer, translated("ke_gpu_command_buffer"));
-    try expectSameLayout(abi.ke_material_spec, translated("ke_material_spec"));
-    try expectSameLayout(abi.ke_vertex, translated("ke_vertex"));
-    try expectSameLayout(abi.ke_render_resource_params, translated("ke_render_resource_params"));
-    try expectSameLayout(abi.ke_render_frame_globals, translated("ke_render_frame_globals"));
-    try expectSameLayout(abi.ke_render_lighting, translated("ke_render_lighting"));
-    try expectSameLayout(abi.ke_render_pass_io, translated("ke_render_pass_io"));
-    try expectSameLayout(abi.ke_ui_font_handle, translated("ke_ui_font_handle"));
-    try expectSameLayout(abi.ke_label_glyph_quad, translated("ke_label_glyph_quad"));
-    try expectSameLayout(abi.ke_ui_quad_component, translated("ke_ui_quad_component"));
-    try expectSameLayout(abi.ke_label_component, translated("ke_label_component"));
-    try expectSameLayout(abi.ke_gpu_command_encoder_handle, translated("ke_gpu_command_encoder_handle"));
-    try expectSameLayout(abi.ke_gpu_command_buffer_handle, translated("ke_gpu_command_buffer_handle"));
-    try expectSameLayout(abi.ke_gpu_device, translated("ke_gpu_device"));
-    try expectSameLayout(abi.ke_gpu_device_handle, translated("ke_gpu_device_handle"));
-    try expectSameLayout(abi.ke_render_resource_binder, translated("ke_render_resource_binder"));
-    try expectSameLayout(abi.ke_render_resource_binder_handle, translated("ke_render_resource_binder_handle"));
-    try expectSameLayout(abi.ke_render_camera, translated("ke_render_camera"));
-    try expectSameLayout(abi.ke_render_camera_handle, translated("ke_render_camera_handle"));
-    try expectSameLayout(abi.ke_gpu_render_pass, translated("ke_gpu_render_pass"));
-    try expectSameLayout(abi.ke_gpu_compute_pass, translated("ke_gpu_compute_pass"));
-    try expectSameLayout(abi.ke_gpu_command_encoder, translated("ke_gpu_command_encoder"));
-    try expectSameLayout(abi.ke_gpu_render_target, translated("ke_gpu_render_target"));
-    try expectSameLayout(abi.ke_gpu_render_target_handle, translated("ke_gpu_render_target_handle"));
-    try expectSameLayout(abi.ke_render_pass_ctx, translated("ke_render_pass_ctx"));
-    try expectSameLayout(abi.ke_render_service, translated("ke_render_service"));
-    try expectSameLayout(abi.ke_render_service_handle, translated("ke_render_service_handle"));
-    try expectSameLayout(abi.ke_gpu_bind_group, c.ke_gpu_bind_group);
-    try expectSameLayout(abi.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
-    try expectSameLayout(abi.ke_gpu_buffer, c.ke_gpu_buffer);
-    try expectSameLayout(abi.ke_gpu_buffer_usage, c.ke_gpu_buffer_usage);
-    try expectSameLayout(abi.ke_gpu_pipeline, c.ke_gpu_pipeline);
-    try expectSameLayout(abi.ke_gpu_queue, c.ke_gpu_queue);
-    try expectSameLayout(abi.ke_gpu_sampler, c.ke_gpu_sampler);
-    try expectSameLayout(abi.ke_gpu_shader_module, c.ke_gpu_shader_module);
-    try expectSameLayout(abi.ke_gpu_shader_stage, c.ke_gpu_shader_stage);
-    try expectSameLayout(abi.ke_gpu_texture, c.ke_gpu_texture);
-    try expectSameLayout(abi.ke_gpu_texture_aspect, c.ke_gpu_texture_aspect);
-    try expectSameLayout(abi.ke_gpu_texture_usage, c.ke_gpu_texture_usage);
-    try expectSameLayout(abi.ke_gpu_texture_view, c.ke_gpu_texture_view);
-    try expectSameLayout(abi.ke_render_chain_link, c.ke_render_chain_link);
-    try expectSameLayout(abi.ke_render_material_binding, c.ke_render_material_binding);
-    try expectSameLayout(abi.ke_render_resource_set, c.ke_render_resource_set);
-    try expectSameLayout(abi.ke_render_shader_layout, c.ke_render_shader_layout);
+    @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_render_resource_params, translated("ke_render_resource_params"));
+    try expectSameLayout(abi.c.ke_render_frame_globals, translated("ke_render_frame_globals"));
+    try expectSameLayout(abi.c.ke_render_lighting, translated("ke_render_lighting"));
+    try expectSameLayout(abi.c.ke_render_pass_io, translated("ke_render_pass_io"));
+    try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
+    try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
+    try expectSameLayout(abi.c.ke_render_service, translated("ke_render_service"));
+    try expectSameLayout(abi.c.ke_render_service_handle, translated("ke_render_service_handle"));
+    try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
+    try expectSameLayout(abi.c.ke_render_camera_handle, translated("ke_render_camera_handle"));
+    try expectSameLayout(abi.c.ke_render_frame, translated("ke_render_frame"));
+    try expectSameLayout(abi.c.ke_render_frame_handle, translated("ke_render_frame_handle"));
+    try expectSameLayout(abi.c.ke_render_scene_resolve, translated("ke_render_scene_resolve"));
+    try expectSameLayout(abi.c.ke_render_scene_resolve_handle, translated("ke_render_scene_resolve_handle"));
+    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
+    if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
+    if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
+    if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
+    if (@hasDecl(c, "ke_gpu_buffer_mapped_func")) try expectSameLayout(abi.c.ke_gpu_buffer_mapped_func, c.ke_gpu_buffer_mapped_func);
+    if (@hasDecl(c, "ke_gpu_buffer_usage")) try expectSameLayout(abi.c.ke_gpu_buffer_usage, c.ke_gpu_buffer_usage);
+    if (@hasDecl(c, "ke_gpu_pipeline")) try expectSameLayout(abi.c.ke_gpu_pipeline, c.ke_gpu_pipeline);
+    if (@hasDecl(c, "ke_gpu_pipeline_ready_func")) try expectSameLayout(abi.c.ke_gpu_pipeline_ready_func, c.ke_gpu_pipeline_ready_func);
+    if (@hasDecl(c, "ke_gpu_queue")) try expectSameLayout(abi.c.ke_gpu_queue, c.ke_gpu_queue);
+    if (@hasDecl(c, "ke_gpu_sampler")) try expectSameLayout(abi.c.ke_gpu_sampler, c.ke_gpu_sampler);
+    if (@hasDecl(c, "ke_gpu_shader_module")) try expectSameLayout(abi.c.ke_gpu_shader_module, c.ke_gpu_shader_module);
+    if (@hasDecl(c, "ke_gpu_shader_stage")) try expectSameLayout(abi.c.ke_gpu_shader_stage, c.ke_gpu_shader_stage);
+    if (@hasDecl(c, "ke_gpu_texture")) try expectSameLayout(abi.c.ke_gpu_texture, c.ke_gpu_texture);
+    if (@hasDecl(c, "ke_gpu_texture_aspect")) try expectSameLayout(abi.c.ke_gpu_texture_aspect, c.ke_gpu_texture_aspect);
+    if (@hasDecl(c, "ke_gpu_texture_usage")) try expectSameLayout(abi.c.ke_gpu_texture_usage, c.ke_gpu_texture_usage);
+    if (@hasDecl(c, "ke_gpu_texture_view")) try expectSameLayout(abi.c.ke_gpu_texture_view, c.ke_gpu_texture_view);
+    if (@hasDecl(c, "ke_render_chain_link")) try expectSameLayout(abi.c.ke_render_chain_link, c.ke_render_chain_link);
+    if (@hasDecl(c, "ke_render_material_binding")) try expectSameLayout(abi.c.ke_render_material_binding, c.ke_render_material_binding);
+    if (@hasDecl(c, "ke_render_resource_set")) try expectSameLayout(abi.c.ke_render_resource_set, c.ke_render_resource_set);
+    if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
 }
 
 test "every enum value is the header's value" {
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_INDEX_FORMAT_UINT16), @as(i64, abi.KE_GPU_INDEX_FORMAT_UINT16));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_INDEX_FORMAT_UINT32), @as(i64, abi.KE_GPU_INDEX_FORMAT_UINT32));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_INVALID), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_INVALID));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_R32_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_R32_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_R16_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_R16_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_D16_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_D16_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_D32_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_RG32_FLOAT), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_RG32_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_R8_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_R8_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM), @as(i64, abi.KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_DIM_1D), @as(i64, abi.KE_GPU_TEXTURE_DIM_1D));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_DIM_2D), @as(i64, abi.KE_GPU_TEXTURE_DIM_2D));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_DIM_3D), @as(i64, abi.KE_GPU_TEXTURE_DIM_3D));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_TEXTURE_DIM_CUBE), @as(i64, abi.KE_GPU_TEXTURE_DIM_CUBE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_LOAD_OP_LOAD), @as(i64, abi.KE_GPU_LOAD_OP_LOAD));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_LOAD_OP_CLEAR), @as(i64, abi.KE_GPU_LOAD_OP_CLEAR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_LOAD_OP_DONT_CARE), @as(i64, abi.KE_GPU_LOAD_OP_DONT_CARE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STORE_OP_STORE), @as(i64, abi.KE_GPU_STORE_OP_STORE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STORE_OP_DONT_CARE), @as(i64, abi.KE_GPU_STORE_OP_DONT_CARE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_FILTER_NEAREST), @as(i64, abi.KE_GPU_FILTER_NEAREST));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_FILTER_LINEAR), @as(i64, abi.KE_GPU_FILTER_LINEAR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SAMPLER_MIPMAP_NEAREST), @as(i64, abi.KE_GPU_SAMPLER_MIPMAP_NEAREST));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SAMPLER_MIPMAP_LINEAR), @as(i64, abi.KE_GPU_SAMPLER_MIPMAP_LINEAR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_ADDRESS_MODE_REPEAT), @as(i64, abi.KE_GPU_ADDRESS_MODE_REPEAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT), @as(i64, abi.KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE), @as(i64, abi.KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER), @as(i64, abi.KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_UNDEFINED), @as(i64, abi.KE_GPU_COMPARE_UNDEFINED));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_NEVER), @as(i64, abi.KE_GPU_COMPARE_NEVER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_LESS), @as(i64, abi.KE_GPU_COMPARE_LESS));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_EQUAL), @as(i64, abi.KE_GPU_COMPARE_EQUAL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_LESS_EQUAL), @as(i64, abi.KE_GPU_COMPARE_LESS_EQUAL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_GREATER), @as(i64, abi.KE_GPU_COMPARE_GREATER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_NOT_EQUAL), @as(i64, abi.KE_GPU_COMPARE_NOT_EQUAL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_GREATER_EQUAL), @as(i64, abi.KE_GPU_COMPARE_GREATER_EQUAL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_COMPARE_ALWAYS), @as(i64, abi.KE_GPU_COMPARE_ALWAYS));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST), @as(i64, abi.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP), @as(i64, abi.KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST), @as(i64, abi.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP), @as(i64, abi.KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST), @as(i64, abi.KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_CULL_MODE_NONE), @as(i64, abi.KE_GPU_CULL_MODE_NONE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_CULL_MODE_FRONT), @as(i64, abi.KE_GPU_CULL_MODE_FRONT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_CULL_MODE_BACK), @as(i64, abi.KE_GPU_CULL_MODE_BACK));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_FRONT_FACE_CCW), @as(i64, abi.KE_GPU_FRONT_FACE_CCW));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_FRONT_FACE_CW), @as(i64, abi.KE_GPU_FRONT_FACE_CW));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ZERO), @as(i64, abi.KE_GPU_BLEND_FACTOR_ZERO));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ONE), @as(i64, abi.KE_GPU_BLEND_FACTOR_ONE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_SRC_ALPHA), @as(i64, abi.KE_GPU_BLEND_FACTOR_SRC_ALPHA));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA), @as(i64, abi.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_DST_ALPHA), @as(i64, abi.KE_GPU_BLEND_FACTOR_DST_ALPHA));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA), @as(i64, abi.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_SRC_COLOR), @as(i64, abi.KE_GPU_BLEND_FACTOR_SRC_COLOR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR), @as(i64, abi.KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_DST_COLOR), @as(i64, abi.KE_GPU_BLEND_FACTOR_DST_COLOR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR), @as(i64, abi.KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_OP_ADD), @as(i64, abi.KE_GPU_BLEND_OP_ADD));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_OP_SUBTRACT), @as(i64, abi.KE_GPU_BLEND_OP_SUBTRACT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_OP_REVERSE_SUBTRACT), @as(i64, abi.KE_GPU_BLEND_OP_REVERSE_SUBTRACT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_OP_MIN), @as(i64, abi.KE_GPU_BLEND_OP_MIN));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BLEND_OP_MAX), @as(i64, abi.KE_GPU_BLEND_OP_MAX));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_KEEP), @as(i64, abi.KE_GPU_STENCIL_OP_KEEP));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_ZERO), @as(i64, abi.KE_GPU_STENCIL_OP_ZERO));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_REPLACE), @as(i64, abi.KE_GPU_STENCIL_OP_REPLACE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_INVERT), @as(i64, abi.KE_GPU_STENCIL_OP_INVERT));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_INCREMENT_CLAMP), @as(i64, abi.KE_GPU_STENCIL_OP_INCREMENT_CLAMP));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_STENCIL_OP_DECREMENT_CLAMP), @as(i64, abi.KE_GPU_STENCIL_OP_DECREMENT_CLAMP));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_STEP_MODE_VERTEX), @as(i64, abi.KE_GPU_VERTEX_STEP_MODE_VERTEX));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_STEP_MODE_INSTANCE), @as(i64, abi.KE_GPU_VERTEX_STEP_MODE_INSTANCE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_FLOAT32X2), @as(i64, abi.KE_GPU_VERTEX_FORMAT_FLOAT32X2));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_FLOAT32X3), @as(i64, abi.KE_GPU_VERTEX_FORMAT_FLOAT32X3));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_FLOAT32X4), @as(i64, abi.KE_GPU_VERTEX_FORMAT_FLOAT32X4));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_SINT16X2), @as(i64, abi.KE_GPU_VERTEX_FORMAT_SINT16X2));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_SINT16X4), @as(i64, abi.KE_GPU_VERTEX_FORMAT_SINT16X4));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM), @as(i64, abi.KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_VERTEX_FORMAT_UINT8X4), @as(i64, abi.KE_GPU_VERTEX_FORMAT_UINT8X4));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_BUFFER), @as(i64, abi.KE_GPU_BINDING_TYPE_BUFFER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_SAMPLER), @as(i64, abi.KE_GPU_BINDING_TYPE_SAMPLER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_TEXTURE), @as(i64, abi.KE_GPU_BINDING_TYPE_TEXTURE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER), @as(i64, abi.KE_GPU_BINDING_TYPE_STORAGE_BUFFER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE), @as(i64, abi.KE_GPU_BINDING_TYPE_STORAGE_TEXTURE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER), @as(i64, abi.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE), @as(i64, abi.KE_GPU_BINDING_TYPE_DEPTH_TEXTURE));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_WGSL), @as(i64, abi.KE_GPU_SHADER_LANG_WGSL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_SPIRV), @as(i64, abi.KE_GPU_SHADER_LANG_SPIRV));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_MSL), @as(i64, abi.KE_GPU_SHADER_LANG_MSL));
-    try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_DXIL), @as(i64, abi.KE_GPU_SHADER_LANG_DXIL));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_BINDING_HINT_DEPTH), @as(i64, abi.KE_RENDER_BINDING_HINT_DEPTH));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET), @as(i64, abi.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET));
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_OPAQUE), @as(i64, abi.KE_ALPHA_MODE_OPAQUE));
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_MASK), @as(i64, abi.KE_ALPHA_MODE_MASK));
-    try std.testing.expectEqual(@as(i64, c.KE_ALPHA_MODE_BLEND), @as(i64, abi.KE_ALPHA_MODE_BLEND));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_RESOURCE_TEXTURE), @as(i64, abi.KE_RENDER_RESOURCE_TEXTURE));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_RESOURCE_BUFFER), @as(i64, abi.KE_RENDER_RESOURCE_BUFFER));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_SIZE_ABSOLUTE), @as(i64, abi.KE_RENDER_SIZE_ABSOLUTE));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER), @as(i64, abi.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_OPAQUE), @as(i64, abi.KE_RENDER_STAGE_OPAQUE));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_SKY), @as(i64, abi.KE_RENDER_STAGE_SKY));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_TRANSPARENT), @as(i64, abi.KE_RENDER_STAGE_TRANSPARENT));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_HDR_POST), @as(i64, abi.KE_RENDER_STAGE_HDR_POST));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_TONEMAP), @as(i64, abi.KE_RENDER_STAGE_TONEMAP));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_LDR_POST), @as(i64, abi.KE_RENDER_STAGE_LDR_POST));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_OVERLAY), @as(i64, abi.KE_RENDER_STAGE_OVERLAY));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_COUNT), @as(i64, abi.KE_RENDER_STAGE_COUNT));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_DRAW_OVER), @as(i64, abi.KE_RENDER_CHAIN_DRAW_OVER));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_SAMPLE_OVER), @as(i64, abi.KE_RENDER_CHAIN_SAMPLE_OVER));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_REPLACE), @as(i64, abi.KE_RENDER_CHAIN_REPLACE));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_NONE), @as(i64, abi.KE_RENDER_DEPTH_NONE));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_TEST), @as(i64, abi.KE_RENDER_DEPTH_TEST));
-    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_WRITE), @as(i64, abi.KE_RENDER_DEPTH_WRITE));
-}
-
-fn expectSameValue(a: anytype, k: anytype) !void {
-    switch (@typeInfo(@TypeOf(a))) {
-        .@"struct" => |s| inline for (s.fields) |f| try expectSameValue(@field(a, f.name), @field(k, f.name)),
-        .@"union" => {},
-        .optional => try std.testing.expectEqualStrings(std.mem.span(k), std.mem.span(a.?)),
-        else => try std.testing.expectEqual(@as(@TypeOf(a), k), a),
-    }
-}
-
-test "every field table lists the header's entries" {
-    try std.testing.expectEqual(c.ke_camera_component_fields.len, abi.ke_camera_component_fields.len);
-    for (abi.ke_camera_component_fields, c.ke_camera_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_directional_light_component_fields.len, abi.ke_directional_light_component_fields.len);
-    for (abi.ke_directional_light_component_fields, c.ke_directional_light_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_point_light_component_fields.len, abi.ke_point_light_component_fields.len);
-    for (abi.ke_point_light_component_fields, c.ke_point_light_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_spot_light_component_fields.len, abi.ke_spot_light_component_fields.len);
-    for (abi.ke_spot_light_component_fields, c.ke_spot_light_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_ambient_light_component_fields.len, abi.ke_ambient_light_component_fields.len);
-    for (abi.ke_ambient_light_component_fields, c.ke_ambient_light_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_mesh_component_fields.len, abi.ke_mesh_component_fields.len);
-    for (abi.ke_mesh_component_fields, c.ke_mesh_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_sprite2d_component_fields.len, abi.ke_sprite2d_component_fields.len);
-    for (abi.ke_sprite2d_component_fields, c.ke_sprite2d_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_ui_quad_component_fields.len, abi.ke_ui_quad_component_fields.len);
-    for (abi.ke_ui_quad_component_fields, c.ke_ui_quad_component_fields) |a, k| try expectSameValue(a, k);
-    try std.testing.expectEqual(c.ke_label_component_fields.len, abi.ke_label_component_fields.len);
-    for (abi.ke_label_component_fields, c.ke_label_component_fields) |a, k| try expectSameValue(a, k);
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_RESOURCE_TEXTURE), @as(i64, abi.c.KE_RENDER_RESOURCE_TEXTURE));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_RESOURCE_BUFFER), @as(i64, abi.c.KE_RENDER_RESOURCE_BUFFER));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_SIZE_ABSOLUTE), @as(i64, abi.c.KE_RENDER_SIZE_ABSOLUTE));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER), @as(i64, abi.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_OPAQUE), @as(i64, abi.c.KE_RENDER_STAGE_OPAQUE));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_SKY), @as(i64, abi.c.KE_RENDER_STAGE_SKY));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_TRANSPARENT), @as(i64, abi.c.KE_RENDER_STAGE_TRANSPARENT));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_HDR_POST), @as(i64, abi.c.KE_RENDER_STAGE_HDR_POST));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_TONEMAP), @as(i64, abi.c.KE_RENDER_STAGE_TONEMAP));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_LDR_POST), @as(i64, abi.c.KE_RENDER_STAGE_LDR_POST));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_OVERLAY), @as(i64, abi.c.KE_RENDER_STAGE_OVERLAY));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_STAGE_COUNT), @as(i64, abi.c.KE_RENDER_STAGE_COUNT));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_DRAW_OVER), @as(i64, abi.c.KE_RENDER_CHAIN_DRAW_OVER));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_SAMPLE_OVER), @as(i64, abi.c.KE_RENDER_CHAIN_SAMPLE_OVER));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_CHAIN_REPLACE), @as(i64, abi.c.KE_RENDER_CHAIN_REPLACE));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_NONE), @as(i64, abi.c.KE_RENDER_DEPTH_NONE));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_TEST), @as(i64, abi.c.KE_RENDER_DEPTH_TEST));
+    try std.testing.expectEqual(@as(i64, c.KE_RENDER_DEPTH_WRITE), @as(i64, abi.c.KE_RENDER_DEPTH_WRITE));
 }
 
 test "every constant is the header's value" {
-    try std.testing.expectEqual(@as(i128, c.KE_RENDER_BINDING_INVALID), @as(i128, abi.KE_RENDER_BINDING_INVALID));
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_CAMERA, abi.KE_COMPONENT_NAME_CAMERA);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, abi.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_POINT_LIGHT, abi.KE_COMPONENT_NAME_POINT_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPOT_LIGHT, abi.KE_COMPONENT_NAME_SPOT_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_AMBIENT_LIGHT, abi.KE_COMPONENT_NAME_AMBIENT_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SKYBOX, abi.KE_COMPONENT_NAME_SKYBOX);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_MESH, abi.KE_COMPONENT_NAME_MESH);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPRITE2D, abi.KE_COMPONENT_NAME_SPRITE2D);
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_ASPECT_COLOR), @as(i128, abi.KE_GPU_TEXTURE_ASPECT_COLOR));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_ASPECT_DEPTH), @as(i128, abi.KE_GPU_TEXTURE_ASPECT_DEPTH));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_ASPECT_STENCIL), @as(i128, abi.KE_GPU_TEXTURE_ASPECT_STENCIL));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_COPY_SRC), @as(i128, abi.KE_GPU_TEXTURE_USAGE_COPY_SRC));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_COPY_DST), @as(i128, abi.KE_GPU_TEXTURE_USAGE_COPY_DST));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_SAMPLED), @as(i128, abi.KE_GPU_TEXTURE_USAGE_SAMPLED));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_STORAGE), @as(i128, abi.KE_GPU_TEXTURE_USAGE_STORAGE));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH), @as(i128, abi.KE_GPU_TEXTURE_USAGE_COLOR_ATTACH));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH), @as(i128, abi.KE_GPU_TEXTURE_USAGE_DEPTH_ATTACH));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_MAP_READ), @as(i128, abi.KE_GPU_BUFFER_USAGE_MAP_READ));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_MAP_WRITE), @as(i128, abi.KE_GPU_BUFFER_USAGE_MAP_WRITE));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_COPY_SRC), @as(i128, abi.KE_GPU_BUFFER_USAGE_COPY_SRC));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_COPY_DST), @as(i128, abi.KE_GPU_BUFFER_USAGE_COPY_DST));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_INDEX), @as(i128, abi.KE_GPU_BUFFER_USAGE_INDEX));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_VERTEX), @as(i128, abi.KE_GPU_BUFFER_USAGE_VERTEX));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_UNIFORM), @as(i128, abi.KE_GPU_BUFFER_USAGE_UNIFORM));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_STORAGE), @as(i128, abi.KE_GPU_BUFFER_USAGE_STORAGE));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_BUFFER_USAGE_INDIRECT), @as(i128, abi.KE_GPU_BUFFER_USAGE_INDIRECT));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_VERTEX), @as(i128, abi.KE_GPU_SHADER_STAGE_VERTEX));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_FRAGMENT), @as(i128, abi.KE_GPU_SHADER_STAGE_FRAGMENT));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_COMPUTE), @as(i128, abi.KE_GPU_SHADER_STAGE_COMPUTE));
-    try std.testing.expectEqual(@as(i128, c.KE_GPU_INVALID_HANDLE), @as(i128, abi.KE_GPU_INVALID_HANDLE));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_INDEX_BITS), @as(i128, abi.KE_HANDLE_INDEX_BITS));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_GENERATION_BITS), @as(i128, abi.KE_HANDLE_GENERATION_BITS));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_INDEX_MASK), @as(i128, abi.KE_HANDLE_INDEX_MASK));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_GENERATION_MASK), @as(i128, abi.KE_HANDLE_GENERATION_MASK));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_GENERATION_FIRST), @as(i128, abi.KE_HANDLE_GENERATION_FIRST));
-    try std.testing.expectEqual(@as(i128, c.KE_HANDLE_NONE), @as(i128, abi.KE_HANDLE_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_MESH_NONE), std.mem.toBytes(abi.KE_MESH_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_TEXTURE_NONE), std.mem.toBytes(abi.KE_TEXTURE_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_MATERIAL_NONE), std.mem.toBytes(abi.KE_MATERIAL_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_CUBEMAP_NONE), std.mem.toBytes(abi.KE_CUBEMAP_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_SHADOW_MAP_NONE), std.mem.toBytes(abi.KE_SHADOW_MAP_NONE));
-    try std.testing.expectEqual(@as(i128, c.KE_MATERIAL_PATH_MAX), @as(i128, abi.KE_MATERIAL_PATH_MAX));
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_ALBEDO, abi.KE_RENDER_GBUFFER_ALBEDO);
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_NORMAL, abi.KE_RENDER_GBUFFER_NORMAL);
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_EMISSIVE, abi.KE_RENDER_GBUFFER_EMISSIVE);
-    try std.testing.expectEqualStrings(c.KE_RENDER_SHADOW_LIGHT, abi.KE_RENDER_SHADOW_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_RENDER_SHADOW_DEPTH, abi.KE_RENDER_SHADOW_DEPTH);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_LIGHTS, abi.KE_RENDER_CLUSTER_POINT_LIGHTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_LIGHTS, abi.KE_RENDER_CLUSTER_SPOT_LIGHTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_INDICES, abi.KE_RENDER_CLUSTER_POINT_INDICES);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_COUNTS, abi.KE_RENDER_CLUSTER_POINT_COUNTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_INDICES, abi.KE_RENDER_CLUSTER_SPOT_INDICES);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_COUNTS, abi.KE_RENDER_CLUSTER_SPOT_COUNTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_GRID, abi.KE_RENDER_CLUSTER_GRID);
-    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_COLOR, abi.KE_RENDER_FRAME_COLOR);
-    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_DEPTH, abi.KE_RENDER_FRAME_DEPTH);
-    try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.KE_RENDER_CHAIN_NONE));
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_UI_QUAD, abi.KE_COMPONENT_NAME_UI_QUAD);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.KE_COMPONENT_NAME_LABEL);
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_UI_FONT_NONE), std.mem.toBytes(abi.KE_UI_FONT_NONE));
-    try std.testing.expectEqual(std.mem.toBytes(c.KE_UI_FONT_FAILED), std.mem.toBytes(abi.KE_UI_FONT_FAILED));
-    try std.testing.expectEqual(@as(i128, c.KE_LABEL_MAX_TEXT), @as(i128, abi.KE_LABEL_MAX_TEXT));
-    try std.testing.expectEqual(@as(i128, c.KE_LABEL_MAX_GLYPHS), @as(i128, abi.KE_LABEL_MAX_GLYPHS));
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_COLOR, abi.c.KE_RENDER_FRAME_COLOR);
+    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_DEPTH, abi.c.KE_RENDER_FRAME_DEPTH);
+    try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.c.KE_RENDER_CHAIN_NONE));
+}
+
+extern const layout_values: [127]c_ulonglong;
+
+test "every size and offset is the one C computes" {
+    @setEvalBranchQuota(100_000_000);
+    const expected = [_]usize{
+        @sizeOf(abi.c.ke_render_resource_params),
+        @offsetOf(abi.c.ke_render_resource_params, "name"),
+        @offsetOf(abi.c.ke_render_resource_params, "type"),
+        @offsetOf(abi.c.ke_render_resource_params, "format"),
+        @offsetOf(abi.c.ke_render_resource_params, "size_mode"),
+        @offsetOf(abi.c.ke_render_resource_params, "width"),
+        @offsetOf(abi.c.ke_render_resource_params, "height"),
+        @offsetOf(abi.c.ke_render_resource_params, "scale_x"),
+        @offsetOf(abi.c.ke_render_resource_params, "scale_y"),
+        @offsetOf(abi.c.ke_render_resource_params, "clear_value"),
+        @sizeOf(abi.c.ke_render_frame_globals),
+        @offsetOf(abi.c.ke_render_frame_globals, "view"),
+        @offsetOf(abi.c.ke_render_frame_globals, "proj"),
+        @offsetOf(abi.c.ke_render_frame_globals, "view_proj"),
+        @offsetOf(abi.c.ke_render_frame_globals, "inv_view_proj"),
+        @offsetOf(abi.c.ke_render_frame_globals, "inv_proj"),
+        @offsetOf(abi.c.ke_render_frame_globals, "camera_pos"),
+        @offsetOf(abi.c.ke_render_frame_globals, "viewport"),
+        @offsetOf(abi.c.ke_render_frame_globals, "time"),
+        @offsetOf(abi.c.ke_render_frame_globals, "dt"),
+        @offsetOf(abi.c.ke_render_frame_globals, "near_plane"),
+        @offsetOf(abi.c.ke_render_frame_globals, "far_plane"),
+        @sizeOf(abi.c.ke_render_lighting),
+        @offsetOf(abi.c.ke_render_lighting, "direction"),
+        @offsetOf(abi.c.ke_render_lighting, "color"),
+        @offsetOf(abi.c.ke_render_lighting, "ambient"),
+        @sizeOf(abi.c.ke_render_pass_io),
+        @offsetOf(abi.c.ke_render_pass_io, "name"),
+        @offsetOf(abi.c.ke_render_pass_io, "reads"),
+        @offsetOf(abi.c.ke_render_pass_io, "reads_count"),
+        @offsetOf(abi.c.ke_render_pass_io, "writes"),
+        @offsetOf(abi.c.ke_render_pass_io, "writes_count"),
+        @offsetOf(abi.c.ke_render_pass_io, "chain"),
+        @offsetOf(abi.c.ke_render_pass_io, "depth"),
+        @sizeOf(abi.c.ke_camera_frustum),
+        @offsetOf(abi.c.ke_camera_frustum, "tan_half_fov_y"),
+        @offsetOf(abi.c.ke_camera_frustum, "aspect"),
+        @offsetOf(abi.c.ke_camera_frustum, "near_plane"),
+        @offsetOf(abi.c.ke_camera_frustum, "far_plane"),
+        @sizeOf(abi.c.ke_render_scene_component_ids),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "mesh"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "camera"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "directional_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "point_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "spot_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "ambient_light"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "skybox"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "sprite2d"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "label"),
+        @offsetOf(abi.c.ke_render_scene_component_ids, "world_transform"),
+        @sizeOf(abi.c.ke_render_service),
+        @offsetOf(abi.c.ke_render_service, "handle"),
+        @offsetOf(abi.c.ke_render_service, "declare"),
+        @offsetOf(abi.c.ke_render_service, "import_texture"),
+        @offsetOf(abi.c.ke_render_service, "import_tag"),
+        @offsetOf(abi.c.ke_render_service, "import_buffer"),
+        @offsetOf(abi.c.ke_render_service, "cid"),
+        @offsetOf(abi.c.ke_render_service, "begin_pass"),
+        @offsetOf(abi.c.ke_render_service, "end_pass"),
+        @offsetOf(abi.c.ke_render_service, "begin_frame"),
+        @offsetOf(abi.c.ke_render_service, "end_frame"),
+        @offsetOf(abi.c.ke_render_service, "upload_mesh"),
+        @offsetOf(abi.c.ke_render_service, "mesh_buffers"),
+        @offsetOf(abi.c.ke_render_service, "set_clear_color"),
+        @offsetOf(abi.c.ke_render_service, "upload_texture"),
+        @offsetOf(abi.c.ke_render_service, "create_material"),
+        @offsetOf(abi.c.ke_render_service, "material_binding"),
+        @offsetOf(abi.c.ke_render_service, "material_alpha_mode"),
+        @offsetOf(abi.c.ke_render_service, "material_alpha_cutoff"),
+        @offsetOf(abi.c.ke_render_service, "upload_cubemap"),
+        @offsetOf(abi.c.ke_render_service, "texture_view"),
+        @offsetOf(abi.c.ke_render_service, "resource_view"),
+        @offsetOf(abi.c.ke_render_service, "resource_texture"),
+        @offsetOf(abi.c.ke_render_service, "resource_buffer"),
+        @offsetOf(abi.c.ke_render_service, "resource_buffer_size"),
+        @offsetOf(abi.c.ke_render_service, "backbuffer_size"),
+        @offsetOf(abi.c.ke_render_service, "upload"),
+        @offsetOf(abi.c.ke_render_service, "get_or_create_pipeline"),
+        @offsetOf(abi.c.ke_render_service, "material_shader"),
+        @offsetOf(abi.c.ke_render_service, "retain_mesh"),
+        @offsetOf(abi.c.ke_render_service, "release_mesh"),
+        @offsetOf(abi.c.ke_render_service, "retain_texture"),
+        @offsetOf(abi.c.ke_render_service, "release_texture"),
+        @offsetOf(abi.c.ke_render_service, "retain_material"),
+        @offsetOf(abi.c.ke_render_service, "release_material"),
+        @offsetOf(abi.c.ke_render_service, "try_get_mesh"),
+        @offsetOf(abi.c.ke_render_service, "try_get_texture"),
+        @offsetOf(abi.c.ke_render_service, "try_get_material"),
+        @offsetOf(abi.c.ke_render_service, "white_texture"),
+        @offsetOf(abi.c.ke_render_service, "load_shader"),
+        @offsetOf(abi.c.ke_render_service, "set_frame_globals"),
+        @offsetOf(abi.c.ke_render_service, "frame_globals"),
+        @offsetOf(abi.c.ke_render_service, "set_lighting"),
+        @offsetOf(abi.c.ke_render_service, "lighting"),
+        @offsetOf(abi.c.ke_render_service, "resource_binder"),
+        @offsetOf(abi.c.ke_render_service, "backbuffer_format"),
+        @offsetOf(abi.c.ke_render_service, "resource_format"),
+        @offsetOf(abi.c.ke_render_service, "resource_generation"),
+        @offsetOf(abi.c.ke_render_service, "join_chain"),
+        @offsetOf(abi.c.ke_render_service, "leave_chain"),
+        @offsetOf(abi.c.ke_render_service, "chain_format"),
+        @sizeOf(abi.c.ke_render_service_handle),
+        @offsetOf(abi.c.ke_render_service_handle, "ref"),
+        @offsetOf(abi.c.ke_render_service_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_camera),
+        @offsetOf(abi.c.ke_render_camera, "handle"),
+        @offsetOf(abi.c.ke_render_camera, "view"),
+        @offsetOf(abi.c.ke_render_camera, "view_rotation"),
+        @offsetOf(abi.c.ke_render_camera, "projection"),
+        @offsetOf(abi.c.ke_render_camera, "perspective_projection"),
+        @offsetOf(abi.c.ke_render_camera, "perspective_frustum"),
+        @sizeOf(abi.c.ke_render_camera_handle),
+        @offsetOf(abi.c.ke_render_camera_handle, "ref"),
+        @offsetOf(abi.c.ke_render_camera_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_frame),
+        @offsetOf(abi.c.ke_render_frame, "handle"),
+        @offsetOf(abi.c.ke_render_frame, "frame_cid"),
+        @sizeOf(abi.c.ke_render_frame_handle),
+        @offsetOf(abi.c.ke_render_frame_handle, "ref"),
+        @offsetOf(abi.c.ke_render_frame_handle, "destroy"),
+        @sizeOf(abi.c.ke_render_scene_resolve),
+        @offsetOf(abi.c.ke_render_scene_resolve, "handle"),
+        @offsetOf(abi.c.ke_render_scene_resolve, "component_ids"),
+        @sizeOf(abi.c.ke_render_scene_resolve_handle),
+        @offsetOf(abi.c.ke_render_scene_resolve_handle, "ref"),
+        @offsetOf(abi.c.ke_render_scene_resolve_handle, "destroy"),
+    };
+    for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

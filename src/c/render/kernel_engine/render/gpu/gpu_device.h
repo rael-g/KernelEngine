@@ -27,14 +27,14 @@ typedef struct ke_gpu_command_buffer  ke_gpu_command_buffer;
 typedef struct ke_gpu_render_pass     ke_gpu_render_pass;
 typedef struct ke_gpu_compute_pass    ke_gpu_compute_pass;
 
-/// Owns a command encoder: destroy releases it, whether or not it was finished.
+/// [owner] Owns a command encoder: destroy releases it, whether or not it was finished.
 typedef struct ke_gpu_command_encoder_handle
 {
     ke_gpu_command_encoder *ref;
     void (*destroy)(ke_gpu_command_encoder *self);
 } ke_gpu_command_encoder_handle;
 
-/// Owns a finished command buffer: destroy releases it, after it was submitted or instead.
+/// [owner] Owns a finished command buffer: destroy releases it, after it was submitted or instead.
 typedef struct ke_gpu_command_buffer_handle
 {
     ke_gpu_command_buffer *ref;
@@ -45,6 +45,7 @@ typedef struct ke_gpu_device ke_gpu_device;
 
 
 
+/// [bag]
 typedef struct ke_gpu_buffer_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -55,6 +56,7 @@ typedef struct ke_gpu_buffer_params
     bool               mapped_at_creation;
 } ke_gpu_buffer_params;
 
+/// [bag]
 typedef struct ke_gpu_texture_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -71,6 +73,7 @@ typedef struct ke_gpu_texture_params
     uint32_t                 initial_data_size; ///< Byte size of initial_data.
 } ke_gpu_texture_params;
 
+/// [bag]
 typedef struct ke_gpu_texture_view_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -84,6 +87,7 @@ typedef struct ke_gpu_texture_view_params
     uint8_t                  array_layer_count;
 } ke_gpu_texture_view_params;
 
+/// [bag]
 typedef struct ke_gpu_sampler_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -100,6 +104,7 @@ typedef struct ke_gpu_sampler_params
     uint16_t                    max_anisotropy;
 } ke_gpu_sampler_params;
 
+/// [bag]
 typedef struct ke_gpu_shader_module_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -117,6 +122,7 @@ typedef struct ke_gpu_vertex_attribute
     uint64_t             offset;
 } ke_gpu_vertex_attribute;
 
+/// [value] One vertex buffer of a pipeline.
 typedef struct ke_gpu_vertex_buffer_layout
 {
     uint64_t                       stride;
@@ -166,6 +172,7 @@ typedef struct ke_gpu_bind_group_layout_entry
     ke_gpu_texture_dimension view_dimension;
 } ke_gpu_bind_group_layout_entry;
 
+/// [bag]
 typedef struct ke_gpu_bind_group_layout_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -185,6 +192,7 @@ typedef struct ke_gpu_bind_group_entry
     ke_gpu_sampler      sampler;
 } ke_gpu_bind_group_entry;
 
+/// [bag]
 typedef struct ke_gpu_bind_group_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -194,6 +202,13 @@ typedef struct ke_gpu_bind_group_params
     const ke_gpu_bind_group_entry *entries; ///< [array_of:entry_count]
 } ke_gpu_bind_group_params;
 
+/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
+typedef void (*ke_gpu_pipeline_ready_func)(ke_gpu_pipeline pso, void *user);
+
+/// Receives the outcome of mapping a buffer for reading.
+typedef void (*ke_gpu_buffer_mapped_func)(ke_gpu_buffer buffer, bool ok, void *user);
+
+/// [bag]
 typedef struct ke_gpu_render_pipeline_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -209,20 +224,21 @@ typedef struct ke_gpu_render_pipeline_params
     const ke_gpu_vertex_buffer_layout *vertex_buffers; ///< [array_of:vertex_buffer_count]
     ke_gpu_blend_state               blend_state;
     ke_gpu_depth_stencil_state       depth_stencil;
-    ke_gpu_bind_group_layout         bind_group_layouts[4];
+    ke_gpu_bind_group_layout         bind_group_layouts[4]; ///< [array_of:bind_group_layout_count]
     uint32_t                         bind_group_layout_count;
     bool                             alpha_to_coverage_enabled;
-    ke_gpu_texture_format            color_target_formats[8];
+    ke_gpu_texture_format            color_target_formats[8]; ///< [array_of:color_target_count]
     uint32_t                         color_target_count;
 } ke_gpu_render_pipeline_params;
 
+/// [bag]
 typedef struct ke_gpu_compute_pipeline_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
     ke_gpu_shader_module     compute_module;
     const char              *compute_entry;
-    ke_gpu_bind_group_layout bind_group_layouts[4];
+    ke_gpu_bind_group_layout bind_group_layouts[4]; ///< [array_of:bind_group_layout_count]
     uint32_t                 bind_group_layout_count;
 } ke_gpu_compute_pipeline_params;
 
@@ -246,6 +262,7 @@ typedef struct ke_gpu_depth_stencil_attachment
     bool                stencil_read_only;
 } ke_gpu_depth_stencil_attachment;
 
+/// [bag]
 typedef struct ke_gpu_render_pass_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -255,12 +272,14 @@ typedef struct ke_gpu_render_pass_params
     const ke_gpu_depth_stencil_attachment *depth_stencil_attachment;
 } ke_gpu_render_pass_params;
 
+/// [bag]
 typedef struct ke_gpu_command_encoder_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
 } ke_gpu_command_encoder_params;
 
+/// [bag]
 typedef struct ke_gpu_compute_pass_params
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
@@ -380,7 +399,7 @@ typedef struct ke_gpu_device
     /// KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
                                          const ke_gpu_render_pipeline_params *p,
-                                         void (*on_ready)(ke_gpu_pipeline pso, void *user),
+                                         ke_gpu_pipeline_ready_func on_ready,
                                          void *user);
 
     /// Blocks until every pipeline compile kicked via
@@ -396,13 +415,14 @@ typedef struct ke_gpu_device
     /// Submit the work that writes the buffer before calling.
     void (*map_buffer_read)(struct ke_gpu_device *self, ke_gpu_buffer h,
                             size_t offset, size_t size,
-                            void (*on_ready)(ke_gpu_buffer buffer, bool ok, void *user),
+                            ke_gpu_buffer_mapped_func on_ready,
                             void *user);
 
     /// Releases a pipeline made by create_compute_pipeline.
     void (*destroy_compute_pipeline)(struct ke_gpu_device *self, ke_gpu_pipeline h);
 } ke_gpu_device;
 
+/// [owner]
 typedef struct ke_gpu_device_handle
 {
     ke_gpu_device *ref;

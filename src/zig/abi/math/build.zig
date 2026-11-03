@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("math.zig") });
+    abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/math/math.h>
@@ -12,8 +13,10 @@ pub fn build(b: *std.Build) void {
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../common/include"));
+    translated.addIncludePath(b.path("../../../c/result"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
+        .link_libc = true,
         .target = target,
         .optimize = optimize,
         .imports = &.{
@@ -21,5 +24,9 @@ pub fn build(b: *std.Build) void {
             .{ .name = "c", .module = translated.createModule() },
         },
     }) });
+    tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../c/math"));
+    tests.root_module.addIncludePath(b.path("../../common/include"));
+    tests.root_module.addIncludePath(b.path("../../../c/result"));
     b.step("test", "Check the math ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -84,6 +84,8 @@
       ]
     }
   ],
+  "id_types": [],
+  "foreign_id_types": [],
   "type_aliases": {
     "ke_log_callback": "void (*)(void *, ke_log_level, const char *, const char *)"
   }

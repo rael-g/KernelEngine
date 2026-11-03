@@ -15,6 +15,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger.Abstractions\KernelEngine.Logger.Abstractions.csproj" />

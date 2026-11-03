@@ -10,7 +10,7 @@ inside is on the generated page of its file. The contract is `ke_ecs` in
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | ecs | `ke_ecs` | component registrations, structural calls, query registrations | entity ids, component bytes, segments of columns |
-| flecs plugin | `ke_ecs_flecs_create`, `ke_ecs_flecs_params` | `world_id_base` | a `ke_ecs_handle` that owns the world |
+| flecs plugin | `ke_ecs_flecs_create`, `ke_ecs_flecs_config` | `world_id_base` | a `ke_ecs_handle` that owns the world |
 | commands | `ke_ecs_commands` | recorded spawn, attach, detach, despawn, defer | the changes, applied by the runtime at the wave barrier |
 | runtime | `ke_runtime_create` | the `ke_ecs` it borrows | queries resolved before a wave, structural calls after it |
 
@@ -34,7 +34,7 @@ field and must outlive the ecs.
 
 **The flecs plugin keeps two id sources apart.** Ids below `world_id_base` form the pool
 `entity_reserve` draws from; the world's own allocator issues ids from `world_id_base` upward.
-`ke_ecs_flecs_params.world_id_base` is therefore the capacity of the pool.
+`ke_ecs_flecs_config.world_id_base` is therefore the capacity of the pool.
 
 **A check flecs fails is a `ke_result`.** The triplets build flecs with soft checks kept in every
 build type (`vcpkg-triplets/flecs-checks.cmake`), so a check of a caller's input logs and returns

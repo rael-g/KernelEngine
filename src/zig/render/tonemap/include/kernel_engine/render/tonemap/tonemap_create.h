@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_TONEMAP_TONEMAP_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -25,6 +26,7 @@ extern "C"
 
     typedef struct ke_render_tonemap ke_render_tonemap;
 
+    /// [owner]
     typedef struct ke_render_tonemap_handle
     {
         ke_render_tonemap *ref;
@@ -32,15 +34,12 @@ extern "C"
     } ke_render_tonemap_handle;
 
     /// What the tonemap pass needs. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and
-    /// replaces the frame's color with its tonemapped copy.
+    /// [bag] replaces the frame's color with its tonemapped copy.
     typedef struct ke_render_tonemap_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the frame's color; borrowed, must outlive it.
-        ke_gpu_device     *device;  ///< Borrowed.
-        /// The tag the system that begins the frame writes; the pass reads it, so it runs once
-        /// the frame has begun.
-        ke_component_id    frame_cid;
+        ke_gpu_device     *device;        ke_render_frame   *frame;   ///< The pass runs inside its frame; borrowed.
     } ke_render_tonemap_params;
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails as an

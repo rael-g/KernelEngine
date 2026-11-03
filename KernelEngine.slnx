@@ -29,7 +29,6 @@
   </Folder>
   <Folder Name="/src/" />
   <Folder Name="/src/csharp/">
-    <Project Path="src/csharp/asset/KernelEngine.Asset.Abstractions/KernelEngine.Asset.Abstractions.csproj" />
     <Project Path="src/csharp/asset/KernelEngine.Asset/KernelEngine.Asset.csproj" />
     <Project Path="src/csharp/asset/KernelEngine.Asset.Assimp/KernelEngine.Asset.Assimp.csproj" />
     <Project Path="src/csharp/asset/KernelEngine.Asset.StbImage/KernelEngine.Asset.StbImage.csproj" />
@@ -41,14 +40,6 @@
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj" />
     <Project Path="src/csharp/view/KernelEngine.View/KernelEngine.View.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Core/Kabic.Core.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Reader/Kabic.Reader.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.CSharp/Kabic.CSharp.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Pipeline/Kabic.Pipeline.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Bindings/Kabic.Bindings.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Numerics/Kabic.Numerics.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Conventions/Kabic.Conventions.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Cli/Kabic.Cli.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input/KernelEngine.Input.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs/KernelEngine.Ecs.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Flecs/KernelEngine.Ecs.Flecs.csproj" />
@@ -59,29 +50,30 @@
     <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/result/KernelEngine.Result/KernelEngine.Result.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
-    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
-    <Project Path="src/csharp/scheduler/KernelEngine.Scheduler.Enki/KernelEngine.Scheduler.Enki.csproj" />
+    <Project Path="src/csharp/task_pool/KernelEngine.TaskPool/KernelEngine.TaskPool.csproj" />
+    <Project Path="src/csharp/task_pool/KernelEngine.TaskPool.Enki/KernelEngine.TaskPool.Enki.csproj" />
+    <Project Path="src/csharp/file_system/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
+    <Project Path="src/csharp/file_system/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.Io/KernelEngine.Io.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.Io.Pool/KernelEngine.Io.Pool.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
-    <Project Path="src/csharp/audio/KernelEngine.Audio.Abstractions/KernelEngine.Audio.Abstractions.csproj" />
     <Project Path="src/csharp/common/KernelEngine.Common/KernelEngine.Common.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Abstractions/KernelEngine.Ecs.Abstractions.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.SourceGenerators/KernelEngine.SourceGenerators.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input.Abstractions/KernelEngine.Input.Abstractions.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.C/Kabic.C.csproj" />
-    <Project Path="src/csharp/kabic/Kabic.Zig/Kabic.Zig.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger.Abstractions/KernelEngine.Logger.Abstractions.csproj" />
+    <Project Path="src/csharp/logger/KernelEngine.Logger.Interop/KernelEngine.Logger.Interop.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Abstractions/KernelEngine.Physics.Abstractions.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Abstractions/KernelEngine.Render.Abstractions.csproj" />
     <Project Path="src/csharp/runtime/KernelEngine.Runtime.Abstractions/KernelEngine.Runtime.Abstractions.csproj" />
-    <Project Path="src/csharp/text/KernelEngine.Text.Abstractions/KernelEngine.Text.Abstractions.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
-    <Project Path="tests/csharp/Kabic.Tests/Kabic.Tests.csproj" />
+    <Project Path="tests/integration/KernelEngine.Integration.Tests/KernelEngine.Integration.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,4 +1,9 @@
-using KernelEngine.Logger.Native;
+using System.Numerics;
+
+using global::KernelEngine.Input;
+using global::KernelEngine.Logger;
+
+using KernelEngine.Common.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Input.Native;
@@ -20,28 +25,28 @@ public unsafe partial struct ke_input
     public delegate* unmanaged[Cdecl]<ke_input*, int, bool> is_key_down;
 
     [NativeTypeName("void (*)(struct ke_input *, ke_input_snapshot *)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, void> get_snapshot;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, void> get_snapshot;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_key_down;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_key_down;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_key_pressed;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_key_pressed;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_key_released;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_key_released;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_mouse_button_down;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_mouse_button_down;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_mouse_button_pressed;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_mouse_button_pressed;
 
     [NativeTypeName("bool (*)(struct ke_input *, const ke_input_snapshot *, int32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_snapshot*, int, bool> snapshot_is_mouse_button_released;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputSnapshot*, int, bool> snapshot_is_mouse_button_released;
 
     [NativeTypeName("uint32_t (*)(struct ke_input *, ke_input_event *, uint32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_input*, ke_input_event*, uint, uint> drain_events;
+    public delegate* unmanaged[Cdecl]<ke_input*, global::KernelEngine.Input.InputEvent*, uint, uint> drain_events;
 
     [NativeTypeName("void (*)(struct ke_input *, int32_t, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input*, int, int, void> on_key;

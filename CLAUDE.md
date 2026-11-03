@@ -17,7 +17,7 @@ vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no ma
 ```bash
 zig build --prefix build/native --global-cache-dir build/zig-global       # configure + build + install, one step
 zig build test --prefix build/native --global-cache-dir build/zig-global  # every plugin's own Zig tests
-zig build docs --prefix build/native --global-cache-dir build/zig-global  # build/native/docs/{engine,kabic}/, pages generated from the sources
+zig build docs --prefix build/native --global-cache-dir build/zig-global  # build/native/docs/engine/, pages generated from the sources
 build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 build/native/bin/docir query <name> src                           # what the sources document about a symbol, a file or an idea
 ```
@@ -29,6 +29,8 @@ build/native/bin/docir query <name> src                           # what the sou
 Build output converges entirely under the given `--prefix` (e.g. `build/native/{bin,lib}/`) — there is no separate install step. Everything the build fetches or produces stays under `build/`: `build/tools/` for fetched toolchains (vcpkg, slangc, wgpu-native, RenderDoc), `build/vcpkg-installed/` for the ports, `build/vcpkg-archives/` and `build/vcpkg-registries/` for vcpkg's compiled-port archives and registry checkouts, `build/zig-global/` for Zig's global cache, and `build/nuget/` for the NuGet packages (`nuget.config` at the root points there). The two exceptions are at the repository root and ignored by git: `.zig-cache/`, the local cache of Zig, and `zig-pkg/`, where Zig unpacks the packages declared by URL in a `build.zig.zon` (zmath, docir). Shared libraries land in `lib/` and executables in `bin/`; the C# side copies from `lib/` (`NativeTypeDir` in `src/csharp/NativeDependencies.targets`). A plugin that links another library carries an `$ORIGIN` runpath, so a plugin copied beside it finds it; running an example or `dotnet test` needs no `LD_LIBRARY_PATH`.
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
+
+An implementation has unit tests only, and every contract it depends on is a substitute configured in the test; it never reads the machine's files or runs another plugin. A test that composes real implementations is an integration test, and integration tests are written in C# only, apart from the C# tests that cover the managed layer's own logic.
 
 The root `test` step runs all of them. It cannot go stale: `Ctx.member` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the plugin's tests are configured by the same `b.dependency` call as its library, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
 
@@ -42,8 +44,8 @@ dotnet test KernelEngine.slnx
 ### Scripts
 
 ```bash
-dotnet run --project src/csharp/kabic/Kabic.Cli -- bindings  # regenerate all C# P/Invoke bindings via ClangSharp, configured from the manifest "bindings" array and the headers
-dotnet run --project src/csharp/kabic/Kabic.Cli -- generate  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
+dotnet run --project src/csharp/generators/KernelEngine.Kabic -- bindings  # regenerate all C# P/Invoke bindings via ClangSharp, configured from the manifest "bindings" array and the headers
+dotnet run --project src/csharp/generators/KernelEngine.Kabic -- generate  # regenerate every kabic domain (ke_api.json + C# + C field tables) from scripts/api_domains.json
 dotnet run scripts/coverage.cs        # C# test coverage report, C# only (clean | report subcommands)
 dotnet run scripts/verify.cs -- docs  # generate the reference pages and build the documentation site into build/docs-site (DocFX, pinned in .config/dotnet-tools.json)
 ```
@@ -71,22 +73,22 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Eighteen domains: `asset`, `audio`, `configuration`, `ecs`, `framework`, `input`, `logger`, `math`, `physics`, `render`, `resource_cache`, `result`, `runtime`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty domains: `asset`, `audio`, `configuration`, `ecs`, `file_system`, `framework`, `input`, `io`, `logger`, `math`, `physics`, `render`, `resource_cache`, `result`, `runtime`, `spatial`, `task_pool`, `text`, `view`, `window`.
 
-One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `scheduler`? include `scheduler`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
+One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `task_pool`? include `task_pool`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
 Contracts worth knowing by name:
 - `ke_log_callback` — where a plugin library's `std.log` lines go, set by the host through the library's `<library>_set_log_callback`
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_scheduler` — the single shared worker pool every parallel subsystem routes through
+- `ke_task_pool` — the single shared worker pool every parallel subsystem routes through
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-three plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-five plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 No C++ implementation. The one `.cpp` in the tree, `src/zig/result/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
@@ -105,7 +107,9 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (`src/csharp/kabic/`) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four of the `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four of the `scripts/check_*.cs`, keep both honest against the headers.
+
+kabic's generic output is the default. A need it does not meet is answered in this order: accept the generic result if it is enough, even when it differs from code that already exists; otherwise ask whether the concept is generic and belongs in kabic's core; only a concept that is neither goes to an extension.
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
@@ -115,8 +119,10 @@ Thin wrappers expose the native vtables as managed types. Game code talks to the
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
-    .Add<INativeEcs, FlecsEcs>()
-    .Add<IScheduler, EnkiScheduler>()
+    .AddFlecsEcsRegistry()
+    .AddEnkiTaskPool()
+    .AddStdFileSystem()
+    .AddPoolIo()
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "Title"));
 
@@ -136,11 +142,11 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-There is one worker pool, behind `ke_scheduler`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+There is one worker pool, behind `ke_task_pool`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pool**: a single shared `ke_scheduler` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
+**Worker pool**: a single shared `ke_task_pool` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
 
 ---
 
@@ -158,15 +164,15 @@ There is one worker pool, behind `ke_scheduler`, and workers are addressed by in
 - **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail returns `ke_result` (`KE_OK` or the code of the failure), writes its value through a last `out_` parameter, and logs the reason with `log.warn`. All callers check the code.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
-- **Param structs**: standardize on `_params` suffix for parameter bags (construction, registration, etc.). Never `_desc`, `_descriptor`, `_info`, or `_config`.
+- **Structs as arguments**: a struct is justified by reuse or by describing an object, never by the number of arguments. A struct that describes an object or a type to be created or registered is a descriptor, suffixed `_desc`. Every other argument is positional. A factory takes its dependencies positionally and its configurable values as the contract's `_config` struct.
 - **Shape of a plugin**, where the language is silent:
   - The entry file is named after the domain and the plugin; a render pass ends in `module`.
   - The state is a struct named `State`, embedding the vtable as the field `api`, whose handle points back at it; one function named `stateOf` recovers it from a slot's first argument.
   - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
-  - A factory is `export` without `pub`, takes a params struct in which zero selects the default, and on failure frees what it took and returns the zeroed handle.
-  - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or `ke_render_common`.
-  - A test is named by a sentence stating the behaviour, uses the shared stubs, and the last test of a plugin checks that nothing leaked.
+  - A factory is `export` without `pub`, takes its dependencies positionally, then a `const ke_<x>_config *` in which NULL or a zero field selects the default, and on failure frees what it took and returns the zeroed handle.
+  - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or from a package named after its concept, declared in the plugin's `build.zig.zon` (`src/zig/render/object_uniforms/`).
+  - A test is named by a sentence stating the behaviour, substitutes the contracts it runs against with zsub (`build.zig.zon`) and configures them in the test, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
 
 ### C#
@@ -199,13 +205,13 @@ The rules below and the conventions above that a machine can check are checked b
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex, condition variable or raw thread in a plugin.** The scheduler is the synchronisation layer: work is dispatched to `ke_scheduler` and waited on through it, and a producer and a consumer are ordered by phases.
+5. **No mutex, condition variable or raw thread in a plugin.** The task pool is the synchronisation layer: work is dispatched to `ke_task_pool` and waited on through it, and a producer and a consumer are ordered by phases.
 
 6. **No `assert` and no `abort` in engine code.** Every failure, an internal guard included, is a `ke_result` code returned by the call.
 
 7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers.
 
-8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a params struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
+8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a `_config` struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
 
 9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 
@@ -226,5 +232,5 @@ Where to look when this file is not enough:
 | what is this symbol or file for, and where is an idea explained? | `build/native/bin/docir query <name> src`, then the code at the location it gives |
 | how does sim hand off to render? | `src/zig/runtime/src/runtime.zig` |
 | which plugins exist? | `grep 'ctx.member("' build.zig` |
-| what does a generated projection look like, and why? | `src/csharp/kabic/`, plus the `scripts/check_*.cs` gate that pins it |
+| what does a generated projection look like, and why? | the kabic repository, plus the `scripts/check_*.cs` gate that pins it |
 | what is being worked on? | `docs/kanban/` — unversioned, and the only place status is allowed |

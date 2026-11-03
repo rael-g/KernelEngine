@@ -1,0 +1,12 @@
+.{
+    .name = .abi_task_pool_enki_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x258729aee93c07f8,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_task_pool = .{ .path = "../../../abi/task_pool" },
+    },
+    .paths = .{"."},
+}

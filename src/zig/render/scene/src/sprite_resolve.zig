@@ -1,7 +1,11 @@
 //! Gives each 2D sprite a mesh component carrying a quad and a material that match its fields.
 
-const abi_asset = @import("abi_asset");
+const abi_asset_resolver = @import("abi_asset_resolver");
+const abi_render_components = @import("abi_render_components");
+const abi_render_handles = @import("abi_render_handles");
 const abi_ecs = @import("abi_ecs");
+const abi_mesh = @import("abi_mesh");
+const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -27,15 +31,15 @@ const Vertex = extern struct {
 /// them. `resolver` is null when no asset resolver was supplied, and then no texture is ever
 /// loaded.
 pub const State = struct {
-    core: *abi_render.ke_render_service,
-    mesh_cid: abi_ecs.ke_component_id,
-    resolver: ?*abi_asset.ke_asset_resolver,
+    core: *abi_render.c.ke_render_service,
+    mesh_cid: abi_asset_resolver.c.ke_component_id,
+    resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
 };
 
 /// Uploads a quad for the sprite's shape and returns its handle, which `swapMesh` takes over.
 /// The key covers every field the vertices and indices are computed from, so sprites of one
 /// shape name the same upload. A failed upload is logged and returns the empty handle.
-fn quadFor(core: *abi_render.ke_render_service, sp: *const abi_render.ke_sprite2d_component) abi_render.ke_mesh_handle {
+fn quadFor(core: *abi_render.c.ke_render_service, sp: *const abi_render_components.c.ke_sprite2d_component) abi_render_handles.c.ke_mesh_handle {
     const w = sp.size.x;
     const h = sp.size.y;
     const x0 = -sp.pivot.x * w;
@@ -66,8 +70,8 @@ fn quadFor(core: *abi_render.ke_render_service, sp: *const abi_render.ke_sprite2
         bitsOf(sp.region.y),  bitsOf(sp.region.z),  bitsOf(sp.region.w),  sp.flip_h,     sp.flip_v,
     });
 
-    var mesh: abi_render.ke_mesh_handle = abi_render.KE_MESH_NONE;
-    if (core.upload_mesh.?(core, k, &verts, @sizeOf(@TypeOf(verts)), &idx, idx.len, &mesh) != R.ok)
+    var mesh: abi_render_handles.c.ke_mesh_handle = abi_render_handles.c.KE_MESH_NONE;
+    if (core.upload_mesh.?(core, k, @ptrCast(&verts), verts.len, &idx, idx.len, &mesh) != R.ok)
         log.warn("a sprite quad could not be uploaded", .{});
     return mesh;
 }
@@ -75,20 +79,20 @@ fn quadFor(core: *abi_render.ke_render_service, sp: *const abi_render.ke_sprite2
 /// Keeps the resolved handle in `texture_handle` and returns it, so a handle that is not empty
 /// skips the resolver from then on. With no resolver the sprite gets the empty texture and
 /// nothing is stored, so the next call tries again.
-fn resolveTexture(st: *State, sp: *abi_render.ke_sprite2d_component) abi_render.ke_texture_handle {
-    if (sp.texture[0] == 0) return abi_render.KE_TEXTURE_NONE;
-    if (sp.texture_handle.bits != abi_render.KE_HANDLE_NONE) return sp.texture_handle;
+fn resolveTexture(st: *State, sp: *abi_render_components.c.ke_sprite2d_component) abi_render_handles.c.ke_texture_handle {
+    if (sp.texture[0] == 0) return abi_render_handles.c.KE_TEXTURE_NONE;
+    if (sp.texture_handle.bits != abi_render_handles.c.KE_HANDLE_NONE) return sp.texture_handle;
 
-    const resolver = st.resolver orelse return abi_render.KE_TEXTURE_NONE;
-    if (resolver.resolve_texture_into.?(resolver, st.core, @ptrCast(&sp.texture), &sp.texture_handle) != abi_result.KE_OK)
-        sp.texture_handle = abi_render.KE_TEXTURE_NONE;
+    const resolver = st.resolver orelse return abi_render_handles.c.KE_TEXTURE_NONE;
+    if (resolver.resolve_texture_into.?(resolver, st.core, @ptrCast(&sp.texture), &sp.texture_handle) != abi_result.c.KE_OK)
+        sp.texture_handle = abi_render_handles.c.KE_TEXTURE_NONE;
     return sp.texture_handle;
 }
 
 /// Asks the core for a material under a key of the color, the resolved texture and the alpha
 /// fields, so a change to any of them yields another material. A failed creation is logged and
 /// returns the empty handle.
-fn materialFor(st: *State, sp: *abi_render.ke_sprite2d_component) abi_render.ke_material_handle {
+fn materialFor(st: *State, sp: *abi_render_components.c.ke_sprite2d_component) abi_render_handles.c.ke_material_handle {
     const core = st.core;
     const col = sp.color;
     const tex = resolveTexture(st, sp);
@@ -97,15 +101,15 @@ fn materialFor(st: *State, sp: *abi_render.ke_sprite2d_component) abi_render.ke_
         bitsOf(col.x), bitsOf(col.y), bitsOf(col.z), bitsOf(col.w), tex.bits, sp.alpha_mode, bitsOf(sp.alpha_cutoff),
     });
 
-    var material: abi_render.ke_material_handle = abi_render.KE_MATERIAL_NONE;
+    var material: abi_render_handles.c.ke_material_handle = abi_render_handles.c.KE_MATERIAL_NONE;
     const made = core.create_material.?(
         core,
         k,
-        @ptrCast(&sp.color),
+        sp.color,
         0,
         1,
         tex,
-        abi_render.KE_TEXTURE_NONE,
+        abi_render_handles.c.KE_TEXTURE_NONE,
         sp.alpha_mode,
         sp.alpha_cutoff,
         1.5,
@@ -119,19 +123,19 @@ fn materialFor(st: *State, sp: *abi_render.ke_sprite2d_component) abi_render.ke_
 
 /// Takes over the handle passed in and releases the one the component held, so across ticks the
 /// component keeps one reference to its mesh rather than one per call.
-fn swapMesh(core: *abi_render.ke_render_service, m: *abi_render.ke_mesh_component, resolved: abi_render.ke_mesh_handle) void {
-    if (resolved.bits == abi_render.KE_HANDLE_NONE) return;
+fn swapMesh(core: *abi_render.c.ke_render_service, m: *abi_render_components.c.ke_mesh_component, resolved: abi_render_handles.c.ke_mesh_handle) void {
+    if (resolved.bits == abi_render_handles.c.KE_HANDLE_NONE) return;
     const held = m.mesh;
     m.mesh = resolved;
-    if (held.bits != abi_render.KE_HANDLE_NONE) core.release_mesh.?(core, held);
+    if (held.bits != abi_render_handles.c.KE_HANDLE_NONE) core.release_mesh.?(core, held);
 }
 
 /// The same convention as `swapMesh`, for the material of the component.
-fn swapMaterial(core: *abi_render.ke_render_service, m: *abi_render.ke_mesh_component, resolved: abi_render.ke_material_handle) void {
-    if (resolved.bits == abi_render.KE_HANDLE_NONE) return;
+fn swapMaterial(core: *abi_render.c.ke_render_service, m: *abi_render_components.c.ke_mesh_component, resolved: abi_render_handles.c.ke_material_handle) void {
+    if (resolved.bits == abi_render_handles.c.KE_HANDLE_NONE) return;
     const held = m.material;
     m.material = resolved;
-    if (held.bits != abi_render.KE_HANDLE_NONE) core.release_material.?(core, held);
+    if (held.bits != abi_render_handles.c.KE_HANDLE_NONE) core.release_material.?(core, held);
 }
 
 /// The update-phase body the module registers, in two passes per tick. The first visits the
@@ -143,18 +147,18 @@ fn swapMaterial(core: *abi_render.ke_render_service, m: *abi_render.ke_mesh_comp
 /// context, so the first pass reaches the sprite on a later tick. A refused attach returns the
 /// commands' code, and the sprite stays marked, so a later tick does not
 /// queue it again. A failed upload, material creation or texture resolve leaves its handle empty.
-pub fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.ke_result {
+pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
     var segs = ctx.?.view.?(ctx, 0, &segc);
     var s: usize = 0;
     while (s < segc) : (s += 1) {
-        const sprites: [*c]abi_render.ke_sprite2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
-        const meshes: [*c]abi_render.ke_mesh_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
+        const sprites: [*c]abi_render_components.c.ke_sprite2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const meshes: [*c]abi_render_components.c.ke_mesh_component = @ptrCast(@alignCast(segs.?[s].columns.?[1]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
-            const sp: *abi_render.ke_sprite2d_component = @ptrCast(&sprites[i]);
+            const sp: *abi_render_components.c.ke_sprite2d_component = @ptrCast(&sprites[i]);
             sp.attached = 1;
             swapMesh(st.core, @ptrCast(&meshes[i]), quadFor(st.core, sp));
             swapMaterial(st.core, @ptrCast(&meshes[i]), materialFor(st, sp));
@@ -164,7 +168,7 @@ pub fn system(ctx: ?*abi_runtime.ke_system_ctx, user: ?*anyopaque, _: f32) callc
     segs = ctx.?.view.?(ctx, 1, &segc);
     s = 0;
     while (s < segc) : (s += 1) {
-        const sprites: [*c]abi_render.ke_sprite2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
+        const sprites: [*c]abi_render_components.c.ke_sprite2d_component = @ptrCast(@alignCast(segs.?[s].columns.?[0]));
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             if (sprites[i].attached != 0) continue;
@@ -201,18 +205,18 @@ const Capture = struct {
 };
 
 fn captureUploadMesh(
-    _: [*c]abi_render.ke_render_service,
+    _: [*c]abi_render.c.ke_render_service,
     key: [*c]const u8,
-    vertices: ?*const anyopaque,
-    _: usize,
+    vertices: [*c]const abi_mesh.c.ke_mesh_vertex,
+    _: u32,
     indices: [*c]const u16,
     index_count: u32,
-    out: [*c]abi_render.ke_mesh_handle,
-) callconv(.c) abi_result.ke_result {
+    out: [*c]abi_render_handles.c.ke_mesh_handle,
+) callconv(.c) abi_result.c.ke_result {
     const k = std.mem.span(key);
     @memcpy(Capture.key[0..k.len], k);
     Capture.key_len = k.len;
-    const v: [*]const Vertex = @ptrCast(@alignCast(vertices.?));
+    const v: [*]const Vertex = @ptrCast(vertices.?);
     Capture.verts = v[0..4].*;
     @memcpy(Capture.indices[0..index_count], indices[0..index_count]);
     Capture.calls += 1;
@@ -220,14 +224,14 @@ fn captureUploadMesh(
     return R.ok;
 }
 
-fn fakeService() abi_render.ke_render_service {
-    var svc = std.mem.zeroes(abi_render.ke_render_service);
+fn fakeService() abi_render.c.ke_render_service {
+    var svc = std.mem.zeroes(abi_render.c.ke_render_service);
     svc.upload_mesh = captureUploadMesh;
     return svc;
 }
 
-fn defaultSprite() abi_render.ke_sprite2d_component {
-    var sp = std.mem.zeroes(abi_render.ke_sprite2d_component);
+fn defaultSprite() abi_render_components.c.ke_sprite2d_component {
+    var sp = std.mem.zeroes(abi_render_components.c.ke_sprite2d_component);
     sp.size = .{ .x = 2, .y = 4 };
     sp.pivot = .{ .x = 0.5, .y = 0.5 };
     sp.region = .{ .x = 0, .y = 0, .z = 1, .w = 1 };
@@ -342,7 +346,7 @@ test "a sprite naming no image resolves to no texture without consulting a resol
     var svc = fakeService();
     var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
     var sp = defaultSprite();
-    try testing.expectEqual(abi_render.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
+    try testing.expectEqual(abi_render_handles.c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
 }
 
 test "a sprite naming an image draws untextured where no resolver was wired" {
@@ -350,7 +354,7 @@ test "a sprite naming an image draws untextured where no resolver was wired" {
     var st = State{ .core = &svc, .mesh_cid = 0, .resolver = null };
     var sp = defaultSprite();
     @memcpy(sp.texture[0.."res://sprite.png".len], "res://sprite.png");
-    try testing.expectEqual(abi_render.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
+    try testing.expectEqual(abi_render_handles.c.KE_TEXTURE_NONE, resolveTexture(&st, &sp));
 }
 
 test "an image already uploaded is not resolved a second time" {
@@ -377,59 +381,59 @@ const Refs = struct {
 };
 
 fn refUploadMesh(
-    _: [*c]abi_render.ke_render_service,
+    _: [*c]abi_render.c.ke_render_service,
     _: [*c]const u8,
-    _: ?*const anyopaque,
-    _: usize,
+    _: [*c]const abi_mesh.c.ke_mesh_vertex,
+    _: u32,
     _: [*c]const u16,
     _: u32,
-    out: [*c]abi_render.ke_mesh_handle,
-) callconv(.c) abi_result.ke_result {
+    out: [*c]abi_render_handles.c.ke_mesh_handle,
+) callconv(.c) abi_result.c.ke_result {
     Refs.mesh += 1;
     out.* = .{ .bits = 100 };
     return R.ok;
 }
 
 fn refCreateMaterial(
-    _: [*c]abi_render.ke_render_service,
+    _: [*c]abi_render.c.ke_render_service,
     _: [*c]const u8,
-    _: [*c]const f32,
+    _: abi_math.c.ke_vec4,
     _: f32,
     _: f32,
-    _: abi_render.ke_texture_handle,
-    _: abi_render.ke_texture_handle,
-    _: abi_render.ke_alpha_mode,
+    _: abi_render_handles.c.ke_texture_handle,
+    _: abi_render_handles.c.ke_texture_handle,
+    _: abi_render_handles.c.ke_alpha_mode,
     _: f32,
     _: f32,
     _: f32,
     _: [*c]const u8,
-    out: [*c]abi_render.ke_material_handle,
-) callconv(.c) abi_result.ke_result {
+    out: [*c]abi_render_handles.c.ke_material_handle,
+) callconv(.c) abi_result.c.ke_result {
     Refs.material += 1;
     out.* = .{ .bits = 200 };
     return R.ok;
 }
 
-fn refReleaseMesh(_: [*c]abi_render.ke_render_service, _: abi_render.ke_mesh_handle) callconv(.c) void {
+fn refReleaseMesh(_: [*c]abi_render.c.ke_render_service, _: abi_render_handles.c.ke_mesh_handle) callconv(.c) void {
     Refs.mesh -= 1;
 }
 
-fn refReleaseMaterial(_: [*c]abi_render.ke_render_service, _: abi_render.ke_material_handle) callconv(.c) void {
+fn refReleaseMaterial(_: [*c]abi_render.c.ke_render_service, _: abi_render_handles.c.ke_material_handle) callconv(.c) void {
     Refs.material -= 1;
 }
 
-var view_sprites: [1]abi_render.ke_sprite2d_component = undefined;
-var view_meshes: [1]abi_render.ke_mesh_component = undefined;
-var view_entities: [1]abi_ecs.ke_entity = .{1};
-var view_segment: abi_ecs.ke_ecs_segment = undefined;
+var view_sprites: [1]abi_render_components.c.ke_sprite2d_component = undefined;
+var view_meshes: [1]abi_render_components.c.ke_mesh_component = undefined;
+var view_entities: [1]abi_asset_resolver.c.ke_entity = .{1};
+var view_segment: abi_ecs.c.ke_ecs_segment = undefined;
 var view_columns: [2]?*anyopaque = undefined;
 
-fn fakeView(_: [*c]abi_runtime.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.ke_ecs_segment {
+fn fakeView(_: [*c]abi_runtime.c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
     if (index != 0) {
         out_count.* = 0;
         return null;
     }
-    view_segment = std.mem.zeroes(abi_ecs.ke_ecs_segment);
+    view_segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
     view_segment.count = 1;
     view_segment.entities = &view_entities;
     view_columns = .{ &view_sprites, &view_meshes };
@@ -441,7 +445,7 @@ fn fakeView(_: [*c]abi_runtime.ke_system_ctx, index: u32, out_count: [*c]usize) 
 
 test "a sprite resolved every tick holds one reference to its mesh and material, not one per tick" {
     Refs.reset();
-    var svc = std.mem.zeroes(abi_render.ke_render_service);
+    var svc = std.mem.zeroes(abi_render.c.ke_render_service);
     svc.upload_mesh = refUploadMesh;
     svc.create_material = refCreateMaterial;
     svc.release_mesh = refReleaseMesh;
@@ -450,8 +454,8 @@ test "a sprite resolved every tick holds one reference to its mesh and material,
 
     view_sprites[0] = defaultSprite();
     view_sprites[0].attached = 1;
-    view_meshes[0] = std.mem.zeroes(abi_render.ke_mesh_component);
-    var ctx = std.mem.zeroes(abi_runtime.ke_system_ctx);
+    view_meshes[0] = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
+    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
     ctx.view = fakeView;
 
     for (0..5) |_| try testing.expect(system(&ctx, &st, 0.0) == R.ok);

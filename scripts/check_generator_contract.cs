@@ -8,7 +8,7 @@ var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 
 var generator = Path.Combine(rootDir, "src", "csharp", "generators", "KernelEngine.SourceGenerators");
 var framework = Path.Combine(rootDir, "src", "csharp", "framework");
-var kabic     = Path.Combine(rootDir, "src", "csharp", "kabic");
+var managed   = Path.Combine(rootDir, "src", "csharp");
 
 static IEnumerable<string> SourcesUnder(string dir) =>
     Directory.EnumerateFiles(dir, "*.cs", SearchOption.AllDirectories)
@@ -28,7 +28,7 @@ foreach (var file in SourcesUnder(generator))
 }
 
 var emitted = new Dictionary<string, string>(StringComparer.Ordinal);
-foreach (var file in SourcesUnder(kabic))
+foreach (var file in SourcesUnder(managed).Where(p => p.EndsWith(".g.cs", StringComparison.Ordinal)))
     foreach (Match m in Regex.Matches(File.ReadAllText(file), @"""?\[(\w+)\("))
     {
         var name = m.Groups[1].Value + "Attribute";

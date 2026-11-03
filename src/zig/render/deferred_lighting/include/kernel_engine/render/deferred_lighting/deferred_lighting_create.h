@@ -4,6 +4,8 @@
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -27,6 +29,7 @@ extern "C"
 
     typedef struct ke_render_deferred_lighting ke_render_deferred_lighting;
 
+    /// [owner]
     typedef struct ke_render_deferred_lighting_handle
     {
         ke_render_deferred_lighting *ref;
@@ -34,17 +37,15 @@ extern "C"
     } ke_render_deferred_lighting_handle;
 
     /// What the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
-    /// over the frame's color, sampling the frame's depth. The names are copied.
+    /// [bag] over the frame's color, sampling the frame's depth. The names are copied.
     typedef struct ke_render_deferred_lighting_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
         ke_render_service *service; ///< Holds the resources it reads and writes; borrowed.
         ke_gpu_device     *device;  ///< Borrowed.
         bool               ibl_enabled;
-        ke_component_id    camera_cid;
-        ke_component_id    world_transform_cid;
-        ke_component_id    skybox_cid;
-        ke_component_id    frame_cid;
+        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
+        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
         /// [utf8] The gbuffer group it lights.
         const char *gbuffer;
         /// [utf8] Optional shadow group; without one the shadow is the neutral one.

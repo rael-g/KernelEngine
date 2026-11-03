@@ -5,28 +5,23 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>
-/// Marks a borrow wrapper with the <c>ScriptBorrow</c> it resolves with, so a
-/// projection recognises a borrow parameter by what it means rather than by a list
-/// of type names kept in step by hand.
-/// </summary>
+/// <summary>Marks a borrow wrapper with the reach it resolves with, so a projection recognises a borrow parameter by what it means.</summary>
 [AttributeUsage(AttributeTargets.Struct)]
 public sealed class NodeBorrowAttribute : Attribute
 {
     /// <summary>Where this wrapper's borrow looks for the node it names.</summary>
-    public ScriptBorrow Reach { get; }
+    public global::KernelEngine.Framework.Native.ScriptBorrow Reach { get; }
 
     /// <param name="reach">Where this wrapper's borrow looks for the node it names.</param>
-    public NodeBorrowAttribute(ScriptBorrow reach) => Reach = reach;
+    public NodeBorrowAttribute(global::KernelEngine.Framework.Native.ScriptBorrow reach) => Reach = reach;
 }
 
 /// <summary>
-/// Below the borrower, depth-first. Obtained as a parameter rather
-/// than stored in a field: re-resolved each time it is handed over, so it can never
-/// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
-/// borrowing body's access list.
+/// Below the borrower, depth-first. Obtained as a parameter rather than stored in a field:
+/// re-resolved each time it is handed over, so it can never dangle, and its type is what puts
+/// <typeparamref name="T"/>'s components into the borrowing body's access list.
 /// </summary>
-[NodeBorrow(ScriptBorrow.Descendant)]
+[NodeBorrow(global::KernelEngine.Framework.Native.ScriptBorrow.Descendant)]
 public readonly ref struct Descendant<T> where T : class
 {
     private readonly T? _node;
@@ -46,12 +41,11 @@ public readonly ref struct Descendant<T> where T : class
 }
 
 /// <summary>
-/// The nearest above the borrower. This is the only reach that never answers ambiguous. Obtained as a parameter rather
-/// than stored in a field: re-resolved each time it is handed over, so it can never
-/// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
-/// borrowing body's access list.
+/// The nearest above the borrower. This is the only reach that never answers ambiguous. Obtained as a parameter rather than stored in a field:
+/// re-resolved each time it is handed over, so it can never dangle, and its type is what puts
+/// <typeparamref name="T"/>'s components into the borrowing body's access list.
 /// </summary>
-[NodeBorrow(ScriptBorrow.Ancestor)]
+[NodeBorrow(global::KernelEngine.Framework.Native.ScriptBorrow.Ancestor)]
 public readonly ref struct Ancestor<T> where T : class
 {
     private readonly T? _node;
@@ -71,12 +65,11 @@ public readonly ref struct Ancestor<T> where T : class
 }
 
 /// <summary>
-/// Anywhere the type is bound, ignoring the borrower's position. Obtained as a parameter rather
-/// than stored in a field: re-resolved each time it is handed over, so it can never
-/// dangle, and its type is what puts <typeparamref name="T"/>'s components into the
-/// borrowing body's access list.
+/// Anywhere the type is bound, ignoring the borrower's position. Obtained as a parameter rather than stored in a field:
+/// re-resolved each time it is handed over, so it can never dangle, and its type is what puts
+/// <typeparamref name="T"/>'s components into the borrowing body's access list.
 /// </summary>
-[NodeBorrow(ScriptBorrow.Anywhere)]
+[NodeBorrow(global::KernelEngine.Framework.Native.ScriptBorrow.Anywhere)]
 public readonly ref struct Anywhere<T> where T : class
 {
     private readonly T? _node;

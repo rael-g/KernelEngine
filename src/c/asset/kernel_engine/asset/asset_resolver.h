@@ -32,6 +32,8 @@ extern "C"
                                      const char               *path,
                                      ke_texture_data         **out);
 
+        /** [releases:ResolvedTexture] Frees a ke_texture_data resolve_texture returned. A null
+         * @p data is ignored. */
         void (*free_texture)(struct ke_asset_resolver *self,
                              ke_texture_data           *data);
 
@@ -40,14 +42,16 @@ extern "C"
          * baked primitive, built via ke_mesh_shape_bake; a path that names none fails.
          * Caller owns the result; release with free_mesh.
          * @param path [utf8]
-         * @param out [out] Receives the baked mesh vertex/index data on success.
+         * @param out [out] Receives the baked mesh vertex/index data on success; NULL on failure.
          * @return KE_OK, KE_RESULT_NOT_FOUND for a path that names no primitive, or
          *         KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*resolve_mesh)(struct ke_asset_resolver *self,
                                   const char               *path,
-                                  ke_mesh_shape_data       *out);
+                                  ke_mesh_shape_data      **out);
 
+        /** [releases:ResolvedMesh] Frees a ke_mesh_shape_data resolve_mesh returned. A null
+         * @p data is ignored. */
         void (*free_mesh)(struct ke_asset_resolver *self,
                           ke_mesh_shape_data        *data);
 
@@ -81,6 +85,8 @@ extern "C"
                                   uint32_t                  atlas_size,
                                   ke_font_data            **out);
 
+        /** [releases:ResolvedFont] Frees a ke_font_data resolve_font returned. A null @p data is
+         * ignored. */
         void (*free_font)(struct ke_asset_resolver *self, ke_font_data *data);
 
         /**
@@ -138,6 +144,7 @@ extern "C"
                                   size_t                    capacity);
     } ke_asset_resolver;
 
+    /// [owner]
     typedef struct ke_asset_resolver_handle
     {
         ke_asset_resolver *ref;

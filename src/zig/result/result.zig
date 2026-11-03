@@ -2,7 +2,7 @@
 //! conversions between it and the code at the ABI edge.
 
 const std = @import("std");
-const c = @import("abi_result");
+const c = @import("abi_result").c;
 
 /// The error set and conversions of a plugin. `domain` pairs each error of the plugin's domain with the code
 /// its header declares for it, as `.{ .{ error.ShaderCompilation, c.KE_RESULT_RENDER_SHADER_COMPILATION } }`.

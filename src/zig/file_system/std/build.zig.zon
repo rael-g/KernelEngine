@@ -1,0 +1,16 @@
+.{
+    .name = .ke_file_system_std,
+    .version = "0.1.0",
+    .fingerprint = 0xb706048d051a2e5b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_file_system = .{ .path = "../../abi/file_system" },
+        .abi_file_system_std_factory = .{ .path = "abi" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .ke_common = .{ .path = "../../common" },
+        .ke_build = .{ .path = "../../build" },
+        .ke_logger = .{ .path = "../../logger" },
+        .ke_result = .{ .path = "../../result" },
+    },
+    .paths = .{"."},
+}

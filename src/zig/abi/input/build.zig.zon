@@ -1,9 +1,11 @@
 .{
-    .name = .ke_abi_input,
+    .name = .abi_input,
     .version = "0.1.0",
-    .fingerprint = 0x6fa3ad294d934118,
+    .fingerprint = 0xc2235051d2d55bb2,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_math = .{ .path = "../math" },
+        .abi_result = .{ .path = "../result" },
     },
     .paths = .{"."},
 }

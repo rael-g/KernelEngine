@@ -1,7 +1,7 @@
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
-using KernelEngine.Scheduler;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.TaskPool;
+using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Runtime;
 
@@ -14,12 +14,12 @@ namespace KernelEngine.Runtime;
 public sealed unsafe partial class Runtime : IRuntime
 {
     /// <summary>
-    /// Builds a runtime over borrowed ECS storage and a borrowed task scheduler.
+    /// Builds a runtime over borrowed ECS storage and a borrowed task pool.
     /// Only the pointers are taken: keeping the managed wrappers reachable is the
     /// caller's business, exactly as it is for whoever else borrows them.
     /// </summary>
-    public Runtime(INativeEcs ecs, IScheduler taskScheduler)
-        : this(NativeEcsOf(ecs), NativeSchedulerOf(taskScheduler), null)
+    public Runtime(INativeEcs ecs, INativeTaskPool taskPool)
+        : this(NativeEcsOf(ecs), NativeTaskPoolOf(taskPool), null)
     {
     }
 
@@ -27,8 +27,8 @@ public sealed unsafe partial class Runtime : IRuntime
     /// Builds a runtime as the constructor above does, the runtime library logging to
     /// <paramref name="logger"/>.
     /// </summary>
-    public Runtime(INativeEcs ecs, IScheduler taskScheduler, KernelEngine.Logger.ILogger logger)
-        : this(RoutingLog(ecs, logger), taskScheduler)
+    public Runtime(INativeEcs ecs, INativeTaskPool taskPool, KernelEngine.Logger.ILogger logger)
+        : this(RoutingLog(ecs, logger), taskPool)
     {
     }
 
@@ -45,10 +45,10 @@ public sealed unsafe partial class Runtime : IRuntime
         return ecs.Native;
     }
 
-    private static ke_scheduler* NativeSchedulerOf(IScheduler taskScheduler)
+    private static ke_task_pool* NativeTaskPoolOf(INativeTaskPool taskPool)
     {
-        ArgumentNullException.ThrowIfNull(taskScheduler);
-        return taskScheduler.Native;
+        ArgumentNullException.ThrowIfNull(taskPool);
+        return taskPool.Native;
     }
 
 }
