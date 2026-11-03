@@ -46,6 +46,9 @@ pub const ToolTree = struct {
             .options = options,
             .dir = .{ .step = &self.step },
         };
+        self.options.executable_dirs = b.allocator.dupe([]const u8, options.executable_dirs) catch @panic("OOM");
+        self.options.patched = b.allocator.dupe(Patched, options.patched) catch @panic("OOM");
+        self.options.added = b.allocator.dupe(Added, options.added) catch @panic("OOM");
         options.package.addStepDependencies(&self.step);
         for (options.added) |a| a.source.addStepDependencies(&self.step);
         return self;
