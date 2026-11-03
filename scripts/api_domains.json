@@ -19,12 +19,6 @@
     "resultManagedType": "KernelEngine.Result.Native.Result",
     "resultHelperClass": "KernelEngine.NativeResults",
     "commonManagedNamespace": "KernelEngine.Common",
-    "handleTypes": {
-      "ke_mesh_handle": "KernelEngine.Render.MeshHandle",
-      "ke_material_handle": "KernelEngine.Render.MaterialHandle",
-      "ke_texture_handle": "KernelEngine.Render.TextureHandle",
-      "ke_ui_font_handle": "KernelEngine.Render.FontHandle"
-    },
     "fieldTable": {
       "entryType": "ke_component_field",
       "variantType": "ke_variant",
