@@ -202,11 +202,18 @@ typedef struct ke_gpu_bind_group_params
     const ke_gpu_bind_group_entry *entries; ///< [array_of:entry_count]
 } ke_gpu_bind_group_params;
 
-/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
-typedef void (*ke_gpu_pipeline_ready_func)(ke_gpu_pipeline pso, void *user);
+/** Receives a pipeline compiled asynchronously.
+ * @param result KE_OK, or the code of the compile that failed, whose reason is logged.
+ * @param pso    The pipeline; KE_GPU_INVALID_HANDLE when the compile failed.
+ * @param user   [context] Forwarded from create_render_pipeline_async. */
+typedef void (*ke_gpu_pipeline_ready_func)(ke_result result, ke_gpu_pipeline pso, void *user);
 
-/// Receives the outcome of mapping a buffer for reading.
-typedef void (*ke_gpu_buffer_mapped_func)(ke_gpu_buffer buffer, bool ok, void *user);
+/** Receives the outcome of mapping a buffer for reading.
+ * @param result KE_OK when the range is readable through map_buffer until unmap_buffer, or the
+ *               code of the mapping that failed.
+ * @param buffer The buffer that was mapped.
+ * @param user   [context] Forwarded from map_buffer_read. */
+typedef void (*ke_gpu_buffer_mapped_func)(ke_result result, ke_gpu_buffer buffer, void *user);
 
 /// [bag]
 typedef struct ke_gpu_render_pipeline_params
@@ -395,8 +402,9 @@ typedef struct ke_gpu_device
 
     /// Kicks a background pipeline compile — the driver compiles off the
     /// caller's thread; `on_ready` fires later (during this device's normal
-    /// event pump, e.g. at queue_poll) with the finished pipeline, or
-    /// KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
+    /// event pump, e.g. at queue_poll) with the finished pipeline, or a failure code and
+    /// KE_GPU_INVALID_HANDLE. No caching and no fallback.
+    /// @param on_ready [completion:user]
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
                                          const ke_gpu_render_pipeline_params *p,
                                          ke_gpu_pipeline_ready_func on_ready,
@@ -410,9 +418,10 @@ typedef struct ke_gpu_device
 
     /// Starts mapping [offset, offset + size) of a buffer created with
     /// KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's
-    /// normal event pump (queue_poll, queue_wait_idle), with `ok` true when the range is
-    /// readable through map_buffer until unmap_buffer, and false when the mapping failed.
-    /// Submit the work that writes the buffer before calling.
+    /// normal event pump (queue_poll, queue_wait_idle), with KE_OK when the range is
+    /// readable through map_buffer until unmap_buffer. Submit the work that writes the buffer
+    /// before calling.
+    /// @param on_ready [completion:user]
     void (*map_buffer_read)(struct ke_gpu_device *self, ke_gpu_buffer h,
                             size_t offset, size_t size,
                             ke_gpu_buffer_mapped_func on_ready,

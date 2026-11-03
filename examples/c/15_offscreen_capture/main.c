@@ -44,11 +44,11 @@ static void check(const char *what, ke_result result)
     if (result != KE_OK) die_result(what, result);
 }
 
-static void on_mapped(ke_gpu_buffer buffer, bool ok, void *user)
+static void on_mapped(ke_result result, ke_gpu_buffer buffer, void *user)
 {
     (void)buffer;
     readback *r = user;
-    r->ok = ok;
+    r->ok = result == KE_OK;
     r->done = true;
 }
 

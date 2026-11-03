@@ -464,12 +464,15 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         return Handle->get_ndc_convention(Handle);
     }
 
-    /// <summary>Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready` fires later (during this device's normal event pump, e.g. at queue_poll) with the finished pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.</summary>
+    /// <summary>Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready` fires later (during this device's normal event pump, e.g. at queue_poll) with the finished pipeline, or a failure code and KE_GPU_INVALID_HANDLE. No caching and no fallback.</summary>
     /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
     /// <param name="vertexEntry">NULL → "main"</param>
     /// <param name="fragmentEntry">NULL → "main"</param>
-    public void CreateRenderPipelineAsync(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats, nint onReady, nint user)
+    /// <returns>The pipeline; KE_GPU_INVALID_HANDLE when the compile failed.</returns>
+    public global::System.Threading.Tasks.Task<ulong> CreateRenderPipelineAsync(string label, ulong vertexModule, ulong fragmentModule, string vertexEntry, string fragmentEntry, GpuPrimitiveTopology primitiveTopology, GpuCullMode cullMode, GpuFrontFace frontFace, ReadOnlySpan<GpuVertexBufferLayout> vertexBuffers, GpuBlendState blendState, GpuDepthStencilState depthStencil, ReadOnlySpan<ulong> bindGroupLayouts, bool alphaToCoverageEnabled, ReadOnlySpan<GpuTextureFormat> colorTargetFormats)
     {
+        var source = new TaskCompletionSource<ulong>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = GCHandle.Alloc(new CreateRenderPipelineAsyncCompletion { Source = source });
         var labelText = label ?? "";
         var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
         Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
@@ -514,12 +517,46 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                                 if (colorTargetFormats.Length > 8) throw new ArgumentOutOfRangeException(nameof(colorTargetFormats));
                                 for (var colorTargetFormatsAt = 0; colorTargetFormatsAt < colorTargetFormats.Length; colorTargetFormatsAt++) p.color_target_formats[colorTargetFormatsAt] = (colorTargetFormatsPtr)[colorTargetFormatsAt];
                                 p.color_target_count = (uint)colorTargetFormats.Length;
-                                Handle->create_render_pipeline_async(Handle, &p, (delegate* unmanaged[Cdecl]<ulong, void*, void>)onReady, (void*)user);
+                                try
+                                {
+                                    Handle->create_render_pipeline_async(Handle, &p, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.Result, ulong, void*, void>)&CreateRenderPipelineAsyncOnReadyTrampoline, (void*)GCHandle.ToIntPtr(completion));
+                                }
+                                catch
+                                {
+                                    completion.Free();
+                                    throw;
+                                }
                             }
                         }
                     }
                 }
             }
+        }
+        return source.Task;
+    }
+
+    /// <summary>What one operation in flight answers when it finishes.</summary>
+    private sealed class CreateRenderPipelineAsyncCompletion
+    {
+        public required TaskCompletionSource<ulong> Source;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void CreateRenderPipelineAsyncOnReadyTrampoline(KernelEngine.Result.Native.Result arg0, ulong arg1, void* ctx)
+    {
+        var pending = GCHandle.FromIntPtr((nint)ctx);
+        if (pending.Target is not CreateRenderPipelineAsyncCompletion state) return;
+        pending.Free();
+        try
+        {
+            if (arg0 != KernelEngine.Result.Native.Result.Ok)
+                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "create_render_pipeline_async"));
+            else
+                state.Source.TrySetResult(arg1);
+        }
+        catch (Exception ex)
+        {
+            state.Source.TrySetException(ex);
         }
     }
 
@@ -529,10 +566,47 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         Handle->flush_pipeline_compiles(Handle);
     }
 
-    /// <summary>Starts mapping [offset, offset + size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's normal event pump (queue_poll, queue_wait_idle), with `ok` true when the range is readable through map_buffer until unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer before calling.</summary>
-    public void MapBufferRead(ulong h, nuint offset, nuint size, nint onReady, nint user)
+    /// <summary>Starts mapping [offset, offset + size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. `on_ready` fires later, during this device's normal event pump (queue_poll, queue_wait_idle), with KE_OK when the range is readable through map_buffer until unmap_buffer. Submit the work that writes the buffer before calling.</summary>
+    /// <returns>The buffer that was mapped.</returns>
+    public global::System.Threading.Tasks.Task<ulong> MapBufferRead(ulong h, nuint offset, nuint size)
     {
-        Handle->map_buffer_read(Handle, h, offset, size, (delegate* unmanaged[Cdecl]<ulong, bool, void*, void>)onReady, (void*)user);
+        var source = new TaskCompletionSource<ulong>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = GCHandle.Alloc(new MapBufferReadCompletion { Source = source });
+        try
+        {
+            Handle->map_buffer_read(Handle, h, offset, size, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.Result, ulong, void*, void>)&MapBufferReadOnReadyTrampoline, (void*)GCHandle.ToIntPtr(completion));
+        }
+        catch
+        {
+            completion.Free();
+            throw;
+        }
+        return source.Task;
+    }
+
+    /// <summary>What one operation in flight answers when it finishes.</summary>
+    private sealed class MapBufferReadCompletion
+    {
+        public required TaskCompletionSource<ulong> Source;
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void MapBufferReadOnReadyTrampoline(KernelEngine.Result.Native.Result arg0, ulong arg1, void* ctx)
+    {
+        var pending = GCHandle.FromIntPtr((nint)ctx);
+        if (pending.Target is not MapBufferReadCompletion state) return;
+        pending.Free();
+        try
+        {
+            if (arg0 != KernelEngine.Result.Native.Result.Ok)
+                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "map_buffer_read"));
+            else
+                state.Source.TrySetResult(arg1);
+        }
+        catch (Exception ex)
+        {
+            state.Source.TrySetException(ex);
+        }
     }
 
     /// <summary>Releases a pipeline made by create_compute_pipeline.</summary>

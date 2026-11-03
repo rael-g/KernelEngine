@@ -586,7 +586,7 @@ pub const GpuDevice = struct {
 
     /// Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready`
     /// fires later (during this device's normal event pump, e.g. at queue_poll) with the finished
-    /// pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.
+    /// pipeline, or a failure code and KE_GPU_INVALID_HANDLE. No caching and no fallback.
     pub fn createRenderPipelineAsync(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_params, on_ready: c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) void {
         return self.ptr.create_render_pipeline_async.?(self.ptr, p, on_ready, user);
     }
@@ -600,9 +600,8 @@ pub const GpuDevice = struct {
 
     /// Starts mapping [offset, offset + size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ
     /// for reading. `on_ready` fires later, during this device's normal event pump (queue_poll,
-    /// queue_wait_idle), with `ok` true when the range is readable through map_buffer until
-    /// unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer
-    /// before calling.
+    /// queue_wait_idle), with KE_OK when the range is readable through map_buffer until
+    /// unmap_buffer. Submit the work that writes the buffer before calling.
     pub fn mapBufferRead(self: GpuDevice, h: c.ke_gpu_buffer, offset: usize, size: usize, on_ready: c.ke_gpu_buffer_mapped_func, user: ?*anyopaque) void {
         return self.ptr.map_buffer_read.?(self.ptr, h, offset, size, on_ready, user);
     }

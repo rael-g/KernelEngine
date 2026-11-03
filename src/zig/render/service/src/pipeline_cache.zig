@@ -98,9 +98,9 @@ const Entry = struct {
 /// Called by the device, on whichever thread finished the compile, once the asynchronous request
 /// made by `getOrCreatePipeline` finishes. An invalid pipeline is dropped, leaving the entry on its
 /// fallback.
-fn onRealPipelineReady(pso: abi_asset_resolver.c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
+fn onRealPipelineReady(result: abi_result.c.ke_result, pso: abi_asset_resolver.c.ke_gpu_pipeline, user: ?*anyopaque) callconv(.c) void {
     const entry: *Entry = @ptrCast(@alignCast(user.?));
-    if (pso == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return;
+    if (result != abi_result.c.KE_OK) return;
     entry.real_pso = pso;
     entry.state.store(.ready, .release);
 }

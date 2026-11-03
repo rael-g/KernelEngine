@@ -20,11 +20,11 @@ pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
 
-/// Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.
-pub const ke_gpu_pipeline_ready_func = ?*const fn (ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
+/// Receives a pipeline compiled asynchronously.
+pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
 
 /// Receives the outcome of mapping a buffer for reading.
-pub const ke_gpu_buffer_mapped_func = ?*const fn (ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void;
+pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu_buffer, ?*anyopaque) callconv(.c) void;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library

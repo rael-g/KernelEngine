@@ -2695,7 +2695,7 @@
           "name": "create_render_pipeline_async",
           "returns": "void",
           "tags": [],
-          "doc": "Kicks a background pipeline compile \u2014 the driver compiles off the caller\u0027s thread; \u0060on_ready\u0060 fires later (during this device\u0027s normal event pump, e.g. at queue_poll) with the finished pipeline, or KE_GPU_INVALID_HANDLE on failure. No caching and no fallback.",
+          "doc": "Kicks a background pipeline compile \u2014 the driver compiles off the caller\u0027s thread; \u0060on_ready\u0060 fires later (during this device\u0027s normal event pump, e.g. at queue_poll) with the finished pipeline, or a failure code and KE_GPU_INVALID_HANDLE. No caching and no fallback.",
           "return_doc": null,
           "params": [
             {
@@ -2707,7 +2707,9 @@
             {
               "name": "on_ready",
               "type": "ke_gpu_pipeline_ready_func",
-              "tags": [],
+              "tags": [
+                "completion:user"
+              ],
               "doc": null
             },
             {
@@ -2732,7 +2734,7 @@
           "name": "map_buffer_read",
           "returns": "void",
           "tags": [],
-          "doc": "Starts mapping [offset, offset \u002B size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. \u0060on_ready\u0060 fires later, during this device\u0027s normal event pump (queue_poll, queue_wait_idle), with \u0060ok\u0060 true when the range is readable through map_buffer until unmap_buffer, and false when the mapping failed. Submit the work that writes the buffer before calling.",
+          "doc": "Starts mapping [offset, offset \u002B size) of a buffer created with KE_GPU_BUFFER_USAGE_MAP_READ for reading. \u0060on_ready\u0060 fires later, during this device\u0027s normal event pump (queue_poll, queue_wait_idle), with KE_OK when the range is readable through map_buffer until unmap_buffer. Submit the work that writes the buffer before calling.",
           "return_doc": null,
           "params": [
             {
@@ -2756,7 +2758,9 @@
             {
               "name": "on_ready",
               "type": "ke_gpu_buffer_mapped_func",
-              "tags": [],
+              "tags": [
+                "completion:user"
+              ],
               "doc": null
             },
             {
@@ -4087,19 +4091,27 @@
     {
       "name": "ke_gpu_pipeline_ready_func",
       "returns": "void",
-      "doc": "Receives a pipeline compiled asynchronously, KE_GPU_INVALID_HANDLE on failure.",
+      "doc": "Receives a pipeline compiled asynchronously.",
       "lanes": [
         {
-          "name": "arg1",
-          "type": "ke_gpu_pipeline",
+          "name": "result",
+          "type": "ke_result",
           "tags": [],
-          "doc": null
+          "doc": "KE_OK, or the code of the compile that failed, whose reason is logged."
         },
         {
-          "name": "arg2",
-          "type": "void *",
+          "name": "pso",
+          "type": "ke_gpu_pipeline",
           "tags": [],
-          "doc": null
+          "doc": "The pipeline; KE_GPU_INVALID_HANDLE when the compile failed."
+        },
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from create_render_pipeline_async."
         }
       ]
     },
@@ -4109,22 +4121,24 @@
       "doc": "Receives the outcome of mapping a buffer for reading.",
       "lanes": [
         {
-          "name": "arg1",
+          "name": "result",
+          "type": "ke_result",
+          "tags": [],
+          "doc": "KE_OK when the range is readable through map_buffer until unmap_buffer, or the code of the mapping that failed."
+        },
+        {
+          "name": "buffer",
           "type": "ke_gpu_buffer",
           "tags": [],
-          "doc": null
+          "doc": "The buffer that was mapped."
         },
         {
-          "name": "arg2",
-          "type": "bool",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "arg3",
+          "name": "user",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from map_buffer_read."
         }
       ]
     }
@@ -4145,8 +4159,8 @@
     "ke_gpu_bind_group_layout": "uint64_t",
     "ke_gpu_bind_group": "uint64_t",
     "ke_gpu_queue": "uint64_t",
-    "ke_gpu_pipeline_ready_func": "void (*)(ke_gpu_pipeline, void *)",
-    "ke_gpu_buffer_mapped_func": "void (*)(ke_gpu_buffer, bool, void *)",
+    "ke_gpu_pipeline_ready_func": "void (*)(ke_result, ke_gpu_pipeline, void *)",
+    "ke_gpu_buffer_mapped_func": "void (*)(ke_result, ke_gpu_buffer, void *)",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
     "ke_render_material_binding": "uint64_t"

@@ -1019,7 +1019,7 @@ const AsyncCompileJob = struct {
     fragment_entry: ?[:0]u8,
     device: wgpu.WGPUDevice,
     build: RenderPipelineDescBuild,
-    on_ready: *const fn (abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
+    on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
 
@@ -1058,8 +1058,17 @@ fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const on_ready = job.on_ready;
     const user = job.user;
     freeAsyncCompileJob(job);
-    on_ready(if (pipeline != null) @intFromPtr(pipeline) else abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+    reportPipeline(on_ready, pipeline, user);
     return @intCast(abi_result.c.KE_OK);
+}
+
+fn reportPipeline(on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, pipeline: wgpu.WGPURenderPipeline, user: ?*anyopaque) void {
+    if (pipeline == null) {
+        log.warn("the device could not compile a render pipeline", .{});
+        on_ready(R.code(error.General), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        return;
+    }
+    on_ready(R.ok, @intFromPtr(pipeline), user);
 }
 
 fn freeAsyncCompileJob(job: *AsyncCompileJob) void {
@@ -1080,11 +1089,11 @@ fn freeAsyncCompileJob(job: *AsyncCompileJob) void {
 /// task pool, with the list full, or when a fragment target has no mappable format, the compile
 /// runs inline or fails inline and the callback has fired before this returns. A job that cannot
 /// be allocated calls back at once with the invalid handle. A null `on_ready` does nothing.
-fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, on_ready: ?*const fn (abi_asset_resolver.c.ke_gpu_pipeline, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
+fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, on_ready: abi_render_gpu.c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const s = state(dev);
     if (!colorTargetsDeclared(p)) {
-        cb(abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        cb(R.code(error.InvalidArgument), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
         return;
     }
 
@@ -1093,7 +1102,7 @@ fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]con
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
         const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(s.device, &build.desc);
-        cb(if (pipeline != null) @intFromPtr(pipeline) else abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        reportPipeline(cb, pipeline, user);
         return;
     };
 
@@ -1103,12 +1112,12 @@ fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]con
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
         const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(s.device, &build.desc);
-        cb(if (pipeline != null) @intFromPtr(pipeline) else abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        reportPipeline(cb, pipeline, user);
         return;
     }
 
     const job = gpa.create(AsyncCompileJob) catch {
-        cb(abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        cb(R.code(error.OutOfMemory), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
         return;
     };
     job.device = s.device;
@@ -1127,7 +1136,7 @@ fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]con
     R.check(pool.dispatch.?(pool, runAsyncCompileJob, job, &task)) catch |err| {
         log.warn("compiling a render pipeline was refused by the task pool: {t}", .{err});
         freeAsyncCompileJob(job);
-        cb(abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
+        cb(R.code(err), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
         return;
     };
     s.pending_compiles[s.pending_compiles_count] = task;
@@ -1661,7 +1670,7 @@ fn mapBuffer(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_g
 /// request, so it is where the caller's callback and user pointer are kept.
 const MapReadRequest = struct {
     buffer: abi_asset_resolver.c.ke_gpu_buffer,
-    on_ready: *const fn (abi_asset_resolver.c.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void,
+    on_ready: *const fn (abi_result.c.ke_result, abi_asset_resolver.c.ke_gpu_buffer, ?*anyopaque) callconv(.c) void,
     user: ?*anyopaque,
 };
 
@@ -1669,17 +1678,18 @@ const MapReadRequest = struct {
 /// caller's callback, then frees the request.
 fn mapReadDone(status: wgpu.WGPUMapAsyncStatus, _: wgpu.WGPUStringView, userdata1: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
     const req: *MapReadRequest = @ptrCast(@alignCast(userdata1.?));
-    req.on_ready(req.buffer, status == wgpu.WGPUMapAsyncStatus_Success, req.user);
+    if (status != wgpu.WGPUMapAsyncStatus_Success) log.warn("mapping a buffer for reading failed", .{});
+    req.on_ready(if (status == wgpu.WGPUMapAsyncStatus_Success) R.ok else R.code(error.General), req.buffer, req.user);
     gpa.destroy(req);
 }
 
 /// The callback runs from device event processing, since the request uses the allow-process-events
 /// mode. The one exception is a request that cannot be allocated: the callback then runs at once
 /// with false.
-fn mapBufferRead(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: usize, size: usize, on_ready: ?*const fn (abi_asset_resolver.c.ke_gpu_buffer, bool, ?*anyopaque) callconv(.c) void, user: ?*anyopaque) callconv(.c) void {
+fn mapBufferRead(_: [*c]abi_render_gpu.c.ke_gpu_device, h: abi_asset_resolver.c.ke_gpu_buffer, offset: usize, size: usize, on_ready: abi_render_gpu.c.ke_gpu_buffer_mapped_func, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const req = gpa.create(MapReadRequest) catch {
-        cb(h, false, user);
+        cb(R.code(error.OutOfMemory), h, user);
         return;
     };
     req.* = .{ .buffer = h, .on_ready = cb, .user = user };
@@ -1746,10 +1756,10 @@ const ReadbackProbe = struct {
     ok: bool = false,
 };
 
-fn readbackProbeDone(_: abi_asset_resolver.c.ke_gpu_buffer, ok: bool, user: ?*anyopaque) callconv(.c) void {
+fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_gpu_buffer, user: ?*anyopaque) callconv(.c) void {
     const probe: *ReadbackProbe = @ptrCast(@alignCast(user.?));
     probe.fired = true;
-    probe.ok = ok;
+    probe.ok = result == R.ok;
 }
 
 test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {

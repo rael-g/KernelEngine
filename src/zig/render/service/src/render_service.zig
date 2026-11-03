@@ -685,7 +685,7 @@ const Gpu = struct {
     }
 
     fn createRenderPipelineAsync(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.create_render_pipeline_async)) void {
-        if (args[2]) |ready| ready(self.pipelines.fetchAdd(1, .monotonic), args[3]);
+        if (args[2]) |ready| ready(R.ok, self.pipelines.fetchAdd(1, .monotonic), args[3]);
     }
 
     fn queueSubmit(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_device).Args(.queue_submit)) void {
