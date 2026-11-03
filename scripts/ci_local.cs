@@ -66,7 +66,7 @@ try
     }
     else if (Run("git", "clone", "--no-hardlinks", "--quiet", rootDir, checkout) != 0) return 1;
 
-    var run = new List<string> { "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", "-w", "/work", "-e", "GITHUB_PACKAGES_TOKEN" };
+    var run = new List<string> { "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", "-w", "/work" };
     if (useCache)
     {
         run.AddRange(["-v", $"{ToolsVolume}:/work/build/tools", "-v", $"{PortsVolume}:/work/build/vcpkg-installed"]);

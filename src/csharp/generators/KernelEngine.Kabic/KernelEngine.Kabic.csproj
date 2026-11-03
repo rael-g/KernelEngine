@@ -4,14 +4,9 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <KabicVersion>0.1.0</KabicVersion>
   </PropertyGroup>
-  <ItemGroup Condition="'$(KabicSourceDir)' == ''">
-    <PackageReference Include="Kabic.Cli" Version="$(KabicVersion)" />
-    <PackageReference Include="Kabic.Factories" Version="$(KabicVersion)" />
-  </ItemGroup>
-  <ItemGroup Condition="'$(KabicSourceDir)' != ''">
-    <ProjectReference Include="$(KabicSourceDir)/src/Kabic.Cli/Kabic.Cli.csproj" />
-    <ProjectReference Include="$(KabicSourceDir)/src/Kabic.Factories/Kabic.Factories.csproj" />
+  <ItemGroup>
+    <ProjectReference Include="../../../../../kabic/src/Kabic.Cli/Kabic.Cli.csproj" />
+    <ProjectReference Include="../../../../../kabic/src/Kabic.Factories/Kabic.Factories.csproj" />
   </ItemGroup>
 </Project>
