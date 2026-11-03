@@ -20,6 +20,7 @@ public partial class Label : Node3D
     [NativeField("Font", Component = typeof(LabelComponent))]
     public partial string Font { get; set; }
 
+    /// <summary>Size the font is baked at, in pixels.</summary>
     [NativeField("FontSize", Component = typeof(LabelComponent))]
     public partial float FontSize { get; set; }
 

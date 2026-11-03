@@ -28,6 +28,7 @@ public partial class Body2D : Node2D
     [NativeField("AngularVelocity", Component = typeof(Body2dComponent))]
     public partial float AngularVelocity { get; set; }
 
+    /// <summary>Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when the body is created.</summary>
     [NativeField("GravityScale", Component = typeof(Body2dComponent))]
     public partial float GravityScale { get; set; }
 

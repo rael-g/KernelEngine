@@ -401,7 +401,7 @@
           "tags": [
             "default:4294967295"
           ],
-          "doc": null
+          "doc": "Which of the 32 view layers this camera draws. A renderable is skipped unless one of its own layer bits is set here."
         }
       ]
     },
@@ -669,7 +669,7 @@
           "tags": [
             "default:1"
           ],
-          "doc": null
+          "doc": "Which of the 32 view layers this renderable occupies. A camera draws it only when its cull_mask names one of these bits."
         }
       ]
     },
@@ -694,7 +694,7 @@
           "tags": [
             "default:0 0 1 1"
           ],
-          "doc": null
+          "doc": "Rectangle of the image to draw, normalized: x, y, width, height."
         },
         {
           "name": "size",
@@ -702,7 +702,7 @@
           "tags": [
             "default:1 1"
           ],
-          "doc": null
+          "doc": "Size in world units, multiplying the node\u0027s scale."
         },
         {
           "name": "pivot",
@@ -710,7 +710,7 @@
           "tags": [
             "default:0.5 0.5"
           ],
-          "doc": null
+          "doc": "Point of the quad the node\u0027s origin sits on, normalized; 0,0 is the bottom-left corner."
         },
         {
           "name": "flip_h",
@@ -734,7 +734,7 @@
           "tags": [
             "default:1 1 1 1"
           ],
-          "doc": null
+          "doc": "Multiplies the sampled image. Linear RGBA."
         },
         {
           "name": "alpha_mode",
@@ -764,9 +764,10 @@
           "name": "attached",
           "type": "uint8_t",
           "tags": [
+            "idiom",
             "bool"
           ],
-          "doc": null
+          "doc": "Whether the quad this sprite draws through has been attached."
         }
       ]
     }

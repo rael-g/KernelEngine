@@ -20,12 +20,15 @@ public partial class Sprite2D : Node2D
     [NativeField("Texture", Component = typeof(Sprite2dComponent))]
     public partial string Texture { get; set; }
 
+    /// <summary>Rectangle of the image to draw, normalized: x, y, width, height.</summary>
     [NativeField("Region", Component = typeof(Sprite2dComponent))]
     public partial System.Numerics.Vector4 Region { get; set; }
 
+    /// <summary>Size in world units, multiplying the node's scale.</summary>
     [NativeField("Size", Component = typeof(Sprite2dComponent))]
     public partial System.Numerics.Vector2 Size { get; set; }
 
+    /// <summary>Point of the quad the node's origin sits on, normalized; 0,0 is the bottom-left corner.</summary>
     [NativeField("Pivot", Component = typeof(Sprite2dComponent))]
     public partial System.Numerics.Vector2 Pivot { get; set; }
 
@@ -35,6 +38,7 @@ public partial class Sprite2D : Node2D
     [NativeField("FlipV", Component = typeof(Sprite2dComponent))]
     public partial bool FlipV { get; set; }
 
+    /// <summary>Multiplies the sampled image. Linear RGBA.</summary>
     [NativeField("Color", Component = typeof(Sprite2dComponent))]
     public partial System.Numerics.Vector4 Color { get; set; }
 
@@ -44,7 +48,4 @@ public partial class Sprite2D : Node2D
 
     [NativeField("AlphaCutoff", Component = typeof(Sprite2dComponent))]
     public partial float AlphaCutoff { get; set; }
-
-    [NativeField("Attached", Component = typeof(Sprite2dComponent))]
-    public partial bool Attached { get; set; }
 }

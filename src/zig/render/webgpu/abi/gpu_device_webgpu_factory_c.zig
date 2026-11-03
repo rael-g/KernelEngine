@@ -56,10 +56,14 @@ pub const ke_gpu_device_webgpu_params = extern struct {
     /// When non-zero, asks the underlying graphics API to validate every call, which takes effect
     /// only where that API's validation layers are installed.
     enable_validation: bool = std.mem.zeroes(bool),
+    /// Optional, borrowed. When non-NULL, this device dispatches the compile of
+    /// create_render_pipeline_async onto this task pool's worker pool. When NULL, the compile runs
+    /// synchronously and the callback is invoked before returning.
     task_pool: ?*abi_task_pool.c.ke_task_pool = std.mem.zeroes(?*abi_task_pool.c.ke_task_pool),
     /// When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying
     /// graphics API, where capture tools read them.
     debug_labels: bool = std.mem.zeroes(bool),
+    /// Optional, borrowed. Read once at creation.
     configuration: ?*abi_configuration.c.ke_configuration = std.mem.zeroes(?*abi_configuration.c.ke_configuration),
 };
 
@@ -71,6 +75,8 @@ pub const ke_gpu_render_target_webgpu_window_params = extern struct {
     window: ?*abi_window.c.ke_window = std.mem.zeroes(?*abi_window.c.ke_window),
     /// Zero selects KE_GPU_PRESENT_MODE_FIFO.
     present_mode: ke_gpu_present_mode = std.mem.zeroes(ke_gpu_present_mode),
+    /// Optional, borrowed. Its [runtime.renderer] vsync false selects IMMEDIATE when present_mode is
+    /// zero.
     configuration: ?*abi_configuration.c.ke_configuration = std.mem.zeroes(?*abi_configuration.c.ke_configuration),
 };
 

@@ -45,6 +45,7 @@ public partial class MeshRenderer : Node3D
     [NativeField("DistortionStrength", Component = typeof(MeshComponent))]
     public partial float DistortionStrength { get; set; }
 
+    /// <summary>Which of the 32 view layers this renderable occupies. A camera draws it only when its cull_mask names one of these bits.</summary>
     [NativeField("Layers", Component = typeof(MeshComponent))]
     public partial uint Layers { get; set; }
 }

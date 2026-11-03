@@ -13,6 +13,8 @@ pub const ke_camera_component = extern struct {
     far_plane: f32 = std.mem.zeroes(f32),
     orthographic_size: f32 = std.mem.zeroes(f32),
     orthographic: u8 = std.mem.zeroes(u8),
+    /// Which of the 32 view layers this camera draws. A renderable is skipped unless one of its own
+    /// layer bits is set here.
     cull_mask: u32 = std.mem.zeroes(u32),
 };
 
@@ -73,6 +75,8 @@ pub const ke_mesh_component = extern struct {
     alpha_cutoff: f32 = std.mem.zeroes(f32),
     ior: f32 = std.mem.zeroes(f32),
     distortion_strength: f32 = std.mem.zeroes(f32),
+    /// Which of the 32 view layers this renderable occupies. A camera draws it only when its
+    /// cull_mask names one of these bits.
     layers: u32 = std.mem.zeroes(u32),
 };
 
@@ -80,16 +84,21 @@ pub const ke_mesh_component = extern struct {
 pub const ke_sprite2d_component = extern struct {
     /// Image to sample. Empty draws the plain tinted quad.
     texture: [128]u8 = std.mem.zeroes([128]u8),
+    /// Rectangle of the image to draw, normalized: x, y, width, height.
     region: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
+    /// Size in world units, multiplying the node's scale.
     size: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    /// Point of the quad the node's origin sits on, normalized; 0,0 is the bottom-left corner.
     pivot: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
     flip_h: u8 = std.mem.zeroes(u8),
     flip_v: u8 = std.mem.zeroes(u8),
+    /// Multiplies the sampled image. Linear RGBA.
     color: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
     /// ke_alpha_mode.
     alpha_mode: u32 = std.mem.zeroes(u32),
     alpha_cutoff: f32 = std.mem.zeroes(f32),
     /// The image resolved from `texture`.
     texture_handle: abi_render_handles.c.ke_texture_handle = std.mem.zeroes(abi_render_handles.c.ke_texture_handle),
+    /// Whether the quad this sprite draws through has been attached.
     attached: u8 = std.mem.zeroes(u8),
 };

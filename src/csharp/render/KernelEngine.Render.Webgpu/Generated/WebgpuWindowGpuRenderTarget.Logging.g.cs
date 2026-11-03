@@ -12,7 +12,7 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">Borrowed, must outlive the target.</param>
     /// <param name="presentMode">Zero selects KE_GPU_PRESENT_MODE_FIFO.</param>
-    /// <param name="configuration"></param>
+    /// <param name="configuration">Optional, borrowed. Its [runtime.renderer] vsync false selects IMMEDIATE when present_mode is zero.</param>
     public WebgpuWindowGpuRenderTarget(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(CreateLogged(logger, device, window, presentMode, configuration))
     {
     }

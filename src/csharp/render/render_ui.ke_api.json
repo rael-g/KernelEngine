@@ -666,7 +666,7 @@
           "tags": [
             "default:32"
           ],
-          "doc": null
+          "doc": "Size the font is baked at, in pixels."
         },
         {
           "name": "font_handle",

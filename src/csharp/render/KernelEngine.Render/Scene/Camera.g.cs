@@ -31,6 +31,7 @@ public partial class Camera : Node3D
     [NativeField("Orthographic", Component = typeof(CameraComponent))]
     public partial bool Orthographic { get; set; }
 
+    /// <summary>Which of the 32 view layers this camera draws. A renderable is skipped unless one of its own layer bits is set here.</summary>
     [NativeField("CullMask", Component = typeof(CameraComponent))]
     public partial uint CullMask { get; set; }
 }

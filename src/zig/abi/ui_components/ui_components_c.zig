@@ -48,6 +48,7 @@ pub const ke_ui_quad_component = extern struct {
 pub const ke_label_component = extern struct {
     /// Font file to draw with.
     font: [128]u8 = std.mem.zeroes([128]u8),
+    /// Size the font is baked at, in pixels.
     font_size: f32 = std.mem.zeroes(f32),
     /// Resolved from `font`.
     font_handle: ke_ui_font_handle = std.mem.zeroes(ke_ui_font_handle),

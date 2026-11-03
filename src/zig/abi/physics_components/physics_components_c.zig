@@ -22,6 +22,8 @@ pub const ke_body2d_component = extern struct {
     velocity: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
     /// Radians per second, CCW positive.
     angular_velocity: f32 = std.mem.zeroes(f32),
+    /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when the body
+    /// is created.
     gravity_scale: f32 = std.mem.zeroes(f32),
     /// Keeps the body's angle fixed against every torque, including contacts. Read when the body is
     /// created.
@@ -35,13 +37,20 @@ pub const ke_body2d_component = extern struct {
 /// names a body.
 pub const ke_collider2d_component = extern struct {
     kind: ke_shape_kind_2d = std.mem.zeroes(ke_shape_kind_2d),
+    /// Half-width and half-height from the node's origin. Read for a box shape.
     half_extents: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    /// Read for a circle shape.
     radius: f32 = std.mem.zeroes(f32),
+    /// Mass per unit area. Drives the owning body's mass and inertia.
     density: f32 = std.mem.zeroes(f32),
+    /// Coulomb friction against other fixtures. 0 is frictionless.
     friction: f32 = std.mem.zeroes(f32),
     /// Bounciness. 0 absorbs the impact, 1 returns all of it.
     restitution: f32 = std.mem.zeroes(f32),
+    /// Which of the 32 collision layers this shape occupies.
     layer: u32 = std.mem.zeroes(u32),
+    /// Which layers this shape tests against. Two shapes touch only when each one's layer bit is set
+    /// in the other's mask.
     mask: u32 = std.mem.zeroes(u32),
     /// Whether the fixture has been attached to its body. Set once the ancestor body exists. Callers
     /// do not write it.

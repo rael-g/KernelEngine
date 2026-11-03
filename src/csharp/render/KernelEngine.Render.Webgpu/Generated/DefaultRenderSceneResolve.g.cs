@@ -12,7 +12,7 @@ public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Rend
     /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
     /// <param name="ecs">Registers the components; borrowed.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
-    /// <param name="resolver"></param>
+    /// <param name="resolver">Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.</param>
     public DefaultRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
     {
     }

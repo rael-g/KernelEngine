@@ -20,15 +20,19 @@ public partial class Collider2D : Node2D
     [NativeField("Kind", Component = typeof(Collider2dComponent))]
     public partial ShapeKind2d Kind { get; set; }
 
+    /// <summary>Half-width and half-height from the node's origin. Read for a box shape.</summary>
     [NativeField("HalfExtents", Component = typeof(Collider2dComponent))]
     public partial System.Numerics.Vector2 HalfExtents { get; set; }
 
+    /// <summary>Read for a circle shape.</summary>
     [NativeField("Radius", Component = typeof(Collider2dComponent))]
     public partial float Radius { get; set; }
 
+    /// <summary>Mass per unit area. Drives the owning body's mass and inertia.</summary>
     [NativeField("Density", Component = typeof(Collider2dComponent))]
     public partial float Density { get; set; }
 
+    /// <summary>Coulomb friction against other fixtures. 0 is frictionless.</summary>
     [NativeField("Friction", Component = typeof(Collider2dComponent))]
     public partial float Friction { get; set; }
 
@@ -36,9 +40,11 @@ public partial class Collider2D : Node2D
     [NativeField("Restitution", Component = typeof(Collider2dComponent))]
     public partial float Restitution { get; set; }
 
+    /// <summary>Which of the 32 collision layers this shape occupies.</summary>
     [NativeField("Layer", Component = typeof(Collider2dComponent))]
     public partial uint Layer { get; set; }
 
+    /// <summary>Which layers this shape tests against. Two shapes touch only when each one's layer bit is set in the other's mask.</summary>
     [NativeField("Mask", Component = typeof(Collider2dComponent))]
     public partial uint Mask { get; set; }
 }

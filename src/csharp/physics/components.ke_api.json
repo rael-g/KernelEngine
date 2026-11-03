@@ -556,7 +556,7 @@
           "tags": [
             "default:1"
           ],
-          "doc": null
+          "doc": "Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when the body is created."
         },
         {
           "name": "fixed_rotation",
@@ -595,7 +595,7 @@
           "tags": [
             "default:0.5 0.5"
           ],
-          "doc": null
+          "doc": "Half-width and half-height from the node\u0027s origin. Read for a box shape."
         },
         {
           "name": "radius",
@@ -603,7 +603,7 @@
           "tags": [
             "default:0.5"
           ],
-          "doc": null
+          "doc": "Read for a circle shape."
         },
         {
           "name": "density",
@@ -611,7 +611,7 @@
           "tags": [
             "default:1"
           ],
-          "doc": null
+          "doc": "Mass per unit area. Drives the owning body\u0027s mass and inertia."
         },
         {
           "name": "friction",
@@ -619,7 +619,7 @@
           "tags": [
             "default:0.3"
           ],
-          "doc": null
+          "doc": "Coulomb friction against other fixtures. 0 is frictionless."
         },
         {
           "name": "restitution",
@@ -633,7 +633,7 @@
           "tags": [
             "default:1"
           ],
-          "doc": null
+          "doc": "Which of the 32 collision layers this shape occupies."
         },
         {
           "name": "mask",
@@ -641,7 +641,7 @@
           "tags": [
             "default:4294967295"
           ],
-          "doc": null
+          "doc": "Which layers this shape tests against. Two shapes touch only when each one\u0027s layer bit is set in the other\u0027s mask."
         },
         {
           "name": "attached",
