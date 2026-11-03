@@ -65,6 +65,7 @@ try
         }
     }
     else if (Run("git", "clone", "--no-hardlinks", "--quiet", rootDir, checkout) != 0) return 1;
+    if (Run("git", "-C", checkout, "-c", "protocol.file.allow=always", "-c", $"submodule.external/kabic.url={Path.Combine(rootDir, "external", "kabic")}", "submodule", "update", "--init", "--quiet") != 0) return 1;
 
     var run = new List<string> { "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", "-w", "/work" };
     if (useCache)
