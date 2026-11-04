@@ -14,8 +14,6 @@ public sealed class PongModule : IRuntimeModule
 {
     public string Name => "Pong";
 
-    public IEnumerable<Type> Dependencies => [typeof(SceneNodesModule)];
-
     public void Configure(IServiceCollection services)
     {
         services.AddNodeType<Wall>();

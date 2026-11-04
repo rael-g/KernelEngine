@@ -1,0 +1,29 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>false</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\task_pool\KernelEngine.TaskPool.Enki\KernelEngine.TaskPool.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="actions.input">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>
+

@@ -23,6 +23,12 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("bool (*)(struct ke_script_host *, const char *, ke_script_type_id *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint*, bool> type_lookup;
 
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, const char *, ke_script_type_id)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint, KernelEngine.Result.Native.Result> register_type_alias;
+
+    [NativeTypeName("ke_result (*)(struct ke_script_host *, const char *, ke_script_type_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, sbyte*, uint*, KernelEngine.Result.Native.Result> type_resolve;
+
     [NativeTypeName("const ke_component_id *(*)(struct ke_script_host *, ke_script_type_id, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint*, global::KernelEngine.Ecs.ComponentId*> type_components;
 

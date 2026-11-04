@@ -12,9 +12,9 @@ A node type is a managed class deriving from `Node` that stands for a set of ECS
 | part | where | receives | hands on |
 |---|---|---|---|
 | kabic | the kabic repository | a component struct tagged "[node:Name]" in a header | a `partial` class with `GeneratedNodeComponentAttribute`, and an Add<Domain>NodeTypes registrar |
-| `NodePropertyGenerator` | `src/csharp/generators/` | a class deriving from `Node` with `partial` properties, `Update` or `On` | component slots, behavior overrides, signal dispatch, `RegisterSceneApply` |
-| `NodeTypeRegistry` | `Scene/NodeTypeRegistry.cs` | `AddNodeType<T>` registrations | a `Type` for a name a scene wrote |
-| `ScriptHost` | `Scene/ScriptHost.Idiom.cs` | a constructed `Node` and its entity | a script type registered per node class, a binding, borrows, signal deliveries |
+| `NodePropertyGenerator` | `src/csharp/generators/` | a class deriving from `Node` with `partial` properties, `Update` or `On` | component slots, behavior overrides, signal dispatch, `RegisterSceneApply`, and a module initializer declaring the type to `NodeTypes` |
+| `NodeTypes` | `Scene/NodeTypes.cs` | the generated declaration of each type | its reach and components before any instance exists, and the scene spelling of a CLR name |
+| `ScriptHost` | `Scene/ScriptHost.Idiom.cs` | a constructed `Node` and its entity; the `AddNodeType<T>` declarations before the initial scene | a script type declared per node class under its qualified name and short alias, the `Type` a scene name resolves to natively, a binding, borrows, signal deliveries |
 | `SceneNodesModule` | `Modules/SceneNodesModule.cs` | the first node of a type with behavior | one runtime system for that type, and the signals of every registered type |
 | `SceneRouterModule` | `Modules/SceneRouterModule.cs` | the loader's script factory call | the node, constructed with the service provider and bound |
 | scene loader | `ke_scene_loader` | a scene file | entities with their blocks, then the factory call |
@@ -67,8 +67,10 @@ type of every registered node type before the first scene is read.
   The native module registers the component under the same string.
 - The component and key name of a game node: `SnakeCase` of the class name; its property keys are
   `SnakeCase` of the property name.
-- The type name spelling: `NodeTypeRegistry.Normalize` and the native `normalizeTypeName` apply
+- The type name spelling: `NodeTypes.NameOf` and the native `normalizeTypeName` apply
   the same rule (snake case, "." for nesting), and a name over 128 bytes is refused natively.
-- The script type name is the full name of the CLR type; its components are the owned set.
+- The script type name is the scene spelling of the CLR type's full name, aliased by its short
+  name; `ke_script_host.type_resolve` fails on a short name two types share. Its components are
+  the owned set.
 - A signal is identified by the payload type's name and its size.
 - Diagnostics: "KESG001" to "KESG003" and "KESG005" to "KESG007".

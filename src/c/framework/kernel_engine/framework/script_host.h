@@ -92,6 +92,25 @@ extern "C"
                             const char            *name,
                             ke_script_type_id     *out_id);
 
+        /// Lets a scene name `type` by `alias` as well. The alias answers only while it is
+        /// unambiguous: a second type under the same alias, or a type registered under the alias
+        /// itself, makes it ambiguous. Registering the same pair twice changes nothing.
+        /// @param alias [borrowed,utf8] The short name.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty @p alias or a type that is
+        ///         not registered, or KE_RESULT_OUT_OF_MEMORY.
+        ke_result (*register_type_alias)(struct ke_script_host *self,
+                                         const char            *alias,
+                                         ke_script_type_id      type);
+
+        /// Resolves the type name a scene wrote: the type registered under it, else the one its
+        /// alias stands for. Fails as not found when neither exists, and as an invalid argument
+        /// when the alias is ambiguous, logging the candidates.
+        /// @param name [borrowed,utf8] The name the scene wrote.
+        /// @param out_type [out] Receives the type.
+        ke_result (*type_resolve)(struct ke_script_host *self,
+                                  const char            *name,
+                                  ke_script_type_id     *out_type);
+
         /// The components a registered type's instances carry, in registration
         /// order.
         /// @param out_count [out]

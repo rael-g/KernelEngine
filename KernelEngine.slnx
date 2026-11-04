@@ -23,6 +23,7 @@
     <Project Path="examples/csharp/18_webgpu_mesh/18_webgpu_mesh.csproj" />
     <Project Path="examples/csharp/19_node_stress/node_stress.csproj" />
     <Project Path="examples/csharp/19_transparency/19_transparency.csproj" />
+    <Project Path="examples/csharp/20_input_actions/20_input_actions.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />

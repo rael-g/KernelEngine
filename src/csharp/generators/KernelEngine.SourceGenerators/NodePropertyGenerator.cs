@@ -121,9 +121,9 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         if (!isNative && !slots.IsEmpty)
         {
             sb.AppendLine("    private static readonly string GeneratedComponentName =");
-            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).FullName!);");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypes.NameOf(typeof({className}).FullName!);");
             sb.AppendLine("    private static readonly string GeneratedComponentAlias =");
-            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({className}).Name);");
+            sb.AppendLine($"        global::KernelEngine.Framework.NodeTypes.NameOf(typeof({className}).Name);");
             sb.AppendLine();
             foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
             {
@@ -198,12 +198,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
         var borrows = borrowList.ToImmutableArray();
 
-        if (anyHook)
-        {
-            var reachesOnlySelf = !anyHandWritten && borrows.Length == 0;
-            sb.AppendLine($"    {overrideModifier} override bool ReachesOnlyItself => {(reachesOnlySelf ? "true" : "false")};");
-            sb.AppendLine();
-        }
+        var reachesOnlyItself = anyHook ? (!anyHandWritten && borrows.Length == 0 ? "true" : "false") : "null";
 
         var writtenSlots = new HashSet<string>();
 
@@ -309,17 +304,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
         }
 
         sb.AppendLine();
-        sb.AppendLine($"    {overrideModifier} override void CollectBehaviorComponents(global::System.Collections.Generic.List<global::KernelEngine.Framework.NodeComponentUse> into)");
+        sb.AppendLine("    [global::System.Runtime.CompilerServices.ModuleInitializer]");
+        sb.AppendLine("    internal static void GeneratedDeclareNodeType()");
         sb.AppendLine("    {");
-        sb.AppendLine("        base.CollectBehaviorComponents(into);");
+        sb.AppendLine($"        global::KernelEngine.Framework.NodeTypes.Declare(typeof({className}), {reachesOnlyItself}, [");
         foreach (var slot in slots)
-            sb.AppendLine($"        into.Add(new({slot.NameExpression}, {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true));");
+            sb.AppendLine($"            new({slot.NameExpression}, {(writtenSlots.Contains(slot.ComponentName) ? "true" : "false")}, true),");
         foreach (var b in borrows)
         {
             if (BorrowKindOf(b.Type) == "Emit") continue;
             foreach (var cn in BehaviorAccess.AllComponentsOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
-                sb.AppendLine($"        into.Add(new({cn}, true, false));");
+                sb.AppendLine($"            new({cn}, true, false),");
         }
+        sb.AppendLine("        ]);");
         sb.AppendLine("    }");
         sb.AppendLine();
 

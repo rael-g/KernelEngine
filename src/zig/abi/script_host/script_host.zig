@@ -56,6 +56,21 @@ pub const ScriptHost = struct {
                     return T.typeLookup(state, std.mem.span(a0 orelse return std.mem.zeroes(bool)), a1);
                 }
             }.call,
+            .register_type_alias = &struct {
+                fn call(self: ?*c.ke_script_host, a0: ?[*:0]const u8, a1: c.ke_script_type_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.registerTypeAlias(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .type_resolve = &struct {
+                fn call(self: ?*c.ke_script_host, a0: ?[*:0]const u8, a1: ?*c.ke_script_type_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.typeResolve(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .type_components = &struct {
                 fn call(self: ?*c.ke_script_host, a0: c.ke_script_type_id, a1: ?*u32) callconv(.c) ?[*]const c.ke_component_id {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?[*]const c.ke_component_id)));
@@ -147,6 +162,22 @@ pub const ScriptHost = struct {
     /// Resolves a type by name without registering it. An undeclared name fails.
     pub fn typeLookup(self: ScriptHost, name: [:0]const u8, out_id: ?*c.ke_script_type_id) bool {
         return self.ptr.type_lookup.?(self.ptr, name.ptr, out_id);
+    }
+
+    /// Lets a scene name `type` by `alias` as well. The alias answers only while it is unambiguous:
+    /// a second type under the same alias, or a type registered under the alias itself, makes it
+    /// ambiguous. Registering the same pair twice changes nothing.
+    pub fn registerTypeAlias(self: ScriptHost, alias: [:0]const u8, @"type": c.ke_script_type_id) Error!void {
+        try checkResult(self.ptr.register_type_alias.?(self.ptr, alias.ptr, @"type"));
+    }
+
+    /// Resolves the type name a scene wrote: the type registered under it, else the one its alias
+    /// stands for. Fails as not found when neither exists, and as an invalid argument when the alias
+    /// is ambiguous, logging the candidates.
+    pub fn typeResolve(self: ScriptHost, name: [:0]const u8) Error!c.ke_script_type_id {
+        var written: c.ke_script_type_id = undefined;
+        try checkResult(self.ptr.type_resolve.?(self.ptr, name.ptr, &written));
+        return written;
     }
 
     /// The components a registered type's instances carry, in registration order.

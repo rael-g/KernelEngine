@@ -962,22 +962,24 @@ ke_signal_bus_handle size=16 align=8
   destroy 8
 
 [script_host]
-ke_script_host size=120 align=8
+ke_script_host size=136 align=8
   handle 0
   register_type 8
   type_lookup 16
-  type_components 24
-  type_reach 32
-  type_tag 40
-  type_tag_group 48
-  bind 56
-  unbind 64
-  bind_deferred 72
-  unbind_deferred 80
-  instance_of 88
-  instance_count 96
-  instances 104
-  resolve 112
+  register_type_alias 24
+  type_resolve 32
+  type_components 40
+  type_reach 48
+  type_tag 56
+  type_tag_group 64
+  bind 72
+  unbind 80
+  bind_deferred 88
+  unbind_deferred 96
+  instance_of 104
+  instance_count 112
+  instances 120
+  resolve 128
 ke_script_host_handle size=16 align=8
   ref 0
   destroy 8

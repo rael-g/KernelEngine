@@ -14,6 +14,8 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
 {
     private readonly InputActions _native;
     private readonly Dictionary<TEnum, int> _ids = new();
+    private readonly Dictionary<int, int> _valueOfId = new();
+    private readonly List<InputActionHandler> _handlers = new();
 
     private InputActionMap(InputActions native) => _native = native;
 
@@ -32,7 +34,9 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
         foreach (var value in Enum.GetValues<TEnum>())
         {
             var id = native.GetActionId(value.ToString());
-            if (id >= 0) map._ids[value] = id;
+            if (id < 0) continue;
+            map._ids[value] = id;
+            map._valueOfId[id] = Convert.ToInt32(value);
         }
         return map;
     }
@@ -41,8 +45,31 @@ public sealed unsafe class InputActionMap<TEnum> : IInputActionMap<TEnum>, IActi
     public void Evaluate(IInputReader? input)
     {
         if (input is not INativeInputReader native) throw new ArgumentException("evaluating needs a native input reader", nameof(input));
-        _native.Evaluate(native.Native, null);
+        _native.Evaluate(native.Native, _handlers.Count == 0 ? null : Dispatch);
     }
+
+    private void Dispatch(KernelEngine.Framework.Native.InputActionEvent e)
+    {
+        if (!_valueOfId.TryGetValue(e.ActionId, out var value)) return;
+        var evt = new ActionEvent
+        {
+            EnumType = typeof(TEnum),
+            ActionId = value,
+            Type = (ActionType)(uint)e.Type,
+            Phase = (KernelEngine.Input.ActionPhase)(uint)e.Phase,
+            ValueX = e.X,
+            ValueY = e.Y,
+            ValueZ = e.Z,
+        };
+        for (var i = _handlers.Count - 1; i >= 0 && !evt.Handled; i--)
+            _handlers[i](ref evt);
+    }
+
+    /// <inheritdoc/>
+    public void Subscribe(InputActionHandler handler) => _handlers.Add(handler);
+
+    /// <inheritdoc/>
+    public void Unsubscribe(InputActionHandler handler) => _handlers.Remove(handler);
 
     /// <inheritdoc/>
     public float GetAxis1D(TEnum action)

@@ -24,7 +24,7 @@ The managed side mirrors them as `ComponentRegistry`, `SceneTree`, `ScriptHost`,
 `AssetResolver` and `InputActions`, and composes them in three runtime modules:
 `FrameworkModule` (signal bus, scene tree, component registry), `SceneNodesModule` (script host,
 input, signal delivery, one behavior system per node type) and `SceneRouterModule` (scene
-switching). Each depends on the one before it.
+switching), which loads the initial scene in the startup phase, once every module has loaded.
 
 ## What ties the pieces together
 
@@ -59,7 +59,7 @@ loader resolves a scene reference through it.
 
 - Component names: "transform", "transform2d", "world_transform", "hierarchy", "name", and
   "script_instance" for a binding.
-- Node type names: the managed `NodeTypeRegistry.Normalize` and the loader's `normalizeTypeName`
+- Node type names: the managed `NodeTypes.NameOf` and the loader's `normalizeTypeName`
   apply one rule, so the factory receives the same spelling whichever casing a scene wrote.
 - Signal identity: the managed side names a signal by the payload type's name and its size; a
   second registration with another size fails.

@@ -8,12 +8,6 @@ namespace KernelEngine.Runtime;
 public interface IRuntimeModule
 {
     /// <summary>
-    /// Optional dependency order. Modules in the dependency list must be
-    /// loaded first. Empty by default; topo-sort happens at runtime startup.
-    /// </summary>
-    IEnumerable<Type> Dependencies => Array.Empty<Type>();
-
-    /// <summary>
     /// Display name used for diagnostics and the C ABI module record.
     /// Defaults to the module's runtime type name.
     /// </summary>
@@ -29,8 +23,8 @@ public interface IRuntimeModule
     void Configure(IServiceCollection services) { }
 
     /// <summary>
-    /// Required runtime participation. Called once at startup AFTER the runtime
-    /// exists and dependencies are loaded. Maps to <c>ke_runtime_module_params.on_load</c>
+    /// Required runtime participation. Called once at startup after the runtime
+    /// exists, in the order the host registered the modules. Maps to <c>ke_runtime_module_params.on_load</c>
     /// at the C ABI level (services parameter is C#-only sugar that lets the
     /// module resolve dependencies it registered during Configure).
     /// Register systems, components, and resources here.

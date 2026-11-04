@@ -1,0 +1,23 @@
+[action.Move]
+type = "Axis2D"
+bindings = [
+    { kind = "key_quad", up = "W", down = "S", left = "A", right = "D" },
+]
+
+[action.Jump]
+type = "Button"
+bindings = [
+    { kind = "key", key = "Space" },
+]
+
+[action.Menu]
+type = "Button"
+bindings = [
+    { kind = "key", key = "Tab" },
+]
+
+[action.Quit]
+type = "Button"
+bindings = [
+    { kind = "key", key = "Escape" },
+]
