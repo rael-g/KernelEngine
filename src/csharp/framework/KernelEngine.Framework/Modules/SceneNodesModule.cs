@@ -33,9 +33,6 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// <summary>The module name, "SceneNodes".</summary>
     public string Name => "SceneNodes";
 
-    /// <summary>The module that creates the scene tree.</summary>
-    public IEnumerable<Type> Dependencies => new[] { typeof(FrameworkModule) };
-
     /// <summary>Setup callback that only needs the node world.</summary>
     public SceneNodesModule(Action<ScriptHost> setup) => _setup = (nw, _) => setup(nw);
 

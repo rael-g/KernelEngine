@@ -44,7 +44,7 @@ var services = new ServiceCollection()
     .Add<IRuntimeModule>(new SceneNodesModule(_ => { }))
     .Add<IRuntimeModule>(new KernelEngine.Physics.Body2DModule())
     .Add<IRuntimeModule>(new PongModule())
-    .Add<IRuntimeModule>(new SceneRouterModule(sceneModuleDependency: typeof(SceneNodesModule)));
+    .Add<IRuntimeModule>(new SceneRouterModule());
 
 using var sp = services.BuildServiceProvider();
 var window = sp.GetRequiredService<IWindow>();

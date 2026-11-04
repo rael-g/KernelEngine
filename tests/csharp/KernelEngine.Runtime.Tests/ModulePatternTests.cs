@@ -72,70 +72,27 @@ public class ModulePatternTests : IDisposable
         Assert.Equal(2, module.TimesRegistered);
     }
 
-    private sealed class ModuleA : IRuntimeModule
+    private sealed class OrderedModule : IRuntimeModule
     {
-        public List<string> Order { get; }
-        public ModuleA(List<string> order) => Order = order;
-        public void OnLoad(IRuntime runtime, IServiceProvider services) => Order.Add("A");
-    }
-
-    private sealed class ModuleB : IRuntimeModule
-    {
-        public List<string> Order { get; }
-        public ModuleB(List<string> order) => Order = order;
-        public IEnumerable<Type> Dependencies => new[] { typeof(ModuleA) };
-        public void OnLoad(IRuntime runtime, IServiceProvider services) => Order.Add("B");
+        private readonly List<string> _order;
+        private readonly string _name;
+        public OrderedModule(List<string> order, string name) { _order = order; _name = name; }
+        public void OnLoad(IRuntime runtime, IServiceProvider services) => _order.Add(_name);
     }
 
     [Fact]
-    public void LoadModules_RespectsDependencyOrder()
+    public void LoadModules_LoadsInRegistrationOrder()
     {
         var order = new List<string>();
         var services = new ServiceCollection()
-            .Add<IRuntimeModule>(new ModuleB(order))
-            .Add<IRuntimeModule>(new ModuleA(order));
+            .Add<IRuntimeModule>(new OrderedModule(order, "B"))
+            .Add<IRuntimeModule>(new OrderedModule(order, "A"));
         using var sp = services.BuildServiceProvider();
 
         using var runtime = new Runtime(_ecs, _taskPool);
         runtime.LoadModules(sp);
 
-        Assert.Equal(new[] { "A", "B" }, order);
-    }
-
-    private sealed class CyclicModule : IRuntimeModule
-    {
-        public IEnumerable<Type> Dependencies => new[] { typeof(CyclicModule) };
-        public void OnLoad(IRuntime runtime, IServiceProvider services) { }
-    }
-
-    [Fact]
-    public void LoadModules_RejectsDependencyCycle()
-    {
-        var services = new ServiceCollection().Add<IRuntimeModule>(new CyclicModule());
-        using var sp = services.BuildServiceProvider();
-
-        using var runtime = new Runtime(_ecs, _taskPool);
-
-        var ex = Assert.Throws<InvalidOperationException>(() => runtime.LoadModules(sp));
-        Assert.Contains("cycle", ex.Message);
-    }
-
-    private sealed class MissingDepModule : IRuntimeModule
-    {
-        public IEnumerable<Type> Dependencies => new[] { typeof(ModuleA) };
-        public void OnLoad(IRuntime runtime, IServiceProvider services) { }
-    }
-
-    [Fact]
-    public void LoadModules_RejectsMissingDependency()
-    {
-        var services = new ServiceCollection().Add<IRuntimeModule>(new MissingDepModule());
-        using var sp = services.BuildServiceProvider();
-
-        using var runtime = new Runtime(_ecs, _taskPool);
-
-        var ex = Assert.Throws<InvalidOperationException>((Action)(() => runtime.LoadModules(sp)));
-        Assert.Contains("not registered", ex.Message);
+        Assert.Equal(new[] { "B", "A" }, order);
     }
 
     [Fact]

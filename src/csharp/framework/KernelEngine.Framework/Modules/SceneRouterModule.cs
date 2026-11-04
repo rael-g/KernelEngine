@@ -10,8 +10,8 @@ namespace KernelEngine.Framework;
 /// Runtime module "Scene.Router". It registers <see cref="ISceneRouter"/>, registers the script
 /// factory of the native scene loader (it resolves the type name through
 /// <see cref="NodeTypeRegistry"/>, constructs the node with the service provider and binds it to
-/// the entity), loads the initial scene on the calling thread during <c>OnLoad</c>, and registers
-/// the system "Scene.Router.Flush" in the pre-update phase, exclusive, so a scene change runs alone before the
+/// the entity), loads the initial scene in the system "Scene.Router.Initial" of the startup phase, so
+/// after every module has loaded, and registers the system "Scene.Router.Flush" in the pre-update phase, exclusive, so a scene change runs alone before the
 /// other systems of the phase. The initial scene is the
 /// constructor override, else the "default_scene" key of the "project" configuration section
 /// with its <c>res://</c>, <c>scenes/</c> and scene extension removed, else "Main".
@@ -19,23 +19,12 @@ namespace KernelEngine.Framework;
 public sealed class SceneRouterModule : IRuntimeModule
 {
     private readonly string? _initialSceneOverride;
-    private readonly Type _sceneModuleDependency;
 
     /// <summary>The module name, "Scene.Router".</summary>
     public string Name => "Scene.Router";
 
-    /// <summary>The module that registers <see cref="ScriptHost"/>.</summary>
-    public IEnumerable<Type> Dependencies => new[] { _sceneModuleDependency };
-
     /// <param name="initialScene">Overrides the project's default scene, if set.</param>
-    /// <param name="sceneModuleDependency">
-    /// The module that must load first. Defaults to <see cref="SceneNodesModule"/>.
-    /// </param>
-    public SceneRouterModule(string? initialScene = null, Type? sceneModuleDependency = null)
-    {
-        _initialSceneOverride = initialScene;
-        _sceneModuleDependency = sceneModuleDependency ?? typeof(SceneNodesModule);
-    }
+    public SceneRouterModule(string? initialScene = null) => _initialSceneOverride = initialScene;
 
     /// <summary>Registers the router as itself and as <see cref="ISceneRouter"/>.</summary>
     public void Configure(IServiceCollection services)
@@ -45,9 +34,8 @@ public sealed class SceneRouterModule : IRuntimeModule
     }
 
     /// <summary>
-    /// Registers the script factory, loads the initial scene and registers the flush system.
+    /// Registers the script factory, the system that loads the initial scene and the flush system.
     /// </summary>
-    /// <exception cref="InvalidOperationException">The initial scene fails to load.</exception>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var loader = services.GetRequiredService<SceneLoader>();
@@ -63,12 +51,14 @@ public sealed class SceneRouterModule : IRuntimeModule
             scriptHost.BindNativeEntity(node, entity);
         });
 
-        try
+        runtime.RegisterSystem("Scene.Router.Initial", RuntimePhase.Startup, (ctx, _) =>
         {
-            router.LoadScene(initial);
-            router.Flush();
-        }
-        catch (Exception ex) { throw new InvalidOperationException("Initial scene load failed", ex); }
+            using (scriptHost.EnterSystem(ctx))
+            {
+                router.LoadScene(initial);
+                router.Flush();
+            }
+        }, exclusive: true);
 
         runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (ctx, _) =>
         {

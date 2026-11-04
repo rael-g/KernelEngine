@@ -36,13 +36,12 @@ what was queued, or the exception `NativeResults.FromCode` makes for the code.
 **The task pool has its own channel.** The dispatch methods that are not generated return a
 `Task`, which the body's failure faults.
 
-**A module is the unit a game is loaded in.** `LoadModules` sorts the `IRuntimeModule` services
-by their `Dependencies` over the order they were added, and registers each with its `Name`; a
-module's `OnLoad` has run when `RegisterModule` returns. A missing dependency or a cycle throws
-before any module loads.
+**A module is the unit a game is loaded in.** `LoadModules` registers the `IRuntimeModule`
+services in the order they were added, each with its `Name`; a module's `OnLoad` has run when
+`RegisterModule` returns. A module depends on no other: what one needs from another is a service
+the container creates on first use, and work that needs every module loaded runs in the startup
+phase.
 
 ## What the parts agree on without a contract
 
-- A module's `Dependencies` are concrete module types, matched by `GetType()`; the native
-  runtime sees only the sorted order and the name.
 - The `Native` property of `INativeRuntime` is the only way the pointer leaves a wrapper.

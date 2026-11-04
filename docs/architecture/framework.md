@@ -24,7 +24,7 @@ The managed side mirrors them as `ComponentRegistry`, `SceneTree`, `ScriptHost`,
 `AssetResolver` and `InputActions`, and composes them in three runtime modules:
 `FrameworkModule` (signal bus, scene tree, component registry), `SceneNodesModule` (script host,
 input, signal delivery, one behavior system per node type) and `SceneRouterModule` (scene
-switching). Each depends on the one before it.
+switching), which loads the initial scene in the startup phase, once every module has loaded.
 
 ## What ties the pieces together
 

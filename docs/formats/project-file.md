@@ -21,7 +21,7 @@ file against a list of keys.
 
 | section | key | type | default | reader |
 |---|---|---|---|---|
-| `project` | `default_scene` | string | `Main` | `SceneRouterModule.ResolveInitialScene`, `SceneRouterModule.cs:79-87` |
+| `project` | `default_scene` | string | `Main` | `SceneRouterModule.ResolveInitialScene`, `SceneRouterModule.cs:70-78` |
 | `logging` | `console_level` | string, a `LogLevel` name (case-insensitive); parsed but has no effect on output, see `architecture/logging.md` | `Trace` | `AddConsoleSink`, `Logger/ServiceCollectionExtensions.cs:35-37` |
 | `runtime.window` | `width`, `height` | int | 1280, 720 | `ke_window_glfw_create`, `src/zig/window/glfw/src/window_glfw.zig` |
 | `runtime.window` | `title` | string | `KernelEngine` | same |
@@ -33,7 +33,7 @@ file against a list of keys.
 | `render` | `max_lights_per_cluster` | int | 0 | same, `:121-123` |
 
 The `default_scene` value is normalised before use: a leading `res://` and then `scenes/` are
-removed, and a trailing `.scene.toml` or `.scene` is removed (`SceneRouterModule.cs:89-97`).
+removed, and a trailing `.scene.toml` or `.scene` is removed (`SceneRouterModule.cs:80-88`).
 A `logging.console_level` that is not a `LogLevel` name makes `Enum.Parse` throw when the sink is
 first resolved (`Logger/ServiceCollectionExtensions.cs:37`).
 
