@@ -11,5 +11,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_service_params, binder),
     offsetof(ke_render_service_params, color_format),
     offsetof(ke_render_service_params, depth_format),
+    offsetof(ke_render_service_params, clear_color),
+    offsetof(ke_render_service_params, configuration),
     0,
 };

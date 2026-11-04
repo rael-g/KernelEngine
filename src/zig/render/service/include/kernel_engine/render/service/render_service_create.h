@@ -1,6 +1,8 @@
 #ifndef KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
+#include <kernel_engine/math/math.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/io/io.h>
@@ -43,6 +45,10 @@ typedef struct ke_render_service_params
     ke_gpu_texture_format      color_format;
     /// Format of the frame's depth; zero selects D32_FLOAT.
     ke_gpu_texture_format      depth_format;
+    /// Color the frame is cleared to; all four components zero read [render] clear_color_r/g/b/a
+    /// from @p configuration, and a key that is absent takes 0.10, 0.15, 0.30, 1.0.
+    ke_vec4                    clear_color;
+    ke_configuration          *configuration; ///< [optional] Borrowed for the call only.
 } ke_render_service_params;
 
 /**

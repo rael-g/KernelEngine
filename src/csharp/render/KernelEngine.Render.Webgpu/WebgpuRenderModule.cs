@@ -29,7 +29,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_ui* _ui;
     private RenderService? _renderService;
     private readonly string _shaderDir;
-    private readonly System.Numerics.Vector4? _clearColorOverride;
+    private readonly System.Numerics.Vector4 _clearColor;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
     private readonly bool _debugLabelsOverride, _defaultPasses;
     private readonly bool _enableShadows, _enableIbl;
@@ -39,8 +39,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// relative to the process working directory. Required.
     /// </param>
     /// <param name="clearColor">
-    /// Background color (RGBA). The default value reads <c>[render] clear_color_r/g/b/a</c> from
-    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/> instead.
+    /// Background color (RGBA). The default value leaves it to the render service, which reads
+    /// <c>[render] clear_color_r/g/b/a</c> from <see cref="IConfiguration"/>.
     /// </param>
     /// <param name="clusterGridX">
     /// Screen-tile columns of the light grid. Zero reads <c>[render] cluster_grid_x</c> from
@@ -68,7 +68,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _debugLabelsOverride = debugLabels;
         ArgumentException.ThrowIfNullOrEmpty(shaderDir);
         _shaderDir = shaderDir;
-        _clearColorOverride = clearColor == default ? null : clearColor;
+        _clearColor = clearColor;
         _clusterGridXOverride = clusterGridX;
         _clusterGridYOverride = clusterGridY;
         _clusterGridZOverride = clusterGridZ;
@@ -94,7 +94,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddWebgpuGpuDevice(enableValidation: true, debugLabels: _debugLabelsOverride)
             .AddWebgpuWindowGpuRenderTarget()
             .AddGroupedRenderResourceBinder(_shaderDir)
-            .AddDefaultRenderService(_shaderDir)
+            .AddDefaultRenderService(_shaderDir, clearColor: _clearColor)
             .AddRhViewSpace()
             .AddDefaultRenderCamera()
             .AddDefaultRenderSceneResolve()
@@ -126,8 +126,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _renderService = RenderService.Borrow(core);
         foreach (var pass in services.GetServices<IRuntimeModule>().OfType<IResolveOnLoad>().ToList())
             pass.Resolve(services);
-        var clearColor = _clearColorOverride ?? ResolveClearColor(services.GetService<IConfiguration>());
-        _renderService.SetClearColor(clearColor.X, clearColor.Y, clearColor.Z, clearColor.W);
 
         if (services.GetService<KernelEngine.Framework.World>() is not { } world)
             return;
@@ -144,21 +142,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         {
             set.destroy(set.@ref);
         }
-    }
-
-    /// <summary>
-    /// Reads the clear color from the four scalar keys <c>[render] clear_color_r/g/b/a</c>, with a
-    /// dark blue for a key or a configuration that is absent.
-    /// </summary>
-    private static System.Numerics.Vector4 ResolveClearColor(IConfiguration? config)
-    {
-        const float defaultR = 0.10f, defaultG = 0.15f, defaultB = 0.30f, defaultA = 1.0f;
-        if (config is null) return new(defaultR, defaultG, defaultB, defaultA);
-        return new(
-            (float)config.GetDouble("render", "clear_color_r", defaultR),
-            (float)config.GetDouble("render", "clear_color_g", defaultG),
-            (float)config.GetDouble("render", "clear_color_b", defaultB),
-            (float)config.GetDouble("render", "clear_color_a", defaultA));
     }
 
     /// <inheritdoc/>
