@@ -1553,7 +1553,7 @@
           "name": "ecs",
           "returns": "ke_ecs *",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "The ecs the world was created with.",
           "return_doc": null,
@@ -1564,7 +1564,7 @@
           "name": "runtime",
           "returns": "ke_runtime *",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "The runtime the world was created with.",
           "return_doc": null,
@@ -1575,7 +1575,7 @@
           "name": "scene_tree",
           "returns": "struct ke_scene_tree *",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "The scene tree the world was created with.",
           "return_doc": null,
@@ -1616,7 +1616,7 @@
           "name": "get_component_fields",
           "returns": "const ke_component_field *",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Field table registered for \u0060cid\u0060, or NULL.",
           "return_doc": null,
@@ -1676,7 +1676,7 @@
           "name": "get_component_apply",
           "returns": "ke_component_apply_fn",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Callback registered for \u0060cid\u0060, or NULL, and the context it was registered with.",
           "return_doc": null,
@@ -1890,7 +1890,7 @@
           "name": "defer",
           "returns": "ke_result",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
           "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",

@@ -568,7 +568,7 @@
           "name": "body",
           "type": "ke_body_2d",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "The body for this entity, assigned when the component is reconciled. Callers do not write it."
         }
@@ -647,7 +647,7 @@
           "name": "attached",
           "type": "_Bool",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Whether the fixture has been attached to its body. Set once the ancestor body exists. Callers do not write it."
         }

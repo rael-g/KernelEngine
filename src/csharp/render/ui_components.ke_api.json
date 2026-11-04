@@ -515,7 +515,7 @@
           "name": "font_handle",
           "type": "ke_ui_font_handle",
           "tags": [
-            "idiom",
+            "internal",
             "name:font_handle"
           ],
           "doc": "Resolved from \u0060font\u0060."
@@ -550,7 +550,7 @@
           "name": "glyph_count",
           "type": "uint32_t",
           "tags": [
-            "idiom",
+            "internal",
             "output"
           ],
           "doc": "Written by the engine each tick; a node authoring it would have the value overwritten on the next tick."
@@ -559,7 +559,7 @@
           "name": "glyphs",
           "type": "ke_label_glyph_quad[256]",
           "tags": [
-            "idiom",
+            "internal",
             "output"
           ],
           "doc": "Shaped output, see glyph_count."

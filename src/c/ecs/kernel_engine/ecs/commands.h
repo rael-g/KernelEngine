@@ -54,7 +54,7 @@ struct ke_ecs_commands {
     /// Records destroying `entity`.
     ke_result (*despawn)(ke_ecs_commands *self, ke_entity entity);
 
-    /// [idiom] Records a structural operation for work the fixed verbs above cannot express. `fn`
+    /// [internal] Records a structural operation for work the fixed verbs above cannot express. `fn`
     /// runs when the queue is applied, in order with the other operations.
     /// `user_size` bytes of `user` are copied, so the caller's buffer need not outlive
     /// the call.

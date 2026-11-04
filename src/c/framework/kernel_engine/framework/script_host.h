@@ -132,7 +132,7 @@ extern "C"
         ///         refuses to detach the binding.
         ke_result (*unbind)(struct ke_script_host *self, ke_entity entity);
 
-        /// [idiom] Records bind into `commands`; the binding takes effect when `commands`
+        /// [internal] Records bind into `commands`; the binding takes effect when `commands`
         /// is applied. A bind that fails at that point is dropped.
         /// @param instance [rooted:entity]
         /// @param commands
@@ -145,7 +145,7 @@ extern "C"
                                    void                  *instance,
                                    ke_ecs_commands       *commands);
 
-        /// [idiom] Records unbind into `commands`; the binding is dropped when `commands`
+        /// [internal] Records unbind into `commands`; the binding is dropped when `commands`
         /// is applied.
         /// @param commands
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p commands, or the queue's

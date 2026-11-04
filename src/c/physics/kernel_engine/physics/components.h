@@ -32,7 +32,7 @@ extern "C"
         /// body is created.
         bool            fixed_rotation;
 
-        /// [idiom] The body for this entity, assigned when the component is reconciled.
+        /// [internal] The body for this entity, assigned when the component is reconciled.
         /// Callers do not write it.
         ke_body_2d      body;
     } ke_body2d_component;
@@ -67,7 +67,7 @@ extern "C"
         /// one's layer bit is set in the other's mask.
         uint32_t         mask; ///< [default:4294967295]
 
-        /// [idiom] Whether the fixture has been attached to its body. Set once the
+        /// [internal] Whether the fixture has been attached to its body. Set once the
         /// ancestor body exists. Callers do not write it.
         bool             attached;
     } ke_collider2d_component;

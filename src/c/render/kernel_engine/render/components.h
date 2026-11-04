@@ -117,10 +117,10 @@ extern "C"
         uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
         float    alpha_cutoff; ///< [default:0.5]
 
-        /// [idiom] The image resolved from `texture`.
+        /// [internal] The image resolved from `texture`.
         ke_texture_handle texture_handle;
 
-        /// [idiom] Whether the quad this sprite draws through has been attached.
+        /// [internal] Whether the quad this sprite draws through has been attached.
         uint8_t           attached; ///< [bool]
     } ke_sprite2d_component;
 

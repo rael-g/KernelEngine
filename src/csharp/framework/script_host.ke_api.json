@@ -1135,7 +1135,7 @@
           "name": "defer",
           "returns": "ke_result",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
           "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
@@ -1373,7 +1373,7 @@
           "name": "bind_deferred",
           "returns": "ke_result",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Records bind into \u0060commands\u0060; the binding takes effect when \u0060commands\u0060 is applied. A bind that fails at that point is dropped.",
           "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a type never registered, KE_RESULT_INVALID_ARGUMENT for the invalid entity or a null commands, or the queue\u0027s code when it refuses the recording.",
@@ -1411,7 +1411,7 @@
           "name": "unbind_deferred",
           "returns": "ke_result",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "Records unbind into \u0060commands\u0060; the binding is dropped when \u0060commands\u0060 is applied.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null commands, or the queue\u0027s code when it refuses the recording.",

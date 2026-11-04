@@ -58,7 +58,7 @@ extern "C"
         /// Size the font is baked at, in pixels.
         float             font_size; ///< [default:32]
 
-        /// [idiom,name:font_handle] Resolved from `font`.
+        /// [internal,name:font_handle] Resolved from `font`.
         ke_ui_font_handle font_handle;
         /// Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.
         float             anchor[2];
@@ -67,10 +67,10 @@ extern "C"
         float             color[4]; ///< [default:1 1 1 1]
         char              text[KE_LABEL_MAX_TEXT];
 
-        /// [idiom,output] Written by the engine each tick; a node authoring it would
+        /// [internal,output] Written by the engine each tick; a node authoring it would
         /// have the value overwritten on the next tick.
         uint32_t            glyph_count;
-        /// [idiom,output] Shaped output, see glyph_count.
+        /// [internal,output] Shaped output, see glyph_count.
         ke_label_glyph_quad glyphs[KE_LABEL_MAX_GLYPHS];
     } ke_label_component;
 

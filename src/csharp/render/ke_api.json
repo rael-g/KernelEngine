@@ -2377,7 +2377,7 @@
           "name": "texture_handle",
           "type": "ke_texture_handle",
           "tags": [
-            "idiom"
+            "internal"
           ],
           "doc": "The image resolved from \u0060texture\u0060."
         },
@@ -2385,7 +2385,7 @@
           "name": "attached",
           "type": "uint8_t",
           "tags": [
-            "idiom",
+            "internal",
             "bool"
           ],
           "doc": "Whether the quad this sprite draws through has been attached."

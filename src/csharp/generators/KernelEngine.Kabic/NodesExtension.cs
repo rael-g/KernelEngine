@@ -85,7 +85,7 @@ public sealed class NodesExtension : IKabicExtension
         o.Add($"[GeneratedNodeComponent(typeof({state}), \"{name}\")]");
         o.Add($"public partial class {node.TagValue("node")} : {node.TagValue("base") ?? "Node"}");
         o.Add("{");
-        foreach (var field in node.Fields.Where(f => !f.Has("idiom")))
+        foreach (var field in node.Fields.Where(f => !f.Has("internal")))
         {
             o.Add("");
             if (!string.IsNullOrEmpty(field.Doc)) o.Add($"    /// <summary>{Escape(field.Doc)}</summary>");

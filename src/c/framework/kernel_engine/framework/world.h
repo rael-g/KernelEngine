@@ -53,11 +53,11 @@ extern "C"
     {
         void *handle;
 
-        /** [idiom] The ecs the world was created with. */
+        /** [internal] The ecs the world was created with. */
         ke_ecs         *(*ecs)(struct ke_world *self);
-        /** [idiom] The runtime the world was created with. */
+        /** [internal] The runtime the world was created with. */
         ke_runtime     *(*runtime)(struct ke_world *self);
-        /** [idiom] The scene tree the world was created with. */
+        /** [internal] The scene tree the world was created with. */
         struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
 
         /** Registers the table describing how a scene block's keys land in this
@@ -74,7 +74,7 @@ extern "C"
                                                const ke_component_field *fields,
                                                uint32_t                  field_count);
 
-        /** [idiom] Field table registered for `cid`, or NULL.
+        /** [internal] Field table registered for `cid`, or NULL.
          * @param out_count [out]
          * @return [array_of:out_count] */
         const ke_component_field *(*get_component_fields)(struct ke_world *self,
@@ -93,7 +93,7 @@ extern "C"
                                               ke_component_apply_fn apply,
                                               void                 *ctx);
 
-        /** [idiom] Callback registered for `cid`, or NULL, and the context it was
+        /** [internal] Callback registered for `cid`, or NULL, and the context it was
          * registered with.
          * @param out_ctx [out] */
         ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
