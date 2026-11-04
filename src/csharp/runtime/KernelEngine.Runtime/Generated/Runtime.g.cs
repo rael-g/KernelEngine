@@ -20,14 +20,19 @@ namespace KernelEngine.Runtime;
 public unsafe interface INativeRuntime
 {
     ke_runtime* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Owns the simulation world, dispatches systems across the worker pool and drives the frame loop.</summary>
 public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 {
     private ke_runtime* _native;
+    private readonly ke_runtime* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_runtime*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     /// <summary>
     /// Keeps every registered handler reachable, one per key the slot registers against.
@@ -56,7 +61,18 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     private ke_runtime* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Runtime));
 
-    ke_runtime* INativeRuntime.Native => Handle;
+    ke_runtime* INativeRuntime.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRuntime.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
     /// <param name="@params">NULL takes every default.</param>
@@ -66,7 +82,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         ke_runtime_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, taskPool, @params, &handle), "ke_runtime_create");
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_runtime*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -75,8 +93,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     private Runtime(ke_runtime* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Loads a module into the runtime, running its load hook before returning.</summary>
@@ -349,25 +368,42 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->flush_render(Handle)), "flush_render");
     }
 
+    /// <summary>Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls every module's unload hook in the reverse of registration order. The host calls it while everything a module's unload hook uses is still alive; destroying the runtime calls it for a host that did not. A second call does nothing.</summary>
+    public void UnloadModules()
+    {
+        Handle->unload_modules(Handle);
+    }
+
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
     public void Dispose()
     {
         OnDispose();
         if (_native == null) return;
-        foreach (var retained in _retainedExecute.Values) retained.Free();
-        _retainedExecute.Clear();
-        if (_borrowed)
+        _native = null;
+        if (_owner is not null)
         {
-            foreach (var retained in _retainedUserData.Values) retained.Free();
-            _retainedUserData.Clear();
-            _native = null;
+            _owner.Dispose();
             return;
         }
-        s_parkedCallbackException = null;
-        _destroy(_native);
-        _native = null;
         foreach (var retained in _retainedUserData.Values) retained.Free();
         _retainedUserData.Clear();
+        foreach (var retained in _retainedExecute.Values) retained.Free();
+        _retainedExecute.Clear();
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native runtime once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        foreach (var retained in _retainedExecute.Values) retained.Free();
+        _retainedExecute.Clear();
+        s_parkedCallbackException = null;
+        _destroy(_owned);
+        foreach (var retained in _retainedUserData.Values) retained.Free();
+        _retainedUserData.Clear();
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
         if (s_parkedCallbackException is { } parked)
         {
             s_parkedCallbackException = null;

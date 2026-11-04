@@ -16,18 +16,35 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
     /// <param name="scene">Names the label component; borrowed.</param>
     public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(Create(runtime, service, ui, resolver, scene))
     {
+        Hold(runtime.Owner);
+        Hold(service.Owner);
+        Hold(ui.Owner);
+        Hold(resolver?.Owner);
+        Hold(scene.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle _handle;
 
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+
     private RenderLabelResolve(KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle handle) => _handle = handle;
 
-    /// <summary>Releases the native object.</summary>
+    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
     public void Dispose()
     {
         if (_handle.@ref == null) return;
         _handle.destroy(_handle.@ref);
         _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene)

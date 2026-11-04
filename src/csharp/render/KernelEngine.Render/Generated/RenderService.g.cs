@@ -18,26 +18,44 @@ namespace KernelEngine.Render;
 public unsafe interface INativeRenderService
 {
     ke_render_service* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class RenderService : IDisposable, INativeRenderService, IRenderService
 {
     private ke_render_service* _native;
+    private readonly ke_render_service* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_service*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_render_service* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderService));
 
-    ke_render_service* INativeRenderService.Native => Handle;
+    ke_render_service* INativeRenderService.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRenderService.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_render_service_handle</c> and runs renderservice's startup lifecycle hook.</summary>
     public RenderService(ke_render_service_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_service*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -46,8 +64,9 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     private RenderService(ke_render_service* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Declares a transient resource the service allocates and recycles.</summary>
@@ -582,9 +601,22 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native renderservice once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

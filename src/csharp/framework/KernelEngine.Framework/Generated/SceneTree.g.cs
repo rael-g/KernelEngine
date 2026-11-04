@@ -20,26 +20,44 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeSceneTree
 {
     ke_scene_tree* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTree
 {
     private ke_scene_tree* _native;
+    private readonly ke_scene_tree* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_tree*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_scene_tree* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SceneTree));
 
-    ke_scene_tree* INativeSceneTree.Native => Handle;
+    ke_scene_tree* INativeSceneTree.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeSceneTree.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_scene_tree_handle</c> and runs scenetree's startup lifecycle hook.</summary>
     public SceneTree(ke_scene_tree_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_scene_tree*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -48,8 +66,9 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
     private SceneTree(ke_scene_tree* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>The tree's root entity. Valid for the whole lifetime of the tree.</summary>
@@ -172,9 +191,22 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native scenetree once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

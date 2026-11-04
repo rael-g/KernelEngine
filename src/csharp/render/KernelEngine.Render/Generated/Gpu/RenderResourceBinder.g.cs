@@ -16,26 +16,44 @@ namespace KernelEngine.Render.Gpu;
 public unsafe interface INativeRenderResourceBinder
 {
     ke_render_resource_binder* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Brings the resources of a frame to the shaders that read them. A pass names a shader's parameters and never learns how they reach it: in groups, in tables indexed per draw, or any other way the implementation chooses.</summary>
 public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderResourceBinder, IRenderResourceBinder
 {
     private ke_render_resource_binder* _native;
+    private readonly ke_render_resource_binder* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_resource_binder*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_render_resource_binder* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderResourceBinder));
 
-    ke_render_resource_binder* INativeRenderResourceBinder.Native => Handle;
+    ke_render_resource_binder* INativeRenderResourceBinder.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRenderResourceBinder.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_render_resource_binder_handle</c> and runs renderresourcebinder's startup lifecycle hook.</summary>
     public RenderResourceBinder(ke_render_resource_binder_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_resource_binder*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -44,8 +62,9 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
     private RenderResourceBinder(ke_render_resource_binder* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Makes `binding` the resource of every shader parameter of its name that a resource set leaves out. The name is copied.</summary>
@@ -180,9 +199,22 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native renderresourcebinder once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

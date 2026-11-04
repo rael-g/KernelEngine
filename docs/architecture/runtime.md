@@ -15,14 +15,14 @@ works inside is on the generated page of its file. Contracts are under `src/c/ru
 | system | `ke_runtime_system_params` | a module | `ke_system_ctx`, a delta time | structural changes, recorded in `ke_ecs_commands` |
 
 The runtime borrows the ecs and the task pool from the host and never frees them. In the managed
-layer `LoadModules` registers every `IRuntimeModule` of the service provider, in dependency order.
+layer `LoadModules` registers every `IRuntimeModule` of the service provider, in the order they were added.
 
 ## A tick
 
 **The phases run in the order of `ke_phase`.** The first tick runs `KE_PHASE_STARTUP` once. Every
 tick then runs `KE_PHASE_PRE_UPDATE`, `KE_PHASE_FIXED_UPDATE` zero or more times,
 `KE_PHASE_UPDATE`, `KE_PHASE_POST_UPDATE`, and dispatches `KE_PHASE_RENDER` without waiting for
-it. `KE_PHASE_SHUTDOWN` runs once from destroy, if a tick ever ran. A phase that fails stops the
+it. `KE_PHASE_SHUTDOWN` runs once when the modules are unloaded, if a tick ever ran. A phase that fails stops the
 tick.
 
 **A phase is cut into waves.** Systems are taken in registration order. Two systems conflict when
@@ -52,8 +52,8 @@ carrying the failing system's name.
 
 **Registration during a tick waits.** `register_system` and `unregister_system` called while a
 tick or the render phase is in flight are queued, and the next tick applies them before its first
-phase. A module's `on_load` runs before `register_module` returns; destroy calls every
-`on_unload` in reverse registration order.
+phase. A module's `on_load` runs before `register_module` returns; `unload_modules` calls every
+`on_unload` in reverse registration order, once, and destroy calls it for a host that did not.
 
 ## What the parts agree on without a contract
 

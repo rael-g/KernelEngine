@@ -40,4 +40,7 @@ public unsafe partial struct ke_runtime
 
     [NativeTypeName("ke_result (*)(ke_runtime *)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, KernelEngine.Result.Native.Result> flush_render;
+
+    [NativeTypeName("void (*)(ke_runtime *)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void> unload_modules;
 }

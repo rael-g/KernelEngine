@@ -18,26 +18,44 @@ namespace KernelEngine.Io;
 public unsafe interface INativeIo
 {
     ke_io* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
 public unsafe partial class Io : IDisposable, INativeIo, IIo
 {
     private ke_io* _native;
+    private readonly ke_io* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_io*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_io* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Io));
 
-    ke_io* INativeIo.Native => Handle;
+    ke_io* INativeIo.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeIo.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_io_handle</c> and runs io's startup lifecycle hook.</summary>
     public Io(ke_io_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_io*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -46,8 +64,9 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
     private Io(ke_io* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Submits a read of a whole file.</summary>
@@ -298,9 +317,22 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native io once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

@@ -24,6 +24,12 @@ public unsafe partial class SceneLoader
     public SceneLoader(KernelEngine.Ecs.INativeEcs ecs, SceneTree tree, SignalBus? signals, ComponentRegistry registry,
         AssetResolver assets, KernelEngine.Io.INativeIo io) : this(Create(ecs, tree, signals, registry, assets, io))
     {
+        Hold(ecs.Owner);
+        Hold(((INativeSceneTree)tree).Owner);
+        Hold(signals is null ? null : ((INativeSignalBus)signals).Owner);
+        Hold(((INativeComponentRegistry)registry).Owner);
+        Hold(((INativeAssetResolver)assets).Owner);
+        Hold(io.Owner);
     }
 
     private static ke_scene_loader_handle Create(KernelEngine.Ecs.INativeEcs ecs, SceneTree tree, SignalBus? signals,

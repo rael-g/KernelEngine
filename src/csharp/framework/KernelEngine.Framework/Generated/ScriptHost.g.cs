@@ -19,14 +19,19 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeScriptHost
 {
     ke_script_host* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScriptHost
 {
     private ke_script_host* _native;
+    private readonly ke_script_host* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_script_host*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     /// <summary>
     /// Keeps alive every managed object handed to the native side as an opaque
@@ -39,14 +44,27 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
     private ke_script_host* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ScriptHost));
 
-    ke_script_host* INativeScriptHost.Native => Handle;
+    ke_script_host* INativeScriptHost.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeScriptHost.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_script_host_handle</c> and runs scripthost's startup lifecycle hook.</summary>
     public ScriptHost(ke_script_host_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_script_host*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -55,8 +73,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
     private ScriptHost(ke_script_host* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Registers a script type under `name`, described by the components its instances carry and how far its behaviour reaches. Registering the same name twice returns the existing id when the description matches and fails as already existing when it does not.</summary>
@@ -246,11 +265,26 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
     {
         OnDispose();
         if (_native == null) return;
+        _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
         foreach (var rooted in _rooted.Values) rooted.Free();
         _rooted.Clear();
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
-        _native = null;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native scripthost once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        foreach (var rooted in _rooted.Values) rooted.Free();
+        _rooted.Clear();
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

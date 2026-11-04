@@ -67,7 +67,9 @@ public sealed class SceneNodesModule : IRuntimeModule
                 var ecs = sp.GetRequiredService<INativeEcs>();
                 Native.ke_script_host_handle handle;
                 KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.script_host_create(ecs.Native, null, &handle), "ke_script_host_create");
-                return new ScriptHost(handle).Compose(
+                var scriptHost = new ScriptHost(handle);
+                scriptHost.Hold(ecs.Owner);
+                return scriptHost.Compose(
                     sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>());

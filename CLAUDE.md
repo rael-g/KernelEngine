@@ -132,6 +132,7 @@ var runtime = sp.GetRequiredService<IRuntime>();
 runtime.LoadModules(sp);
 
 while (!window.ShouldClose()) runtime.Tick(dt);
+runtime.UnloadModules();
 ```
 
 Game code becomes a runtime module too, registering its own components and systems via `IRuntimeModule.OnLoad`. The smallest working host is [`examples/csharp/00_runtime_minimal/Program.cs`](examples/csharp/00_runtime_minimal/Program.cs) — copy that, not this snippet.

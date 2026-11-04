@@ -258,7 +258,7 @@
         {
           "name": "KE_PHASE_SHUTDOWN",
           "value": 8,
-          "doc": "Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not reported."
+          "doc": "Runs once when the modules are unloaded, if a tick ever ran. A failure of its bodies is not reported."
         }
       ]
     },
@@ -1441,6 +1441,15 @@
           "return_doc": "KE_OK, or the code a body of the render phase failed with.",
           "params": [],
           "receiver": "ke_runtime *"
+        },
+        {
+          "name": "unload_modules",
+          "returns": "void",
+          "tags": [],
+          "doc": "Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls every module\u0027s unload hook in the reverse of registration order. The host calls it while everything a module\u0027s unload hook uses is still alive; destroying the runtime calls it for a host that did not. A second call does nothing.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_runtime *"
         }
       ]
     },
@@ -1921,7 +1930,7 @@
     {
       "name": "ke_module_unload_fn",
       "returns": "void",
-      "doc": "Releases whatever the matching load acquired, as the runtime is torn down.",
+      "doc": "Releases whatever the matching load acquired, as the modules are unloaded.",
       "lanes": [
         {
           "name": "runtime",

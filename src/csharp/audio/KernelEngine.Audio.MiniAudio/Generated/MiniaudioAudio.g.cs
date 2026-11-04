@@ -12,6 +12,7 @@ public sealed unsafe partial class MiniaudioAudio : KernelEngine.Audio.Audio
     /// <param name="io">The io it reads through; borrowed for the lifetime of the backend.</param>
     public MiniaudioAudio(KernelEngine.Io.INativeIo io) : base(Create(io))
     {
+        Hold(io.Owner);
     }
 
     private static KernelEngine.Audio.Native.ke_audio_handle Create(KernelEngine.Io.INativeIo io)

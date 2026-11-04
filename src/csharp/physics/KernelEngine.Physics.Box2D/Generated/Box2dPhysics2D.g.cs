@@ -12,6 +12,7 @@ public sealed unsafe partial class Box2dPhysics2D : KernelEngine.Physics.Physics
     /// <param name="configuration">Holds gravity_x and gravity_y in section runtime.physics_2d; a missing key, or NULL here, selects (0, -9.81).</param>
     public Box2dPhysics2D(KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(configuration))
     {
+        Hold(configuration?.Owner);
     }
 
     private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration)

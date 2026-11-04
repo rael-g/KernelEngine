@@ -16,6 +16,11 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Rend
     /// <param name="scene">Names the components the frame reads; borrowed.</param>
     public DefaultRenderFrame(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(Create(runtime, ecs, service, camera, scene))
     {
+        Hold(runtime.Owner);
+        Hold(ecs.Owner);
+        Hold(service.Owner);
+        Hold(camera.Owner);
+        Hold(scene.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_render_frame_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene)

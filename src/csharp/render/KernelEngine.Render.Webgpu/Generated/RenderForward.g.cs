@@ -19,18 +19,35 @@ public sealed unsafe partial class RenderForward : IDisposable
     /// <param name="clusters">Optional cluster group; without one no clustered light is bound.</param>
     public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? shadow = default, string? clusters = default) : this(Create(runtime, service, device, iblEnabled, scene, frame, shadow, clusters))
     {
+        Hold(runtime.Owner);
+        Hold(service.Owner);
+        Hold(device.Owner);
+        Hold(scene.Owner);
+        Hold(frame.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_forward_handle _handle;
 
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+
     private RenderForward(KernelEngine.Render.Webgpu.Native.ke_render_forward_handle handle) => _handle = handle;
 
-    /// <summary>Releases the native object.</summary>
+    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
     public void Dispose()
     {
         if (_handle.@ref == null) return;
         _handle.destroy(_handle.@ref);
         _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? shadow, string? clusters)

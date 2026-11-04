@@ -22,14 +22,19 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeComponentRegistry
 {
     ke_component_registry* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>What a scene needs to know of each component beyond the ecs: how a scene block's keys land in its memory, and the short names a scene may write for it.</summary>
 public unsafe partial class ComponentRegistry : IDisposable, INativeComponentRegistry, IComponentRegistry
 {
     private ke_component_registry* _native;
+    private readonly ke_component_registry* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_component_registry*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     /// <summary>
     /// Keeps every registered handler reachable, one per key the slot registers against.
@@ -51,14 +56,27 @@ public unsafe partial class ComponentRegistry : IDisposable, INativeComponentReg
     private ke_component_registry* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ComponentRegistry));
 
-    ke_component_registry* INativeComponentRegistry.Native => Handle;
+    ke_component_registry* INativeComponentRegistry.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeComponentRegistry.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_component_registry_handle</c> and runs componentregistry's startup lifecycle hook.</summary>
     public ComponentRegistry(ke_component_registry_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_component_registry*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -67,8 +85,9 @@ public unsafe partial class ComponentRegistry : IDisposable, INativeComponentReg
     private ComponentRegistry(ke_component_registry* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the registry. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
@@ -179,11 +198,26 @@ public unsafe partial class ComponentRegistry : IDisposable, INativeComponentReg
     {
         OnDispose();
         if (_native == null) return;
+        _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
         foreach (var retained in _retainedApply.Values) retained.Free();
         _retainedApply.Clear();
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
-        _native = null;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native componentregistry once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        foreach (var retained in _retainedApply.Values) retained.Free();
+        _retainedApply.Clear();
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

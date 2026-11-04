@@ -80,6 +80,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[03_pbr_directional] Exited cleanly.");

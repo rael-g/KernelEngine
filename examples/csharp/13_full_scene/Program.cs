@@ -123,6 +123,7 @@ while (!window.ShouldClose())
         fpsWindowStart = now;
     }
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");

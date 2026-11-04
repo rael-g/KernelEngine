@@ -19,26 +19,44 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeSignalBus
 {
     ke_signal_bus* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class SignalBus : IDisposable, INativeSignalBus, ISignalBus
 {
     private ke_signal_bus* _native;
+    private readonly ke_signal_bus* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_signal_bus*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_signal_bus* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SignalBus));
 
-    ke_signal_bus* INativeSignalBus.Native => Handle;
+    ke_signal_bus* INativeSignalBus.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeSignalBus.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_signal_bus_handle</c> and runs signalbus's startup lifecycle hook.</summary>
     public SignalBus(ke_signal_bus_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_signal_bus*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -47,8 +65,9 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus, ISignalBu
     private SignalBus(ke_signal_bus* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails as already existing.</summary>
@@ -128,9 +147,22 @@ public unsafe partial class SignalBus : IDisposable, INativeSignalBus, ISignalBu
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native signalbus once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

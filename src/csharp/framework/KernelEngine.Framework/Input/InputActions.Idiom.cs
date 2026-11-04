@@ -10,9 +10,10 @@ public unsafe partial class InputActions
 {
     /// <summary>Creates a native input-actions instance that loads its file through <paramref name="io"/>.</summary>
     /// <exception cref="InvalidOperationException">The native factory fails.</exception>
-    /// <param name="io">The io the file is read through, borrowed; must outlive the instance.</param>
+    /// <param name="io">The io the file is read through, kept alive while the instance lives.</param>
     public InputActions(KernelEngine.Io.INativeIo io) : this(Create(io))
     {
+        Hold(io.Owner);
     }
 
     private static ke_input_actions_handle Create(KernelEngine.Io.INativeIo io)

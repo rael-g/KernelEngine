@@ -16,26 +16,44 @@ namespace KernelEngine.FileSystem;
 public unsafe interface INativeFileSystem
 {
     ke_file_system* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Read-only access to the files of one platform. Paths are UTF-8 with '/' as the separator; a relative path is resolved against the root the implementation was created with. Every slot may be called from several threads at once, read_at on one open file included.</summary>
 public unsafe partial class FileSystem : IDisposable, INativeFileSystem, IFileSystem
 {
     private ke_file_system* _native;
+    private readonly ke_file_system* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_file_system*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_file_system* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(FileSystem));
 
-    ke_file_system* INativeFileSystem.Native => Handle;
+    ke_file_system* INativeFileSystem.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeFileSystem.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_file_system_handle</c> and runs filesystem's startup lifecycle hook.</summary>
     public FileSystem(ke_file_system_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_file_system*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -44,8 +62,9 @@ public unsafe partial class FileSystem : IDisposable, INativeFileSystem, IFileSy
     private FileSystem(ke_file_system* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Opens a file for reading.</summary>
@@ -121,9 +140,22 @@ public unsafe partial class FileSystem : IDisposable, INativeFileSystem, IFileSy
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native filesystem once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

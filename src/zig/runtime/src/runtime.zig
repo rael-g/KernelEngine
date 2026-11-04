@@ -201,6 +201,7 @@ const RuntimeState = struct {
     fixed_dt_max_accum: f32,
     fixed_accumulator: f32,
     started: bool,
+    shut_down: bool,
     in_tick: std.atomic.Value(bool),
     in_render: std.atomic.Value(bool),
     pending_systems: std.atomic.Value(?*RegisteredSystem),
@@ -1139,16 +1140,18 @@ fn runtimeFlushRender(self: ?*abi_runtime.c.ke_runtime) callconv(.c) abi_result.
     return R.ok;
 }
 
-/// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
-/// ever started, unloads the modules in reverse order of registration, and releases the pending and
-/// registered systems and the scratch. The ecs and the task pool are not touched.
-fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
+/// Slot `unload_modules`. Sets `shut_down` and clears the module list as it goes, so a second
+/// call, and the one `runtimeDestroy` makes, find nothing left to run.
+fn runtimeUnloadModules(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
 
     _ = runtimeJoinPendingRender(h);
 
-    if (h.state.started) _ = runtimeRunPhase(h, abi_runtime.c.KE_PHASE_SHUTDOWN, 0.0);
+    if (h.state.started and !h.state.shut_down) {
+        h.state.shut_down = true;
+        _ = runtimeRunPhase(h, abi_runtime.c.KE_PHASE_SHUTDOWN, 0.0);
+    }
 
     if (h.state.modules) |modules| {
         var i = h.state.module_count;
@@ -1157,7 +1160,20 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
             if (modules[i].on_unload) |unload| unload(self, modules[i].user_data);
         }
         cFree(RegisteredModule, modules, h.state.module_capacity);
+        h.state.modules = null;
+        h.state.module_count = 0;
+        h.state.module_capacity = 0;
     }
+}
+
+/// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
+/// ever started, calls `runtimeUnloadModules`, and releases the pending and
+/// registered systems and the scratch. The ecs and the task pool are not touched.
+fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
+    if (self == null or self.?.handle == null) return;
+    const h = handleOf(self.?);
+
+    runtimeUnloadModules(self);
 
     if (h.state.render_job) |rj| cFree(RenderJob, @ptrCast(rj), 1);
 
@@ -1239,6 +1255,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.api.check_order = &runtimeCheckOrder;
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
+    h.api.unload_modules = &runtimeUnloadModules;
 
     out.* = .{ .ref = &h.api, .destroy = &runtimeDestroy };
     return R.ok;
@@ -1527,6 +1544,27 @@ test "a module's unload hook runs when the runtime is destroyed" {
 
     try testing.expectEqual(@as(usize, 1), recorder.count);
     try testing.expectEqual(@as(u32, 7), recorder.seen[0]);
+}
+
+test "unloading the modules runs each unload hook once, before and not again at destroy" {
+    var recorder = UnloadRecorder{};
+    var only = OrderedModule{ .recorder = &recorder, .tag = 3 };
+
+    var f = try Fixture.init();
+    var mod = std.mem.zeroes(abi_runtime.c.ke_runtime_module_params);
+    mod.name = "UnloadModule";
+    mod.user_data = &only;
+    mod.on_load = &orderedOnLoad;
+    mod.on_unload = &orderedOnUnload;
+
+    try testing.expect(loadedModule(f.rt(), &mod) != 0);
+    f.rt().unload_modules.?(f.rt());
+    try testing.expectEqual(@as(usize, 1), recorder.count);
+
+    f.rt().unload_modules.?(f.rt());
+    f.deinit();
+
+    try testing.expectEqual(@as(usize, 1), recorder.count);
 }
 
 test "modules unload in reverse registration order" {

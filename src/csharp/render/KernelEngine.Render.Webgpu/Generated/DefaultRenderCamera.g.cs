@@ -13,6 +13,8 @@ public sealed unsafe partial class DefaultRenderCamera : KernelEngine.Render.Ren
     /// <param name="device">Read once, for its clip convention.</param>
     public DefaultRenderCamera(KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(Create(viewSpace, device))
     {
+        Hold(viewSpace.Owner);
+        Hold(device.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_render_camera_handle Create(KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device)

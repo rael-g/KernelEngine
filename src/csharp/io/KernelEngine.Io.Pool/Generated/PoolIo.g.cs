@@ -13,6 +13,8 @@ public sealed unsafe partial class PoolIo : KernelEngine.Io.Io
     /// <param name="fileSystem">The file system each request reads through; borrowed for the lifetime of the ke_io.</param>
     public PoolIo(KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(Create(taskPool, fileSystem))
     {
+        Hold(taskPool.Owner);
+        Hold(fileSystem.Owner);
     }
 
     private static KernelEngine.Io.Native.ke_io_handle Create(KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem)

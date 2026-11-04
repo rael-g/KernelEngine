@@ -15,6 +15,10 @@ public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Rend
     /// <param name="resolver">Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.</param>
     public DefaultRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
     {
+        Hold(runtime.Owner);
+        Hold(ecs.Owner);
+        Hold(service.Owner);
+        Hold(resolver?.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)

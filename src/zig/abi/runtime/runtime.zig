@@ -106,6 +106,12 @@ pub const Runtime = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .unload_modules = &struct {
+                fn call(self: ?*c.ke_runtime) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.unloadModules(state);
+                }
+            }.call,
         };
     }
 
@@ -171,6 +177,14 @@ pub const Runtime = struct {
     /// races the teardown. A no-op if nothing is pending.
     pub fn flushRender(self: Runtime) Error!void {
         try checkResult(self.ptr.flush_render.?(self.ptr));
+    }
+
+    /// Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls
+    /// every module's unload hook in the reverse of registration order. The host calls it while
+    /// everything a module's unload hook uses is still alive; destroying the runtime calls it for a
+    /// host that did not. A second call does nothing.
+    pub fn unloadModules(self: Runtime) void {
+        return self.ptr.unload_modules.?(self.ptr);
     }
 
     /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.

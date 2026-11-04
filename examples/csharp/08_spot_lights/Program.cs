@@ -92,6 +92,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");

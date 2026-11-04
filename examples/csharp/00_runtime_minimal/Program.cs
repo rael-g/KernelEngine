@@ -61,6 +61,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 #endregion
 
 Console.WriteLine("[00_runtime_minimal] Exited cleanly.");

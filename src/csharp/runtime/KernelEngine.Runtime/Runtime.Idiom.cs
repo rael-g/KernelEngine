@@ -14,13 +14,14 @@ namespace KernelEngine.Runtime;
 public sealed unsafe partial class Runtime : IRuntime
 {
     /// <summary>
-    /// Builds a runtime over borrowed ECS storage and a borrowed task pool.
-    /// Only the pointers are taken: keeping the managed wrappers reachable is the
-    /// caller's business, exactly as it is for whoever else borrows them.
+    /// Builds a runtime over borrowed ECS storage and a borrowed task pool, both kept alive while
+    /// the runtime lives.
     /// </summary>
     public Runtime(INativeEcs ecs, INativeTaskPool taskPool)
         : this(NativeEcsOf(ecs), NativeTaskPoolOf(taskPool), null)
     {
+        Hold(ecs.Owner);
+        Hold(taskPool.Owner);
     }
 
     /// <summary>

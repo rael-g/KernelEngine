@@ -16,26 +16,44 @@ namespace KernelEngine.Audio;
 public unsafe interface INativeAudio
 {
     ke_audio* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Audio playback. Every slot is safe to call from a system body.</summary>
 public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
 {
     private ke_audio* _native;
+    private readonly ke_audio* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_audio*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_audio* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Audio));
 
-    ke_audio* INativeAudio.Native => Handle;
+    ke_audio* INativeAudio.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeAudio.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_audio_handle</c> and runs audio's startup lifecycle hook.</summary>
     public Audio(ke_audio_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_audio*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -44,8 +62,9 @@ public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
     private Audio(ke_audio* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Loads a sound for repeated playback; the backend autodetects the format.</summary>
@@ -98,9 +117,22 @@ public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native audio once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

@@ -12,6 +12,7 @@ public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoad
     /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbImageLoader(KernelEngine.Io.INativeIo io) : base(Create(io))
     {
+        Hold(io.Owner);
     }
 
     private static KernelEngine.Asset.Native.ke_image_loader_handle Create(KernelEngine.Io.INativeIo io)

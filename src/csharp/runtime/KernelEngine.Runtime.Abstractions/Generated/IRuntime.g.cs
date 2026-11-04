@@ -12,7 +12,7 @@ namespace KernelEngine.Runtime;
 /// <param name="runtime">The runtime the module is being loaded into.</param>
 public delegate void ModuleLoad(IRuntime runtime);
 
-/// <summary>Releases whatever the matching load acquired, as the runtime is torn down.</summary>
+/// <summary>Releases whatever the matching load acquired, as the modules are unloaded.</summary>
 /// <param name="runtime">The runtime the module was loaded into.</param>
 public delegate void ModuleUnload(IRuntime runtime);
 
@@ -65,4 +65,6 @@ public interface IRuntime : IDisposable
     /// <summary>Blocks until any render phase dispatched by a previous tick() has finished, and fails with whatever a body of that phase failed with. That phase outlives the tick that dispatched it, so this is where its failure is reported rather than by the tick that started it. tick() dispatches render asynchronously and returns before it completes; callers that need to tear down render-owned native resources must call this first, or the still-running render phase races the teardown. A no-op if nothing is pending.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Flush();
+    /// <summary>Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls every module's unload hook in the reverse of registration order. The host calls it while everything a module's unload hook uses is still alive; destroying the runtime calls it for a host that did not. A second call does nothing.</summary>
+    void UnloadModules();
 }

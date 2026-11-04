@@ -17,18 +17,35 @@ public sealed unsafe partial class RenderGbuffer : IDisposable
     /// <param name="output">The group it writes: albedo, normal and emissive under the suffixes of kernel_engine/render/resource_groups.h, each declared the size of the backbuffer.</param>
     public RenderGbuffer(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default) : this(Create(runtime, service, device, scene, frame, output))
     {
+        Hold(runtime.Owner);
+        Hold(service.Owner);
+        Hold(device.Owner);
+        Hold(scene.Owner);
+        Hold(frame.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle _handle;
 
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+
     private RenderGbuffer(KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle handle) => _handle = handle;
 
-    /// <summary>Releases the native object.</summary>
+    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
     public void Dispose()
     {
         if (_handle.@ref == null) return;
         _handle.destroy(_handle.@ref);
         _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output)
