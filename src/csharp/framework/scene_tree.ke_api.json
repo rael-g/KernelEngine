@@ -1377,6 +1377,31 @@
           "receiver": "struct ke_scene_tree *"
         },
         {
+          "name": "children_first",
+          "returns": "uint32_t",
+          "tags": [],
+          "doc": "Every node under the root, each node\u0027s children before the node and siblings in the order they were linked, as many as the buffer holds. The root is not listed.",
+          "return_doc": "The number of nodes under the root, which exceeds capacity when the buffer was too small.",
+          "params": [
+            {
+              "name": "out_nodes",
+              "type": "ke_entity *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the nodes; may be NULL when capacity is zero."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "Maximum number of nodes to write."
+            }
+          ],
+          "receiver": "struct ke_scene_tree *"
+        },
+        {
           "name": "hierarchy_generation",
           "returns": "uint64_t",
           "tags": [],

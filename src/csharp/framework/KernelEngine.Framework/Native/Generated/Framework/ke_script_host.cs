@@ -56,6 +56,6 @@ public unsafe partial struct ke_script_host
     [NativeTypeName("const ke_entity *(*)(struct ke_script_host *, ke_script_type_id, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_script_host*, uint, uint*, global::KernelEngine.Ecs.Entity*> instances;
 
-    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, ke_script_type_id, const char *, ke_script_borrow, ke_script_resolve *)")]
-    public delegate* unmanaged[Cdecl]<ke_script_host*, global::KernelEngine.Ecs.Entity, uint, sbyte*, ScriptBorrow, ScriptResolve*, global::KernelEngine.Ecs.Entity> resolve;
+    [NativeTypeName("ke_entity (*)(struct ke_script_host *, ke_entity, const ke_script_type_id *, uint32_t, const char *, ke_script_borrow, ke_script_resolve *)")]
+    public delegate* unmanaged[Cdecl]<ke_script_host*, global::KernelEngine.Ecs.Entity, uint*, uint, sbyte*, ScriptBorrow, ScriptResolve*, global::KernelEngine.Ecs.Entity> resolve;
 }

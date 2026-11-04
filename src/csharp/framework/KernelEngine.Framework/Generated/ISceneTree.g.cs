@@ -43,6 +43,10 @@ public interface ISceneTree : IDisposable
     /// <summary>The next child of `entity`'s parent, or KE_ENTITY_INVALID at the end of the list. Children come back in the order they were added.</summary>
     Entity NextSibling(Entity entity);
     void PropagateTransforms();
+    /// <summary>Every node under the root, each node's children before the node and siblings in the order they were linked, as many as the buffer holds. The root is not listed.</summary>
+    /// <param name="outNodes">Receives the nodes; may be NULL when capacity is zero.</param>
+    /// <returns>The number of nodes under the root, which exceeds capacity when the buffer was too small.</returns>
+    uint ChildrenFirst(Span<Entity> outNodes);
     /// <summary>A count that changes whenever a node is linked into or unlinked from the tree, including when deferred commands apply. Two equal readings mean no parent link changed between them.</summary>
     ulong HierarchyGeneration();
 }

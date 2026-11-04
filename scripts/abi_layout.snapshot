@@ -911,7 +911,7 @@ ke_component_registry_handle size=16 align=8
   destroy 8
 
 [scene_tree]
-ke_scene_tree size=104 align=8
+ke_scene_tree size=112 align=8
   handle 0
   root 8
   create_node 16
@@ -924,7 +924,8 @@ ke_scene_tree size=104 align=8
   first_child 72
   next_sibling 80
   propagate_transforms 88
-  hierarchy_generation 96
+  children_first 96
+  hierarchy_generation 104
 ke_scene_tree_handle size=16 align=8
   ref 0
   destroy 8

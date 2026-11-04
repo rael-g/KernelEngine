@@ -86,6 +86,17 @@ extern "C"
         void (*propagate_transforms)(struct ke_scene_tree *self);
 
         /**
+         * Every node under the root, each node's children before the node and siblings in
+         * the order they were linked, as many as the buffer holds. The root is not listed.
+         * @param out_nodes [out,array_of:capacity] Receives the nodes; may be NULL when
+         *        @p capacity is zero.
+         * @param capacity Maximum number of nodes to write.
+         * @return The number of nodes under the root, which exceeds @p capacity when the
+         *         buffer was too small.
+         */
+        uint32_t (*children_first)(struct ke_scene_tree *self, ke_entity *out_nodes, uint32_t capacity);
+
+        /**
          * A count that changes whenever a node is linked into or unlinked from the tree,
          * including when deferred commands apply. Two equal readings mean no parent link
          * changed between them.

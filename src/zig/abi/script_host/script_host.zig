@@ -127,9 +127,9 @@ pub const ScriptHost = struct {
                 }
             }.call,
             .resolve = &struct {
-                fn call(self: ?*c.ke_script_host, a0: c.ke_entity, a1: c.ke_script_type_id, a2: ?[*:0]const u8, a3: c.ke_script_borrow, a4: ?*c.ke_script_resolve) callconv(.c) c.ke_entity {
+                fn call(self: ?*c.ke_script_host, a0: c.ke_entity, a1: ?[*]const c.ke_script_type_id, a2: u32, a3: ?[*:0]const u8, a4: c.ke_script_borrow, a5: ?*c.ke_script_resolve) callconv(.c) c.ke_entity {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
-                    return T.resolve(state, a0, a1, std.mem.span(a2 orelse return std.mem.zeroes(c.ke_entity)), @enumFromInt(a3), a4);
+                    return T.resolve(state, a0, if (a1) |items| items[0..a2] else &.{}, std.mem.span(a3 orelse return std.mem.zeroes(c.ke_entity)), @enumFromInt(a4), a5);
                 }
             }.call,
         };
@@ -213,12 +213,13 @@ pub const ScriptHost = struct {
         return self.ptr.instances.?(self.ptr, @"type", out_count);
     }
 
-    /// The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to
-    /// a node of that name; empty matches on type alone, and answers ambiguous when two candidates
-    /// qualify rather than picking one. `out_why` says which of the two an invalid answer was, and
-    /// may be NULL.
-    pub fn resolve(self: ScriptHost, owner: c.ke_entity, @"type": c.ke_script_type_id, name: [:0]const u8, reach: ScriptBorrow, out_why: ?*c.ke_script_resolve) c.ke_entity {
-        return self.ptr.resolve.?(self.ptr, owner, @"type", name.ptr, @intFromEnum(reach), out_why);
+    /// The entity `owner` borrows: an instance of any of `types` found within `reach`. `name`
+    /// narrows it to a node of that name; empty matches on type alone. An ancestor borrow answers
+    /// the nearest ancestor that qualifies; any other answers ambiguous when two candidates qualify,
+    /// of one type or of two, rather than picking one. `out_why` says which of the two an invalid
+    /// answer was, and may be NULL.
+    pub fn resolve(self: ScriptHost, owner: c.ke_entity, types: []const c.ke_script_type_id, name: [:0]const u8, reach: ScriptBorrow, out_why: ?*c.ke_script_resolve) c.ke_entity {
+        return self.ptr.resolve.?(self.ptr, owner, types.ptr, @intCast(types.len), name.ptr, @intFromEnum(reach), out_why);
     }
 
 };

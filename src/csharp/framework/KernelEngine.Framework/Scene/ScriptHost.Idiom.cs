@@ -105,33 +105,13 @@ public unsafe partial class ScriptHost
 
     /// <summary>
     /// The node <paramref name="owner"/> borrows: an instance of <paramref name="wanted"/>
-    /// within <paramref name="reach"/>, or null when none is or more than one answers, whether
-    /// the candidates share a script type or not. The native host is asked once per script type
-    /// that is <paramref name="wanted"/> or derives from it; an ancestor borrow whose number of
-    /// such types is not one is resolved by walking the parents here.
+    /// within <paramref name="reach"/>, as the native host resolves it over every script type that
+    /// is <paramref name="wanted"/> or derives from it; null when none or more than one answers.
     /// </summary>
     internal Node? Borrow(Node owner, Type wanted, string name, ScriptBorrow reach)
     {
-        var ids = ScriptTypesAssignableTo(wanted);
-
-        if (reach == ScriptBorrow.Ancestor && ids.Length != 1)
-        {
-            for (var ancestor = owner.Parent; ancestor is not null; ancestor = ancestor.Parent)
-                if (wanted.IsInstanceOfType(ancestor) && (name.Length == 0 || ancestor.Name == name))
-                    return ancestor;
-            return null;
-        }
-
-        Node? found = null;
-        foreach (var id in ids)
-        {
-            var entity = Resolve(owner.Entity, id, name, reach, out var why);
-            if (why == ScriptResolve.Ambiguous) return null;
-            if (entity == default || NodeOf(entity) is not { } node) continue;
-            if (found is not null) return null;
-            found = node;
-        }
-        return found;
+        var entity = Resolve(owner.Entity, ScriptTypesAssignableTo(wanted), name, reach, out _);
+        return entity == default ? null : NodeOf(entity);
     }
 
     private SignalBus? _signals;
@@ -514,19 +494,14 @@ public unsafe partial class ScriptHost
         _ecs.GetComponent<T>(entity, cid);
 
     /// <summary>
-    /// Calls <see cref="Node.OnReady"/> on every node walking the scene tree, a node's children
-    /// before the node.
+    /// Calls <see cref="Node.OnReady"/> on every node in the order the scene tree lists them, a
+    /// node's children before the node.
     /// </summary>
     internal void TriggerReady()
     {
-        foreach (var root in AllNodes)
-            if (root.Parent is null) ReadyDepthFirst(root);
-    }
-
-    private static void ReadyDepthFirst(Node node)
-    {
-        var children = node.Children;
-        for (int i = 0; i < children.Count; i++) ReadyDepthFirst(children[i]);
-        node.OnReady();
+        var nodes = new Entity[_tree.ChildrenFirst(default)];
+        var count = (int)_tree.ChildrenFirst(nodes);
+        foreach (var entity in nodes.AsSpan(0, Math.Min(count, nodes.Length)))
+            NodeOf(entity)?.OnReady();
     }
 }
