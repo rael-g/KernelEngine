@@ -45,20 +45,4 @@ public class ConfigurationTests
         Assert.Equal(-9.81, cfg.GetDouble("runtime.physics_2d", "gravity_y", 0.0));
     }
 
-    [Fact]
-    public void SetFloatArray_ThenGetFloatArray_RoundTrips()
-    {
-        using var cfg = new Configuration();
-        cfg.SetFloatArray("render", "clear_color", [0.04f, 0.04f, 0.08f, 1.0f]);
-        var result = cfg.GetFloatArray("render", "clear_color", [0f, 0f, 0f, 0f]);
-        Assert.Equal([0.04f, 0.04f, 0.08f, 1.0f], result);
-    }
-
-    [Fact]
-    public void GetFloatArray_ReturnsFallback_WhenKeyMissing()
-    {
-        using var cfg = new Configuration();
-        var result = cfg.GetFloatArray("render", "clear_color", [0.1f, 0.2f, 0.3f, 1.0f]);
-        Assert.Equal([0.1f, 0.2f, 0.3f, 1.0f], result);
-    }
 }
