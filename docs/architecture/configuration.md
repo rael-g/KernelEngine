@@ -23,7 +23,7 @@ missing or holds a value of another type; an integer read as a double is convert
 
 **The TOML source flattens a file.** A table becomes a section, a nested table a section named by the
 path joined with dots, and a key directly under the root has the empty section. An array is
-skipped, which is why `GetFloatArray` and `SetFloatArray` use the keys `key_0`, `key_1`, and so on.
+skipped.
 
 **A write calls the subscribers of its section.** They run on the writing thread, after the
 value is stored, and receive the section, not the key. `Configuration` has no subscribe member.
