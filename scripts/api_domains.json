@@ -18,6 +18,7 @@
     "resultOk": "Ok",
     "resultManagedType": "KernelEngine.Result.Native.Result",
     "resultHelperClass": "KernelEngine.NativeResults",
+    "ownerClass": "global::KernelEngine.Interop.NativeOwner",
     "commonManagedNamespace": "KernelEngine.Common",
     "fieldTable": {
       "entryType": "ke_component_field",

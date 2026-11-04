@@ -17,6 +17,8 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
     /// <param name="fullscreen"></param>
     public GlfwWindow(KernelEngine.Input.INativeInput? input = default, KernelEngine.Configuration.INativeConfiguration? configuration = default, string? title = default, int width = default, int height = default, bool fullscreen = default) : base(Create(input, configuration, title, width, height, fullscreen))
     {
+        Hold(input?.Owner);
+        Hold(configuration?.Owner);
     }
 
     private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, string? title, int width, int height, bool fullscreen)

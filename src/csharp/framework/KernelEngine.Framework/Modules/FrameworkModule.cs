@@ -81,7 +81,10 @@ public sealed class FrameworkModule : IRuntimeModule
                 ke_scene_tree_handle tree;
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
                     flecsEcs.Native, runtime.Native, &tree), "ke_scene_tree_create");
-                return new SceneTree(tree);
+                var sceneTree = new SceneTree(tree);
+                sceneTree.Hold(flecsEcs.Owner);
+                sceneTree.Hold(runtime.Owner);
+                return sceneTree;
             }
         });
 
@@ -94,7 +97,9 @@ public sealed class FrameworkModule : IRuntimeModule
                 ke_component_registry_handle registry;
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.component_registry_create(
                     flecsEcs.Native, &registry), "ke_component_registry_create");
-                return new ComponentRegistry(registry);
+                var componentRegistry = new ComponentRegistry(registry);
+                componentRegistry.Hold(flecsEcs.Owner);
+                return componentRegistry;
             }
         });
     }

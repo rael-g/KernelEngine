@@ -17,26 +17,44 @@ namespace KernelEngine.Render.Webgpu;
 public unsafe interface INativeRenderUi
 {
     ke_render_ui* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>The ui pass as a font registry.</summary>
 public unsafe partial class RenderUi : IDisposable, INativeRenderUi, IRenderUi
 {
     private ke_render_ui* _native;
+    private readonly ke_render_ui* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_ui*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_render_ui* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderUi));
 
-    ke_render_ui* INativeRenderUi.Native => Handle;
+    ke_render_ui* INativeRenderUi.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRenderUi.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_render_ui_handle</c> and runs renderui's startup lifecycle hook.</summary>
     public RenderUi(ke_render_ui_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_ui*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -45,8 +63,9 @@ public unsafe partial class RenderUi : IDisposable, INativeRenderUi, IRenderUi
     private RenderUi(ke_render_ui* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Registers a font's glyph table, deduped by `key`: a resident key retains and returns the existing handle without copying `glyphs` again. `glyphs` is copied; the caller may free its own copy after this returns.</summary>
@@ -74,9 +93,22 @@ public unsafe partial class RenderUi : IDisposable, INativeRenderUi, IRenderUi
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native renderui once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

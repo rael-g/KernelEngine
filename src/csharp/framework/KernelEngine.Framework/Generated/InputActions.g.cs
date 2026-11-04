@@ -20,14 +20,19 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeInputActions
 {
     ke_input_actions* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class InputActions : IDisposable, INativeInputActions, IInputActions
 {
     private ke_input_actions* _native;
+    private readonly ke_input_actions* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_input_actions*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
@@ -42,14 +47,27 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     private ke_input_actions* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(InputActions));
 
-    ke_input_actions* INativeInputActions.Native => Handle;
+    ke_input_actions* INativeInputActions.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeInputActions.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_input_actions_handle</c> and runs inputactions's startup lifecycle hook.</summary>
     public InputActions(ke_input_actions_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_input_actions*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -58,8 +76,9 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     private InputActions(ke_input_actions* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.</summary>
@@ -216,9 +235,22 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native inputactions once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

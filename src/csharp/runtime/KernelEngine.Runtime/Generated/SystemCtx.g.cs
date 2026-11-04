@@ -20,19 +20,35 @@ namespace KernelEngine.Runtime;
 public unsafe interface INativeSystemCtx
 {
     ke_system_ctx* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>What one call of a system body is given to work with: the entities its queries resolved to, which share of them it owns, and the queue it records structural changes into. It exists for the duration of the call and means nothing outside it. `handle` is runtime-private.</summary>
 public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx, ISystemCtx
 {
     private ke_system_ctx* _native;
+    private readonly ke_system_ctx* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_system_ctx*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_system_ctx* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SystemCtx));
 
-    ke_system_ctx* INativeSystemCtx.Native => Handle;
+    ke_system_ctx* INativeSystemCtx.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeSystemCtx.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps a <c>ke_system_ctx*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
     public static SystemCtx Borrow(ke_system_ctx* native) => new(native, borrowed: true);
@@ -40,8 +56,9 @@ public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx, ISystemCt
     private SystemCtx(ke_system_ctx* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>The system body's only path to component memory. Returns the resolved archetype segments for the system's query at query_index (the order the queries were declared in ke_runtime_system_params). Sets *out_count to the segment count and returns the segment array; both are valid for the duration of the system body. Makes no ke_ecs call. Returns NULL for an out-of-range index or a system that declared no queries.</summary>
@@ -77,9 +94,22 @@ public unsafe partial class SystemCtx : IDisposable, INativeSystemCtx, ISystemCt
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native systemctx once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

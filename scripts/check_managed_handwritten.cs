@@ -3,6 +3,7 @@
 using System.Runtime.CompilerServices;
 
 const int Ceiling = 89;
+const string InteropDir = "src/csharp/interop/";
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
@@ -14,8 +15,22 @@ var files = Directory.EnumerateFiles(managedDir, "*.cs", SearchOption.AllDirecto
     .Where(p => !p.EndsWith(".g.cs", StringComparison.Ordinal))
     .Where(p => !p.Contains("/kabic/", StringComparison.Ordinal))
     .Where(p => !p.Contains("/generators/", StringComparison.Ordinal))
+    .Where(p => !p.StartsWith(InteropDir, StringComparison.Ordinal))
     .OrderBy(p => p, StringComparer.Ordinal)
     .ToList();
+
+var reaching = Directory.EnumerateFiles(Path.Combine(rootDir, InteropDir), "*.cs", SearchOption.AllDirectories)
+    .Where(p => !Segments(Path.GetRelativePath(rootDir, p).Replace('\\', '/')).Any(s => s is "obj" or "bin"))
+    .Where(p => System.Text.RegularExpressions.Regex.IsMatch(File.ReadAllText(p), @"\bKernelEngine\.(?!Interop\b)\w"))
+    .Select(p => Path.GetRelativePath(rootDir, p).Replace('\\', '/'))
+    .ToList();
+if (reaching.Count > 0)
+{
+    foreach (var p in reaching) Console.Error.WriteLine($"{p}: names a domain namespace");
+    Console.Error.WriteLine("The interop project holds only what is the same for every contract; code that needs a");
+    Console.Error.WriteLine("contract belongs to the generator or to the native side.");
+    return 1;
+}
 
 var buckets = files.GroupBy(Bucket).OrderByDescending(g => g.Count());
 foreach (var b in buckets) Console.WriteLine($"  {b.Count(),4}  {b.Key}");

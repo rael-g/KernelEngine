@@ -12,6 +12,7 @@ public sealed unsafe partial class StbFontLoader : KernelEngine.Text.FontLoader
     /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbFontLoader(KernelEngine.Io.INativeIo io) : base(Create(io))
     {
+        Hold(io.Owner);
     }
 
     private static KernelEngine.Text.Native.ke_font_loader_handle Create(KernelEngine.Io.INativeIo io)

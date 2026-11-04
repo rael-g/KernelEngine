@@ -14,6 +14,8 @@ public sealed unsafe partial class GroupedRenderResourceBinder : KernelEngine.Re
     /// <param name="io">Borrowed; must outlive the binder. The reflection is read through it.</param>
     public GroupedRenderResourceBinder(KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io) : base(Create(device, shaderDir, io))
     {
+        Hold(device.Owner);
+        Hold(io.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_render_resource_binder_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io)

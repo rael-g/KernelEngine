@@ -19,14 +19,19 @@ namespace KernelEngine.Framework;
 public unsafe interface INativeSceneLoader
 {
     ke_scene_loader* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 
 public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, ISceneLoader
 {
     private ke_scene_loader* _native;
+    private readonly ke_scene_loader* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_scene_loader*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     /// <summary>
     /// Keeps the registered handler reachable.
@@ -48,14 +53,27 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
     private ke_scene_loader* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(SceneLoader));
 
-    ke_scene_loader* INativeSceneLoader.Native => Handle;
+    ke_scene_loader* INativeSceneLoader.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeSceneLoader.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_scene_loader_handle</c> and runs sceneloader's startup lifecycle hook.</summary>
     public SceneLoader(ke_scene_loader_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_scene_loader*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -64,8 +82,9 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
     private SceneLoader(ke_scene_loader* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Loads the scene at path, instantiating every entity it declares. A script factory's refusal of an entity fails the load with the factory's code; what failed, and where in the file, is logged.</summary>
@@ -139,10 +158,24 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
     {
         OnDispose();
         if (_native == null) return;
-        if (_retainedFactory.IsAllocated) _retainedFactory.Free();
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        if (_retainedFactory.IsAllocated) _retainedFactory.Free();
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native sceneloader once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        if (_retainedFactory.IsAllocated) _retainedFactory.Free();
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

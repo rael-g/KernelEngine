@@ -24,18 +24,38 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <param name="configuration">A zero grid field reads its [render] key; borrowed.</param>
     public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster, configuration))
     {
+        Hold(runtime.Owner);
+        Hold(service.Owner);
+        Hold(device.Owner);
+        Hold(viewSpace.Owner);
+        Hold(camera.Owner);
+        Hold(scene.Owner);
+        Hold(frame.Owner);
+        Hold(configuration?.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle _handle;
 
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+
     private RenderCluster(KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle handle) => _handle = handle;
 
-    /// <summary>Releases the native object.</summary>
+    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
     public void Dispose()
     {
         if (_handle.@ref == null) return;
         _handle.destroy(_handle.@ref);
         _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster, KernelEngine.Configuration.INativeConfiguration? configuration)

@@ -16,26 +16,44 @@ namespace KernelEngine.Configuration;
 public unsafe interface INativeConfigurationSource
 {
     ke_configuration_source* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>Reads values from somewhere outside the process into a configuration, through its setter slots. A source keeps nothing between loads; which store it writes to is the caller's choice.</summary>
 public unsafe partial class ConfigurationSource : IDisposable, INativeConfigurationSource, IConfigurationSource
 {
     private ke_configuration_source* _native;
+    private readonly ke_configuration_source* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_configuration_source*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_configuration_source* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ConfigurationSource));
 
-    ke_configuration_source* INativeConfigurationSource.Native => Handle;
+    ke_configuration_source* INativeConfigurationSource.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeConfigurationSource.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_configuration_source_handle</c> and runs configurationsource's startup lifecycle hook.</summary>
     public ConfigurationSource(ke_configuration_source_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_configuration_source*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -44,8 +62,9 @@ public unsafe partial class ConfigurationSource : IDisposable, INativeConfigurat
     private ConfigurationSource(ke_configuration_source* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Writes what path holds into cfg. A path that does not exist writes nothing and succeeds. Writes made before a failure stay.</summary>
@@ -69,9 +88,22 @@ public unsafe partial class ConfigurationSource : IDisposable, INativeConfigurat
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native configurationsource once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

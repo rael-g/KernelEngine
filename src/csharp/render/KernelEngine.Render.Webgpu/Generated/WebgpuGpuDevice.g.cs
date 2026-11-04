@@ -15,6 +15,8 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
     /// <param name="configuration">Optional, borrowed. Read once at creation.</param>
     public WebgpuGpuDevice(bool enableValidation = default, KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool debugLabels = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(enableValidation, taskPool, debugLabels, configuration))
     {
+        Hold(taskPool?.Owner);
+        Hold(configuration?.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_gpu_device_handle Create(bool enableValidation, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool debugLabels, KernelEngine.Configuration.INativeConfiguration? configuration)

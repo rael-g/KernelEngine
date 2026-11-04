@@ -34,6 +34,9 @@ public unsafe partial class AssetResolver
                                INativeFontLoader? fontLoader = null, string? projectRoot = null)
         : this(Create(io, imageLoader, fontLoader, projectRoot))
     {
+        Hold(io.Owner);
+        Hold(imageLoader?.Owner);
+        Hold(fontLoader?.Owner);
     }
 
     private static ke_asset_resolver_handle Create(KernelEngine.Io.INativeIo io, INativeImageLoader? imageLoader,

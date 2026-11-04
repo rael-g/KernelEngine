@@ -21,6 +21,12 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
     /// <param name="configuration">Borrowed for the call only.</param>
     public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default, System.Numerics.Vector4 clearColor = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat, clearColor, configuration))
     {
+        Hold(device.Owner);
+        Hold(target.Owner);
+        Hold(ecs.Owner);
+        Hold(io.Owner);
+        Hold(binder.Owner);
+        Hold(configuration?.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor, KernelEngine.Configuration.INativeConfiguration? configuration)

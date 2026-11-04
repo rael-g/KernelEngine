@@ -18,26 +18,44 @@ namespace KernelEngine.Render;
 public unsafe interface INativeRenderCamera
 {
     ke_render_camera* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>The matrices and projection that a camera component and its world transform describe. Every slot is callable at any time and tolerates a null `self`, a null input or a null output by writing nothing.</summary>
 public unsafe partial class RenderCamera : IDisposable, INativeRenderCamera, IRenderCamera
 {
     private ke_render_camera* _native;
+    private readonly ke_render_camera* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_camera*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_render_camera* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderCamera));
 
-    ke_render_camera* INativeRenderCamera.Native => Handle;
+    ke_render_camera* INativeRenderCamera.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRenderCamera.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_render_camera_handle</c> and runs rendercamera's startup lifecycle hook.</summary>
     public RenderCamera(ke_render_camera_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_camera*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -46,8 +64,9 @@ public unsafe partial class RenderCamera : IDisposable, INativeRenderCamera, IRe
     private RenderCamera(ke_render_camera* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>World-to-view for a camera placed by `camera_world`.</summary>
@@ -103,9 +122,22 @@ public unsafe partial class RenderCamera : IDisposable, INativeRenderCamera, IRe
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native rendercamera once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

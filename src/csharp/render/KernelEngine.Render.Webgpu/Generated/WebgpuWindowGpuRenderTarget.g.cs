@@ -15,6 +15,9 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget : KernelEngine.Re
     /// <param name="configuration">Optional, borrowed. Its [runtime.renderer] vsync false selects IMMEDIATE when present_mode is zero.</param>
     public WebgpuWindowGpuRenderTarget(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(device, window, presentMode, configuration))
     {
+        Hold(device.Owner);
+        Hold(window.Owner);
+        Hold(configuration?.Owner);
     }
 
     private static KernelEngine.Render.Native.ke_gpu_render_target_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode, KernelEngine.Configuration.INativeConfiguration? configuration)

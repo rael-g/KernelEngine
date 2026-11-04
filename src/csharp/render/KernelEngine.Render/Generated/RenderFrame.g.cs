@@ -18,26 +18,44 @@ namespace KernelEngine.Render;
 public unsafe interface INativeRenderFrame
 {
     ke_render_frame* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>The systems that begin and end a frame on the render service.</summary>
 public unsafe partial class RenderFrame : IDisposable, INativeRenderFrame, IRenderFrame
 {
     private ke_render_frame* _native;
+    private readonly ke_render_frame* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_frame*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_render_frame* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderFrame));
 
-    ke_render_frame* INativeRenderFrame.Native => Handle;
+    ke_render_frame* INativeRenderFrame.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeRenderFrame.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_render_frame_handle</c> and runs renderframe's startup lifecycle hook.</summary>
     public RenderFrame(ke_render_frame_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_frame*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -46,8 +64,9 @@ public unsafe partial class RenderFrame : IDisposable, INativeRenderFrame, IRend
     private RenderFrame(ke_render_frame* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>The tag the system that begins the frame writes and the system that ends it reads. A pass that reads it runs inside the frame.</summary>
@@ -61,9 +80,22 @@ public unsafe partial class RenderFrame : IDisposable, INativeRenderFrame, IRend
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native renderframe once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

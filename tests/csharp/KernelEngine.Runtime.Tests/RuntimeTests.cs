@@ -25,6 +25,25 @@ public class RuntimeTests : IDisposable
     }
 
     [Fact]
+    public void Dispose_OfItsDependenciesFirst_LeavesTheRuntimeUsableUntilItIsDisposed()
+    {
+        var ecs = new FlecsEcsRegistry();
+        var taskPool = new EnkiTaskPool();
+        IRuntime runtime = new Runtime(ecs, taskPool);
+        var unloadCount = 0;
+        runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
+
+        ecs.Dispose();
+        taskPool.Dispose();
+        runtime.Tick(1f / 60f);
+        runtime.Dispose();
+
+        Assert.Equal(1, unloadCount);
+        Assert.True(((KernelEngine.Ecs.INativeEcs)ecs).Owner!.IsClosed);
+        Assert.True(((KernelEngine.TaskPool.INativeTaskPool)taskPool).Owner!.IsClosed);
+    }
+
+    [Fact]
     public void RegisterModule_InvokesOnLoad_Once()
     {
         using IRuntime runtime = new Runtime(_ecs, _taskPool);

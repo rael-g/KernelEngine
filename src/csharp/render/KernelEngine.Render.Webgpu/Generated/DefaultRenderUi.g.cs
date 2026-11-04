@@ -16,6 +16,11 @@ public sealed unsafe partial class DefaultRenderUi : KernelEngine.Render.Webgpu.
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
     public DefaultRenderUi(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(Create(runtime, ecs, service, device, frame))
     {
+        Hold(runtime.Owner);
+        Hold(ecs.Owner);
+        Hold(service.Owner);
+        Hold(device.Owner);
+        Hold(frame.Owner);
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame)

@@ -16,19 +16,35 @@ namespace KernelEngine.Ecs;
 public unsafe interface INativeEcsCommands
 {
     ke_ecs_commands* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.</summary>
 public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsCommands
 {
     private ke_ecs_commands* _native;
+    private readonly ke_ecs_commands* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs_commands*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_ecs_commands* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(EcsCommands));
 
-    ke_ecs_commands* INativeEcsCommands.Native => Handle;
+    ke_ecs_commands* INativeEcsCommands.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeEcsCommands.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps a <c>ke_ecs_commands*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
     public static EcsCommands Borrow(ke_ecs_commands* native) => new(native, borrowed: true);
@@ -36,8 +52,9 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     private EcsCommands(ke_ecs_commands* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.</summary>
@@ -89,9 +106,22 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native ecscommands once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

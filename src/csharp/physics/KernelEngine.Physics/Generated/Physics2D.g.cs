@@ -16,26 +16,44 @@ namespace KernelEngine.Physics;
 public unsafe interface INativePhysics2d
 {
     ke_physics_2d* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe — call all methods on the same thread.</summary>
 public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2D
 {
     private ke_physics_2d* _native;
+    private readonly ke_physics_2d* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_physics_2d*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_physics_2d* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Physics2D));
 
-    ke_physics_2d* INativePhysics2d.Native => Handle;
+    ke_physics_2d* INativePhysics2d.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativePhysics2d.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_physics_2d_handle</c> and runs physics2d's startup lifecycle hook.</summary>
     public Physics2D(ke_physics_2d_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_physics_2d*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -44,8 +62,9 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     private Physics2D(ke_physics_2d* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>Sets world gravity (m/s^2). Default is (0, -9.81).</summary>
@@ -136,9 +155,22 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native physics2d once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();

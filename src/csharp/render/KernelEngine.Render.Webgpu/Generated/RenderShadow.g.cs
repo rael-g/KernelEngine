@@ -23,18 +23,36 @@ public sealed unsafe partial class RenderShadow : IDisposable
     /// <param name="farPlane">Far plane of the shadow camera. 0 takes the default.</param>
     public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint resolution = default, float lightDistance = default, float extent = default, float nearPlane = default, float farPlane = default) : this(Create(runtime, service, device, viewSpace, scene, frame, output, resolution, lightDistance, extent, nearPlane, farPlane))
     {
+        Hold(runtime.Owner);
+        Hold(service.Owner);
+        Hold(device.Owner);
+        Hold(viewSpace.Owner);
+        Hold(scene.Owner);
+        Hold(frame.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle _handle;
 
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+
     private RenderShadow(KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle handle) => _handle = handle;
 
-    /// <summary>Releases the native object.</summary>
+    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
+
+    /// <summary>Releases the native object, then what it held.</summary>
     public void Dispose()
     {
         if (_handle.@ref == null) return;
         _handle.destroy(_handle.@ref);
         _handle = default;
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     private static KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane)

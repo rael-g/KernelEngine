@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
+    <ProjectReference Include="..\..\interop\KernelEngine.Interop\KernelEngine.Interop.csproj" />
   </ItemGroup>
 
 </Project>

@@ -17,26 +17,44 @@ namespace KernelEngine.View;
 public unsafe interface INativeViewSpace
 {
     ke_view_space* Native { get; }
+
+    /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
+    global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
 /// <summary>How the engine lays out view space: which way the camera faces along z, and with it the shape of the view and projection matrices. Independent of `ke_ndc_convention`, which reports the clip space of the device. Every slot is callable at any time. No slot's result is documented as constant; a consumer that caches one is making its own choice.</summary>
 public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpace
 {
     private ke_view_space* _native;
+    private readonly ke_view_space* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_view_space*, void> _destroy;
-    private readonly bool _borrowed;
+    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
+    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
     private ke_view_space* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ViewSpace));
 
-    ke_view_space* INativeViewSpace.Native => Handle;
+    ke_view_space* INativeViewSpace.Native => _owner is { IsClosed: false } ? _owned : Handle;
+
+    global::KernelEngine.Interop.NativeOwner? INativeViewSpace.Owner => _owner;
+
+    /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
+    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    {
+        if (owner is null) return;
+        var added = false;
+        owner.DangerousAddRef(ref added);
+        _held.Add(owner);
+    }
 
     /// <summary>Wraps an owner <c>ke_view_space_handle</c> and runs viewspace's startup lifecycle hook.</summary>
     public ViewSpace(ke_view_space_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
+        _owned = handle.@ref;
         _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_view_space*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -45,8 +63,9 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
     private ViewSpace(ke_view_space* native, bool borrowed)
     {
         _native = native;
+        _owned = native;
         _destroy = null;
-        _borrowed = borrowed;
+        _owner = null;
     }
 
     /// <summary>The numbers to hand to consumers that cannot call this interface.</summary>
@@ -105,9 +124,22 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
     {
         OnDispose();
         if (_native == null) return;
-        if (_borrowed) { _native = null; return; }
-        _destroy(_native);
         _native = null;
+        if (_owner is not null)
+        {
+            _owner.Dispose();
+            return;
+        }
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
+    }
+
+    /// <summary>Destroys the native viewspace once its last reference is released, then releases what it held.</summary>
+    private void Teardown()
+    {
+        _destroy(_owned);
+        foreach (var held in _held) held.DangerousRelease();
+        _held.Clear();
     }
 
     partial void OnDispose();
