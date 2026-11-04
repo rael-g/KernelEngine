@@ -647,9 +647,11 @@ ke_collider2d_component size=40 align=4
   attached 36
 
 [audio_components]
-ke_audio_player_component size=260 align=4
+ke_audio_player_component size=268 align=4
   path 0
   volume 256
+  play_requested 260
+  sound 264
 
 [text]
 ke_glyph_metrics size=40 align=4

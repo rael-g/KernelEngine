@@ -12,7 +12,7 @@ using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
-/// <summary>A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name.</summary>
+/// <summary>A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name. The clip is loaded on the first update that sees the component and unloaded on the first update in which the entity no longer holds it.</summary>
 [GeneratedNodeComponent(typeof(AudioPlayerComponent), "audio_player")]
 public partial class AudioPlayer : Node3D
 {
@@ -24,4 +24,8 @@ public partial class AudioPlayer : Node3D
     /// <summary>Linear gain, 0..1.</summary>
     [NativeField("Volume", Component = typeof(AudioPlayerComponent))]
     public partial float Volume { get; set; }
+
+    /// <summary>Set to play the clip once from its start at volume; the next update plays it and clears the flag. A clip that is not loaded clears it without playing.</summary>
+    [NativeField("PlayRequested", Component = typeof(AudioPlayerComponent))]
+    public partial bool PlayRequested { get; set; }
 }

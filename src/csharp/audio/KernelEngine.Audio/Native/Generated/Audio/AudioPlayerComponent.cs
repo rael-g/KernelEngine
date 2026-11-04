@@ -12,6 +12,11 @@ public partial struct AudioPlayerComponent
 
     public float Volume;
 
+    public bool PlayRequested;
+
+    [NativeTypeName("ke_audio_sound")]
+    public uint Sound;
+
     [InlineArray(256)]
     public partial struct _Path_e__FixedBuffer
     {

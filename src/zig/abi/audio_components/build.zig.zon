@@ -4,6 +4,7 @@
     .fingerprint = 0xcb743c5f14148935,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_audio = .{ .path = "../audio" },
         .abi_result = .{ .path = "../result" },
         .abi_spatial = .{ .path = "../spatial" },
     },
