@@ -23,4 +23,14 @@ public interface IInputActionMap<TEnum> where TEnum : struct, Enum
     /// the one before. False for an action the file does not bind.
     /// </summary>
     bool IsJustPressed(TEnum action);
+
+    /// <summary>
+    /// Adds <paramref name="handler"/> to the handlers each phase transition of an action is
+    /// handed to. The handler added last hears an event first, and an event a handler consumes
+    /// reaches no handler added before it.
+    /// </summary>
+    void Subscribe(InputActionHandler handler);
+
+    /// <summary>Removes <paramref name="handler"/>; a handler never added is ignored.</summary>
+    void Unsubscribe(InputActionHandler handler);
 }
