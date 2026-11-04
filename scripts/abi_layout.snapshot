@@ -932,10 +932,11 @@ ke_scene_tree_handle size=16 align=8
   destroy 8
 
 [scene_loader]
-ke_scene_loader size=24 align=8
+ke_scene_loader size=32 align=8
   handle 0
   load 8
-  register_script_factory 16
+  instantiate 16
+  register_script_factory 24
 ke_scene_loader_handle size=16 align=8
   ref 0
   destroy 8

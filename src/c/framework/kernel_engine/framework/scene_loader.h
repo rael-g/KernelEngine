@@ -3,6 +3,7 @@
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
+#include <kernel_engine/ecs/commands.h>
 #include <kernel_engine/ecs/variant.h>
 
 #ifdef __cplusplus
@@ -29,6 +30,20 @@ extern "C"
          * failed, and where in the file, is logged.
          * @param path [utf8] Path to the scene file. */
         ke_result (*load)(struct ke_scene_loader *self, const char *path);
+
+        /** Records into @p commands loading the scene at @p path under @p parent, as load does it
+         * at the root, when @p commands is applied; the scene's first entity becomes a child of
+         * @p parent. A failure of the recorded load is logged and fails the application of
+         * @p commands with its code, and removes what that load made.
+         * @param path     [utf8] Path to the scene file, read as load reads it.
+         * @param parent   The node the scene is attached under; KE_ENTITY_INVALID attaches it at
+         *                 the root.
+         * @param commands
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p path or @p commands, or a path
+         *         longer than the longest path the platform accepts; the queue's code when it
+         *         refuses the recording. */
+        ke_result (*instantiate)(struct ke_scene_loader *self, const char *path, ke_entity parent,
+                                 ke_ecs_commands *commands);
 
         /** Registers the factory consulted for every entity that declares a type.
          * Replaces any factory registered before it.
