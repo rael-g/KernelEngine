@@ -61,7 +61,7 @@ const UiFont = struct {
 const UiState = struct {
     api: abi_render_ui.c.ke_render_ui = undefined,
     runtime: *abi_runtime.c.ke_runtime = undefined,
-    systems: [2]abi_framework.c.ke_system_id = .{ 0, 0 },
+    systems: [2]abi_runtime.c.ke_system_id = .{ 0, 0 },
 
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
@@ -565,7 +565,7 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.c.ke_render_ui_params,
     params.access_count = ui.access.len;
     params.user_data = ui;
     params.execute = system;
-    var first_system: abi_framework.c.ke_system_id = 0;
+    var first_system: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &params, &first_system));
     errdefer _ = rt.unregister_system.?(rt, first_system);
 
@@ -579,7 +579,7 @@ fn register(ui: *UiState, p: *const abi_render_ui_factory.c.ke_render_ui_params,
     shape_params.query_count = ui.label_shape_queries.len;
     shape_params.user_data = ui;
     shape_params.execute = labelShapeSystem;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &shape_params, &system_id));
     ui.runtime = rt;
     ui.systems = .{ first_system, system_id };
@@ -671,7 +671,7 @@ test "destroying the ui pass unregisters every system it registered" {
     try R.check(ke_render_ui_create(&.{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api(), }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 

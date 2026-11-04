@@ -4,7 +4,6 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/variant.h>
-struct ke_world;
 
 #ifdef __cplusplus
 extern "C"

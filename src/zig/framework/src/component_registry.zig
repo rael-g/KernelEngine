@@ -1,18 +1,15 @@
-//! The world: the handle that carries the ecs, runtime and scene tree the framework works on, and
-//! the registry of how a scene fills each component.
+//! The component registry: how a scene fills each component, and the short names a scene may
+//! write for one.
 
 const abi_framework = @import("abi_framework");
 const abi_spatial_contract = @import("abi_spatial_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_scene_loader = @import("abi_scene_loader");
-const abi_scene_tree = @import("abi_scene_tree");
-const abi_signal_bus = @import("abi_signal_bus");
-const abi_world = @import("abi_world");
+const abi_component_registry = @import("abi_component_registry");
 const std = @import("std");
 
 const abi_ecs = @import("abi_ecs");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 
@@ -34,62 +31,28 @@ const ApplyEntry = struct {
 };
 
 /// One short name a scene may write for a component, and the full name it stands for. Both are
-/// copies the world owns.
+/// copies the registry owns.
 const Alias = struct {
     alias: [:0]u8,
     name: [:0]u8,
 };
 
-/// The state of one world, held by `Block`. The pointers it holds are borrowed from the creation
-/// params and never freed. `apply_registry` stays null until the first registration, and
-/// `apply_capacity` is the length of the buffer it points to, which is what `worldDestroy` frees.
+/// The state behind one registry, embedding its vtable as `api`, whose handle points back at it.
+/// The ecs is borrowed and never freed. `apply_registry` stays null until the first registration,
+/// and `apply_capacity` is the length of the buffer it points to, which is what `destroy` frees.
 const State = struct {
-    ecs: ?*abi_ecs.c.ke_ecs,
-    runtime: ?*abi_runtime.c.ke_runtime,
-    scene_tree: ?*abi_scene_tree.c.ke_scene_tree,
-    signal_bus: ?*abi_signal_bus.c.ke_signal_bus,
+    api: abi_component_registry.c.ke_component_registry,
+    ecs: *abi_ecs.c.ke_ecs,
 
-    apply_registry: ?[*]ApplyEntry,
-    apply_count: u32,
-    apply_capacity: u32,
+    apply_registry: ?[*]ApplyEntry = null,
+    apply_count: u32 = 0,
+    apply_capacity: u32 = 0,
 
-    aliases: std.ArrayList(Alias),
+    aliases: std.ArrayList(Alias) = .empty,
 };
 
-/// The single allocation of a world: the state and the vtable. The `ref` of the handle returned by
-/// `ke_world_create` points at the `world` field, and `handle` of that vtable points at `state`,
-/// so the destroy function reaches both from either.
-const Block = struct {
-    state: State,
-    world: abi_world.c.ke_world,
-};
-
-fn stateOf(self: *abi_world.c.ke_world) *State {
+fn stateOf(self: *abi_component_registry.c.ke_component_registry) *State {
     return @ptrCast(@alignCast(self.handle));
-}
-
-/// Returns the signal bus given at creation. The world only borrows it, and null if none was given.
-pub fn signalBusOf(self: *abi_world.c.ke_world) ?*abi_signal_bus.c.ke_signal_bus {
-    return stateOf(self).signal_bus;
-}
-
-/// Slot `ecs`. Returns the ecs given at creation, or null for a null world.
-fn worldEcs(self_in: ?*abi_world.c.ke_world) callconv(.c) ?*abi_ecs.c.ke_ecs {
-    const self = self_in orelse return null;
-    return stateOf(self).ecs;
-}
-
-/// Slot `runtime`. Returns the runtime given at creation, or null for a null world.
-fn worldRuntime(self_in: ?*abi_world.c.ke_world) callconv(.c) ?*abi_runtime.c.ke_runtime {
-    const self = self_in orelse return null;
-    return stateOf(self).runtime;
-}
-
-/// Slot `scene_tree`. Returns the scene tree given at creation, null when none was given or for a
-/// null world.
-fn worldSceneTree(self_in: ?*abi_world.c.ke_world) callconv(.c) ?*abi_scene_tree.c.ke_scene_tree {
-    const self = self_in orelse return null;
-    return stateOf(self).scene_tree;
 }
 
 /// Returns the entry for the given component id, appending an empty one when there is none. Both
@@ -122,9 +85,9 @@ fn entryFor(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{OutOfMem
 
 /// Slot `register_component_apply`. Sets the callback and context of a component id, leaving its
 /// field table alone, and replaces a callback registered before. Fails as an invalid argument for
-/// a null world or callback, and as out of memory when the registry cannot grow.
-fn worldRegisterComponentApply(
-    self_in: ?*abi_world.c.ke_world,
+/// a null registry or callback, and as out of memory when the registry cannot grow.
+fn registerComponentApply(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     apply_fn: abi_framework.c.ke_component_apply_fn,
     ctx: ?*anyopaque,
@@ -138,10 +101,10 @@ fn worldRegisterComponentApply(
 }
 
 /// Slot `register_component_fields`. Sets the field table of a component id, leaving its callback
-/// alone; the table is borrowed, not copied. Fails as an invalid argument for a null world or
+/// alone; the table is borrowed, not copied. Fails as an invalid argument for a null registry or
 /// table or a zero count, and as out of memory when the registry cannot grow.
-fn worldRegisterComponentFields(
-    self_in: ?*abi_world.c.ke_world,
+fn registerComponentFields(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     fields: [*c]const abi_ecs.c.ke_component_field,
     field_count: u32,
@@ -157,8 +120,8 @@ fn worldRegisterComponentFields(
 /// Slot `get_component_fields`. Returns the table registered for the id and writes its length to
 /// `out_count` when that is non-null. An id whose entry has no fields returns null, not
 /// an empty table.
-fn worldGetComponentFields(
-    self_in: ?*abi_world.c.ke_world,
+fn getComponentFields(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     out_count: [*c]u32,
 ) callconv(.c) [*c]const abi_ecs.c.ke_component_field {
@@ -178,8 +141,8 @@ fn worldGetComponentFields(
 /// Slot `get_component_apply`. Returns the callback registered for the id and writes its context.
 /// The context is written whenever the id has an entry, so a null callback can still come back
 /// together with a context.
-fn worldGetComponentApply(
-    self_in: ?*abi_world.c.ke_world,
+fn getComponentApply(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     out_ctx: [*c]?*anyopaque,
 ) callconv(.c) abi_framework.c.ke_component_apply_fn {
@@ -197,9 +160,9 @@ fn worldGetComponentApply(
 
 /// Slot `register_component_alias`. Records the pair unless it is already recorded; two pairs
 /// with one alias are kept both, which is what makes the alias ambiguous. Fails as an invalid
-/// argument for a null world, alias or name, and as out of memory when a copy cannot be made.
-fn worldRegisterComponentAlias(
-    self_in: ?*abi_world.c.ke_world,
+/// argument for a null registry, alias or name, and as out of memory when a copy cannot be made.
+fn registerComponentAlias(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     alias: [*c]const u8,
     name: [*c]const u8,
 ) callconv(.c) abi_result.c.ke_result {
@@ -223,15 +186,15 @@ fn registerAlias(s: *State, alias: []const u8, name: []const u8) error{OutOfMemo
 /// single full name, and no component registered under the alias itself, resolves to that name.
 /// A name nothing answers to fails as not found and an ambiguous one as an invalid argument, each
 /// logging the name and, when ambiguous, its candidates.
-fn worldResolveComponent(
-    self_in: ?*abi_world.c.ke_world,
+fn resolveComponent(
+    self_in: ?*abi_component_registry.c.ke_component_registry,
     name: [*c]const u8,
     out_meta: [*c]abi_ecs.c.ke_component_meta,
 ) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or name == null or out_meta == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
-    const e = s.ecs orelse return R.code(error.InvalidArgument);
+    const e = s.ecs;
     const name_s = std.mem.span(name);
 
     var target: ?[:0]const u8 = null;
@@ -261,9 +224,9 @@ fn worldResolveComponent(
     return R.code(error.InvalidArgument);
 }
 
-/// The destroy function of the handle. After it returns the registry buffer and the block are
-/// freed; the ecs, runtime and other borrowed objects are untouched.
-fn worldDestroy(self_in: ?*abi_world.c.ke_world) callconv(.c) void {
+/// The destroy function of the handle. After it returns the registry buffer and the state are
+/// freed; the ecs is untouched.
+fn destroy(self_in: ?*abi_component_registry.c.ke_component_registry) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
@@ -273,14 +236,11 @@ fn worldDestroy(self_in: ?*abi_world.c.ke_world) callconv(.c) void {
         heap.gpa.free(a.name);
     }
     s.aliases.deinit(heap.gpa);
-    heap.gpa.destroy(@as(*Block, @fieldParentPtr("state", s)));
+    heap.gpa.destroy(s);
 }
 
-/// Called by `ke_world_create` once for each builtin component. A refusal of the ecs fails with
-/// its code; the world's own registrations cannot fail on a block just created except for lack of
-/// memory.
 fn registerBuiltin(
-    world: *abi_world.c.ke_world,
+    registry: *abi_component_registry.c.ke_component_registry,
     e: *abi_ecs.c.ke_ecs,
     name: [*c]const u8,
     comptime T: type,
@@ -290,68 +250,53 @@ fn registerBuiltin(
 ) R.Error!void {
     var cid: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = fields orelse null, .field_count = field_count }, &cid));
-    if (fields) |f| try R.check(world.register_component_fields.?(world, cid, f, field_count));
-    if (apply_fn != null) try R.check(world.register_component_apply.?(world, cid, apply_fn, null));
+    if (fields) |f| try R.check(registry.register_component_fields.?(registry, cid, f, field_count));
+    if (apply_fn != null) try R.check(registry.register_component_apply.?(registry, cid, apply_fn, null));
 }
 
-/// Factory. Writes a handle whose `ref` is the world and whose destroy is `worldDestroy`, after
-/// registering the transform, 2D transform and world transform components on the ecs. A null
-/// params pointer or out-parameter, or a missing ecs or runtime, fails as an invalid argument; a
-/// failed allocation fails as out of memory; a refused builtin registration fails with the ecs's
-/// code. Each leaves the handle zeroed.
-export fn ke_world_create(
-    params_in: ?*const abi_world.c.ke_world_params,
-    out_world: ?*abi_world.c.ke_world_handle,
+/// Factory. Writes a handle whose `ref` is the registry and whose destroy is `destroy`, after
+/// registering the transform, 2D transform and world transform components on the ecs. A null ecs
+/// or out-parameter fails as an invalid argument; a failed allocation fails as out of memory; a
+/// refused builtin registration fails with the ecs's code. Each leaves the handle zeroed.
+export fn ke_component_registry_create(
+    ecs_in: ?*abi_ecs.c.ke_ecs,
+    out_registry: ?*abi_component_registry.c.ke_component_registry_handle,
 ) callconv(.c) abi_result.c.ke_result {
-    const out = out_world orelse return R.code(error.InvalidArgument);
-    out.* = std.mem.zeroes(abi_world.c.ke_world_handle);
-    const params = params_in orelse return R.code(error.InvalidArgument);
-    if (params.ecs == null or params.runtime == null) return R.code(error.InvalidArgument);
+    const out = out_registry orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_component_registry.c.ke_component_registry_handle);
+    const e = ecs_in orelse return R.code(error.InvalidArgument);
 
-    const block = heap.gpa.create(Block) catch |err| return R.code(err);
-    block.* = std.mem.zeroes(Block);
-    block.state.aliases = .empty;
+    const state = heap.gpa.create(State) catch |err| return R.code(err);
+    state.* = .{ .api = std.mem.zeroes(abi_component_registry.c.ke_component_registry), .ecs = e };
+    const registry = &state.api;
+    registry.handle = state;
+    registry.register_component_fields = registerComponentFields;
+    registry.get_component_fields = getComponentFields;
+    registry.register_component_apply = registerComponentApply;
+    registry.get_component_apply = getComponentApply;
+    registry.register_component_alias = registerComponentAlias;
+    registry.resolve_component = resolveComponent;
 
-    const state = &block.state;
-    const world = &block.world;
-
-    state.ecs = params.ecs;
-    state.runtime = params.runtime;
-    state.scene_tree = params.scene_tree;
-    state.signal_bus = params.signal_bus;
-
-    world.handle = state;
-    world.ecs = worldEcs;
-    world.runtime = worldRuntime;
-    world.scene_tree = worldSceneTree;
-    world.register_component_fields = worldRegisterComponentFields;
-    world.get_component_fields = worldGetComponentFields;
-    world.register_component_apply = worldRegisterComponentApply;
-    world.get_component_apply = worldGetComponentApply;
-    world.register_component_alias = worldRegisterComponentAlias;
-    world.resolve_component = worldResolveComponent;
-
-    const e = params.ecs.?;
-    registerBuiltins(world, e) catch |err| {
-        worldDestroy(world);
+    registerBuiltins(registry, e) catch |err| {
+        destroy(registry);
         return R.code(err);
     };
 
-    out.* = .{ .ref = world, .destroy = worldDestroy };
+    out.* = .{ .ref = registry, .destroy = destroy };
     return R.ok;
 }
 
-fn registerBuiltins(world: *abi_world.c.ke_world, e: *abi_ecs.c.ke_ecs) R.Error!void {
-    try registerBuiltin(world, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, apply.ke_framework_apply_transform, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
-    try registerBuiltin(world, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, apply.ke_framework_apply_transform2d, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
-    try registerBuiltin(world, e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, null, null, 0);
+fn registerBuiltins(registry: *abi_component_registry.c.ke_component_registry, e: *abi_ecs.c.ke_ecs) R.Error!void {
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, apply.ke_framework_apply_transform, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, apply.ke_framework_apply_transform2d, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, null, null, 0);
 }
 
 const testing = std.testing;
 
-fn testWorld(params: *const abi_world.c.ke_world_params) abi_world.c.ke_world_handle {
-    var h = std.mem.zeroes(abi_world.c.ke_world_handle);
-    _ = ke_world_create(params, &h);
+fn testRegistry(ecs: ?*abi_ecs.c.ke_ecs) abi_component_registry.c.ke_component_registry_handle {
+    var h = std.mem.zeroes(abi_component_registry.c.ke_component_registry_handle);
+    _ = ke_component_registry_create(ecs, &h);
     return h;
 }
 
@@ -398,116 +343,36 @@ fn answer(out_cid: [*c]abi_asset_resolver.c.ke_component_id, cid: abi_asset_reso
     return if (cid == 0) R.code(error.InvalidArgument) else R.ok;
 }
 
-fn stubEntityCreate(self: ?*abi_ecs.c.ke_ecs, out_entity: [*c]abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
-    const s = stubEcsOf(self);
-    s.next_entity += 1;
-    out_entity.* = s.next_entity;
-    return R.ok;
-}
-
-fn worldEntity(ecs: *abi_ecs.c.ke_ecs) R.Error!abi_asset_resolver.c.ke_entity {
-    var entity: abi_asset_resolver.c.ke_entity = abi_ecs.c.KE_ENTITY_INVALID;
-    try R.check(ecs.entity_create.?(ecs, &entity));
-    return entity;
-}
-
 fn stubEcsInit(s: *StubEcs) void {
     s.* = std.mem.zeroes(StubEcs);
     s.vtable.handle = s;
     s.vtable.component_lookup = stubComponentLookup;
     s.vtable.component_register = stubComponentRegister;
-    s.vtable.entity_create = stubEntityCreate;
 }
 
-test "a world hands back the ecs and runtime it was built with, and no tree it never got" {
+test "a registry registers the three transforms on its ecs and refuses a missing ecs" {
     var ecs: StubEcs = undefined;
     stubEcsInit(&ecs);
-    var runtime = std.mem.zeroes(abi_runtime.c.ke_runtime);
-
-    var params = std.mem.zeroes(abi_world.c.ke_world_params);
-    params.ecs = &ecs.vtable;
-    params.runtime = &runtime;
-
-    const h = testWorld(&params);
+    const h = testRegistry(&ecs.vtable);
     try testing.expect(h.ref != null);
-    defer h.destroy.?(h.ref);
-
-    const w: *abi_world.c.ke_world = h.ref.?;
-    try testing.expectEqual(@as(?*abi_ecs.c.ke_ecs, &ecs.vtable), w.*.ecs.?(w));
-    try testing.expectEqual(@as(?*abi_runtime.c.ke_runtime, &runtime), w.*.runtime.?(w));
-    try testing.expect(w.*.scene_tree.?(w) == null);
-
-    const e = w.*.ecs.?(w).?;
-    try testing.expect((try worldEntity(e)) != abi_ecs.c.KE_ENTITY_INVALID);
-}
-
-test "two worlds never share the ecs, and destroying one leaves the other alive" {
-    var ecs_a: StubEcs = undefined;
-    var ecs_b: StubEcs = undefined;
-    stubEcsInit(&ecs_a);
-    stubEcsInit(&ecs_b);
-    var runtime = std.mem.zeroes(abi_runtime.c.ke_runtime);
-
-    var pa = std.mem.zeroes(abi_world.c.ke_world_params);
-    pa.ecs = &ecs_a.vtable;
-    pa.runtime = &runtime;
-    var pb = std.mem.zeroes(abi_world.c.ke_world_params);
-    pb.ecs = &ecs_b.vtable;
-    pb.runtime = &runtime;
-
-    const ha = testWorld(&pa);
-    const hb = testWorld(&pb);
-    try testing.expect(ha.ref != null);
-    try testing.expect(hb.ref != null);
-
-    const wa = ha.ref.?;
-    const wb = hb.ref.?;
-    const ea = wa.*.ecs.?(wa).?;
-    const eb = wb.*.ecs.?(wb).?;
-    try testing.expect(ea != eb);
-
-    const a = (try worldEntity(ea));
-    const b = (try worldEntity(eb));
-    try testing.expect(a != abi_ecs.c.KE_ENTITY_INVALID);
-    try testing.expect(b != abi_ecs.c.KE_ENTITY_INVALID);
-
-    ha.destroy.?(ha.ref);
-
-    const b2 = (try worldEntity(eb));
-    try testing.expect(b2 != abi_ecs.c.KE_ENTITY_INVALID);
-    try testing.expect(b2 != b);
-
-    hb.destroy.?(hb.ref);
-}
-
-test "creating and destroying a world leaves no block allocated" {
-    var ecs: StubEcs = undefined;
-    stubEcsInit(&ecs);
-    var runtime = std.mem.zeroes(abi_runtime.c.ke_runtime);
-
-    var params = std.mem.zeroes(abi_world.c.ke_world_params);
-    params.ecs = &ecs.vtable;
-    params.runtime = &runtime;
-
-    const h = testWorld(&params);
+    try testing.expectEqual(@as(abi_asset_resolver.c.ke_component_id, 3), ecs.next_cid);
+    var count: u32 = 0;
+    try testing.expect(h.ref.?.get_component_fields.?(h.ref, 1, &count) != null);
     h.destroy.?(h.ref);
+
+    try testing.expect(testRegistry(null).ref == null);
     try heap.expectNoLeaks();
 }
 
-fn aliasWorld(ecs: *StubEcs, runtime: *abi_runtime.c.ke_runtime) abi_world.c.ke_world_handle {
+fn aliasRegistry(ecs: *StubEcs) abi_component_registry.c.ke_component_registry_handle {
     stubEcsInit(ecs);
-    runtime.* = std.mem.zeroes(abi_runtime.c.ke_runtime);
-    var params = std.mem.zeroes(abi_world.c.ke_world_params);
-    params.ecs = &ecs.vtable;
-    params.runtime = runtime;
-    return testWorld(&params);
+    return testRegistry(&ecs.vtable);
 }
 
 test "a short name a single component answers to resolves to it, and the full name still does" {
     var ecs: StubEcs = undefined;
-    var runtime: abi_runtime.c.ke_runtime = undefined;
-    const h = aliasWorld(&ecs, &runtime);
-    const w: *abi_world.c.ke_world = h.ref.?;
+    const h = aliasRegistry(&ecs);
+    const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     var paddle: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &paddle));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
@@ -525,9 +390,8 @@ test "a short name a single component answers to resolves to it, and the full na
 
 test "a short name two components answer to is refused as an invalid argument" {
     var ecs: StubEcs = undefined;
-    var runtime: abi_runtime.c.ke_runtime = undefined;
-    const h = aliasWorld(&ecs, &runtime);
-    const w: *abi_world.c.ke_world = h.ref.?;
+    const h = aliasRegistry(&ecs);
+    const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
         try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
@@ -548,9 +412,8 @@ test "a short name two components answer to is refused as an invalid argument" {
 
 test "a short name that is also a registered component name is refused" {
     var ecs: StubEcs = undefined;
-    var runtime: abi_runtime.c.ke_runtime = undefined;
-    const h = aliasWorld(&ecs, &runtime);
-    const w: *abi_world.c.ke_world = h.ref.?;
+    const h = aliasRegistry(&ecs);
+    const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
         try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));

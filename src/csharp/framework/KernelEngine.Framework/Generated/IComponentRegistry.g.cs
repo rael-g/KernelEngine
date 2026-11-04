@@ -20,16 +20,10 @@ namespace KernelEngine.Framework;
 /// <param name="count">Number of entries.</param>
 public delegate void ComponentApply(nint component, nint entries, uint count);
 
-/// <summary>The world contract game code depends on, so a caller names a capability rather than the <see cref="World"/> that carries it.</summary>
-public interface IWorld : IDisposable
+/// <summary>The componentregistry contract game code depends on, so a caller names a capability rather than the <see cref="ComponentRegistry"/> that carries it.</summary>
+public interface IComponentRegistry : IDisposable
 {
-    /// <summary>The ecs the world was created with.</summary>
-    nint Ecs();
-    /// <summary>The runtime the world was created with.</summary>
-    nint Runtime();
-    /// <summary>The scene tree the world was created with.</summary>
-    nint SceneTree();
-    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
+    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the registry. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
     /// <param name="fields">The table.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields);

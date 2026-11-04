@@ -13,10 +13,10 @@ using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
 
-public unsafe partial struct ke_world_handle
+public unsafe partial struct ke_component_registry_handle
 {
-    public ke_world* @ref;
+    public ke_component_registry* @ref;
 
-    [NativeTypeName("void (*)(ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_world*, void> destroy;
+    [NativeTypeName("void (*)(ke_component_registry *)")]
+    public delegate* unmanaged[Cdecl]<ke_component_registry*, void> destroy;
 }

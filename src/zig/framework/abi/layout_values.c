@@ -8,7 +8,7 @@
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/framework/script_host_create.h>
 #include <kernel_engine/framework/signal_bus_create.h>
-#include <kernel_engine/framework/world_create.h>
+#include <kernel_engine/framework/component_registry_create.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_script_host_params),
     offsetof(ke_script_host_params, max_types),

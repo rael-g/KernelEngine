@@ -127,10 +127,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         foreach (var pass in services.GetServices<IRuntimeModule>().OfType<IResolveOnLoad>().ToList())
             pass.Resolve(services);
 
-        if (services.GetService<KernelEngine.Framework.World>() is not { } world)
+        if (services.GetService<KernelEngine.Framework.ComponentRegistry>() is not { } registry)
             return;
         var ec = services.GetRequiredService<INativeEcs>().Native;
-        var wd = ((KernelEngine.Framework.INativeWorld)world).Native;
+        var wd = ((KernelEngine.Framework.INativeComponentRegistry)registry).Native;
         KernelEngine.Framework.Native.ke_scene_component_set_handle set;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
         try

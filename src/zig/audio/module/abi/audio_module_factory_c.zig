@@ -18,6 +18,18 @@ pub const ke_module_id = u64;
 pub const ke_query_id = u64;
 pub const ke_system_id = u64;
 
+/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
+/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
+/// nothing in the engine wanted.
+pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
+
+/// Receives one line a plugin library logged. Each plugin library exports ` <library
+/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
+/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
+/// library's lines to stderr, which is also where they go until it is set. Called on whichever
+/// thread logged.
+pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -31,18 +43,6 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// runtime logs the system's name. The remaining bodies of the same wave still run — they were
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
-/// Receives one line a plugin library logged. Each plugin library exports ` <library
-/// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
-/// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
-/// library's lines to stderr, which is also where they go until it is set. Called on whichever
-/// thread logged.
-pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Values a caller gives; a zero field takes its default.
 pub const ke_audio_player_module_config = extern struct {

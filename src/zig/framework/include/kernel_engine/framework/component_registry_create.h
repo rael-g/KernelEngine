@@ -1,7 +1,7 @@
-﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
-#define KERNEL_ENGINE_FRAMEWORK_WORLD_CREATE_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_COMPONENT_REGISTRY_CREATE_H_
+#define KERNEL_ENGINE_FRAMEWORK_COMPONENT_REGISTRY_CREATE_H_
 
-#include <kernel_engine/framework/world.h>
+#include <kernel_engine/framework/component_registry.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -24,14 +24,14 @@ extern "C"
 #endif
 #endif
 
-    /// Creates a world over the params' ecs and runtime, registering the transform, 2D transform
-    /// and world transform components on the ecs.
-    /// @param out_world [out] Receives the world; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p params, ecs, runtime or
-    ///         @p out_world, KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused a
-    ///         component.
-    KE_FRAMEWORK_API ke_result ke_world_create(
-        const ke_world_params *params, ke_world_handle *out_world);
+    /// Creates a component registry over @p ecs, registering the transform, 2D transform and
+    /// world transform components on it with their field tables.
+    /// @param ecs [borrowed] Resolves the names a scene writes; must outlive the registry.
+    /// @param out_registry [out] Receives the registry; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs or @p out_registry,
+    ///         KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused a component.
+    KE_FRAMEWORK_API ke_result ke_component_registry_create(
+        ke_ecs *ecs, ke_component_registry_handle *out_registry);
 
 #ifdef __cplusplus
 }

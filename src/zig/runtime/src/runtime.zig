@@ -157,7 +157,7 @@ fn releaseSystem(rs: *RegisteredSystem) void {
 /// whose load hook refused has both cleared.
 const RegisteredModule = struct {
     user_data: ?*anyopaque,
-    on_unload: abi_framework.c.ke_module_unload_fn,
+    on_unload: abi_runtime.c.ke_module_unload_fn,
 };
 
 /// The render phase of one tick. The render phase overlaps the sim: its bodies read only the
@@ -174,7 +174,7 @@ const RenderJob = struct {
 /// A removal requested while a tick or the render phase was in flight, linked on
 /// `RuntimeState.pending_removals` until the next tick applies it.
 const PendingRemoval = struct {
-    id: abi_framework.c.ke_system_id,
+    id: abi_runtime.c.ke_system_id,
     next: ?*PendingRemoval,
 };
 
@@ -240,7 +240,7 @@ fn handleOf(self: *abi_runtime.c.ke_runtime) *RuntimeHandle {
 /// grow, and with the hook's own code when it fails. The hook runs with the module already
 /// recorded, so systems it registers are registered before the call returns; a refused module has
 /// its unload hook cleared and is never unloaded.
-fn runtimeRegisterModule(self: ?*abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_module_params, out_id: ?*abi_framework.c.ke_module_id) callconv(.c) abi_result.c.ke_result {
+fn runtimeRegisterModule(self: ?*abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_module_params, out_id: ?*abi_runtime.c.ke_module_id) callconv(.c) abi_result.c.ke_result {
     const out = out_id orelse return R.code(error.InvalidArgument);
     out.* = 0;
     if (self == null or self.?.handle == null or p == null or p.*.on_load == null) {
@@ -465,7 +465,7 @@ fn appendSystem(h: *RuntimeHandle, rs: *RegisteredSystem) R.Error!void {
 /// While a tick or a render phase is in flight the system is pushed onto
 /// `RuntimeState.pending_systems` with a compare-exchange; otherwise the render phase in flight is
 /// joined and the system is appended now.
-fn runtimeRegisterSystem(self: ?*abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params, out_id: ?*abi_framework.c.ke_system_id) callconv(.c) abi_result.c.ke_result {
+fn runtimeRegisterSystem(self: ?*abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params, out_id: ?*abi_runtime.c.ke_system_id) callconv(.c) abi_result.c.ke_result {
     const out = out_id orelse return R.code(error.InvalidArgument);
     out.* = 0;
     if (self == null or self.?.handle == null or p == null or p.*.execute == null) {
@@ -532,7 +532,7 @@ fn applyPendingSystems(h: *RuntimeHandle) void {
 /// `systems_prepared` in step, then releases it. Returns false when no system has that id. Both
 /// callers have joined the render phase first, since the removed system may be one a render job
 /// reads.
-fn removeSystemNow(h: *RuntimeHandle, id: abi_framework.c.ke_system_id) bool {
+fn removeSystemNow(h: *RuntimeHandle, id: abi_runtime.c.ke_system_id) bool {
     const systems = h.state.systems orelse return false;
     for (0..h.state.system_count) |i| {
         if (systems[i].?.id != id) continue;
@@ -551,7 +551,7 @@ fn removeSystemNow(h: *RuntimeHandle, id: abi_framework.c.ke_system_id) bool {
 /// `RuntimeState.pending_removals` and reported as done; it is looked up only when the next tick
 /// applies it, so an id already removed passes here and is dropped there without an error.
 /// Otherwise the render phase in flight is joined and the system is removed now.
-fn runtimeUnregisterSystem(self: ?*abi_runtime.c.ke_runtime, id: abi_framework.c.ke_system_id) callconv(.c) abi_result.c.ke_result {
+fn runtimeUnregisterSystem(self: ?*abi_runtime.c.ke_runtime, id: abi_runtime.c.ke_system_id) callconv(.c) abi_result.c.ke_result {
     if (self == null or self.?.handle == null) {
         return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
     }
@@ -578,7 +578,7 @@ fn runtimeUnregisterSystem(self: ?*abi_runtime.c.ke_runtime, id: abi_framework.c
 /// Slot `last_system`. Returns the id of the last system in the list, or zero when the list is
 /// empty. A system still waiting in `RuntimeState.pending_systems` is not in the list and is not
 /// counted.
-fn runtimeLastSystem(self: ?*abi_runtime.c.ke_runtime) callconv(.c) abi_framework.c.ke_system_id {
+fn runtimeLastSystem(self: ?*abi_runtime.c.ke_runtime) callconv(.c) abi_runtime.c.ke_system_id {
     if (self == null or self.?.handle == null) return 0;
     const h = handleOf(self.?);
     const systems = h.state.systems orelse return 0;
@@ -1246,14 +1246,14 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
 
 const testing = std.testing;
 
-fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_framework.c.ke_system_id {
-    var id: abi_framework.c.ke_system_id = 0;
+fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_runtime.c.ke_system_id {
+    var id: abi_runtime.c.ke_system_id = 0;
     _ = rt.*.register_system.?(rt, p, &id);
     return id;
 }
 
-fn loadedModule(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_module_params) abi_framework.c.ke_module_id {
-    var id: abi_framework.c.ke_module_id = 0;
+fn loadedModule(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_module_params) abi_runtime.c.ke_module_id {
+    var id: abi_runtime.c.ke_module_id = 0;
     _ = rt.*.register_module.?(rt, p, &id);
     return id;
 }
@@ -1570,7 +1570,7 @@ test "a module whose load failed is not unloaded" {
     bad.user_data = &refused;
     bad.on_load = &refusingOnLoad;
     bad.on_unload = &orderedOnUnload;
-    try testing.expectEqual(@as(abi_framework.c.ke_module_id, 0), loadedModule(f.rt(), &bad));
+    try testing.expectEqual(@as(abi_runtime.c.ke_module_id, 0), loadedModule(f.rt(), &bad));
 
     f.deinit();
 
@@ -1582,7 +1582,7 @@ test "registering a module with no params is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    try testing.expectEqual(@as(abi_framework.c.ke_module_id, 0), loadedModule(f.rt(), null));
+    try testing.expectEqual(@as(abi_runtime.c.ke_module_id, 0), loadedModule(f.rt(), null));
 }
 
 test "a body that fails the tick keeps the later phases from running" {
@@ -1609,7 +1609,7 @@ test "registering a system with no execute body is refused" {
     defer f.deinit();
 
     const sys = systemParams("Bad", abi_runtime.c.KE_PHASE_UPDATE);
-    try testing.expectEqual(@as(abi_framework.c.ke_system_id, 0), systemId(f.rt(), &sys));
+    try testing.expectEqual(@as(abi_runtime.c.ke_system_id, 0), systemId(f.rt(), &sys));
 }
 
 const BareRuntime = struct {
@@ -1749,7 +1749,7 @@ test "a query counting terms it does not point at is refused" {
     const decls = [_]abi_runtime.c.ke_query_decl{.{ .terms = null, .term_count = 2 }};
     withQueries(&sys, &decls);
 
-    try testing.expectEqual(@as(abi_framework.c.ke_system_id, 0), systemId(b.rt(), &sys));
+    try testing.expectEqual(@as(abi_runtime.c.ke_system_id, 0), systemId(b.rt(), &sys));
 }
 
 test "a query declaring no terms is refused" {
@@ -1762,7 +1762,7 @@ test "a query declaring no terms is refused" {
     var terms = [_]abi_runtime.c.ke_component_access{};
     withQueries(&sys, &.{queryOf(&terms)});
 
-    try testing.expectEqual(@as(abi_framework.c.ke_system_id, 0), systemId(b.rt(), &sys));
+    try testing.expectEqual(@as(abi_runtime.c.ke_system_id, 0), systemId(b.rt(), &sys));
 }
 
 var inline_result: abi_result.c.ke_result = R.ok;
@@ -1962,7 +1962,7 @@ test "an unregistered system no longer runs and the others keep running" {
 
     var seen_log = PhaseLog{};
     var entries: [3]PhaseLogEntry = undefined;
-    var ids: [3]abi_framework.c.ke_system_id = undefined;
+    var ids: [3]abi_runtime.c.ke_system_id = undefined;
     const phases = [_]c_int{ abi_runtime.c.KE_PHASE_PRE_UPDATE, abi_runtime.c.KE_PHASE_UPDATE, abi_runtime.c.KE_PHASE_POST_UPDATE };
     for (phases, 0..) |ph, i| {
         entries[i] = .{ .log = &seen_log, .phase = ph };
@@ -1990,7 +1990,7 @@ const MidTick = struct {
     late_runs: u32 = 0,
     unregister_accepted: bool = false,
     keep: bool = false,
-    late_id: abi_framework.c.ke_system_id = 0,
+    late_id: abi_runtime.c.ke_system_id = 0,
 };
 
 fn lateBody(_: ?*abi_runtime.c.ke_system_ctx, ud: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {

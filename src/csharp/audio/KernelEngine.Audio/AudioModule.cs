@@ -22,8 +22,8 @@ public sealed unsafe class AudioModule : IRuntimeModule
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var world = services.GetService<KernelEngine.Framework.World>();
-        if (world is null) return;
+        var registry = services.GetService<KernelEngine.Framework.ComponentRegistry>();
+        if (registry is null) return;
 
         var ecs = services.GetRequiredService<INativeEcs>();
         if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
@@ -35,7 +35,7 @@ public sealed unsafe class AudioModule : IRuntimeModule
         try
         {
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.audio_scene_components_create(set.@ref), "ke_audio_scene_components_create");
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeComponentRegistry)registry).Native), "register_into");
         }
         finally
         {

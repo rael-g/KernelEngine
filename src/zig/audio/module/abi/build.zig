@@ -41,8 +41,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/text"));
     translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../../../../c/window"));
-    translated.addIncludePath(b.path("../../../runtime/include"));
     translated.addIncludePath(b.path("../../../framework/include"));
+    translated.addIncludePath(b.path("../../../runtime/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -76,7 +76,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/text"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../../c/window"));
-    tests.root_module.addIncludePath(b.path("../../../runtime/include"));
     tests.root_module.addIncludePath(b.path("../../../framework/include"));
+    tests.root_module.addIncludePath(b.path("../../../runtime/include"));
     b.step("test", "Check the audio_module_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

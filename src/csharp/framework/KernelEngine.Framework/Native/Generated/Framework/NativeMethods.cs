@@ -20,9 +20,9 @@ public static unsafe partial class NativeMethods
     [return: NativeTypeName("ke_result")]
     public static extern KernelEngine.Result.Native.Result scene_component_set_create(ke_scene_component_set_handle* out_set);
 
-    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_world_create", ExactSpelling = true)]
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_component_registry_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result world_create([NativeTypeName("const ke_world_params *")] ke_world_params* @params, ke_world_handle* out_world);
+    public static extern KernelEngine.Result.Native.Result component_registry_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_component_registry_handle* out_registry);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
@@ -30,7 +30,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_loader_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_loader_create([NativeTypeName("struct ke_world *")] ke_world* world, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, ke_scene_loader_handle* out_loader);
+    public static extern KernelEngine.Result.Native.Result scene_loader_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_scene_tree* scene_tree, ke_signal_bus* signal_bus, ke_component_registry* registry, [NativeTypeName("ke_asset_resolver *")] KernelEngine.Asset.Native.ke_asset_resolver* assets, [NativeTypeName("ke_io *")] KernelEngine.Io.Native.ke_io* io, ke_scene_loader_handle* out_loader);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

@@ -7,7 +7,6 @@
         .abi_ecs = .{ .path = "../ecs" },
         .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_result = .{ .path = "../result" },
-        .abi_runtime = .{ .path = "../runtime" },
     },
     .paths = .{"."},
 }

@@ -18,17 +18,17 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Exposes the raw native world pointer for cross-domain composition wiring.</summary>
-public unsafe interface INativeWorld
+/// <summary>Exposes the raw native componentregistry pointer for cross-domain composition wiring.</summary>
+public unsafe interface INativeComponentRegistry
 {
-    ke_world* Native { get; }
+    ke_component_registry* Native { get; }
 }
 
-
-public unsafe partial class World : IDisposable, INativeWorld, IWorld
+/// <summary>What a scene needs to know of each component beyond the ecs: how a scene block's keys land in its memory, and the short names a scene may write for it.</summary>
+public unsafe partial class ComponentRegistry : IDisposable, INativeComponentRegistry, IComponentRegistry
 {
-    private ke_world* _native;
-    private readonly delegate* unmanaged[Cdecl]<ke_world*, void> _destroy;
+    private ke_component_registry* _native;
+    private readonly delegate* unmanaged[Cdecl]<ke_component_registry*, void> _destroy;
     private readonly bool _borrowed;
 
     /// <summary>
@@ -48,48 +48,30 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
     [ThreadStatic]
     private static Exception? s_parkedCallbackException;
 
-    private ke_world* Handle => _native != null ? _native
-        : throw new ObjectDisposedException(nameof(World));
+    private ke_component_registry* Handle => _native != null ? _native
+        : throw new ObjectDisposedException(nameof(ComponentRegistry));
 
-    ke_world* INativeWorld.Native => Handle;
+    ke_component_registry* INativeComponentRegistry.Native => Handle;
 
-    /// <summary>Wraps an owner <c>ke_world_handle</c> and runs world's startup lifecycle hook.</summary>
-    public World(ke_world_handle handle)
+    /// <summary>Wraps an owner <c>ke_component_registry_handle</c> and runs componentregistry's startup lifecycle hook.</summary>
+    public ComponentRegistry(ke_component_registry_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
         _native = handle.@ref;
         _destroy = handle.destroy;
     }
 
-    /// <summary>Wraps a <c>ke_world*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
-    public static World Borrow(ke_world* native) => new(native, borrowed: true);
+    /// <summary>Wraps a <c>ke_component_registry*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
+    public static ComponentRegistry Borrow(ke_component_registry* native) => new(native, borrowed: true);
 
-    private World(ke_world* native, bool borrowed)
+    private ComponentRegistry(ke_component_registry* native, bool borrowed)
     {
         _native = native;
         _destroy = null;
         _borrowed = borrowed;
     }
 
-    /// <summary>The ecs the world was created with.</summary>
-    public nint Ecs()
-    {
-        return (nint)Handle->ecs(Handle);
-    }
-
-    /// <summary>The runtime the world was created with.</summary>
-    public nint Runtime()
-    {
-        return (nint)Handle->runtime(Handle);
-    }
-
-    /// <summary>The scene tree the world was created with.</summary>
-    public nint SceneTree()
-    {
-        return (nint)Handle->scene_tree(Handle);
-    }
-
-    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
+    /// <summary>Registers the table describing how a scene block's keys land in this component's memory. Runs before the apply callback registered for the same component, if any: the table covers every field it can describe, the callback is left with what a description cannot express (a unit conversion, an enum spelled as a string). Borrowed; must outlive the registry. Fails as an invalid argument for a null table or a zero count, and as out of memory.</summary>
     /// <param name="fields">The table.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields)
@@ -192,7 +174,7 @@ public unsafe partial class World : IDisposable, INativeWorld, IWorld
         }
     }
 
-    /// <summary>Releases the native world.</summary>
+    /// <summary>Releases the native componentregistry.</summary>
     public void Dispose()
     {
         OnDispose();

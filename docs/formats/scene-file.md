@@ -47,7 +47,7 @@ A scene file spells four kinds of name, and the loader treats them differently.
 
 | written as | names | matched how |
 |---|---|---|
-| `[entity.<name>]` | a component | as written, then as the short name of one component (`resolve_component` of `ke_world`) |
+| `[entity.<name>]` | a component | as written, then as the short name of one component (`resolve_component` of `ke_component_registry`) |
 | a key inside a block | a field of that component | as written, against the field table (`component_fields_apply.zig:18-36`) |
 | `type = "<name>"` | a node type | **normalized**, qualified name first, then short name |
 | `signal = "<name>"` | a signal | as written, against the signals declared to the bus (`scene_loader.zig:446`) |
@@ -86,9 +86,9 @@ runs after it, so a node binds onto the values the scene authored
 ## Component blocks
 
 A table named `[entity.<name>]` is a component block, `<name>` being the name a module registered
-the component under, or its short name. The loader resolves it through the world and fails when no
+the component under, or its short name. The loader resolves it through the component registry and fails when no
 module registered it or when the short name is ambiguous. The component must also have a field table, an apply callback, or both registered in the
-world (`:341`; [framework.md](../architecture/framework.md)).
+component registry ([framework.md](../architecture/framework.md)).
 
 For a component the entity does not yet have, the loader zeroes it and seeds the defaults the field
 table declares (`:350-354`). It then applies the block's keys through the field table, then through
@@ -160,7 +160,7 @@ that range fails the load (`applyConnections`).
   entity for` (`:470-473`).
 - A `[[entity.connect]]` written on the **including** entity (the one with `scene =`) has the included
   root as its source, and its target is resolved in the including file (`:700-708`).
-- A scene that declares a connection while the world has no signal bus fails the load.
+- A scene that declares a connection while the loader has no signal bus fails the load.
 
 ## Including a scene
 

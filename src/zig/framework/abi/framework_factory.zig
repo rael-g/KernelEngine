@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
+const abi_component_registry = @import("component_registry");
 const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
@@ -16,7 +17,6 @@ const abi_scene_tree = @import("scene_tree");
 const abi_script_host = @import("script_host");
 const abi_signal_bus = @import("signal_bus");
 const abi_text = @import("text");
-const abi_world = @import("world");
 
 /// The ABI as the headers declare it.
 pub const c = @import("framework_factory_c.zig");
@@ -66,15 +66,14 @@ pub fn sceneHierarchyCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.
     return written;
 }
 
-/// Allocates a scene loader bound to the given world. The loader uses the world's component
-/// registry to drive [entity. <component >] blocks and the world's scene_tree to spawn entities.
-/// A "res://" scene reference is resolved by `assets`, which is borrowed and must outlive the
-/// loader. String lifetime: a value a block authors into a char field is copied into the
-/// component, but the parsed entries themselves come from an arena freed at loader.destroy().
-/// Nothing the loader wrote outlives it by reference.
-pub fn sceneLoaderCreate(world: ?*abi_world.c.ke_world, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_scene_loader.c.ke_scene_loader_handle {
+/// Allocates a scene loader. The loader resolves the components a block names through `registry`
+/// and `ecs`, fills them as the registry describes, and spawns the entities in `scene_tree`. A
+/// "res://" scene reference is resolved by `assets`. String lifetime: a value a block authors
+/// into a char field is copied into the component, but the parsed entries themselves come from
+/// an arena freed at loader.destroy(). Nothing the loader wrote outlives it by reference.
+pub fn sceneLoaderCreate(ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, signal_bus: ?*abi_signal_bus.c.ke_signal_bus, registry: ?*abi_component_registry.c.ke_component_registry, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_scene_loader.c.ke_scene_loader_handle {
     var written: abi_scene_loader.c.ke_scene_loader_handle = undefined;
-    try checkResult(c.ke_scene_loader_create(world, assets, io, &written));
+    try checkResult(c.ke_scene_loader_create(ecs, scene_tree, signal_bus, registry, assets, io, &written));
     return written;
 }
 
@@ -105,11 +104,11 @@ pub fn signalBusCreate(params: ?*const c.ke_signal_bus_params) Error!abi_signal_
     return written;
 }
 
-/// Creates a world over the params' ecs and runtime, registering the transform, 2D transform and
-/// world transform components on the ecs.
-pub fn worldCreate(params: ?*const abi_world.c.ke_world_params) Error!abi_world.c.ke_world_handle {
-    var written: abi_world.c.ke_world_handle = undefined;
-    try checkResult(c.ke_world_create(params, &written));
+/// Creates a component registry over ecs, registering the transform, 2D transform and world
+/// transform components on it with their field tables.
+pub fn componentRegistryCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_component_registry.c.ke_component_registry_handle {
+    var written: abi_component_registry.c.ke_component_registry_handle = undefined;
+    try checkResult(c.ke_component_registry_create(ecs, &written));
     return written;
 }
 

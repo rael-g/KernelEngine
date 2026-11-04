@@ -1,0 +1,12 @@
+.{
+    .name = .abi_component_registry,
+    .version = "0.1.0",
+    .fingerprint = 0x58e117df7cf80c91,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_ecs_variant = .{ .path = "../ecs_variant" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

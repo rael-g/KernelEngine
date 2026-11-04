@@ -45,7 +45,7 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
 /// `destroyHandle` unregisters the system the factory registered before it frees the module.
 const SkyboxModule = struct {
     runtime: *abi_runtime.c.ke_runtime = undefined,
-    system: abi_framework.c.ke_system_id = 0,
+    system: abi_runtime.c.ke_system_id = 0,
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     camera: *abi_render.c.ke_render_camera = undefined,
@@ -262,7 +262,7 @@ export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.c
     params.access_count = sm.access.len;
     params.user_data = sm;
     params.execute = system;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &params, &system_id);
     if (registered != R.ok) {
         destroyModule(sm);
@@ -361,7 +361,7 @@ test "destroying the skybox pass unregisters every system it registered" {
     try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 

@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scene_loader_c.zig");

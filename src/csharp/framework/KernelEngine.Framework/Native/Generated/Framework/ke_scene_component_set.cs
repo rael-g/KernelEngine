@@ -20,6 +20,6 @@ public unsafe partial struct ke_scene_component_set
     [NativeTypeName("ke_result (*)(struct ke_scene_component_set *, const ke_component_params *, ke_component_apply_fn)")]
     public delegate* unmanaged[Cdecl]<ke_scene_component_set*, KernelEngine.Ecs.Native.ke_component_params*, delegate* unmanaged[Cdecl]<void*, void*, KernelEngine.Ecs.Native.VariantTableEntry*, uint, KernelEngine.Result.Native.Result>, KernelEngine.Result.Native.Result> add;
 
-    [NativeTypeName("ke_result (*)(struct ke_scene_component_set *, ke_ecs *, ke_world *)")]
-    public delegate* unmanaged[Cdecl]<ke_scene_component_set*, KernelEngine.Ecs.Native.ke_ecs*, ke_world*, KernelEngine.Result.Native.Result> register_into;
+    [NativeTypeName("ke_result (*)(struct ke_scene_component_set *, ke_ecs *, ke_component_registry *)")]
+    public delegate* unmanaged[Cdecl]<ke_scene_component_set*, KernelEngine.Ecs.Native.ke_ecs*, ke_component_registry*, KernelEngine.Result.Native.Result> register_into;
 }

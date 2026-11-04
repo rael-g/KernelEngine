@@ -9,6 +9,7 @@
         .abi_audio = .{ .path = "audio" },
         .abi_audio_components = .{ .path = "audio_components" },
         .abi_audio_contract = .{ .path = "audio_contract" },
+        .abi_component_registry = .{ .path = "component_registry" },
         .abi_configuration = .{ .path = "configuration" },
         .abi_ecs = .{ .path = "ecs" },
         .abi_ecs_variant = .{ .path = "ecs_variant" },
@@ -47,7 +48,6 @@
         .abi_ui_components = .{ .path = "ui_components" },
         .abi_view = .{ .path = "view" },
         .abi_window = .{ .path = "window" },
-        .abi_world = .{ .path = "world" },
     },
     .paths = .{"."},
 }

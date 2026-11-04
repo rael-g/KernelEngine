@@ -19,10 +19,9 @@ public readonly record struct SignalBusCapacities(uint MaxSignals = 0, uint MaxC
 
 /// <summary>
 /// Runtime module "Framework". It registers <see cref="IEcsRegistry"/> over the native ECS, the
-/// <see cref="SignalBus"/>, and the <see cref="World"/>, which owns the scene tree created with
-/// it. <c>OnLoad</c> resolves the world so that it exists before any scene module runs. The
-/// world is created with the ECS, the runtime, the scene tree, the signal bus and, when a
-/// logger is registered, the logger.
+/// <see cref="SignalBus"/>, the <see cref="SceneTree"/> and the <see cref="ComponentRegistry"/>.
+/// <c>OnLoad</c> resolves the tree and the registry so that they exist before any scene module
+/// runs.
 /// </summary>
 public sealed class FrameworkModule : IRuntimeModule
 {
@@ -40,9 +39,9 @@ public sealed class FrameworkModule : IRuntimeModule
     public string Name => "Framework";
 
     /// <summary>
-    /// Registers the ECS registry, the signal bus and the world. The framework library logs to the
-    /// registered <see cref="KernelEngine.Logger.ILogger"/> once the world is created, or to stderr
-    /// when there is none.
+    /// Registers the ECS registry, the signal bus, the scene tree and the component registry. The
+    /// framework library logs to the registered <see cref="KernelEngine.Logger.ILogger"/> once the
+    /// scene tree is created, or to stderr when there is none.
     /// </summary>
     /// <exception cref="InvalidOperationException">
     /// A native factory fails when the service is first requested.
@@ -71,39 +70,39 @@ public sealed class FrameworkModule : IRuntimeModule
             }
         });
 
-        services.AddSingleton<World>(sp =>
+        services.AddSingleton<SceneTree>(sp =>
         {
             var flecsEcs = sp.GetRequiredService<INativeEcs>();
-            var rtRuntime = (KernelEngine.Runtime.Runtime)sp.GetRequiredService<IRuntime>();
+            var runtime = (INativeRuntime)sp.GetRequiredService<IRuntime>();
             unsafe
             {
                 if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
                     KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
                 ke_scene_tree_handle tree;
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
-                    flecsEcs.Native, ((INativeRuntime)rtRuntime).Native, &tree), "ke_scene_tree_create");
-
-                ke_world_params p = default;
-                p.ecs = flecsEcs.Native;
-                p.runtime = ((INativeRuntime)rtRuntime).Native;
-                p.scene_tree = tree.@ref;
-                p.signal_bus = ((INativeSignalBus)sp.GetRequiredService<SignalBus>()).Native;
-                ke_world_handle w;
-                var made = KernelEngine.Framework.Native.NativeMethods.world_create(&p, &w);
-                if (made != KernelEngine.Result.Native.Result.Ok)
-                {
-                    tree.destroy(tree.@ref);
-                    KernelEngine.NativeResults.ThrowIfFailed(made, "ke_world_create");
-                }
-                return new World(w, tree);
+                    flecsEcs.Native, runtime.Native, &tree), "ke_scene_tree_create");
+                return new SceneTree(tree);
             }
         });
 
+        services.AddSingleton<ComponentRegistry>(sp =>
+        {
+            var flecsEcs = sp.GetRequiredService<INativeEcs>();
+            _ = sp.GetRequiredService<SceneTree>();
+            unsafe
+            {
+                ke_component_registry_handle registry;
+                KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.component_registry_create(
+                    flecsEcs.Native, &registry), "ke_component_registry_create");
+                return new ComponentRegistry(registry);
+            }
+        });
     }
 
-    /// <summary>Creates the world.</summary>
+    /// <summary>Creates the scene tree and the component registry.</summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        _ = services.GetRequiredService<World>();
+        _ = services.GetRequiredService<SceneTree>();
+        _ = services.GetRequiredService<ComponentRegistry>();
     }
 }

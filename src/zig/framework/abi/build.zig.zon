@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
+        .abi_component_registry = .{ .path = "../../abi/component_registry" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_framework = .{ .path = "../../abi/framework" },
@@ -19,7 +20,6 @@
         .abi_script_host = .{ .path = "../../abi/script_host" },
         .abi_signal_bus = .{ .path = "../../abi/signal_bus" },
         .abi_text = .{ .path = "../../abi/text" },
-        .abi_world = .{ .path = "../../abi/world" },
     },
     .paths = .{"."},
 }

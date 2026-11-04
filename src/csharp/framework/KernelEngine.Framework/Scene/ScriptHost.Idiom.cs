@@ -16,7 +16,7 @@ namespace KernelEngine.Framework;
 /// </summary>
 public unsafe partial class ScriptHost
 {
-    private World _world = null!;
+    private SceneTree _tree = null!;
     private EcsRegistry _ecs = null!;
     private ComponentId _nameCid;
 
@@ -187,15 +187,15 @@ public unsafe partial class ScriptHost
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
-    /// Gives the host the world, the ECS registry and the optional signal bus, looks up the name,
+    /// Gives the host the scene tree, the ECS registry and the optional signal bus, looks up the name,
     /// transform and hierarchy components the scene tree registered, and registers the host's own
     /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(World world, EcsRegistry ecs, SignalBus? signals = null)
+    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null)
     {
         _signals = signals;
-        _world = world;
+        _tree = tree;
         _ecs = ecs;
         _nameCid = CidOfName("name");
         _nativeTransformCid = CidOfName("transform");
@@ -211,8 +211,8 @@ public unsafe partial class ScriptHost
     {
         var parentEntity = parent?.Entity ?? default;
         return _commands is { } commands
-            ? _world.Tree.CreateNodeDeferred(name, parentEntity, commands)
-            : _world.Tree.CreateNode(name, parentEntity);
+            ? _tree.CreateNodeDeferred(name, parentEntity, commands)
+            : _tree.CreateNode(name, parentEntity);
     }
 
     private static unsafe nint CommandsHandle(KernelEngine.Ecs.EcsCommands commands) =>
@@ -345,7 +345,7 @@ public unsafe partial class ScriptHost
     /// <summary>Finds a node by its name or path, resolved through the native scene tree.</summary>
     public Node? Find(string name)
     {
-        var entity = _world.Tree.FindNode(name);
+        var entity = _tree.FindNode(name);
         return entity != default ? NodeOf(entity) : null;
     }
 
@@ -376,9 +376,9 @@ public unsafe partial class ScriptHost
         UnbindScript(node.Entity);
         _signals?.ForgetEntity(node.Entity);
         if (_commands is { } commands)
-            _world.Tree.DestroyNodeDeferred(node.Entity, commands);
+            _tree.DestroyNodeDeferred(node.Entity, commands);
         else
-            _world.Tree.DestroyNode(node.Entity);
+            _tree.DestroyNode(node.Entity);
         node.UnbindFromScene();
     }
 
@@ -421,7 +421,7 @@ public unsafe partial class ScriptHost
     /// </summary>
     internal Node? GetParent(Entity entity)
     {
-        var parent = _world.Tree.Parent(entity);
+        var parent = _tree.Parent(entity);
         return parent == default ? null : NodeOf(parent);
     }
 
@@ -432,7 +432,7 @@ public unsafe partial class ScriptHost
     internal IReadOnlyList<Node> GetChildren(Entity entity)
     {
         var result = new List<Node>();
-        var tree = _world.Tree;
+        var tree = _tree;
         for (var child = tree.FirstChild(entity); child != default; child = tree.NextSibling(child))
             if (NodeOf(child) is { } node) result.Add(node);
         return result;

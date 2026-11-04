@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         "abi_audio",
         "abi_audio_components",
         "abi_audio_contract",
+        "abi_component_registry",
         "abi_configuration",
         "abi_ecs",
         "abi_ecs_variant",
@@ -48,7 +49,6 @@ pub fn build(b: *std.Build) void {
         "abi_ui_components",
         "abi_view",
         "abi_window",
-        "abi_world",
     }) |name| {
         const domain = b.dependency(name, .{ .target = target, .optimize = optimize });
         tests.dependOn(&domain.builder.top_level_steps.get("test").?.step);
