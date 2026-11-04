@@ -53,7 +53,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 enum DemoAction
 {

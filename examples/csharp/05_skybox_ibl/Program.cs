@@ -94,7 +94,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[05_skybox_ibl] Exited cleanly.");
 

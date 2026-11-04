@@ -124,7 +124,6 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[13_full_scene] Exited cleanly.");
 

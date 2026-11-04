@@ -81,7 +81,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[03_pbr_directional] Exited cleanly.");
 
