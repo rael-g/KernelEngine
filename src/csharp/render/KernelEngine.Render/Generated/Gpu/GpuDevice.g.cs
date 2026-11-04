@@ -409,6 +409,26 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         Handle->destroy_bind_group(Handle, h);
     }
 
+    /// <summary>Creates a command encoder. p may be NULL, which creates it unlabeled.</summary>
+    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <returns>Receives the encoder; left zeroed on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public IGpuCommandEncoder CreateCommandEncoder(string label)
+    {
+        var labelText = label ?? "";
+        var labelSize = System.Text.Encoding.UTF8.GetMaxByteCount(labelText.Length) + 1;
+        Span<byte> labelBytes = labelSize <= 512 ? stackalloc byte[512] : new byte[labelSize];
+        labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
+        fixed (byte* labelPtr = labelBytes)
+        {
+            ke_gpu_command_encoder_params p = default;
+            p.label = (sbyte*)labelPtr;
+            ke_gpu_command_encoder_handle resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_command_encoder(Handle, &p, &resultOut), "create_command_encoder");
+            return new GpuCommandEncoder(resultOut);
+        }
+    }
+
 
     public void WriteBuffer(ulong h, ulong offset, nint data, nuint size)
     {
