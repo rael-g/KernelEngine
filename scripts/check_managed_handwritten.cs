@@ -2,7 +2,7 @@
 
 using System.Runtime.CompilerServices;
 
-const int Ceiling = 89;
+const int Ceiling = 76;
 const string InteropDir = "src/csharp/interop/";
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;
@@ -15,6 +15,7 @@ var files = Directory.EnumerateFiles(managedDir, "*.cs", SearchOption.AllDirecto
     .Where(p => !p.EndsWith(".g.cs", StringComparison.Ordinal))
     .Where(p => !p.Contains("/kabic/", StringComparison.Ordinal))
     .Where(p => !p.Contains("/generators/", StringComparison.Ordinal))
+    .Where(p => !p.StartsWith("src/csharp/cli/", StringComparison.Ordinal))
     .Where(p => !p.StartsWith(InteropDir, StringComparison.Ordinal))
     .OrderBy(p => p, StringComparer.Ordinal)
     .ToList();
@@ -69,8 +70,6 @@ static string Bucket(string path)
         return "registration -- derivable from the factory it registers";
     if (name.EndsWith("Module.cs", StringComparison.Ordinal))
         return "module -- a second encarnation of a native module";
-    if (path.Contains("/KernelEngine.Cli/", StringComparison.Ordinal))
-        return "cli -- project tooling, not a projection";
     if (path.Contains(".Abstractions/", StringComparison.Ordinal))
         return "abstraction -- the interface a projection should satisfy";
     return "other -- unclassified, read it and decide";
