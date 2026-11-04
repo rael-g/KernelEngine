@@ -5,6 +5,8 @@ const unsigned long long layout_values[] = {
     offsetof(ke_script_host, handle),
     offsetof(ke_script_host, register_type),
     offsetof(ke_script_host, type_lookup),
+    offsetof(ke_script_host, register_type_alias),
+    offsetof(ke_script_host, type_resolve),
     offsetof(ke_script_host, type_components),
     offsetof(ke_script_host, type_reach),
     offsetof(ke_script_host, type_tag),

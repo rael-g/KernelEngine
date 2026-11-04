@@ -94,6 +94,39 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
         }
     }
 
+    /// <summary>Lets a scene name `type` by `alias` as well. The alias answers only while it is unambiguous: a second type under the same alias, or a type registered under the alias itself, makes it ambiguous. Registering the same pair twice changes nothing.</summary>
+    /// <param name="alias">The short name.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void RegisterTypeAlias(string alias, uint type)
+    {
+        var aliasText = alias ?? "";
+        var aliasSize = System.Text.Encoding.UTF8.GetMaxByteCount(aliasText.Length) + 1;
+        Span<byte> aliasBytes = aliasSize <= 512 ? stackalloc byte[512] : new byte[aliasSize];
+        aliasBytes[System.Text.Encoding.UTF8.GetBytes(aliasText, aliasBytes)] = 0;
+        fixed (byte* aliasPtr = aliasBytes)
+        {
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->register_type_alias(Handle, (sbyte*)aliasPtr, type), "register_type_alias");
+        }
+    }
+
+    /// <summary>Resolves the type name a scene wrote: the type registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument when the alias is ambiguous, logging the candidates.</summary>
+    /// <param name="name">The name the scene wrote.</param>
+    /// <returns>Receives the type.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public uint TypeResolve(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            uint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->type_resolve(Handle, (sbyte*)namePtr, &resultOut), "type_resolve");
+            return resultOut;
+        }
+    }
+
     /// <summary>The components a registered type's instances carry, in registration order.</summary>
     public ReadOnlySpan<ComponentId> TypeComponents(uint type)
     {

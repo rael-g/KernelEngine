@@ -19,6 +19,15 @@ public interface IScriptHost : IDisposable
     uint RegisterType(string name, ReadOnlySpan<ComponentId> components, ScriptReach reach);
     /// <summary>Resolves a type by name without registering it. An undeclared name fails.</summary>
     bool TryTypeLookup(string name, out uint outId);
+    /// <summary>Lets a scene name `type` by `alias` as well. The alias answers only while it is unambiguous: a second type under the same alias, or a type registered under the alias itself, makes it ambiguous. Registering the same pair twice changes nothing.</summary>
+    /// <param name="alias">The short name.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void RegisterTypeAlias(string alias, uint type);
+    /// <summary>Resolves the type name a scene wrote: the type registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument when the alias is ambiguous, logging the candidates.</summary>
+    /// <param name="name">The name the scene wrote.</param>
+    /// <returns>Receives the type.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    uint TypeResolve(string name);
     /// <summary>The components a registered type's instances carry, in registration order.</summary>
     ReadOnlySpan<ComponentId> TypeComponents(uint type);
     /// <summary>How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id.</summary>

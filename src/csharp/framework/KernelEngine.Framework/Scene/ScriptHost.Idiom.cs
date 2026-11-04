@@ -24,6 +24,7 @@ public unsafe partial class ScriptHost
 
     private readonly System.Collections.Concurrent.ConcurrentDictionary<Type, uint> _scriptTypes = new();
     private readonly object _typeGate = new();
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<uint, Type> _clrOfType = new();
     private readonly System.Collections.Concurrent.ConcurrentQueue<(long Epoch, System.Runtime.InteropServices.GCHandle Handle)> _retired = new();
     private long _epoch;
 
@@ -239,35 +240,55 @@ public unsafe partial class ScriptHost
     internal void CompleteAddNode(Node node) => node.CompleteBind();
 
     /// <summary>
-    /// Returns the native script type of a node's CLR type, registering it on first use with the
-    /// components the node owns and whether its behavior reaches only its own entity. The type
-    /// name is the full name of the CLR type.
+    /// Returns the native script type of a node's CLR type, declaring it on first use under the
+    /// scene spelling of its full name.
     /// </summary>
-    private uint ScriptTypeOf(Node node)
+    private uint ScriptTypeOf(Node node) => DeclareNodeType(node.GetType(), null);
+
+    /// <summary>
+    /// Declares <paramref name="clr"/> as a native script type, with the components it owns and
+    /// whether its behavior reaches only its own entity as <see cref="NodeTypes"/> says, under
+    /// <paramref name="name"/> or the scene spelling of its full name, and with the scene
+    /// spelling of its short name as an alias. A type declared already keeps its id and takes
+    /// <paramref name="name"/> as one more alias.
+    /// </summary>
+    internal uint DeclareNodeType(Type clr, string? name)
     {
-        var clr = node.GetType();
-        if (_scriptTypes.TryGetValue(clr, out var existing)) return existing;
+        if (_scriptTypes.TryGetValue(clr, out var existing) && name is null) return existing;
         lock (_typeGate)
         {
-            if (_scriptTypes.TryGetValue(clr, out existing)) return existing;
-            return RegisterTypeFor(clr, node);
+            if (!_scriptTypes.TryGetValue(clr, out existing))
+            {
+                var uses = new List<NodeComponentUse>();
+                NodeTypes.CollectComponents(clr, uses);
+                var cids = new List<ComponentId>();
+                foreach (var use in uses)
+                    if (use.Owned && _ecs.TryLookupComponent(use.Name, out var cid) && !cids.Contains(cid))
+                        cids.Add(cid);
+                var reach = NodeTypes.ReachesOnlyItself(clr) ? ScriptReach.Self : ScriptReach.Any;
+                existing = RegisterType(name ?? NodeTypes.NameOf(clr.FullName ?? clr.Name), cids.ToArray(), reach);
+                RegisterTypeAlias(NodeTypes.NameOf(clr.Name), existing);
+                _clrOfType[existing] = clr;
+                _scriptTypes[clr] = existing;
+            }
+            else if (name is not null) RegisterTypeAlias(name, existing);
+            return existing;
         }
     }
 
-    private uint RegisterTypeFor(Type clr, Node node)
+    /// <summary>
+    /// The CLR type of the node type a scene names, resolved by the native host over the names
+    /// and aliases <see cref="DeclareNodeType"/> gave it.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The name is unknown or ambiguous.</exception>
+    internal Type NodeTypeNamed(string name)
     {
-        var uses = new List<NodeComponentUse>();
-        node.CollectBehaviorComponents(uses);
-
-        var cids = new List<ComponentId>();
-        foreach (var use in uses)
-            if (use.Owned && _ecs.TryLookupComponent(use.Name, out var cid) && !cids.Contains(cid))
-                cids.Add(cid);
-
-        var reach = node.ReachesOnlyItself ? ScriptReach.Self : ScriptReach.Any;
-        var id = RegisterType(clr.FullName ?? clr.Name, cids.ToArray(), reach);
-        _scriptTypes[clr] = id;
-        return id;
+        try { return _clrOfType[TypeResolve(name)]; }
+        catch (Exception ex) when (ex is not InvalidOperationException)
+        {
+            throw new InvalidOperationException(
+                $"Scene references node type '{name}', which no registered type answers to alone; register it with services.AddNodeType<T>() or write the qualified name.", ex);
+        }
     }
 
     /// <summary>

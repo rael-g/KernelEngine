@@ -49,7 +49,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_SCRIPT_TYPE_NONE), @as(i128, abi.c.KE_SCRIPT_TYPE_NONE));
 }
 
-extern const layout_values: [20]c_ulonglong;
+extern const layout_values: [22]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -58,6 +58,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_script_host, "handle"),
         @offsetOf(abi.c.ke_script_host, "register_type"),
         @offsetOf(abi.c.ke_script_host, "type_lookup"),
+        @offsetOf(abi.c.ke_script_host, "register_type_alias"),
+        @offsetOf(abi.c.ke_script_host, "type_resolve"),
         @offsetOf(abi.c.ke_script_host, "type_components"),
         @offsetOf(abi.c.ke_script_host, "type_reach"),
         @offsetOf(abi.c.ke_script_host, "type_tag"),

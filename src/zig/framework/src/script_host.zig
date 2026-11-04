@@ -66,6 +66,13 @@ const State = struct {
 
     types: []ScriptType,
     type_count: u32,
+    aliases: std.ArrayList(Alias) = .empty,
+};
+
+/// One short name a scene may write for a type, a copy the host owns.
+const Alias = struct {
+    alias: [:0]u8,
+    type_id: abi_script_host.c.ke_script_type_id,
 };
 
 /// Logs `msg` and returns the code of `err`, for a failure whose reason the code does not carry.
@@ -204,6 +211,72 @@ fn typeLookup(
         return true;
     }
     return false;
+}
+
+/// Slot `register_type_alias`. Records the pair unless it is already recorded; two pairs with one
+/// alias are kept both, which is what makes the alias ambiguous.
+fn registerTypeAlias(
+    self_in: ?*abi_script_host.c.ke_script_host,
+    alias_in: [*c]const u8,
+    type_id: abi_script_host.c.ke_script_type_id,
+) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (alias_in == null) return R.code(error.InvalidArgument);
+    const s = stateOf(self);
+    const alias = std.mem.span(alias_in);
+    if (alias.len == 0 or typeAt(s, type_id) == null) return R.code(error.InvalidArgument);
+    for (s.aliases.items) |a| {
+        if (a.type_id == type_id and std.mem.eql(u8, a.alias, alias)) return R.ok;
+    }
+    const copy = heap.gpa.dupeZ(u8, alias) catch |err| return R.code(err);
+    s.aliases.append(heap.gpa, .{ .alias = copy, .type_id = type_id }) catch |err| {
+        heap.gpa.free(copy);
+        return R.code(err);
+    };
+    return R.ok;
+}
+
+/// Slot `type_resolve`. A registered name wins when no alias shares it; an alias with a single
+/// type, and no type registered under the alias itself, resolves to that type.
+fn typeResolve(
+    self_in: ?*abi_script_host.c.ke_script_host,
+    name_in: [*c]const u8,
+    out_type: [*c]abi_script_host.c.ke_script_type_id,
+) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (name_in == null or out_type == null) return R.code(error.InvalidArgument);
+    const s = stateOf(self);
+    const name = std.mem.span(name_in);
+
+    var direct: abi_script_host.c.ke_script_type_id = abi_script_host.c.KE_SCRIPT_TYPE_NONE;
+    _ = typeLookup(self, name_in, &direct);
+
+    var target: abi_script_host.c.ke_script_type_id = abi_script_host.c.KE_SCRIPT_TYPE_NONE;
+    var candidates: u32 = 0;
+    var buf: [256]u8 = undefined;
+    var list = std.Io.Writer.fixed(&buf);
+    for (s.aliases.items) |a| {
+        if (!std.mem.eql(u8, a.alias, name)) continue;
+        candidates += 1;
+        target = a.type_id;
+        list.print("{s}'{s}'", .{ if (candidates > 1) " and " else "", s.types[a.type_id - 1].name }) catch {};
+    }
+
+    if (candidates == 0) {
+        if (direct != abi_script_host.c.KE_SCRIPT_TYPE_NONE) {
+            out_type.* = direct;
+            return R.ok;
+        }
+        log.warn("no node type is registered as '{s}'", .{name});
+        return R.code(error.NotFound);
+    }
+    if (candidates == 1 and direct == abi_script_host.c.KE_SCRIPT_TYPE_NONE) {
+        out_type.* = target;
+        return R.ok;
+    }
+    if (direct != abi_script_host.c.KE_SCRIPT_TYPE_NONE) list.print(" and '{s}'", .{name}) catch {};
+    log.warn("node type name '{s}' is ambiguous between {s}; write the qualified name", .{ name, list.buffered() });
+    return R.code(error.InvalidArgument);
 }
 
 /// Slot `type_components`. The returned pointer aims into the record itself, so it stays valid
@@ -524,6 +597,8 @@ fn destroy(self_in: ?*abi_script_host.c.ke_script_host) callconv(.c) void {
         heap.gpa.free(t.name);
         heap.gpa.free(t.components);
     }
+    for (s.aliases.items) |a| heap.gpa.free(a.alias);
+    s.aliases.deinit(heap.gpa);
     heap.gpa.free(s.types);
     heap.gpa.destroy(s);
 }
@@ -564,6 +639,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, n_types: u32) R.Error!abi_script_host.c.ke_scr
     errdefer heap.gpa.destroy(s);
     s.types = try heap.gpa.alloc(ScriptType, n_types);
     errdefer heap.gpa.free(s.types);
+    s.aliases = .empty;
 
     s.ecs = ecs;
     s.hierarchy_cid = hierarchy_meta.cid;
@@ -578,6 +654,8 @@ fn create(ecs: *abi_ecs.c.ke_ecs, n_types: u32) R.Error!abi_script_host.c.ke_scr
         .handle = s,
         .register_type = &registerType,
         .type_lookup = &typeLookup,
+        .register_type_alias = &registerTypeAlias,
+        .type_resolve = &typeResolve,
         .type_components = &typeComponents,
         .type_reach = &typeReach,
         .type_tag = &typeTag,
@@ -1117,6 +1195,30 @@ test "two descendants bound to two of the wanted types are ambiguous" {
     try testing.expectEqual(@as(abi_asset_resolver.c.ke_entity, abi_ecs.c.KE_ENTITY_INVALID), h.host().resolve.?(h.host(), ball, &types, 2, "", abi_script_host.c.KE_SCRIPT_BORROW_ANYWHERE, &verdict));
     try testing.expectEqual(abi_script_host.c.KE_SCRIPT_RESOLVE_AMBIGUOUS, verdict);
     try testing.expectEqual(b, h.host().resolve.?(h.host(), ball, &types, 2, "B", abi_script_host.c.KE_SCRIPT_BORROW_DESCENDANT, null));
+}
+
+test "a type resolves by its name and by an alias only one type answers to" {
+    var h: Harness = undefined;
+    try h.init();
+    defer h.deinit();
+
+    const paddle = try h.declare("pong.paddle", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const tennis = try h.declare("tennis.paddle", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const ball = try h.declare("pong.ball", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const host = h.host();
+    try R.check(host.register_type_alias.?(host, "ball", ball));
+    try R.check(host.register_type_alias.?(host, "ball", ball));
+    try R.check(host.register_type_alias.?(host, "paddle", paddle));
+    try R.check(host.register_type_alias.?(host, "paddle", tennis));
+
+    var id: abi_script_host.c.ke_script_type_id = 0;
+    try R.check(host.type_resolve.?(host, "ball", &id));
+    try testing.expectEqual(ball, id);
+    try R.check(host.type_resolve.?(host, "tennis.paddle", &id));
+    try testing.expectEqual(tennis, id);
+    try testing.expectError(error.InvalidArgument, R.check(host.type_resolve.?(host, "paddle", &id)));
+    try testing.expectError(error.NotFound, R.check(host.type_resolve.?(host, "wall", &id)));
+    try testing.expectError(error.InvalidArgument, R.check(host.register_type_alias.?(host, "x", 99)));
 }
 
 test "creating and destroying a script host leaves no block allocated" {

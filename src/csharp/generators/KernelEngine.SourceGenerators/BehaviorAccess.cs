@@ -216,7 +216,7 @@ static class BehaviorAccess
             foreach (var m in markers) yield return $"\"{(string)m.ConstructorArguments[1].Value!}\"";
         }
         foreach (var t in ScriptSlotTypes(type))
-            yield return $"global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
+            yield return $"global::KernelEngine.Framework.NodeTypes.NameOf(typeof({t.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
     }
 
     /// <summary>
@@ -291,6 +291,6 @@ static class BehaviorAccess
         if (!partial) return null;
         return SymbolEqualityComparer.Default.Equals(type, owner)
             ? "GeneratedComponentName"
-            : $"global::KernelEngine.Framework.NodeTypeRegistry.Normalize(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
+            : $"global::KernelEngine.Framework.NodeTypes.NameOf(typeof({type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}).FullName!)";
     }
 }

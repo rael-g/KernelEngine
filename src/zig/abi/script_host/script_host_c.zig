@@ -53,6 +53,14 @@ pub const ke_script_host = extern struct {
     register_type: ?*const fn (?*ke_script_host, ?[*:0]const u8, ?[*]const ke_component_id, u32, ke_script_reach, ?*ke_script_type_id) callconv(.c) abi_result.c.ke_result = null,
     /// Resolves a type by name without registering it. An undeclared name fails.
     type_lookup: ?*const fn (?*ke_script_host, ?[*:0]const u8, ?*ke_script_type_id) callconv(.c) bool = null,
+    /// Lets a scene name `type` by `alias` as well. The alias answers only while it is unambiguous:
+    /// a second type under the same alias, or a type registered under the alias itself, makes it
+    /// ambiguous. Registering the same pair twice changes nothing.
+    register_type_alias: ?*const fn (?*ke_script_host, ?[*:0]const u8, ke_script_type_id) callconv(.c) abi_result.c.ke_result = null,
+    /// Resolves the type name a scene wrote: the type registered under it, else the one its alias
+    /// stands for. Fails as not found when neither exists, and as an invalid argument when the alias
+    /// is ambiguous, logging the candidates.
+    type_resolve: ?*const fn (?*ke_script_host, ?[*:0]const u8, ?*ke_script_type_id) callconv(.c) abi_result.c.ke_result = null,
     /// The components a registered type's instances carry, in registration order.
     type_components: ?*const fn (?*ke_script_host, ke_script_type_id, ?*u32) callconv(.c) ?[*]const ke_component_id = null,
     /// How far the registered type's behaviour reaches. KE_SCRIPT_REACH_ANY for an unknown id.

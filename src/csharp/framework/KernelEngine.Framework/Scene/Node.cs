@@ -92,9 +92,10 @@ public abstract class Node
     /// <summary>
     /// Whether this node type's behavior touches nothing beyond its own entity, so that its
     /// instances may run concurrently. False for a node that borrows another node, and for a
-    /// hand-written <see cref="OnUpdate"/> or <see cref="OnFixedUpdate"/>. Base is false.
+    /// hand-written <see cref="OnUpdate"/> or <see cref="OnFixedUpdate"/>, as the type declared in
+    /// <see cref="NodeTypes"/>.
     /// </summary>
-    protected internal virtual bool ReachesOnlyItself => false;
+    protected internal bool ReachesOnlyItself => NodeTypes.ReachesOnlyItself(GetType());
 
     /// <summary>
     /// Whether one hook of this node type, <c>FixedUpdate</c> when <paramref name="fixedStep"/> is
@@ -104,11 +105,10 @@ public abstract class Node
     protected internal virtual bool HookReachesOnlyItself(bool fixedStep) => ReachesOnlyItself;
 
     /// <summary>
-    /// Appends the ECS components this node type reaches and how it reaches them. An override
-    /// calls the base first and then adds its own, so an inherited set accumulates down the
-    /// chain.
+    /// Appends the ECS components this node type reaches and how it reaches them, as its type and
+    /// its base types declared in <see cref="NodeTypes"/>.
     /// </summary>
-    protected internal virtual void CollectBehaviorComponents(List<NodeComponentUse> into) { }
+    protected internal void CollectBehaviorComponents(List<NodeComponentUse> into) => NodeTypes.CollectComponents(GetType(), into);
 
     /// <summary>
     /// Appends the ECS components one hook of this node type reaches, <c>FixedUpdate</c> when

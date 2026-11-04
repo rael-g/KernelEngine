@@ -8,8 +8,8 @@ namespace KernelEngine.Framework;
 
 /// <summary>
 /// Runtime module "Scene.Router". It registers <see cref="ISceneRouter"/>, registers the script
-/// factory of the native scene loader (it resolves the type name through
-/// <see cref="NodeTypeRegistry"/>, constructs the node with the service provider and binds it to
+/// factory of the native scene loader (the native script host resolves the type name over the
+/// node types the host registered, declared before the initial scene loads; it constructs the node with the service provider and binds it to
 /// the entity), loads the initial scene in the system "Scene.Router.Initial" of the startup phase, so
 /// after every module has loaded, and registers the system "Scene.Router.Flush" in the pre-update phase, exclusive, so a scene change runs alone before the
 /// other systems of the phase. The initial scene is the
@@ -40,13 +40,13 @@ public sealed class SceneRouterModule : IRuntimeModule
     {
         var loader = services.GetRequiredService<SceneLoader>();
         var scriptHost = services.GetRequiredService<ScriptHost>();
-        var types = services.GetRequiredService<NodeTypeRegistry>();
+        var declarations = services.GetServices<NodeTypeDeclaration>().ToList();
         var router = services.GetRequiredService<SceneRouter>();
         var initial = ResolveInitialScene(services);
 
         loader.RegisterScriptFactory((entity, typeName) =>
         {
-            var type = types.Resolve(typeName);
+            var type = scriptHost.NodeTypeNamed(typeName);
             var node = (Node)ActivatorUtilities.CreateInstance(services, type);
             scriptHost.BindNativeEntity(node, entity);
         });
@@ -55,6 +55,7 @@ public sealed class SceneRouterModule : IRuntimeModule
         {
             using (scriptHost.EnterSystem(ctx))
             {
+                foreach (var d in declarations) scriptHost.DeclareNodeType(d.Type, d.Name);
                 router.LoadScene(initial);
                 router.Flush();
             }

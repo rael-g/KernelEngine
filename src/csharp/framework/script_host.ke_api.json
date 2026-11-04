@@ -1254,6 +1254,58 @@
           "receiver": "struct ke_script_host *"
         },
         {
+          "name": "register_type_alias",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Lets a scene name \u0060type\u0060 by \u0060alias\u0060 as well. The alias answers only while it is unambiguous: a second type under the same alias, or a type registered under the alias itself, makes it ambiguous. Registering the same pair twice changes nothing.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty alias or a type that is not registered, or KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "alias",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The short name."
+            },
+            {
+              "name": "type",
+              "type": "ke_script_type_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
+          "name": "type_resolve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Resolves the type name a scene wrote: the type registered under it, else the one its alias stands for. Fails as not found when neither exists, and as an invalid argument when the alias is ambiguous, logging the candidates.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The name the scene wrote."
+            },
+            {
+              "name": "out_type",
+              "type": "ke_script_type_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the type."
+            }
+          ],
+          "receiver": "struct ke_script_host *"
+        },
+        {
           "name": "type_components",
           "returns": "const ke_component_id *",
           "tags": [],
