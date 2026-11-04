@@ -65,7 +65,7 @@ ref var entW = ref reg.AddComponent<WorldTransformComponent>(ent, worldCid)[0];
 entW.Matrix = Matrix4x4.Identity;
 ref var entM = ref reg.AddComponent<MeshComponent>(ent, meshCid)[0];
 entM = MeshComponent.Default with { Material = orange };
-System.Text.Encoding.ASCII.GetBytes("cube", System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref entM.Primitive.e0, 32)));
+entM.PrimitiveText = "cube";
 
 var sun = reg.CreateEntity();
 ref var sunL = ref reg.AddComponent<DirectionalLightComponent>(sun, lightCid)[0];
