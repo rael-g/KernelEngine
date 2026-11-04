@@ -14,7 +14,7 @@ runtime, and each module it wants loaded. Here the only module is the window.
 ## Build them and load the modules
 
 Building the provider creates the native objects. `LoadModules` then hands each registered
-`IRuntimeModule` the runtime, in dependency order, so that it can register its components and
+`IRuntimeModule` the runtime, in the order they were registered, so that it can register its components and
 systems.
 
 [!code-csharp[](../../examples/csharp/00_runtime_minimal/Program.cs#load)]

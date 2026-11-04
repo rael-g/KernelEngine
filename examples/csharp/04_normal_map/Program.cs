@@ -88,6 +88,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[04_normal_map] Exited cleanly.");

@@ -79,6 +79,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");

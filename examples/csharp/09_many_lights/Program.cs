@@ -118,6 +118,7 @@ while (!window.ShouldClose())
         fpsWindowStart = now;
     }
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");

@@ -34,7 +34,7 @@ pub const KE_PHASE_POST_UPDATE: ke_phase = 6;
 /// Runs asynchronously against the next tick's sim phases. Its systems read extracted query
 /// results, never live storage, and may not mutate structure.
 pub const KE_PHASE_RENDER: ke_phase = 7;
-/// Runs once when the runtime is destroyed, if a tick ever ran. A failure of its bodies is not
+/// Runs once when the modules are unloaded, if a tick ever ran. A failure of its bodies is not
 /// reported.
 pub const KE_PHASE_SHUTDOWN: ke_phase = 8;
 
@@ -46,7 +46,7 @@ pub const KE_ACCESS_WRITE: ke_access = 2;
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// Releases whatever the matching load acquired, as the runtime is torn down.
+/// Releases whatever the matching load acquired, as the modules are unloaded.
 pub const ke_module_unload_fn = ?*const fn (?*ke_runtime, ?*anyopaque) callconv(.c) void;
 
 /// One call of a system body. The runtime calls it once per tick the system's phase runs, or
@@ -181,6 +181,11 @@ pub const ke_runtime = extern struct {
     /// down render-owned native resources must call this first, or the still-running render phase
     /// races the teardown. A no-op if nothing is pending.
     flush_render: ?*const fn (?*ke_runtime) callconv(.c) abi_result.c.ke_result = null,
+    /// Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls
+    /// every module's unload hook in the reverse of registration order. The host calls it while
+    /// everything a module's unload hook uses is still alive; destroying the runtime calls it for a
+    /// host that did not. A second call does nothing.
+    unload_modules: ?*const fn (?*ke_runtime) callconv(.c) void = null,
 };
 
 pub const ke_runtime_handle = extern struct {

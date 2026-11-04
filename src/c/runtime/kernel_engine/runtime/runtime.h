@@ -31,7 +31,7 @@ typedef enum ke_phase {
     /// Runs asynchronously against the next tick's sim phases. Its systems read
     /// extracted query results, never live storage, and may not mutate structure.
     KE_PHASE_RENDER            = 7,
-    /// Runs once when the runtime is destroyed, if a tick ever ran. A failure of its
+    /// Runs once when the modules are unloaded, if a tick ever ran. A failure of its
     /// bodies is not reported.
     KE_PHASE_SHUTDOWN          = 8,
 } ke_phase;
@@ -66,7 +66,7 @@ typedef struct ke_query_decl {
 /// @return KE_OK, or the code the module refused to load with; registration fails with it.
 typedef ke_result (*ke_module_load_fn)(ke_runtime *runtime, void *user_data);
 
-/// Releases whatever the matching load acquired, as the runtime is torn down.
+/// Releases whatever the matching load acquired, as the modules are unloaded.
 /// @param runtime   [self] The runtime the module was loaded into.
 /// @param user_data [context] Opaque context forwarded from register_module.
 typedef void (*ke_module_unload_fn)(ke_runtime *runtime, void *user_data);
@@ -219,6 +219,12 @@ typedef struct ke_runtime {
     /// races the teardown. A no-op if nothing is pending.
     /// @return KE_OK, or the code a body of the render phase failed with.
     ke_result (*flush_render)(ke_runtime *self);
+
+    /// Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then
+    /// calls every module's unload hook in the reverse of registration order. The host calls it
+    /// while everything a module's unload hook uses is still alive; destroying the runtime calls
+    /// it for a host that did not. A second call does nothing.
+    void (*unload_modules)(ke_runtime *self);
 } ke_runtime;
 
 /// [owner]

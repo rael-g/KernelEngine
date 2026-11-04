@@ -349,6 +349,12 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->flush_render(Handle)), "flush_render");
     }
 
+    /// <summary>Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls every module's unload hook in the reverse of registration order. The host calls it while everything a module's unload hook uses is still alive; destroying the runtime calls it for a host that did not. A second call does nothing.</summary>
+    public void UnloadModules()
+    {
+        Handle->unload_modules(Handle);
+    }
+
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
     public void Dispose()
     {

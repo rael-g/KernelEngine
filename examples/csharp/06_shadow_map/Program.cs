@@ -74,6 +74,7 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 
 Console.WriteLine("[06_shadow_map] Exited cleanly.");

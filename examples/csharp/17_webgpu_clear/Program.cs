@@ -40,5 +40,6 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 Console.WriteLine("[17_webgpu_clear] Exited cleanly.");

@@ -40,5 +40,6 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 Console.WriteLine("[01_runtime_clear_color] Exited cleanly.");

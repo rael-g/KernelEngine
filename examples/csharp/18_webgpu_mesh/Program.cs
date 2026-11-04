@@ -88,5 +88,6 @@ while (!window.ShouldClose())
     runtime.Tick((float)(now - prev));
     prev = now;
 }
+runtime.UnloadModules();
 
 Console.WriteLine("[18_webgpu_mesh] Exited cleanly.");

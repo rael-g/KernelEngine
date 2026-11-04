@@ -42,7 +42,7 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// Releases whatever the matching load acquired, as the runtime is torn down.
+/// Releases whatever the matching load acquired, as the modules are unloaded.
 pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) void;
 
 /// One call of a system body. The runtime calls it once per tick the system's phase runs, or
