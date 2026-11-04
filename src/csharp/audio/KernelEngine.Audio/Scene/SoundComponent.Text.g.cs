@@ -11,10 +11,10 @@ using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
-/// <summary>The text of <c>ke_audio_player_component</c>'s fixed character arrays.</summary>
-public static class AudioPlayerComponentText
+/// <summary>The text of <c>ke_sound_component</c>'s fixed character arrays.</summary>
+public static class SoundComponentText
 {
-    extension(ref AudioPlayerComponent self)
+    extension(ref SoundComponent self)
     {
         /// <summary><c>path</c> as text.</summary>
         public string PathText

@@ -1,4 +1,4 @@
-﻿#ifndef KERNEL_ENGINE_AUDIO_AUDIO_H_
+#ifndef KERNEL_ENGINE_AUDIO_AUDIO_H_
 #define KERNEL_ENGINE_AUDIO_AUDIO_H_
 
 #include <kernel_engine/common/export.h>
@@ -14,6 +14,10 @@ extern "C"
     /** Opaque sound identifier owned by an audio backend. 0 is reserved as "invalid". */
     typedef uint32_t ke_audio_sound;
 #define KE_AUDIO_SOUND_INVALID ((ke_audio_sound)0)
+
+    /** Opaque identifier of one playback of a sound, owned by an audio backend. 0 is reserved as "invalid". */
+    typedef uint32_t ke_audio_voice;
+#define KE_AUDIO_VOICE_INVALID ((ke_audio_voice)0)
 
     /**
      * [interface] Audio playback.
@@ -36,17 +40,23 @@ extern "C"
         void (*unload_sound)(struct ke_audio *self, ke_audio_sound sound);
 
         /**
-         * Plays a sound, restarting it from the beginning if already playing.
+         * Starts a new playback of a loaded sound, independent of every other playback of it.
+         * The voice holds a reference on the sound until it is stopped.
          * @param volume Playback volume in 0..1.
-         * @param loop Non-zero to restart the sound when it ends.
-         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID;
-         *         KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_GENERAL when the
-         *         backend cannot start it.
+         * @param pitch Playback rate, 1 for the recorded pitch.
+         * @param loop Restarts the voice when it ends, so it plays until stopped.
+         * @param out_voice [out] Receives the voice; KE_AUDIO_VOICE_INVALID on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID or a null out_voice;
+         *         KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_OUT_OF_MEMORY;
+         *         KE_RESULT_GENERAL when the backend cannot start it.
          */
-        ke_result (*play)(struct ke_audio *self, ke_audio_sound sound, float volume, bool loop);
+        ke_result (*voice_start)(struct ke_audio *self, ke_audio_sound sound, float volume, float pitch, bool loop, ke_audio_voice *out_voice);
 
-        /** Stops a playing sound; no-op when it is not playing. */
-        void (*stop)(struct ke_audio *self, ke_audio_sound sound);
+        /** True while the voice is playing; false once it reached its end, and for a stopped or unknown voice. */
+        bool (*voice_playing)(struct ke_audio *self, ke_audio_voice voice);
+
+        /** Stops the voice and releases it, along with its reference on the sound; safe on KE_AUDIO_VOICE_INVALID. */
+        void (*voice_stop)(struct ke_audio *self, ke_audio_voice voice);
 
         /** Sets a global multiplier applied on top of per-sound volumes (0..1). */
         void (*set_master_volume)(struct ke_audio *self, float volume);

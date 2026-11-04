@@ -103,7 +103,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
     }
 
     /// <summary>Records into commands loading the scene at path under parent, as load does it at the root, when commands is applied; the scene's first entity becomes a child of parent. A failure of the recorded load is logged and fails the application of commands with its code, and removes what that load made.</summary>
-    /// <param name="path">Path to the scene file, read as load reads it.</param>
+    /// <param name="path">Path to the scene file; a `res://` path is the project root joined with the rest, as for an included scene, and any other is read as load reads it.</param>
     /// <param name="parent">The node the scene is attached under; KE_ENTITY_INVALID attaches it at the root.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Instantiate(string path, Entity parent, INativeEcsCommands commands)

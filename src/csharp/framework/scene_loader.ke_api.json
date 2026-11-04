@@ -1152,7 +1152,7 @@
               "tags": [
                 "utf8"
               ],
-              "doc": "Path to the scene file, read as load reads it."
+              "doc": "Path to the scene file; a \u0060res://\u0060 path is the project root joined with the rest, as for an included scene, and any other is read as load reads it."
             },
             {
               "name": "parent",

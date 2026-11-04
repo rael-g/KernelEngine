@@ -176,8 +176,8 @@ it (`scene_loader.zig:173-190`).
 
 `instantiate` records into an ecs command queue the load of a scene file under a parent node, and
 the scene's first entity becomes that node's child when the queue is applied, so a system can create
-nodes from a file without touching the tree mid-wave (`vtInstantiate`, `scene_loader.zig`). The path
-is read as `load` reads it. A failed instantiation logs, removes what it made and fails the
+nodes from a file without touching the tree mid-wave (`vtInstantiate`, `scene_loader.zig`). A `res://`
+path is resolved as an included scene's is, and any other is read as `load` reads it. A failed instantiation logs, removes what it made and fails the
 application with its code.
 
 ## Failure

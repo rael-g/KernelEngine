@@ -20,14 +20,22 @@ const abi_result = @import("abi_result");
 const R = @import("result").Result(.{});
 
 /// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
-/// it. `bytes` is the file the io read, which `decoder` reads from until it is released through
-/// the io; `decoder` is initialised once `decoder_ready` is set and `sound` once `initialized` is.
+/// it. `bytes` is the file the io read, released through the io with the sound; every voice of the
+/// sound decodes from it.
 const LoadedSound = struct {
-    sound: ma.ma_sound,
-    initialized: bool,
+    bytes: ?*anyopaque,
+    size: usize,
+};
+
+/// One playback, allocated by `audioVoiceStart` and owned by `voices` until `audioVoiceStop` frees
+/// it. `decoder` reads the bytes of `clip`, on which the voice holds a cache reference, and is
+/// initialised once `decoder_ready` is set; `sound` is initialised once `initialized` is.
+const Voice = struct {
+    clip: abi_audio.c.ke_audio_sound,
     decoder: ma.ma_decoder,
     decoder_ready: bool,
-    bytes: ?*anyopaque,
+    sound: ma.ma_sound,
+    initialized: bool,
 };
 
 /// The backend's whole state: allocated by `ke_audio_miniaudio_create`, freed by `audioDestroy`,
@@ -35,7 +43,7 @@ const LoadedSound = struct {
 /// when `engine_ready` is set. `cache` and `cache_destroy` are undefined until the cache is
 /// created, and the destroy callback reads `sounds`, so the map must still exist while the cache is
 /// alive. A sound id is a key of `sounds` and a handle of the cache, which reference-counts it by
-/// id and by path. `io` is borrowed from the factory's caller, and every sound file is read through
+/// id and by path. A voice id is a key of `voices`. `io` is borrowed from the factory's caller, and every sound file is read through
 /// it. Everything runs on the calling thread.
 const State = struct {
     io: *abi_io.c.ke_io,
@@ -43,6 +51,8 @@ const State = struct {
     engine_ready: bool,
     sounds: std.AutoHashMap(abi_audio.c.ke_audio_sound, *LoadedSound),
     next_id: abi_audio.c.ke_audio_sound,
+    voices: std.AutoHashMap(abi_audio.c.ke_audio_voice, *Voice),
+    next_voice: abi_audio.c.ke_audio_voice,
     cache: *abi_resource_cache.c.ke_resource_cache,
     cache_destroy: *const fn (?*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
 };
@@ -58,18 +68,25 @@ fn destroySoundResource(handle: abi_resource_cache.c.ke_resource_handle, ctx: ?*
 }
 
 fn release(state: *State, s: *LoadedSound) void {
-    if (s.initialized) ma.ma_sound_uninit(&s.sound);
-    if (s.decoder_ready) _ = ma.ma_decoder_uninit(&s.decoder);
     if (s.bytes) |bytes| state.io.free_bytes.?(state.io, bytes);
     gpa.destroy(s);
 }
 
-/// Tears the backend down in the order the cache callback requires: the cache first, which frees
-/// every sound still held, then the engine if it was initialised, then the map, the state and the
+fn releaseVoice(v: *Voice) void {
+    if (v.initialized) ma.ma_sound_uninit(&v.sound);
+    if (v.decoder_ready) _ = ma.ma_decoder_uninit(&v.decoder);
+    gpa.destroy(v);
+}
+
+/// Tears the backend down in the order the cache callback requires: every voice still playing
+/// first, then the cache, which frees every sound still held, then the engine if it was initialised, then the map, the state and the
 /// struct. A null backend is ignored.
 fn audioDestroy(self: ?*abi_audio.c.ke_audio) callconv(.c) void {
     const api = self orelse return;
     const state: *State = @ptrCast(@alignCast(api.handle));
+    var voices = state.voices.valueIterator();
+    while (voices.next()) |v| releaseVoice(v.*);
+    state.voices.deinit();
     state.cache_destroy(state.cache);
     if (state.engine_ready) ma.ma_engine_uninit(&state.engine);
     state.sounds.deinit();
@@ -112,23 +129,16 @@ fn loadSound(state: *State, path: [*c]const u8) R.Error!abi_audio.c.ke_audio_sou
         state.io.free_bytes.?(state.io, file.bytes);
         return error.OutOfMemory;
     };
-    slot.* = std.mem.zeroes(LoadedSound);
-    slot.bytes = file.bytes;
+    slot.* = .{ .bytes = file.bytes, .size = file.size };
     errdefer release(state, slot);
 
-    const decoded = ma.ma_decoder_init_memory(file.bytes, @intCast(file.size), null, &slot.decoder);
+    var probe: ma.ma_decoder = undefined;
+    const decoded = ma.ma_decoder_init_memory(file.bytes, @intCast(file.size), null, &probe);
     if (decoded != ma.MA_SUCCESS) {
         log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(decoded) });
         return error.NotFound;
     }
-    slot.decoder_ready = true;
-
-    const r = ma.ma_sound_init_from_data_source(&state.engine, @ptrCast(&slot.decoder), 0, null, &slot.sound);
-    if (r != ma.MA_SUCCESS) {
-        log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(r) });
-        return error.NotFound;
-    }
-    slot.initialized = true;
+    _ = ma.ma_decoder_uninit(&probe);
 
     if (state.next_id == 0) state.next_id = 1;
     const id = state.next_id;
@@ -149,43 +159,65 @@ fn audioUnloadSound(self: ?*abi_audio.c.ke_audio, id: abi_audio.c.ke_audio_sound
     _ = state.cache.release.?(state.cache, id);
 }
 
-/// Resolves an id to its slot, or null when it was never loaded or has been released.
-fn findSound(state: *State, id: abi_audio.c.ke_audio_sound) ?*LoadedSound {
-    return state.sounds.get(id);
-}
-
-/// A sound already playing is restarted from its first frame, with the given volume and looping
-/// flag. When the start fails, the sound is left stopped. Fails with an invalid-argument error for
-/// a null backend or the invalid id, with a not-found error for an id that is not loaded, and with
-/// a general error when miniaudio cannot start the sound.
-fn audioPlay(self: ?*abi_audio.c.ke_audio, id: abi_audio.c.ke_audio_sound, volume: f32, loop: bool) callconv(.c) abi_result.c.ke_result {
+/// Starts a voice that decodes the sound's bytes on its own, so voices of one sound play
+/// independently, and takes a cache reference on the sound for the voice's life. When the start
+/// fails nothing is left behind. Fails with an invalid-argument error for a null backend, the
+/// invalid id or a null out-parameter, with a not-found error for an id that is not loaded, out of
+/// memory, and a general error when miniaudio cannot start the voice.
+fn audioVoiceStart(self: ?*abi_audio.c.ke_audio, id: abi_audio.c.ke_audio_sound, volume: f32, pitch: f32, loop: bool, out_voice: ?*abi_audio.c.ke_audio_voice) callconv(.c) abi_result.c.ke_result {
+    const out = out_voice orelse return R.code(error.InvalidArgument);
+    out.* = abi_audio.c.KE_AUDIO_VOICE_INVALID;
     if (self == null or id == abi_audio.c.KE_AUDIO_SOUND_INVALID) return R.code(error.InvalidArgument);
     const state: *State = @ptrCast(@alignCast(self.?.handle));
-
-    const slot = findSound(state, id);
-    if (slot == null or !slot.?.initialized) return R.code(error.NotFound);
-    const s = slot.?;
-
-    _ = ma.ma_sound_stop(&s.sound);
-    _ = ma.ma_sound_seek_to_pcm_frame(&s.sound, 0);
-    ma.ma_sound_set_volume(&s.sound, volume);
-    ma.ma_sound_set_looping(&s.sound, if (loop) ma.MA_TRUE else ma.MA_FALSE);
-    const r = ma.ma_sound_start(&s.sound);
-    if (r != ma.MA_SUCCESS) {
-        log.warn("starting sound {d} failed: {s}", .{ id, ma.ma_result_description(r) });
-        return R.code(error.General);
-    }
+    out.* = voiceStart(state, id, volume, pitch, loop) catch |err| {
+        log.warn("starting sound {d} failed: {t}", .{ id, err });
+        return R.code(err);
+    };
     return R.ok;
 }
 
-/// Stops the sound without releasing it. A null backend, the invalid id or an unknown id is
-/// ignored.
-fn audioStop(self: ?*abi_audio.c.ke_audio, id: abi_audio.c.ke_audio_sound) callconv(.c) void {
-    if (self == null or id == abi_audio.c.KE_AUDIO_SOUND_INVALID) return;
-    const state: *State = @ptrCast(@alignCast(self.?.handle));
-    if (findSound(state, id)) |s| {
-        if (s.initialized) _ = ma.ma_sound_stop(&s.sound);
-    }
+fn voiceStart(state: *State, id: abi_audio.c.ke_audio_sound, volume: f32, pitch: f32, loop: bool) R.Error!abi_audio.c.ke_audio_voice {
+    const clip = state.sounds.get(id) orelse return error.NotFound;
+    const v = try gpa.create(Voice);
+    v.* = .{ .clip = id, .decoder = undefined, .decoder_ready = false, .sound = undefined, .initialized = false };
+    errdefer releaseVoice(v);
+
+    if (ma.ma_decoder_init_memory(clip.bytes, clip.size, null, &v.decoder) != ma.MA_SUCCESS) return error.General;
+    v.decoder_ready = true;
+    if (ma.ma_sound_init_from_data_source(&state.engine, @ptrCast(&v.decoder), 0, null, &v.sound) != ma.MA_SUCCESS) return error.General;
+    v.initialized = true;
+    ma.ma_sound_set_volume(&v.sound, volume);
+    ma.ma_sound_set_pitch(&v.sound, pitch);
+    ma.ma_sound_set_looping(&v.sound, if (loop) ma.MA_TRUE else ma.MA_FALSE);
+
+    if (state.next_voice == 0) state.next_voice = 1;
+    const voice = state.next_voice;
+    try state.voices.put(voice, v);
+    errdefer _ = state.voices.remove(voice);
+    if (ma.ma_sound_start(&v.sound) != ma.MA_SUCCESS) return error.General;
+    state.next_voice += 1;
+    _ = state.cache.retain.?(state.cache, id);
+    return voice;
+}
+
+/// Whether miniaudio still plays the voice; a voice that reached its end, or an unknown one, does
+/// not play. A null backend is not playing.
+fn audioVoicePlaying(self: ?*abi_audio.c.ke_audio, voice: abi_audio.c.ke_audio_voice) callconv(.c) bool {
+    const api = self orelse return false;
+    const state: *State = @ptrCast(@alignCast(api.handle));
+    const v = state.voices.get(voice) orelse return false;
+    return ma.ma_sound_is_playing(&v.sound) == ma.MA_TRUE;
+}
+
+/// Stops and frees the voice and gives its reference on the sound back to the cache. A null
+/// backend, the invalid id or an unknown id is ignored.
+fn audioVoiceStop(self: ?*abi_audio.c.ke_audio, voice: abi_audio.c.ke_audio_voice) callconv(.c) void {
+    const api = self orelse return;
+    const state: *State = @ptrCast(@alignCast(api.handle));
+    const kv = state.voices.fetchRemove(voice) orelse return;
+    const clip = kv.value.clip;
+    releaseVoice(kv.value);
+    _ = state.cache.release.?(state.cache, clip);
 }
 
 /// Sets the volume of the engine, which scales every sound. A null backend is ignored.
@@ -221,10 +253,13 @@ fn create(io: *abi_io.c.ke_io) R.Error!abi_audio.c.ke_audio_handle {
         .engine_ready = false,
         .sounds = std.AutoHashMap(abi_audio.c.ke_audio_sound, *LoadedSound).init(gpa),
         .next_id = 1,
+        .voices = std.AutoHashMap(abi_audio.c.ke_audio_voice, *Voice).init(gpa),
+        .next_voice = 1,
         .cache = undefined,
         .cache_destroy = undefined,
     };
     errdefer state.sounds.deinit();
+    errdefer state.voices.deinit();
 
     var cfg = ma.ma_engine_config_init();
     const r = ma.ma_engine_init(&cfg, &state.engine);
@@ -247,8 +282,9 @@ fn create(io: *abi_io.c.ke_io) R.Error!abi_audio.c.ke_audio_handle {
     api.handle = state;
     api.load_sound = &audioLoadSound;
     api.unload_sound = &audioUnloadSound;
-    api.play = &audioPlay;
-    api.stop = &audioStop;
+    api.voice_start = &audioVoiceStart;
+    api.voice_playing = &audioVoicePlaying;
+    api.voice_stop = &audioVoiceStop;
     api.set_master_volume = &audioSetMasterVolume;
 
     return .{ .ref = api, .destroy = &audioDestroy };
@@ -375,8 +411,8 @@ test "unloading the invalid sound id is a no-op" {
     h.ref.?.unload_sound.?(h.ref, abi_audio.c.KE_AUDIO_SOUND_INVALID);
 }
 
-test "stopping through a null backend is a no-op" {
-    audioStop(null, abi_audio.c.KE_AUDIO_SOUND_INVALID);
+test "stopping a voice through a null backend is a no-op" {
+    audioVoiceStop(null, abi_audio.c.KE_AUDIO_VOICE_INVALID);
 }
 
 test "setting the master volume through a null backend is a no-op" {
@@ -387,12 +423,36 @@ test "destroying a null backend is a no-op" {
     audioDestroy(null);
 }
 
-test "playing a sound that was never loaded fails" {
+test "starting a voice of a sound that was never loaded fails" {
     const h = createAudio();
     if (h.ref == null) return error.SkipZigTest;
     defer h.destroy.?(h.ref);
 
-    try testing.expectError(error.NotFound, R.check(h.ref.?.play.?(h.ref, 12345, 1.0, false)));
+    var voice: abi_audio.c.ke_audio_voice = 1;
+    try testing.expectError(error.NotFound, R.check(h.ref.?.voice_start.?(h.ref, 12345, 1.0, 1.0, false, &voice)));
+    try testing.expectEqual(@as(abi_audio.c.ke_audio_voice, abi_audio.c.KE_AUDIO_VOICE_INVALID), voice);
+}
+
+test "two voices of one sound play at once and each stops on its own" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    _ = try serving(&silent_wav);
+    defer served = null;
+    var id: abi_audio.c.ke_audio_sound = abi_audio.c.KE_AUDIO_SOUND_INVALID;
+    try R.check(h.ref.?.load_sound.?(h.ref, "beep.wav", &id));
+    var a: abi_audio.c.ke_audio_voice = abi_audio.c.KE_AUDIO_VOICE_INVALID;
+    var b: abi_audio.c.ke_audio_voice = abi_audio.c.KE_AUDIO_VOICE_INVALID;
+    try R.check(h.ref.?.voice_start.?(h.ref, id, 1.0, 1.0, true, &a));
+    try R.check(h.ref.?.voice_start.?(h.ref, id, 1.0, 1.0, true, &b));
+    try testing.expect(a != b);
+    h.ref.?.unload_sound.?(h.ref, id);
+    try testing.expect(h.ref.?.voice_playing.?(h.ref, a));
+    h.ref.?.voice_stop.?(h.ref, a);
+    try testing.expect(!h.ref.?.voice_playing.?(h.ref, a));
+    try testing.expect(h.ref.?.voice_playing.?(h.ref, b));
+    h.ref.?.voice_stop.?(h.ref, b);
 }
 
 test "the master volume accepts the full unit range" {
@@ -405,8 +465,9 @@ test "the master volume accepts the full unit range" {
     h.ref.?.set_master_volume.?(h.ref, 1.0);
 }
 
-test "playing through a null backend is an invalid argument" {
-    try testing.expectError(error.InvalidArgument, R.check(audioPlay(null, abi_audio.c.KE_AUDIO_SOUND_INVALID, 1.0, false)));
+test "starting a voice through a null backend is an invalid argument" {
+    var voice: abi_audio.c.ke_audio_voice = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(audioVoiceStart(null, abi_audio.c.KE_AUDIO_SOUND_INVALID, 1.0, 1.0, false, &voice)));
 }
 
 test "creating and destroying the audio backend leaves no block allocated" {

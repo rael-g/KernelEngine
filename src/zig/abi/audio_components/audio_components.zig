@@ -10,4 +10,10 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const AudioPlayerComponent = c.ke_audio_player_component;
+pub const SoundRelease = enum(c.ke_sound_release) {
+    keep = 0,
+    when_done = 1,
+    _,
+};
+
+pub const SoundComponent = c.ke_sound_component;

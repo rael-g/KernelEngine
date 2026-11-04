@@ -18,13 +18,17 @@ public interface IAudio : IDisposable
     uint LoadSound(string path);
     /// <summary>Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.</summary>
     void UnloadSound(uint sound);
-    /// <summary>Plays a sound, restarting it from the beginning if already playing.</summary>
+    /// <summary>Starts a new playback of a loaded sound, independent of every other playback of it. The voice holds a reference on the sound until it is stopped.</summary>
     /// <param name="volume">Playback volume in 0..1.</param>
-    /// <param name="loop">Non-zero to restart the sound when it ends.</param>
+    /// <param name="pitch">Playback rate, 1 for the recorded pitch.</param>
+    /// <param name="loop">Restarts the voice when it ends, so it plays until stopped.</param>
+    /// <returns>Receives the voice; KE_AUDIO_VOICE_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Play(uint sound, float volume, bool loop);
-    /// <summary>Stops a playing sound; no-op when it is not playing.</summary>
-    void Stop(uint sound);
+    uint VoiceStart(uint sound, float volume, float pitch, bool loop);
+    /// <summary>True while the voice is playing; false once it reached its end, and for a stopped or unknown voice.</summary>
+    bool VoicePlaying(uint voice);
+    /// <summary>Stops the voice and releases it, along with its reference on the sound; safe on KE_AUDIO_VOICE_INVALID.</summary>
+    void VoiceStop(uint voice);
     /// <summary>Sets a global multiplier applied on top of per-sound volumes (0..1).</summary>
     void SetMasterVolume(float volume);
 }

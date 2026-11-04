@@ -116,6 +116,7 @@ public unsafe partial class ScriptHost
     }
 
     private SignalBus? _signals;
+    private SceneLoader? _loader;
     /// <summary>The signal bus this host raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
 
@@ -173,15 +174,28 @@ public unsafe partial class ScriptHost
     /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null)
+    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null, SceneLoader? loader = null)
     {
         _signals = signals;
+        _loader = loader;
         _tree = tree;
         _ecs = ecs;
         _nameCid = CidOfName("name");
         _nativeTransformCid = CidOfName("transform");
         _ = CidOfName("hierarchy");
         return this;
+    }
+
+    /// <summary>
+    /// Records the creation of the nodes the scene file at <paramref name="path"/> describes under
+    /// <paramref name="parent"/>, applied at the barrier of the current system.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">No scene loader was composed, or no system is current.</exception>
+    internal void Instantiate(string path, Node parent)
+    {
+        if (_loader is null) throw new InvalidOperationException("spawning a scene needs a scene loader");
+        if (_commands is not { } commands) throw new InvalidOperationException($"spawning '{path}' runs inside a system");
+        _loader.Instantiate(path, parent.Entity, commands);
     }
 
     /// <summary>

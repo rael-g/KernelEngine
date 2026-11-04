@@ -1,0 +1,11 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "HitSound"
+type = "sound"
+[entity.sound]
+path    = "assets/sounds/hit.wav"
+volume  = 0.5
+playing = true
+release = 1

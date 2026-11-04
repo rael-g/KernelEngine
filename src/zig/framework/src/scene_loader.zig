@@ -560,7 +560,10 @@ fn cbInstantiate(ecs: ?*abi_ecs.c.ke_ecs, user: ?*anyopaque) callconv(.c) abi_re
     const p: *PendingInstance = @ptrCast(@alignCast(user));
     const s = p.s;
     s.created.clearRetainingCapacity();
-    const path: [*:0]const u8 = @ptrCast(&p.path);
+    const written: [*:0]const u8 = @ptrCast(&p.path);
+    var resolved: [std.fs.max_path_bytes + 1]u8 = undefined;
+    resolvePath(s, ".", written, &resolved) catch |err| return R.code(err);
+    const path: [*:0]const u8 = @ptrCast(&resolved);
     loadSceneRecursive(s, path, p.parent, null, null, null) catch |err| {
         log.warn("instantiating {s} failed: {t}", .{ path, err });
         discardCreated(s);
@@ -965,7 +968,7 @@ const Fixture = struct {
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_MESH, @sizeOf(abi_render_components.c.ke_mesh_component), generatedFields(&abi_render_contract.c.ke_mesh_component_fields), abi_render_contract.c.ke_mesh_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(abi_render_components.c.ke_sprite2d_component), generatedFields(&abi_render_contract.c.ke_sprite2d_component_fields), abi_render_contract.c.ke_sprite2d_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_LABEL, @sizeOf(abi_ui_components.c.ke_label_component), generatedFields(&abi_render_contract.c.ke_label_component_fields), abi_render_contract.c.ke_label_component_fields.len);
-        self.describe(abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(abi_audio_components.c.ke_audio_player_component), generatedFields(&abi_audio_contract.c.ke_audio_player_component_fields), abi_audio_contract.c.ke_audio_player_component_fields.len);
+        self.describe(abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, @sizeOf(abi_audio_components.c.ke_sound_component), generatedFields(&abi_audio_contract.c.ke_sound_component_fields), abi_audio_contract.c.ke_sound_component_fields.len);
         self.describe(abi_physics_contract.c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(abi_physics_components.c.ke_collider2d_component), generatedFields(&abi_physics_contract.c.ke_collider2d_component_fields), abi_physics_contract.c.ke_collider2d_component_fields.len);
 
         self.assets_h = std.mem.zeroes(abi_asset_resolver.c.ke_asset_resolver_handle);
@@ -2030,7 +2033,7 @@ test "destroying a null loader is safe" {
     f.loader_h.destroy.?(null);
 }
 
-test "an audio player keeps the path and volume the scene authored" {
+test "a sound keeps the path, volume and release the scene authored" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -2040,9 +2043,10 @@ test "an audio player keeps the path and volume the scene authored" {
     try scene.put("main.scene.toml",
         \\[[entity]]
         \\name = "Hit"
-        \\[entity.audio_player]
+        \\[entity.sound]
         \\path = "assets/sounds/hit.wav"
         \\volume = 0.5
+        \\release = 1
         \\
     );
 
@@ -2050,9 +2054,10 @@ test "an audio player keeps the path and volume the scene authored" {
     const e = f.find("Hit");
     try testing.expect(e != abi_ecs.c.KE_ENTITY_INVALID);
 
-    const a = f.comp(abi_audio_components.c.ke_audio_player_component, abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, e) orelse return error.MissingComponent;
+    const a = f.comp(abi_audio_components.c.ke_sound_component, abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("assets/sounds/hit.wav", std.mem.sliceTo(&a.path, 0));
     try testing.expectApproxEqAbs(@as(f32, 0.5), a.volume, 1e-6);
+    try testing.expectEqual(abi_audio_components.c.KE_SOUND_RELEASE_WHEN_DONE, a.release);
 }
 
 test "a collider keeps the extents and surface the scene authored" {

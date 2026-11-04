@@ -4,8 +4,10 @@ const std = @import("std");
 const abi_result = @import("result");
 
 pub const ke_audio_sound = u32;
+pub const ke_audio_voice = u32;
 
 pub const KE_AUDIO_SOUND_INVALID: ke_audio_sound = 0;
+pub const KE_AUDIO_VOICE_INVALID: ke_audio_voice = 0;
 
 /// Audio playback. Every slot is safe to call from a system body.
 pub const ke_audio = extern struct {
@@ -14,10 +16,15 @@ pub const ke_audio = extern struct {
     load_sound: ?*const fn (?*ke_audio, ?[*:0]const u8, ?*ke_audio_sound) callconv(.c) abi_result.c.ke_result = null,
     /// Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.
     unload_sound: ?*const fn (?*ke_audio, ke_audio_sound) callconv(.c) void = null,
-    /// Plays a sound, restarting it from the beginning if already playing.
-    play: ?*const fn (?*ke_audio, ke_audio_sound, f32, bool) callconv(.c) abi_result.c.ke_result = null,
-    /// Stops a playing sound; no-op when it is not playing.
-    stop: ?*const fn (?*ke_audio, ke_audio_sound) callconv(.c) void = null,
+    /// Starts a new playback of a loaded sound, independent of every other playback of it. The voice
+    /// holds a reference on the sound until it is stopped.
+    voice_start: ?*const fn (?*ke_audio, ke_audio_sound, f32, f32, bool, ?*ke_audio_voice) callconv(.c) abi_result.c.ke_result = null,
+    /// True while the voice is playing; false once it reached its end, and for a stopped or unknown
+    /// voice.
+    voice_playing: ?*const fn (?*ke_audio, ke_audio_voice) callconv(.c) bool = null,
+    /// Stops the voice and releases it, along with its reference on the sound; safe on
+    /// KE_AUDIO_VOICE_INVALID.
+    voice_stop: ?*const fn (?*ke_audio, ke_audio_voice) callconv(.c) void = null,
     /// Sets a global multiplier applied on top of per-sound volumes (0..1).
     set_master_volume: ?*const fn (?*ke_audio, f32) callconv(.c) void = null,
 };

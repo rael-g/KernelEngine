@@ -9,7 +9,7 @@ namespace Pong;
 /// The ball. Composes <see cref="Body2D"/>, so its pose and motion are the physics
 /// component itself and the physics plugin's own system advances them — this script
 /// owns launch and scoring only, reading input each frame and touching the body each
-/// fixed step. Visual, collider and sounds are children declared in Ball.scene.
+/// fixed step. Visual and collider are children declared in Ball.scene; each sound is a scene of its own, spawned under the ball when it plays.
 /// </summary>
 public sealed partial class Ball : Body2D
 {
@@ -17,6 +17,12 @@ public sealed partial class Ball : Body2D
 
     private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter _router;
+
+    /// <summary>The sound played each time the ball bounces off a paddle.</summary>
+    public partial SceneRef HitSound { get; set; }
+
+    /// <summary>The sound played each time a goal is scored.</summary>
+    public partial SceneRef ScoreSound { get; set; }
 
     /// <summary>Speed the ball is launched at, in metres per second.</summary>
     public partial float InitialSpeed { get; set; }
@@ -50,8 +56,6 @@ public sealed partial class Ball : Body2D
     }
 
     void FixedUpdate(in View view,
-        [NodeName("HitSound")] Descendant<AudioPlayer> hit,
-        [NodeName("ScoreSound")] Descendant<AudioPlayer> sfx,
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
     {
@@ -59,11 +63,11 @@ public sealed partial class Ball : Body2D
         if (AwaitingLaunch) return;
 
         if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
-            hit.Node?.Play();
+            HitSound.Spawn();
         LastVelocity = Velocity;
 
-        if (Position.X > Field.HalfW + GoalLineMargin) Score(leftScored: true, goal, sfx);
-        if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal, sfx);
+        if (Position.X > Field.HalfW + GoalLineMargin) Score(leftScored: true, goal);
+        if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal);
     }
 
     void Launch(Emit<BallLaunched> launched)
@@ -78,10 +82,10 @@ public sealed partial class Ball : Body2D
         LastVelocity = Velocity;
     }
 
-    void Score(bool leftScored, Emit<GoalScored> goal, Descendant<AudioPlayer> sfx)
+    void Score(bool leftScored, Emit<GoalScored> goal)
     {
         goal.Send(new GoalScored(leftScored));
-        sfx.Node?.Play();
+        ScoreSound.Spawn();
         Position = Vector2.Zero;
         Velocity = Vector2.Zero;
         LastVelocity = Vector2.Zero;

@@ -113,7 +113,7 @@ sealed class AudioController : Node
     private readonly uint _beep;
     private readonly uint _bass;
 
-    private bool _bassLooping;
+    private uint _bassVoice;
     private bool _prevSpace;
     private bool _prevL;
     private bool _prevEsc;
@@ -135,20 +135,20 @@ sealed class AudioController : Node
 
         if (space && !_prevSpace)
         {
-            _audio.Play(_beep, volume: 0.6f, loop: false);
+            _audio.VoiceStart(_beep, volume: 0.6f, pitch: 1f, loop: false);
             Console.WriteLine("BEEP");
         }
         if (l && !_prevL)
         {
-            _bassLooping = !_bassLooping;
-            if (_bassLooping)
+            if (_bassVoice == 0)
             {
-                _audio.Play(_bass, volume: 0.4f, loop: true);
+                _bassVoice = _audio.VoiceStart(_bass, volume: 0.4f, pitch: 1f, loop: true);
                 Console.WriteLine("BASS on");
             }
             else
             {
-                _audio.Stop(_bass);
+                _audio.VoiceStop(_bassVoice);
+                _bassVoice = 0;
                 Console.WriteLine("BASS off");
             }
         }

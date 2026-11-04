@@ -10,6 +10,6 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public partial struct ke_audio_player_module
+public partial struct ke_sound_module
 {
 }

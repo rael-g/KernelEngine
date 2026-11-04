@@ -35,7 +35,8 @@ extern "C"
          * at the root, when @p commands is applied; the scene's first entity becomes a child of
          * @p parent. A failure of the recorded load is logged and fails the application of
          * @p commands with its code, and removes what that load made.
-         * @param path     [utf8] Path to the scene file, read as load reads it.
+         * @param path     [utf8] Path to the scene file; a `res://` path is the project root joined with the
+         *                 rest, as for an included scene, and any other is read as load reads it.
          * @param parent   The node the scene is attached under; KE_ENTITY_INVALID attaches it at
          *                 the root.
          * @param commands

@@ -11,7 +11,7 @@
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- Node, for AudioPlayer -->
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>

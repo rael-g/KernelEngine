@@ -12,6 +12,7 @@ public class AudioTests
     private static uint LastSoundId = 0;
     private static float LastVolume = 0;
     private static bool LastLoop;
+    private static float LastPitch;
     private static bool DestroyCalled = false;
     private static string? LastPath = null;
 
@@ -30,18 +31,23 @@ public class AudioTests
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe global::KernelEngine.Result.Native.Result MockPlay(ke_audio* self, uint soundId, float volume, bool loop)
+    private static unsafe global::KernelEngine.Result.Native.Result MockVoiceStart(ke_audio* self, uint soundId, float volume, float pitch, bool loop, uint* outVoice)
     {
         LastSoundId = soundId;
         LastVolume = volume;
+        LastPitch = pitch;
         LastLoop = loop;
+        *outVoice = 7u;
         return global::KernelEngine.Result.Native.Result.Ok;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
-    private static unsafe void MockStop(ke_audio* self, uint soundId)
+    private static unsafe bool MockVoicePlaying(ke_audio* self, uint voice) => voice == 7u;
+
+    [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
+    private static unsafe void MockVoiceStop(ke_audio* self, uint voice)
     {
-        LastSoundId = soundId;
+        LastSoundId = voice;
     }
 
     [UnmanagedCallersOnly(CallConvs = new[] { typeof(System.Runtime.CompilerServices.CallConvCdecl) })]
@@ -61,8 +67,9 @@ public class AudioTests
         var ptr = (ke_audio*)NativeMemory.Alloc((nuint)sizeof(ke_audio));
         ptr->load_sound = &MockLoadSound;
         ptr->unload_sound = &MockUnloadSound;
-        ptr->play = &MockPlay;
-        ptr->stop = &MockStop;
+        ptr->voice_start = &MockVoiceStart;
+        ptr->voice_playing = &MockVoicePlaying;
+        ptr->voice_stop = &MockVoiceStop;
         ptr->set_master_volume = &MockSetMasterVolume;
         return new ke_audio_handle { @ref = ptr, destroy = &MockDestroy };
     }
@@ -113,30 +120,33 @@ public class AudioTests
     }
 
     [Fact]
-    public unsafe void Play_CallsNative()
+    public unsafe void VoiceStart_CallsNative_AndReturnsTheVoice()
     {
         var h = CreateMockHandle();
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Play(123u, 0.5f, true);
+        var voice = audio.VoiceStart(123u, 0.5f, 1.5f, true);
 
+        Assert.Equal(7u, voice);
         Assert.Equal(123u, LastSoundId);
         Assert.Equal(0.5f, LastVolume);
+        Assert.Equal(1.5f, LastPitch);
         Assert.True(LastLoop);
+        Assert.True(audio.VoicePlaying(voice));
         NativeMemory.Free(h.@ref);
     }
 
     [Fact]
-    public unsafe void Stop_CallsNative()
+    public unsafe void VoiceStop_CallsNative()
     {
         var h = CreateMockHandle();
         IAudio audio = new Audio(h);
         LastSoundId = 0;
 
-        audio.Stop(123u);
+        audio.VoiceStop(7u);
 
-        Assert.Equal(123u, LastSoundId);
+        Assert.Equal(7u, LastSoundId);
         NativeMemory.Free(h.@ref);
     }
 

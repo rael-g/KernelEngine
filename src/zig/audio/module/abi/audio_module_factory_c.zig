@@ -9,9 +9,10 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
-pub const ke_audio_player_module = opaque {};
+pub const ke_sound_module = opaque {};
 
 pub const ke_audio_sound = u32;
+pub const ke_audio_voice = u32;
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_module_id = u64;
@@ -45,24 +46,24 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// Values a caller gives; a zero field takes its default.
-pub const ke_audio_player_module_config = extern struct {
+pub const ke_sound_module_config = extern struct {
     /// Directory a clip's path is joined to; copied. NULL uses the path as written.
     root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
-pub const ke_audio_player_module_handle = extern struct {
-    ref: ?*ke_audio_player_module = std.mem.zeroes(?*ke_audio_player_module),
-    destroy: ?*const fn (?*ke_audio_player_module) callconv(.c) void = null,
+pub const ke_sound_module_handle = extern struct {
+    ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
+    destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
 
-/// Adds audio's scene components to set: the audio player, with its field table, so an
-/// [entity.components.audio_player] block applies.
+/// Adds audio's scene components to set: the sound, with its field table, so a [entity.sound]
+/// block applies.
 pub extern fn ke_audio_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_audio_module_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Registers the post-update-phase system that loads, plays and unloads the clip of every
-/// ke_audio_player_component. Destroying the module unloads every clip it loaded.
-pub extern fn ke_audio_player_module_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const ke_audio_player_module_config, out_module: ?*ke_audio_player_module_handle) abi_result.c.ke_result;
+/// Registers the post-update-phase system that loads, plays and releases the clip of every
+/// ke_sound_component. Destroying the module stops every voice and releases every clip it holds.
+pub extern fn ke_sound_module_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const ke_sound_module_config, out_module: ?*ke_sound_module_handle) abi_result.c.ke_result;

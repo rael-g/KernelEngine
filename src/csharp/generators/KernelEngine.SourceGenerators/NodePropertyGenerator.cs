@@ -125,7 +125,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine("    private static readonly string GeneratedComponentAlias =");
             sb.AppendLine($"        global::KernelEngine.Framework.NodeTypes.NameOf(typeof({className}).Name);");
             sb.AppendLine();
-            foreach (var p in properties.Where(p => p.Type.SpecialType == SpecialType.System_String))
+            foreach (var p in properties.Where(p => IsText(p.Type)))
             {
                 sb.AppendLine($"    [global::System.Runtime.CompilerServices.InlineArray({TextCapacityOf(p)})]");
                 sb.AppendLine($"    private struct {p.Name}Buffer {{ private byte _first; }}");
@@ -135,7 +135,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             sb.AppendLine($"    private struct {slots[0].TypeName} : global::KernelEngine.Ecs.IComponentLayout");
             sb.AppendLine("    {");
             foreach (var p in properties)
-                sb.AppendLine(p.Type.SpecialType == SpecialType.System_String
+                sb.AppendLine(IsText(p.Type)
                     ? $"        public {p.Name}Buffer {p.Name};"
                     : $"        public {p.Type.ToDisplayString()} {p.Name};");
             EmitLayout(sb, slots[0].TypeName, properties);
@@ -222,6 +222,29 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
             var fieldName = isNative ? declaredFieldName : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
+            if (IsSceneRef(p.Type) && !isNative)
+            {
+                needsUtf8Helpers = true;
+                sb.AppendLine($"    public partial global::KernelEngine.Framework.SceneRef {p.Name}");
+                sb.AppendLine("    {");
+                sb.AppendLine("        get");
+                sb.AppendLine("        {");
+                sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
+                sb.AppendLine($"            return new global::KernelEngine.Framework.SceneRef(this, GeneratedUtf8Get(ref s.{p.Name}));");
+                sb.AppendLine("        }");
+                if (writes)
+                {
+                    sb.AppendLine("        set");
+                    sb.AppendLine("        {");
+                    sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
+                    sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value.Path, \"{p.Name}\");");
+                    sb.AppendLine($"            if (!live && IsBound) GeneratedSet({slot.Cid}, s);");
+                    sb.AppendLine("        }");
+                }
+                sb.AppendLine("    }");
+                continue;
+            }
+
             if (p.Type.SpecialType == SpecialType.System_String && !isNative)
             {
                 needsUtf8Helpers = true;
@@ -426,7 +449,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     static string? KindOf(ITypeSymbol t)
     {
         if (t.TypeKind == TypeKind.Enum) return "Int";
-        if (t.SpecialType == SpecialType.System_String) return "String";
+        if (IsText(t)) return "String";
         return t.ToDisplayString() switch
         {
             "float" or "double" => "Float",
@@ -441,6 +464,11 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     }
 
     const int DefaultTextCapacity = 128;
+
+    static bool IsSceneRef(ITypeSymbol t) => t.ToDisplayString() == "KernelEngine.Framework.SceneRef";
+
+    /// <summary>Whether a property is stored as UTF-8 text in its component: a string or a scene reference.</summary>
+    static bool IsText(ITypeSymbol t) => t.SpecialType == SpecialType.System_String || IsSceneRef(t);
 
     static int TextCapacityOf(IPropertySymbol p)
     {

@@ -10,7 +10,7 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public unsafe partial struct ke_audio_player_module_config
+public unsafe partial struct ke_sound_module_config
 {
     [NativeTypeName("const char *")]
     public sbyte* root;

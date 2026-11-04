@@ -13,7 +13,7 @@ public static class AudioComponentsNodeTypes
     /// <summary>Registers this domain's node types with the scene node registry.</summary>
     public static IServiceCollection AddAudioComponentsNodeTypes(this IServiceCollection services)
     {
-        services.AddNodeType<AudioPlayer>();
+        services.AddNodeType<Sound>();
         return services;
     }
 }

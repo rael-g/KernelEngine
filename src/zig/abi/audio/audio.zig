@@ -35,17 +35,24 @@ pub const Audio = struct {
                     return T.unloadSound(state, a0);
                 }
             }.call,
-            .play = &struct {
-                fn call(self: ?*c.ke_audio, a0: c.ke_audio_sound, a1: f32, a2: bool) callconv(.c) abi_result.c.ke_result {
+            .voice_start = &struct {
+                fn call(self: ?*c.ke_audio, a0: c.ke_audio_sound, a1: f32, a2: f32, a3: bool, a4: ?*c.ke_audio_voice) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.play(state, a0, a1, a2) catch |failure| return resultOf(failure);
+                    const value = T.voiceStart(state, a0, a1, a2, a3) catch |failure| return resultOf(failure);
+                    (a4 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
-            .stop = &struct {
-                fn call(self: ?*c.ke_audio, a0: c.ke_audio_sound) callconv(.c) void {
+            .voice_playing = &struct {
+                fn call(self: ?*c.ke_audio, a0: c.ke_audio_voice) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.voicePlaying(state, a0);
+                }
+            }.call,
+            .voice_stop = &struct {
+                fn call(self: ?*c.ke_audio, a0: c.ke_audio_voice) callconv(.c) void {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.stop(state, a0);
+                    return T.voiceStop(state, a0);
                 }
             }.call,
             .set_master_volume = &struct {
@@ -69,14 +76,24 @@ pub const Audio = struct {
         return self.ptr.unload_sound.?(self.ptr, sound);
     }
 
-    /// Plays a sound, restarting it from the beginning if already playing.
-    pub fn play(self: Audio, sound: c.ke_audio_sound, volume: f32, loop: bool) Error!void {
-        try checkResult(self.ptr.play.?(self.ptr, sound, volume, loop));
+    /// Starts a new playback of a loaded sound, independent of every other playback of it. The voice
+    /// holds a reference on the sound until it is stopped.
+    pub fn voiceStart(self: Audio, sound: c.ke_audio_sound, volume: f32, pitch: f32, loop: bool) Error!c.ke_audio_voice {
+        var written: c.ke_audio_voice = undefined;
+        try checkResult(self.ptr.voice_start.?(self.ptr, sound, volume, pitch, loop, &written));
+        return written;
     }
 
-    /// Stops a playing sound; no-op when it is not playing.
-    pub fn stop(self: Audio, sound: c.ke_audio_sound) void {
-        return self.ptr.stop.?(self.ptr, sound);
+    /// True while the voice is playing; false once it reached its end, and for a stopped or unknown
+    /// voice.
+    pub fn voicePlaying(self: Audio, voice: c.ke_audio_voice) bool {
+        return self.ptr.voice_playing.?(self.ptr, voice);
+    }
+
+    /// Stops the voice and releases it, along with its reference on the sound; safe on
+    /// KE_AUDIO_VOICE_INVALID.
+    pub fn voiceStop(self: Audio, voice: c.ke_audio_voice) void {
+        return self.ptr.voice_stop.?(self.ptr, voice);
     }
 
     /// Sets a global multiplier applied on top of per-sound volumes (0..1).
