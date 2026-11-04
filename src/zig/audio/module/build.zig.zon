@@ -14,6 +14,13 @@
         .abi_result = .{ .path = "../../abi/result" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
+        .abi_runtime = .{ .path = "../../abi/runtime" },
+        .abi_audio_module_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../../common" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
     },
     .paths = .{"."},
 }

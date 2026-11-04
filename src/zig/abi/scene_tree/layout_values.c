@@ -14,6 +14,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_scene_tree, first_child),
     offsetof(ke_scene_tree, next_sibling),
     offsetof(ke_scene_tree, propagate_transforms),
+    offsetof(ke_scene_tree, children_first),
     offsetof(ke_scene_tree, hierarchy_generation),
     sizeof(ke_scene_tree_handle),
     offsetof(ke_scene_tree_handle, ref),

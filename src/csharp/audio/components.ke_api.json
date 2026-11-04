@@ -1,5 +1,160 @@
 {
-  "enums": [],
+  "enums": [
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
   "structs": [
     {
       "name": "ke_vec2",
@@ -254,7 +409,7 @@
     },
     {
       "name": "ke_audio_player_component",
-      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name.",
+      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name. The clip is loaded on the first update that sees the component and unloaded on the first update in which the entity no longer holds it.",
       "tags": [
         "table",
         "node:AudioPlayer",
@@ -274,16 +429,181 @@
             "default:1"
           ],
           "doc": "Linear gain, 0..1."
+        },
+        {
+          "name": "play_requested",
+          "type": "bool",
+          "tags": [],
+          "doc": "Set to play the clip once from its start at volume; the next update plays it and clears the flag. A clip that is not loaded clears it without playing."
+        },
+        {
+          "name": "sound",
+          "type": "ke_audio_sound",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The loaded clip, assigned when the component is reconciled. Callers do not write it."
         }
       ]
     }
   ],
-  "vtables": [],
+  "vtables": [
+    {
+      "name": "ke_audio",
+      "doc": "Audio playback. Every slot is safe to call from a system body.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_sound",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Loads a sound for repeated playback; the backend autodetects the format.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_sound; KE_RESULT_NOT_FOUND when the file cannot be opened; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The audio file, read through the io the backend was created with."
+            },
+            {
+              "name": "out_sound",
+              "type": "ke_audio_sound *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the sound; KE_AUDIO_SOUND_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "unload_sound",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "play",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Plays a sound, restarting it from the beginning if already playing.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID; KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_GENERAL when the backend cannot start it.",
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": "Playback volume in 0..1."
+            },
+            {
+              "name": "loop",
+              "type": "bool",
+              "tags": [],
+              "doc": "Non-zero to restart the sound when it ends."
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "stop",
+          "returns": "void",
+          "tags": [],
+          "doc": "Stops a playing sound; no-op when it is not playing.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "set_master_volume",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets a global multiplier applied on top of per-sound volumes (0..1).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_audio_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_audio *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_audio *"
+        }
+      ],
+      "external": true
+    }
+  ],
   "functions": [],
   "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {},
+  "type_aliases": {
+    "ke_audio_sound": "uint32_t"
+  },
   "constants": [
     {
       "name": "KE_AUDIO_PLAYER_MAX_PATH",

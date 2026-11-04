@@ -121,6 +121,29 @@ fn vtFirstChild(self_in: ?*abi_scene_tree.c.ke_scene_tree, entity: abi_asset_res
     return h.first_child;
 }
 
+fn listChildrenFirst(s: *State, parent: abi_asset_resolver.c.ke_entity, out: []abi_asset_resolver.c.ke_entity, count: *u32) void {
+    const h = getHierarchy(s, parent) orelse return;
+    var child = h.first_child;
+    while (child != abi_ecs.c.KE_ENTITY_INVALID) {
+        listChildrenFirst(s, child, out, count);
+        if (count.* < out.len) out[count.*] = child;
+        count.* += 1;
+        child = if (getHierarchy(s, child)) |ch| ch.next_sibling else abi_ecs.c.KE_ENTITY_INVALID;
+    }
+}
+
+/// Slot `children_first`. Walks the tree from the root depth-first, writing a node after its
+/// subtree, and counts every node whether or not the buffer holds it. A null tree lists nothing.
+fn vtChildrenFirst(self_in: ?*abi_scene_tree.c.ke_scene_tree, out_nodes: [*c]abi_asset_resolver.c.ke_entity, capacity: u32) callconv(.c) u32 {
+    const self = self_in orelse return 0;
+    if (self.handle == null) return 0;
+    const s = stateOf(self);
+    const out: []abi_asset_resolver.c.ke_entity = if (out_nodes == null) &.{} else out_nodes[0..capacity];
+    var count: u32 = 0;
+    listChildrenFirst(s, s.root, out, &count);
+    return count;
+}
+
 /// Slot `next_sibling`. Returns the sibling created right after the entity under the same parent,
 /// or the invalid entity when it is the last, has no hierarchy component, or the tree is null.
 fn vtNextSibling(self_in: ?*abi_scene_tree.c.ke_scene_tree, entity: abi_asset_resolver.c.ke_entity) callconv(.c) abi_asset_resolver.c.ke_entity {
@@ -572,6 +595,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) R.Error!a
     s.api.parent = vtParent;
     s.api.first_child = vtFirstChild;
     s.api.next_sibling = vtNextSibling;
+    s.api.children_first = vtChildrenFirst;
     s.api.propagate_transforms = vtPropagateTransforms;
     s.api.hierarchy_generation = vtHierarchyGeneration;
 
@@ -653,7 +677,8 @@ fn fakeComponentRegister(
         if (std.mem.eql(u8, comp.name, wanted)) return answer(out_cid, @intCast(i + 1));
     }
     if (f.component_count >= fake_max_components) return answer(out_cid, 0);
-    f.components[f.component_count] = .{ .name = wanted, .size = params.*.size, .fields = params.*.fields };
+    const name = f.arena.allocator().dupe(u8, wanted) catch return answer(out_cid, 0);
+    f.components[f.component_count] = .{ .name = name, .size = params.*.size, .fields = params.*.fields };
     f.component_count += 1;
     return answer(out_cid, @intCast(f.component_count));
 }
@@ -1345,6 +1370,27 @@ test "linking and unlinking a node each move the hierarchy generation" {
     try testing.expect(linked != before);
     try testing.expectEqual(R.ok, t.*.destroy_node.?(t, n));
     try testing.expect(t.*.hierarchy_generation.?(t) != linked);
+}
+
+test "children first lists a node after its subtree and counts what the buffer cannot hold" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    const a = f.create("A", abi_ecs.c.KE_ENTITY_INVALID);
+    const a1 = f.create("A1", a);
+    const a2 = f.create("A2", a);
+    const b = f.create("B", abi_ecs.c.KE_ENTITY_INVALID);
+    const t = f.tree();
+
+    var nodes: [4]abi_asset_resolver.c.ke_entity = undefined;
+    try testing.expectEqual(@as(u32, 4), t.*.children_first.?(t, &nodes, nodes.len));
+    try testing.expectEqualSlices(abi_asset_resolver.c.ke_entity, &.{ a1, a2, a, b }, &nodes);
+
+    var two: [2]abi_asset_resolver.c.ke_entity = undefined;
+    try testing.expectEqual(@as(u32, 4), t.*.children_first.?(t, &two, two.len));
+    try testing.expectEqualSlices(abi_asset_resolver.c.ke_entity, &.{ a1, a2 }, &two);
+    try testing.expectEqual(@as(u32, 4), t.*.children_first.?(t, null, 0));
 }
 
 test "creating nodes and destroying the tree leaves no block allocated" {

@@ -84,11 +84,12 @@ pub const ke_script_host = extern struct {
     /// The entities bound as instances of `type`, in binding order. The slice belongs to the host
     /// and is invalidated by the next bind or unbind of that type.
     instances: ?*const fn (?*ke_script_host, ke_script_type_id, ?*u32) callconv(.c) ?[*]const ke_entity = null,
-    /// The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to
-    /// a node of that name; empty matches on type alone, and answers ambiguous when two candidates
-    /// qualify rather than picking one. `out_why` says which of the two an invalid answer was, and
-    /// may be NULL.
-    resolve: ?*const fn (?*ke_script_host, ke_entity, ke_script_type_id, ?[*:0]const u8, ke_script_borrow, ?*ke_script_resolve) callconv(.c) ke_entity = null,
+    /// The entity `owner` borrows: an instance of any of `types` found within `reach`. `name`
+    /// narrows it to a node of that name; empty matches on type alone. An ancestor borrow answers
+    /// the nearest ancestor that qualifies; any other answers ambiguous when two candidates qualify,
+    /// of one type or of two, rather than picking one. `out_why` says which of the two an invalid
+    /// answer was, and may be NULL.
+    resolve: ?*const fn (?*ke_script_host, ke_entity, ?[*]const ke_script_type_id, u32, ?[*:0]const u8, ke_script_borrow, ?*ke_script_resolve) callconv(.c) ke_entity = null,
 };
 
 /// Owner wrapper: destroy releases the type table and the bindings. The instances are not

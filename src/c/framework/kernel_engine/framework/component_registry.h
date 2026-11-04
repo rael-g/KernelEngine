@@ -1,19 +1,15 @@
-﻿#ifndef KERNEL_ENGINE_FRAMEWORK_WORLD_H_
-#define KERNEL_ENGINE_FRAMEWORK_WORLD_H_
+﻿#ifndef KERNEL_ENGINE_FRAMEWORK_COMPONENT_REGISTRY_H_
+#define KERNEL_ENGINE_FRAMEWORK_COMPONENT_REGISTRY_H_
 
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/variant.h>
-#include <kernel_engine/runtime/runtime.h>
 
 #ifdef __cplusplus
 extern "C"
 {
 #endif
-
-    struct ke_scene_tree;
-    struct ke_signal_bus;
 
     /// Fills a component from a scene block's keys.
     ///
@@ -32,33 +28,13 @@ extern "C"
                                                ke_variant_table_entry *entries,
                                                uint32_t                count);
 
-    typedef struct ke_world ke_world;
+    typedef struct ke_component_registry ke_component_registry;
 
-    /// [bag]
-    typedef struct ke_world_params
-    {
-        /// The ecs the world registers scene components on; required, borrowed.
-        ke_ecs                   *ecs;
-        /// The runtime the world hands out; required, borrowed.
-        ke_runtime               *runtime;
-        /// The scene tree the world hands out; optional, borrowed.
-        struct ke_scene_tree     *scene_tree;
-        /// Signal bus scene-declared connections are wired into; optional,
-        /// borrowed. Without one, a scene's connection blocks are reported and
-        /// skipped rather than silently doing nothing.
-        struct ke_signal_bus     *signal_bus;
-    } ke_world_params;
-
-    struct ke_world
+    /// What a scene needs to know of each component beyond the ecs: how a scene block's keys
+    /// land in its memory, and the short names a scene may write for it.
+    struct ke_component_registry
     {
         void *handle;
-
-        /** [internal] The ecs the world was created with. */
-        ke_ecs         *(*ecs)(struct ke_world *self);
-        /** [internal] The runtime the world was created with. */
-        ke_runtime     *(*runtime)(struct ke_world *self);
-        /** [internal] The scene tree the world was created with. */
-        struct ke_scene_tree *(*scene_tree)(struct ke_world *self);
 
         /** Registers the table describing how a scene block's keys land in this
          * component's memory.
@@ -66,10 +42,10 @@ extern "C"
          * Runs before the apply callback registered for the same component, if
          * any: the table covers every field it can describe, the callback is
          * left with what a description cannot express (a unit conversion, an
-         * enum spelled as a string). Borrowed; must outlive the world. Fails as an invalid
+         * enum spelled as a string). Borrowed; must outlive the registry. Fails as an invalid
          * argument for a null table or a zero count, and as out of memory.
          * @param fields [array_of:field_count] The table. */
-        ke_result (*register_component_fields)(struct ke_world          *self,
+        ke_result (*register_component_fields)(struct ke_component_registry *self,
                                                ke_component_id           cid,
                                                const ke_component_field *fields,
                                                uint32_t                  field_count);
@@ -77,7 +53,7 @@ extern "C"
         /** [internal] Field table registered for `cid`, or NULL.
          * @param out_count [out]
          * @return [array_of:out_count] */
-        const ke_component_field *(*get_component_fields)(struct ke_world *self,
+        const ke_component_field *(*get_component_fields)(struct ke_component_registry *self,
                                                           ke_component_id  cid,
                                                           uint32_t        *out_count);
 
@@ -88,7 +64,7 @@ extern "C"
          * @param ctx   Forwarded to @p apply unchanged.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p apply, or
          *         KE_RESULT_OUT_OF_MEMORY. */
-        ke_result (*register_component_apply)(struct ke_world      *self,
+        ke_result (*register_component_apply)(struct ke_component_registry *self,
                                               ke_component_id       cid,
                                               ke_component_apply_fn apply,
                                               void                 *ctx);
@@ -96,7 +72,7 @@ extern "C"
         /** [internal] Callback registered for `cid`, or NULL, and the context it was
          * registered with.
          * @param out_ctx [out] */
-        ke_component_apply_fn (*get_component_apply)(struct ke_world *self,
+        ke_component_apply_fn (*get_component_apply)(struct ke_component_registry *self,
                                                      ke_component_id  cid,
                                                      void           **out_ctx);
 
@@ -108,7 +84,7 @@ extern "C"
          * @param name  [borrowed,utf8] The name the component is registered under.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or
          *         KE_RESULT_OUT_OF_MEMORY. */
-        ke_result (*register_component_alias)(struct ke_world *self,
+        ke_result (*register_component_alias)(struct ke_component_registry *self,
                                               const char      *alias,
                                               const char      *name);
 
@@ -117,18 +93,18 @@ extern "C"
          * invalid argument when the alias is ambiguous, logging the candidates.
          * @param name     [borrowed,utf8] The name the scene wrote.
          * @param out_meta [out] Receives the component's id, size and field metadata. */
-        ke_result (*resolve_component)(struct ke_world   *self,
+        ke_result (*resolve_component)(struct ke_component_registry *self,
                                        const char        *name,
                                        ke_component_meta *out_meta);
 
     };
 
     /// [owner]
-    typedef struct ke_world_handle
+    typedef struct ke_component_registry_handle
     {
-        ke_world *ref;
-        void (*destroy)(ke_world *self);
-    } ke_world_handle;
+        ke_component_registry *ref;
+        void (*destroy)(ke_component_registry *self);
+    } ke_component_registry_handle;
 
 #ifdef __cplusplus
 }

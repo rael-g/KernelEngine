@@ -150,6 +150,17 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
         Handle->propagate_transforms(Handle);
     }
 
+    /// <summary>Every node under the root, each node's children before the node and siblings in the order they were linked, as many as the buffer holds. The root is not listed.</summary>
+    /// <param name="outNodes">Receives the nodes; may be NULL when capacity is zero.</param>
+    /// <returns>The number of nodes under the root, which exceeds capacity when the buffer was too small.</returns>
+    public uint ChildrenFirst(Span<Entity> outNodes)
+    {
+        fixed (Entity* outNodesPtr = outNodes)
+        {
+            return Handle->children_first(Handle, outNodesPtr, (uint)outNodes.Length);
+        }
+    }
+
     /// <summary>A count that changes whenever a node is linked into or unlinked from the tree, including when deferred commands apply. Two equal readings mean no parent link changed between them.</summary>
     public ulong HierarchyGeneration()
     {

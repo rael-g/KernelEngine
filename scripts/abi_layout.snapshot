@@ -647,9 +647,11 @@ ke_collider2d_component size=40 align=4
   attached 36
 
 [audio_components]
-ke_audio_player_component size=260 align=4
+ke_audio_player_component size=268 align=4
   path 0
   volume 256
+  play_requested 260
+  sound 264
 
 [text]
 ke_glyph_metrics size=40 align=4
@@ -895,29 +897,21 @@ ke_transform2d_component size=24 align=4
 ke_world_transform_component size=64 align=4
   matrix 0
 
-[world]
-ke_world_params size=32 align=8
-  ecs 0
-  runtime 8
-  scene_tree 16
-  signal_bus 24
-ke_world size=80 align=8
+[component_registry]
+ke_component_registry size=56 align=8
   handle 0
-  ecs 8
-  runtime 16
-  scene_tree 24
-  register_component_fields 32
-  get_component_fields 40
-  register_component_apply 48
-  get_component_apply 56
-  register_component_alias 64
-  resolve_component 72
-ke_world_handle size=16 align=8
+  register_component_fields 8
+  get_component_fields 16
+  register_component_apply 24
+  get_component_apply 32
+  register_component_alias 40
+  resolve_component 48
+ke_component_registry_handle size=16 align=8
   ref 0
   destroy 8
 
 [scene_tree]
-ke_scene_tree size=104 align=8
+ke_scene_tree size=112 align=8
   handle 0
   root 8
   create_node 16
@@ -930,7 +924,8 @@ ke_scene_tree size=104 align=8
   first_child 72
   next_sibling 80
   propagate_transforms 88
-  hierarchy_generation 96
+  children_first 96
+  hierarchy_generation 104
 ke_scene_tree_handle size=16 align=8
   ref 0
   destroy 8

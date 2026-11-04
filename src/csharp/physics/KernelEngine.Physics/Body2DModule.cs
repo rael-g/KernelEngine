@@ -11,7 +11,7 @@ namespace KernelEngine.Physics;
 /// it creates the body at the node's transform, steps the world, and writes the pose
 /// back into the transform and the motion into the component. Without this module a
 /// <c>Body2D</c> is storage that nothing advances. It requires a
-/// <see cref="KernelEngine.Framework.World"/>, whose scene tree tells it when a collider's
+/// <see cref="KernelEngine.Framework.SceneTree"/>, which tells it when a collider's
 /// ancestors may have changed.
 /// </summary>
 public sealed unsafe class Body2DModule : IRuntimeModule
@@ -34,14 +34,15 @@ public sealed unsafe class Body2DModule : IRuntimeModule
 
         if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
             KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        var world = services.GetRequiredService<KernelEngine.Framework.World>();
+        var tree = services.GetRequiredService<KernelEngine.Framework.SceneTree>();
+        var registry = services.GetRequiredService<KernelEngine.Framework.ComponentRegistry>();
 
         var @params = new ke_physics_body2d_module_params
         {
             runtime = ((INativeRuntime)runtime).Native,
             ecs = ((INativeEcs)ecs).Native,
             physics = ((INativePhysics2d)physics).Native,
-            scene_tree = ((KernelEngine.Framework.INativeSceneTree)world.Tree).Native,
+            scene_tree = ((KernelEngine.Framework.INativeSceneTree)tree).Native,
         };
 
         ke_physics_body2d_module_handle handle;
@@ -54,7 +55,7 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         try
         {
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create(set.@ref), "ke_physics_scene_components_create");
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeComponentRegistry)registry).Native), "register_into");
         }
         finally
         {

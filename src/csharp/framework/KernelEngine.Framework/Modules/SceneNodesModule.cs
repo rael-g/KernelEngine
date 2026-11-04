@@ -33,7 +33,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     /// <summary>The module name, "SceneNodes".</summary>
     public string Name => "SceneNodes";
 
-    /// <summary>The module that creates the world.</summary>
+    /// <summary>The module that creates the scene tree.</summary>
     public IEnumerable<Type> Dependencies => new[] { typeof(FrameworkModule) };
 
     /// <summary>Setup callback that only needs the node world.</summary>
@@ -71,7 +71,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                 Native.ke_script_host_handle handle;
                 KernelEngine.NativeResults.ThrowIfFailed(Native.NativeMethods.script_host_create(ecs.Native, null, &handle), "ke_script_host_create");
                 return new ScriptHost(handle).Compose(
-                    sp.GetRequiredService<World>(),
+                    sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>());
             }
@@ -86,8 +86,7 @@ public sealed class SceneNodesModule : IRuntimeModule
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var scriptHost = services.GetRequiredService<ScriptHost>();
-        var world = services.GetRequiredService<World>();
-        var sceneTree = world.Tree;
+        var sceneTree = services.GetRequiredService<SceneTree>();
         var input = services.GetService<IInput>();
         var evaluator = services.GetService<IActionEvaluator>();
 

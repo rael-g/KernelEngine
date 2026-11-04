@@ -1515,7 +1515,7 @@
           "tags": [
             "borrows"
           ],
-          "doc": "The entity \u0060owner\u0060 borrows: an instance of \u0060type\u0060 found within \u0060reach\u0060. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
+          "doc": "The entity \u0060owner\u0060 borrows: an instance of any of \u0060types\u0060 found within \u0060reach\u0060. \u0060name\u0060 narrows it to a node of that name; empty matches on type alone. An ancestor borrow answers the nearest ancestor that qualifies; any other answers ambiguous when two candidates qualify, of one type or of two, rather than picking one. \u0060out_why\u0060 says which of the two an invalid answer was, and may be NULL.",
           "return_doc": null,
           "params": [
             {
@@ -1525,8 +1525,16 @@
               "doc": null
             },
             {
-              "name": "type",
-              "type": "ke_script_type_id",
+              "name": "types",
+              "type": "const ke_script_type_id *",
+              "tags": [
+                "array_of:type_count"
+              ],
+              "doc": "The types a candidate may be bound to."
+            },
+            {
+              "name": "type_count",
+              "type": "uint32_t",
               "tags": [],
               "doc": null
             },

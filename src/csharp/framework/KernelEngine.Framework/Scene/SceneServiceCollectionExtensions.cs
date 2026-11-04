@@ -31,7 +31,10 @@ public static class SceneServiceCollectionExtensions
         });
         services.AddSingleton<SceneLoader>(sp =>
             new SceneLoader(
-                sp.GetRequiredService<World>(),
+                sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(),
+                sp.GetRequiredService<SceneTree>(),
+                sp.GetService<SignalBus>(),
+                sp.GetRequiredService<ComponentRegistry>(),
                 sp.GetRequiredService<AssetResolver>(),
                 sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
 

@@ -11,6 +11,7 @@
 static const ke_component_field ke_audio_player_component_fields[] = {
     { "path", KE_VARIANT_STRING, offsetof(ke_audio_player_component, path), sizeof(((ke_audio_player_component *)0)->path), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "volume", KE_VARIANT_FLOAT, offsetof(ke_audio_player_component, volume), sizeof(((ke_audio_player_component *)0)->volume), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
+    { "play_requested", KE_VARIANT_BOOL, offsetof(ke_audio_player_component, play_requested), sizeof(((ke_audio_player_component *)0)->play_requested), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
 #endif /* KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_ */

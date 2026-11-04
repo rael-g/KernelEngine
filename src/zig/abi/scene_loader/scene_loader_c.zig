@@ -3,30 +3,13 @@
 const std = @import("std");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_module_id = u64;
 pub const ke_query_id = u64;
-pub const ke_system_id = u64;
 
 /// Builds and binds the script an entity's declared type names.
 pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
-
-/// Registers the module's components and systems against the runtime it is being loaded into.
-/// Runs inside register_module, before that call returns.
-pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// Releases whatever the matching load acquired, as the runtime is torn down.
-pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) void;
-
-/// One call of a system body. The runtime calls it once per tick the system's phase runs, or
-/// once per slice when the system declared per_entity. A body runs on a worker thread; the code
-/// it returns is carried to the thread driving the tick, which tick() then fails with, and the
-/// runtime logs the system's name. The remaining bodies of the same wave still run — they were
-/// already dispatched — but no later phase of that tick starts.
-pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
 /// what it took: a key it accepted must have `consumed` set, or the loader will report it as one

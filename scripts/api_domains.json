@@ -2,7 +2,7 @@
   "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (kabic generate); each `bindings` entry configures ClangSharp (kabic bindings). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
   "convention": {
     "format": { "csharp": "../.editorconfig" },
-    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_world.resolve_component" ],
+    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_component_registry.resolve_component" ],
     "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_field_write", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
     "names": { "factory": [ { "match": "^(.*)_create$", "replace": "$1" } ], "csharp-type": [ { "match": "^ke_task$", "replace": "NativeTask" }, { "match": "^ke_action_type$", "replace": "NativeActionType" }, { "match": "^ke_ecs$", "replace": "EcsRegistry" }, { "match": "^ke_physics_2d$", "replace": "Physics2D" }, { "match": "^ke_body_type_2d$", "replace": "BodyType2D" }, { "match": "^ke_phase$", "replace": "RuntimePhase" }, { "match": "^ke_access$", "replace": "RuntimeAccess" } ] },
     "types": { "csharp": { "ke_vec2": "System.Numerics.Vector2", "ke_vec3": "System.Numerics.Vector3", "ke_vec4": "System.Numerics.Vector4", "ke_quat": "System.Numerics.Quaternion", "ke_mat4": "System.Numerics.Matrix4x4" } },
@@ -608,9 +608,9 @@
       ]
     },
     {
-      "name": "world",
+      "name": "component_registry",
       "headers": [
-        "src/c/framework/kernel_engine/framework/world.h"
+        "src/c/framework/kernel_engine/framework/component_registry.h"
       ],
       "auxHeaders": ["src/c/framework/kernel_engine/framework/scene_tree.h", "src/c/framework/kernel_engine/framework/signal_bus.h", 
         "src/c/ecs/kernel_engine/ecs/ecs.h"
@@ -627,7 +627,7 @@
         "src/c/result",
         "src/c/result"
       ],
-      "apiJson": "src/csharp/framework/world.ke_api.json",
+      "apiJson": "src/csharp/framework/component_registry.ke_api.json",
       "namespace": "KernelEngine.Framework",
       "nativeNamespace": "KernelEngine.Framework.Native",
       "outDir": "src/csharp/framework/KernelEngine.Framework/Generated",
@@ -670,7 +670,7 @@
       ],
       "auxHeaders": [
         "src/c/ecs/kernel_engine/ecs/ecs.h"
-      , "src/c/framework/kernel_engine/framework/world.h"],
+      , "src/c/framework/kernel_engine/framework/component_registry.h"],
       "includeDirs": ["src/c/runtime", "src/c/task_pool", "src/c/logger", 
         "src/c/framework",
         "src/zig/framework/include",
@@ -859,12 +859,12 @@
     { "name": "asset_assimp_factory", "packageDir": "src/zig/asset/assimp/abi", "headers": ["src/zig/asset/assimp/include/kernel_engine/asset/assimp/asset_assimp_log.h", "src/zig/asset/assimp/include/kernel_engine/asset/assimp/assimp_loader.h"], "includeDirs": ["src/c/asset", "src/zig/asset/assimp/include", "src/c/ecs", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/framework", "src/c/input", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/view", "src/c/window"] },
     { "name": "asset_stb_image_factory", "packageDir": "src/zig/asset/stb_image/abi", "headers": ["src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/asset_stb_image_log.h", "src/zig/asset/stb_image/include/kernel_engine/asset/stb_image/stb_image_loader.h"], "includeDirs": ["src/c/asset", "src/zig/asset/stb_image/include", "src/c/ecs", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/framework", "src/c/input", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/view", "src/c/window"] },
     { "name": "audio_miniaudio_factory", "packageDir": "src/zig/audio/miniaudio/abi", "headers": ["src/zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/audio_miniaudio_log.h", "src/zig/audio/miniaudio/include/kernel_engine/audio/miniaudio/miniaudio_audio.h"], "includeDirs": ["src/c/audio", "src/zig/audio/miniaudio/include", "src/c/ecs", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/math", "src/c/result", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/configuration", "src/c/framework", "src/c/input", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
-    { "name": "audio_module_factory", "packageDir": "src/zig/audio/module/abi", "headers": ["src/zig/audio/module/include/kernel_engine/audio/module/audio_module.h", "src/zig/audio/module/include/kernel_engine/audio/module/audio_module_log.h"], "includeDirs": ["src/zig/audio/module/include", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/result", "src/c/runtime", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/io", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
+    { "name": "audio_module_factory", "packageDir": "src/zig/audio/module/abi", "headers": ["src/zig/audio/module/include/kernel_engine/audio/module/audio_module.h", "src/zig/audio/module/include/kernel_engine/audio/module/audio_module_log.h", "src/zig/audio/module/include/kernel_engine/audio/module/audio_player_create.h"], "includeDirs": ["src/zig/audio/module/include", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/result", "src/c/runtime", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/io", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "configuration_factory", "packageDir": "src/zig/configuration/abi", "headers": ["src/zig/configuration/include/kernel_engine/configuration/configuration_create.h", "src/zig/configuration/include/kernel_engine/configuration/configuration_log.h"], "includeDirs": ["src/c/configuration", "src/zig/configuration/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "configuration_toml_factory", "packageDir": "src/zig/configuration/toml/abi", "headers": ["src/zig/configuration/toml/include/kernel_engine/configuration/toml/configuration_toml.h", "src/zig/configuration/toml/include/kernel_engine/configuration/toml/configuration_toml_log.h"], "includeDirs": ["src/c/configuration", "src/zig/configuration/toml/include", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "ecs_flecs_factory", "packageDir": "src/zig/ecs/flecs/abi", "headers": ["src/zig/ecs/flecs/include/kernel_engine/ecs/ecs_flecs_log.h", "src/zig/ecs/flecs/include/kernel_engine/ecs/ke_ecs_flecs.h"], "includeDirs": ["src/c/ecs", "src/zig/ecs/flecs/include", "src/c/logger", "src/c/math", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "file_system_std_factory", "packageDir": "src/zig/file_system/std/abi", "headers": ["src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_create.h", "src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_log.h"], "includeDirs": ["src/c/file_system", "src/zig/file_system/std/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
-    { "name": "framework_factory", "packageDir": "src/zig/framework/abi", "headers": ["src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h", "src/zig/framework/include/kernel_engine/framework/framework_log.h", "src/zig/framework/include/kernel_engine/framework/input_actions_create.h", "src/zig/framework/include/kernel_engine/framework/scene_component_set_create.h", "src/zig/framework/include/kernel_engine/framework/scene_hierarchy_create.h", "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h", "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h", "src/zig/framework/include/kernel_engine/framework/script_host_create.h", "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h", "src/zig/framework/include/kernel_engine/framework/world_create.h"], "includeDirs": ["src/c/asset", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/zig/framework/include", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/physics", "src/c/resource_cache", "src/c/view", "src/c/window"] },
+    { "name": "framework_factory", "packageDir": "src/zig/framework/abi", "headers": ["src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h", "src/zig/framework/include/kernel_engine/framework/framework_log.h", "src/zig/framework/include/kernel_engine/framework/input_actions_create.h", "src/zig/framework/include/kernel_engine/framework/scene_component_set_create.h", "src/zig/framework/include/kernel_engine/framework/scene_hierarchy_create.h", "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h", "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h", "src/zig/framework/include/kernel_engine/framework/script_host_create.h", "src/zig/framework/include/kernel_engine/framework/signal_bus_create.h", "src/zig/framework/include/kernel_engine/framework/component_registry_create.h"], "includeDirs": ["src/c/asset", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/zig/framework/include", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/physics", "src/c/resource_cache", "src/c/view", "src/c/window"] },
     { "name": "input_default_factory", "packageDir": "src/zig/input/default/abi", "headers": ["src/zig/input/default/include/kernel_engine/input/default/input_default_create.h", "src/zig/input/default/include/kernel_engine/input/default/input_default_log.h"], "includeDirs": ["src/c/input", "src/zig/input/default/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "io_pool_factory", "packageDir": "src/zig/io/pool/abi", "headers": ["src/zig/io/pool/include/kernel_engine/io/pool/io_pool_create.h", "src/zig/io/pool/include/kernel_engine/io/pool/io_pool_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/pool/include", "src/c/logger", "src/c/result", "src/c/task_pool", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "physics_body2d_factory", "packageDir": "src/zig/physics/body2d/abi", "headers": ["src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h", "src/zig/physics/body2d/include/kernel_engine/physics/body2d/physics_body2d_log.h", "src/zig/physics/body2d/include/kernel_engine/physics/body2d/scene_components.h"], "includeDirs": ["src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/physics", "src/zig/physics/body2d/include", "src/c/result", "src/c/runtime", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/io", "src/c/render", "src/c/resource_cache", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
@@ -1011,7 +1011,8 @@
       "namespace": "KernelEngine.Audio.Native",
       "headers": [
         "src/zig/audio/module/include/kernel_engine/audio/module/audio_module.h",
-        "src/zig/audio/module/include/kernel_engine/audio/module/audio_module_log.h"
+        "src/zig/audio/module/include/kernel_engine/audio/module/audio_module_log.h",
+        "src/zig/audio/module/include/kernel_engine/audio/module/audio_player_create.h"
       ],
       "library": "ke_audio_module",
       "output": "Generated/AudioModule/"
@@ -1088,12 +1089,12 @@
       "headers": [
         "src/c/framework/kernel_engine/framework/components.h",
         "src/c/framework/kernel_engine/framework/scene_tree.h",
-        "src/c/framework/kernel_engine/framework/world.h",
+        "src/c/framework/kernel_engine/framework/component_registry.h",
         "src/c/framework/kernel_engine/framework/input_actions.h",
         "src/c/framework/kernel_engine/framework/scene_loader.h",
         "src/c/framework/kernel_engine/framework/scene_component_set.h",
         "src/zig/framework/include/kernel_engine/framework/scene_component_set_create.h",
-        "src/zig/framework/include/kernel_engine/framework/world_create.h",
+        "src/zig/framework/include/kernel_engine/framework/component_registry_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h",
         "src/zig/framework/include/kernel_engine/framework/scene_loader_create.h",
         "src/zig/framework/include/kernel_engine/framework/input_actions_create.h",

@@ -17,11 +17,13 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
     /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST; zero selects RGBA16_FLOAT.</param>
     /// <param name="depthFormat">Format of the frame's depth; zero selects D32_FLOAT.</param>
-    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default) : base(Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat))
+    /// <param name="clearColor">Color the frame is cleared to; all four components zero read [render] clear_color_r/g/b/a from configuration, and a key that is absent takes 0.10, 0.15, 0.30, 1.0.</param>
+    /// <param name="configuration">Borrowed for the call only.</param>
+    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default, System.Numerics.Vector4 clearColor = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat, clearColor, configuration))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat)
+    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor, KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(target);
@@ -40,6 +42,8 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
             config.binder = binder.Native;
             config.color_format = colorFormat;
             config.depth_format = depthFormat;
+            config.clear_color = clearColor;
+            config.configuration = (configuration is null ? null : configuration.Native);
             KernelEngine.Render.Native.ke_render_service_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(&config, &handle), "ke_render_service_create");
             return handle;

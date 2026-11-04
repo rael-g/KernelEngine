@@ -95,6 +95,12 @@ pub const SceneTree = struct {
                     return T.propagateTransforms(state);
                 }
             }.call,
+            .children_first = &struct {
+                fn call(self: ?*c.ke_scene_tree, a0: ?[*]c.ke_entity, a1: u32) callconv(.c) u32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u32)));
+                    return T.childrenFirst(state, a0, a1);
+                }
+            }.call,
             .hierarchy_generation = &struct {
                 fn call(self: ?*c.ke_scene_tree) callconv(.c) u64 {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u64)));
@@ -173,6 +179,12 @@ pub const SceneTree = struct {
 
     pub fn propagateTransforms(self: SceneTree) void {
         return self.ptr.propagate_transforms.?(self.ptr);
+    }
+
+    /// Every node under the root, each node's children before the node and siblings in the order
+    /// they were linked, as many as the buffer holds. The root is not listed.
+    pub fn childrenFirst(self: SceneTree, out_nodes: ?[*]c.ke_entity, capacity: u32) u32 {
+        return self.ptr.children_first.?(self.ptr, out_nodes, capacity);
     }
 
     /// A count that changes whenever a node is linked into or unlinked from the tree, including when

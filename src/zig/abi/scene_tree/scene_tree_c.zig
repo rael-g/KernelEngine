@@ -49,6 +49,9 @@ pub const ke_scene_tree = extern struct {
     /// come back in the order they were added.
     next_sibling: ?*const fn (?*ke_scene_tree, ke_entity) callconv(.c) ke_entity = null,
     propagate_transforms: ?*const fn (?*ke_scene_tree) callconv(.c) void = null,
+    /// Every node under the root, each node's children before the node and siblings in the order
+    /// they were linked, as many as the buffer holds. The root is not listed.
+    children_first: ?*const fn (?*ke_scene_tree, ?[*]ke_entity, u32) callconv(.c) u32 = null,
     /// A count that changes whenever a node is linked into or unlinked from the tree, including when
     /// deferred commands apply. Two equal readings mean no parent link changed between them.
     hierarchy_generation: ?*const fn (?*ke_scene_tree) callconv(.c) u64 = null,

@@ -10,7 +10,7 @@
         .abi_physics_contract = .{ .path = "../abi/physics_contract" },
         .abi_framework = .{ .path = "../abi/framework" },
         .abi_audio_contract = .{ .path = "../abi/audio_contract" },
-        .abi_world = .{ .path = "../abi/world" },
+        .abi_component_registry = .{ .path = "../abi/component_registry" },
         .abi_ui_components = .{ .path = "../abi/ui_components" },
         .abi_signal_bus = .{ .path = "../abi/signal_bus" },
         .abi_script_host = .{ .path = "../abi/script_host" },

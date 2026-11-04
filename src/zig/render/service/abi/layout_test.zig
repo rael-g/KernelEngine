@@ -25,6 +25,8 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_render_service_params, translated("ke_render_service_params"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
+    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
@@ -49,7 +51,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
 }
 
-extern const layout_values: [10]c_ulonglong;
+extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -63,6 +65,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_service_params, "binder"),
         @offsetOf(abi.c.ke_render_service_params, "color_format"),
         @offsetOf(abi.c.ke_render_service_params, "depth_format"),
+        @offsetOf(abi.c.ke_render_service_params, "clear_color"),
+        @offsetOf(abi.c.ke_render_service_params, "configuration"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

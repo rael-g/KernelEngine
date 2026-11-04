@@ -24,6 +24,7 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_audio_player_component, translated("ke_audio_player_component"));
+    if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
 }
 
 test "every constant is the header's value" {
@@ -31,7 +32,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_AUDIO_PLAYER_MAX_PATH), @as(i128, abi.c.KE_AUDIO_PLAYER_MAX_PATH));
 }
 
-extern const layout_values: [4]c_ulonglong;
+extern const layout_values: [6]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -39,6 +40,8 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_audio_player_component),
         @offsetOf(abi.c.ke_audio_player_component, "path"),
         @offsetOf(abi.c.ke_audio_player_component, "volume"),
+        @offsetOf(abi.c.ke_audio_player_component, "play_requested"),
+        @offsetOf(abi.c.ke_audio_player_component, "sound"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

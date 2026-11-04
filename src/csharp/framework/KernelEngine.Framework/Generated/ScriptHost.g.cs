@@ -188,8 +188,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
         return front == null ? default : new ReadOnlySpan<Entity>(front, (int)outCountLocal);
     }
 
-    /// <summary>The entity `owner` borrows: an instance of `type` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone, and answers ambiguous when two candidates qualify rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
-    public Entity Resolve(Entity owner, uint type, string name, ScriptBorrow reach, out ScriptResolve outWhy)
+    /// <summary>The entity `owner` borrows: an instance of any of `types` found within `reach`. `name` narrows it to a node of that name; empty matches on type alone. An ancestor borrow answers the nearest ancestor that qualifies; any other answers ambiguous when two candidates qualify, of one type or of two, rather than picking one. `out_why` says which of the two an invalid answer was, and may be NULL.</summary>
+    /// <param name="types">The types a candidate may be bound to.</param>
+    public Entity Resolve(Entity owner, ReadOnlySpan<uint> types, string name, ScriptBorrow reach, out ScriptResolve outWhy)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -197,10 +198,13 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            ScriptResolve outWhyLocal;
-            var result = Handle->resolve(Handle, owner, type, (sbyte*)namePtr, (ScriptBorrow)reach, &outWhyLocal);
-            outWhy = outWhyLocal;
-            return result;
+            fixed (uint* typesPtr = types)
+            {
+                ScriptResolve outWhyLocal;
+                var result = Handle->resolve(Handle, owner, typesPtr, (uint)types.Length, (sbyte*)namePtr, (ScriptBorrow)reach, &outWhyLocal);
+                outWhy = outWhyLocal;
+                return result;
+            }
         }
     }
 

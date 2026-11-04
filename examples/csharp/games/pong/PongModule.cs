@@ -28,10 +28,10 @@ public sealed class PongModule : IRuntimeModule
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
         var ecs = services.GetRequiredService<INativeEcs>();
-        var world = services.GetRequiredService<World>();
+        var registry = services.GetRequiredService<ComponentRegistry>();
 
-        Paddle.RegisterSceneApply(world, ecs);
+        Paddle.RegisterSceneApply(registry, ecs);
 
-        Scoreboard.RegisterSceneApply(world, ecs);
+        Scoreboard.RegisterSceneApply(registry, ecs);
     }
 }

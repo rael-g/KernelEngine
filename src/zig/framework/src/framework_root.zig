@@ -11,7 +11,7 @@ comptime {
     _ = @import("components_apply.zig");
     _ = @import("mesh_shape.zig");
     _ = @import("asset_resolver.zig");
-    _ = @import("world.zig");
+    _ = @import("component_registry.zig");
     _ = @import("scene_tree.zig");
     _ = @import("scene_hierarchy.zig");
     _ = @import("input_actions.zig");

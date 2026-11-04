@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/framework/scene_loader.h>
@@ -19,7 +18,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/result"));
     translated.addIncludePath(b.path("../../../c/runtime"));
-    translated.addIncludePath(b.path("../../runtime/include"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/framework"));
@@ -40,7 +38,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../c/runtime"));
-    tests.root_module.addIncludePath(b.path("../../runtime/include"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../c/framework"));

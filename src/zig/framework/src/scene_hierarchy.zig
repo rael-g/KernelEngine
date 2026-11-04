@@ -23,7 +23,7 @@ const mat4 = @import("mat4.zig");
 /// pointed at from the registration, and the query's terms point into `queries_terms`.
 const State = struct {
     runtime: *abi_runtime.c.ke_runtime = undefined,
-    system: abi_framework.c.ke_system_id = 0,
+    system: abi_runtime.c.ke_system_id = 0,
     ecs: *abi_ecs.c.ke_ecs,
     transform_cid: abi_asset_resolver.c.ke_component_id,
     transform2d_cid: abi_asset_resolver.c.ke_component_id,
@@ -200,7 +200,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs) R.Error!ab
     propagate.user_data = s;
     propagate.execute = propagateSystem;
 
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     try R.check(runtime.register_system.?(runtime, &propagate, &system_id));
     s.runtime = runtime;
     s.system = system_id;
@@ -231,6 +231,6 @@ test "destroying the scene hierarchy unregisters its system" {
     try R.check(ke_scene_hierarchy_create(rt.api(), ecs.api(), &h));
     h.destroy.?(h.ref);
     try rt.received(.register_system).times(1);
-    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));
 }

@@ -176,20 +176,22 @@ extern "C"
                                       ke_script_type_id      type,
                                       uint32_t              *out_count);
 
-        /// [borrows] The entity `owner` borrows: an instance of `type` found within
+        /// [borrows] The entity `owner` borrows: an instance of any of `types` found within
         /// `reach`. `name` narrows it to a node of that name; empty matches on type
-        /// alone, and answers ambiguous when two candidates qualify rather than
-        /// picking one. `out_why` says which of the two an invalid answer was, and
-        /// may be NULL.
+        /// alone. An ancestor borrow answers the nearest ancestor that qualifies; any other
+        /// answers ambiguous when two candidates qualify, of one type or of two, rather than
+        /// picking one. `out_why` says which of the two an invalid answer was, and may be NULL.
+        /// @param types [array_of:type_count] The types a candidate may be bound to.
         /// @param name [utf8]
         /// @param reach [enum:ke_script_borrow]
         /// @param out_why [out,enum:ke_script_resolve]
-        ke_entity (*resolve)(struct ke_script_host *self,
-                             ke_entity              owner,
-                             ke_script_type_id      type,
-                             const char            *name,
-                             ke_script_borrow       reach,
-                             ke_script_resolve     *out_why);
+        ke_entity (*resolve)(struct ke_script_host  *self,
+                             ke_entity               owner,
+                             const ke_script_type_id *types,
+                             uint32_t                type_count,
+                             const char             *name,
+                             ke_script_borrow        reach,
+                             ke_script_resolve      *out_why);
     };
 
     /// [owner] Owner wrapper: destroy releases the type table and the bindings. The

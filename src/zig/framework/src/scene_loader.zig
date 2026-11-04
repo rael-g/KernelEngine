@@ -1,5 +1,5 @@
 //! The scene loader: reads a scene file and builds its nodes, components and signal connections
-//! on the world it was created with.
+//! on the ecs, scene tree and signal bus it was created with.
 
 const abi_framework_components = @import("abi_framework_components");
 const abi_audio_contract = @import("abi_audio_contract");
@@ -16,7 +16,7 @@ const abi_scene_loader = @import("abi_scene_loader");
 const abi_scene_tree = @import("abi_scene_tree");
 const abi_signal_bus = @import("abi_signal_bus");
 const abi_ui_components = @import("abi_ui_components");
-const abi_world = @import("abi_world");
+const abi_component_registry = @import("abi_component_registry");
 const std = @import("std");
 
 const c = @import("c");
@@ -27,12 +27,10 @@ const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 const abi_io = @import("abi_io");
 const file_read = @import("file_read.zig");
-const world_impl = @import("world.zig");
 const fields_apply = @import("component_fields_apply.zig");
 const values = @import("scene_values.zig");
 const names_mod = @import("scene_names.zig");
@@ -50,15 +48,18 @@ const res_prefix = "res://";
 /// destroy. `api.handle` points back here. `created` is cleared when a load starts and emptied by
 /// `discardCreated` when one fails, so after a successful load it lists that load's nodes.
 ///
-/// The loader keeps no scene data: nodes come from the `ke_scene_tree` of `world`, components
-/// from its `ke_ecs`, connections from its signal bus. What it owns is `arena`, which holds every
+/// The loader keeps no scene data: nodes come from `tree`, components from `ecs` as `registry`
+/// describes them, connections from `bus`. What it owns is `arena`, which holds every
 /// string and table read from a scene and lives as long as the loader, so what a load read stays
 /// valid until `vtDestroy`, and `created`. `assets` is borrowed and resolves every "res://"
 /// reference. Every failure is logged and returned as an error; faults in what a scene says go
 /// through `structural`. A load runs on its caller's thread.
 const State = struct {
     api: abi_scene_loader.c.ke_scene_loader,
-    world: *abi_world.c.ke_world,
+    ecs: *abi_ecs.c.ke_ecs,
+    tree: *abi_scene_tree.c.ke_scene_tree,
+    bus: ?*abi_signal_bus.c.ke_signal_bus,
+    registry: *abi_component_registry.c.ke_component_registry,
     assets: *abi_asset_resolver.c.ke_asset_resolver,
     io: *abi_io.c.ke_io,
 
@@ -71,16 +72,6 @@ const State = struct {
 
 fn stateOf(self: *abi_scene_loader.c.ke_scene_loader) *State {
     return @ptrCast(@alignCast(self.handle));
-}
-
-fn ecsOf(world: *abi_world.c.ke_world) ?*abi_ecs.c.ke_ecs {
-    const e = world.ecs.?(world);
-    return if (e == null) null else e;
-}
-
-fn treeOf(world: *abi_world.c.ke_world) ?*abi_scene_tree.c.ke_scene_tree {
-    const t = world.scene_tree.?(world);
-    return if (t == null) null else t;
 }
 
 fn pathDirname(path: []const u8) []const u8 {
@@ -143,8 +134,8 @@ fn refuse(err: R.Error, comptime msg: []const u8) R.Error {
     return err;
 }
 
-/// Applies one component table of an entity through the field mapping or apply callback the world
-/// holds for the component. The component must be registered, and the world must supply a field
+/// Applies one component table of an entity through the field mapping or apply callback the
+/// registry holds for the component. The component must be registered, and the registry must supply a field
 /// mapping or an apply callback for it. A component the entity lacks is added, zeroed and given
 /// its declared defaults; one it already has keeps its values. Generic fields are written first,
 /// then the domain callback gets the entries, and an authored entry that neither consumed fails
@@ -155,23 +146,21 @@ fn applyComponentBlock(
     comp_name: [*c]const u8,
     comp_tbl: *c.toml_table_t,
 ) R.Error!void {
-    const world = s.world;
-    const e = ecsOf(world) orelse {
-        return structural("world has no ecs", .{});
-    };
+    const registry = s.registry;
+    const e = s.ecs;
 
     var meta: abi_ecs.c.ke_component_meta = undefined;
-    R.check(world.resolve_component.?(world, comp_name, &meta)) catch
-        return structural("scene names component '{s}', which the world cannot resolve", .{comp_name});
+    R.check(registry.resolve_component.?(registry, comp_name, &meta)) catch
+        return structural("scene names component '{s}', which the registry cannot resolve", .{comp_name});
 
     var field_count: u32 = 0;
-    var fields = world.get_component_fields.?(world, meta.cid, &field_count);
+    var fields = registry.get_component_fields.?(registry, meta.cid, &field_count);
     if (fields == null) {
         fields = meta.fields;
         field_count = meta.field_count;
     }
     var apply_ctx: ?*anyopaque = null;
-    const apply_fn = world.get_component_apply.?(world, meta.cid, &apply_ctx);
+    const apply_fn = registry.get_component_apply.?(registry, meta.cid, &apply_ctx);
     if (fields == null and apply_fn == null) {
         return structural("component '{s}' has no field mapping registered", .{comp_name});
     }
@@ -298,10 +287,8 @@ fn applyConnections(
     names: *const NameMap,
 ) R.Error!void {
     const arr = c.toml_array_in(entity_tbl, "connect") orelse return;
-    const world = s.world;
-
-    const bus = world_impl.signalBusOf(world) orelse {
-        return structural("scene declares signal connections but the world has no signal bus", .{});
+    const bus = s.bus orelse {
+        return structural("scene declares signal connections but the loader has no signal bus", .{});
     };
 
     const n = c.toml_array_nelem(arr);
@@ -383,10 +370,7 @@ fn processEntity(
     }
     const effective_name: [*c]const u8 = if (args.override_name) |n| n else name_d.u.s;
 
-    const world = s.world;
-    const tree = treeOf(world) orelse {
-        return refuse(error.NotInitialized, "world has no scene tree");
-    };
+    const tree = s.tree;
     var parent = if (args.attach_parent_override != abi_ecs.c.KE_ENTITY_INVALID)
         args.attach_parent_override
     else
@@ -567,7 +551,7 @@ fn vtLoad(
 /// Destroys every node in `created`, the most recently recorded first, then empties the list. A
 /// parent is always recorded before its children, so a child is removed before its parent.
 fn discardCreated(s: *State) void {
-    const tree = treeOf(s.world) orelse return;
+    const tree = s.tree;
     var i = s.created.items.len;
     while (i > 0) {
         i -= 1;
@@ -602,26 +586,34 @@ fn vtDestroy(self_in: ?*abi_scene_loader.c.ke_scene_loader) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. Builds a loader over the given world, resolving "res://" references through the given
-/// asset resolver and reading every scene file through the given io. A null world, resolver, io or
-/// out-parameter fails as an invalid argument and a
-/// failed allocation as out of memory; each leaves the handle zeroed.
+/// Factory. Builds a loader over the given ecs, scene tree, signal bus and registry, resolving
+/// "res://" references through the given asset resolver and reading every scene file through the
+/// given io. A null ecs, scene tree, registry, resolver, io or out-parameter fails as an invalid
+/// argument and a failed allocation as out of memory; each leaves the handle zeroed.
 export fn ke_scene_loader_create(
-    world_in: ?*abi_world.c.ke_world,
+    ecs_in: ?*abi_ecs.c.ke_ecs,
+    tree_in: ?*abi_scene_tree.c.ke_scene_tree,
+    bus: ?*abi_signal_bus.c.ke_signal_bus,
+    registry_in: ?*abi_component_registry.c.ke_component_registry,
     assets_in: ?*abi_asset_resolver.c.ke_asset_resolver,
     io_in: ?*abi_io.c.ke_io,
     out_loader: ?*abi_scene_loader.c.ke_scene_loader_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_loader orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_scene_loader.c.ke_scene_loader_handle);
-    const world = world_in orelse return R.code(error.InvalidArgument);
+    const ecs = ecs_in orelse return R.code(error.InvalidArgument);
+    const tree = tree_in orelse return R.code(error.InvalidArgument);
+    const registry = registry_in orelse return R.code(error.InvalidArgument);
     const assets = assets_in orelse return R.code(error.InvalidArgument);
     const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{
         .api = std.mem.zeroes(abi_scene_loader.c.ke_scene_loader),
-        .world = world,
+        .ecs = ecs,
+        .tree = tree,
+        .bus = bus,
+        .registry = registry,
         .assets = assets,
         .io = io,
         .script_factory = null,
@@ -887,10 +879,9 @@ const TempScene = struct {
 
 const Fixture = struct {
     ecs: FakeEcs,
-    runtime: abi_runtime.c.ke_runtime,
     tree_h: abi_scene_tree.c.ke_scene_tree_handle,
     bus_h: abi_signal_bus.c.ke_signal_bus_handle,
-    world_h: abi_world.c.ke_world_handle,
+    registry_h: abi_component_registry.c.ke_component_registry_handle,
     assets_h: abi_asset_resolver.c.ke_asset_resolver_handle,
     loader_h: abi_scene_loader.c.ke_scene_loader_handle,
 
@@ -916,7 +907,6 @@ const Fixture = struct {
         self.ecs.vtable.component_size = fakeComponentSize;
         self.ecs.vtable.component_field_write = fakeComponentFieldWrite;
 
-        self.runtime = std.mem.zeroes(abi_runtime.c.ke_runtime);
 
         try testing.expectEqual(R.ok, abi_framework_factory.c.ke_scene_tree_create(&self.ecs.vtable, null, &self.tree_h));
 
@@ -925,12 +915,7 @@ const Fixture = struct {
             try testing.expectEqual(R.ok, signal_bus_impl.ke_signal_bus_create(null, &self.bus_h));
         }
 
-        var params = std.mem.zeroes(abi_world.c.ke_world_params);
-        params.ecs = &self.ecs.vtable;
-        params.runtime = &self.runtime;
-        params.scene_tree = self.tree_h.ref;
-        params.signal_bus = self.bus_h.ref;
-        try testing.expectEqual(R.ok, abi_framework_factory.c.ke_world_create(&params, &self.world_h));
+        try testing.expectEqual(R.ok, abi_framework_factory.c.ke_component_registry_create(&self.ecs.vtable, &self.registry_h));
 
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, @sizeOf(abi_render_components.c.ke_camera_component), generatedFields(&abi_render_contract.c.ke_camera_component_fields), abi_render_contract.c.ke_camera_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, @sizeOf(abi_render_components.c.ke_directional_light_component), generatedFields(&abi_render_contract.c.ke_directional_light_component_fields), abi_render_contract.c.ke_directional_light_component_fields.len);
@@ -951,7 +936,7 @@ const Fixture = struct {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
         try testing.expectEqual(R.ok, abi_framework_factory.c.ke_asset_resolver_create(null, null, root, served_files.io(), &self.assets_h));
-        try testing.expectEqual(R.ok, ke_scene_loader_create(self.world_h.ref, self.assets_h.ref, served_files.io(), &self.loader_h));
+        try testing.expectEqual(R.ok, ke_scene_loader_create(&self.ecs.vtable, self.tree_h.ref, self.bus_h.ref, self.registry_h.ref, self.assets_h.ref, served_files.io(), &self.loader_h));
     }
 
     fn describe(
@@ -964,14 +949,14 @@ const Fixture = struct {
         const e = &self.ecs.vtable;
         var cid: abi_asset_resolver.c.ke_component_id = 0;
         _ = e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = name, .size = size, .alignment = 0, .fields = null, .field_count = 0 }, &cid);
-        const w = self.world_h.ref.?;
+        const w = self.registry_h.ref.?;
         _ = w.*.register_component_fields.?(w, cid, fields, @intCast(field_count));
     }
 
     fn deinit(self: *Fixture) void {
         if (self.loader_h.destroy) |d| d(self.loader_h.ref);
         if (self.assets_h.destroy) |d| d(self.assets_h.ref);
-        if (self.world_h.destroy) |d| d(self.world_h.ref);
+        if (self.registry_h.destroy) |d| d(self.registry_h.ref);
         if (self.bus_h.destroy) |d| d(self.bus_h.ref);
         if (self.tree_h.destroy) |d| d(self.tree_h.ref);
         self.ecs.arena.deinit();
@@ -1833,7 +1818,7 @@ test "a user component is applied through the callback its owner registered" {
     var demo_cid: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
-    const w = f.world_h.ref.?;
+    const w = f.registry_h.ref.?;
     var saw_ctx = false;
     try testing.expectEqual(R.ok, w.*.register_component_apply.?(w, demo_cid, demoApply, &saw_ctx));
 
@@ -1877,7 +1862,7 @@ test "the code an apply callback rejects a value with reaches the caller instead
     var demo_cid: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "demo", .size = @sizeOf(DemoComponent), .alignment = @alignOf(DemoComponent), .fields = null, .field_count = 0 }, &demo_cid));
     try testing.expect(demo_cid != 0);
-    const w = f.world_h.ref.?;
+    const w = f.registry_h.ref.?;
     try testing.expectEqual(R.ok, w.*.register_component_apply.?(w, demo_cid, rejectingApply, null));
 
     var scene = TempScene.init();
@@ -1937,14 +1922,16 @@ test "a scene that fails to load leaves none of the entities it had already crea
     try testing.expectEqual(abi_ecs.c.KE_ENTITY_INVALID, f.find("Third"));
 }
 
-test "a loader is never created without a world or an asset resolver" {
+test "a loader is never created without its ecs, scene tree, registry or asset resolver" {
     var h: abi_scene_loader.c.ke_scene_loader_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, served_files.io(), &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(null, null, null, null, null, served_files.io(), &h));
     try testing.expect(h.ref == null);
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(f.world_h.ref, null, served_files.io(), &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(&f.ecs.vtable, f.tree_h.ref, null, f.registry_h.ref, null, served_files.io(), &h));
+    try testing.expect(h.ref == null);
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_loader_create(&f.ecs.vtable, f.tree_h.ref, null, null, f.assets_h.ref, served_files.io(), &h));
     try testing.expect(h.ref == null);
 }
 
@@ -2508,7 +2495,7 @@ test "an entity that splices a subscene connects from the subscene's root" {
     try testing.expectEqual(f.find("Holder"), list[0].target);
 }
 
-test "a scene that declares a connection fails when the world has no signal bus" {
+test "a scene that declares a connection fails when the loader has no signal bus" {
     var f: Fixture = undefined;
     try f.initEx(false);
     defer f.deinit();
@@ -2527,7 +2514,7 @@ test "a scene that declares a connection fails when the world has no signal bus"
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
-test "a scene without connections loads on a world that has no signal bus" {
+test "a scene without connections loads on a loader that has no signal bus" {
     var f: Fixture = undefined;
     try f.initEx(false);
     defer f.deinit();
@@ -2563,7 +2550,7 @@ test "a connect written as a single table instead of an array fails the load" {
     try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
-test "creating and destroying a scene loader with its world leaves no block allocated" {
+test "creating and destroying a scene loader with its registry leaves no block allocated" {
     var f: Fixture = undefined;
     try f.init();
     f.deinit();

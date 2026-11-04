@@ -4,11 +4,10 @@
     .fingerprint = 0x0081b801974fef69,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_component_registry = .{ .path = "../component_registry" },
         .abi_ecs = .{ .path = "../ecs" },
         .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_result = .{ .path = "../result" },
-        .abi_runtime = .{ .path = "../runtime" },
-        .abi_world = .{ .path = "../world" },
     },
     .paths = .{"."},
 }

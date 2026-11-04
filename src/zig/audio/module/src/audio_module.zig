@@ -1,5 +1,5 @@
 //! Audio's scene components, added to the set the host hands in, so a scene file can author an
-//! audio player.
+//! audio player, and the system that plays it.
 
 const abi_audio_contract = @import("abi_audio_contract");
 const abi_audio_components = @import("abi_audio_components");
@@ -27,6 +27,10 @@ export fn ke_audio_scene_components_create(set_in: ?*abi_framework.c.ke_scene_co
 
 const std = @import("std");
 const testing = std.testing;
+
+comptime {
+    _ = @import("audio_player.zig");
+}
 
 const FakeSet = struct {
     api: abi_framework.c.ke_scene_component_set,
@@ -65,4 +69,8 @@ test "a set that refuses a component, or a missing set, fails the factory" {
     set.init(true);
     try testing.expectEqual(@as(abi_result.c.ke_result, abi_result.c.KE_RESULT_OUT_OF_MEMORY), ke_audio_scene_components_create(&set.api));
     try testing.expectEqual(@as(abi_result.c.ke_result, abi_result.c.KE_RESULT_INVALID_ARGUMENT), ke_audio_scene_components_create(null));
+}
+
+test "nothing the module allocated is left behind" {
+    try @import("heap").expectNoLeaks();
 }

@@ -65,7 +65,7 @@ export fn ke_render_scene_components_create(set_in: ?*abi_framework.c.ke_scene_c
 const SceneResolve = struct {
     api: abi_render.c.ke_render_scene_resolve,
     runtime: *abi_runtime.c.ke_runtime,
-    systems: [2]abi_framework.c.ke_system_id,
+    systems: [2]abi_runtime.c.ke_system_id,
     ids: abi_render.c.ke_render_scene_component_ids,
     sprite: sprite_resolve.State,
     mesh_terms: [1]abi_runtime.c.ke_component_access,
@@ -155,7 +155,7 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.c.ke_rend
     sprite.query_count = st.sprite_queries.len;
     sprite.user_data = &st.sprite;
     sprite.execute = sprite_resolve.system;
-    var sprite_id: abi_framework.c.ke_system_id = 0;
+    var sprite_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &sprite, &sprite_id));
     errdefer _ = rt.unregister_system.?(rt, sprite_id);
 
@@ -170,7 +170,7 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.c.ke_rend
     mesh.execute = mesh_resolve.system;
     mesh.after = &mesh_resolve_after;
     mesh.after_count = mesh_resolve_after.len;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &mesh, &system_id));
     st.runtime = rt;
     st.systems = .{ sprite_id, system_id };
@@ -182,7 +182,7 @@ fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.c.ke_rend
 const LabelResolve = struct {
     state: label_resolve.State,
     runtime: *abi_runtime.c.ke_runtime,
-    system: abi_framework.c.ke_system_id,
+    system: abi_runtime.c.ke_system_id,
     terms: [1]abi_runtime.c.ke_component_access,
     queries: [1]abi_runtime.c.ke_query_decl,
 };
@@ -222,7 +222,7 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
     label.execute = label_resolve.system;
     label.before = &label_resolve_before;
     label.before_count = label_resolve_before.len;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &label, &system_id);
     if (registered != R.ok) {
         gpa.destroy(st);
@@ -294,7 +294,7 @@ test "destroying the scene resolve unregisters both its systems" {
     try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
@@ -346,7 +346,7 @@ test "destroying the label resolve unregisters its system" {
     try R.check(ke_render_label_resolve_create(&p, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 

@@ -31,7 +31,7 @@ const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
 /// `destroyHandle` unregisters the system the factory registered before it frees the module.
 pub const TonemapModule = struct {
     runtime: *abi_runtime.c.ke_runtime = undefined,
-    system: abi_framework.c.ke_system_id = 0,
+    system: abi_runtime.c.ke_system_id = 0,
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
 
@@ -180,7 +180,7 @@ fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render
     params.access_count = tm.access.len;
     params.user_data = tm;
     params.execute = system;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &params, &system_id));
     tm.runtime = rt;
     tm.system = system_id;
@@ -260,7 +260,7 @@ test "destroying the tonemap pass unregisters every system it registered" {
     try R.check(ke_render_tonemap_create(&testParams(&rig), &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 

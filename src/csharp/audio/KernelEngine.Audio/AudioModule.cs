@@ -8,33 +8,59 @@ namespace KernelEngine.Audio;
 /// <summary>
 /// Teaches the scene loader audio's own component vocabulary, so an
 /// <c>[entity.components.audio_player]</c> block applies instead of being
-/// reported and skipped.
+/// reported and skipped, and, when an <see cref="IAudio"/> is registered, registers the native
+/// system that loads and plays the clip of every audio player, with paths relative to the
+/// application's base directory.
 /// </summary>
 public sealed unsafe class AudioModule : IRuntimeModule
 {
+    private KernelEngine.Audio.Native.ke_audio_player_module_handle _player;
+
     /// <inheritdoc />
     public string Name => "Audio.Scene";
 
     /// <inheritdoc />
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var world = services.GetService<KernelEngine.Framework.World>();
-        if (world is null) return;
+        var registry = services.GetService<KernelEngine.Framework.ComponentRegistry>();
+        if (registry is null) return;
 
         var ecs = services.GetRequiredService<INativeEcs>();
         if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
             KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        if (services.GetService<IAudio>() is INativeAudio audio)
+            CreatePlayer(runtime, ecs, audio);
         KernelEngine.Framework.Native.ke_scene_component_set_handle set;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
         try
         {
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.audio_scene_components_create(set.@ref), "ke_audio_scene_components_create");
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeWorld)world).Native), "register_into");
+            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeComponentRegistry)registry).Native), "register_into");
         }
         finally
         {
             set.destroy(set.@ref);
         }
+    }
+
+    private void CreatePlayer(IRuntime runtime, INativeEcs ecs, INativeAudio audio)
+    {
+        var root = System.Text.Encoding.UTF8.GetBytes(System.AppContext.BaseDirectory + '\0');
+        fixed (byte* r = root)
+        {
+            var config = new KernelEngine.Audio.Native.ke_audio_player_module_config { root = (sbyte*)r };
+            KernelEngine.Audio.Native.ke_audio_player_module_handle handle;
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.audio_player_module_create(((INativeRuntime)runtime).Native, ecs.Native, audio.Native, &config, &handle), "ke_audio_player_module_create");
+            _player = handle;
+        }
+    }
+
+    /// <inheritdoc />
+    public void OnUnload(IRuntime runtime, IServiceProvider services)
+    {
+        if (_player.@ref == null) return;
+        _player.destroy(_player.@ref);
+        _player.@ref = null;
     }
 }
 

@@ -12,6 +12,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const abi_ecs = @import("abi_ecs");
 pub const abi_io = @import("abi_io");
+const abi_configuration = @import("abi_configuration");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_render_service_factory = @import("abi_render_service_factory");
@@ -364,7 +365,7 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
         .upload_count = std.atomic.Value(u32).init(0),
         .upload_arena = upload_arena,
         .upload_arena_offset = std.atomic.Value(usize).init(0),
-        .clear_color = .{ 0.10, 0.15, 0.30, 1.0 },
+        .clear_color = default_clear_color,
         .mesh_store = slot_map.SlotMap(Mesh).init(gpa),
         .texture_store = slot_map.SlotMap(Texture).init(gpa),
         .material_store = slot_map.SlotMap(Material).init(gpa),
@@ -504,12 +505,26 @@ export fn ke_render_service_create(params: ?*const abi_render_service_factory.c.
     const depth_format = if (p.depth_format != abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID) p.depth_format else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
     const core = assemble(dev, tgt, e, bnd, std.mem.span(p.shader_dir.?), io) catch |err| return R.code(err);
+    coreOf(core).clear_color = clearColor(p);
     prepare(core, color_format, depth_format) catch |err| {
         destroyCore(core);
         return R.code(err);
     };
     out.* = .{ .ref = core, .destroy = destroyCore };
     return R.ok;
+}
+
+const default_clear_color = [4]f32{ 0.10, 0.15, 0.30, 1.0 };
+const clear_color_keys = [4][*:0]const u8{ "clear_color_r", "clear_color_g", "clear_color_b", "clear_color_a" };
+
+fn clearColor(p: *const abi_render_service_factory.c.ke_render_service_params) [4]f32 {
+    const given = [4]f32{ p.clear_color.x, p.clear_color.y, p.clear_color.z, p.clear_color.w };
+    if (!std.mem.allEqual(f32, &given, 0)) return given;
+    const store = p.configuration orelse return default_clear_color;
+    var color: [4]f32 = undefined;
+    for (&color, clear_color_keys, default_clear_color) |*channel, key, fallback|
+        channel.* = @floatCast(store.*.get_double.?(store, "render", key, fallback));
+    return color;
 }
 
 fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!void {
@@ -542,6 +557,21 @@ fn deadFrame(state: *CoreState) abi_render.c.ke_render_service {
 test {
     _ = slot_map;
     _ = frame_globals;
+}
+
+fn storedRed(_: [*c]abi_configuration.c.ke_configuration, _: [*c]const u8, key: [*c]const u8, fallback: f64) callconv(.c) f64 {
+    return if (std.mem.eql(u8, std.mem.span(key), "clear_color_r")) 0.5 else fallback;
+}
+
+test "a given clear color wins over the store and the store over the default" {
+    var store = std.mem.zeroes(abi_configuration.c.ke_configuration);
+    store.get_double = storedRed;
+    var p = std.mem.zeroes(abi_render_service_factory.c.ke_render_service_params);
+    try testing.expectEqual(default_clear_color, clearColor(&p));
+    p.configuration = @ptrCast(&store);
+    try testing.expectEqual([4]f32{ 0.5, 0.15, 0.30, 1.0 }, clearColor(&p));
+    p.clear_color = .{ .x = 1, .y = 0, .z = 0, .w = 1 };
+    try testing.expectEqual([4]f32{ 1, 0, 0, 1 }, clearColor(&p));
 }
 
 test "a pass cannot be opened once the frame has no target view to draw into" {

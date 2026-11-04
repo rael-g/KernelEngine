@@ -28,7 +28,7 @@ const gpa = heap.gpa;
 const FrameModule = struct {
     api: abi_render.c.ke_render_frame,
     runtime: *abi_runtime.c.ke_runtime,
-    systems: [2]abi_framework.c.ke_system_id,
+    systems: [2]abi_runtime.c.ke_system_id,
     frame_cid: abi_asset_resolver.c.ke_component_id,
     producer: frame_producer.State,
     begin_access: [1]abi_runtime.c.ke_component_access,
@@ -115,7 +115,7 @@ fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render
     begin.query_count = st.queries.len;
     begin.user_data = &st.producer;
     begin.execute = frame_producer.system;
-    var begin_id: abi_framework.c.ke_system_id = 0;
+    var begin_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &begin, &begin_id));
     errdefer _ = rt.unregister_system.?(rt, begin_id);
 
@@ -126,7 +126,7 @@ fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render
     end.access_count = st.end_access.len;
     end.user_data = st;
     end.execute = endSystem;
-    var system_id: abi_framework.c.ke_system_id = 0;
+    var system_id: abi_runtime.c.ke_system_id = 0;
     try R.check(rt.register_system.?(rt, &end, &system_id));
     st.runtime = rt;
     st.systems = .{ begin_id, system_id };
@@ -199,7 +199,7 @@ test "destroying the frame unregisters both its systems" {
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_framework.c.ke_system_id, 0))).never();
+    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
     try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
 }
 
