@@ -75,7 +75,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[06_shadow_map] Exited cleanly.");
 

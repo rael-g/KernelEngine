@@ -89,6 +89,5 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[10_hdr_tonemapping] Exited cleanly.");

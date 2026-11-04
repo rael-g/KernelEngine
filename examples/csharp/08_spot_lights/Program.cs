@@ -93,7 +93,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[08_spot_lights] Exited cleanly.");
 

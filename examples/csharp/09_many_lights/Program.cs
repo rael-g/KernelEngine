@@ -119,7 +119,6 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[09_many_lights] Exited cleanly.");
 

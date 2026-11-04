@@ -83,7 +83,6 @@ while (!window.ShouldClose())
     }
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[01_window_scene] Exited cleanly.");
 

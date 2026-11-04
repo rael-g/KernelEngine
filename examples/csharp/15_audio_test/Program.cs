@@ -66,7 +66,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[15_audio_test] Exited cleanly.");
 

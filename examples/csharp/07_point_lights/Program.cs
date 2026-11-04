@@ -80,7 +80,6 @@ while (!window.ShouldClose())
     prev = now;
 }
 
-runtime.Dispose();
 
 Console.WriteLine("[07_point_lights] Exited cleanly.");
 
