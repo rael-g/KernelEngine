@@ -903,9 +903,7 @@
         {
           "name": "query_resolve",
           "returns": "ke_result",
-          "tags": [
-            "raw"
-          ],
+          "tags": [],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
           "params": [
@@ -1029,9 +1027,7 @@
         {
           "name": "signal_id",
           "returns": "ke_result",
-          "tags": [
-            "interns"
-          ],
+          "tags": [],
           "doc": "Resolves a signal by name, registering it on first use. The payload size is part of the identity: a second registration of the name under a different size fails as already existing.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty name or a null out_id, KE_RESULT_ALREADY_EXISTS, or KE_RESULT_OUT_OF_MEMORY when the table is full.",
           "params": [
@@ -1047,9 +1043,7 @@
             {
               "name": "payload_size",
               "type": "uint32_t",
-              "tags": [
-                "type_size"
-              ],
+              "tags": [],
               "doc": null
             },
             {

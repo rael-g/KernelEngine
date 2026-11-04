@@ -145,7 +145,7 @@ extern "C"
                                     ke_query_id           *out_query);
 
         /**
-         * [raw] Resolves a query into archetype segments. MUST run single-threaded, before
+         * Resolves a query into archetype segments. MUST run single-threaded, before
          * a parallel wave; afterwards the segments are plain memory touching no
          * backend state.
          * @param out_segments [out,array_of:max_segments] Receives the matched segments.

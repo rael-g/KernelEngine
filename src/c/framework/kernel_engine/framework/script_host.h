@@ -50,7 +50,7 @@ extern "C"
         KE_SCRIPT_RESOLVE_AMBIGUOUS = 2,
     } ke_script_resolve;
 
-    /// [borrow_kinds] Where a borrow looks for the node it names. A borrow is always
+    /// Where a borrow looks for the node it names. A borrow is always
     /// an instance of a type, optionally with a name; only the region searched differs.
     typedef enum ke_script_borrow
     {
@@ -135,7 +135,7 @@ extern "C"
         /// [idiom] Records bind into `commands`; the binding takes effect when `commands`
         /// is applied. A bind that fails at that point is dropped.
         /// @param instance [rooted:entity]
-        /// @param commands [ctx]
+        /// @param commands
         /// @return KE_OK; KE_RESULT_NOT_FOUND for a type never registered,
         ///         KE_RESULT_INVALID_ARGUMENT for the invalid entity or a null @p commands, or
         ///         the queue's code when it refuses the recording.
@@ -147,7 +147,7 @@ extern "C"
 
         /// [idiom] Records unbind into `commands`; the binding is dropped when `commands`
         /// is applied.
-        /// @param commands [ctx]
+        /// @param commands
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p commands, or the queue's
         ///         code when it refuses the recording.
         ke_result (*unbind_deferred)(struct ke_script_host *self,

@@ -94,7 +94,7 @@ typedef struct ke_runtime_module_params {
 /// driving the tick, which tick() then fails with, and the runtime logs the system's
 /// name. The remaining bodies of the same wave still run — they were already
 /// dispatched — but no later phase of that tick starts.
-/// @param ctx       [ctx] The body's only doorway to component memory for this
+/// @param ctx       The body's only doorway to component memory for this
 ///                  call. Opaque; pass it to the entry points that take one.
 /// @param user_data [context] Opaque context forwarded from register_system.
 /// @param dt        Seconds since the previous tick, or the fixed timestep in
@@ -203,7 +203,7 @@ typedef struct ke_runtime {
     ///         are ambiguous. The systems involved are named in the log.
     ke_result (*check_order)(ke_runtime *self, bool refuse_ambiguity);
 
-    /// [drains] Runs one tick: every sim phase in order, then the render phase.
+    /// Runs one tick: every sim phase in order, then the render phase.
     ///
     /// This is where a body that failed during the tick is answered for.
     /// @return KE_OK, or the code a body of this tick failed with.

@@ -1430,9 +1430,7 @@
         {
           "name": "drain_events",
           "returns": "uint32_t",
-          "tags": [
-            "raw"
-          ],
+          "tags": [],
           "doc": "Moves the oldest pending discrete events, as many as the buffer holds, out of the queue; the rest stay queued for the next call. Must run on the same thread as the sinks below.",
           "return_doc": "Number of events written.",
           "params": [
@@ -1457,9 +1455,7 @@
         {
           "name": "on_key",
           "returns": "void",
-          "tags": [
-            "sink"
-          ],
+          "tags": [],
           "doc": "Reports a key transition from the window backend.",
           "return_doc": null,
           "params": [
@@ -1485,9 +1481,7 @@
         {
           "name": "on_mouse_move",
           "returns": "void",
-          "tags": [
-            "sink"
-          ],
+          "tags": [],
           "doc": "Reports an absolute cursor position from the window backend.",
           "return_doc": null,
           "params": [
@@ -1509,9 +1503,7 @@
         {
           "name": "on_mouse_button",
           "returns": "void",
-          "tags": [
-            "sink"
-          ],
+          "tags": [],
           "doc": "Reports a mouse-button transition from the window backend.",
           "return_doc": null,
           "params": [
@@ -1537,9 +1529,7 @@
         {
           "name": "on_mouse_scroll",
           "returns": "void",
-          "tags": [
-            "sink"
-          ],
+          "tags": [],
           "doc": "Reports a scroll-wheel delta from the window backend.",
           "return_doc": null,
           "params": [

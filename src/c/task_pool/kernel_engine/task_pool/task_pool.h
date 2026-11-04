@@ -35,7 +35,7 @@ extern "C"
 
         /**
          * Schedules a task, which the caller releases by waiting on it.
-         * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
+         * @param func [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
          * @param out_task [out] Receives the task; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p func or @p out_task,
@@ -47,9 +47,9 @@ extern "C"
 
         /**
          * Schedules a task and a completion callback run once it finishes.
-         * @param func [raw_callback] [closure:data] Entry point invoked on a worker thread.
+         * @param func [closure:data] Entry point invoked on a worker thread.
          * @param data [borrowed] Opaque context passed to func unchanged.
-         * @param on_complete [raw_callback] [closure:user_data] Invoked after func returns.
+         * @param on_complete [closure:user_data] Invoked after func returns.
          * @param user_data [borrowed] Opaque context passed to on_complete unchanged.
          * @param out_task [out] Receives the task; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p func or @p out_task,

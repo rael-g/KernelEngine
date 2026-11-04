@@ -893,9 +893,7 @@
         {
           "name": "load",
           "returns": "ke_result",
-          "tags": [
-            "drains"
-          ],
+          "tags": [],
           "doc": "Loads the scene at path, instantiating every entity it declares. A script factory\u0027s refusal of an entity fails the load with the factory\u0027s code; what failed, and where in the file, is logged.",
           "return_doc": null,
           "params": [
@@ -1225,9 +1223,7 @@
         {
           "name": "query_resolve",
           "returns": "ke_result",
-          "tags": [
-            "raw"
-          ],
+          "tags": [],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
           "params": [
@@ -1484,9 +1480,7 @@
         {
           "name": "tick",
           "returns": "ke_result",
-          "tags": [
-            "drains"
-          ],
+          "tags": [],
           "doc": "Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.",
           "return_doc": "KE_OK, or the code a body of this tick failed with.",
           "params": [
@@ -1627,9 +1621,7 @@
         {
           "name": "ctx",
           "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
+          "tags": [],
           "doc": "The body\u0027s only doorway to component memory for this call. Opaque; pass it to the entry points that take one."
         },
         {

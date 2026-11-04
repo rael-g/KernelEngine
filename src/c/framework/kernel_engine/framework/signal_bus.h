@@ -41,12 +41,12 @@ extern "C"
     {
         void *handle;
 
-        /// [interns] Resolves a signal by name, registering it on first use.
+        /// Resolves a signal by name, registering it on first use.
         ///
         /// The payload size is part of the identity: a second registration of the
         /// name under a different size fails as already existing.
         /// @param name [utf8, type_name]
-        /// @param payload_size [type_size]
+        /// @param payload_size
         /// @param out_id [out]
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or empty @p name or a null
         ///         @p out_id, KE_RESULT_ALREADY_EXISTS, or KE_RESULT_OUT_OF_MEMORY when the

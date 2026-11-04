@@ -9,7 +9,7 @@ extern "C"
 #endif
 
     /**
-     * [bridge] Receives one line a plugin library logged. Each plugin library exports
+     * Receives one line a plugin library logged. Each plugin library exports
      * `<library>_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its
      * `<library>_log.h`; the host sets it once, before the library logs, and a NULL callback
      * sends the library's lines to stderr, which is also where they go until it is set. Called on

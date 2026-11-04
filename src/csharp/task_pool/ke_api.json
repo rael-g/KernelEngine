@@ -183,7 +183,6 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback",
                 "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
@@ -218,7 +217,6 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback",
                 "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
@@ -235,7 +233,6 @@
               "name": "on_complete",
               "type": "ke_task_on_complete_func",
               "tags": [
-                "raw_callback",
                 "closure:user_data"
               ],
               "doc": "Invoked after func returns."

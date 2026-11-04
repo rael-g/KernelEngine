@@ -78,9 +78,6 @@
           ],
           "doc": "The formatted line. Valid only during the call."
         }
-      ],
-      "tags": [
-        "bridge"
       ]
     }
   ],

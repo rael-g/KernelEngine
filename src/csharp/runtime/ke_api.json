@@ -1160,9 +1160,7 @@
         {
           "name": "query_resolve",
           "returns": "ke_result",
-          "tags": [
-            "raw"
-          ],
+          "tags": [],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
           "params": [
@@ -1419,9 +1417,7 @@
         {
           "name": "tick",
           "returns": "ke_result",
-          "tags": [
-            "drains"
-          ],
+          "tags": [],
           "doc": "Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.",
           "return_doc": "KE_OK, or the code a body of this tick failed with.",
           "params": [
@@ -1714,7 +1710,6 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback",
                 "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
@@ -1749,7 +1744,6 @@
               "name": "func",
               "type": "ke_task_func",
               "tags": [
-                "raw_callback",
                 "closure:data"
               ],
               "doc": "Entry point invoked on a worker thread."
@@ -1766,7 +1760,6 @@
               "name": "on_complete",
               "type": "ke_task_on_complete_func",
               "tags": [
-                "raw_callback",
                 "closure:user_data"
               ],
               "doc": "Invoked after func returns."
@@ -1956,9 +1949,7 @@
         {
           "name": "ctx",
           "type": "ke_system_ctx *",
-          "tags": [
-            "ctx"
-          ],
+          "tags": [],
           "doc": "The body\u0027s only doorway to component memory for this call. Opaque; pass it to the entry points that take one."
         },
         {

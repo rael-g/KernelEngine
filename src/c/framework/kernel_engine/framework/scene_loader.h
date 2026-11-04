@@ -25,7 +25,7 @@ extern "C"
     {
         void *handle;
 
-        /** [drains] Loads the scene at @p path, instantiating every entity it declares.
+        /** Loads the scene at @p path, instantiating every entity it declares.
          * A script factory's refusal of an entity fails the load with the factory's code; what
          * failed, and where in the file, is logged.
          * @param path [utf8] Path to the scene file. */

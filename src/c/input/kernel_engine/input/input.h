@@ -89,7 +89,7 @@ extern "C"
         bool (*snapshot_is_mouse_button_released)(struct ke_input *self, const ke_input_snapshot *snapshot, int32_t button);
 
         /**
-         * [raw] Moves the oldest pending discrete events, as many as the buffer holds, out
+         * Moves the oldest pending discrete events, as many as the buffer holds, out
          * of the queue; the rest stay queued for the next call. Must run on the same thread
          * as the sinks below.
          * @param out_buf [out,array_of:capacity] Receives the drained events.
@@ -99,28 +99,28 @@ extern "C"
         uint32_t (*drain_events)(struct ke_input *self, ke_input_event *out_buf, uint32_t capacity);
 
         /**
-         * [sink] Reports a key transition from the window backend.
+         * Reports a key transition from the window backend.
          * @param key [enum:ke_key] Key that changed.
          * @param action [enum:ke_input_action] Whether the key went down or up.
          */
         void (*on_key)(struct ke_input *self, int32_t key, int32_t action);
 
         /**
-         * [sink] Reports an absolute cursor position from the window backend.
+         * Reports an absolute cursor position from the window backend.
          * @param x Cursor position on the horizontal axis, in pixels.
          * @param y Cursor position on the vertical axis, in pixels.
          */
         void (*on_mouse_move)(struct ke_input *self, float x, float y);
 
         /**
-         * [sink] Reports a mouse-button transition from the window backend.
+         * Reports a mouse-button transition from the window backend.
          * @param button [enum:ke_mouse_button] Button that changed.
          * @param action [enum:ke_input_action] Whether the button went down or up.
          */
         void (*on_mouse_button)(struct ke_input *self, int32_t button, int32_t action);
 
         /**
-         * [sink] Reports a scroll-wheel delta from the window backend.
+         * Reports a scroll-wheel delta from the window backend.
          * @param dx Horizontal scroll delta.
          * @param dy Vertical scroll delta.
          */

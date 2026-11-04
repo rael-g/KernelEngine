@@ -34,7 +34,7 @@ extern "C"
          * system body. Fails as an invalid argument for a null tree, @p commands or @p out_node,
          * and with the queue's code when it refuses the recording.
          * @param name [utf8]
-         * @param commands [ctx]
+         * @param commands
          * @param out_node [out] Receives the reserved id.
          */
         ke_result (*create_node_deferred)(struct ke_scene_tree *self, const char *name, ke_entity parent, ke_ecs_commands *commands, ke_entity *out_node);
@@ -51,7 +51,7 @@ extern "C"
          * destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an
          * invalid argument for a null @p commands, and with the queue's code when it refuses the
          * recording.
-         * @param commands [ctx]
+         * @param commands
          */
         ke_result (*destroy_node_deferred)(struct ke_scene_tree *self, ke_entity entity, ke_ecs_commands *commands);
 

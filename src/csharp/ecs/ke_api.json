@@ -943,9 +943,7 @@
         {
           "name": "query_resolve",
           "returns": "ke_result",
-          "tags": [
-            "raw"
-          ],
+          "tags": [],
           "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
           "params": [
