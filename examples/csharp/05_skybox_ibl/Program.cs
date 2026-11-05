@@ -18,10 +18,23 @@ using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using KernelEngine.Framework.Native;
+
+using InputAction = KernelEngine.Framework.InputAction;
+
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
+    .AddSingleton(_ =>
+    {
+        var actions = new InputActions();
+        var fly = actions.AddMap("Fly", 0);
+        actions.BindKeyQuad(actions.AddAction(fly, "Look", NativeActionType.Axis2d), Key.Up, Key.Down, Key.Left, Key.Right);
+        actions.BindKeyQuad(actions.AddAction(fly, "Move", NativeActionType.Axis2d), Key.W, Key.S, Key.A, Key.D);
+        actions.BindKeyPair(actions.AddAction(fly, "Rise", NativeActionType.Axis1d), Key.ControlLeft, Key.ShiftLeft);
+        return actions;
+    })
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
@@ -112,10 +125,9 @@ sealed class FreeLook : Camera
     {
         float dt = view.DeltaTime;
 
-        if (view.IsKeyDown(262)) _yaw += RotateDeg * dt;
-        if (view.IsKeyDown(263)) _yaw -= RotateDeg * dt;
-        if (view.IsKeyDown(265)) _pitch += RotateDeg * dt;
-        if (view.IsKeyDown(264)) _pitch -= RotateDeg * dt;
+        var look = new InputAction(this, "Look").Vector;
+        _yaw -= look.X * RotateDeg * dt;
+        _pitch += look.Y * RotateDeg * dt;
         _pitch = Math.Clamp(_pitch, -89f, 89f);
 
         var rot = Quaternion.CreateFromYawPitchRoll(_yaw * MathF.PI / 180f, _pitch * MathF.PI / 180f, 0f);
@@ -123,12 +135,9 @@ sealed class FreeLook : Camera
         var right = Vector3.Transform(-Vector3.UnitX, rot);
 
         var move = Vector3.Zero;
-        if (view.IsKeyDown(87)) move += forward;
-        if (view.IsKeyDown(83)) move -= forward;
-        if (view.IsKeyDown(65)) move -= right;
-        if (view.IsKeyDown(68)) move += right;
-        if (view.IsKeyDown(340)) move += Vector3.UnitY;
-        if (view.IsKeyDown(341)) move -= Vector3.UnitY;
+        var walk = new InputAction(this, "Move").Vector;
+        move += forward * walk.Y + right * walk.X;
+        move += Vector3.UnitY * new InputAction(this, "Rise").Axis;
         if (move != Vector3.Zero) move = Vector3.Normalize(move);
 
         Position += move * MoveSpeed * dt;

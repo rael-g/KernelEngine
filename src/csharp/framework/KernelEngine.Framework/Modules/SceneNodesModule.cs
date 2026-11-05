@@ -28,7 +28,6 @@ public sealed class SceneNodesModule : IRuntimeModule
 {
     private readonly Action<ScriptHost, IServiceProvider> _setup;
 
-    private KernelEngine.Input.IInputReader? _inputSnapshot;
 
     /// <summary>The module name, "SceneNodes".</summary>
     public string Name => "SceneNodes";
@@ -98,8 +97,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         {
             scriptHost.ReleaseRetired();
             input?.Update();
-            _inputSnapshot = (input as KernelEngine.Input.Input)?.CaptureSnapshot();
-            if (actions is not null && _inputSnapshot is KernelEngine.Input.INativeInputReader reader) actions.Evaluate(reader.Native);
+            if (actions is not null && (input as KernelEngine.Input.Input)?.CaptureSnapshot() is KernelEngine.Input.INativeInputReader reader) actions.Evaluate(reader.Native);
         }, accessList: []);
 
         var signals = services.GetService<SignalBus>();
@@ -155,7 +153,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
                 runtime.RegisterSystem(name, phase, (ctx, dt) =>
                 {
-                    var view = new View(scriptHost, dt, _inputSnapshot, ctx);
+                    var view = new View(scriptHost, dt, ctx);
                     using (scriptHost.EnterSystem(ctx))
                     {
                         var system = KernelEngine.Runtime.SystemCtx.Of(ctx);

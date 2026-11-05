@@ -1,4 +1,4 @@
-﻿using KernelEngine.Audio;
+using KernelEngine.Audio;
 using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
@@ -16,6 +16,10 @@ using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using KernelEngine.Framework.Native;
+
+using InputAction = KernelEngine.Framework.InputAction;
+
 var beepPath = WriteSineWav(440, durationMs: 150);
 var bassPath = WriteSineWav(220, durationMs: 500);
 
@@ -23,6 +27,15 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
+    .AddSingleton(_ =>
+    {
+        var actions = new InputActions();
+        var test = actions.AddMap("AudioTest", 0);
+        actions.BindKey(actions.AddAction(test, "Beep", NativeActionType.Button), Key.Space);
+        actions.BindKey(actions.AddAction(test, "Bass", NativeActionType.Button), Key.L);
+        actions.BindKey(actions.AddAction(test, "Quit", NativeActionType.Button), Key.Escape);
+        return actions;
+    })
     .AddMiniaudioAudio()
     .AddAudioScene()
     .AddAudioComponentsNodeTypes()
@@ -105,18 +118,12 @@ static string WriteSineWav(int frequency, int durationMs)
 
 sealed class AudioController : Node
 {
-    private const int KeySpace = 32;
-    private const int KeyL = 76;
-    private const int KeyEscape = 256;
 
     private readonly IAudio _audio;
     private readonly uint _beep;
     private readonly uint _bass;
 
     private uint _bassVoice;
-    private bool _prevSpace;
-    private bool _prevL;
-    private bool _prevEsc;
 
     public AudioController(IAudio audio, uint beep, uint bass)
     {
@@ -129,16 +136,12 @@ sealed class AudioController : Node
 
     protected override void OnUpdate(in View view)
     {
-        bool space = view.IsKeyDown(KeySpace);
-        bool l = view.IsKeyDown(KeyL);
-        bool esc = view.IsKeyDown(KeyEscape);
-
-        if (space && !_prevSpace)
+        if (new InputAction(this, "Beep").JustPressed)
         {
             _audio.VoiceStart(_beep, volume: 0.6f, pitch: 1f, loop: false);
             Console.WriteLine("BEEP");
         }
-        if (l && !_prevL)
+        if (new InputAction(this, "Bass").JustPressed)
         {
             if (_bassVoice == 0)
             {
@@ -152,10 +155,6 @@ sealed class AudioController : Node
                 Console.WriteLine("BASS off");
             }
         }
-        if (esc && !_prevEsc) Environment.Exit(0);
-
-        _prevSpace = space;
-        _prevL = l;
-        _prevEsc = esc;
+        if (new InputAction(this, "Quit").JustPressed) Environment.Exit(0);
     }
 }

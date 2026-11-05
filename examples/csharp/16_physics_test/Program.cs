@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
@@ -19,6 +19,10 @@ using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using KernelEngine.Framework.Native;
+
+using InputAction = KernelEngine.Framework.InputAction;
+
 const float FloorY = -3f;
 const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
@@ -27,6 +31,15 @@ var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
+    .AddSingleton(_ =>
+    {
+        var actions = new InputActions();
+        var test = actions.AddMap("PhysicsTest", 0);
+        actions.BindKey(actions.AddAction(test, "Drop", NativeActionType.Button), Key.Space);
+        actions.BindKey(actions.AddAction(test, "Reset", NativeActionType.Button), Key.R);
+        actions.BindKey(actions.AddAction(test, "Quit", NativeActionType.Button), Key.Escape);
+        return actions;
+    })
     .AddBox2dPhysics2D()
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
@@ -92,18 +105,11 @@ Console.WriteLine("[16_physics_test] Exited cleanly.");
 
 sealed class PhysicsScene : Node
 {
-    private const int KeySpace = 32;
-    private const int KeyR = 82;
-    private const int KeyEscape = 256;
-
     private readonly IPhysics2D _physics;
     private readonly string _ballMesh;
     private readonly MaterialHandle _ballMat;
     private readonly List<(MeshRenderer Node, KernelEngine.Physics.Body2d Body)> _balls = new();
 
-    private bool _prevSpace;
-    private bool _prevR;
-    private bool _prevEsc;
     private bool _initialDropped;
 
     public PhysicsScene(IPhysics2D physics, string ballMesh, MaterialHandle ballMat)
@@ -133,14 +139,10 @@ sealed class PhysicsScene : Node
             node.Rotation = Quaternion.CreateFromAxisAngle(Vector3.UnitZ, s.Angle);
         }
 
-        bool space = view.IsKeyDown(KeySpace);
-        bool r = view.IsKeyDown(KeyR);
-        bool esc = view.IsKeyDown(KeyEscape);
-
-        if (space && !_prevSpace)
+        if (new InputAction(this, "Drop").JustPressed)
             Spawn(new Vector2((Random.Shared.NextSingle() - 0.5f) * 6f, 5f));
 
-        if (r && !_prevR)
+        if (new InputAction(this, "Reset").JustPressed)
         {
             Console.WriteLine($"Reset — destroying {_balls.Count} balls");
             for (int i = 0; i < _balls.Count; i++)
@@ -151,11 +153,7 @@ sealed class PhysicsScene : Node
             _balls.Clear();
         }
 
-        if (esc && !_prevEsc) Environment.Exit(0);
-
-        _prevSpace = space;
-        _prevR = r;
-        _prevEsc = esc;
+        if (new InputAction(this, "Quit").JustPressed) Environment.Exit(0);
     }
 
     private void Spawn(Vector2 at)

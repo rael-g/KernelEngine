@@ -13,7 +13,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 | managed input | `IInput`, `IInputReader` | `Input` in `KernelEngine.Input` | the native `ke_input` | an `IInputReader` over one snapshot |
 | action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
 | node field | `InputAction`, `InputMap` | `KernelEngine.Framework` | an action or map name, written by a scene or by code | the action's value, the map's switch |
-| system | none; the `Scene.Input` system of `SceneNodesModule` | framework | `IInput`, `InputActions` | the snapshot kept for the tick |
+| system | none; the `Scene.Input` system of `SceneNodesModule` | framework | `IInput`, `InputActions` | the actions evaluated for the tick |
 
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
@@ -35,9 +35,9 @@ takes no lock: sinks, `update` and `get_snapshot` must not overlap.
 The host calls `PollEvents` on the window, then `Tick` on the runtime. The window module registers
 no system, so the sink calls of a poll never interleave with a tick. Inside the tick, the system
 "Scene.Input" runs in `KE_PHASE_PRE_UPDATE` with an empty access list: it
-calls `Update` on `IInput`, captures a snapshot with `CaptureSnapshot`, keeps it in a field of
-`SceneNodesModule`, and calls `Evaluate` on `InputActions` with it. Systems of later phases
-read that field through `View`, so every read in the rest of the tick sees one snapshot.
+calls `Update` on `IInput`, captures a snapshot with `CaptureSnapshot` and calls `Evaluate` on
+`InputActions` with it. Systems of later phases read actions, never keys, so every read in the rest
+of the tick sees the values of one evaluation.
 
 **Actions are derived, not read from the edges.** The action layer reads only the `keys_down` and
 `mouse_buttons_down` bitsets of the snapshot and derives its own edges by comparing one `evaluate`
