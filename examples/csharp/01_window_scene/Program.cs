@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -26,7 +27,8 @@ var services = new ServiceCollection()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
 #region modules
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Window/Tree"))
+    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 01 Window/Tree", Width: 1280, Height: 720))
+    .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.15f, 0.15f, 0.15f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
 #endregion

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -32,7 +33,8 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 09 Many Lights Stress Test"))
+    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 09 Many Lights Stress Test", Width: 1280, Height: 720))
+    .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.005f, 0.005f, 0.008f, 1.0f),
         clusterGridZ: 64, maxLightsPerCluster: 512, enableShadows: EnableShadows, enableIbl: EnableIbl))
     .Add<IRuntimeModule>(new FrameworkModule())

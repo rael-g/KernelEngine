@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -25,7 +26,8 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 07 Point Lights"))
+    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 07 Point Lights", Width: 1280, Height: 720))
+    .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.02f, 0.02f, 0.02f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>

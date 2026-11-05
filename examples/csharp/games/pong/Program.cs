@@ -23,6 +23,7 @@ using Pong;
 
 var services = new ServiceCollection()
     .AddProjectConfig()
+    .AddConfig<GlfwWindowConfig>("runtime.window")
     .AddLogger()
     .AddConsoleSink()
     .AddInput()

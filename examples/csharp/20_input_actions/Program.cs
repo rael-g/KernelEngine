@@ -1,3 +1,4 @@
+using KernelEngine.Configuration;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
@@ -25,7 +26,8 @@ var services = new ServiceCollection()
     .AddPoolIo()
     .AddSingleton(_ => DemoInput.Build())
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(640, 160, "KernelEngine — 20 Input Actions (WASD, Space, Tab, Esc)"))
+    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 20 Input Actions (WASD, Space, Tab, Esc)", Width: 640, Height: 160))
+    .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((host, _) =>

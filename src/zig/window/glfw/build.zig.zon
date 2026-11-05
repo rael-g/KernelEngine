@@ -5,7 +5,6 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_input = .{ .path = "../../abi/input" },
-        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_window = .{ .path = "../../abi/window" },
         .abi_window_glfw_factory = .{ .path = "abi" },

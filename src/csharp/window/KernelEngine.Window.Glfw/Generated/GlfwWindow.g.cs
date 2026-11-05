@@ -10,18 +10,16 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
 {
     /// <summary>Creates a window and starts it.</summary>
     /// <param name="input">Input sink target.</param>
-    /// <param name="configuration">Holds width, height, title and fullscreen in section runtime.window; a missing key selects 1280x720 windowed, titled KernelEngine.</param>
     /// <param name="title">Window title.</param>
-    /// <param name="width"></param>
-    /// <param name="height"></param>
-    /// <param name="fullscreen"></param>
-    public GlfwWindow(KernelEngine.Input.INativeInput? input = default, KernelEngine.Configuration.INativeConfiguration? configuration = default, string? title = default, int width = default, int height = default, bool fullscreen = default) : base(Create(input, configuration, title, width, height, fullscreen))
+    /// <param name="width">Client width in pixels; zero selects 1280.</param>
+    /// <param name="height">Client height in pixels; zero selects 720.</param>
+    /// <param name="fullscreen">Whether the window covers the primary monitor.</param>
+    public GlfwWindow(KernelEngine.Input.INativeInput? input = default, string? title = default, int width = default, int height = default, bool fullscreen = default) : base(Create(input, title, width, height, fullscreen))
     {
         Hold(input?.Owner);
-        Hold(configuration?.Owner);
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, string? title, int width, int height, bool fullscreen)
+    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen)
     {
         var titleBytes = title is null ? null : System.Text.Encoding.UTF8.GetBytes(title + "\0");
         fixed (byte* titlePtr = titleBytes)
@@ -32,7 +30,7 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
             config.height = height;
             config.fullscreen = fullscreen;
             KernelEngine.Window.Native.ke_window_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &config, &handle), "ke_window_glfw_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), &config, &handle), "ke_window_glfw_create");
             return handle;
         }
     }

@@ -53,7 +53,7 @@ int main(void)
         .fullscreen = false,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window create failed", made_window);
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init failed", window_ready);

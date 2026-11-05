@@ -10,19 +10,18 @@ public sealed unsafe partial class GlfwWindow
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
     /// <param name="input">Input sink target.</param>
-    /// <param name="configuration">Holds width, height, title and fullscreen in section runtime.window; a missing key selects 1280x720 windowed, titled KernelEngine.</param>
     /// <param name="title">Window title.</param>
-    /// <param name="width"></param>
-    /// <param name="height"></param>
-    /// <param name="fullscreen"></param>
-    public GlfwWindow(KernelEngine.Logger.ILogger logger, KernelEngine.Input.INativeInput? input = default, KernelEngine.Configuration.INativeConfiguration? configuration = default, string? title = default, int width = default, int height = default, bool fullscreen = default) : base(CreateLogged(logger, input, configuration, title, width, height, fullscreen))
+    /// <param name="width">Client width in pixels; zero selects 1280.</param>
+    /// <param name="height">Client height in pixels; zero selects 720.</param>
+    /// <param name="fullscreen">Whether the window covers the primary monitor.</param>
+    public GlfwWindow(KernelEngine.Logger.ILogger logger, KernelEngine.Input.INativeInput? input = default, string? title = default, int width = default, int height = default, bool fullscreen = default) : base(CreateLogged(logger, input, title, width, height, fullscreen))
     {
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, string? title, int width, int height, bool fullscreen)
+    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(input, configuration, title, width, height, fullscreen);
+        return Create(input, title, width, height, fullscreen);
     }
 }

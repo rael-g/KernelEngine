@@ -1,6 +1,7 @@
 using System.Numerics;
 
 using KernelEngine.Common;
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -27,7 +28,8 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 18 Webgpu Mesh (v2)"))
+    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 18 Webgpu Mesh (v2)", Width: 1024, Height: 640))
+    .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(render);
 
 using var sp = services.BuildServiceProvider();

@@ -51,7 +51,7 @@ int main(void)
         .title = "c_demo_13 runtime clear", .width = 1024, .height = 640,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window", made_window);
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init", window_ready);
