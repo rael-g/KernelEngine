@@ -72,7 +72,7 @@ public sealed class SceneNodesModule : IRuntimeModule
                     sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>(),
-                    sp.GetService<SceneLoader>(),
+                    () => sp.GetService<SceneLoader>(),
                     sp.GetService<InputActions>());
             }
         });

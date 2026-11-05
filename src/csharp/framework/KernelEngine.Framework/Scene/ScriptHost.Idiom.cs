@@ -116,7 +116,7 @@ public unsafe partial class ScriptHost
     }
 
     private SignalBus? _signals;
-    private SceneLoader? _loader;
+    private Func<SceneLoader?>? _loader;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _actionIds = new();
     /// <summary>The signal bus this host raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
@@ -170,12 +170,12 @@ public unsafe partial class ScriptHost
         _signals is null ? default : new Emit<T>(_signals, source, SignalIdOf<T>());
 
     /// <summary>
-    /// Gives the host the scene tree, the ECS registry and the optional signal bus, looks up the name,
-    /// transform and hierarchy components the scene tree registered, and registers the host's own
-    /// state component.
+    /// Gives the host the scene tree, the ECS registry, the optional signal bus, the optional source of
+    /// the scene loader, asked only when a scene is spawned, and the optional input actions; looks up
+    /// the name, transform and hierarchy components the scene tree registered.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null, SceneLoader? loader = null, InputActions? actions = null)
+    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null, Func<SceneLoader?>? loader = null, InputActions? actions = null)
     {
         _signals = signals;
         _loader = loader;
@@ -201,9 +201,9 @@ public unsafe partial class ScriptHost
     /// <exception cref="InvalidOperationException">No scene loader was composed, or no system is current.</exception>
     internal void Instantiate(string path, Node parent)
     {
-        if (_loader is null) throw new InvalidOperationException("spawning a scene needs a scene loader");
+        if (_loader?.Invoke() is not { } loader) throw new InvalidOperationException("spawning a scene needs a scene loader");
         if (_commands is not { } commands) throw new InvalidOperationException($"spawning '{path}' runs inside a system");
-        _loader.Instantiate(path, parent.Entity, commands);
+        loader.Instantiate(path, parent.Entity, commands);
     }
 
     /// <summary>
