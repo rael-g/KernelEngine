@@ -64,7 +64,8 @@ const R = @import("result").Result(.{});
 
 /// The fixed-post-update-phase system that reconciles every body with its component and transform,
 /// in this order: a component with no body gets one at its transform's position and rotation; a
-/// transform or a velocity that differs from the world's pushes it in; the world steps by `dt`;
+/// transform or a velocity that differs from the world's pushes it in, and a pending impulse is
+/// applied and cleared; the world steps by `dt`;
 /// every body's state is then written back, its velocities into its component and its position and
 /// angle into its transform. A body created here is therefore simulated in the same update. The
 /// body type, gravity scale and fixed rotation are read only when the body is created. A failed
@@ -100,6 +101,7 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
                 p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
                 p.set_body_fixed_rotation.?(p, b.body, b.fixed_rotation);
                 p.set_body_gravity_scale.?(p, b.body, b.gravity_scale);
+                applyImpulse(p, b);
                 log.info(
                     "body on entity {d}: type={d} pos=({d:.3},{d:.3}) angle={d:.4} scale=({d:.3},{d:.3})",
                     .{ segs.?[s].entities.?[i], b.type, pose.position.x, pose.position.y, pose.rotation, pose.scale.x, pose.scale.y });
@@ -114,6 +116,7 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
                 p.set_body_position.?(p, b.body, .{ .x = pose.position.x, .y = pose.position.y }, pose.rotation);
             if (b.velocity.x != st.velocity_x or b.velocity.y != st.velocity_y)
                 p.set_body_velocity.?(p, b.body, .{ .x = b.velocity.x, .y = b.velocity.y });
+            applyImpulse(p, b);
         }
     }
 
@@ -140,6 +143,12 @@ fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
         }
     }
     return R.ok;
+}
+
+fn applyImpulse(p: *abi_physics.c.ke_physics_2d, b: [*c]abi_physics_components.c.ke_body2d_component) void {
+    if (b.*.impulse.x == 0 and b.*.impulse.y == 0) return;
+    p.apply_impulse.?(p, b.*.body, .{ .x = b.*.impulse.x, .y = b.*.impulse.y });
+    b.*.impulse = .{ .x = 0, .y = 0 };
 }
 
 /// Destroys every recorded body whose entity was not seen holding it in the current update, and
@@ -503,10 +512,18 @@ const FakeWorld = struct {
     var next_body: abi_physics.c.ke_body_2d = .{ .bits = 1 };
     var destroyed: [4]abi_physics.c.ke_body_2d = undefined;
     var destroyed_count: usize = 0;
+    var impulses: usize = 0;
+    var last_impulse: abi_math.c.ke_vec2 = undefined;
 
     fn reset() void {
         next_body = .{ .bits = 1 };
         destroyed_count = 0;
+        impulses = 0;
+    }
+
+    fn recordImpulse(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_2d, impulse: abi_math.c.ke_vec2) callconv(.c) void {
+        impulses += 1;
+        last_impulse = impulse;
     }
 
     fn createBody(_: [*c]abi_physics.c.ke_physics_2d, _: abi_physics.c.ke_body_type_2d, _: abi_math.c.ke_vec2, out_body: [*c]abi_physics.c.ke_body_2d) callconv(.c) abi_result.c.ke_result {
@@ -539,6 +556,7 @@ const FakeWorld = struct {
         p.set_body_velocity = setBodyVelocity;
         p.set_body_fixed_rotation = setBodyFixedRotation;
         p.set_body_gravity_scale = setBodyGravityScale;
+        p.apply_impulse = recordImpulse;
         p.step = step;
         return p;
     }
@@ -594,6 +612,36 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     destroyHandle(@ptrCast(m));
     try testing.expectEqual(@as(usize, 1), FakeWorld.destroyed_count);
     try heap.expectNoLeaks();
+}
+
+test "a pending impulse is applied once before the step and cleared" {
+    FakeWorld.reset();
+    var physics = FakeWorld.api();
+    var rt: RuntimeSub = undefined;
+    try substituteRuntime(&rt);
+    defer rt.deinit();
+    const m = try gpa.create(Module);
+    var tree: Tree = undefined;
+    tree.init();
+    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    ctx.view = BodyView.view;
+
+    BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);
+    BodyView.transforms[0] = std.mem.zeroes(abi_spatial.c.ke_transform2d_component);
+    BodyView.live = 1;
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
+    try testing.expectEqual(@as(usize, 0), FakeWorld.impulses);
+
+    BodyView.bodies[0].impulse = .{ .x = 1, .y = 0 };
+    BodyView.bodies[0].impulse.x += 2;
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
+    try testing.expect(bodySystem(&ctx, m, 0.0) == R.ok);
+    try testing.expectEqual(@as(usize, 1), FakeWorld.impulses);
+    try testing.expectEqual(@as(f32, 3), FakeWorld.last_impulse.x);
+    try testing.expectEqual(@as(f32, 0), BodyView.bodies[0].impulse.x);
+
+    destroyHandle(@ptrCast(m));
 }
 
 const OrphanView = struct {

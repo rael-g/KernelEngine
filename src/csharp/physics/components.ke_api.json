@@ -545,6 +545,12 @@
           "doc": null
         },
         {
+          "name": "impulse",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": "Added to the body\u0027s momentum before the next step, in newton-seconds, then cleared. Writes in between add up."
+        },
+        {
           "name": "angular_velocity",
           "type": "float",
           "tags": [],

@@ -23,6 +23,9 @@ extern "C"
         /// Read when the body is created; a later change does not reach it.
         ke_body_type_2d type;
         ke_vec2         velocity;
+        /// Added to the body's momentum before the next step, in newton-seconds, then cleared.
+        /// Writes in between add up.
+        ke_vec2         impulse;
         /// Radians per second, CCW positive.
         float           angular_velocity;
         /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when

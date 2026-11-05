@@ -6,6 +6,7 @@ public partial struct Body2dComponent
 {
     public BodyType2D Type;
     public System.Numerics.Vector2 Velocity;
+    public System.Numerics.Vector2 Impulse;
 
     public float AngularVelocity;
 

@@ -630,13 +630,14 @@ ke_physics_2d_handle size=16 align=8
   destroy 8
 
 [physics_components]
-ke_body2d_component size=28 align=4
+ke_body2d_component size=36 align=4
   type 0
   velocity 4
-  angular_velocity 12
-  gravity_scale 16
-  fixed_rotation 20
-  body 24
+  impulse 12
+  angular_velocity 20
+  gravity_scale 24
+  fixed_rotation 28
+  body 32
 ke_collider2d_component size=40 align=4
   kind 0
   half_extents 4

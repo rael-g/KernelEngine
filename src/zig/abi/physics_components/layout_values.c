@@ -4,6 +4,7 @@ const unsigned long long layout_values[] = {
     sizeof(ke_body2d_component),
     offsetof(ke_body2d_component, type),
     offsetof(ke_body2d_component, velocity),
+    offsetof(ke_body2d_component, impulse),
     offsetof(ke_body2d_component, angular_velocity),
     offsetof(ke_body2d_component, gravity_scale),
     offsetof(ke_body2d_component, fixed_rotation),
