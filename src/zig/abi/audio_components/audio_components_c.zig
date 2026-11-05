@@ -23,9 +23,9 @@ pub const ke_sound_component = extern struct {
     /// Path to the audio file, resolved against the project's base directory.
     path: [256]u8 = std.mem.zeroes([256]u8),
     /// Linear gain, 0..1.
-    volume: f32 = std.mem.zeroes(f32),
+    volume: f32 = 1,
     /// Playback rate; 1 is the recorded pitch.
-    pitch: f32 = std.mem.zeroes(f32),
+    pitch: f32 = 1,
     /// Plays the clip again from its beginning each time it ends, until playing is cleared.
     loop: bool = std.mem.zeroes(bool),
     playing: bool = std.mem.zeroes(bool),

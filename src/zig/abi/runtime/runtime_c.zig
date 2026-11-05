@@ -119,7 +119,7 @@ pub const ke_runtime_system_params = extern struct {
     /// share ke_system_ctx_slice reports. False keeps the body one call over the whole set. What
     /// breaks the promise is a body reaching an entity other than the one it is visiting, or
     /// touching state shared across the set.
-    per_entity: bool = std.mem.zeroes(bool),
+    per_entity: bool = false,
     /// Names of systems of the same phase this one runs after, whatever they access. A name is
     /// resolved when the phase is built, so it may name a system registered later; a name no system
     /// of the phase carries fails the tick.
@@ -131,7 +131,7 @@ pub const ke_runtime_system_params = extern struct {
     /// The body runs alone at the start of its phase, before every system of the phase that is not
     /// exclusive, and what it records is applied before they run. Two exclusive systems are ordered
     /// like two writers of one component. Neither its access nor per_entity orders or splits it.
-    exclusive: bool = std.mem.zeroes(bool),
+    exclusive: bool = false,
 };
 
 pub const ke_runtime_params = extern struct {

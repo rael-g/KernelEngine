@@ -7,8 +7,8 @@ const abi_result = @import("result");
 /// An entity's authored 3D pose.
 pub const ke_transform_component = extern struct {
     position: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
-    rotation: abi_math.c.ke_quat = std.mem.zeroes(abi_math.c.ke_quat),
-    scale: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
+    rotation: abi_math.c.ke_quat = @bitCast([_]std.meta.fields(abi_math.c.ke_quat)[0].type{ 0, 0, 0, 1 }),
+    scale: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 1, 1, 1 }),
 };
 
 /// An entity's authored 2D pose, read and written as one unit.
@@ -16,7 +16,7 @@ pub const ke_transform2d_component = extern struct {
     position: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
     /// Radians, CCW positive.
     rotation: f32 = std.mem.zeroes(f32),
-    scale: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    scale: abi_math.c.ke_vec2 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec2)[0].type{ 1, 1 }),
     /// Where the plane sits along Z.
     depth: f32 = std.mem.zeroes(f32),
 };

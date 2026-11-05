@@ -40,7 +40,7 @@ pub const ke_ui_quad_component = extern struct {
     @"u1": f32 = std.mem.zeroes(f32),
     v1: f32 = std.mem.zeroes(f32),
     /// Premultiplied alpha RGBA.
-    color: [4]f32 = std.mem.zeroes([4]f32),
+    color: [4]f32 = .{ 1, 1, 1, 1 },
 };
 
 /// A screen-space text label. Text, anchor, offset, color and font are the caller's input;
@@ -49,14 +49,14 @@ pub const ke_label_component = extern struct {
     /// Font file to draw with.
     font: [128]u8 = std.mem.zeroes([128]u8),
     /// Size the font is baked at, in pixels.
-    font_size: f32 = std.mem.zeroes(f32),
+    font_size: f32 = 32,
     /// Resolved from `font`.
     font_handle: ke_ui_font_handle = std.mem.zeroes(ke_ui_font_handle),
     /// Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right.
     anchor: [2]f32 = std.mem.zeroes([2]f32),
     /// Pixel offset applied AFTER anchor positioning.
     offset: [2]f32 = std.mem.zeroes([2]f32),
-    color: [4]f32 = std.mem.zeroes([4]f32),
+    color: [4]f32 = .{ 1, 1, 1, 1 },
     text: [256]u8 = std.mem.zeroes([256]u8),
     /// Written by the engine each tick; a node authoring it would have the value overwritten on the
     /// next tick.
