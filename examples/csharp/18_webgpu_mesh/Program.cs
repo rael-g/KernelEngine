@@ -28,7 +28,7 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 18 Webgpu Mesh (v2)", Width: 1024, Height: 640))
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 18 Webgpu Mesh (v2)", Width = 1024, Height = 640 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .Add<IRuntimeModule>(render);
 

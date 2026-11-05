@@ -5,20 +5,33 @@
 
 namespace KernelEngine.Window.Glfw;
 
-/// <summary>The values <see cref="GlfwWindow"/> is created with; a zero value selects its default.</summary>
-/// <param name="Title">Window title.</param>
-/// <param name="Width">Client width in pixels; zero selects 1280.</param>
-/// <param name="Height">Client height in pixels; zero selects 720.</param>
-/// <param name="Fullscreen">Whether the window covers the primary monitor.</param>
-public sealed record GlfwWindowConfig(string? Title = default, int Width = default, int Height = default, bool Fullscreen = default)
-    : KernelEngine.Configuration.IConfigSection<GlfwWindowConfig>
+/// <summary>The values <see cref="GlfwWindow"/> is created with, each starting at its default.</summary>
+public sealed record GlfwWindowConfig : KernelEngine.Configuration.IConfigSection<GlfwWindowConfig>
 {
+    /// <summary>Window title.</summary>
+    public string? Title { get; init; } = "KernelEngine";
+
+    /// <summary>Client width in pixels.</summary>
+    public int Width { get; init; } = 1280;
+
+    /// <summary>Client height in pixels.</summary>
+    public int Height { get; init; } = 720;
+
+    /// <summary>Whether the window covers the primary monitor.</summary>
+    public bool Fullscreen { get; init; } = false;
+
     /// <inheritdoc/>
-    public static GlfwWindowConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section) => new(
-        configuration.GetString(section, "title", "") is { Length: > 0 } titleText ? titleText : null,
-        (int)configuration.GetInt(section, "width", 0),
-        (int)configuration.GetInt(section, "height", 0),
-        configuration.GetBool(section, "fullscreen", false));
+    public static GlfwWindowConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)
+    {
+        var defaults = new GlfwWindowConfig();
+        return new()
+        {
+            Title = configuration.GetString(section, "title", defaults.Title ?? "") is { Length: > 0 } titleText ? titleText : null,
+            Width = (int)configuration.GetInt(section, "width", defaults.Width),
+            Height = (int)configuration.GetInt(section, "height", defaults.Height),
+            Fullscreen = configuration.GetBool(section, "fullscreen", defaults.Fullscreen),
+        };
+    }
 
     /// <inheritdoc/>
     public GlfwWindowConfig Value => this;

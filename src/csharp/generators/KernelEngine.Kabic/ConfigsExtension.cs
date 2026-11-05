@@ -8,9 +8,9 @@ namespace KernelEngine.Kabic;
 /// <summary>
 /// Projects the values of each named factory's config struct into a <c>&lt;Class&gt;Config</c> record
 /// a host fills in code or reads from a section of a <c>KernelEngine.Configuration.IConfiguration</c>,
-/// and gives the factory's class a constructor that takes the record in place of those values. A key
-/// of the section is the name of the field; an absent key reads zero, which selects the factory's
-/// default. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
+/// and gives the factory's class a constructor that takes the record in place of those values. A
+/// member starts at the value of its field's <c>[default:&lt;value&gt;]</c> tag, or zero; a key of
+/// the section is the name of the field, and an absent key keeps the default. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
 /// where the interface file receives <c>IConfigSection&lt;T&gt;</c> and the <c>Read&lt;T&gt;</c> extension.
 /// </summary>
 public sealed class ConfigsExtension : IKabicExtension
@@ -35,13 +35,14 @@ public sealed class ConfigsExtension : IKabicExtension
                 context.Report($"configs: {f.Function.Name} has no value to read");
                 continue;
             }
-            if (values.FirstOrDefault(a => ReadOf(a) is null) is { } unread)
+            var defaults = values.ToDictionary(a => a, a => DefaultOf(a, f.Config!.Fields.First(x => x.Name == a.Field).TagValue("default")));
+            if (values.FirstOrDefault(a => ReadOf(a) is null || defaults[a] is null) is { } unread)
             {
                 context.Report($"configs: {f.Function.Name}'s {unread.Field} ({unread.ManagedType}) cannot be read from a section");
                 continue;
             }
             var dir = Path.GetRelativePath(context.Root, f.ProjectDir).Replace('\\', '/');
-            context.Emit($"{dir}/Generated/{f.ClassName}Config.g.cs", Render(f, values));
+            context.Emit($"{dir}/Generated/{f.ClassName}Config.g.cs", Render(f, values, defaults!));
         }
     }
 
@@ -51,11 +52,11 @@ public sealed class ConfigsExtension : IKabicExtension
         "/// <summary>Values a factory takes, which are their own options and which a section of a configuration can hold.</summary>\n" +
         "/// <typeparam name=\"T\">The type of the values.</typeparam>\n" +
         "public interface IConfigSection<T> : IOptions<T> where T : class, IConfigSection<T>\n{\n" +
-        "    /// <summary>Reads the values from <paramref name=\"section\"/> of <paramref name=\"configuration\"/>; an absent key reads zero.</summary>\n" +
+        "    /// <summary>Reads the values from <paramref name=\"section\"/> of <paramref name=\"configuration\"/>; an absent key keeps its default.</summary>\n" +
         "    static abstract T Read(IConfiguration configuration, string section);\n}\n\n" +
         "/// <summary>Registering the values of a factory, given in code or read from a configuration.</summary>\n" +
         "public static class ConfigSectionExtensions\n{\n" +
-        "    /// <summary>Reads <typeparamref name=\"T\"/> from <paramref name=\"section\"/>; an absent key reads zero.</summary>\n" +
+        "    /// <summary>Reads <typeparamref name=\"T\"/> from <paramref name=\"section\"/>; an absent key keeps its default.</summary>\n" +
         "    public static T Read<T>(this IConfiguration configuration, string section) where T : class, IConfigSection<T> => T.Read(configuration, section);\n\n" +
         "    /// <summary>Registers <paramref name=\"value\"/> as the <see cref=\"IOptions{T}\"/> of <typeparamref name=\"T\"/>.</summary>\n" +
         "    public static IServiceCollection AddConfig<T>(this IServiceCollection services, T value) where T : class, IConfigSection<T> =>\n" +
@@ -64,33 +65,44 @@ public sealed class ConfigsExtension : IKabicExtension
         "    public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section) where T : class, IConfigSection<T> =>\n" +
         "        services.AddSingleton<IOptions<T>>(sp => T.Read(sp.GetRequiredService<IConfiguration>(), section));\n}\n";
 
+    private static string? DefaultOf(FactoryArgument a, string? tag) => a.ManagedType switch
+    {
+        "string?" => tag is null ? "null" : $"\"{tag}\"",
+        "bool" => tag ?? "false",
+        "float" => tag is null ? "0f" : $"{tag}f",
+        "double" or "sbyte" or "byte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => tag ?? "0",
+        var t when t.Contains('.') && !t.EndsWith('?') => tag is null ? $"default({t})" : long.TryParse(tag, out _) ? $"({t}){tag}" : null,
+        _ => null,
+    };
+
     private static string? ReadOf(FactoryArgument a)
     {
         var key = $"section, \"{a.Field}\"";
+        var given = $"defaults.{Pascal(a.Name)}";
         return a.ManagedType switch
         {
-            "string?" => $"configuration.GetString({key}, \"\") is {{ Length: > 0 }} {a.Name}Text ? {a.Name}Text : null",
-            "bool" => $"configuration.GetBool({key}, false)",
-            "float" or "double" => $"({a.ManagedType})configuration.GetDouble({key}, 0)",
-            "sbyte" or "byte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => $"({a.ManagedType})configuration.GetInt({key}, 0)",
-            var t when t.Contains('.') && !t.EndsWith('?') => $"({t})configuration.GetInt({key}, 0)",
+            "string?" => $"configuration.GetString({key}, {given} ?? \"\") is {{ Length: > 0 }} {a.Name}Text ? {a.Name}Text : null",
+            "bool" => $"configuration.GetBool({key}, {given})",
+            "float" or "double" => $"({a.ManagedType})configuration.GetDouble({key}, {given})",
+            "sbyte" or "byte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => $"({a.ManagedType})configuration.GetInt({key}, {given})",
+            var t when t.Contains('.') && !t.EndsWith('?') => $"({t})configuration.GetInt({key}, (long){given})",
             _ => null,
         };
     }
 
-    private static string Render(Factory f, List<FactoryArgument> values)
+    private static string Render(Factory f, List<FactoryArgument> values, Dictionary<FactoryArgument, string> defaults)
     {
         var type = f.ClassName + "Config";
         var o = new StringBuilder();
         o.Append($"// <auto-generated/>\n// Derived from the factory header. Do not edit; edit the header instead.\n\n#nullable enable\n\nnamespace {f.ManagedNamespace};\n\n");
-        o.Append($"/// <summary>The values <see cref=\"{f.ClassName}\"/> is created with; a zero value selects its default.</summary>\n");
+        o.Append($"/// <summary>The values <see cref=\"{f.ClassName}\"/> is created with, each starting at its default.</summary>\n");
+        o.Append($"public sealed record {type} : KernelEngine.Configuration.IConfigSection<{type}>\n{{\n");
         foreach (var a in values)
-            o.Append($"/// <param name=\"{Pascal(a.Name)}\">{Xml(a.Doc)}</param>\n");
-        o.Append($"public sealed record {type}({string.Join(", ", values.Select(a => $"{a.ManagedType} {Pascal(a.Name)} = default"))})\n");
-        o.Append($"    : KernelEngine.Configuration.IConfigSection<{type}>\n{{\n");
-        o.Append($"    /// <inheritdoc/>\n    public static {type} Read(KernelEngine.Configuration.IConfiguration configuration, string section) => new(\n");
-        o.Append(string.Join(",\n", values.Select(a => $"        {ReadOf(a)}")));
-        o.Append(");\n\n");
+            o.Append($"    /// <summary>{Xml(a.Doc)}</summary>\n    public {a.ManagedType} {Pascal(a.Name)} {{ get; init; }} = {defaults[a]};\n\n");
+        o.Append($"    /// <inheritdoc/>\n    public static {type} Read(KernelEngine.Configuration.IConfiguration configuration, string section)\n    {{\n");
+        o.Append($"        var defaults = new {type}();\n        return new()\n        {{\n");
+        o.Append(string.Join(",\n", values.Select(a => $"            {Pascal(a.Name)} = {ReadOf(a)}")));
+        o.Append(",\n        };\n    }\n\n");
         o.Append($"    /// <inheritdoc/>\n    public {type} Value => this;\n}}\n\n");
         var providers = f.Arguments.Where(a => !values.Contains(a)).ToList();
         o.Append($"public sealed unsafe partial class {f.ClassName}\n{{\n");

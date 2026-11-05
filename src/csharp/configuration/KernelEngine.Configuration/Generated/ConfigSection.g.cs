@@ -12,14 +12,14 @@ namespace KernelEngine.Configuration;
 /// <typeparam name="T">The type of the values.</typeparam>
 public interface IConfigSection<T> : IOptions<T> where T : class, IConfigSection<T>
 {
-    /// <summary>Reads the values from <paramref name="section"/> of <paramref name="configuration"/>; an absent key reads zero.</summary>
+    /// <summary>Reads the values from <paramref name="section"/> of <paramref name="configuration"/>; an absent key keeps its default.</summary>
     static abstract T Read(IConfiguration configuration, string section);
 }
 
 /// <summary>Registering the values of a factory, given in code or read from a configuration.</summary>
 public static class ConfigSectionExtensions
 {
-    /// <summary>Reads <typeparamref name="T"/> from <paramref name="section"/>; an absent key reads zero.</summary>
+    /// <summary>Reads <typeparamref name="T"/> from <paramref name="section"/>; an absent key keeps its default.</summary>
     public static T Read<T>(this IConfiguration configuration, string section) where T : class, IConfigSection<T> => T.Read(configuration, section);
 
     /// <summary>Registers <paramref name="value"/> as the <see cref="IOptions{T}"/> of <typeparamref name="T"/>.</summary>

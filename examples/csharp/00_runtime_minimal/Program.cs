@@ -23,7 +23,7 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .AddConfig(new GlfwWindowConfig(Title: "KernelEngine — 00 Runtime Minimal", Width: 800, Height: 600))
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 00 Runtime Minimal", Width = 800, Height = 600 })
     .Add<IRuntimeModule>(new GlfwWindowModule());
 #endregion
 
