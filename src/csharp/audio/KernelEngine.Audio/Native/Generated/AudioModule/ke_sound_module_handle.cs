@@ -10,10 +10,10 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public unsafe partial struct ke_audio_player_module_handle
+public unsafe partial struct ke_sound_module_handle
 {
-    public ke_audio_player_module* @ref;
+    public ke_sound_module* @ref;
 
-    [NativeTypeName("void (*)(ke_audio_player_module *)")]
-    public delegate* unmanaged[Cdecl]<ke_audio_player_module*, void> destroy;
+    [NativeTypeName("void (*)(ke_sound_module *)")]
+    public delegate* unmanaged[Cdecl]<ke_sound_module*, void> destroy;
 }

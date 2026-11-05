@@ -4,6 +4,9 @@ version = 2
 [[entity]]
 name = "Root"
 type = "pong.ball"
+[entity.ball]
+hit_sound   = "res://scenes/HitSound.scene.toml"
+score_sound = "res://scenes/ScoreSound.scene.toml"
 
 [[entity]]
 name   = "Shape"
@@ -21,19 +24,3 @@ type   = "sprite2d"
 [entity.sprite2d]
 size  = [0.36, 0.36]
 color = [0.95, 0.95, 0.95, 1.0]
-
-[[entity]]
-name   = "HitSound"
-parent = "Root"
-type   = "audio_player"
-[entity.audio_player]
-path   = "assets/sounds/hit.wav"
-volume = 0.5
-
-[[entity]]
-name   = "ScoreSound"
-parent = "Root"
-type   = "audio_player"
-[entity.audio_player]
-path   = "assets/sounds/score.wav"
-volume = 0.6

@@ -1,5 +1,5 @@
-//! Audio's scene components, added to the set the host hands in, so a scene file can author an
-//! audio player, and the system that plays it.
+//! Audio's scene components, added to the set the host hands in, so a scene file can author a
+//! sound, and the system that plays it.
 
 const abi_audio_contract = @import("abi_audio_contract");
 const abi_audio_components = @import("abi_audio_components");
@@ -12,7 +12,7 @@ const abi_framework = @import("abi_framework");
 const abi_result = @import("abi_result");
 
 const components = [_]abi_ecs.c.ke_component_params{
-    .{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, .size = @sizeOf(abi_audio_components.c.ke_audio_player_component), .alignment = @alignOf(abi_audio_components.c.ke_audio_player_component), .fields = &abi_audio_contract.c.ke_audio_player_component_fields, .field_count = abi_audio_contract.c.ke_audio_player_component_fields.len },
+    .{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(abi_audio_components.c.ke_sound_component), .alignment = @alignOf(abi_audio_components.c.ke_sound_component), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len },
 };
 
 /// The factory. Adds the components in order and stops at the first one the set refuses.
@@ -29,7 +29,7 @@ const std = @import("std");
 const testing = std.testing;
 
 comptime {
-    _ = @import("audio_player.zig");
+    _ = @import("sound.zig");
 }
 
 const FakeSet = struct {
@@ -55,13 +55,13 @@ const FakeSet = struct {
     }
 };
 
-test "the audio player is added to the set with its field table" {
+test "the sound is added to the set with its field table" {
     var set: FakeSet = undefined;
     set.init(false);
     try testing.expectEqual(@as(abi_result.c.ke_result, abi_result.c.KE_OK), ke_audio_scene_components_create(&set.api));
     try testing.expectEqual(@as(usize, 1), set.count);
-    try testing.expectEqualStrings(abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, std.mem.span(set.names[0]));
-    try testing.expectEqual(@as(u32, abi_audio_contract.c.ke_audio_player_component_fields.len), set.field_counts[0]);
+    try testing.expectEqualStrings(abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, std.mem.span(set.names[0]));
+    try testing.expectEqual(@as(u32, abi_audio_contract.c.ke_sound_component_fields.len), set.field_counts[0]);
 }
 
 test "a set that refuses a component, or a missing set, fails the factory" {

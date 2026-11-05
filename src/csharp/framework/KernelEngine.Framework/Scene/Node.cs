@@ -15,6 +15,8 @@ public abstract class Node
 
     private ScriptHost? ScriptHost { get; set; }
 
+    internal ScriptHost? Host => ScriptHost;
+
     /// <summary>
     /// Name of the entity, read from <c>ke_name_component</c> each time. Empty while the node is
     /// not bound.

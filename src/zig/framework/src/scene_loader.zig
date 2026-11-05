@@ -548,6 +548,49 @@ fn vtLoad(
     return R.ok;
 }
 
+const PendingInstance = extern struct {
+    s: *State,
+    parent: abi_asset_resolver.c.ke_entity,
+    path: [std.fs.max_path_bytes + 1]u8,
+};
+
+/// Runs when the commands apply; a failed load removes the nodes it made, as `vtLoad` does.
+fn cbInstantiate(ecs: ?*abi_ecs.c.ke_ecs, user: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    _ = ecs;
+    const p: *PendingInstance = @ptrCast(@alignCast(user));
+    const s = p.s;
+    s.created.clearRetainingCapacity();
+    const written: [*:0]const u8 = @ptrCast(&p.path);
+    var resolved: [std.fs.max_path_bytes + 1]u8 = undefined;
+    resolvePath(s, ".", written, &resolved) catch |err| return R.code(err);
+    const path: [*:0]const u8 = @ptrCast(&resolved);
+    loadSceneRecursive(s, path, p.parent, null, null, null) catch |err| {
+        log.warn("instantiating {s} failed: {t}", .{ path, err });
+        discardCreated(s);
+        return R.code(err);
+    };
+    return R.ok;
+}
+
+/// Slot `instantiate`. Copies the path into the recording, so the caller's string need not
+/// outlive the call.
+fn vtInstantiate(
+    self_in: ?*abi_scene_loader.c.ke_scene_loader,
+    path: [*c]const u8,
+    parent: abi_asset_resolver.c.ke_entity,
+    commands: ?*abi_ecs.c.ke_ecs_commands,
+) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const cmds = commands orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
+    const text = std.mem.span(path);
+    var pending: PendingInstance = .{ .s = stateOf(self), .parent = parent, .path = undefined };
+    if (text.len > std.fs.max_path_bytes) return R.code(error.InvalidArgument);
+    @memcpy(pending.path[0..text.len], text);
+    pending.path[text.len] = 0;
+    return cmds.@"defer".?(cmds, cbInstantiate, &pending, @sizeOf(PendingInstance));
+}
+
 /// Destroys every node in `created`, the most recently recorded first, then empties the list. A
 /// parent is always recorded before its children, so a child is removed before its parent.
 fn discardCreated(s: *State) void {
@@ -624,6 +667,7 @@ export fn ke_scene_loader_create(
 
     s.api.handle = s;
     s.api.load = vtLoad;
+    s.api.instantiate = vtInstantiate;
     s.api.register_script_factory = vtRegisterScriptFactory;
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
@@ -924,7 +968,7 @@ const Fixture = struct {
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_MESH, @sizeOf(abi_render_components.c.ke_mesh_component), generatedFields(&abi_render_contract.c.ke_mesh_component_fields), abi_render_contract.c.ke_mesh_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, @sizeOf(abi_render_components.c.ke_sprite2d_component), generatedFields(&abi_render_contract.c.ke_sprite2d_component_fields), abi_render_contract.c.ke_sprite2d_component_fields.len);
         self.describe(abi_render_contract.c.KE_COMPONENT_NAME_LABEL, @sizeOf(abi_ui_components.c.ke_label_component), generatedFields(&abi_render_contract.c.ke_label_component_fields), abi_render_contract.c.ke_label_component_fields.len);
-        self.describe(abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, @sizeOf(abi_audio_components.c.ke_audio_player_component), generatedFields(&abi_audio_contract.c.ke_audio_player_component_fields), abi_audio_contract.c.ke_audio_player_component_fields.len);
+        self.describe(abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, @sizeOf(abi_audio_components.c.ke_sound_component), generatedFields(&abi_audio_contract.c.ke_sound_component_fields), abi_audio_contract.c.ke_sound_component_fields.len);
         self.describe(abi_physics_contract.c.KE_COMPONENT_NAME_COLLIDER2D, @sizeOf(abi_physics_components.c.ke_collider2d_component), generatedFields(&abi_physics_contract.c.ke_collider2d_component_fields), abi_physics_contract.c.ke_collider2d_component_fields.len);
 
         self.assets_h = std.mem.zeroes(abi_asset_resolver.c.ke_asset_resolver_handle);
@@ -1061,6 +1105,52 @@ test "a named entity reaches the tree" {
 
     try testing.expect(f.load(try scene.cPath("main.scene.toml")));
     try testing.expect(f.find("Player") != abi_ecs.c.KE_ENTITY_INVALID);
+}
+
+const RecordedCommands = struct {
+    api: abi_ecs.c.ke_ecs_commands,
+    run: abi_ecs.c.ke_defer_fn = null,
+    payload: [@sizeOf(PendingInstance)]u8 align(@alignOf(PendingInstance)) = undefined,
+
+    fn record(self: ?*abi_ecs.c.ke_ecs_commands, run: abi_ecs.c.ke_defer_fn, user: ?*const anyopaque, size: usize) callconv(.c) abi_result.c.ke_result {
+        const r: *RecordedCommands = @fieldParentPtr("api", self.?);
+        r.run = run;
+        @memcpy(r.payload[0..size], @as([*]const u8, @ptrCast(user.?))[0..size]);
+        return R.ok;
+    }
+
+    fn apply(self: *RecordedCommands) abi_result.c.ke_result {
+        return self.run.?(null, &self.payload);
+    }
+};
+
+test "an instantiated scene appears under its parent only when the commands apply" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "World"
+        \\
+    );
+    try scene.put("sound.scene.toml",
+        \\[[entity]]
+        \\name = "Voice"
+        \\
+    );
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const world = f.find("World");
+
+    var cmds: RecordedCommands = .{ .api = std.mem.zeroes(abi_ecs.c.ke_ecs_commands) };
+    cmds.api.@"defer" = RecordedCommands.record;
+    try R.check(f.loader().instantiate.?(f.loader(), try scene.cPath("sound.scene.toml"), world, &cmds.api));
+    try testing.expectEqual(abi_ecs.c.KE_ENTITY_INVALID, f.find("World/Voice"));
+
+    try R.check(cmds.apply());
+    try testing.expect(f.find("World/Voice") != abi_ecs.c.KE_ENTITY_INVALID);
 }
 
 test "parent names an entity declared earlier in the same file" {
@@ -1943,7 +2033,7 @@ test "destroying a null loader is safe" {
     f.loader_h.destroy.?(null);
 }
 
-test "an audio player keeps the path and volume the scene authored" {
+test "a sound keeps the path, volume and release the scene authored" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -1953,9 +2043,10 @@ test "an audio player keeps the path and volume the scene authored" {
     try scene.put("main.scene.toml",
         \\[[entity]]
         \\name = "Hit"
-        \\[entity.audio_player]
+        \\[entity.sound]
         \\path = "assets/sounds/hit.wav"
         \\volume = 0.5
+        \\release = 1
         \\
     );
 
@@ -1963,9 +2054,10 @@ test "an audio player keeps the path and volume the scene authored" {
     const e = f.find("Hit");
     try testing.expect(e != abi_ecs.c.KE_ENTITY_INVALID);
 
-    const a = f.comp(abi_audio_components.c.ke_audio_player_component, abi_audio_contract.c.KE_COMPONENT_NAME_AUDIO_PLAYER, e) orelse return error.MissingComponent;
+    const a = f.comp(abi_audio_components.c.ke_sound_component, abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, e) orelse return error.MissingComponent;
     try testing.expectEqualStrings("assets/sounds/hit.wav", std.mem.sliceTo(&a.path, 0));
     try testing.expectApproxEqAbs(@as(f32, 0.5), a.volume, 1e-6);
+    try testing.expectEqual(abi_audio_components.c.KE_SOUND_RELEASE_WHEN_DONE, a.release);
 }
 
 test "a collider keeps the extents and surface the scene authored" {

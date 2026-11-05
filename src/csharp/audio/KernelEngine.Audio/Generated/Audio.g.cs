@@ -91,19 +91,29 @@ public unsafe partial class Audio : IDisposable, INativeAudio, IAudio
         Handle->unload_sound(Handle, sound);
     }
 
-    /// <summary>Plays a sound, restarting it from the beginning if already playing.</summary>
+    /// <summary>Starts a new playback of a loaded sound, independent of every other playback of it. The voice holds a reference on the sound until it is stopped.</summary>
     /// <param name="volume">Playback volume in 0..1.</param>
-    /// <param name="loop">Non-zero to restart the sound when it ends.</param>
+    /// <param name="pitch">Playback rate, 1 for the recorded pitch.</param>
+    /// <param name="loop">Restarts the voice when it ends, so it plays until stopped.</param>
+    /// <returns>Receives the voice; KE_AUDIO_VOICE_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Play(uint sound, float volume, bool loop)
+    public uint VoiceStart(uint sound, float volume, float pitch, bool loop)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->play(Handle, sound, volume, loop), "play");
+        uint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->voice_start(Handle, sound, volume, pitch, loop, &resultOut), "voice_start");
+        return resultOut;
     }
 
-    /// <summary>Stops a playing sound; no-op when it is not playing.</summary>
-    public void Stop(uint sound)
+    /// <summary>True while the voice is playing; false once it reached its end, and for a stopped or unknown voice.</summary>
+    public bool VoicePlaying(uint voice)
     {
-        Handle->stop(Handle, sound);
+        return Handle->voice_playing(Handle, voice);
+    }
+
+    /// <summary>Stops the voice and releases it, along with its reference on the sound; safe on KE_AUDIO_VOICE_INVALID.</summary>
+    public void VoiceStop(uint voice)
+    {
+        Handle->voice_stop(Handle, voice);
     }
 
     /// <summary>Sets a global multiplier applied on top of per-sound volumes (0..1).</summary>

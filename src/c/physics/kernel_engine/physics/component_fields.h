@@ -12,6 +12,7 @@
 static const ke_component_field ke_body2d_component_fields[] = {
     { "type", KE_VARIANT_INT, offsetof(ke_body2d_component, type), sizeof(((ke_body2d_component *)0)->type), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "velocity", KE_VARIANT_VEC2, offsetof(ke_body2d_component, velocity), sizeof(((ke_body2d_component *)0)->velocity), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "impulse", KE_VARIANT_VEC2, offsetof(ke_body2d_component, impulse), sizeof(((ke_body2d_component *)0)->impulse), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "angular_velocity", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, angular_velocity), sizeof(((ke_body2d_component *)0)->angular_velocity), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "gravity_scale", KE_VARIANT_FLOAT, offsetof(ke_body2d_component, gravity_scale), sizeof(((ke_body2d_component *)0)->gravity_scale), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
     { "fixed_rotation", KE_VARIANT_BOOL, offsetof(ke_body2d_component, fixed_rotation), sizeof(((ke_body2d_component *)0)->fixed_rotation), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },

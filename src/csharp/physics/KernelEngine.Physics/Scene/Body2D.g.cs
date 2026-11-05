@@ -24,6 +24,10 @@ public partial class Body2D : Node2D
     [NativeField("Velocity", Component = typeof(Body2dComponent))]
     public partial System.Numerics.Vector2 Velocity { get; set; }
 
+    /// <summary>Added to the body's momentum before the next step, in newton-seconds, then cleared. Writes in between add up.</summary>
+    [NativeField("Impulse", Component = typeof(Body2dComponent))]
+    public partial System.Numerics.Vector2 Impulse { get; set; }
+
     /// <summary>Radians per second, CCW positive.</summary>
     [NativeField("AngularVelocity", Component = typeof(Body2dComponent))]
     public partial float AngularVelocity { get; set; }

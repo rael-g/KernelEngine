@@ -33,7 +33,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_CIRCLE), @as(i64, abi.c.KE_SHAPE_KIND_2D_CIRCLE));
 }
 
-extern const layout_values: [18]c_ulonglong;
+extern const layout_values: [19]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -41,6 +41,7 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_body2d_component),
         @offsetOf(abi.c.ke_body2d_component, "type"),
         @offsetOf(abi.c.ke_body2d_component, "velocity"),
+        @offsetOf(abi.c.ke_body2d_component, "impulse"),
         @offsetOf(abi.c.ke_body2d_component, "angular_velocity"),
         @offsetOf(abi.c.ke_body2d_component, "gravity_scale"),
         @offsetOf(abi.c.ke_body2d_component, "fixed_rotation"),

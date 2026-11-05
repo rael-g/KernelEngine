@@ -980,7 +980,7 @@ test "a descendant of the wanted type is found through intermediate nodes" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const holder = h.tree.create("Sounds", ball);
     const hit = h.tree.create("HitSound", holder);
@@ -995,7 +995,7 @@ test "a descendant named by the borrow is picked out of several of its type" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const hit = h.tree.create("HitSound", ball);
     const score = h.tree.create("ScoreSound", ball);
@@ -1012,7 +1012,7 @@ test "an unnamed borrow answered by two nodes resolves to nothing instead of gue
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const hit = h.tree.create("HitSound", ball);
     const score = h.tree.create("ScoreSound", ball);
@@ -1029,7 +1029,7 @@ test "an invalid answer says whether nothing matched or too much did" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     var verdict: abi_script_host.c.ke_script_resolve = abi_script_host.c.KE_SCRIPT_RESOLVE_FOUND;
 
@@ -1067,7 +1067,7 @@ test "a node of the wanted type outside the subtree is not a descendant" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const elsewhere = h.tree.create("Music", 0);
     var marker: u32 = 1;
@@ -1081,7 +1081,7 @@ test "a borrow reaching anywhere finds a node the subtree does not contain" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const elsewhere = h.tree.create("Music", 0);
     var marker: u32 = 1;
@@ -1096,7 +1096,7 @@ test "two nodes of one type anywhere are ambiguous until the borrow names one" {
     try h.init();
     defer h.deinit();
 
-    const audio = try h.declare("engine.audio_player", abi_script_host.c.KE_SCRIPT_REACH_SELF);
+    const audio = try h.declare("engine.sound", abi_script_host.c.KE_SCRIPT_REACH_SELF);
     const ball = h.tree.create("Ball", 0);
     const music = h.tree.create("Music", 0);
     const hit = h.tree.create("HitSound", 0);

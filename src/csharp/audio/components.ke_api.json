@@ -153,6 +153,22 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_sound_release",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SOUND_RELEASE_KEEP",
+          "value": 0,
+          "doc": "The entity stays when the sound ends, ready to play again."
+        },
+        {
+          "name": "KE_SOUND_RELEASE_WHEN_DONE",
+          "value": 1,
+          "doc": "The entity is destroyed when the sound ends."
+        }
+      ]
     }
   ],
   "structs": [
@@ -408,11 +424,11 @@
       "external": true
     },
     {
-      "name": "ke_audio_player_component",
-      "doc": "A single audio clip, loaded from the path the scene declares and played on demand. Each node holds its own clip: two AudioPlayer children under the same parent are two clips, told apart by node name. The clip is loaded on the first update that sees the component and unloaded on the first update in which the entity no longer holds it.",
+      "name": "ke_sound_component",
+      "doc": "One playback of an audio clip. The sound plays while playing is set: setting it starts the clip from its beginning, clearing it stops the clip, and the clip reaching its end clears it. Two sounds of the same clip play at once, each on its own. The clip is loaded on the first update that sees the component and released on the first update in which the entity no longer holds it.",
       "tags": [
         "table",
-        "node:AudioPlayer",
+        "node:Sound",
         "base:Node3D"
       ],
       "fields": [
@@ -431,18 +447,46 @@
           "doc": "Linear gain, 0..1."
         },
         {
-          "name": "play_requested",
-          "type": "bool",
-          "tags": [],
-          "doc": "Set to play the clip once from its start at volume; the next update plays it and clears the flag. A clip that is not loaded clears it without playing."
+          "name": "pitch",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Playback rate; 1 is the recorded pitch."
         },
         {
-          "name": "sound",
+          "name": "loop",
+          "type": "bool",
+          "tags": [],
+          "doc": "Plays the clip again from its beginning each time it ends, until playing is cleared."
+        },
+        {
+          "name": "playing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "release",
+          "type": "ke_sound_release",
+          "tags": [],
+          "doc": "What happens to the entity when the clip ends."
+        },
+        {
+          "name": "clip",
           "type": "ke_audio_sound",
           "tags": [
             "internal"
           ],
           "doc": "The loaded clip, assigned when the component is reconciled. Callers do not write it."
+        },
+        {
+          "name": "voice",
+          "type": "ke_audio_voice",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The playback in progress, assigned while the clip plays. Callers do not write it."
         }
       ]
     }
@@ -507,11 +551,11 @@
           "receiver": "struct ke_audio *"
         },
         {
-          "name": "play",
+          "name": "voice_start",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Plays a sound, restarting it from the beginning if already playing.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID; KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_GENERAL when the backend cannot start it.",
+          "doc": "Starts a new playback of a loaded sound, independent of every other playback of it. The voice holds a reference on the sound until it is stopped.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID or a null out_voice; KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the backend cannot start it.",
           "params": [
             {
               "name": "sound",
@@ -526,24 +570,54 @@
               "doc": "Playback volume in 0..1."
             },
             {
+              "name": "pitch",
+              "type": "float",
+              "tags": [],
+              "doc": "Playback rate, 1 for the recorded pitch."
+            },
+            {
               "name": "loop",
               "type": "bool",
               "tags": [],
-              "doc": "Non-zero to restart the sound when it ends."
+              "doc": "Restarts the voice when it ends, so it plays until stopped."
+            },
+            {
+              "name": "out_voice",
+              "type": "ke_audio_voice *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the voice; KE_AUDIO_VOICE_INVALID on failure."
             }
           ],
           "receiver": "struct ke_audio *"
         },
         {
-          "name": "stop",
-          "returns": "void",
+          "name": "voice_playing",
+          "returns": "bool",
           "tags": [],
-          "doc": "Stops a playing sound; no-op when it is not playing.",
+          "doc": "True while the voice is playing; false once it reached its end, and for a stopped or unknown voice.",
           "return_doc": null,
           "params": [
             {
-              "name": "sound",
-              "type": "ke_audio_sound",
+              "name": "voice",
+              "type": "ke_audio_voice",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "voice_stop",
+          "returns": "void",
+          "tags": [],
+          "doc": "Stops the voice and releases it, along with its reference on the sound; safe on KE_AUDIO_VOICE_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "voice",
+              "type": "ke_audio_voice",
               "tags": [],
               "doc": null
             }
@@ -602,11 +676,12 @@
   "id_types": [],
   "foreign_id_types": [],
   "type_aliases": {
-    "ke_audio_sound": "uint32_t"
+    "ke_audio_sound": "uint32_t",
+    "ke_audio_voice": "uint32_t"
   },
   "constants": [
     {
-      "name": "KE_AUDIO_PLAYER_MAX_PATH",
+      "name": "KE_SOUND_MAX_PATH",
       "type": "int",
       "value": "256"
     }

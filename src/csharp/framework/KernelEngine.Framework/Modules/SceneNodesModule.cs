@@ -72,7 +72,8 @@ public sealed class SceneNodesModule : IRuntimeModule
                 return scriptHost.Compose(
                     sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
-                    sp.GetRequiredService<SignalBus>());
+                    sp.GetRequiredService<SignalBus>(),
+                    sp.GetService<SceneLoader>());
             }
         });
     }

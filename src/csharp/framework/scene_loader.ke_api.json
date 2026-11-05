@@ -599,90 +599,6 @@
   ],
   "vtables": [
     {
-      "name": "ke_scene_loader",
-      "doc": null,
-      "tags": [],
-      "fields": [
-        {
-          "name": "handle",
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "load",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Loads the scene at path, instantiating every entity it declares. A script factory\u0027s refusal of an entity fails the load with the factory\u0027s code; what failed, and where in the file, is logged.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "path",
-              "type": "const char *",
-              "tags": [
-                "utf8"
-              ],
-              "doc": "Path to the scene file."
-            }
-          ],
-          "receiver": "struct ke_scene_loader *"
-        },
-        {
-          "name": "register_script_factory",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.",
-          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null factory.",
-          "params": [
-            {
-              "name": "factory",
-              "type": "ke_script_factory_func",
-              "tags": [
-                "closure:ctx",
-                "retained"
-              ],
-              "doc": "Consulted once per typed entity."
-            },
-            {
-              "name": "ctx",
-              "type": "void *",
-              "tags": [],
-              "doc": "Forwarded to factory unchanged."
-            }
-          ],
-          "receiver": "struct ke_scene_loader *"
-        }
-      ]
-    },
-    {
-      "name": "ke_scene_loader_handle",
-      "doc": null,
-      "tags": [
-        "owner"
-      ],
-      "fields": [
-        {
-          "name": "ref",
-          "type": "ke_scene_loader *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "destroy",
-          "returns": "void",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_scene_loader *"
-        }
-      ]
-    },
-    {
       "name": "ke_ecs",
       "doc": "Entity lifetime and component storage.",
       "tags": [],
@@ -1051,10 +967,283 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_ecs_commands",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_ENTITY_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "attach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, when \u0060size\u0060 is neither 0 nor the registered size of \u0060cid\u0060.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "detach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "despawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records destroying \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "defer",
+          "returns": "ke_result",
+          "tags": [
+            "internal"
+          ],
+          "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:user_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scene_loader",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Loads the scene at path, instantiating every entity it declares. A script factory\u0027s refusal of an entity fails the load with the factory\u0027s code; what failed, and where in the file, is logged.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Path to the scene file."
+            }
+          ],
+          "receiver": "struct ke_scene_loader *"
+        },
+        {
+          "name": "instantiate",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records into commands loading the scene at path under parent, as load does it at the root, when commands is applied; the scene\u0027s first entity becomes a child of parent. A failure of the recorded load is logged and fails the application of commands with its code, and removes what that load made.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or commands, or a path longer than the longest path the platform accepts; the queue\u0027s code when it refuses the recording.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Path to the scene file; a \u0060res://\u0060 path is the project root joined with the rest, as for an included scene, and any other is read as load reads it."
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": "The node the scene is attached under; KE_ENTITY_INVALID attaches it at the root."
+            },
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_scene_loader *"
+        },
+        {
+          "name": "register_script_factory",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null factory.",
+          "params": [
+            {
+              "name": "factory",
+              "type": "ke_script_factory_func",
+              "tags": [
+                "closure:ctx",
+                "retained"
+              ],
+              "doc": "Consulted once per typed entity."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": "Forwarded to factory unchanged."
+            }
+          ],
+          "receiver": "struct ke_scene_loader *"
+        }
+      ]
+    },
+    {
+      "name": "ke_scene_loader_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scene_loader *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scene_loader *"
+        }
+      ]
     }
   ],
   "functions": [],
   "callbacks": [
+    {
+      "name": "ke_defer_fn",
+      "returns": "ke_result",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world. A failure is returned, and the queue stops there: the operations recorded after it are dropped.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
     {
       "name": "ke_script_factory_func",
       "returns": "ke_result",
@@ -1128,8 +1317,9 @@
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
-    "ke_script_factory_func": "ke_result (*)(void *, ke_entity, const char *)",
     "ke_query_id": "uint64_t",
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
+    "ke_script_factory_func": "ke_result (*)(void *, ke_entity, const char *)",
     "ke_component_apply_fn": "ke_result (*)(void *, void *, ke_variant_table_entry *, uint32_t)"
   }
 }

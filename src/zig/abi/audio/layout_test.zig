@@ -26,14 +26,16 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_audio, translated("ke_audio"));
     try expectSameLayout(abi.c.ke_audio_handle, translated("ke_audio_handle"));
     if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
+    if (@hasDecl(c, "ke_audio_voice")) try expectSameLayout(abi.c.ke_audio_voice, c.ke_audio_voice);
 }
 
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_AUDIO_SOUND_INVALID), @as(i128, abi.c.KE_AUDIO_SOUND_INVALID));
+    try std.testing.expectEqual(@as(i128, c.KE_AUDIO_VOICE_INVALID), @as(i128, abi.c.KE_AUDIO_VOICE_INVALID));
 }
 
-extern const layout_values: [11]c_ulonglong;
+extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -42,8 +44,9 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_audio, "handle"),
         @offsetOf(abi.c.ke_audio, "load_sound"),
         @offsetOf(abi.c.ke_audio, "unload_sound"),
-        @offsetOf(abi.c.ke_audio, "play"),
-        @offsetOf(abi.c.ke_audio, "stop"),
+        @offsetOf(abi.c.ke_audio, "voice_start"),
+        @offsetOf(abi.c.ke_audio, "voice_playing"),
+        @offsetOf(abi.c.ke_audio, "voice_stop"),
         @offsetOf(abi.c.ke_audio, "set_master_volume"),
         @sizeOf(abi.c.ke_audio_handle),
         @offsetOf(abi.c.ke_audio_handle, "ref"),

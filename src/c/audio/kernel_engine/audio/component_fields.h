@@ -6,12 +6,15 @@
 #include <kernel_engine/audio/components.h>
 #include <stddef.h>
 
-#define KE_COMPONENT_NAME_AUDIO_PLAYER "audio_player"
+#define KE_COMPONENT_NAME_SOUND "sound"
 
-static const ke_component_field ke_audio_player_component_fields[] = {
-    { "path", KE_VARIANT_STRING, offsetof(ke_audio_player_component, path), sizeof(((ke_audio_player_component *)0)->path), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "volume", KE_VARIANT_FLOAT, offsetof(ke_audio_player_component, volume), sizeof(((ke_audio_player_component *)0)->volume), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
-    { "play_requested", KE_VARIANT_BOOL, offsetof(ke_audio_player_component, play_requested), sizeof(((ke_audio_player_component *)0)->play_requested), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+static const ke_component_field ke_sound_component_fields[] = {
+    { "path", KE_VARIANT_STRING, offsetof(ke_sound_component, path), sizeof(((ke_sound_component *)0)->path), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "volume", KE_VARIANT_FLOAT, offsetof(ke_sound_component, volume), sizeof(((ke_sound_component *)0)->volume), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
+    { "pitch", KE_VARIANT_FLOAT, offsetof(ke_sound_component, pitch), sizeof(((ke_sound_component *)0)->pitch), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
+    { "loop", KE_VARIANT_BOOL, offsetof(ke_sound_component, loop), sizeof(((ke_sound_component *)0)->loop), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "playing", KE_VARIANT_BOOL, offsetof(ke_sound_component, playing), sizeof(((ke_sound_component *)0)->playing), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "release", KE_VARIANT_INT, offsetof(ke_sound_component, release), sizeof(((ke_sound_component *)0)->release), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
 #endif /* KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_ */

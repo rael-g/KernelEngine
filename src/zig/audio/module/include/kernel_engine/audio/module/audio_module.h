@@ -22,8 +22,8 @@
 extern "C" {
 #endif
 
-/// @brief Adds audio's scene components to @p set: the audio player, with its field table, so an
-///        [entity.components.audio_player] block applies.
+/// @brief Adds audio's scene components to @p set: the sound, with its field table, so a
+///        [entity.sound] block applies.
 /// @param set [borrowed] The set the components are added to.
 /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p set, or the code of the set that refused
 ///         a component, after the components added before it.

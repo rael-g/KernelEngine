@@ -20,6 +20,9 @@ pub const ke_body2d_component = extern struct {
     /// Read when the body is created; a later change does not reach it.
     @"type": abi_physics.c.ke_body_type_2d = std.mem.zeroes(abi_physics.c.ke_body_type_2d),
     velocity: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    /// Added to the body's momentum before the next step, in newton-seconds, then cleared. Writes in
+    /// between add up.
+    impulse: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
     /// Radians per second, CCW positive.
     angular_velocity: f32 = std.mem.zeroes(f32),
     /// Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when the body

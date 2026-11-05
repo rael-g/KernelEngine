@@ -3,8 +3,8 @@
 
 namespace KernelEngine.Audio.Native;
 
-public partial struct AudioPlayerComponent
+public partial struct SoundComponent
 {
     /// <summary>The name the component is registered under.</summary>
-    public const string Name = "audio_player";
+    public const string Name = "sound";
 }

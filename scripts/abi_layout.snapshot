@@ -586,13 +586,14 @@ ke_ecs_commands size=48 align=8
   defer 40
 
 [audio]
-ke_audio size=48 align=8
+ke_audio size=56 align=8
   handle 0
   load_sound 8
   unload_sound 16
-  play 24
-  stop 32
-  set_master_volume 40
+  voice_start 24
+  voice_playing 32
+  voice_stop 40
+  set_master_volume 48
 ke_audio_handle size=16 align=8
   ref 0
   destroy 8
@@ -629,13 +630,14 @@ ke_physics_2d_handle size=16 align=8
   destroy 8
 
 [physics_components]
-ke_body2d_component size=28 align=4
+ke_body2d_component size=36 align=4
   type 0
   velocity 4
-  angular_velocity 12
-  gravity_scale 16
-  fixed_rotation 20
-  body 24
+  impulse 12
+  angular_velocity 20
+  gravity_scale 24
+  fixed_rotation 28
+  body 32
 ke_collider2d_component size=40 align=4
   kind 0
   half_extents 4
@@ -648,11 +650,15 @@ ke_collider2d_component size=40 align=4
   attached 36
 
 [audio_components]
-ke_audio_player_component size=268 align=4
+ke_sound_component size=280 align=4
   path 0
   volume 256
-  play_requested 260
-  sound 264
+  pitch 260
+  loop 264
+  playing 265
+  release 268
+  clip 272
+  voice 276
 
 [text]
 ke_glyph_metrics size=40 align=4
@@ -932,10 +938,11 @@ ke_scene_tree_handle size=16 align=8
   destroy 8
 
 [scene_loader]
-ke_scene_loader size=24 align=8
+ke_scene_loader size=32 align=8
   handle 0
   load 8
-  register_script_factory 16
+  instantiate 16
+  register_script_factory 24
 ke_scene_loader_handle size=16 align=8
   ref 0
   destroy 8

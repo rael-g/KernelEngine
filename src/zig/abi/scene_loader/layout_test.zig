@@ -27,12 +27,13 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_scene_loader_handle, translated("ke_scene_loader_handle"));
     if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_script_factory_func")) try expectSameLayout(abi.c.ke_script_factory_func, c.ke_script_factory_func);
 }
 
-extern const layout_values: [8]c_ulonglong;
+extern const layout_values: [9]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -40,6 +41,7 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_scene_loader),
         @offsetOf(abi.c.ke_scene_loader, "handle"),
         @offsetOf(abi.c.ke_scene_loader, "load"),
+        @offsetOf(abi.c.ke_scene_loader, "instantiate"),
         @offsetOf(abi.c.ke_scene_loader, "register_script_factory"),
         @sizeOf(abi.c.ke_scene_loader_handle),
         @offsetOf(abi.c.ke_scene_loader_handle, "ref"),

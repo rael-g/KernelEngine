@@ -6,6 +6,7 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 
 pub const ke_audio_sound = u32;
+pub const ke_audio_voice = u32;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library

@@ -77,13 +77,13 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Builds and binds the script an entity's declared type names.
-pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
-
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// Builds and binds the script an entity's declared type names.
+pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
 
 /// Sizing for one script host. The defaults are conveniences, not ceilings. [bag] Instances need
 /// no sizing.

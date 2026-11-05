@@ -23,25 +23,36 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_audio_player_component, translated("ke_audio_player_component"));
+    try expectSameLayout(abi.c.ke_sound_component, translated("ke_sound_component"));
     if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
+    if (@hasDecl(c, "ke_audio_voice")) try expectSameLayout(abi.c.ke_audio_voice, c.ke_audio_voice);
+}
+
+test "every enum value is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i64, c.KE_SOUND_RELEASE_KEEP), @as(i64, abi.c.KE_SOUND_RELEASE_KEEP));
+    try std.testing.expectEqual(@as(i64, c.KE_SOUND_RELEASE_WHEN_DONE), @as(i64, abi.c.KE_SOUND_RELEASE_WHEN_DONE));
 }
 
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i128, c.KE_AUDIO_PLAYER_MAX_PATH), @as(i128, abi.c.KE_AUDIO_PLAYER_MAX_PATH));
+    try std.testing.expectEqual(@as(i128, c.KE_SOUND_MAX_PATH), @as(i128, abi.c.KE_SOUND_MAX_PATH));
 }
 
-extern const layout_values: [6]c_ulonglong;
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_audio_player_component),
-        @offsetOf(abi.c.ke_audio_player_component, "path"),
-        @offsetOf(abi.c.ke_audio_player_component, "volume"),
-        @offsetOf(abi.c.ke_audio_player_component, "play_requested"),
-        @offsetOf(abi.c.ke_audio_player_component, "sound"),
+        @sizeOf(abi.c.ke_sound_component),
+        @offsetOf(abi.c.ke_sound_component, "path"),
+        @offsetOf(abi.c.ke_sound_component, "volume"),
+        @offsetOf(abi.c.ke_sound_component, "pitch"),
+        @offsetOf(abi.c.ke_sound_component, "loop"),
+        @offsetOf(abi.c.ke_sound_component, "playing"),
+        @offsetOf(abi.c.ke_sound_component, "release"),
+        @offsetOf(abi.c.ke_sound_component, "clip"),
+        @offsetOf(abi.c.ke_sound_component, "voice"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }
