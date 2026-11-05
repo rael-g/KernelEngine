@@ -853,27 +853,6 @@
           "doc": null
         }
       ]
-    },
-    {
-      "name": "ke_action_phase",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_ACTION_PHASE_STARTED",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_ACTION_PHASE_PERFORMED",
-          "value": 2,
-          "doc": null
-        },
-        {
-          "name": "KE_ACTION_PHASE_CANCELED",
-          "value": 3,
-          "doc": null
-        }
-      ]
     }
   ],
   "structs": [
@@ -962,56 +941,15 @@
         }
       ],
       "external": true
-    },
-    {
-      "name": "ke_input_action_event",
-      "doc": null,
-      "tags": [],
-      "fields": [
-        {
-          "name": "action_id",
-          "type": "int32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "type",
-          "type": "ke_action_type",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "phase",
-          "type": "ke_action_phase",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "x",
-          "type": "float",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "y",
-          "type": "float",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "z",
-          "type": "float",
-          "tags": [],
-          "doc": null
-        }
-      ]
     }
   ],
   "vtables": [
     {
       "name": "ke_input_actions",
-      "doc": null,
-      "tags": [],
+      "doc": "Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame against an input snapshot and polled. Maps are evaluated from the highest priority down, ties in the order they were added; a key or mouse button bound in an enabled map is not seen by any map evaluated after it. The actions of a disabled map are inactive.",
+      "tags": [
+        "interface"
+      ],
       "fields": [
         {
           "name": "handle",
@@ -1022,14 +960,38 @@
       ],
       "slots": [
         {
-          "name": "load",
-          "returns": "ke_result",
+          "name": "add_map",
+          "returns": "int32_t",
           "tags": [],
-          "doc": "Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.",
-          "return_doc": null,
+          "doc": "Adds an enabled map after those already present.",
+          "return_doc": "The map\u0027s id; -1 for a null, empty or duplicated name, or when it cannot be stored.",
           "params": [
             {
-              "name": "path",
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "Unique among the maps."
+            },
+            {
+              "name": "priority",
+              "type": "int32_t",
+              "tags": [],
+              "doc": "Higher is evaluated first."
+            }
+          ],
+          "receiver": "struct ke_input_actions *"
+        },
+        {
+          "name": "get_map_id",
+          "returns": "int32_t",
+          "tags": [],
+          "doc": null,
+          "return_doc": "The id of the map with that name; -1 when none has it.",
+          "params": [
+            {
+              "name": "name",
               "type": "const char *",
               "tags": [
                 "utf8"
@@ -1040,11 +1002,49 @@
           "receiver": "struct ke_input_actions *"
         },
         {
+          "name": "set_map_enabled",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Enables or disables a map from the next evaluation on.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for an id no map has.",
+          "params": [
+            {
+              "name": "map_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "enabled",
+              "type": "_Bool",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_input_actions *"
+        },
+        {
+          "name": "is_map_enabled",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "False for an id no map has.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "map_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_input_actions *"
+        },
+        {
           "name": "get_action_id",
           "returns": "int32_t",
           "tags": [],
           "doc": null,
-          "return_doc": null,
+          "return_doc": "The id of the action with that name, in any map; -1 when none has it.",
           "params": [
             {
               "name": "name",
@@ -1061,16 +1061,22 @@
           "name": "add_action",
           "returns": "int32_t",
           "tags": [],
-          "doc": null,
-          "return_doc": null,
+          "doc": "Adds an action to a map.",
+          "return_doc": "The action\u0027s id; -1 for an id no map has, a null, empty or duplicated name, or when it cannot be stored.",
           "params": [
+            {
+              "name": "map_id",
+              "type": "int32_t",
+              "tags": [],
+              "doc": null
+            },
             {
               "name": "name",
               "type": "const char *",
               "tags": [
                 "utf8"
               ],
-              "doc": null
+              "doc": "Unique among the actions of every map."
             },
             {
               "name": "type",
@@ -1197,26 +1203,12 @@
           "name": "evaluate",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.",
+          "doc": "Runs one frame of evaluation against snapshot, making each action\u0027s held state, edges and axes current.",
           "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null snapshot, which changes nothing.",
           "params": [
             {
               "name": "snapshot",
               "type": "const ke_input_snapshot *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "on_event",
-              "type": "ke_input_action_event_func",
-              "tags": [
-                "closure:event_ctx"
-              ],
-              "doc": null
-            },
-            {
-              "name": "event_ctx",
-              "type": "void *",
               "tags": [],
               "doc": null
             }
@@ -1389,32 +1381,8 @@
     }
   ],
   "functions": [],
-  "callbacks": [
-    {
-      "name": "ke_input_action_event_func",
-      "returns": "void",
-      "doc": "Reports one phase transition of one binding.",
-      "lanes": [
-        {
-          "name": "ctx",
-          "type": "void *",
-          "tags": [
-            "context"
-          ],
-          "doc": "Opaque context forwarded from the call that registered it."
-        },
-        {
-          "name": "event",
-          "type": "ke_input_action_event",
-          "tags": [],
-          "doc": "The transition, naming the action it belongs to."
-        }
-      ]
-    }
-  ],
+  "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {
-    "ke_input_action_event_func": "void (*)(void *, ke_input_action_event)"
-  }
+  "type_aliases": {}
 }

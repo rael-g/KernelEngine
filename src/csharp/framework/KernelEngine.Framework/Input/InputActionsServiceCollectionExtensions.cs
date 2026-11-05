@@ -4,27 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Service registration of the input action map.</summary>
+/// <summary>Service registration of the input action maps.</summary>
 public static class InputActionsServiceCollectionExtensions
 {
     /// <summary>
-    /// Registers the <see cref="InputActionMap{TEnum}"/> built from the TOML file at
-    /// <paramref name="path"/> (default <c>actions.input</c>, a relative path resolved against
-    /// the application base directory) as itself, as <see cref="IInputActionMap{TEnum}"/> and as
-    /// <see cref="IActionEvaluator"/>. The file is loaded when the map is first requested, through
-    /// the registered <see cref="KernelEngine.Io.INativeIo"/>.
+    /// Registers the <see cref="InputActions"/> built from the <c>input</c> section of the
+    /// registered <see cref="IConfiguration"/>, or empty when none is registered. The scene
+    /// evaluates it once per frame, and an <see cref="InputAction"/> field reads it.
     /// </summary>
-    public static IServiceCollection AddInputActions<TEnum>(
-        this IServiceCollection services, string? path = null)
-        where TEnum : struct, Enum
-    {
-        var resolvedPath = path is null
-            ? Path.Combine(AppContext.BaseDirectory, "actions.input")
-            : (Path.IsPathRooted(path) ? path : Path.Combine(AppContext.BaseDirectory, path));
-
-        services.AddSingleton(sp => InputActionMap<TEnum>.LoadFromFile(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), resolvedPath));
-        services.AddSingleton<IInputActionMap<TEnum>>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
-        services.AddSingleton<IActionEvaluator>(sp => sp.GetRequiredService<InputActionMap<TEnum>>());
-        return services;
-    }
+    public static IServiceCollection AddInputActions(this IServiceCollection services)
+        => services.AddSingleton(sp => new InputActions(sp.GetService<IConfiguration>() as INativeConfiguration));
 }

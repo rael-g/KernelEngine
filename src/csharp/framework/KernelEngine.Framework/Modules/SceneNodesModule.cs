@@ -28,7 +28,6 @@ public sealed class SceneNodesModule : IRuntimeModule
 {
     private readonly Action<ScriptHost, IServiceProvider> _setup;
 
-    private KernelEngine.Input.IInputReader? _inputSnapshot;
 
     /// <summary>The module name, "SceneNodes".</summary>
     public string Name => "SceneNodes";
@@ -73,7 +72,8 @@ public sealed class SceneNodesModule : IRuntimeModule
                     sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>(),
-                    sp.GetService<SceneLoader>());
+                    sp.GetService<SceneLoader>(),
+                    sp.GetService<InputActions>());
             }
         });
     }
@@ -88,7 +88,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scriptHost = services.GetRequiredService<ScriptHost>();
         var sceneTree = services.GetRequiredService<SceneTree>();
         var input = services.GetService<IInput>();
-        var evaluator = services.GetService<IActionEvaluator>();
+        var actions = services.GetService<InputActions>();
 
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
         var nameCid = scriptHost.CidOfName("name");
@@ -97,8 +97,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         {
             scriptHost.ReleaseRetired();
             input?.Update();
-            _inputSnapshot = (input as KernelEngine.Input.Input)?.CaptureSnapshot();
-            evaluator?.Evaluate(_inputSnapshot);
+            if (actions is not null && (input as KernelEngine.Input.Input)?.CaptureSnapshot() is KernelEngine.Input.INativeInputReader reader) actions.Evaluate(reader.Native);
         }, accessList: []);
 
         var signals = services.GetService<SignalBus>();
@@ -154,7 +153,7 @@ public sealed class SceneNodesModule : IRuntimeModule
 
                 runtime.RegisterSystem(name, phase, (ctx, dt) =>
                 {
-                    var view = new View(scriptHost, dt, _inputSnapshot, ctx);
+                    var view = new View(scriptHost, dt, ctx);
                     using (scriptHost.EnterSystem(ctx))
                     {
                         var system = KernelEngine.Runtime.SystemCtx.Of(ctx);

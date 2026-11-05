@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_component_registry = @import("component_registry");
+const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
@@ -19,6 +20,7 @@ const abi_signal_bus = @import("signal_bus");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
+pub const ke_configuration_subscription = u32;
 pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
@@ -55,8 +57,13 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Reports one phase transition of one binding.
-pub const ke_input_action_event_func = ?*const fn (?*anyopaque, abi_input_actions.c.ke_input_action_event) callconv(.c) void;
+/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
+/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
+/// section changed and does nothing else.
+pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
+/// Receives one child section of the section being listed.
+pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
 /// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
@@ -84,6 +91,12 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 
 /// Builds and binds the script an entity's declared type names.
 pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
+
+/// Values a caller gives; a zero field takes its default.
+pub const ke_input_actions_config = extern struct {
+    /// The configuration section the maps are read from; NULL reads "input".
+    section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+};
 
 /// Sizing for one script host. The defaults are conveniences, not ceilings. [bag] Instances need
 /// no sizing.
@@ -116,8 +129,14 @@ pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_ima
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Creates an empty action map.
-pub extern fn ke_input_actions_create(io: ?*abi_io.c.ke_io, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+/// Creates the action maps, adding through the map's own slots every map the configuration
+/// describes under the section: ` <section >.map. <Map >` holds `priority` (default 0) and
+/// `enabled` (default true); ` <section >.map. <Map >.action. <Action >` holds `type` (Button,
+/// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
+/// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
+/// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
+/// key_quad, each a key name such as "Space" or "W".
+pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Creates an empty scene component set, which the plugins fill through its `add` slot.
 pub extern fn ke_scene_component_set_create(out_set: ?*abi_framework.c.ke_scene_component_set_handle) abi_result.c.ke_result;

@@ -10,6 +10,8 @@
 #include <kernel_engine/framework/signal_bus_create.h>
 #include <kernel_engine/framework/component_registry_create.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_input_actions_config),
+    offsetof(ke_input_actions_config, section),
     sizeof(ke_script_host_params),
     offsetof(ke_script_host_params, max_types),
     sizeof(ke_signal_bus_params),

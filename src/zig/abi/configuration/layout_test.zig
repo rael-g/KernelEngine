@@ -30,6 +30,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_configuration_source, translated("ke_configuration_source"));
     try expectSameLayout(abi.c.ke_configuration_source_handle, translated("ke_configuration_source_handle"));
     if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
+    if (@hasDecl(c, "ke_configuration_child_func")) try expectSameLayout(abi.c.ke_configuration_child_func, c.ke_configuration_child_func);
     if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
 }
 
@@ -47,7 +48,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.c.KE_CONFIGURATION_SUBSCRIPTION_NONE));
 }
 
-extern const layout_values: [30]c_ulonglong;
+extern const layout_values: [31]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -72,6 +73,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_configuration, "subscribe"),
         @offsetOf(abi.c.ke_configuration, "unsubscribe"),
         @offsetOf(abi.c.ke_configuration, "fill"),
+        @offsetOf(abi.c.ke_configuration, "for_each_child"),
         @sizeOf(abi.c.ke_configuration_handle),
         @offsetOf(abi.c.ke_configuration_handle, "ref"),
         @offsetOf(abi.c.ke_configuration_handle, "destroy"),

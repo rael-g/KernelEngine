@@ -99,7 +99,7 @@ ke_config_field size=32 align=8
   offset 12
   size 16
   default_value 24
-ke_configuration size=96 align=8
+ke_configuration size=104 align=8
   handle 0
   get_int 8
   get_double 16
@@ -112,6 +112,7 @@ ke_configuration size=96 align=8
   subscribe 72
   unsubscribe 80
   fill 88
+  for_each_child 96
 ke_configuration_handle size=16 align=8
   ref 0
   destroy 8
@@ -1079,29 +1080,25 @@ ke_label_component size=8620 align=4
   glyphs 428
 
 [input_actions]
-ke_input_action_event size=24 align=4
-  action_id 0
-  type 4
-  phase 8
-  x 12
-  y 16
-  z 20
-ke_input_actions size=120 align=8
+ke_input_actions size=144 align=8
   handle 0
-  load 8
-  get_action_id 16
-  add_action 24
-  bind_key 32
-  bind_mouse_button 40
-  bind_key_pair 48
-  bind_key_quad 56
-  evaluate 64
-  is_action_down 72
-  was_action_pressed 80
-  was_action_released 88
-  get_axis1d 96
-  get_axis2d 104
-  get_axis3d 112
+  add_map 8
+  get_map_id 16
+  set_map_enabled 24
+  is_map_enabled 32
+  get_action_id 40
+  add_action 48
+  bind_key 56
+  bind_mouse_button 64
+  bind_key_pair 72
+  bind_key_quad 80
+  evaluate 88
+  is_action_down 96
+  was_action_pressed 104
+  was_action_released 112
+  get_axis1d 120
+  get_axis2d 128
+  get_axis3d 136
 ke_input_actions_handle size=16 align=8
   ref 0
   destroy 8

@@ -101,6 +101,13 @@ pub const Configuration = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .for_each_child = &struct {
+                fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: c.ke_configuration_child_func, a2: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.forEachChild(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
         };
     }
 
@@ -161,6 +168,13 @@ pub const Configuration = struct {
     /// store's copy, valid as get_string's result is.
     pub fn fill(self: Configuration, section: [:0]const u8, fields: []const c.ke_config_field, config: ?*anyopaque) Error!void {
         try checkResult(self.ptr.fill.?(self.ptr, section.ptr, fields.ptr, @intCast(fields.len), config));
+    }
+
+    /// Lists the sections directly under section, once each, in the order their first key was
+    /// stored. A section is under another when its name is the other's followed by a dot and one
+    /// more name; it is listed when it or any section under it holds a key.
+    pub fn forEachChild(self: Configuration, section: [:0]const u8, each: c.ke_configuration_child_func, ctx: ?*anyopaque) Error!void {
+        try checkResult(self.ptr.for_each_child.?(self.ptr, section.ptr, each, ctx));
     }
 
 };

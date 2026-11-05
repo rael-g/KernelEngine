@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_component_registry = @import("component_registry");
+const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
@@ -41,10 +42,16 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
     return c.ke_framework_set_log_callback(callback, ctx);
 }
 
-/// Creates an empty action map.
-pub fn inputActionsCreate(io: ?*abi_io.c.ke_io) Error!abi_input_actions.c.ke_input_actions_handle {
+/// Creates the action maps, adding through the map's own slots every map the configuration
+/// describes under the section: ` <section >.map. <Map >` holds `priority` (default 0) and
+/// `enabled` (default true); ` <section >.map. <Map >.action. <Action >` holds `type` (Button,
+/// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
+/// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
+/// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
+/// key_quad, each a key name such as "Space" or "W".
+pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(io, &written));
+    try checkResult(c.ke_input_actions_create(configuration, config, &written));
     return written;
 }
 
@@ -112,5 +119,6 @@ pub fn componentRegistryCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_component_regi
     return written;
 }
 
+pub const InputActionsConfig = c.ke_input_actions_config;
 pub const ScriptHostParams = c.ke_script_host_params;
 pub const SignalBusParams = c.ke_signal_bus_params;

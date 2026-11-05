@@ -14,20 +14,17 @@ public sealed partial class Paddle : Body2D
     const float HalfH = 0.9f;
     const float Speed = 7f;
 
-    private readonly IInputActionMap<PongAction> _actions;
-
     /// <summary>Which action moves this paddle. Authored per instance in the scene.</summary>
-    public partial PongAction MoveAction { get; set; }
+    public partial InputAction MoveAction { get; set; }
 
-    public Paddle(IInputActionMap<PongAction> actions)
+    public Paddle()
     {
-        _actions = actions;
         Type = BodyType2D.Kinematic;
     }
 
     void FixedUpdate(in View view)
     {
-        float vy = _actions.GetAxis1D(MoveAction) * Speed;
+        float vy = MoveAction.Axis * Speed;
 
         float maxY = Field.HalfH - Field.WallThickness - HalfH;
         if (vy > 0 && Position.Y >= maxY) vy = 0;

@@ -582,6 +582,39 @@
             }
           ],
           "receiver": "struct ke_configuration *"
+        },
+        {
+          "name": "for_each_child",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other\u0027s followed by a dot and one more name; it is listed when it or any section under it holds a key.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null section or callback.",
+          "params": [
+            {
+              "name": "section",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The parent; \u0022\u0022 lists the top-level sections."
+            },
+            {
+              "name": "each",
+              "type": "ke_configuration_child_func",
+              "tags": [
+                "closure:ctx"
+              ],
+              "doc": "Called once per child section."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_configuration *"
         }
       ]
     },
@@ -699,13 +732,38 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_configuration_child_func",
+      "returns": "void",
+      "doc": "Receives one child section of the section being listed.",
+      "lanes": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The child\u0027s own name, without its parent\u0027s; valid only during the call."
+        },
+        {
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Opaque context forwarded from the call that listed."
+        }
+      ]
     }
   ],
   "id_types": [],
   "foreign_id_types": [],
   "type_aliases": {
     "ke_configuration_subscription": "uint32_t",
-    "ke_configuration_change_func": "void (*)(const char *, void *)"
+    "ke_configuration_change_func": "void (*)(const char *, void *)",
+    "ke_configuration_child_func": "void (*)(const char *, void *)"
   },
   "constants": [
     {

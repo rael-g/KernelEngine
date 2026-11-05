@@ -11,6 +11,9 @@ pub const ke_configuration_subscription = u32;
 /// section changed and does nothing else.
 pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
+/// Receives one child section of the section being listed.
+pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
 /// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the

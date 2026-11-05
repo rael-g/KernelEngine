@@ -19,13 +19,6 @@ pub const ActionType = enum(c.ke_action_type) {
     _,
 };
 
-pub const ActionPhase = enum(c.ke_action_phase) {
-    started = 1,
-    performed = 2,
-    canceled = 3,
-    _,
-};
-
 pub const InputActions = struct {
     ptr: *c.ke_input_actions,
     owner: ?c.ke_input_actions_handle = null,
@@ -37,11 +30,29 @@ pub const InputActions = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_input_actions {
         return .{
-            .load = &struct {
-                fn call(self: ?*c.ke_input_actions, a0: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+            .add_map = &struct {
+                fn call(self: ?*c.ke_input_actions, a0: ?[*:0]const u8, a1: i32) callconv(.c) i32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(i32)));
+                    return T.addMap(state, std.mem.span(a0 orelse return std.mem.zeroes(i32)), a1);
+                }
+            }.call,
+            .get_map_id = &struct {
+                fn call(self: ?*c.ke_input_actions, a0: ?[*:0]const u8) callconv(.c) i32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(i32)));
+                    return T.getMapId(state, std.mem.span(a0 orelse return std.mem.zeroes(i32)));
+                }
+            }.call,
+            .set_map_enabled = &struct {
+                fn call(self: ?*c.ke_input_actions, a0: i32, a1: bool) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.load(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    T.setMapEnabled(state, a0, a1) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
+                }
+            }.call,
+            .is_map_enabled = &struct {
+                fn call(self: ?*c.ke_input_actions, a0: i32) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.isMapEnabled(state, a0);
                 }
             }.call,
             .get_action_id = &struct {
@@ -51,9 +62,9 @@ pub const InputActions = struct {
                 }
             }.call,
             .add_action = &struct {
-                fn call(self: ?*c.ke_input_actions, a0: ?[*:0]const u8, a1: c.ke_action_type) callconv(.c) i32 {
+                fn call(self: ?*c.ke_input_actions, a0: i32, a1: ?[*:0]const u8, a2: c.ke_action_type) callconv(.c) i32 {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(i32)));
-                    return T.addAction(state, std.mem.span(a0 orelse return std.mem.zeroes(i32)), @enumFromInt(a1));
+                    return T.addAction(state, a0, std.mem.span(a1 orelse return std.mem.zeroes(i32)), @enumFromInt(a2));
                 }
             }.call,
             .bind_key = &struct {
@@ -85,9 +96,9 @@ pub const InputActions = struct {
                 }
             }.call,
             .evaluate = &struct {
-                fn call(self: ?*c.ke_input_actions, a0: ?*const abi_input.c.ke_input_snapshot, a1: c.ke_input_action_event_func, a2: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_input_actions, a0: ?*const abi_input.c.ke_input_snapshot) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.evaluate(state, a0, a1, a2) catch |failure| return resultOf(failure);
+                    T.evaluate(state, a0) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -130,21 +141,32 @@ pub const InputActions = struct {
         };
     }
 
-    /// Replaces every action with those of a TOML input file. An action type other than Button,
-    /// Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key
-    /// or mouse button name the engine does not know each fail the load, as an invalid argument,
-    /// logging the action and the binding; a load that fails leaves no actions. A file that cannot
-    /// be opened fails as not found and one that does not parse as KE_RESULT_IO.
-    pub fn load(self: InputActions, path: [:0]const u8) Error!void {
-        try checkResult(self.ptr.load.?(self.ptr, path.ptr));
+    /// Adds an enabled map after those already present.
+    pub fn addMap(self: InputActions, name: [:0]const u8, priority: i32) i32 {
+        return self.ptr.add_map.?(self.ptr, name.ptr, priority);
+    }
+
+    pub fn getMapId(self: InputActions, name: [:0]const u8) i32 {
+        return self.ptr.get_map_id.?(self.ptr, name.ptr);
+    }
+
+    /// Enables or disables a map from the next evaluation on.
+    pub fn setMapEnabled(self: InputActions, map_id: i32, enabled: bool) Error!void {
+        try checkResult(self.ptr.set_map_enabled.?(self.ptr, map_id, enabled));
+    }
+
+    /// False for an id no map has.
+    pub fn isMapEnabled(self: InputActions, map_id: i32) bool {
+        return self.ptr.is_map_enabled.?(self.ptr, map_id);
     }
 
     pub fn getActionId(self: InputActions, name: [:0]const u8) i32 {
         return self.ptr.get_action_id.?(self.ptr, name.ptr);
     }
 
-    pub fn addAction(self: InputActions, name: [:0]const u8, @"type": ActionType) i32 {
-        return self.ptr.add_action.?(self.ptr, name.ptr, @intFromEnum(@"type"));
+    /// Adds an action to a map.
+    pub fn addAction(self: InputActions, map_id: i32, name: [:0]const u8, @"type": ActionType) i32 {
+        return self.ptr.add_action.?(self.ptr, map_id, name.ptr, @intFromEnum(@"type"));
     }
 
     /// Adds a key binding to an action.
@@ -169,10 +191,10 @@ pub const InputActions = struct {
         try checkResult(self.ptr.bind_key_quad.?(self.ptr, action_id, up, down, left, right));
     }
 
-    /// Runs one frame of binding evaluation against snapshot, updating polling state and firing
-    /// on_event for each phase transition. A null on_event updates polling only.
-    pub fn evaluate(self: InputActions, snapshot: ?*const abi_input.c.ke_input_snapshot, on_event: c.ke_input_action_event_func, event_ctx: ?*anyopaque) Error!void {
-        try checkResult(self.ptr.evaluate.?(self.ptr, snapshot, on_event, event_ctx));
+    /// Runs one frame of evaluation against snapshot, making each action's held state, edges and
+    /// axes current.
+    pub fn evaluate(self: InputActions, snapshot: ?*const abi_input.c.ke_input_snapshot) Error!void {
+        try checkResult(self.ptr.evaluate.?(self.ptr, snapshot));
     }
 
     pub fn isActionDown(self: InputActions, action_id: i32) bool {
@@ -201,5 +223,4 @@ pub const InputActions = struct {
 
 };
 
-pub const InputActionEvent = c.ke_input_action_event;
 pub const InputActionsHandle = c.ke_input_actions_handle;

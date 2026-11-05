@@ -222,22 +222,23 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
             var fieldName = isNative ? declaredFieldName : p.Name;
             var fieldSymbol = backingTypeSymbol?.GetMembers(fieldName).OfType<IFieldSymbol>().FirstOrDefault();
-            if (IsSceneRef(p.Type) && !isNative)
+            if (RefMember(p.Type) is { } refMember && !isNative)
             {
                 needsUtf8Helpers = true;
-                sb.AppendLine($"    public partial global::KernelEngine.Framework.SceneRef {p.Name}");
+                var refType = "global::" + p.Type.ToDisplayString();
+                sb.AppendLine($"    public partial {refType} {p.Name}");
                 sb.AppendLine("    {");
                 sb.AppendLine("        get");
                 sb.AppendLine("        {");
                 sb.AppendLine($"            ref var s = ref {slot.Current}(out _);");
-                sb.AppendLine($"            return new global::KernelEngine.Framework.SceneRef(this, GeneratedUtf8Get(ref s.{p.Name}));");
+                sb.AppendLine($"            return new {refType}(this, GeneratedUtf8Get(ref s.{p.Name}));");
                 sb.AppendLine("        }");
                 if (writes)
                 {
                     sb.AppendLine("        set");
                     sb.AppendLine("        {");
                     sb.AppendLine($"            ref var s = ref {slot.Current}(out var live);");
-                    sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value.Path, \"{p.Name}\");");
+                    sb.AppendLine($"            GeneratedUtf8Set(ref s.{p.Name}, value.{refMember}, \"{p.Name}\");");
                     sb.AppendLine($"            if (!live && IsBound) GeneratedSet({slot.Cid}, s);");
                     sb.AppendLine("        }");
                 }
@@ -465,10 +466,19 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
 
     const int DefaultTextCapacity = 128;
 
-    static bool IsSceneRef(ITypeSymbol t) => t.ToDisplayString() == "KernelEngine.Framework.SceneRef";
+    /// <summary>
+    /// For a type that names something by text and is built from its owning node and that text, the
+    /// member holding the text; null for any other type.
+    /// </summary>
+    static string? RefMember(ITypeSymbol t) => t.ToDisplayString() switch
+    {
+        "KernelEngine.Framework.SceneRef" => "Path",
+        "KernelEngine.Framework.InputAction" or "KernelEngine.Framework.InputMap" => "Name",
+        _ => null,
+    };
 
-    /// <summary>Whether a property is stored as UTF-8 text in its component: a string or a scene reference.</summary>
-    static bool IsText(ITypeSymbol t) => t.SpecialType == SpecialType.System_String || IsSceneRef(t);
+    /// <summary>Whether a property is stored as UTF-8 text in its component: a string or a reference by text.</summary>
+    static bool IsText(ITypeSymbol t) => t.SpecialType == SpecialType.System_String || RefMember(t) is not null;
 
     static int TextCapacityOf(IPropertySymbol p)
     {

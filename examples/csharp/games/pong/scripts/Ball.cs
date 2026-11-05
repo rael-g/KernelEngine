@@ -15,7 +15,6 @@ public sealed partial class Ball : Body2D
 {
     const float GoalLineMargin = 0.5f;
 
-    private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter _router;
 
     /// <summary>The sound played each time the ball bounces off a paddle.</summary>
@@ -23,6 +22,12 @@ public sealed partial class Ball : Body2D
 
     /// <summary>The sound played each time a goal is scored.</summary>
     public partial SceneRef ScoreSound { get; set; }
+
+    /// <summary>The action that serves the ball.</summary>
+    public partial InputAction Launch { get; set; }
+
+    /// <summary>The action that leaves the match for the menu.</summary>
+    public partial InputAction Quit { get; set; }
 
     /// <summary>Speed the ball is launched at, in metres per second.</summary>
     public partial float InitialSpeed { get; set; }
@@ -39,10 +44,11 @@ public sealed partial class Ball : Body2D
     /// <summary>How many times the ball has been served, which decides serve direction.</summary>
     public partial int Launches { get; set; }
 
-    public Ball(IInputActionMap<PongAction> actions, ISceneRouter router)
+    public Ball(ISceneRouter router)
     {
-        _actions = actions;
         _router = router;
+        Launch = "Launch";
+        Quit = "Quit";
         InitialSpeed = 6f;
         AwaitingLaunch = true;
         Type = BodyType2D.Dynamic;
@@ -51,15 +57,15 @@ public sealed partial class Ball : Body2D
 
     void Update(in View view)
     {
-        if (_actions.IsJustPressed(PongAction.Quit)) _router.LoadScene<Scenes.Menu>();
-        if (_actions.IsJustPressed(PongAction.Launch) && AwaitingLaunch) LaunchRequested = true;
+        if (Quit.JustPressed) _router.LoadScene<Scenes.Menu>();
+        if (Launch.JustPressed && AwaitingLaunch) LaunchRequested = true;
     }
 
     void FixedUpdate(in View view,
         Emit<GoalScored> goal,
         Emit<BallLaunched> launched)
     {
-        if (LaunchRequested) Launch(launched);
+        if (LaunchRequested) Serve(launched);
         if (AwaitingLaunch) return;
 
         if (Math.Sign(Velocity.X) != Math.Sign(LastVelocity.X) && LastVelocity.X != 0)
@@ -70,7 +76,7 @@ public sealed partial class Ball : Body2D
         if (Position.X < -Field.HalfW - GoalLineMargin) Score(leftScored: false, goal);
     }
 
-    void Launch(Emit<BallLaunched> launched)
+    void Serve(Emit<BallLaunched> launched)
     {
         AwaitingLaunch = false;
         LaunchRequested = false;

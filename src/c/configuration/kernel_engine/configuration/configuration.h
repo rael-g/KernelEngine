@@ -19,6 +19,11 @@ extern "C"
     /// latch-only: it records that the section changed and does nothing else.
     typedef void (*ke_configuration_change_func)(const char *section, void *ctx);
 
+    /** Receives one child section of the section being listed.
+     * @param name [borrowed,utf8] The child's own name, without its parent's; valid only during the call.
+     * @param ctx [context] Opaque context forwarded from the call that listed. */
+    typedef void (*ke_configuration_child_func)(const char *name, void *ctx);
+
     /** How a field of a config struct is stored. */
     typedef enum ke_config_type
     {
@@ -93,6 +98,15 @@ extern "C"
         ///         does not fit its type; fields before it are already written.
         ke_result (*fill)(struct ke_configuration *self, const char *section, const ke_config_field *fields,
                           uint32_t field_count, void *config);
+
+        /// Lists the sections directly under @p section, once each, in the order their first key
+        /// was stored. A section is under another when its name is the other's followed by a dot
+        /// and one more name; it is listed when it or any section under it holds a key.
+        /// @param section [borrowed,utf8] The parent; "" lists the top-level sections.
+        /// @param each [closure:ctx] Called once per child section.
+        /// @return KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null section or callback.
+        ke_result (*for_each_child)(struct ke_configuration *self, const char *section,
+                                    ke_configuration_child_func each, void *ctx);
 
     } ke_configuration;
 

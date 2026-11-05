@@ -2,7 +2,7 @@
 
 using System.Runtime.CompilerServices;
 
-const int Ceiling = 76;
+const int Ceiling = 72;
 const string InteropDir = "src/csharp/interop/";
 
 static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryName(path)!;

@@ -30,6 +30,16 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
     private readonly global::KernelEngine.Interop.NativeOwner? _owner;
     private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
+    /// <summary>
+    /// Where a managed exception waits out the native frames. A handler runs
+    /// underneath native code that has no way to carry an exception, so throwing
+    /// through it would tear down the process; the trampoline parks it here and
+    /// the call rethrows once the native stack has unwound. Per-thread, because
+    /// a handler runs on whichever thread the native side called it from.
+    /// </summary>
+    [ThreadStatic]
+    private static Exception? s_parkedCallbackException;
+
     private ke_configuration* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Configuration));
 
@@ -281,6 +291,53 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
             {
                 KernelEngine.NativeResults.ThrowIfFailed(Handle->fill(Handle, (sbyte*)sectionPtr, fieldsPtr, (uint)fields.Length, (void*)config), "fill");
             }
+        }
+    }
+
+    /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>
+    /// <param name="section">The parent; "" lists the top-level sections.</param>
+    /// <param name="each">Called once per child section.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void ForEachChild(string section, ConfigurationChild? each)
+    {
+        var sectionText = section ?? "";
+        var sectionSize = System.Text.Encoding.UTF8.GetMaxByteCount(sectionText.Length) + 1;
+        Span<byte> sectionBytes = sectionSize <= 512 ? stackalloc byte[512] : new byte[sectionSize];
+        sectionBytes[System.Text.Encoding.UTF8.GetBytes(sectionText, sectionBytes)] = 0;
+        fixed (byte* sectionPtr = sectionBytes)
+        {
+            var eachHandle = each is null ? default : GCHandle.Alloc(each);
+            s_parkedCallbackException = null;
+            KernelEngine.Result.Native.Result rc;
+            bool ok;
+            try
+            {
+                ok = (rc = Handle->for_each_child(Handle, (sbyte*)sectionPtr, each is null ? null : (delegate* unmanaged[Cdecl]<sbyte*, void*, void>)&ForEachChildEachTrampoline, (void*)GCHandle.ToIntPtr(eachHandle))) == KernelEngine.Result.Native.Result.Ok;
+            }
+            finally
+            {
+                if (eachHandle.IsAllocated) eachHandle.Free();
+            }
+            if (s_parkedCallbackException is { } parked)
+            {
+                s_parkedCallbackException = null;
+                throw parked;
+            }
+            if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "for_each_child");
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static void ForEachChildEachTrampoline(sbyte* arg0, void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is ConfigurationChild handler)
+                handler(Marshal.PtrToStringUTF8((nint)arg0) ?? "");
+        }
+        catch (Exception ex)
+        {
+            s_parkedCallbackException ??= ex;
         }
     }
 

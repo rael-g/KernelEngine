@@ -5,6 +5,7 @@ using global::KernelEngine.Input;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Asset.Native;
+using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
@@ -17,14 +18,23 @@ public unsafe partial struct ke_input_actions
 {
     public void* handle;
 
-    [NativeTypeName("ke_result (*)(struct ke_input_actions *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, KernelEngine.Result.Native.Result> load;
+    [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int, int> add_map;
+
+    [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int> get_map_id;
+
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, bool)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool, KernelEngine.Result.Native.Result> set_map_enabled;
+
+    [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> is_map_enabled;
 
     [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, int> get_action_id;
 
-    [NativeTypeName("int32_t (*)(struct ke_input_actions *, const char *, ke_action_type)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, sbyte*, NativeActionType, int> add_action;
+    [NativeTypeName("int32_t (*)(struct ke_input_actions *, int32_t, const char *, ke_action_type)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, int, sbyte*, NativeActionType, int> add_action;
 
     [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, global::KernelEngine.Input.Key, KernelEngine.Result.Native.Result> bind_key;
@@ -38,8 +48,8 @@ public unsafe partial struct ke_input_actions
     [NativeTypeName("ke_result (*)(struct ke_input_actions *, int32_t, ke_key, ke_key, ke_key, ke_key)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, global::KernelEngine.Input.Key, global::KernelEngine.Input.Key, global::KernelEngine.Input.Key, global::KernelEngine.Input.Key, KernelEngine.Result.Native.Result> bind_key_quad;
 
-    [NativeTypeName("ke_result (*)(struct ke_input_actions *, const ke_input_snapshot *, ke_input_action_event_func, void *)")]
-    public delegate* unmanaged[Cdecl]<ke_input_actions*, global::KernelEngine.Input.InputSnapshot*, delegate* unmanaged[Cdecl]<void*, InputActionEvent, void>, void*, KernelEngine.Result.Native.Result> evaluate;
+    [NativeTypeName("ke_result (*)(struct ke_input_actions *, const ke_input_snapshot *)")]
+    public delegate* unmanaged[Cdecl]<ke_input_actions*, global::KernelEngine.Input.InputSnapshot*, KernelEngine.Result.Native.Result> evaluate;
 
     [NativeTypeName("bool (*)(struct ke_input_actions *, int32_t)")]
     public delegate* unmanaged[Cdecl]<ke_input_actions*, int, bool> is_action_down;
