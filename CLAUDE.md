@@ -216,6 +216,8 @@ The rules below and the conventions above that a machine can check are checked b
 
 9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 
+10. **Code first, files on top.** The engine is a framework first. Everything an auxiliary file describes (a project, a scene, input actions, a module) is first an API a program calls; the file is a loader that reads the text and calls that same API, and adds nothing the API cannot do. A file format never reaches state the code cannot reach.
+
 ---
 
 ## Key documents
