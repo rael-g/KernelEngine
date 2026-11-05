@@ -22,6 +22,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_configuration, subscribe),
     offsetof(ke_configuration, unsubscribe),
     offsetof(ke_configuration, fill),
+    offsetof(ke_configuration, for_each_child),
     sizeof(ke_configuration_handle),
     offsetof(ke_configuration_handle, ref),
     offsetof(ke_configuration_handle, destroy),

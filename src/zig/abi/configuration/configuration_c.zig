@@ -20,6 +20,9 @@ pub const KE_CONFIG_STRING: ke_config_type = 4;
 /// section changed and does nothing else.
 pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
+/// Receives one child section of the section being listed.
+pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// A default of a config field; the member read is the one its type names.
 pub const ke_config_value = extern union {
     i: i64,
@@ -66,6 +69,10 @@ pub const ke_configuration = extern struct {
     /// default; an integer is accepted by a float or double field. A string field points at the
     /// store's copy, valid as get_string's result is.
     fill: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*]const ke_config_field, u32, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
+    /// Lists the sections directly under section, once each, in the order their first key was
+    /// stored. A section is under another when its name is the other's followed by a dot and one
+    /// more name; it is listed when it or any section under it holds a key.
+    for_each_child: ?*const fn (?*ke_configuration, ?[*:0]const u8, ke_configuration_child_func, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
 };
 
 pub const ke_configuration_handle = extern struct {

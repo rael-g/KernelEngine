@@ -99,7 +99,7 @@ ke_config_field size=32 align=8
   offset 12
   size 16
   default_value 24
-ke_configuration size=96 align=8
+ke_configuration size=104 align=8
   handle 0
   get_int 8
   get_double 16
@@ -112,6 +112,7 @@ ke_configuration size=96 align=8
   subscribe 72
   unsubscribe 80
   fill 88
+  for_each_child 96
 ke_configuration_handle size=16 align=8
   ref 0
   destroy 8

@@ -52,11 +52,27 @@ fn walkTable(cfg: [*c]abi_configuration.c.ke_configuration, tab: ?*toml.toml_tab
                 try std.fmt.allocPrintSentinel(gpa, "{s}.{s}", .{ section, std.mem.span(key) }, 0);
             defer gpa.free(child);
             try walkTable(cfg, sub, child);
-        } else if (toml.toml_array_in(tab, key) != null) {
-            continue;
+        } else if (toml.toml_array_in(tab, key)) |arr| {
+            try walkArrayOfTables(cfg, arr, section, key);
         } else {
             try setScalar(cfg, section, key, tab);
         }
+    }
+}
+
+/// An array of tables becomes one section per element, named by the array's key and the
+/// element's index; an array of anything else is skipped.
+fn walkArrayOfTables(cfg: [*c]abi_configuration.c.ke_configuration, arr: *toml.toml_array_t, section: [:0]const u8, key: [*c]const u8) R.Error!void {
+    const n = toml.toml_array_nelem(arr);
+    var j: c_int = 0;
+    while (j < n) : (j += 1) {
+        const sub = toml.toml_table_at(arr, j) orelse return;
+        const child = if (section.len == 0)
+            try std.fmt.allocPrintSentinel(gpa, "{s}.{d}", .{ std.mem.span(key), j }, 0)
+        else
+            try std.fmt.allocPrintSentinel(gpa, "{s}.{s}.{d}", .{ section, std.mem.span(key), j }, 0);
+        defer gpa.free(child);
+        try walkTable(cfg, sub, child);
     }
 }
 
@@ -321,6 +337,22 @@ test "dotted sub-tables flatten to dotted section names" {
     var cfg = mockConfig();
     try std.testing.expect(try testLoad(&cfg, text));
     try std.testing.expectEqual(@as(?i64, 4), findInt("shadow.cascade", "count"));
+}
+
+test "an array of tables flattens to one section per element, named by its index" {
+    defer clearRecs();
+    const text =
+        \\[input.map.Game.action.Jump]
+        \\bindings = [{ key = 1 }, { key = 2 }]
+        \\scale = [1, 2]
+        \\
+    ;
+
+    var cfg = mockConfig();
+    try std.testing.expect(try testLoad(&cfg, text));
+    try std.testing.expectEqual(@as(?i64, 1), findInt("input.map.Game.action.Jump.bindings.0", "key"));
+    try std.testing.expectEqual(@as(?i64, 2), findInt("input.map.Game.action.Jump.bindings.1", "key"));
+    try std.testing.expectEqual(@as(usize, 2), g_recs.items.len);
 }
 
 test "a missing file is not an error, is never read and writes nothing" {

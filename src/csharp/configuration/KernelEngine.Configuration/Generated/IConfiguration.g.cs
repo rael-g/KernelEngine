@@ -8,6 +8,10 @@ using KernelEngine.Configuration.Native;
 
 namespace KernelEngine.Configuration;
 
+/// <summary>Receives one child section of the section being listed.</summary>
+/// <param name="name">The child's own name, without its parent's; valid only during the call.</param>
+public delegate void ConfigurationChild(string name);
+
 /// <summary>The configuration contract game code depends on, so a caller names a capability rather than the <see cref="Configuration"/> that carries it.</summary>
 public interface IConfiguration : IDisposable
 {
@@ -38,4 +42,9 @@ public interface IConfiguration : IDisposable
     /// <param name="config">The struct to fill.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void Fill(string section, ReadOnlySpan<ConfigField> fields, nint config);
+    /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>
+    /// <param name="section">The parent; "" lists the top-level sections.</param>
+    /// <param name="each">Called once per child section.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void ForEachChild(string section, ConfigurationChild? each);
 }

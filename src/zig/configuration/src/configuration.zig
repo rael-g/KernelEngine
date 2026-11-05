@@ -124,6 +124,38 @@ fn notify(st: *State, section_c: [*c]const u8) void {
     }
 }
 
+/// Lists the children of `section` from the entries' sections, deduplicated in first-seen order;
+/// each name is copied into a NUL-terminated buffer for the duration of its callback.
+fn forEachChild(self: [*c]abi_configuration.c.ke_configuration, section_c: [*c]const u8, each: abi_configuration.c.ke_configuration_child_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    if (self == null or section_c == null) return R.code(error.InvalidArgument);
+    const cb = each orelse return R.code(error.InvalidArgument);
+    const st = state(self);
+    const parent = std.mem.span(section_c);
+    var seen: std.ArrayListUnmanaged([]const u8) = .empty;
+    defer seen.deinit(gpa);
+    for (st.entries.items) |e| {
+        const child = childOf(parent, e.section) orelse continue;
+        var known = false;
+        for (seen.items) |n| known = known or std.mem.eql(u8, n, child);
+        if (known) continue;
+        seen.append(gpa, child) catch return R.code(error.OutOfMemory);
+        const name = gpa.dupeZ(u8, child) catch return R.code(error.OutOfMemory);
+        defer gpa.free(name);
+        cb(name.ptr, ctx);
+    }
+    return R.ok;
+}
+
+fn childOf(parent: []const u8, section: []const u8) ?[]const u8 {
+    const rest = if (parent.len == 0) section else blk: {
+        if (section.len <= parent.len + 1 or !std.mem.startsWith(u8, section, parent) or section[parent.len] != '.') return null;
+        break :blk section[parent.len + 1 ..];
+    };
+    if (rest.len == 0) return null;
+    const end = std.mem.indexOfScalar(u8, rest, '.') orelse rest.len;
+    return rest[0..end];
+}
+
 /// Returns the integer stored at this section and key, or the fallback when an argument is null,
 /// the key is missing, or it holds another type.
 fn getInt(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
@@ -389,6 +421,7 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
             .subscribe = subscribe,
             .unsubscribe = unsubscribe,
             .fill = fill,
+            .for_each_child = forEachChild,
         },
         .entries = .empty,
         .subs = .empty,
@@ -585,4 +618,41 @@ test "creating, filling and destroying a configuration leaves no block allocated
     try R.check(cfg.?.set_string.?(cfg, "render", "shader_path", "res/shaders"));
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
+}
+
+const ChildList = struct {
+    names: [8][16]u8 = undefined,
+    count: usize = 0,
+
+    fn add(name: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
+        const l: *ChildList = @ptrCast(@alignCast(ctx));
+        const span = std.mem.span(name);
+        @memcpy(l.names[l.count][0..span.len], span);
+        l.names[l.count][span.len] = 0;
+        l.count += 1;
+    }
+
+    fn at(l: *const ChildList, i: usize) []const u8 {
+        return std.mem.sliceTo(&l.names[i], 0);
+    }
+};
+
+test "the children of a section are listed once each, in the order their first key was stored" {
+    const h = try madeStore();
+    defer h.destroy.?(h.ref);
+    const c = h.ref;
+    try R.check(c.?.set_int.?(c, "input.map.Menu", "priority", 10));
+    try R.check(c.?.set_string.?(c, "input.map.Game.action.Jump", "type", "Button"));
+    try R.check(c.?.set_int.?(c, "input.map.Menu", "enabled", 0));
+    try R.check(c.?.set_string.?(c, "input.mapping", "x", "y"));
+    var maps: ChildList = .{};
+    try R.check(c.?.for_each_child.?(c, "input.map", ChildList.add, &maps));
+    try std.testing.expectEqual(@as(usize, 2), maps.count);
+    try std.testing.expectEqualStrings("Menu", maps.at(0));
+    try std.testing.expectEqualStrings("Game", maps.at(1));
+    var top: ChildList = .{};
+    try R.check(c.?.for_each_child.?(c, "", ChildList.add, &top));
+    try std.testing.expectEqual(@as(usize, 1), top.count);
+    try std.testing.expectEqualStrings("input", top.at(0));
+    try std.testing.expectError(error.InvalidArgument, R.check(c.?.for_each_child.?(c, null, ChildList.add, &top)));
 }
