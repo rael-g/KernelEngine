@@ -5,6 +5,7 @@ using global::KernelEngine.Input;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Asset.Native;
+using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;

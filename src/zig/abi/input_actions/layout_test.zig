@@ -23,10 +23,8 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_input_action_event, translated("ke_input_action_event"));
     try expectSameLayout(abi.c.ke_input_actions, translated("ke_input_actions"));
     try expectSameLayout(abi.c.ke_input_actions_handle, translated("ke_input_actions_handle"));
-    if (@hasDecl(c, "ke_input_action_event_func")) try expectSameLayout(abi.c.ke_input_action_event_func, c.ke_input_action_event_func);
 }
 
 test "every enum value is the header's value" {
@@ -35,26 +33,19 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS1D), @as(i64, abi.c.KE_ACTION_TYPE_AXIS1D));
     try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS2D), @as(i64, abi.c.KE_ACTION_TYPE_AXIS2D));
     try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS3D), @as(i64, abi.c.KE_ACTION_TYPE_AXIS3D));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_STARTED), @as(i64, abi.c.KE_ACTION_PHASE_STARTED));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_PERFORMED), @as(i64, abi.c.KE_ACTION_PHASE_PERFORMED));
-    try std.testing.expectEqual(@as(i64, c.KE_ACTION_PHASE_CANCELED), @as(i64, abi.c.KE_ACTION_PHASE_CANCELED));
 }
 
-extern const layout_values: [27]c_ulonglong;
+extern const layout_values: [23]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_input_action_event),
-        @offsetOf(abi.c.ke_input_action_event, "action_id"),
-        @offsetOf(abi.c.ke_input_action_event, "type"),
-        @offsetOf(abi.c.ke_input_action_event, "phase"),
-        @offsetOf(abi.c.ke_input_action_event, "x"),
-        @offsetOf(abi.c.ke_input_action_event, "y"),
-        @offsetOf(abi.c.ke_input_action_event, "z"),
         @sizeOf(abi.c.ke_input_actions),
         @offsetOf(abi.c.ke_input_actions, "handle"),
-        @offsetOf(abi.c.ke_input_actions, "load"),
+        @offsetOf(abi.c.ke_input_actions, "add_map"),
+        @offsetOf(abi.c.ke_input_actions, "get_map_id"),
+        @offsetOf(abi.c.ke_input_actions, "set_map_enabled"),
+        @offsetOf(abi.c.ke_input_actions, "is_map_enabled"),
         @offsetOf(abi.c.ke_input_actions, "get_action_id"),
         @offsetOf(abi.c.ke_input_actions, "add_action"),
         @offsetOf(abi.c.ke_input_actions, "bind_key"),

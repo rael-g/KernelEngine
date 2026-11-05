@@ -12,18 +12,27 @@ using KernelEngine.Render;
 
 namespace KernelEngine.Framework;
 
-/// <summary>Reports one phase transition of one binding.</summary>
-/// <param name="@event">The transition, naming the action it belongs to.</param>
-public delegate void InputActionEventCallback(InputActionEvent @event);
-
 /// <summary>The inputactions contract game code depends on, so a caller names a capability rather than the <see cref="InputActions"/> that carries it.</summary>
 public interface IInputActions : IDisposable
 {
-    /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.</summary>
+    /// <summary>Adds an enabled map after those already present.</summary>
+    /// <param name="name">Unique among the maps.</param>
+    /// <param name="priority">Higher is evaluated first.</param>
+    /// <returns>The map's id; -1 for a null, empty or duplicated name, or when it cannot be stored.</returns>
+    int AddMap(string name, int priority);
+    /// <returns>The id of the map with that name; -1 when none has it.</returns>
+    int GetMapId(string name);
+    /// <summary>Enables or disables a map from the next evaluation on.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Load(string path);
+    void SetMapEnabled(int mapId, bool enabled);
+    /// <summary>False for an id no map has.</summary>
+    bool IsMapEnabled(int mapId);
+    /// <returns>The id of the action with that name, in any map; -1 when none has it.</returns>
     int GetActionId(string name);
-    int AddAction(string name, NativeActionType type);
+    /// <summary>Adds an action to a map.</summary>
+    /// <param name="name">Unique among the actions of every map.</param>
+    /// <returns>The action's id; -1 for an id no map has, a null, empty or duplicated name, or when it cannot be stored.</returns>
+    int AddAction(int mapId, string name, NativeActionType type);
     /// <summary>Adds a key binding to an action.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void BindKey(int actionId, Key key);
@@ -36,9 +45,9 @@ public interface IInputActions : IDisposable
     /// <summary>Adds a two-axis binding to an action: x is right minus left and y is up minus down. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void BindKeyQuad(int actionId, Key up, Key down, Key left, Key right);
-    /// <summary>Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.</summary>
+    /// <summary>Runs one frame of evaluation against snapshot, making each action's held state, edges and axes current.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Evaluate(InputSnapshot snapshot, InputActionEventCallback? onEvent);
+    void Evaluate(InputSnapshot snapshot);
     bool IsActionDown(int actionId);
     bool WasActionPressed(int actionId);
     bool WasActionReleased(int actionId);

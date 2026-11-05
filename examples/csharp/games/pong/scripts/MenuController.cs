@@ -11,21 +11,24 @@ namespace Pong;
 /// instance which isn't loadable directly from scene properties yet), and
 /// drives the transition to the Main scene on Launch / quit on Quit.
 /// </summary>
-public sealed class MenuController : Node
+public sealed partial class MenuController : Node
 {
-    private readonly IInputActionMap<PongAction> _actions;
     private readonly ISceneRouter _router;
     private readonly IFontLoader _fontLoader;
     private readonly IRenderResources _resources;
 
     private Font? _font;
-    private bool _prevLaunch;
-    private bool _prevQuit;
 
-    public MenuController(IInputActionMap<PongAction> actions, ISceneRouter router, IFontLoader fontLoader,
-                          IRenderResources resources)
+    /// <summary>The action that starts a match.</summary>
+    public partial InputAction Launch { get; set; }
+
+    /// <summary>The action that closes the game.</summary>
+    public partial InputAction Quit { get; set; }
+
+    public MenuController(ISceneRouter router, IFontLoader fontLoader, IRenderResources resources)
     {
-        _actions = actions;
+        Launch = "Launch";
+        Quit = "Quit";
         _router = router;
         _fontLoader = fontLoader;
         _resources = resources;
@@ -57,15 +60,9 @@ public sealed class MenuController : Node
         }, "Hint");
     }
 
-    protected override bool HasBehavior => true;
-
-    protected override void OnUpdate(in View view)
+    void Update(in View view)
     {
-        bool launch = _actions.IsPressed(PongAction.Launch);
-        bool quit = _actions.IsPressed(PongAction.Quit);
-        if (launch && !_prevLaunch) _router.LoadScene<Scenes.Main>();
-        if (quit && !_prevQuit) Environment.Exit(0);
-        _prevLaunch = launch;
-        _prevQuit = quit;
+        if (Launch.JustPressed) _router.LoadScene<Scenes.Main>();
+        if (Quit.JustPressed) Environment.Exit(0);
     }
 }

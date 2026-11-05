@@ -25,7 +25,7 @@ public unsafe interface INativeInputActions
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-
+/// <summary>Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame against an input snapshot and polled. Maps are evaluated from the highest priority down, ties in the order they were added; a key or mouse button bound in an enabled map is not seen by any map evaluated after it. The actions of a disabled map are inactive.</summary>
 public unsafe partial class InputActions : IDisposable, INativeInputActions, IInputActions
 {
     private ke_input_actions* _native;
@@ -33,16 +33,6 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     private readonly delegate* unmanaged[Cdecl]<ke_input_actions*, void> _destroy;
     private readonly global::KernelEngine.Interop.NativeOwner? _owner;
     private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
-
-    /// <summary>
-    /// Where a managed exception waits out the native frames. A handler runs
-    /// underneath native code that has no way to carry an exception, so throwing
-    /// through it would tear down the process; the trampoline parks it here and
-    /// the call rethrows once the native stack has unwound. Per-thread, because
-    /// a handler runs on whichever thread the native side called it from.
-    /// </summary>
-    [ThreadStatic]
-    private static Exception? s_parkedCallbackException;
 
     private ke_input_actions* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(InputActions));
@@ -81,21 +71,49 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         _owner = null;
     }
 
-    /// <summary>Replaces every action with those of a TOML input file. An action type other than Button, Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key or mouse button name the engine does not know each fail the load, as an invalid argument, logging the action and the binding; a load that fails leaves no actions. A file that cannot be opened fails as not found and one that does not parse as KE_RESULT_IO.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Load(string path)
+    /// <summary>Adds an enabled map after those already present.</summary>
+    /// <param name="name">Unique among the maps.</param>
+    /// <param name="priority">Higher is evaluated first.</param>
+    /// <returns>The map's id; -1 for a null, empty or duplicated name, or when it cannot be stored.</returns>
+    public int AddMap(string name, int priority)
     {
-        var pathText = path ?? "";
-        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
-        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
-        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
-        fixed (byte* pathPtr = pathBytes)
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
         {
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->load(Handle, (sbyte*)pathPtr), "load");
+            return Handle->add_map(Handle, (sbyte*)namePtr, priority);
         }
     }
 
+    /// <returns>The id of the map with that name; -1 when none has it.</returns>
+    public int GetMapId(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->get_map_id(Handle, (sbyte*)namePtr);
+        }
+    }
 
+    /// <summary>Enables or disables a map from the next evaluation on.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void SetMapEnabled(int mapId, bool enabled)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->set_map_enabled(Handle, mapId, enabled), "set_map_enabled");
+    }
+
+    /// <summary>False for an id no map has.</summary>
+    public bool IsMapEnabled(int mapId)
+    {
+        return Handle->is_map_enabled(Handle, mapId);
+    }
+
+    /// <returns>The id of the action with that name, in any map; -1 when none has it.</returns>
     public int GetActionId(string name)
     {
         var nameText = name ?? "";
@@ -108,8 +126,10 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         }
     }
 
-
-    public int AddAction(string name, NativeActionType type)
+    /// <summary>Adds an action to a map.</summary>
+    /// <param name="name">Unique among the actions of every map.</param>
+    /// <returns>The action's id; -1 for an id no map has, a null, empty or duplicated name, or when it cannot be stored.</returns>
+    public int AddAction(int mapId, string name, NativeActionType type)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -117,7 +137,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            return Handle->add_action(Handle, (sbyte*)namePtr, (NativeActionType)type);
+            return Handle->add_action(Handle, mapId, (sbyte*)namePtr, (NativeActionType)type);
         }
     }
 
@@ -149,42 +169,11 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, (Key)up, (Key)down, (Key)left, (Key)right), "bind_key_quad");
     }
 
-    /// <summary>Runs one frame of binding evaluation against snapshot, updating polling state and firing on_event for each phase transition. A null on_event updates polling only.</summary>
+    /// <summary>Runs one frame of evaluation against snapshot, making each action's held state, edges and axes current.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Evaluate(InputSnapshot snapshot, InputActionEventCallback? onEvent)
+    public void Evaluate(InputSnapshot snapshot)
     {
-        var onEventHandle = onEvent is null ? default : GCHandle.Alloc(onEvent);
-        s_parkedCallbackException = null;
-        KernelEngine.Result.Native.Result rc;
-        bool ok;
-        try
-        {
-            ok = (rc = Handle->evaluate(Handle, (InputSnapshot*)&snapshot, onEvent is null ? null : (delegate* unmanaged[Cdecl]<void*, InputActionEvent, void>)&EvaluateOnEventTrampoline, (void*)GCHandle.ToIntPtr(onEventHandle))) == KernelEngine.Result.Native.Result.Ok;
-        }
-        finally
-        {
-            if (onEventHandle.IsAllocated) onEventHandle.Free();
-        }
-        if (s_parkedCallbackException is { } parked)
-        {
-            s_parkedCallbackException = null;
-            throw parked;
-        }
-        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "evaluate");
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void EvaluateOnEventTrampoline(void* ctx, InputActionEvent arg1)
-    {
-        try
-        {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is InputActionEventCallback handler)
-                handler(arg1);
-        }
-        catch (Exception ex)
-        {
-            s_parkedCallbackException ??= ex;
-        }
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->evaluate(Handle, (InputSnapshot*)&snapshot), "evaluate");
     }
 
 

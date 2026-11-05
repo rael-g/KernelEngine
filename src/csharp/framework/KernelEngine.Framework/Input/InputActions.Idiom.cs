@@ -1,26 +1,27 @@
-using KernelEngine.Common;
-
 namespace KernelEngine.Framework;
 
 /// <summary>
-/// Managed handle to a native input actions map. This part declares the constructor that calls
+/// Managed handle to the native input action maps. This part declares the constructor that calls
 /// the native factory; the members that mirror the vtable are generated.
 /// </summary>
 public unsafe partial class InputActions
 {
-    /// <summary>Creates a native input-actions instance that loads its file through <paramref name="io"/>.</summary>
-    /// <exception cref="InvalidOperationException">The native factory fails.</exception>
-    /// <param name="io">The io the file is read through, kept alive while the instance lives.</param>
-    public InputActions(KernelEngine.Io.INativeIo io) : this(Create(io))
+    /// <summary>
+    /// Creates the action maps, adding those the <c>input</c> section of
+    /// <paramref name="configuration"/> describes; with no configuration there is no map, and a
+    /// program adds its own through <see cref="AddMap"/> and <see cref="AddAction"/>.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">The native factory fails, such as for a key
+    /// name the configuration misspells.</exception>
+    public InputActions(KernelEngine.Configuration.INativeConfiguration? configuration = null) : this(Create(configuration))
     {
-        Hold(io.Owner);
+        if (configuration is not null) Hold(configuration.Owner);
     }
 
-    private static ke_input_actions_handle Create(KernelEngine.Io.INativeIo io)
+    private static ke_input_actions_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration)
     {
-        ArgumentNullException.ThrowIfNull(io);
         ke_input_actions_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(io.Native, &handle), "ke_input_actions_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(configuration is null ? null : configuration.Native, null, &handle), "ke_input_actions_create");
         return handle;
     }
 }

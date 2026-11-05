@@ -19,9 +19,6 @@
     <Content Include="Project">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
-    <Content Include="actions.input">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <!-- Also handed to the generator, which emits one type per scene so
          LoadScene<T> can name them; it puts them under RootNamespace.Scenes,
          which it can only read if the property is made compiler-visible. -->

@@ -1,6 +1,7 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
+using KernelEngine.Framework.Native;
 using KernelEngine.Input;
 using KernelEngine.Io.Pool;
 using KernelEngine.Logger;
@@ -12,6 +13,8 @@ using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
 
+using InputAction = KernelEngine.Framework.InputAction;
+
 var services = new ServiceCollection()
     .AddLogger()
     .AddConsoleSink()
@@ -20,20 +23,16 @@ var services = new ServiceCollection()
     .AddEnkiTaskPool()
     .AddStdFileSystem()
     .AddPoolIo()
-    .AddInputActions<DemoAction>()
+    .AddSingleton(_ => DemoInput.Build())
     .Add<IRuntime, Runtime>()
     .Add<IRuntimeModule>(new GlfwWindowModule(640, 160, "KernelEngine — 20 Input Actions (WASD, Space, Tab, Esc)"))
     .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.05f, 0.05f, 0.08f, 1.0f)))
     .Add<IRuntimeModule>(new FrameworkModule())
-    .Add<IRuntimeModule>(new SceneNodesModule((_, sp) =>
+    .Add<IRuntimeModule>(new SceneNodesModule((host, _) =>
     {
         Console.WriteLine("[KernelEngine] Example: 20_input_actions");
-        Console.WriteLine("[KernelEngine] Features: action_events, action_phases, event_consumption");
-        var actions = sp.GetRequiredService<IInputActionMap<DemoAction>>();
-        var gameplay = new Gameplay();
-        var menu = new Menu();
-        actions.Subscribe(gameplay.OnAction);
-        actions.Subscribe(menu.OnAction);
+        Console.WriteLine("[KernelEngine] Features: maps_built_in_code, map_priority, map_enabled");
+        host.AddNode(new Player(), "Player");
     }));
 
 using var sp = services.BuildServiceProvider();
@@ -55,42 +54,57 @@ while (!window.ShouldClose())
 runtime.UnloadModules();
 
 
-enum DemoAction
+static class DemoInput
 {
-    Move,
-    Jump,
-    Menu,
-    Quit,
-}
-
-sealed class Gameplay
-{
-    public void OnAction(ref ActionEvent evt)
+    public static InputActions Build()
     {
-        if (evt.Is(DemoAction.Quit)) Environment.Exit(0);
-        if (evt.Is(DemoAction.Move))
-            Console.WriteLine($"[gameplay] move {evt.Phase} {evt.Vector2Value}");
-        else if (evt.Is(DemoAction.Jump) && evt.Phase == ActionPhase.Started)
-            Console.WriteLine("[gameplay] jump");
+        var actions = new InputActions();
+
+        var system = actions.AddMap("System", 20);
+        actions.BindKey(actions.AddAction(system, "ToggleMenu", NativeActionType.Button), Key.Tab);
+        actions.BindKey(actions.AddAction(system, "Quit", NativeActionType.Button), Key.Escape);
+
+        var menu = actions.AddMap("Menu", 10);
+        actions.BindKey(actions.AddAction(menu, "Accept", NativeActionType.Button), Key.Space);
+        actions.SetMapEnabled(menu, false);
+
+        var gameplay = actions.AddMap("Gameplay", 0);
+        actions.BindKeyQuad(actions.AddAction(gameplay, "Move", NativeActionType.Axis2d), Key.W, Key.S, Key.A, Key.D);
+        actions.BindKey(actions.AddAction(gameplay, "Jump", NativeActionType.Button), Key.Space);
+        return actions;
     }
 }
 
-sealed class Menu
+sealed partial class Player : Node
 {
-    private bool _open;
+    public partial InputAction Move { get; set; }
+    public partial InputAction Jump { get; set; }
+    public partial InputAction Accept { get; set; }
+    public partial InputAction ToggleMenu { get; set; }
+    public partial InputAction Quit { get; set; }
+    public partial InputMap Menu { get; set; }
 
-    public void OnAction(ref ActionEvent evt)
+    public Player()
     {
-        if (evt.Is(DemoAction.Menu) && evt.Phase == ActionPhase.Started)
+        Move = "Move";
+        Jump = "Jump";
+        Accept = "Accept";
+        ToggleMenu = "ToggleMenu";
+        Quit = "Quit";
+        Menu = "Menu";
+    }
+
+    void Update(in View view)
+    {
+        if (Quit.JustPressed) Environment.Exit(0);
+        if (ToggleMenu.JustPressed)
         {
-            _open = !_open;
-            Console.WriteLine(_open ? "[menu] opened: gameplay hears nothing but Quit" : "[menu] closed");
-            evt.Consume();
-            return;
+            var menu = Menu;
+            menu.Enabled = !menu.Enabled;
+            Console.WriteLine(menu.Enabled ? "[menu] opened: Space accepts, gameplay does not jump" : "[menu] closed");
         }
-        if (!_open || evt.Is(DemoAction.Quit)) return;
-        if (evt.As(out DemoAction action) && evt.Phase == ActionPhase.Started)
-            Console.WriteLine($"[menu] {action}");
-        evt.Consume();
+        if (Accept.JustPressed) Console.WriteLine("[menu] accept");
+        if (Jump.JustPressed) Console.WriteLine("[gameplay] jump");
+        if (Move.Vector != System.Numerics.Vector2.Zero) Console.WriteLine($"[gameplay] move {Move.Vector}");
     }
 }

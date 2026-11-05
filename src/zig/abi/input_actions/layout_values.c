@@ -1,16 +1,12 @@
 #include <stddef.h>
 #include <kernel_engine/framework/input_actions.h>
 const unsigned long long layout_values[] = {
-    sizeof(ke_input_action_event),
-    offsetof(ke_input_action_event, action_id),
-    offsetof(ke_input_action_event, type),
-    offsetof(ke_input_action_event, phase),
-    offsetof(ke_input_action_event, x),
-    offsetof(ke_input_action_event, y),
-    offsetof(ke_input_action_event, z),
     sizeof(ke_input_actions),
     offsetof(ke_input_actions, handle),
-    offsetof(ke_input_actions, load),
+    offsetof(ke_input_actions, add_map),
+    offsetof(ke_input_actions, get_map_id),
+    offsetof(ke_input_actions, set_map_enabled),
+    offsetof(ke_input_actions, is_map_enabled),
     offsetof(ke_input_actions, get_action_id),
     offsetof(ke_input_actions, add_action),
     offsetof(ke_input_actions, bind_key),

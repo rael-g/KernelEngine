@@ -6,6 +6,7 @@
     .dependencies = .{
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },
         .abi_component_registry = .{ .path = "../../abi/component_registry" },
+        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_framework = .{ .path = "../../abi/framework" },

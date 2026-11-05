@@ -1,15 +1,15 @@
-//! The input actions map: named actions bound to keys and mouse buttons, evaluated once per frame
-//! against an input snapshot and polled by a game.
+//! The input action maps: named actions grouped in prioritised maps, bound to keys and mouse
+//! buttons, evaluated once per frame against an input snapshot and polled by a game; the factory
+//! adds the maps a configuration describes through the same slots a program calls.
 
 const abi_input_actions = @import("abi_input_actions");
+const abi_framework_factory = @import("abi_framework_factory");
+const abi_configuration = @import("abi_configuration");
 const std = @import("std");
 
-const c = @import("c");
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
-const abi_io = @import("abi_io");
-const file_read = @import("file_read.zig");
 
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
@@ -138,13 +138,16 @@ const Binding = struct {
     k3: c_int = 0,
 };
 
-/// One named action, held by value in the `actions` array of its `State`. `name` is NUL-terminated
-/// within its buffer. `bindings` stays null until the first binding is appended, and its buffer is
-/// freed only by `clearActions`. The current values are written by `vtEvaluate`, which copies them
-/// to the previous ones before sampling. The edge queries compare `curr_active` with
-/// `prev_active`.
+
+const map_initial_capacity: u32 = 4;
+
+/// One named action, held by value in the `actions` array of its `State`; `map` is the index of
+/// the map it belongs to. `bindings` stays null until the first binding is appended. `vtEvaluate`
+/// moves the current values to the previous ones before sampling, and the edge queries compare
+/// `curr_active` with `prev_active`.
 const Action = struct {
     name: [action_name_max]u8,
+    map: u32,
     type: abi_input_actions.c.ke_action_type,
     bindings: ?[*]Binding,
     binding_count: u32,
@@ -153,15 +156,13 @@ const Action = struct {
     curr_x: f32,
     curr_y: f32,
     curr_z: f32,
-    prev_x: f32,
-    prev_y: f32,
-    prev_z: f32,
     curr_active: bool,
     prev_active: bool,
 
     fn blank() Action {
         return .{
             .name = [_]u8{0} ** action_name_max,
+            .map = 0,
             .type = abi_input_actions.c.KE_ACTION_TYPE_BUTTON,
             .bindings = null,
             .binding_count = 0,
@@ -169,35 +170,34 @@ const Action = struct {
             .curr_x = 0,
             .curr_y = 0,
             .curr_z = 0,
-            .prev_x = 0,
-            .prev_y = 0,
-            .prev_z = 0,
             .curr_active = false,
             .prev_active = false,
         };
     }
 };
 
-/// The object behind the handle that `ke_input_actions_create` returns, freed by `vtDestroy`. `api`
-/// is the vtable the handle's ref points at, and its `handle` field points back at this `State`,
-/// which is how each vtable function reaches it through `stateOf`. `actions` stays null until the
-/// first action is added or loaded.
-///
-/// An action id is the index of the action in `actions`, so appending keeps ids valid and a load
-/// invalidates them. A binding names no key by text: names such as "Space" or "Left" are turned
-/// into codes by `lookupKey` and `lookupMouseButton` when a binding is created from a file, so
-/// evaluation deals only in codes. `vtEvaluate` moves each action's current values to its
-/// previous ones, samples every binding and keeps the result; the queries only read those stored
-/// values, never the snapshot, which is how they report both a held state and a press or release
-/// edge. Slots that take an error output report an invalid argument for a null handle or
-/// pointer; those that return a sentinel set no error. Nothing here locks, so one handle is not
-/// safe to use from several threads at once.
+/// One named map, held by value in the `maps` array of its `State`.
+const Map = struct {
+    name: [action_name_max]u8,
+    priority: i32,
+    enabled: bool,
+};
+
+/// The object behind the handle `ke_input_actions_create` returns, freed by `vtDestroy`; `api`
+/// is the vtable the handle points at, and its `handle` points back here. A map id is an index
+/// in `maps` and an action id an index in `actions`, so appending keeps every id valid.
+/// `vtEvaluate` walks the maps from the highest priority down, masks out of the snapshot every key
+/// and mouse button an earlier enabled map binds, samples each action of an enabled map against
+/// the masked snapshot and clears the actions of a disabled one; the queries only read the stored
+/// values. Nothing here locks, so one handle is not safe to use from several threads at once.
 const State = struct {
     api: abi_input_actions.c.ke_input_actions,
-    actions: ?[*]Action,
-    action_count: u32,
-    action_capacity: u32,
-    io: *abi_io.c.ke_io,
+    maps: ?[*]Map = null,
+    map_count: u32 = 0,
+    map_capacity: u32 = 0,
+    actions: ?[*]Action = null,
+    action_count: u32 = 0,
+    action_capacity: u32 = 0,
 };
 
 fn stateOf(self: *abi_input_actions.c.ke_input_actions) *State {
@@ -233,34 +233,37 @@ fn ensureActionCapacity(s: *State, needed: u32) bool {
     return true;
 }
 
+fn ensureMapCapacity(s: *State, needed: u32) bool {
+    const grown = growArray(Map, s.maps, s.map_count, &s.map_capacity, needed, map_initial_capacity) orelse return false;
+    s.maps = grown;
+    return true;
+}
+
 fn ensureBindingCapacity(a: *Action, needed: u32) bool {
     const grown = growArray(Binding, a.bindings, a.binding_count, &a.binding_capacity, needed, binding_initial_capacity) orelse return false;
     a.bindings = grown;
     return true;
 }
 
-/// Frees the bindings of every action and forgets the actions, but keeps the action array allocated
-/// at its capacity, so the next add or load reuses it.
-fn clearActions(s: *State) void {
-    if (s.actions) |actions| {
-        for (actions[0..s.action_count]) |*a| {
-            if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
-            a.bindings = null;
-            a.binding_count = 0;
-            a.binding_capacity = 0;
-        }
-    }
-    s.action_count = 0;
-}
-
-/// Compares the whole given name with each stored name, and returns -1 when none matches. A name
-/// longer than `action_name_max` was stored truncated, so only its truncated form matches.
 fn findActionByName(s: *const State, name: []const u8) i32 {
     const actions = s.actions orelse return -1;
     for (actions[0..s.action_count], 0..) |*a, i| {
         if (std.mem.eql(u8, std.mem.sliceTo(&a.name, 0), name)) return @intCast(i);
     }
     return -1;
+}
+
+fn findMapByName(s: *const State, name: []const u8) i32 {
+    const maps = s.maps orelse return -1;
+    for (maps[0..s.map_count], 0..) |*m, i| {
+        if (std.mem.eql(u8, std.mem.sliceTo(&m.name, 0), name)) return @intCast(i);
+    }
+    return -1;
+}
+
+fn getMapMut(s: *State, id: i32) ?*Map {
+    if (id < 0 or @as(u32, @intCast(id)) >= s.map_count) return null;
+    return &s.maps.?[@intCast(id)];
 }
 
 fn copyName(dst: []u8, src: []const u8) void {
@@ -310,218 +313,83 @@ fn sampleBinding(b: *const Binding, snap: *const abi_input.c.ke_input_snapshot) 
     return .{ out, out.x != 0.0 or out.y != 0.0 or out.z != 0.0 };
 }
 
-/// Releases the string that the TOML string lookup allocated for a found value. A lookup that did
-/// not find its key allocates nothing, so there is nothing to release.
-fn freeDatumStr(d: c.toml_datum_t) void {
-    if (d.ok != 0 and d.u.s != null) std.c.free(d.u.s);
-}
-
-/// Writes `out` only when it returns true. It returns false when the table has no "kind" string,
-/// when the kind is not one it knows, or when a field that kind needs is missing.
-/// Why a binding table could not be read, written by `parseBindingTable`.
-const Reason = struct {
-    buf: [160]u8 = undefined,
-    len: usize = 0,
-
-    fn set(self: *Reason, comptime fmt: []const u8, args: anytype) void {
-        self.len = if (std.fmt.bufPrint(&self.buf, fmt, args)) |m| m.len else |_| self.buf.len;
-    }
-
-    fn text(self: *const Reason) []const u8 {
-        return self.buf[0..self.len];
-    }
-};
-
-fn keyCode(name: [*c]const u8, reason: *Reason) ?c_int {
-    const code = lookupKey(name);
-    if (code >= 0) return code;
-    reason.set("'{s}' is not a key name", .{std.mem.span(name)});
-    return null;
-}
-
-fn mouseCode(name: [*c]const u8, reason: *Reason) ?c_int {
-    const code = lookupMouseButton(name);
-    if (code >= 0) return code;
-    reason.set("'{s}' is not a mouse button name", .{std.mem.span(name)});
-    return null;
-}
-
-/// Reads one binding table into `out`. A missing field, an unknown kind, or a name that is no key
-/// or mouse button returns false with the reason in `reason`.
-fn parseBindingTable(bt: ?*c.toml_table_t, out: *Binding, reason: *Reason) bool {
-    const kind = c.toml_string_in(bt, "kind");
-    if (kind.ok == 0) {
-        reason.set("it has no kind", .{});
-        return false;
-    }
-    defer freeDatumStr(kind);
-    const kind_str = std.mem.span(kind.u.s);
-
-    if (std.mem.eql(u8, kind_str, "key")) {
-        const k = c.toml_string_in(bt, "key");
-        defer freeDatumStr(k);
-        if (k.ok == 0) {
-            reason.set("a key binding has no key", .{});
-            return false;
-        }
-        out.* = .{ .kind = .key, .k0 = keyCode(k.u.s, reason) orelse return false };
-        return true;
-    }
-    if (std.mem.eql(u8, kind_str, "key_pair")) {
-        const neg = c.toml_string_in(bt, "negative");
-        const pos = c.toml_string_in(bt, "positive");
-        defer freeDatumStr(neg);
-        defer freeDatumStr(pos);
-        if (neg.ok == 0 or pos.ok == 0) {
-            reason.set("a key_pair binding needs negative and positive", .{});
-            return false;
-        }
-        out.* = .{
-            .kind = .key_pair,
-            .k0 = keyCode(neg.u.s, reason) orelse return false,
-            .k1 = keyCode(pos.u.s, reason) orelse return false,
-        };
-        return true;
-    }
-    if (std.mem.eql(u8, kind_str, "key_quad")) {
-        const up = c.toml_string_in(bt, "up");
-        const down = c.toml_string_in(bt, "down");
-        const left = c.toml_string_in(bt, "left");
-        const right = c.toml_string_in(bt, "right");
-        defer freeDatumStr(up);
-        defer freeDatumStr(down);
-        defer freeDatumStr(left);
-        defer freeDatumStr(right);
-        if (up.ok == 0 or down.ok == 0 or left.ok == 0 or right.ok == 0) {
-            reason.set("a key_quad binding needs up, down, left and right", .{});
-            return false;
-        }
-        out.* = .{
-            .kind = .key_quad,
-            .k0 = keyCode(up.u.s, reason) orelse return false,
-            .k1 = keyCode(down.u.s, reason) orelse return false,
-            .k2 = keyCode(left.u.s, reason) orelse return false,
-            .k3 = keyCode(right.u.s, reason) orelse return false,
-        };
-        return true;
-    }
-    if (std.mem.eql(u8, kind_str, "mouse")) {
-        const btn = c.toml_string_in(bt, "button");
-        defer freeDatumStr(btn);
-        if (btn.ok == 0) {
-            reason.set("a mouse binding has no button", .{});
-            return false;
-        }
-        out.* = .{ .kind = .mouse_button, .k0 = mouseCode(btn.u.s, reason) orelse return false };
-        return true;
-    }
-    reason.set("'{s}' is not a binding kind", .{kind_str});
-    return false;
-}
-
-/// Drops every action, the one being read included, so a load that fails leaves none, and returns
-/// `err` for the caller to return.
-fn abandonLoad(s: *State, err: R.Error) R.Error {
-    s.action_count += 1;
-    clearActions(s);
-    return err;
-}
-
-/// Slot `load`. Replaces the whole set of actions from a TOML file, reading each binding table
-/// with `parseBindingTable`. It clears all actions before
-/// reading, and a load that fails leaves no actions. Ids handed out before a load are not valid after it. It reports not found when the
-/// file cannot be opened, an I/O error when the text does not parse, and out of memory when an
-/// action or a binding cannot be allocated, and an invalid argument for a null handle or path, for
-/// an action type that is not Button, Axis1D, Axis2D or Axis3D, and for a binding that cannot be
-/// read, naming the action, the binding and why.
-/// A file without an "action" table succeeds with no actions.
-fn vtLoad(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    path: [*c]const u8,
-) callconv(.c) abi_result.c.ke_result {
-    const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or path == null) return R.code(error.InvalidArgument);
-    const s = stateOf(self);
-    clearActions(s);
-    return R.of(load(s, path));
-}
-
-fn load(s: *State, path: [*c]const u8) R.Error!void {
-    const text = file_read.readText(s.io, path) catch |err| {
-        log.warn("input file '{s}' could not be read: {t}", .{ path, err });
-        return err;
+/// Marks in `claimed` every key and mouse button the binding reads.
+fn claim(b: *const Binding, keys: []u64, buttons: *u32) void {
+    const codes = [_]c_int{ b.k0, b.k1, b.k2, b.k3 };
+    const used: usize = switch (b.kind) {
+        .key, .mouse_button => 1,
+        .key_pair => 2,
+        .key_quad => 4,
     };
-    defer heap.gpa.free(text);
-    var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse(text.ptr, &errbuf, errbuf.len);
-    if (root == null) {
-        log.warn("input file '{s}' does not parse: {s}", .{ path, std.mem.sliceTo(&errbuf, 0) });
-        return error.Io;
-    }
-    defer c.toml_free(root);
-
-    const action_section = c.toml_table_in(root, "action") orelse return;
-
-    var i: c_int = 0;
-    while (true) : (i += 1) {
-        const action_name = c.toml_key_in(action_section, i) orelse break;
-        const action_tbl = c.toml_table_in(action_section, action_name) orelse continue;
-
-        if (!ensureActionCapacity(s, s.action_count + 1)) return error.OutOfMemory;
-        const act = &s.actions.?[s.action_count];
-        act.* = Action.blank();
-        copyName(&act.name, std.mem.span(action_name));
-
-        const type_node = c.toml_string_in(action_tbl, "type");
-        if (type_node.ok != 0) {
-            defer freeDatumStr(type_node);
-            act.type = parseActionType(type_node.u.s) orelse {
-                log.warn("action '{s}': '{s}' is not an action type", .{ std.mem.span(action_name), std.mem.span(type_node.u.s) });
-                return abandonLoad(s, error.InvalidArgument);
-            };
+    for (codes[0..used]) |code| {
+        if (code < 0) continue;
+        if (b.kind == .mouse_button) {
+            if (code < 32) buttons.* |= @as(u32, 1) << @intCast(code);
+        } else if (code < key_bit_count) {
+            const k: usize = @intCast(code);
+            keys[k / 64] |= @as(u64, 1) << @intCast(k % 64);
         }
-
-        if (c.toml_array_in(action_tbl, "bindings")) |bindings_arr| {
-            const n = c.toml_array_nelem(bindings_arr);
-            var j: c_int = 0;
-            while (j < n) : (j += 1) {
-                const bt = c.toml_table_at(bindings_arr, j) orelse continue;
-                var b: Binding = undefined;
-                var reason: Reason = .{};
-                if (!parseBindingTable(bt, &b, &reason)) {
-                    log.warn("action '{s}', binding {d}: {s}", .{ std.mem.span(action_name), j + 1, reason.text() });
-                    return abandonLoad(s, error.InvalidArgument);
-                }
-                if (!ensureBindingCapacity(act, act.binding_count + 1)) return abandonLoad(s, error.OutOfMemory);
-                act.bindings.?[act.binding_count] = b;
-                act.binding_count += 1;
-            }
-        }
-
-        s.action_count += 1;
     }
 }
 
-/// Slot `get_action_id`. Returns the id of the action with that name, or -1 for a null handle or
-/// name and for a name no action has; it sets no error.
+/// Slot `add_map`. Returns -1 for a null handle, a null, empty or duplicated name, and when the
+/// array cannot grow; none of them changes the maps.
+fn vtAddMap(self_in: ?*abi_input_actions.c.ke_input_actions, name: [*c]const u8, priority: i32) callconv(.c) i32 {
+    const self = self_in orelse return -1;
+    if (name == null or name[0] == 0) return -1;
+    const s = stateOf(self);
+    const n = std.mem.span(name);
+    if (findMapByName(s, n) >= 0) return -1;
+    if (!ensureMapCapacity(s, s.map_count + 1)) return -1;
+    const m = &s.maps.?[s.map_count];
+    m.* = .{ .name = [_]u8{0} ** action_name_max, .priority = priority, .enabled = true };
+    copyName(&m.name, n);
+    s.map_count += 1;
+    return @intCast(s.map_count - 1);
+}
+
+/// Slot `get_map_id`. -1 for a null handle or name and for a name no map has.
+fn vtGetMapId(self_in: ?*abi_input_actions.c.ke_input_actions, name: [*c]const u8) callconv(.c) i32 {
+    const self = self_in orelse return -1;
+    if (name == null) return -1;
+    return findMapByName(stateOf(self), std.mem.span(name));
+}
+
+/// Slot `set_map_enabled`. Invalid argument for a null handle, not found for an unknown id.
+fn vtSetMapEnabled(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, enabled: bool) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    const m = getMapMut(stateOf(self), id) orelse return R.code(error.NotFound);
+    m.enabled = enabled;
+    return R.ok;
+}
+
+/// Slot `is_map_enabled`. False for a null handle and an unknown id.
+fn vtIsMapEnabled(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) callconv(.c) bool {
+    const self = self_in orelse return false;
+    const m = getMapMut(stateOf(self), id) orelse return false;
+    return m.enabled;
+}
+
+/// Slot `get_action_id`. -1 for a null handle or name and for a name no action has.
 fn vtGetActionId(self_in: ?*abi_input_actions.c.ke_input_actions, name: [*c]const u8) callconv(.c) i32 {
     const self = self_in orelse return -1;
-    if (self.handle == null or name == null) return -1;
+    if (name == null) return -1;
     return findActionByName(stateOf(self), std.mem.span(name));
 }
 
 /// Slot `add_action`. Appends the action after those already present, so earlier ids keep their
-/// meaning. Returns -1
-/// for a null or empty name, for a name already present, and when the array cannot grow. Each of
-/// those leaves the actions unchanged, and none of them sets an error.
+/// meaning. Returns -1 for a null handle, an unknown map, a null, empty or duplicated name, and
+/// when the array cannot grow; none of them changes the actions.
 fn vtAddAction(
     self_in: ?*abi_input_actions.c.ke_input_actions,
+    map_id: i32,
     name: [*c]const u8,
     action_type: abi_input_actions.c.ke_action_type,
 ) callconv(.c) i32 {
     const self = self_in orelse return -1;
-    if (self.handle == null or name == null or name[0] == 0) return -1;
+    if (name == null or name[0] == 0) return -1;
     const s = stateOf(self);
+    if (getMapMut(s, map_id) == null) return -1;
     const n = std.mem.span(name);
     if (findActionByName(s, n) >= 0) return -1;
     if (!ensureActionCapacity(s, s.action_count + 1)) return -1;
@@ -529,21 +397,17 @@ fn vtAddAction(
     const act = &s.actions.?[s.action_count];
     act.* = Action.blank();
     copyName(&act.name, n);
+    act.map = @intCast(map_id);
     act.type = action_type;
-    const id: i32 = @intCast(s.action_count);
     s.action_count += 1;
-    return id;
+    return @intCast(s.action_count - 1);
 }
 
-/// The pointer addresses an element of the action array, so it is valid only until that array
-/// grows.
 fn getActionMut(s: *State, id: i32) ?*Action {
     if (id < 0 or @as(u32, @intCast(id)) >= s.action_count) return null;
     return &s.actions.?[@intCast(id)];
 }
 
-/// Appends one binding to the action with the given id. It reports not found when no action has
-/// that id, and out of memory when the bindings cannot grow. The action is unchanged in both cases.
 fn appendBinding(s: *State, id: i32, b: Binding) abi_result.c.ke_result {
     const a = getActionMut(s, id) orelse return R.code(error.NotFound);
     if (!ensureBindingCapacity(a, a.binding_count + 1)) return R.code(error.OutOfMemory);
@@ -552,49 +416,27 @@ fn appendBinding(s: *State, id: i32, b: Binding) abi_result.c.ke_result {
     return R.ok;
 }
 
-/// Slot `bind_key`. Stores the key code as given. A code the snapshot cannot carry is not refused
-/// here, and it is never reported as held. A null handle is an invalid argument, an id that names
-/// no action is not found, and a binding array that cannot grow is out of memory.
-fn vtBindKey(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    action_id: i32,
-    key: abi_input.c.ke_key,
-) callconv(.c) abi_result.c.ke_result {
+/// Slot `bind_key`. Stores the key code as given; a code the snapshot cannot carry is never
+/// reported held. A null handle is an invalid argument, an id that names no action is not found,
+/// and a binding array that cannot grow is out of memory.
+fn vtBindKey(self_in: ?*abi_input_actions.c.ke_input_actions, action_id: i32, key: abi_input.c.ke_key) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null) return R.code(error.InvalidArgument);
     return appendBinding(stateOf(self), action_id, .{ .kind = .key, .k0 = @intCast(key) });
 }
 
 /// Slot `bind_mouse_button`. Failures are those of `vtBindKey`.
-fn vtBindMouseButton(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    action_id: i32,
-    button: abi_input.c.ke_mouse_button,
-) callconv(.c) abi_result.c.ke_result {
+fn vtBindMouseButton(self_in: ?*abi_input_actions.c.ke_input_actions, action_id: i32, button: abi_input.c.ke_mouse_button) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null) return R.code(error.InvalidArgument);
     return appendBinding(stateOf(self), action_id, .{ .kind = .mouse_button, .k0 = @intCast(button) });
 }
 
-/// Slot `bind_key_pair`. The pair reads one axis, positive when `pos` is held and negative when
-/// `neg` is. Failures are those of `vtBindKey`.
-fn vtBindKeyPair(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    action_id: i32,
-    neg: abi_input.c.ke_key,
-    pos: abi_input.c.ke_key,
-) callconv(.c) abi_result.c.ke_result {
+/// Slot `bind_key_pair`. Failures are those of `vtBindKey`.
+fn vtBindKeyPair(self_in: ?*abi_input_actions.c.ke_input_actions, action_id: i32, neg: abi_input.c.ke_key, pos: abi_input.c.ke_key) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null) return R.code(error.InvalidArgument);
-    return appendBinding(
-        stateOf(self),
-        action_id,
-        .{ .kind = .key_pair, .k0 = @intCast(neg), .k1 = @intCast(pos) },
-    );
+    return appendBinding(stateOf(self), action_id, .{ .kind = .key_pair, .k0 = @intCast(neg), .k1 = @intCast(pos) });
 }
 
-/// Slot `bind_key_quad`. The quad reads two axes: x is right minus left and y is up minus down.
-/// Failures are those of `vtBindKey`.
+/// Slot `bind_key_quad`. Failures are those of `vtBindKey`.
 fn vtBindKeyQuad(
     self_in: ?*abi_input_actions.c.ke_input_actions,
     action_id: i32,
@@ -604,46 +446,43 @@ fn vtBindKeyQuad(
     right: abi_input.c.ke_key,
 ) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null) return R.code(error.InvalidArgument);
-    return appendBinding(stateOf(self), action_id, .{
-        .kind = .key_quad,
-        .k0 = @intCast(up),
-        .k1 = @intCast(down),
-        .k2 = @intCast(left),
-        .k3 = @intCast(right),
-    });
+    return appendBinding(stateOf(self), action_id, .{ .kind = .key_quad, .k0 = @intCast(up), .k1 = @intCast(down), .k2 = @intCast(left), .k3 = @intCast(right) });
 }
 
-/// Slot `evaluate`. Runs one frame: it samples the snapshot into the action values and reports the
-/// transitions through the event callback, synchronously and on the calling thread. A button
-/// action is active when any binding is, and an axis action takes the largest magnitude per
-/// component. The callback gets started and canceled on a change of activity, and performed for
-/// an axis that moved while held. An action's callback sees its own new state, while actions
-/// later in the order still hold the previous frame's values. A null handle or a null snapshot
-/// reports invalid argument and changes nothing.
-fn vtEvaluate(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    snapshot_in: ?*const abi_input.c.ke_input_snapshot,
-    on_event: abi_input_actions.c.ke_input_action_event_func,
-    event_ctx: ?*anyopaque,
-) callconv(.c) abi_result.c.ke_result {
+/// Slot `evaluate`. A button action is active when any binding is, and an axis action takes the
+/// largest magnitude per component. A null handle or snapshot is an invalid argument and changes
+/// nothing; an order that cannot be allocated is out of memory, also changing nothing.
+fn vtEvaluate(self_in: ?*abi_input_actions.c.ke_input_actions, snapshot_in: ?*const abi_input.c.ke_input_snapshot) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     const snapshot = snapshot_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     if (s.action_count == 0) return R.ok;
 
-    for (s.actions.?[0..s.action_count], 0..) |*a, idx| {
-        a.prev_active = a.curr_active;
-        a.prev_x = a.curr_x;
-        a.prev_y = a.curr_y;
-        a.prev_z = a.curr_z;
+    const order = heap.gpa.alloc(u32, s.map_count) catch return R.code(error.OutOfMemory);
+    defer heap.gpa.free(order);
+    for (order, 0..) |*o, i| o.* = @intCast(i);
+    const maps = s.maps.?[0..s.map_count];
+    std.sort.insertion(u32, order, maps, struct {
+        fn higher(ms: []Map, a: u32, b: u32) bool {
+            return ms[a].priority > ms[b].priority;
+        }
+    }.higher);
 
-        var acc: Sample = .{};
-        var any_active = false;
-        if (a.bindings) |bindings| {
-            for (bindings[0..a.binding_count]) |*b| {
-                const sampled, const active = sampleBinding(b, snapshot);
+    var masked = snapshot.*;
+    for (s.actions.?[0..s.action_count]) |*a| a.prev_active = a.curr_active;
+
+    for (order) |map_index| {
+        const map = &maps[map_index];
+        var claimed_keys = std.mem.zeroes(@TypeOf(masked.keys_down));
+        var claimed_buttons: u32 = 0;
+        for (s.actions.?[0..s.action_count]) |*a| {
+            if (a.map != map_index) continue;
+            var acc: Sample = .{};
+            var any_active = false;
+            if (a.bindings) |bindings| for (bindings[0..a.binding_count]) |*b| {
+                if (!map.enabled) continue;
+                claim(b, &claimed_keys, &claimed_buttons);
+                const sampled, const active = sampleBinding(b, &masked);
                 if (!active) continue;
                 any_active = true;
                 if (a.type == abi_input_actions.c.KE_ACTION_TYPE_BUTTON) {
@@ -653,51 +492,21 @@ fn vtEvaluate(
                     if (@abs(sampled.y) > @abs(acc.y)) acc.y = sampled.y;
                     if (@abs(sampled.z) > @abs(acc.z)) acc.z = sampled.z;
                 }
-            }
+            };
+            a.curr_x = acc.x;
+            a.curr_y = acc.y;
+            a.curr_z = acc.z;
+            a.curr_active = any_active;
         }
-        a.curr_x = acc.x;
-        a.curr_y = acc.y;
-        a.curr_z = acc.z;
-        a.curr_active = any_active;
-
-        const emit = on_event orelse continue;
-        const id: i32 = @intCast(idx);
-
-        if (a.curr_active != a.prev_active) {
-            var ev = std.mem.zeroes(abi_input_actions.c.ke_input_action_event);
-            ev.action_id = id;
-            ev.type = a.type;
-            ev.phase = if (a.curr_active) abi_input_actions.c.KE_ACTION_PHASE_STARTED else abi_input_actions.c.KE_ACTION_PHASE_CANCELED;
-            ev.x = acc.x;
-            ev.y = acc.y;
-            ev.z = acc.z;
-            emit(event_ctx, ev);
-        }
-        if (a.curr_active and a.prev_active and
-            a.type != abi_input_actions.c.KE_ACTION_TYPE_BUTTON and
-            (a.prev_x != a.curr_x or a.prev_y != a.curr_y or a.prev_z != a.curr_z))
-        {
-            var ev = std.mem.zeroes(abi_input_actions.c.ke_input_action_event);
-            ev.action_id = id;
-            ev.type = a.type;
-            ev.phase = abi_input_actions.c.KE_ACTION_PHASE_PERFORMED;
-            ev.x = acc.x;
-            ev.y = acc.y;
-            ev.z = acc.z;
-            emit(event_ctx, ev);
-        }
+        for (&masked.keys_down, claimed_keys) |*word, claimed| word.* &= ~claimed;
+        masked.mouse_buttons_down &= ~claimed_buttons;
     }
     return R.ok;
 }
 
-/// Returns a pointer into the action array, valid until the next add or load, or null for a null
-/// handle or an id that names no action.
 fn getAction(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) ?*const Action {
     const self = self_in orelse return null;
-    if (self.handle == null) return null;
-    const s = stateOf(self);
-    if (id < 0 or @as(u32, @intCast(id)) >= s.action_count) return null;
-    return &s.actions.?[@intCast(id)];
+    return getActionMut(stateOf(self), id);
 }
 
 /// Slot `is_action_down`. True while the action is active as of the last evaluation; false for an
@@ -711,70 +520,179 @@ fn vtIsActionDown(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) call
 /// unknown id.
 fn vtWasActionPressed(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
-    if (a.curr_active and !a.prev_active) return true;
-    return false;
+    return a.curr_active and !a.prev_active;
 }
 
 /// Slot `was_action_released`. True when the last evaluation made the action inactive; false for
 /// an unknown id.
 fn vtWasActionReleased(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) callconv(.c) bool {
     const a = getAction(self_in, id) orelse return false;
-    if (!a.curr_active and a.prev_active) return true;
-    return false;
+    return !a.curr_active and a.prev_active;
 }
 
-/// Slot `get_axis1d`. Returns the stored x value; zero for an unknown id.
+/// Slot `get_axis1d`. The stored x value; zero for an unknown id.
 fn vtGetAxis1d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32) callconv(.c) f32 {
     const a = getAction(self_in, id) orelse return 0.0;
     return a.curr_x;
 }
 
-/// Slot `get_axis2d`. Writes the stored x and y values to the non-null outputs; zero for an
-/// unknown id.
+/// Slot `get_axis2d`. Writes the stored x and y to the non-null outputs; zero for an unknown id.
 fn vtGetAxis2d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, out_x: [*c]f32, out_y: [*c]f32) callconv(.c) void {
     const a = getAction(self_in, id);
     if (out_x != null) out_x.* = if (a) |act| act.curr_x else 0.0;
     if (out_y != null) out_y.* = if (a) |act| act.curr_y else 0.0;
 }
 
-/// Slot `get_axis3d`. Writes the stored x, y and z values to the non-null outputs; zero for an
-/// unknown id.
-fn vtGetAxis3d(
-    self_in: ?*abi_input_actions.c.ke_input_actions,
-    id: i32,
-    out_x: [*c]f32,
-    out_y: [*c]f32,
-    out_z: [*c]f32,
-) callconv(.c) void {
+/// Slot `get_axis3d`. Writes the stored x, y and z to the non-null outputs; zero for an unknown id.
+fn vtGetAxis3d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, out_x: [*c]f32, out_y: [*c]f32, out_z: [*c]f32) callconv(.c) void {
     const a = getAction(self_in, id);
     if (out_x != null) out_x.* = if (a) |act| act.curr_x else 0.0;
     if (out_y != null) out_y.* = if (a) |act| act.curr_y else 0.0;
     if (out_z != null) out_z.* = if (a) |act| act.curr_z else 0.0;
 }
 
-/// The destroy of the handle. Frees the bindings, the action array and the `State`. The `api` that
-/// the handle's ref pointed at is invalid afterwards.
+/// The destroy of the handle. Frees the bindings, the arrays and the `State`.
 fn vtDestroy(self_in: ?*abi_input_actions.c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
-    if (self.handle == null) return;
     const s = stateOf(self);
-    clearActions(s);
-    if (s.actions) |actions| heap.gpa.free(actions[0..s.action_capacity]);
+    if (s.actions) |actions| {
+        for (actions[0..s.action_count]) |*a| {
+            if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
+        }
+        heap.gpa.free(actions[0..s.action_capacity]);
+    }
+    if (s.maps) |maps| heap.gpa.free(maps[0..s.map_capacity]);
     heap.gpa.destroy(s);
 }
 
-/// Factory. Writes a handle to an empty map, which reads its file through `io_in`. A null out-parameter fails as an invalid argument and
-/// an allocation failure as out of memory, leaving the handle zeroed.
-export fn ke_input_actions_create(io_in: ?*abi_io.c.ke_io, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) callconv(.c) abi_result.c.ke_result {
+/// What a walk of the configuration reads from and where it adds, and the first failure it met.
+const Reader = struct {
+    api: *abi_input_actions.c.ke_input_actions,
+    cfg: *abi_configuration.c.ke_configuration,
+    failure: ?R.Error = null,
+
+    fn fail(r: *Reader, err: R.Error, comptime fmt: []const u8, args: anytype) void {
+        log.warn(fmt, args);
+        if (r.failure == null) r.failure = err;
+    }
+
+    fn string(r: *Reader, section: [:0]const u8, key: [*:0]const u8) ?[*:0]const u8 {
+        const v = r.cfg.get_string.?(r.cfg, section.ptr, key, null);
+        return if (v == null) null else @ptrCast(v);
+    }
+};
+
+/// What one level of the walk lists the children of.
+const Walk = struct {
+    reader: *Reader,
+    parent: [:0]const u8,
+    map: i32 = -1,
+    action: i32 = -1,
+};
+
+fn listChildren(w: *Walk, comptime each: fn (*Walk, [:0]const u8) void) void {
+    if (w.reader.failure != null) return;
+    const Thunk = struct {
+        fn call(name: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const walk: *Walk = @ptrCast(@alignCast(ctx.?));
+            if (walk.reader.failure != null) return;
+            each(walk, std.mem.span(@as([*:0]const u8, @ptrCast(name))));
+        }
+    };
+    R.check(w.reader.cfg.for_each_child.?(w.reader.cfg, w.parent.ptr, Thunk.call, w)) catch |err|
+        w.reader.fail(err, "listing {s} failed: {t}", .{ w.parent, err });
+}
+
+fn childSection(w: *Walk, a: []const u8, b: []const u8) ?[:0]u8 {
+    return std.fmt.allocPrintSentinel(heap.gpa, "{s}.{s}{s}", .{ w.parent, a, b }, 0) catch {
+        w.reader.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
+        return null;
+    };
+}
+
+fn readMap(w: *Walk, name: [:0]const u8) void {
+    const r = w.reader;
+    const section = childSection(w, name, "") orelse return;
+    defer heap.gpa.free(section);
+    const priority = r.cfg.get_int.?(r.cfg, section.ptr, "priority", 0);
+    const map = r.api.add_map.?(r.api, name.ptr, @intCast(std.math.clamp(priority, std.math.minInt(i32), std.math.maxInt(i32))));
+    if (map < 0) return r.fail(error.InvalidArgument, "input map '{s}' could not be added", .{name});
+    if (!r.cfg.get_bool.?(r.cfg, section.ptr, "enabled", true)) _ = r.api.set_map_enabled.?(r.api, map, false);
+    const actions = std.fmt.allocPrintSentinel(heap.gpa, "{s}.action", .{section}, 0) catch
+        return r.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
+    defer heap.gpa.free(actions);
+    var inner: Walk = .{ .reader = r, .parent = actions, .map = map };
+    listChildren(&inner, readAction);
+}
+
+fn readAction(w: *Walk, name: [:0]const u8) void {
+    const r = w.reader;
+    const section = childSection(w, name, "") orelse return;
+    defer heap.gpa.free(section);
+    var action_type: abi_input_actions.c.ke_action_type = abi_input_actions.c.KE_ACTION_TYPE_BUTTON;
+    if (r.string(section, "type")) |t| action_type = parseActionType(t) orelse
+        return r.fail(error.InvalidArgument, "action '{s}': '{s}' is not an action type", .{ name, t });
+    const action = r.api.add_action.?(r.api, w.map, name.ptr, action_type);
+    if (action < 0) return r.fail(error.InvalidArgument, "action '{s}' could not be added", .{name});
+    const bindings = std.fmt.allocPrintSentinel(heap.gpa, "{s}.bindings", .{section}, 0) catch
+        return r.fail(error.OutOfMemory, "reading the input maps ran out of memory", .{});
+    defer heap.gpa.free(bindings);
+    var inner: Walk = .{ .reader = r, .parent = bindings, .map = w.map, .action = action };
+    listChildren(&inner, readBinding);
+}
+
+fn keyOf(r: *Reader, section: [:0]const u8, key: [*:0]const u8) ?abi_input.c.ke_key {
+    const name = r.string(section, key) orelse {
+        r.fail(error.InvalidArgument, "binding {s} has no {s}", .{ section, key });
+        return null;
+    };
+    const code = lookupKey(name);
+    if (code < 0) {
+        r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a key name", .{ section, name });
+        return null;
+    }
+    return @intCast(code);
+}
+
+fn readBinding(w: *Walk, index: [:0]const u8) void {
+    const r = w.reader;
+    const section = childSection(w, index, "") orelse return;
+    defer heap.gpa.free(section);
+    const kind = std.mem.span(r.string(section, "kind") orelse
+        return r.fail(error.InvalidArgument, "binding {s} has no kind", .{section}));
+    const a = w.action;
+    const result = if (std.mem.eql(u8, kind, "key"))
+        r.api.bind_key.?(r.api, a, keyOf(r, section, "key") orelse return)
+    else if (std.mem.eql(u8, kind, "key_pair"))
+        r.api.bind_key_pair.?(r.api, a, keyOf(r, section, "negative") orelse return, keyOf(r, section, "positive") orelse return)
+    else if (std.mem.eql(u8, kind, "key_quad"))
+        r.api.bind_key_quad.?(r.api, a, keyOf(r, section, "up") orelse return, keyOf(r, section, "down") orelse return, keyOf(r, section, "left") orelse return, keyOf(r, section, "right") orelse return)
+    else if (std.mem.eql(u8, kind, "mouse")) blk: {
+        const name = r.string(section, "button") orelse return r.fail(error.InvalidArgument, "binding {s} has no button", .{section});
+        const code = lookupMouseButton(name);
+        if (code < 0) return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a mouse button name", .{ section, name });
+        break :blk r.api.bind_mouse_button.?(r.api, a, @intCast(code));
+    } else return r.fail(error.InvalidArgument, "binding {s}: '{s}' is not a binding kind", .{ section, kind });
+    R.check(result) catch |err| r.fail(err, "binding {s} could not be added: {t}", .{ section, err });
+}
+
+/// Factory. Builds an empty set of maps, then adds those the configuration describes through the
+/// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
+export fn ke_input_actions_create(
+    configuration: ?*abi_configuration.c.ke_configuration,
+    config: ?*const abi_framework_factory.c.ke_input_actions_config,
+    out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
+) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-    const io = io_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
-    s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions), .actions = null, .action_count = 0, .action_capacity = 0, .io = io };
-
+    s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions) };
     s.api.handle = s;
-    s.api.load = vtLoad;
+    s.api.add_map = vtAddMap;
+    s.api.get_map_id = vtGetMapId;
+    s.api.set_map_enabled = vtSetMapEnabled;
+    s.api.is_map_enabled = vtIsMapEnabled;
     s.api.get_action_id = vtGetActionId;
     s.api.add_action = vtAddAction;
     s.api.bind_key = vtBindKey;
@@ -789,38 +707,89 @@ export fn ke_input_actions_create(io_in: ?*abi_io.c.ke_io, out_actions: ?*abi_in
     s.api.get_axis2d = vtGetAxis2d;
     s.api.get_axis3d = vtGetAxis3d;
 
+    if (configuration) |cfg| {
+        const section_name: [*:0]const u8 = if (config) |cf| (if (cf.section) |sec| @ptrCast(sec) else "input") else "input";
+        const maps = std.fmt.allocPrintSentinel(heap.gpa, "{s}.map", .{std.mem.span(section_name)}, 0) catch {
+            vtDestroy(&s.api);
+            return R.code(error.OutOfMemory);
+        };
+        defer heap.gpa.free(maps);
+        var reader: Reader = .{ .api = &s.api, .cfg = cfg };
+        var walk: Walk = .{ .reader = &reader, .parent = maps };
+        listChildren(&walk, readMap);
+        if (reader.failure) |err| {
+            vtDestroy(&s.api);
+            return R.code(err);
+        }
+    }
+
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
 
 const testing = std.testing;
-const served_files = @import("served_files_test.zig");
 
-const TempInput = struct {
-    tmp: served_files.Dir,
-    path_buf: [std.fs.max_path_bytes]u8,
+const FakeConfig = struct {
+    const Value = union(enum) { str: [*:0]const u8, int: i64, boolean: bool };
+    const Entry = struct { section: []const u8, key: []const u8, value: Value };
 
-    fn init(contents: []const u8) !TempInput {
-        var self = TempInput{
-            .tmp = served_files.Dir.init(),
-            .path_buf = undefined,
-        };
-        errdefer self.tmp.cleanup();
+    var entries: []const Entry = &.{};
 
-        const name = "bindings.input";
-        try self.tmp.writeFile(name, contents);
-
-        const full = try std.fmt.bufPrint(&self.path_buf, "{s}/{s}", .{ self.tmp.path(), name });
-        self.path_buf[full.len] = 0;
-        return self;
+    fn api(with: []const Entry) abi_configuration.c.ke_configuration {
+        entries = with;
+        var cfg = std.mem.zeroes(abi_configuration.c.ke_configuration);
+        cfg.get_string = getString;
+        cfg.get_int = getInt;
+        cfg.get_bool = getBool;
+        cfg.for_each_child = forEachChild;
+        return cfg;
     }
 
-    fn cPath(self: *const TempInput) [*:0]const u8 {
-        return @ptrCast(&self.path_buf);
+    fn find(section: [*c]const u8, key: [*c]const u8) ?Value {
+        for (entries) |e| {
+            if (std.mem.eql(u8, e.section, std.mem.span(section)) and std.mem.eql(u8, e.key, std.mem.span(key))) return e.value;
+        }
+        return null;
     }
 
-    fn deinit(self: *TempInput) void {
-        self.tmp.cleanup();
+    fn getString(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: [*c]const u8) callconv(.c) [*c]const u8 {
+        return if (find(section, key)) |v| switch (v) {
+            .str => |s| s,
+            else => fallback,
+        } else fallback;
+    }
+
+    fn getInt(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: i64) callconv(.c) i64 {
+        return if (find(section, key)) |v| switch (v) {
+            .int => |i| i,
+            else => fallback,
+        } else fallback;
+    }
+
+    fn getBool(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, fallback: bool) callconv(.c) bool {
+        return if (find(section, key)) |v| switch (v) {
+            .boolean => |b| b,
+            else => fallback,
+        } else fallback;
+    }
+
+    fn forEachChild(_: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, each: abi_configuration.c.ke_configuration_child_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+        const parent = std.mem.span(section);
+        var seen: [16][]const u8 = undefined;
+        var count: usize = 0;
+        outer: for (entries) |e| {
+            if (e.section.len <= parent.len + 1 or !std.mem.startsWith(u8, e.section, parent) or e.section[parent.len] != '.') continue;
+            const rest = e.section[parent.len + 1 ..];
+            const child = rest[0 .. std.mem.indexOfScalar(u8, rest, '.') orelse rest.len];
+            for (seen[0..count]) |n| if (std.mem.eql(u8, n, child)) continue :outer;
+            seen[count] = child;
+            count += 1;
+            var buf: [64]u8 = undefined;
+            @memcpy(buf[0..child.len], child);
+            buf[child.len] = 0;
+            each.?(@ptrCast(&buf), ctx);
+        }
+        return R.ok;
     }
 };
 
@@ -829,12 +798,27 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(served_files.io(), &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(null, null, &h));
+        return .{ .handle = h };
+    }
+
+    fn from(entries: []const FakeConfig.Entry) !Actions {
+        var cfg = FakeConfig.api(entries);
+        var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
+        try R.check(ke_input_actions_create(&cfg, null, &h));
         return .{ .handle = h };
     }
 
     fn api(self: *const Actions) *abi_input_actions.c.ke_input_actions {
         return @ptrCast(self.handle.ref);
+    }
+
+    fn action(self: *const Actions, map: i32, name: [*:0]const u8, t: abi_input_actions.c.ke_action_type) i32 {
+        return self.api().add_action.?(self.api(), map, name, t);
+    }
+
+    fn eval(self: *const Actions, snapshot: *const abi_input.c.ke_input_snapshot) !void {
+        try testing.expectEqual(R.ok, self.api().evaluate.?(self.api(), snapshot));
     }
 
     fn deinit(self: *Actions) void {
@@ -848,315 +832,50 @@ fn pressKey(snapshot: *abi_input.c.ke_input_snapshot, key: c_int) void {
     snapshot.keys_down[index] |= (@as(u64, 1) << bit);
 }
 
-const PhaseCounter = struct {
-    started: i32 = 0,
-    performed: i32 = 0,
-    canceled: i32 = 0,
-};
-
-fn countPhase(ctx: ?*anyopaque, event: abi_input_actions.c.ke_input_action_event) callconv(.c) void {
-    const counter: *PhaseCounter = @ptrCast(@alignCast(ctx.?));
-    switch (event.phase) {
-        abi_input_actions.c.KE_ACTION_PHASE_STARTED => counter.started += 1,
-        abi_input_actions.c.KE_ACTION_PHASE_PERFORMED => counter.performed += 1,
-        abi_input_actions.c.KE_ACTION_PHASE_CANCELED => counter.canceled += 1,
-        else => {},
-    }
-}
-
-test "creating the actions map yields a usable handle" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    try testing.expect(a.api().handle != null);
-    try testing.expect(a.handle.destroy != null);
-}
-
-test "loading a file that is not there fails" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    try testing.expectEqual(R.code(error.NotFound), a.api().load.?(a.api(), "does/not/exist.input"));
-}
-
-test "actions are numbered in the order the file declares them" {
-    var file = try TempInput.init(
-        \\[action.Jump]
-        \\type = "Button"
-        \\bindings = [ { kind = "key", key = "Space" } ]
-        \\
-        \\[action.Move]
-        \\type = "Axis1D"
-        \\bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
-        \\
-    );
-    defer file.deinit();
-
-    var a = try Actions.init();
-    defer a.deinit();
-
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-    try testing.expectEqual(@as(i32, 0), a.api().get_action_id.?(a.api(), "Jump"));
-    try testing.expectEqual(@as(i32, 1), a.api().get_action_id.?(a.api(), "Move"));
-    try testing.expectEqual(@as(i32, -1), a.api().get_action_id.?(a.api(), "Unknown"));
-}
-
-test "a bound key reports pressed on the edge and down while it is held" {
-    var file = try TempInput.init(
-        \\[action.Jump]
-        \\type = "Button"
-        \\bindings = [ { kind = "key", key = "Space" } ]
-        \\
-    );
-    defer file.deinit();
-
-    var a = try Actions.init();
-    defer a.deinit();
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-    const id = a.api().get_action_id.?(a.api(), "Jump");
-
+fn held(keys: []const c_int) abi_input.c.ke_input_snapshot {
     var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(!a.api().is_action_down.?(a.api(), id));
-    try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
+    for (keys) |k| pressKey(&snapshot, k);
+    return snapshot;
+}
 
-    pressKey(&snapshot, abi_input.c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
+test "creating without a configuration yields no map and no action" {
+    var a = try Actions.init();
+    defer a.deinit();
+    try testing.expectEqual(@as(i32, -1), a.api().get_map_id.?(a.api(), "Game"));
+    try testing.expectEqual(@as(i32, -1), a.api().get_action_id.?(a.api(), "Jump"));
+}
+
+test "a key bound by hand drives its button, pressed only on the first evaluation it is held" {
+    var a = try Actions.init();
+    defer a.deinit();
+    const map = a.api().add_map.?(a.api(), "Game", 0);
+    const id = a.action(map, "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), id, abi_input.c.KE_KEY_SPACE));
+
+    const snapshot = held(&.{abi_input.c.KE_KEY_SPACE});
+    try a.eval(&snapshot);
     try testing.expect(a.api().is_action_down.?(a.api(), id));
     try testing.expect(a.api().was_action_pressed.?(a.api(), id));
-
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(a.api().is_action_down.?(a.api(), id));
+    try a.eval(&snapshot);
     try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
-
-    snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(!a.api().is_action_down.?(a.api(), id));
+    try a.eval(&std.mem.zeroes(abi_input.c.ke_input_snapshot));
     try testing.expect(a.api().was_action_released.?(a.api(), id));
 }
 
-test "a key pair reads one at each end and cancels when both are held" {
-    var file = try TempInput.init(
-        \\[action.Move]
-        \\type = "Axis1D"
-        \\bindings = [ { kind = "key_pair", negative = "S", positive = "W" } ]
-        \\
-    );
-    defer file.deinit();
-
+test "a key pair reads one at each end, and a key quad drives two axes" {
     var a = try Actions.init();
     defer a.deinit();
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-    const id = a.api().get_action_id.?(a.api(), "Move");
+    const map = a.api().add_map.?(a.api(), "Game", 0);
+    const strafe = a.action(map, "Strafe", abi_input_actions.c.KE_ACTION_TYPE_AXIS1D);
+    const move = a.action(map, "Move", abi_input_actions.c.KE_ACTION_TYPE_AXIS2D);
+    try testing.expectEqual(R.ok, a.api().bind_key_pair.?(a.api(), strafe, abi_input.c.KE_KEY_A, abi_input.c.KE_KEY_D));
+    try testing.expectEqual(R.ok, a.api().bind_key_quad.?(a.api(), move, abi_input.c.KE_KEY_UP, abi_input.c.KE_KEY_DOWN, abi_input.c.KE_KEY_LEFT, abi_input.c.KE_KEY_RIGHT));
 
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_W);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expectEqual(@as(f32, 1.0), a.api().get_axis1d.?(a.api(), id));
-
-    snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_S);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expectEqual(@as(f32, -1.0), a.api().get_axis1d.?(a.api(), id));
-
-    snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_W);
-    pressKey(&snapshot, abi_input.c.KE_KEY_S);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expectEqual(@as(f32, 0.0), a.api().get_axis1d.?(a.api(), id));
-}
-
-test "a key quad drives both axes at once" {
-    var file = try TempInput.init(
-        \\[action.Move]
-        \\type = "Axis2D"
-        \\bindings = [ { kind = "key_quad", up = "W", down = "S", left = "A", right = "D" } ]
-        \\
-    );
-    defer file.deinit();
-
-    var a = try Actions.init();
-    defer a.deinit();
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-    const id = a.api().get_action_id.?(a.api(), "Move");
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_W);
-    pressKey(&snapshot, abi_input.c.KE_KEY_D);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-
+    try a.eval(&held(&.{ abi_input.c.KE_KEY_A, abi_input.c.KE_KEY_UP, abi_input.c.KE_KEY_RIGHT }));
+    try testing.expectEqual(@as(f32, -1.0), a.api().get_axis1d.?(a.api(), strafe));
     var x: f32 = 0;
     var y: f32 = 0;
-    a.api().get_axis2d.?(a.api(), id, &x, &y);
-    try testing.expectEqual(@as(f32, 1.0), x);
-    try testing.expectEqual(@as(f32, 1.0), y);
-}
-
-test "a mouse binding read from a file drives a button action" {
-    var file = try TempInput.init(
-        \\[action.Fire]
-        \\type = "Button"
-        \\bindings = [ { kind = "mouse", button = "Left" } ]
-        \\
-    );
-    defer file.deinit();
-
-    var a = try Actions.init();
-    defer a.deinit();
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-    const id = a.api().get_action_id.?(a.api(), "Fire");
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    snapshot.mouse_buttons_down = @as(u32, 1) << @intCast(abi_input.c.KE_MOUSE_BUTTON_LEFT);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(a.api().is_action_down.?(a.api(), id));
-}
-
-test "an action starts once on the edge and cancels when the key goes up" {
-    var file = try TempInput.init(
-        \\[action.Jump]
-        \\type = "Button"
-        \\bindings = [ { kind = "key", key = "Space" } ]
-        \\
-    );
-    defer file.deinit();
-
-    var a = try Actions.init();
-    defer a.deinit();
-    try testing.expectEqual(R.ok, a.api().load.?(a.api(), file.cPath()));
-
-    var counter = PhaseCounter{};
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
-    try testing.expectEqual(@as(i32, 0), counter.started);
-
-    pressKey(&snapshot, abi_input.c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
-    try testing.expectEqual(@as(i32, 1), counter.started);
-    try testing.expectEqual(@as(i32, 0), counter.performed);
-
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
-    try testing.expectEqual(@as(i32, 1), counter.started);
-    try testing.expectEqual(@as(i32, 0), counter.performed);
-
-    snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    _ = a.api().evaluate.?(a.api(), &snapshot, countPhase, &counter);
-    try testing.expectEqual(@as(i32, 1), counter.canceled);
-}
-
-fn expectLoadRefused(text: []const u8) !void {
-    var file = try TempInput.init(text);
-    defer file.deinit();
-    var a = try Actions.init();
-    defer a.deinit();
-    try testing.expectEqual(R.code(error.InvalidArgument), a.api().load.?(a.api(), file.cPath()));
-}
-
-test "a misspelt key name fails the load as an invalid argument" {
-    try expectLoadRefused(
-        \\[action.Jump]
-        \\bindings = [ { kind = "key", key = "Space" }, { kind = "key", key = "Spcae" } ]
-        \\
-    );
-}
-
-test "an unknown mouse button, binding kind or action type fails the load" {
-    try expectLoadRefused(
-        \\[action.Fire]
-        \\bindings = [ { kind = "mouse", button = "Thumb" } ]
-        \\
-    );
-    try expectLoadRefused(
-        \\[action.Fire]
-        \\bindings = [ { kind = "pad", button = "A" } ]
-        \\
-    );
-    try expectLoadRefused(
-        \\[action.Move]
-        \\type = "Axis1d"
-        \\
-    );
-}
-
-test "a binding missing a field fails the load" {
-    try expectLoadRefused(
-        \\[action.Move]
-        \\bindings = [ { kind = "key_pair", negative = "A" } ]
-        \\
-    );
-}
-
-test "actions added by hand are numbered in the order they arrive" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    try testing.expectEqual(@as(i32, 0), a.api().add_action.?(a.api(), "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
-    try testing.expectEqual(@as(i32, 1), a.api().add_action.?(a.api(), "Move", abi_input_actions.c.KE_ACTION_TYPE_AXIS2D));
-    try testing.expectEqual(@as(i32, 2), a.api().add_action.?(a.api(), "Look", abi_input_actions.c.KE_ACTION_TYPE_AXIS2D));
-
-    try testing.expectEqual(@as(i32, 0), a.api().get_action_id.?(a.api(), "Jump"));
-    try testing.expectEqual(@as(i32, 1), a.api().get_action_id.?(a.api(), "Move"));
-    try testing.expectEqual(@as(i32, 2), a.api().get_action_id.?(a.api(), "Look"));
-}
-
-test "a duplicated, empty or absent action name is refused" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    try testing.expectEqual(@as(i32, 0), a.api().add_action.?(a.api(), "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
-    try testing.expectEqual(@as(i32, -1), a.api().add_action.?(a.api(), "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
-    try testing.expectEqual(@as(i32, -1), a.api().add_action.?(a.api(), "", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
-    try testing.expectEqual(@as(i32, -1), a.api().add_action.?(a.api(), null, abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
-}
-
-test "a key bound by hand drives its button" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    const id = a.api().add_action.?(a.api(), "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
-    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), id, abi_input.c.KE_KEY_SPACE));
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_SPACE);
-    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
-    try testing.expect(a.api().is_action_down.?(a.api(), id));
-    try testing.expect(a.api().was_action_pressed.?(a.api(), id));
-}
-
-test "a key pair bound by hand produces a one dimensional axis" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    const id = a.api().add_action.?(a.api(), "Strafe", abi_input_actions.c.KE_ACTION_TYPE_AXIS1D);
-    try testing.expectEqual(R.ok, a.api().bind_key_pair.?(a.api(), id, abi_input.c.KE_KEY_A, abi_input.c.KE_KEY_D));
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_D);
-    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
-    try testing.expectEqual(@as(f32, 1.0), a.api().get_axis1d.?(a.api(), id));
-
-    snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_A);
-    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
-    try testing.expectEqual(@as(f32, -1.0), a.api().get_axis1d.?(a.api(), id));
-}
-
-test "a key quad bound by hand produces a two dimensional axis" {
-    var a = try Actions.init();
-    defer a.deinit();
-
-    const id = a.api().add_action.?(a.api(), "Move", abi_input_actions.c.KE_ACTION_TYPE_AXIS2D);
-    try testing.expectEqual(R.ok, a.api().bind_key_quad.?(a.api(), id, abi_input.c.KE_KEY_W, abi_input.c.KE_KEY_S, abi_input.c.KE_KEY_A, abi_input.c.KE_KEY_D));
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_W);
-    pressKey(&snapshot, abi_input.c.KE_KEY_D);
-    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
-
-    var x: f32 = 0;
-    var y: f32 = 0;
-    a.api().get_axis2d.?(a.api(), id, &x, &y);
+    a.api().get_axis2d.?(a.api(), move, &x, &y);
     try testing.expectEqual(@as(f32, 1.0), x);
     try testing.expectEqual(@as(f32, 1.0), y);
 }
@@ -1164,62 +883,105 @@ test "a key quad bound by hand produces a two dimensional axis" {
 test "a mouse button bound by hand drives its action" {
     var a = try Actions.init();
     defer a.deinit();
-
-    const id = a.api().add_action.?(a.api(), "Fire", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    const id = a.action(a.api().add_map.?(a.api(), "Game", 0), "Fire", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
     try testing.expectEqual(R.ok, a.api().bind_mouse_button.?(a.api(), id, abi_input.c.KE_MOUSE_BUTTON_LEFT));
-
     var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
     snapshot.mouse_buttons_down = @as(u32, 1) << @intCast(abi_input.c.KE_MOUSE_BUTTON_LEFT);
-    try testing.expectEqual(R.ok, a.api().evaluate.?(a.api(), &snapshot, null, null));
+    try a.eval(&snapshot);
     try testing.expect(a.api().is_action_down.?(a.api(), id));
 }
 
-test "binding onto an action id that was never added fails" {
+test "a duplicated, empty or absent name, or an unknown map, is refused" {
     var a = try Actions.init();
     defer a.deinit();
-
+    const map = a.api().add_map.?(a.api(), "Game", 0);
+    try testing.expectEqual(@as(i32, -1), a.api().add_map.?(a.api(), "Game", 1));
+    try testing.expectEqual(@as(i32, -1), a.api().add_map.?(a.api(), "", 1));
+    try testing.expect(a.action(map, "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON) >= 0);
+    try testing.expectEqual(@as(i32, -1), a.action(map, "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
+    try testing.expectEqual(@as(i32, -1), a.action(map, "", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
+    try testing.expectEqual(@as(i32, -1), a.action(7, "Run", abi_input_actions.c.KE_ACTION_TYPE_BUTTON));
     try testing.expectEqual(R.code(error.NotFound), a.api().bind_key.?(a.api(), 99, abi_input.c.KE_KEY_SPACE));
-    try testing.expectEqual(R.code(error.NotFound), a.api().bind_key_pair.?(a.api(), 99, abi_input.c.KE_KEY_A, abi_input.c.KE_KEY_D));
+    try testing.expectEqual(R.code(error.NotFound), a.api().set_map_enabled.?(a.api(), 9, false));
+    try testing.expectEqual(R.code(error.InvalidArgument), a.api().evaluate.?(a.api(), null));
 }
 
-test "a three dimensional axis starts at the origin" {
+test "a key bound in a higher priority map is not seen by a lower one" {
     var a = try Actions.init();
     defer a.deinit();
+    const game = a.api().add_map.?(a.api(), "Game", 0);
+    const menu = a.api().add_map.?(a.api(), "Menu", 10);
+    const jump = a.action(game, "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    const accept = a.action(menu, "Accept", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), jump, abi_input.c.KE_KEY_SPACE));
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), accept, abi_input.c.KE_KEY_SPACE));
 
-    const id = a.api().add_action.?(a.api(), "Move", abi_input_actions.c.KE_ACTION_TYPE_AXIS3D);
-    var x: f32 = 1;
-    var y: f32 = 1;
-    var z: f32 = 1;
-    a.api().get_axis3d.?(a.api(), id, &x, &y, &z);
-    try testing.expectEqual(@as(f32, 0.0), x);
-    try testing.expectEqual(@as(f32, 0.0), y);
-    try testing.expectEqual(@as(f32, 0.0), z);
+    const space = held(&.{abi_input.c.KE_KEY_SPACE});
+    try a.eval(&space);
+    try testing.expect(a.api().is_action_down.?(a.api(), accept));
+    try testing.expect(!a.api().is_action_down.?(a.api(), jump));
 }
 
-test "evaluating without a snapshot fails" {
+test "a disabled map holds no active action and hides no key from the maps below it" {
     var a = try Actions.init();
     defer a.deinit();
+    const game = a.api().add_map.?(a.api(), "Game", 0);
+    const menu = a.api().add_map.?(a.api(), "Menu", 10);
+    const jump = a.action(game, "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    const accept = a.action(menu, "Accept", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), jump, abi_input.c.KE_KEY_SPACE));
+    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), accept, abi_input.c.KE_KEY_SPACE));
 
-    try testing.expectEqual(R.code(error.InvalidArgument), a.api().evaluate.?(a.api(), null, null, null));
+    const space = held(&.{abi_input.c.KE_KEY_SPACE});
+    try a.eval(&space);
+    try testing.expectEqual(R.ok, a.api().set_map_enabled.?(a.api(), menu, false));
+    try testing.expect(!a.api().is_map_enabled.?(a.api(), menu));
+    try a.eval(&space);
+    try testing.expect(!a.api().is_action_down.?(a.api(), accept));
+    try testing.expect(a.api().was_action_released.?(a.api(), accept));
+    try testing.expect(a.api().is_action_down.?(a.api(), jump));
 }
 
-test "a key held across two evaluations reports pressed only on the first" {
-    var a = try Actions.init();
+test "the maps, actions and bindings a configuration describes are added through the slots" {
+    var a = try Actions.from(&.{
+        .{ .section = "input.map.Game", .key = "priority", .value = .{ .int = 0 } },
+        .{ .section = "input.map.Game.action.Move", .key = "type", .value = .{ .str = "Axis1D" } },
+        .{ .section = "input.map.Game.action.Move.bindings.0", .key = "kind", .value = .{ .str = "key_pair" } },
+        .{ .section = "input.map.Game.action.Move.bindings.0", .key = "negative", .value = .{ .str = "S" } },
+        .{ .section = "input.map.Game.action.Move.bindings.0", .key = "positive", .value = .{ .str = "W" } },
+        .{ .section = "input.map.Game.action.Fire.bindings.0", .key = "kind", .value = .{ .str = "mouse" } },
+        .{ .section = "input.map.Game.action.Fire.bindings.0", .key = "button", .value = .{ .str = "Left" } },
+        .{ .section = "input.map.Menu", .key = "priority", .value = .{ .int = 10 } },
+        .{ .section = "input.map.Menu", .key = "enabled", .value = .{ .boolean = false } },
+        .{ .section = "input.map.Menu.action.Accept.bindings.0", .key = "kind", .value = .{ .str = "key" } },
+        .{ .section = "input.map.Menu.action.Accept.bindings.0", .key = "key", .value = .{ .str = "W" } },
+    });
     defer a.deinit();
-
-    const id = a.api().add_action.?(a.api(), "Jump", abi_input_actions.c.KE_ACTION_TYPE_BUTTON);
-    try testing.expectEqual(R.ok, a.api().bind_key.?(a.api(), id, abi_input.c.KE_KEY_SPACE));
-
-    var snapshot = std.mem.zeroes(abi_input.c.ke_input_snapshot);
-    pressKey(&snapshot, abi_input.c.KE_KEY_SPACE);
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(a.api().was_action_pressed.?(a.api(), id));
-
-    _ = a.api().evaluate.?(a.api(), &snapshot, null, null);
-    try testing.expect(!a.api().was_action_pressed.?(a.api(), id));
+    const menu = a.api().get_map_id.?(a.api(), "Menu");
+    try testing.expect(menu >= 0);
+    try testing.expect(!a.api().is_map_enabled.?(a.api(), menu));
+    const move = a.api().get_action_id.?(a.api(), "Move");
+    try a.eval(&held(&.{abi_input.c.KE_KEY_W}));
+    try testing.expectEqual(@as(f32, 1.0), a.api().get_axis1d.?(a.api(), move));
+    try testing.expect(a.api().get_action_id.?(a.api(), "Fire") >= 0);
 }
 
-test "creating and destroying the actions map leaves no block allocated" {
+test "a misspelt key, an unknown kind or type, or a binding missing a key fails the create" {
+    const cases = [_][]const FakeConfig.Entry{
+        &.{ .{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "key" } }, .{ .section = "input.map.G.action.J.bindings.0", .key = "key", .value = .{ .str = "Spcae" } } },
+        &.{.{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "chord" } }},
+        &.{.{ .section = "input.map.G.action.J", .key = "type", .value = .{ .str = "Axis4D" } }},
+        &.{.{ .section = "input.map.G.action.J.bindings.0", .key = "kind", .value = .{ .str = "key_pair" } }},
+    };
+    for (cases) |entries| {
+        var cfg = FakeConfig.api(entries);
+        var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, null, &h)));
+        try testing.expect(h.ref == null);
+    }
+}
+
+test "creating and destroying the action maps leaves no block allocated" {
     var actions = try Actions.init();
     actions.deinit();
     try heap.expectNoLeaks();

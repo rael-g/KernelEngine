@@ -73,7 +73,8 @@ public sealed class SceneNodesModule : IRuntimeModule
                     sp.GetRequiredService<SceneTree>(),
                     (EcsRegistry)sp.GetRequiredService<IEcsRegistry>(),
                     sp.GetRequiredService<SignalBus>(),
-                    sp.GetService<SceneLoader>());
+                    sp.GetService<SceneLoader>(),
+                    sp.GetService<InputActions>());
             }
         });
     }
@@ -88,7 +89,7 @@ public sealed class SceneNodesModule : IRuntimeModule
         var scriptHost = services.GetRequiredService<ScriptHost>();
         var sceneTree = services.GetRequiredService<SceneTree>();
         var input = services.GetService<IInput>();
-        var evaluator = services.GetService<IActionEvaluator>();
+        var actions = services.GetService<InputActions>();
 
         var hierarchyCid = scriptHost.CidOfName("hierarchy");
         var nameCid = scriptHost.CidOfName("name");
@@ -98,7 +99,7 @@ public sealed class SceneNodesModule : IRuntimeModule
             scriptHost.ReleaseRetired();
             input?.Update();
             _inputSnapshot = (input as KernelEngine.Input.Input)?.CaptureSnapshot();
-            evaluator?.Evaluate(_inputSnapshot);
+            if (actions is not null && _inputSnapshot is KernelEngine.Input.INativeInputReader reader) actions.Evaluate(reader.Native);
         }, accessList: []);
 
         var signals = services.GetService<SignalBus>();

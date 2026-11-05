@@ -23,6 +23,7 @@
         .abi_mesh_data = .{ .path = "../abi/mesh_data" },
         .abi_mesh = .{ .path = "../abi/mesh" },
         .abi_input_actions = .{ .path = "../abi/input_actions" },
+        .abi_configuration = .{ .path = "../abi/configuration" },
         .abi_image_loader = .{ .path = "../abi/image_loader" },
         .abi_ecs_variant = .{ .path = "../abi/ecs_variant" },
         .abi_audio_components = .{ .path = "../abi/audio_components" },

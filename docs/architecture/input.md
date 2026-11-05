@@ -11,8 +11,9 @@ part works inside is on the generated page of its file. Contracts are under `src
 | window | `ke_window` | glfw | OS events, a borrowed `ke_input` | calls on the four sinks of `ke_input` |
 | input | `ke_input` | default | the sink calls | live queries, a `ke_input_snapshot`, a queue of events |
 | managed input | `IInput`, `IInputReader` | `Input` in `KernelEngine.Input` | the native `ke_input` | an `IInputReader` over one snapshot |
-| action map | `ke_input_actions`, `InputActionMap` | framework | an `IInputReader` that is also an `INativeInputReader` | polled action values |
-| system | none; the `Scene.Input` system of `SceneNodesModule` | framework | `IInput`, the action evaluator | the snapshot kept for the tick |
+| action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
+| node field | `InputAction`, `InputMap` | `KernelEngine.Framework` | an action or map name, written by a scene or by code | the action's value, the map's switch |
+| system | none; the `Scene.Input` system of `SceneNodesModule` | framework | `IInput`, `InputActions` | the snapshot kept for the tick |
 
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
@@ -35,13 +36,20 @@ The host calls `PollEvents` on the window, then `Tick` on the runtime. The windo
 no system, so the sink calls of a poll never interleave with a tick. Inside the tick, the system
 "Scene.Input" runs in `KE_PHASE_PRE_UPDATE` with an empty access list: it
 calls `Update` on `IInput`, captures a snapshot with `CaptureSnapshot`, keeps it in a field of
-`SceneNodesModule`, and calls `Evaluate` on the action evaluator with it. Systems of later phases
+`SceneNodesModule`, and calls `Evaluate` on `InputActions` with it. Systems of later phases
 read that field through `View`, so every read in the rest of the tick sees one snapshot.
 
 **Actions are derived, not read from the edges.** The action layer reads only the `keys_down` and
 `mouse_buttons_down` bitsets of the snapshot and derives its own edges by comparing one `evaluate`
-with the previous one. `InputActionMap.Evaluate` passes no event callback, so managed code polls
-action values and receives no `ke_input_action_event`.
+with the previous one. Code polls action values; no event is delivered.
+
+**Maps decide who hears a key.** `evaluate` walks the enabled maps from the highest priority down,
+and a key or mouse button bound in one is masked out of the snapshot the maps after it read. A
+disabled map's actions are inactive and mask nothing.
+
+**A configuration is a list of calls.** `ke_input_actions_create` walks the sections under
+`input.map` of the configuration it is given and adds each map, action and binding through the same
+slots a program calls; with no configuration the maps are whatever the program adds.
 
 ## What the parts agree on without a contract
 

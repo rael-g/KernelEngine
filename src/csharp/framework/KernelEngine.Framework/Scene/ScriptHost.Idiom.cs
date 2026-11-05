@@ -117,6 +117,7 @@ public unsafe partial class ScriptHost
 
     private SignalBus? _signals;
     private SceneLoader? _loader;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, int> _actionIds = new();
     /// <summary>The signal bus this host raises through, or null when none is registered.</summary>
     public SignalBus? Signals => _signals;
 
@@ -174,10 +175,11 @@ public unsafe partial class ScriptHost
     /// state component.
     /// </summary>
     /// <returns>The same instance, so composition reads as one expression.</returns>
-    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null, SceneLoader? loader = null)
+    internal ScriptHost Compose(SceneTree tree, EcsRegistry ecs, SignalBus? signals = null, SceneLoader? loader = null, InputActions? actions = null)
     {
         _signals = signals;
         _loader = loader;
+        Actions = actions;
         _tree = tree;
         _ecs = ecs;
         _nameCid = CidOfName("name");
@@ -185,6 +187,12 @@ public unsafe partial class ScriptHost
         _ = CidOfName("hierarchy");
         return this;
     }
+
+    /// <summary>The input action maps an <see cref="InputAction"/> field reads; null when none was composed.</summary>
+    internal InputActions? Actions { get; private set; }
+
+    /// <summary>The id of the action named <paramref name="name"/>, looked up once; -1 when no map has it.</summary>
+    internal int ActionId(string name) => _actionIds.GetOrAdd(name, n => Actions?.GetActionId(n) ?? -1);
 
     /// <summary>
     /// Records the creation of the nodes the scene file at <paramref name="path"/> describes under

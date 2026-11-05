@@ -4,40 +4,28 @@ const std = @import("std");
 const abi_input = @import("input");
 const abi_result = @import("result");
 
-
 pub const ke_action_type = c_uint;
 pub const KE_ACTION_TYPE_BUTTON: ke_action_type = 0;
 pub const KE_ACTION_TYPE_AXIS1D: ke_action_type = 1;
 pub const KE_ACTION_TYPE_AXIS2D: ke_action_type = 2;
 pub const KE_ACTION_TYPE_AXIS3D: ke_action_type = 3;
 
-pub const ke_action_phase = c_uint;
-pub const KE_ACTION_PHASE_STARTED: ke_action_phase = 1;
-pub const KE_ACTION_PHASE_PERFORMED: ke_action_phase = 2;
-pub const KE_ACTION_PHASE_CANCELED: ke_action_phase = 3;
-
-/// Reports one phase transition of one binding.
-pub const ke_input_action_event_func = ?*const fn (?*anyopaque, ke_input_action_event) callconv(.c) void;
-
-pub const ke_input_action_event = extern struct {
-    action_id: i32 = std.mem.zeroes(i32),
-    @"type": ke_action_type = std.mem.zeroes(ke_action_type),
-    phase: ke_action_phase = std.mem.zeroes(ke_action_phase),
-    x: f32 = std.mem.zeroes(f32),
-    y: f32 = std.mem.zeroes(f32),
-    z: f32 = std.mem.zeroes(f32),
-};
-
+/// Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame
+/// against an input snapshot and polled. Maps are evaluated from the highest priority down, ties
+/// in the order they were added; a key or mouse button bound in an enabled map is not seen by
+/// any map evaluated after it. The actions of a disabled map are inactive.
 pub const ke_input_actions = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Replaces every action with those of a TOML input file. An action type other than Button,
-    /// Axis1D, Axis2D or Axis3D, a binding of an unknown kind, a binding missing a field, and a key
-    /// or mouse button name the engine does not know each fail the load, as an invalid argument,
-    /// logging the action and the binding; a load that fails leaves no actions. A file that cannot
-    /// be opened fails as not found and one that does not parse as KE_RESULT_IO.
-    load: ?*const fn (?*ke_input_actions, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
+    /// Adds an enabled map after those already present.
+    add_map: ?*const fn (?*ke_input_actions, ?[*:0]const u8, i32) callconv(.c) i32 = null,
+    get_map_id: ?*const fn (?*ke_input_actions, ?[*:0]const u8) callconv(.c) i32 = null,
+    /// Enables or disables a map from the next evaluation on.
+    set_map_enabled: ?*const fn (?*ke_input_actions, i32, bool) callconv(.c) abi_result.c.ke_result = null,
+    /// False for an id no map has.
+    is_map_enabled: ?*const fn (?*ke_input_actions, i32) callconv(.c) bool = null,
     get_action_id: ?*const fn (?*ke_input_actions, ?[*:0]const u8) callconv(.c) i32 = null,
-    add_action: ?*const fn (?*ke_input_actions, ?[*:0]const u8, ke_action_type) callconv(.c) i32 = null,
+    /// Adds an action to a map.
+    add_action: ?*const fn (?*ke_input_actions, i32, ?[*:0]const u8, ke_action_type) callconv(.c) i32 = null,
     /// Adds a key binding to an action.
     bind_key: ?*const fn (?*ke_input_actions, i32, abi_input.c.ke_key) callconv(.c) abi_result.c.ke_result = null,
     /// Adds a mouse button binding to an action. Fails as bind_key does.
@@ -48,9 +36,9 @@ pub const ke_input_actions = extern struct {
     /// Adds a two-axis binding to an action: x is right minus left and y is up minus down. Fails as
     /// bind_key does.
     bind_key_quad: ?*const fn (?*ke_input_actions, i32, abi_input.c.ke_key, abi_input.c.ke_key, abi_input.c.ke_key, abi_input.c.ke_key) callconv(.c) abi_result.c.ke_result = null,
-    /// Runs one frame of binding evaluation against snapshot, updating polling state and firing
-    /// on_event for each phase transition. A null on_event updates polling only.
-    evaluate: ?*const fn (?*ke_input_actions, ?*const abi_input.c.ke_input_snapshot, ke_input_action_event_func, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
+    /// Runs one frame of evaluation against snapshot, making each action's held state, edges and
+    /// axes current.
+    evaluate: ?*const fn (?*ke_input_actions, ?*const abi_input.c.ke_input_snapshot) callconv(.c) abi_result.c.ke_result = null,
     is_action_down: ?*const fn (?*ke_input_actions, i32) callconv(.c) bool = null,
     was_action_pressed: ?*const fn (?*ke_input_actions, i32) callconv(.c) bool = null,
     was_action_released: ?*const fn (?*ke_input_actions, i32) callconv(.c) bool = null,
