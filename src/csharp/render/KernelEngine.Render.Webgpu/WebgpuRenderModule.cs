@@ -28,32 +28,15 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_service* _core;
     private ke_render_ui* _ui;
     private RenderService? _renderService;
-    private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
     private readonly bool _defaultPasses;
     private readonly bool _enableShadows, _enableIbl;
 
-    /// <param name="clusterGridX">
-    /// Screen-tile columns of the light grid. Zero reads <c>[render] cluster_grid_x</c> from
-    /// <see cref="IConfiguration"/> at <see cref="OnLoad"/>, and a value still zero is left to the
-    /// cluster pass.
-    /// </param>
-    /// <param name="clusterGridY">Rows of the light grid, resolved as <paramref name="clusterGridX"/> with key <c>cluster_grid_y</c>.</param>
-    /// <param name="clusterGridZ">Depth slices of the light grid, resolved as <paramref name="clusterGridX"/> with key <c>cluster_grid_z</c>.</param>
-    /// <param name="maxLightsPerCluster">
-    /// Capacity of the light list of one cluster, resolved as <paramref name="clusterGridX"/> with
-    /// key <c>max_lights_per_cluster</c>.
-    /// </param>
     /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist.</param>
     /// <param name="enableIbl">When false, materials sample a black environment whatever skybox exists; the skybox itself still draws.</param>
     /// <param name="defaultPasses">When false, no pass is registered; the host registers its own, in the order their resources flow.</param>
-    public WebgpuRenderModule(uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool enableShadows = true, bool enableIbl = true, bool defaultPasses = true)
+    public WebgpuRenderModule(bool enableShadows = true, bool enableIbl = true, bool defaultPasses = true)
     {
         _defaultPasses = defaultPasses;
-        _clusterGridXOverride = clusterGridX;
-        _clusterGridYOverride = clusterGridY;
-        _clusterGridZOverride = clusterGridZ;
-        _maxLightsPerClusterOverride = maxLightsPerCluster;
         _enableShadows = enableShadows;
         _enableIbl = enableIbl;
     }
@@ -96,7 +79,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         if (_enableShadows) services.AddRenderShadow("shadow");
         var shadow = _enableShadows ? "shadow" : null;
         services
-            .AddRenderCluster("clusters", _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride)
+            .AddRenderCluster("clusters")
             .AddRenderGbuffer("gbuffer")
             .AddRenderDeferredLighting(_enableIbl, "gbuffer", shadow, "clusters")
             .AddRenderSkybox()

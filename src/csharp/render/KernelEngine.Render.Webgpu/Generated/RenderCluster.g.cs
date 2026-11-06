@@ -5,24 +5,23 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the pass's render-phase system. A missing runtime, service, device, view space, camera or output fails as an invalid argument.</summary>
+/// <summary>Creates a light-cluster pass and registers its render-phase system.</summary>
 public sealed unsafe partial class RenderCluster : IDisposable
 {
-    /// <summary>Registers the pass's render-phase system. A missing runtime, service, device, view space, camera or output fails as an invalid argument.</summary>
+    /// <summary>Creates a light-cluster pass and registers its render-phase system.</summary>
     /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
     /// <param name="service">Receives the published buffers; borrowed.</param>
     /// <param name="device">Borrowed.</param>
     /// <param name="viewSpace">Builds the cluster frusta; borrowed.</param>
-    /// <param name="camera">Names the components the pass reads; borrowed.</param>
+    /// <param name="camera">Borrowed.</param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="output">The cluster group it writes: a tag under the group's own name, and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.</param>
-    /// <param name="gridX">Clusters across the screen. 0 takes the default.</param>
-    /// <param name="gridY">Clusters down the screen. 0 takes the default.</param>
-    /// <param name="gridZ">Depth slices. 0 takes the default.</param>
-    /// <param name="maxLightsPerCluster">Lights one cluster can list. 0 takes the default.</param>
-    /// <param name="configuration">A zero grid field reads its [render] key; borrowed.</param>
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster, configuration))
+    /// <param name="output">The cluster group it writes, copied: a tag under the group's own name, and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.</param>
+    /// <param name="gridX">Clusters across the screen.</param>
+    /// <param name="gridY">Clusters down the screen.</param>
+    /// <param name="gridZ">Depth slices.</param>
+    /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
     {
         Hold(runtime.Owner);
         Hold(service.Owner);
@@ -31,7 +30,6 @@ public sealed unsafe partial class RenderCluster : IDisposable
         Hold(camera.Owner);
         Hold(scene.Owner);
         Hold(frame.Owner);
-        Hold(configuration?.Owner);
     }
 
     private KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle _handle;
@@ -58,7 +56,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster, KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(service);
@@ -70,22 +68,13 @@ public sealed unsafe partial class RenderCluster : IDisposable
         var outputBytes = output is null ? null : System.Text.Encoding.UTF8.GetBytes(output + "\0");
         fixed (byte* outputPtr = outputBytes)
         {
-            KernelEngine.Render.Webgpu.Native.ke_render_cluster_params config = default;
-            config.runtime = runtime.Native;
-            config.service = service.Native;
-            config.device = device.Native;
-            config.view_space = viewSpace.Native;
-            config.camera = camera.Native;
-            config.scene = scene.Native;
-            config.frame = frame.Native;
-            config.output = (sbyte*)outputPtr;
+            KernelEngine.Render.Webgpu.Native.ke_render_cluster_config config = default;
             config.grid_x = gridX;
             config.grid_y = gridY;
             config.grid_z = gridZ;
             config.max_lights_per_cluster = maxLightsPerCluster;
-            config.configuration = (configuration is null ? null : configuration.Native);
             KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&config, &handle), "ke_render_cluster_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(runtime.Native, service.Native, device.Native, viewSpace.Native, camera.Native, scene.Native, frame.Native, (sbyte*)outputPtr, &config, &handle), "ke_render_cluster_create");
             return handle;
         }
     }

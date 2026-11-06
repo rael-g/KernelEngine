@@ -10,12 +10,16 @@ using Microsoft.Extensions.DependencyInjection;
 /// <summary>Registers <see cref="RenderCluster"/> with a service collection.</summary>
 public static class RenderClusterRegistration
 {
-    /// <summary>Registers one <see cref="RenderCluster"/>, created when the modules load with its providers from the container.</summary>
-    public static IServiceCollection AddRenderCluster(this IServiceCollection services, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default)
+    /// <summary>Registers one <see cref="RenderCluster"/>, created when the modules load with its providers from the container and the <see cref="RenderClusterConfig"/> it holds, or the defaults when it holds none.</summary>
+    public static IServiceCollection AddRenderCluster(this IServiceCollection services, string? output = default)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderCluster(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, gridX, gridY, gridZ, maxLightsPerCluster, sp.GetService<KernelEngine.Configuration.INativeConfiguration>())
-            : new RenderCluster(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, gridX, gridY, gridZ, maxLightsPerCluster, sp.GetService<KernelEngine.Configuration.INativeConfiguration>()));
+        services.AddSingleton(sp =>
+        {
+            var config = sp.GetService<Microsoft.Extensions.Options.IOptions<RenderClusterConfig>>()?.Value ?? new RenderClusterConfig();
+            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
+                ? new RenderCluster(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster)
+                : new RenderCluster(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster);
+        });
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderCluster>());
         return services;
     }

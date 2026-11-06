@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -38,34 +37,39 @@ extern "C"
         void (*destroy)(ke_render_cluster *self);
     } ke_render_cluster_handle;
 
-    /// [bag] What the light-cluster pass culls and publishes. The name is copied.
-    typedef struct ke_render_cluster_params
+    /// [bag] The values a light-cluster pass is created with, each applied as given.
+    typedef struct ke_render_cluster_config
     {
-        ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service;    ///< Receives the published buffers; borrowed.
-        ke_gpu_device     *device;     ///< Borrowed.
-        ke_view_space     *view_space; ///< Builds the cluster frusta; borrowed.
-        ke_render_camera  *camera;        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
-        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
-        /// [utf8] The cluster group it writes: a tag under the group's own name, and the light
-        /// lists and grid under the suffixes of kernel_engine/render/resource_groups.h.
-        const char *output;
-        /// Clusters across the screen. 0 takes the default.
+        /// [default:16] Clusters across the screen.
         uint32_t grid_x;
-        /// Clusters down the screen. 0 takes the default.
+        /// [default:9] Clusters down the screen.
         uint32_t grid_y;
-        /// Depth slices. 0 takes the default.
+        /// [default:24] Depth slices.
         uint32_t grid_z;
-        /// Lights one cluster can list. 0 takes the default.
+        /// [default:64] Lights one cluster can list.
         uint32_t max_lights_per_cluster;
-        ke_configuration  *configuration; ///< [optional] A zero grid field reads its [render] key; borrowed.
-    } ke_render_cluster_params;
+    } ke_render_cluster_config;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, view space,
-    /// camera or output fails as an invalid argument.
-    /// @param out_cluster [out] Receives the handle; left zeroed on failure.
+    /**
+     * @brief Creates a light-cluster pass and registers its render-phase system.
+     * @param runtime Registers the pass's system; borrowed, must outlive it.
+     * @param service Receives the published buffers; borrowed.
+     * @param device Borrowed.
+     * @param view_space Builds the cluster frusta; borrowed.
+     * @param camera Borrowed.
+     * @param scene Names the components the pass reads; borrowed.
+     * @param frame The pass runs inside its frame; borrowed.
+     * @param output [utf8] The cluster group it writes, copied: a tag under the group's own name,
+     *        and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.
+     * @param config [borrowed,optional] The pass's values; NULL selects the default of each.
+     * @param out_cluster [out] Receives the handle; left zeroed on failure.
+     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when a dependency or @p output is
+     *         NULL, or a field of @p config is 0.
+     */
     KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
-        const ke_render_cluster_params *params, ke_render_cluster_handle *out_cluster);
+        ke_runtime *runtime, ke_render_service *service, ke_gpu_device *device, ke_view_space *view_space,
+        ke_render_camera *camera, ke_render_scene_resolve *scene, ke_render_frame *frame, const char *output,
+        const ke_render_cluster_config *config, ke_render_cluster_handle *out_cluster);
 
 #ifdef __cplusplus
 }

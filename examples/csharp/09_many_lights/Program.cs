@@ -36,7 +36,8 @@ var services = new ServiceCollection()
     .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 09 Many Lights Stress Test", Width = 1280, Height = 720 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
     .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new Vector4(0.005f, 0.005f, 0.008f, 1.0f) })
-    .Add<IRuntimeModule>(new WebgpuRenderModule(clusterGridZ: 64, maxLightsPerCluster: 512, enableShadows: EnableShadows, enableIbl: EnableIbl))
+    .AddConfig(new RenderClusterConfig { GridZ = 64, MaxLightsPerCluster = 512 })
+    .Add<IRuntimeModule>(new WebgpuRenderModule(enableShadows: EnableShadows, enableIbl: EnableIbl))
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

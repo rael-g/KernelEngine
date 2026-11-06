@@ -13,23 +13,22 @@ public sealed unsafe partial class RenderCluster
     /// <param name="service">Receives the published buffers; borrowed.</param>
     /// <param name="device">Borrowed.</param>
     /// <param name="viewSpace">Builds the cluster frusta; borrowed.</param>
-    /// <param name="camera">Names the components the pass reads; borrowed.</param>
+    /// <param name="camera">Borrowed.</param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="output">The cluster group it writes: a tag under the group's own name, and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.</param>
-    /// <param name="gridX">Clusters across the screen. 0 takes the default.</param>
-    /// <param name="gridY">Clusters down the screen. 0 takes the default.</param>
-    /// <param name="gridZ">Depth slices. 0 takes the default.</param>
-    /// <param name="maxLightsPerCluster">Lights one cluster can list. 0 takes the default.</param>
-    /// <param name="configuration">A zero grid field reads its [render] key; borrowed.</param>
-    public RenderCluster(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : this(CreateLogged(logger, runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster, configuration))
+    /// <param name="output">The cluster group it writes, copied: a tag under the group's own name, and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.</param>
+    /// <param name="gridX">Clusters across the screen.</param>
+    /// <param name="gridY">Clusters down the screen.</param>
+    /// <param name="gridZ">Depth slices.</param>
+    /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
+    public RenderCluster(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(CreateLogged(logger, runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster, KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster, configuration);
+        return Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster);
     }
 }
