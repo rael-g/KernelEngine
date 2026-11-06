@@ -1,0 +1,8 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Root"
+type = "probe"
+[entity.probe]
+given = 3

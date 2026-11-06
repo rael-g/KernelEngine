@@ -351,9 +351,10 @@ const ProcessArgs = struct {
 /// and reports the root of it through out_entity. An entity with a "scene" key creates no node of
 /// its own: the file it names is loaded by `loadSceneRecursive` and its first entity takes the
 /// name, the parent and the extra component tables of the referencing entity. Otherwise the
-/// component tables are applied by `applyComponentBlocks`, and then the script factory is asked
-/// about the entity's "type" through `dispatchScript`, the type of the referencing entity after
-/// the subscene's own. A node is recorded in `created` as soon as it exists. The entity's name
+/// script factory is asked about the entity's "type" through `dispatchScript`, the type of the
+/// referencing entity after the subscene's own, and then the component tables are applied by
+/// `applyComponentBlocks` over the values the script's node gave its components, writing only the
+/// keys they hold. A node is recorded in `created` as soon as it exists. The entity's name
 /// enters the file's name map only after its components and its script type have been applied.
 /// An entity with no name and no override, or an unknown "parent", fails as an invalid argument, a
 /// refused node with the tree's code, and a failed record as out of memory.
@@ -422,11 +423,6 @@ fn processEntity(
         return refuse(error.OutOfMemory, "failed to record the node it created");
     };
 
-    try applyComponentBlocks(s, entity, args.entity_tbl);
-    if (args.override_outer) |outer| {
-        try applyComponentBlocks(s, entity, outer);
-    }
-
     const type_d = c.toml_string_in(args.entity_tbl, "type");
     if (type_d.ok != 0) {
         defer std.c.free(type_d.u.s);
@@ -439,6 +435,11 @@ fn processEntity(
             defer std.c.free(outer_type.u.s);
             try dispatchScript(s, entity, outer_type.u.s);
         }
+    }
+
+    try applyComponentBlocks(s, entity, args.entity_tbl);
+    if (args.override_outer) |outer| {
+        try applyComponentBlocks(s, entity, outer);
     }
 
     if (name_d.ok != 0) try args.names.put(name_d.u.s, entity);
@@ -1354,6 +1355,47 @@ test "a partial block leaves the header declared default standing" {
     try testing.expectEqual(@as(f32, 1.0), m.roughness);
     try testing.expectEqual(@as(f32, 1.5), m.ior);
     try testing.expectEqual(@as(f32, 0.5), m.alpha_cutoff);
+}
+
+fn seedingFactory(
+    ctx: ?*anyopaque,
+    entity: abi_asset_resolver.c.ke_entity,
+    type_name: [*c]const u8,
+) callconv(.c) abi_result.c.ke_result {
+    _ = type_name;
+    const f: *Fixture = @ptrCast(@alignCast(ctx.?));
+    var meta: abi_ecs.c.ke_component_meta = undefined;
+    if (!fakeComponentLookup(&f.ecs.vtable, abi_render_contract.c.KE_COMPONENT_NAME_MESH, &meta)) return R.code(error.NotFound);
+    var added: ?*anyopaque = null;
+    R.check(fakeComponentAdd(&f.ecs.vtable, entity, meta.cid, &added)) catch |err| return R.code(err);
+    const mesh: *abi_render_components.c.ke_mesh_component = @ptrCast(@alignCast(added.?));
+    mesh.* = .{ .roughness = 0.25 };
+    return R.ok;
+}
+
+test "a block written over the component a script's node gave keeps every value it does not name" {
+    var f: Fixture = undefined;
+    try f.init();
+    defer f.deinit();
+    const l = f.loader();
+    try testing.expectEqual(R.ok, l.register_script_factory.?(l, seedingFactory, &f));
+
+    var scene = TempScene.init();
+    defer scene.deinit();
+    try scene.put("main.scene.toml",
+        \\[[entity]]
+        \\name = "Seeded"
+        \\type = "seeded"
+        \\[entity.mesh]
+        \\color = [1.0, 0.0, 0.0, 1.0]
+        \\
+    );
+
+    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
+    const m = f.comp(abi_render_components.c.ke_mesh_component, abi_render_contract.c.KE_COMPONENT_NAME_MESH, f.find("Seeded")) orelse return error.MissingComponent;
+    try testing.expectEqual(@as(f32, 1.0), m.base_color.x);
+    try testing.expectEqual(@as(f32, 0.0), m.base_color.y);
+    try testing.expectEqual(@as(f32, 0.25), m.roughness);
 }
 
 test "a mesh is chosen by the name of its shape" {

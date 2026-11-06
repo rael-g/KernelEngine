@@ -340,7 +340,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
             foreach (var cn in BehaviorAccess.AllComponentsOf((INamedTypeSymbol)((INamedTypeSymbol)b.Type).TypeArguments[0]))
                 sb.AppendLine($"            new({cn}, true, false),");
         }
-        sb.AppendLine("        ]);");
+        sb.AppendLine(!isNative && !slots.IsEmpty ? "        ], RegisterSceneApply);" : "        ]);");
         sb.AppendLine("    }");
         sb.AppendLine();
 
@@ -520,7 +520,7 @@ public sealed class NodePropertyGenerator : IIncrementalGenerator
     {
         sb.AppendLine();
         sb.AppendLine("    /// <summary>Registers this node's component and the scene-file apply for it.</summary>");
-        sb.AppendLine("    internal static void RegisterSceneApply(global::KernelEngine.Framework.ComponentRegistry registry,"
+        sb.AppendLine("    private static void RegisterSceneApply(global::KernelEngine.Framework.ComponentRegistry registry,"
             + " global::KernelEngine.Ecs.INativeEcs ecs)");
         sb.AppendLine("    {");
         sb.AppendLine($"        _ = global::KernelEngine.Ecs.ComponentLayoutRegistration.RegisterLaidOutComponent<{slot.TypeName}>(ecs, {slot.NameExpression});");
