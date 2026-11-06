@@ -18,7 +18,7 @@ using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
 
-var render = new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir);
+var render = new WebgpuRenderModule();
 
 var services = new ServiceCollection()
     .AddLogger()
@@ -30,6 +30,7 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 18 Webgpu Mesh (v2)", Width = 1024, Height = 640 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir })
     .Add<IRuntimeModule>(render);
 
 using var sp = services.BuildServiceProvider();

@@ -76,8 +76,8 @@ int main(void)
         &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
 
     ke_render_service_handle core = { 0 };
-    check("render core", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &core));
+    check("render core", ke_render_service_create(gpu.ref, target.ref, ecs.ref, file_io.ref, binder.ref,
+        &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &core));
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend");
 

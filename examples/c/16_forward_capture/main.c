@@ -153,8 +153,8 @@ typedef struct renderer
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
     check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders", .io = io }, &r->binder));
-    check("render service", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .io = io, .binder = r->binder.ref }, &r->service));
+    check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref,
+        &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->service));
     ke_render_service *core = r->service.ref;
 
     ke_result made_view = ke_view_space_rh_create(&r->view_space);

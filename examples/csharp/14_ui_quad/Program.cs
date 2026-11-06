@@ -32,7 +32,8 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 14 UI Quad", Width = 960, Height = 540 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new Vector4(0.10f, 0.12f, 0.16f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

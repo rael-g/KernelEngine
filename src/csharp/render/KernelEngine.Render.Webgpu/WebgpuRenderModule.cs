@@ -28,20 +28,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private ke_render_service* _core;
     private ke_render_ui* _ui;
     private RenderService? _renderService;
-    private readonly string _shaderDir;
-    private readonly System.Numerics.Vector4 _clearColor;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
     private readonly bool _defaultPasses;
     private readonly bool _enableShadows, _enableIbl;
 
-    /// <param name="shaderDir">
-    /// Directory the compiled shaders of every render pass were installed into. Absolute, or
-    /// relative to the process working directory. Required.
-    /// </param>
-    /// <param name="clearColor">
-    /// Background color (RGBA). The default value leaves it to the render service, which reads
-    /// <c>[render] clear_color_r/g/b/a</c> from <see cref="IConfiguration"/>.
-    /// </param>
     /// <param name="clusterGridX">
     /// Screen-tile columns of the light grid. Zero reads <c>[render] cluster_grid_x</c> from
     /// <see cref="IConfiguration"/> at <see cref="OnLoad"/>, and a value still zero is left to the
@@ -56,14 +46,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist.</param>
     /// <param name="enableIbl">When false, materials sample a black environment whatever skybox exists; the skybox itself still draws.</param>
     /// <param name="defaultPasses">When false, no pass is registered; the host registers its own, in the order their resources flow.</param>
-    public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
-        uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
+    public WebgpuRenderModule(uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
         bool enableShadows = true, bool enableIbl = true, bool defaultPasses = true)
     {
         _defaultPasses = defaultPasses;
-        ArgumentException.ThrowIfNullOrEmpty(shaderDir);
-        _shaderDir = shaderDir;
-        _clearColor = clearColor;
         _clusterGridXOverride = clusterGridX;
         _clusterGridYOverride = clusterGridY;
         _clusterGridZOverride = clusterGridZ;
@@ -75,8 +61,10 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     public string Name => "Webgpu.Render";
 
     /// <summary>
-    /// Exposes this module as <see cref="IRenderResources"/> and registers the node types of the
-    /// render domain.
+    /// Exposes this module as <see cref="IRenderResources"/>, registers the node types of the
+    /// render domain and the renderer's parts, each created with the config registered for it or
+    /// its defaults; the resource binder reads its shaders from the <c>ShaderDir</c> of the registered
+    /// <see cref="DefaultRenderServiceConfig"/>.
     /// </summary>
     public void Configure(IServiceCollection services)
     {
@@ -88,8 +76,18 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         services
             .AddWebgpuGpuDevice()
             .AddWebgpuWindowGpuRenderTarget()
-            .AddGroupedRenderResourceBinder(_shaderDir)
-            .AddDefaultRenderService(_shaderDir, clearColor: _clearColor)
+            .AddDefaultRenderService();
+        services.AddSingleton(sp =>
+        {
+            var shaderDir = sp.GetService<Microsoft.Extensions.Options.IOptions<DefaultRenderServiceConfig>>()?.Value.ShaderDir;
+            var device = sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>();
+            var io = sp.GetRequiredService<KernelEngine.Io.INativeIo>();
+            return sp.GetService<ILogger>() is { } logger
+                ? new GroupedRenderResourceBinder(logger, device, shaderDir, io)
+                : new GroupedRenderResourceBinder(device, shaderDir, io);
+        });
+        services.AddSingleton<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(sp => sp.GetRequiredService<GroupedRenderResourceBinder>());
+        services
             .AddRhViewSpace()
             .AddDefaultRenderCamera()
             .AddDefaultRenderSceneResolve()

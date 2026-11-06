@@ -23,7 +23,8 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 17 Webgpu Clear (v2)", Width = 1024, Height = 640 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir));
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir })
+    .Add<IRuntimeModule>(new WebgpuRenderModule());
 
 using var sp = services.BuildServiceProvider();
 var window = sp.GetRequiredService<IWindow>();

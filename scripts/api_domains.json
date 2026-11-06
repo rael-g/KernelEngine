@@ -945,7 +945,7 @@
     },
     "nodes": {},
     "fieldTables": {},
-    "configs": { "interface": "src/csharp/configuration/KernelEngine.Configuration/Generated/ConfigSection.g.cs", "bindings": ["Glfw", "Box2D", "GpuDevice", "GpuWindowTarget"] },
+    "configs": { "interface": "src/csharp/configuration/KernelEngine.Configuration/Generated/ConfigSection.g.cs", "bindings": ["Glfw", "Box2D", "GpuDevice", "GpuWindowTarget", "RenderServiceFactory"] },
     "factories": { "bindings": ["Assimp", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
   },
   "bindings": [

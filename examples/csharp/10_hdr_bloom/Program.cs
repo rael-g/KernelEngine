@@ -28,7 +28,8 @@ var services = new ServiceCollection()
     .Add<IRuntime, Runtime>()
     .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 10 HDR Tonemapping", Width = 1280, Height = 720 })
     .Add<IRuntimeModule>(new GlfwWindowModule())
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.0f, 0.0f, 0.0f, 1.0f)))
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new Vector4(0.0f, 0.0f, 0.0f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

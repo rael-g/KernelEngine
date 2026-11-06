@@ -12,8 +12,9 @@ namespace KernelEngine.Kabic;
 /// a host fills in code or reads from a section of a <c>KernelEngine.Configuration.IConfiguration</c>,
 /// and gives the factory's class a constructor that takes the record in place of those values. A
 /// member starts at the value of its field's <c>[default:&lt;value&gt;]</c> tag, or zero; a key of
-/// the section is the name of the field, an absent key keeps the default, and an enum is written as
-/// the name of its value. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
+/// the section is the name of the field, an absent key keeps the default, an enum is written as
+/// the name of its value and a vector as an array, whose elements a section holds as
+/// <c>&lt;field&gt;.&lt;index&gt;</c>. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
 /// where the interface file receives <c>IConfigSection&lt;T&gt;</c> and the <c>Read&lt;T&gt;</c> extension.
 /// </summary>
 public sealed class ConfigsExtension : IKabicExtension
@@ -67,10 +68,22 @@ public sealed class ConfigsExtension : IKabicExtension
         "        services.AddSingleton<IOptions<T>>(value);\n\n" +
         "    /// <summary>Registers as the <see cref=\"IOptions{T}\"/> of <typeparamref name=\"T\"/> the values read from <paramref name=\"section\"/> of the registered <see cref=\"IConfiguration\"/> when they are first asked for.</summary>\n" +
         "    public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section) where T : class, IConfigSection<T> =>\n" +
-        "        services.AddSingleton<IOptions<T>>(sp => T.Read(sp.GetRequiredService<IConfiguration>(), section));\n}\n";
+        "        services.AddSingleton<IOptions<T>>(sp => T.Read(sp.GetRequiredService<IConfiguration>(), section));\n\n" +
+        "    /// <summary>Registers as the <see cref=\"IOptions{T}\"/> of <typeparamref name=\"T\"/> the values read from <paramref name=\"section\"/> of the registered <see cref=\"IConfiguration\"/>, passed through <paramref name=\"adjust\"/>, when they are first asked for.</summary>\n" +
+        "    public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section, Func<T, T> adjust) where T : class, IConfigSection<T> =>\n" +
+        "        services.AddSingleton<IOptions<T>>(sp => adjust(T.Read(sp.GetRequiredService<IConfiguration>(), section)));\n}\n";
+
+    private static readonly Dictionary<string, string[]> Vectors = new()
+    {
+        ["System.Numerics.Vector2"] = ["X", "Y"],
+        ["System.Numerics.Vector3"] = ["X", "Y", "Z"],
+        ["System.Numerics.Vector4"] = ["X", "Y", "Z", "W"],
+    };
 
     private static string? DefaultOf(FactoryArgument a, string? tag, string cType) => a.ManagedType switch
     {
+        var t when Vectors.TryGetValue(t, out var parts) => tag is null ? $"default({t})"
+            : tag.Split(' ', StringSplitOptions.RemoveEmptyEntries) is { } n && n.Length == parts.Length ? $"new {t}({string.Join(", ", n.Select(x => x + "f"))})" : null,
         var t when t.Contains('.') && !t.EndsWith('?') && tag is not null && !long.TryParse(tag, out _)
             => $"{t}.{Idioms.EnumMember(tag, cType)}",
         "string?" => tag is null ? "null" : $"\"{tag}\"",
@@ -85,6 +98,8 @@ public sealed class ConfigsExtension : IKabicExtension
     {
         var key = $"section, \"{a.Field}\"";
         var given = $"defaults.{Pascal(a.Name)}";
+        if (Vectors.TryGetValue(a.ManagedType, out var parts))
+            return $"new {a.ManagedType}({string.Join(", ", parts.Select((p, i) => $"(float)configuration.GetDouble(section, \"{a.Field}.{i}\", {given}.{p})"))})";
         return a.ManagedType switch
         {
             "string?" => $"configuration.GetString({key}, {given} ?? \"\") is {{ Length: > 0 }} {a.Name}Text ? {a.Name}Text : null",

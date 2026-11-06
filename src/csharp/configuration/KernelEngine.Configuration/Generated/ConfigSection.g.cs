@@ -29,4 +29,8 @@ public static class ConfigSectionExtensions
     /// <summary>Registers as the <see cref="IOptions{T}"/> of <typeparamref name="T"/> the values read from <paramref name="section"/> of the registered <see cref="IConfiguration"/> when they are first asked for.</summary>
     public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section) where T : class, IConfigSection<T> =>
         services.AddSingleton<IOptions<T>>(sp => T.Read(sp.GetRequiredService<IConfiguration>(), section));
+
+    /// <summary>Registers as the <see cref="IOptions{T}"/> of <typeparamref name="T"/> the values read from <paramref name="section"/> of the registered <see cref="IConfiguration"/>, passed through <paramref name="adjust"/>, when they are first asked for.</summary>
+    public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section, Func<T, T> adjust) where T : class, IConfigSection<T> =>
+        services.AddSingleton<IOptions<T>>(sp => adjust(T.Read(sp.GetRequiredService<IConfiguration>(), section)));
 }
