@@ -61,9 +61,11 @@ fn walkTable(cfg: [*c]abi_configuration.c.ke_configuration, tab: ?*toml.toml_tab
 }
 
 /// An array of tables becomes one section per element, named by the array's key and the
-/// element's index; an array of anything else is skipped.
+/// element's index; an array of values becomes one key per element in the same section, named the
+/// same way.
 fn walkArrayOfTables(cfg: [*c]abi_configuration.c.ke_configuration, arr: *toml.toml_array_t, section: [:0]const u8, key: [*c]const u8) R.Error!void {
     const n = toml.toml_array_nelem(arr);
+    if (n > 0 and toml.toml_table_at(arr, 0) == null) return walkArrayOfValues(cfg, arr, section, key);
     var j: c_int = 0;
     while (j < n) : (j += 1) {
         const sub = toml.toml_table_at(arr, j) orelse return;
@@ -73,6 +75,36 @@ fn walkArrayOfTables(cfg: [*c]abi_configuration.c.ke_configuration, arr: *toml.t
             try std.fmt.allocPrintSentinel(gpa, "{s}.{s}.{d}", .{ section, std.mem.span(key), j }, 0);
         defer gpa.free(child);
         try walkTable(cfg, sub, child);
+    }
+}
+
+/// A value that matches none of the four readings is skipped without an error.
+fn walkArrayOfValues(cfg: [*c]abi_configuration.c.ke_configuration, arr: *toml.toml_array_t, section: [:0]const u8, key: [*c]const u8) R.Error!void {
+    const n = toml.toml_array_nelem(arr);
+    var j: c_int = 0;
+    while (j < n) : (j += 1) {
+        const element = try std.fmt.allocPrintSentinel(gpa, "{s}.{d}", .{ std.mem.span(key), j }, 0);
+        defer gpa.free(element);
+        const di = toml.toml_int_at(arr, j);
+        if (di.ok != 0) {
+            try R.check(cfg.*.set_int.?(cfg, section.ptr, element.ptr, di.u.i));
+            continue;
+        }
+        const dd = toml.toml_double_at(arr, j);
+        if (dd.ok != 0) {
+            try R.check(cfg.*.set_double.?(cfg, section.ptr, element.ptr, dd.u.d));
+            continue;
+        }
+        const db = toml.toml_bool_at(arr, j);
+        if (db.ok != 0) {
+            try R.check(cfg.*.set_bool.?(cfg, section.ptr, element.ptr, db.u.b != 0));
+            continue;
+        }
+        const ds = toml.toml_string_at(arr, j);
+        if (ds.ok != 0) {
+            defer std.c.free(ds.u.s);
+            try R.check(cfg.*.set_string.?(cfg, section.ptr, element.ptr, ds.u.s));
+        }
     }
 }
 
@@ -344,7 +376,6 @@ test "an array of tables flattens to one section per element, named by its index
     const text =
         \\[input.map.Game.action.Jump]
         \\bindings = [{ key = 1 }, { key = 2 }]
-        \\scale = [1, 2]
         \\
     ;
 
@@ -352,6 +383,21 @@ test "an array of tables flattens to one section per element, named by its index
     try std.testing.expect(try testLoad(&cfg, text));
     try std.testing.expectEqual(@as(?i64, 1), findInt("input.map.Game.action.Jump.bindings.0", "key"));
     try std.testing.expectEqual(@as(?i64, 2), findInt("input.map.Game.action.Jump.bindings.1", "key"));
+    try std.testing.expectEqual(@as(usize, 2), g_recs.items.len);
+}
+
+test "an array of values flattens to one key per element, named by its index" {
+    defer clearRecs();
+    const text =
+        \\[render]
+        \\scale = [1, 2]
+        \\
+    ;
+
+    var cfg = mockConfig();
+    try std.testing.expect(try testLoad(&cfg, text));
+    try std.testing.expectEqual(@as(?i64, 1), findInt("render", "scale.0"));
+    try std.testing.expectEqual(@as(?i64, 2), findInt("render", "scale.1"));
     try std.testing.expectEqual(@as(usize, 2), g_recs.items.len);
 }
 
