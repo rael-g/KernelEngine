@@ -63,7 +63,7 @@ int main(void)
     check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target create", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
+    check("render target create", ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, NULL, &target));
 
     ke_gpu_buffer_params vbp = {
         .initial_data       = vertices,

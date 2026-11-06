@@ -14,7 +14,7 @@ fullscreen = false
 
 [runtime.renderer]
 shader_path = "shaders"
-vsync = true
+present_mode = "fifo"
 
 [runtime.physics_2d]
 gravity_x = 0.0

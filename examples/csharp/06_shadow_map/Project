@@ -10,4 +10,4 @@ fullscreen = false
 
 [runtime.renderer]
 shader_path = "shaders"
-vsync       = true
+present_mode = "fifo"

@@ -61,7 +61,7 @@ int main(void)
     check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
+    check("render target", ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, NULL, &target));
 
     ke_ecs_handle ecs = { 0 };
     ke_result made_ecs = ke_ecs_flecs_create(NULL, &ecs);

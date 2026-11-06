@@ -1,5 +1,7 @@
 using System.Text;
 
+using Kabic;
+using Kabic.CSharp;
 using Kabic.Factories;
 using Kabic.Pipeline;
 
@@ -10,7 +12,8 @@ namespace KernelEngine.Kabic;
 /// a host fills in code or reads from a section of a <c>KernelEngine.Configuration.IConfiguration</c>,
 /// and gives the factory's class a constructor that takes the record in place of those values. A
 /// member starts at the value of its field's <c>[default:&lt;value&gt;]</c> tag, or zero; a key of
-/// the section is the name of the field, and an absent key keeps the default. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
+/// the section is the name of the field, an absent key keeps the default, and an enum is written as
+/// the name of its value. Section: <c>{"interface": "&lt;file&gt;", "bindings": ["&lt;binding name&gt;", ...]}</c>,
 /// where the interface file receives <c>IConfigSection&lt;T&gt;</c> and the <c>Read&lt;T&gt;</c> extension.
 /// </summary>
 public sealed class ConfigsExtension : IKabicExtension
@@ -35,7 +38,8 @@ public sealed class ConfigsExtension : IKabicExtension
                 context.Report($"configs: {f.Function.Name} has no value to read");
                 continue;
             }
-            var defaults = values.ToDictionary(a => a, a => DefaultOf(a, f.Config!.Fields.First(x => x.Name == a.Field).TagValue("default")));
+            var defaults = values.ToDictionary(a => a, a => f.Config!.Fields.First(x => x.Name == a.Field) is var field
+                ? DefaultOf(a, field.TagValue("default"), CType.Of(field.Type).Name) : null);
             if (values.FirstOrDefault(a => ReadOf(a) is null || defaults[a] is null) is { } unread)
             {
                 context.Report($"configs: {f.Function.Name}'s {unread.Field} ({unread.ManagedType}) cannot be read from a section");
@@ -65,8 +69,10 @@ public sealed class ConfigsExtension : IKabicExtension
         "    public static IServiceCollection AddConfig<T>(this IServiceCollection services, string section) where T : class, IConfigSection<T> =>\n" +
         "        services.AddSingleton<IOptions<T>>(sp => T.Read(sp.GetRequiredService<IConfiguration>(), section));\n}\n";
 
-    private static string? DefaultOf(FactoryArgument a, string? tag) => a.ManagedType switch
+    private static string? DefaultOf(FactoryArgument a, string? tag, string cType) => a.ManagedType switch
     {
+        var t when t.Contains('.') && !t.EndsWith('?') && tag is not null && !long.TryParse(tag, out _)
+            => $"{t}.{Idioms.EnumMember(tag, cType)}",
         "string?" => tag is null ? "null" : $"\"{tag}\"",
         "bool" => tag ?? "false",
         "float" => tag is null ? "0f" : $"{tag}f",
@@ -85,7 +91,7 @@ public sealed class ConfigsExtension : IKabicExtension
             "bool" => $"configuration.GetBool({key}, {given})",
             "float" or "double" => $"({a.ManagedType})configuration.GetDouble({key}, {given})",
             "sbyte" or "byte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" => $"({a.ManagedType})configuration.GetInt({key}, {given})",
-            var t when t.Contains('.') && !t.EndsWith('?') => $"({t})configuration.GetInt({key}, (long){given})",
+            var t when t.Contains('.') && !t.EndsWith('?') => $"configuration.GetString({key}, \"\") is {{ Length: > 0 }} {a.Name}Text ? global::System.Enum.Parse<{t}>({a.Name}Text, ignoreCase: true) : {given}",
             _ => null,
         };
     }

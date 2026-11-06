@@ -109,9 +109,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     }
 
     /// <summary>
-    /// Creates the device, the window target and the renderer. The window target presents
-    /// with vertical sync unless <c>[runtime.renderer] vsync</c> is false in
-    /// <see cref="IConfiguration"/>, in which case frames are shown at once.
+    /// Creates the device, the window target and the renderer, each with the config registered
+    /// for it or its defaults.
     /// </summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
