@@ -1,8 +1,6 @@
 [project]
-name = "Pong"
 default_scene = "Menu"
 
-[runtime]
 [runtime.window]
 width = 960
 height = 540
@@ -10,7 +8,6 @@ title = "KernelEngine — Pong (2D)"
 fullscreen = false
 
 [runtime.renderer]
-shader_path = "shaders"
 present_mode = "fifo"
 
 [runtime.physics_2d]
@@ -19,7 +16,6 @@ gravity_y = 0.0
 
 [render]
 clear_color = [0.04, 0.04, 0.08, 1.0]
-ambient_light = [1.0, 1.0, 1.0]
 
 [input.map.Pong.action.PaddleLeftMove]
 type = "Axis1D"
@@ -34,6 +30,3 @@ bindings = [{ kind = "key", key = "Space" }]
 
 [input.map.Pong.action.Quit]
 bindings = [{ kind = "key", key = "Escape" }]
-
-[ke]
-modules = ["KernelEngine.Kernel", "KernelEngine.Kernel.Logger", "KernelEngine.Kernel.ConsoleSink", "KernelEngine.Kernel.Input", "KernelEngine.Configuration", "KernelEngine.Framework.InputActions", "KernelEngine.Window.Glfw", "KernelEngine.Render.Bgfx", "KernelEngine.Physics.Box2D", "KernelEngine.Audio.MiniAudio", "KernelEngine.Framework.AudioFramework", "KernelEngine.Text.StbTrueType"]
