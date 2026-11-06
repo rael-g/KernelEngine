@@ -2,9 +2,6 @@
 name = "Pong"
 default_scene = "Menu"
 
-[logging]
-console_level = "Warning"
-
 [runtime]
 [runtime.window]
 width = 960

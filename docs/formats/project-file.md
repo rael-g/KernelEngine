@@ -34,8 +34,7 @@ enum is written as the name of its value (`present_mode = "fifo"`) and a vector 
 The section a host names is its own choice; the records the engine generates are listed in the
 `configs` section of `scripts/api_domains.json`.
 
-Besides those records, `SceneRouterModule` reads `[project] default_scene` and `AddConsoleSink`
-reads `[logging] console_level` (`SceneRouterModule.cs`, `Logger/ServiceCollectionExtensions.cs`).
+Besides those records, `SceneRouterModule` reads `[project] default_scene` (`SceneRouterModule.cs`).
 
 ## Keys read only by the command-line tool
 

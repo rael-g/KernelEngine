@@ -36,11 +36,10 @@ tag.
 each sink whose `MinLevel` the event reaches, in the order the sinks were added.
 
 **Composition.** `AddLogger` registers the logger and, when it is first resolved, adds the
-`ILoggerSink` services registered by then. `AddConsoleSink` registers the console sink.
+`ILoggerSink` services registered by then. `AddConsoleSink` registers the console sink at the
+level the host gives it, which so filters native and managed lines alike.
 
 ## What the parts agree on without a contract
 
-- The section "logging" and the key "console_level" of the project file, read by `AddConsoleSink`
-  and holding a `LogLevel` name.
 - The console format, `[LEVEL] tag: message`.
 - The setter's name, `<library>_set_log_callback`, spelled from the library name by the `log` module.
