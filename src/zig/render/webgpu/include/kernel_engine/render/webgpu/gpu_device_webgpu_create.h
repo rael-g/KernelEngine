@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -26,31 +25,28 @@ extern "C"
 {
 #endif
 
-/// [bag] @brief Parameters for the WebGPU GPU device.
-typedef struct ke_gpu_device_webgpu_params
+/// [bag] The values a WebGPU device is created with, each applied as given.
+typedef struct ke_gpu_device_webgpu_config
 {
-    /// When non-zero, asks the underlying graphics API to validate every call, which takes
-    /// effect only where that API's validation layers are installed.
-    bool                 enable_validation;
-    /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this task pool's worker pool. When NULL,
-    /// the compile runs synchronously and the callback is invoked before returning.
-    struct ke_task_pool *task_pool; ///< [borrowed,optional]
-    /// When non-zero, the labels and debug groups given through ke_gpu_device reach the
+    /// [default:true] Asks the underlying graphics API to validate every call, which takes effect
+    /// only where that API's validation layers are installed.
+    bool enable_validation;
+    /// [default:false] The labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
-    bool                 debug_labels;
-    /// Optional, borrowed. Read once at creation.
-    ke_configuration    *configuration; ///< [optional]
-} ke_gpu_device_webgpu_params;
+    bool debug_labels;
+} ke_gpu_device_webgpu_config;
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
+ * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
+ *        workers; NULL compiles synchronously, invoking the callback before returning.
+ * @param config [borrowed,optional] The device's values; NULL selects the default of each.
+ * @param out_device [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or a failure code; call @c handle.destroy(handle.ref) to release the handle
  *         when done.
- * @param out_device [out] Receives the handle; left zeroed on failure.
  */
 KE_GPU_WEBGPU_API ke_result
-ke_gpu_device_webgpu_create(const ke_gpu_device_webgpu_params *params,
+ke_gpu_device_webgpu_create(struct ke_task_pool *task_pool, const ke_gpu_device_webgpu_config *config,
                              ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus

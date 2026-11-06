@@ -23,9 +23,9 @@ pub const GpuPresentMode = enum(c.ke_gpu_present_mode) {
 };
 
 /// Creates a ke_gpu_device backed by WebGPU.
-pub fn gpuDeviceWebgpuCreate(params: ?*const c.ke_gpu_device_webgpu_params) Error!abi_render_gpu.c.ke_gpu_device_handle {
+pub fn gpuDeviceWebgpuCreate(task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_gpu_device_webgpu_config) Error!abi_render_gpu.c.ke_gpu_device_handle {
     var written: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    try checkResult(c.ke_gpu_device_webgpu_create(params, &written));
+    try checkResult(c.ke_gpu_device_webgpu_create(task_pool, config, &written));
     return written;
 }
 
@@ -42,5 +42,5 @@ pub fn gpuRenderTargetWebgpuWindowCreate(params: ?*const c.ke_gpu_render_target_
     return written;
 }
 
-pub const GpuDeviceWebgpuParams = c.ke_gpu_device_webgpu_params;
+pub const GpuDeviceWebgpuConfig = c.ke_gpu_device_webgpu_config;
 pub const GpuRenderTargetWebgpuWindowParams = c.ke_gpu_render_target_webgpu_window_params;

@@ -156,9 +156,9 @@ int main(void)
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init", window_ready);
 
-    ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
+    ke_gpu_device_webgpu_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_render_target_handle target = { 0 };
     check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));

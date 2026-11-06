@@ -350,29 +350,28 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
     return dev;
 }
 
-/// Reads the params once; the `task_pool` they carry is borrowed, kept by the state and never
-/// freed here. Creates the wgpu instance, adapter, device and queue, then the vtable whose handle
-/// is the `DeviceState`. A failed creation fails as not initialised or out of memory, logging
-/// why, and leaves the handle zeroed, with every object created on the way already released. The
-/// written `destroy` releases the wgpu objects and the state without waiting for compiles still
-/// listed.
+/// Applies `config` as given, or the defaults of every field when it is null; `task_pool` is
+/// borrowed, kept by the state and never freed here. Creates the wgpu instance, adapter, device and
+/// queue, then the vtable whose handle is the `DeviceState`. A failed creation fails as not
+/// initialised or out of memory, logging why, and leaves the handle zeroed, with every object
+/// created on the way already released. The written `destroy` releases the wgpu objects and the
+/// state without waiting for compiles still listed.
 pub export fn ke_gpu_device_webgpu_create(
-    params: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_params,
+    task_pool: ?*abi_task_pool.c.ke_task_pool,
+    config: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
+    const given = config orelse &abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config{};
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
-    if (params) |p| {
-        if (p.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
-        const asked = if (p.configuration) |store| store.*.get_bool.?(store, "render", "debug_labels", false) else false;
-        if (p.debug_labels or asked) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
-    }
+    if (given.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
+    if (given.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
     const s = createDeviceState(instance_flags) catch |err| {
         log.warn("webgpu: device initialisation failed: {s}", .{@errorName(err)});
         return codeOf(err);
     };
-    s.task_pool = if (params) |p| p.task_pool else null;
+    s.task_pool = task_pool;
 
     const dev = createDeviceVtable(s) catch |err| {
         wgpu.wgpuQueueRelease(s.queue);
@@ -1747,7 +1746,7 @@ test "a sampler's filters and address modes reach wgpu as the modes they name" {
 
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &handle) == R.ok) handle.destroy.?(handle.ref);
+    if (ke_gpu_device_webgpu_create(null, null, &handle) == R.ok) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
 }
 
@@ -1764,7 +1763,7 @@ fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_
 
 test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &handle) != R.ok) return error.SkipZigTest;
+    if (ke_gpu_device_webgpu_create(null, null, &handle) != R.ok) return error.SkipZigTest;
     defer handle.destroy.?(handle.ref);
     const dev = handle.ref;
 

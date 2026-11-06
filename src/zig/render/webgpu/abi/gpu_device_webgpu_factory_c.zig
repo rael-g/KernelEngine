@@ -33,14 +33,6 @@ pub const KE_GPU_PRESENT_MODE_MAILBOX: ke_gpu_present_mode = 1;
 /// Frames are shown at once and may tear.
 pub const KE_GPU_PRESENT_MODE_IMMEDIATE: ke_gpu_present_mode = 2;
 
-/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
-/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
-/// section changed and does nothing else.
-pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
-/// Receives one child section of the section being listed.
-pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
 
@@ -54,20 +46,22 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Parameters for the WebGPU GPU device.
-pub const ke_gpu_device_webgpu_params = extern struct {
-    /// When non-zero, asks the underlying graphics API to validate every call, which takes effect
-    /// only where that API's validation layers are installed.
-    enable_validation: bool = std.mem.zeroes(bool),
-    /// Optional, borrowed. When non-NULL, this device dispatches the compile of
-    /// create_render_pipeline_async onto this task pool's worker pool. When NULL, the compile runs
-    /// synchronously and the callback is invoked before returning.
-    task_pool: ?*abi_task_pool.c.ke_task_pool = std.mem.zeroes(?*abi_task_pool.c.ke_task_pool),
-    /// When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying
-    /// graphics API, where capture tools read them.
-    debug_labels: bool = std.mem.zeroes(bool),
-    /// Optional, borrowed. Read once at creation.
-    configuration: ?*abi_configuration.c.ke_configuration = std.mem.zeroes(?*abi_configuration.c.ke_configuration),
+/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
+/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
+/// section changed and does nothing else.
+pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
+/// Receives one child section of the section being listed.
+pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
+/// The values a WebGPU device is created with, each applied as given.
+pub const ke_gpu_device_webgpu_config = extern struct {
+    /// Asks the underlying graphics API to validate every call, which takes effect only where that
+    /// API's validation layers are installed.
+    enable_validation: bool = true,
+    /// The labels and debug groups given through ke_gpu_device reach the underlying graphics API,
+    /// where capture tools read them.
+    debug_labels: bool = false,
 };
 
 /// Parameters for a render target presenting into a window.
@@ -84,7 +78,7 @@ pub const ke_gpu_render_target_webgpu_window_params = extern struct {
 };
 
 /// Creates a ke_gpu_device backed by WebGPU.
-pub extern fn ke_gpu_device_webgpu_create(params: ?*const ke_gpu_device_webgpu_params, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) abi_result.c.ke_result;
+pub extern fn ke_gpu_device_webgpu_create(task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const ke_gpu_device_webgpu_config, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_gpu_device_webgpu logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

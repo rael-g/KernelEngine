@@ -201,9 +201,9 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
-    ke_gpu_device_webgpu_params dp = { .enable_validation = 1, .debug_labels = renderdoc };
+    ke_gpu_device_webgpu_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_texture texture = { 0 };
     check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){

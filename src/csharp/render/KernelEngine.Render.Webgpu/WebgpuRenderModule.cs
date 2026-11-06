@@ -31,7 +31,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     private readonly string _shaderDir;
     private readonly System.Numerics.Vector4 _clearColor;
     private readonly uint _clusterGridXOverride, _clusterGridYOverride, _clusterGridZOverride, _maxLightsPerClusterOverride;
-    private readonly bool _debugLabelsOverride, _defaultPasses;
+    private readonly bool _defaultPasses;
     private readonly bool _enableShadows, _enableIbl;
 
     /// <param name="shaderDir">
@@ -55,17 +55,12 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
     /// </param>
     /// <param name="enableShadows">When false, no shadow pass and no shadow map render target exist.</param>
     /// <param name="enableIbl">When false, materials sample a black environment whatever skybox exists; the skybox itself still draws.</param>
-    /// <param name="debugLabels">
-    /// When true, the names of GPU objects, passes and debug groups reach the graphics API. False
-    /// reads <c>[render] debug_labels</c> from <see cref="IConfiguration"/> at <see cref="OnLoad"/>.
-    /// </param>
     /// <param name="defaultPasses">When false, no pass is registered; the host registers its own, in the order their resources flow.</param>
     public WebgpuRenderModule(string shaderDir, System.Numerics.Vector4 clearColor = default,
         uint clusterGridX = 0, uint clusterGridY = 0, uint clusterGridZ = 0, uint maxLightsPerCluster = 0,
-        bool enableShadows = true, bool enableIbl = true, bool debugLabels = false, bool defaultPasses = true)
+        bool enableShadows = true, bool enableIbl = true, bool defaultPasses = true)
     {
         _defaultPasses = defaultPasses;
-        _debugLabelsOverride = debugLabels;
         ArgumentException.ThrowIfNullOrEmpty(shaderDir);
         _shaderDir = shaderDir;
         _clearColor = clearColor;
@@ -91,7 +86,7 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddUiComponentsNodeTypes()
             .AddNodeType<Sprite2D>();
         services
-            .AddWebgpuGpuDevice(enableValidation: true, debugLabels: _debugLabelsOverride)
+            .AddWebgpuGpuDevice()
             .AddWebgpuWindowGpuRenderTarget()
             .AddGroupedRenderResourceBinder(_shaderDir)
             .AddDefaultRenderService(_shaderDir, clearColor: _clearColor)

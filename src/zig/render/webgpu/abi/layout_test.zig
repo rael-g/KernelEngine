@@ -23,7 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_gpu_device_webgpu_params, translated("ke_gpu_device_webgpu_params"));
+    try expectSameLayout(abi.c.ke_gpu_device_webgpu_config, translated("ke_gpu_device_webgpu_config"));
     try expectSameLayout(abi.c.ke_gpu_render_target_webgpu_window_params, translated("ke_gpu_render_target_webgpu_window_params"));
     if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
     if (@hasDecl(c, "ke_configuration_child_func")) try expectSameLayout(abi.c.ke_configuration_child_func, c.ke_configuration_child_func);
@@ -53,16 +53,14 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_GPU_PRESENT_MODE_IMMEDIATE), @as(i64, abi.c.KE_GPU_PRESENT_MODE_IMMEDIATE));
 }
 
-extern const layout_values: [11]c_ulonglong;
+extern const layout_values: [9]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_gpu_device_webgpu_params),
-        @offsetOf(abi.c.ke_gpu_device_webgpu_params, "enable_validation"),
-        @offsetOf(abi.c.ke_gpu_device_webgpu_params, "task_pool"),
-        @offsetOf(abi.c.ke_gpu_device_webgpu_params, "debug_labels"),
-        @offsetOf(abi.c.ke_gpu_device_webgpu_params, "configuration"),
+        @sizeOf(abi.c.ke_gpu_device_webgpu_config),
+        @offsetOf(abi.c.ke_gpu_device_webgpu_config, "enable_validation"),
+        @offsetOf(abi.c.ke_gpu_device_webgpu_config, "debug_labels"),
         @sizeOf(abi.c.ke_gpu_render_target_webgpu_window_params),
         @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "device"),
         @offsetOf(abi.c.ke_gpu_render_target_webgpu_window_params, "window"),

@@ -335,7 +335,7 @@ test "a window target refuses missing params, a device it did not come from and 
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = &foreign, .window = null, .present_mode = abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO }, &target));
 
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (dev_impl.ke_gpu_device_webgpu_create(null, &handle) != R.ok) return error.SkipZigTest;
+    if (dev_impl.ke_gpu_device_webgpu_create(null, null, &handle) != R.ok) return error.SkipZigTest;
     const dev = handle.ref;
     defer handle.destroy.?(dev);
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(&.{ .device = dev, .window = null, .present_mode = abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO }, &target));
