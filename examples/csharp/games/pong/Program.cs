@@ -24,6 +24,7 @@ using Pong;
 var services = new ServiceCollection()
     .AddProjectConfig()
     .AddConfig<GlfwWindowConfig>("runtime.window")
+    .AddConfig<Box2dPhysics2DConfig>("runtime.physics_2d")
     .AddLogger()
     .AddConsoleSink()
     .AddInput()
