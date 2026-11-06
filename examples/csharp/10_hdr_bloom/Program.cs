@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Numerics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -25,8 +26,10 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 10 HDR Tonemapping"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.0f, 0.0f, 0.0f, 1.0f)))
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 10 HDR Tonemapping", Width = 1280, Height = 720 })
+    .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new Vector4(0.0f, 0.0f, 0.0f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

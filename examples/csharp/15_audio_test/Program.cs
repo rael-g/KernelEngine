@@ -1,5 +1,6 @@
 using KernelEngine.Audio;
 using KernelEngine.Audio.MiniAudio;
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -44,8 +45,10 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(640, 200, "KernelEngine — 15 Audio Test (click window, then Space)"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.05f, 0.08f, 0.10f, 1.0f)))
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 15 Audio Test (click window, then Space)", Width = 640, Height = 200 })
+    .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new System.Numerics.Vector4(0.05f, 0.08f, 0.10f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

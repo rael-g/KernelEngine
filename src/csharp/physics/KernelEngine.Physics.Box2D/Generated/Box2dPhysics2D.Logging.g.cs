@@ -9,15 +9,16 @@ public sealed unsafe partial class Box2dPhysics2D
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
-    /// <param name="configuration">Holds gravity_x and gravity_y in section runtime.physics_2d; a missing key, or NULL here, selects (0, -9.81).</param>
-    public Box2dPhysics2D(KernelEngine.Logger.ILogger logger, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(CreateLogged(logger, configuration))
+    /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
+    /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
+    public Box2dPhysics2D(KernelEngine.Logger.ILogger logger, float gravityX = default, float gravityY = default) : base(CreateLogged(logger, gravityX, gravityY))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(KernelEngine.Logger.ILogger logger, float gravityX, float gravityY)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(configuration);
+        return Create(gravityX, gravityY);
     }
 }

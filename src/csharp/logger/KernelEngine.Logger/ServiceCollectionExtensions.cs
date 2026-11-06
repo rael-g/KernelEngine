@@ -34,24 +34,10 @@ public static class LoggerServiceCollectionExtensions
     }
 
     /// <summary>
-    /// Registers the console sink, at every level until the runtime loads its modules; then its
-    /// minimum level becomes the <c>console_level</c> key of the <c>logging</c> section of the
-    /// Project file, and stays every level when the key is missing. Loading throws when the key is
-    /// not a <see cref="LogLevel"/> name.
+    /// Registers the console sink, writing every line, native or managed, at or above
+    /// <paramref name="minLevel"/>.
     /// </summary>
-    public static IServiceCollection AddConsoleSink(this IServiceCollection services)
-    {
-        services.TryAddConfigurationSingleton();
-        var sink = new ConsoleLoggerSink(LogLevel.Trace);
-        services.AddSingleton<ILoggerSink>(sink);
-        services.AddSingleton<IRuntimeModule>(new ConsoleLevelModule(sink));
-        return services;
-    }
-
-    /// <summary>
-    /// Registers the console sink with this minimum level, without reading the Project file.
-    /// </summary>
-    public static IServiceCollection AddConsoleSink(this IServiceCollection services, LogLevel minLevel)
+    public static IServiceCollection AddConsoleSink(this IServiceCollection services, LogLevel minLevel = LogLevel.Trace)
     {
         services.AddSingleton<ILoggerSink>(new ConsoleLoggerSink(minLevel));
         return services;
@@ -70,18 +56,4 @@ internal sealed class ConsoleLoggerSink(LogLevel minLevel) : ILoggerSink
         Console.Error.WriteLine($"[{level.ToString().ToUpperInvariant()}] {tag}: {message}");
 
     public void Flush() => Console.Error.Flush();
-}
-
-/// <summary>
-/// Sets the console sink's minimum level from the <c>logging</c> section of the Project file once
-/// the container is built, so the logger is created without the configuration.
-/// </summary>
-internal sealed class ConsoleLevelModule(ConsoleLoggerSink sink) : IRuntimeModule
-{
-    public void OnLoad(IRuntime runtime, IServiceProvider services)
-    {
-        var cfg = services.GetRequiredService<IConfiguration>();
-        var level = cfg.GetString("logging", "console_level", nameof(LogLevel.Trace));
-        sink.MinLevel = Enum.Parse<LogLevel>(level, ignoreCase: true);
-    }
 }

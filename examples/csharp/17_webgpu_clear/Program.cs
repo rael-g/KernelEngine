@@ -1,3 +1,4 @@
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -20,8 +21,10 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1024, 640, "KernelEngine — 17 Webgpu Clear (v2)"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir));
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 17 Webgpu Clear (v2)", Width = 1024, Height = 640 })
+    .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir })
+    .Add<IRuntimeModule>(new WebgpuRenderModule());
 
 using var sp = services.BuildServiceProvider();
 var window = sp.GetRequiredService<IWindow>();

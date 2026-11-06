@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     _ = ke_build.plugin(b, .{
         .name = "ke_physics_2d_box2d",
         .root = "src/box2d_physics.zig",
-        .abi = &.{ "abi_math", "abi_configuration", "abi_physics", "abi_physics_2d_box2d_factory", "abi_result" },
+        .abi = &.{ "abi_math", "abi_physics", "abi_physics_2d_box2d_factory", "abi_result" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "box2d", .header = "src/box2d.h" }},
         .third_party = box2d,

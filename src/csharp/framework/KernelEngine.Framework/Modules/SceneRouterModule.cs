@@ -34,7 +34,8 @@ public sealed class SceneRouterModule : IRuntimeModule
     }
 
     /// <summary>
-    /// Registers the script factory, the system that loads the initial scene and the flush system.
+    /// Registers the component and scene apply each node type given to <c>AddNodeType</c> declares,
+    /// the script factory, the system that loads the initial scene and the flush system.
     /// </summary>
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
@@ -43,6 +44,11 @@ public sealed class SceneRouterModule : IRuntimeModule
         var declarations = services.GetServices<NodeTypeDeclaration>().ToList();
         var router = services.GetRequiredService<SceneRouter>();
         var initial = ResolveInitialScene(services);
+
+        var registry = services.GetRequiredService<ComponentRegistry>();
+        var ecs = services.GetRequiredService<KernelEngine.Ecs.INativeEcs>();
+        var registered = new HashSet<Type>();
+        foreach (var d in declarations) NodeTypes.RegisterComponents(d.Type, registry, ecs, registered);
 
         loader.RegisterScriptFactory((entity, typeName) =>
         {
@@ -57,14 +63,14 @@ public sealed class SceneRouterModule : IRuntimeModule
             {
                 foreach (var d in declarations) scriptHost.DeclareNodeType(d.Type, d.Name);
                 router.LoadScene(initial);
-                router.Flush();
+                router.Flush(KernelEngine.Runtime.SystemCtx.Of(ctx).Commands);
             }
         }, exclusive: true);
 
         runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (ctx, _) =>
         {
             using (scriptHost.EnterSystem(ctx))
-                router.Flush();
+                router.Flush(KernelEngine.Runtime.SystemCtx.Of(ctx).Commands);
         }, exclusive: true);
     }
 

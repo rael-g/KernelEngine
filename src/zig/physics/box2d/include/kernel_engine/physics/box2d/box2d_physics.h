@@ -1,7 +1,6 @@
 ﻿#ifndef KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 #define KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/physics/physics_2d.h>
 
 #ifndef KE_PHYSICS_BOX2D_API
@@ -22,17 +21,22 @@
 extern "C" {
 #endif
 
+/// [bag] The values a world is created with, each applied as given.
+typedef struct ke_physics_2d_box2d_config {
+    float gravity_x; /**< [default:0] Horizontal gravity, in metres per second squared. */
+    float gravity_y; /**< [default:-9.81] Vertical gravity, in metres per second squared. */
+} ke_physics_2d_box2d_config;
+
 /**
  * @brief Creates a 2D physics world.
- * @param configuration [borrowed,optional] Holds gravity_x and gravity_y in section
- *        runtime.physics_2d; a missing key, or NULL here, selects (0, -9.81).
+ * @param config [borrowed,optional] The world's values; NULL selects the default of each.
  * @param out_world [out] Receives the world; left zeroed on failure.
- * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_world;
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_world or a gravity that is not finite;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.
  */
 KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
-    ke_configuration     *configuration,
-    ke_physics_2d_handle *out_world);
+    const ke_physics_2d_box2d_config *config,
+    ke_physics_2d_handle             *out_world);
 
 #ifdef __cplusplus
 }

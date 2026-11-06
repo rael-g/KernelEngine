@@ -171,7 +171,7 @@ There is one worker pool, behind `ke_task_pool`, and workers are addressed by in
   - The state is a struct named `State`, embedding the vtable as the field `api`, whose handle points back at it; one function named `stateOf` recovers it from a slot's first argument.
   - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one. A slot with an error lane fills it on every failure.
-  - A factory is `export` without `pub`, takes its dependencies positionally, then a `const ke_<x>_config *` in which NULL or a zero field selects the default, and on failure frees what it took and returns the zeroed handle.
+  - A factory is `export` without `pub`, takes its dependencies positionally, then a `const ke_<x>_config *`, and on failure frees what it took and returns the zeroed handle.
   - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or from a package named after its concept, declared in the plugin's `build.zig.zon` (`src/zig/render/object_uniforms/`).
   - A test is named by a sentence stating the behaviour, substitutes the contracts it runs against with zsub (`build.zig.zon`) and configures them in the test, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.

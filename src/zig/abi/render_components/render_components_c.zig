@@ -8,48 +8,48 @@ const abi_result = @import("result");
 /// Scene node that drives the per-frame view/projection. The first entity with a Camera in the
 /// ECS becomes the active camera.
 pub const ke_camera_component = extern struct {
-    fov: f32 = std.mem.zeroes(f32),
-    near_plane: f32 = std.mem.zeroes(f32),
-    far_plane: f32 = std.mem.zeroes(f32),
-    orthographic_size: f32 = std.mem.zeroes(f32),
+    fov: f32 = 60,
+    near_plane: f32 = 0.1,
+    far_plane: f32 = 1000,
+    orthographic_size: f32 = 5,
     orthographic: u8 = std.mem.zeroes(u8),
     /// Which of the 32 view layers this camera draws. A renderable is skipped unless one of its own
     /// layer bits is set here.
-    cull_mask: u32 = std.mem.zeroes(u32),
+    cull_mask: u32 = 4294967295,
 };
 
 /// Directional light node. Its properties give the light's direction, color, intensity and
 /// ambient term.
 pub const ke_directional_light_component = extern struct {
-    direction: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
+    direction: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 0.2, 1, 0.5 }),
     /// Linear RGB.
-    color: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
-    intensity: f32 = std.mem.zeroes(f32),
-    ambient: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
+    color: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 1, 1, 1 }),
+    intensity: f32 = 1,
+    ambient: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 0.2, 0.2, 0.2 }),
 };
 
 /// Point light node — emits light in all directions from this entity's world position.
 pub const ke_point_light_component = extern struct {
     /// Linear RGB.
-    color: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
-    intensity: f32 = std.mem.zeroes(f32),
-    radius: f32 = std.mem.zeroes(f32),
+    color: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 1, 1, 1 }),
+    intensity: f32 = 1,
+    radius: f32 = 10,
 };
 
 /// Spot light node — emits a cone of light from this entity's world position.
 pub const ke_spot_light_component = extern struct {
-    direction: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
+    direction: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 0, -1, 0 }),
     /// Linear RGB.
-    color: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
-    intensity: f32 = std.mem.zeroes(f32),
-    range: f32 = std.mem.zeroes(f32),
-    inner_angle: f32 = std.mem.zeroes(f32),
-    outer_angle: f32 = std.mem.zeroes(f32),
+    color: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 1, 1, 1 }),
+    intensity: f32 = 1,
+    range: f32 = 20,
+    inner_angle: f32 = 25,
+    outer_angle: f32 = 35,
 };
 
 /// Scene-wide ambient light node. First entity with this component wins.
 pub const ke_ambient_light_component = extern struct {
-    color: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),
+    color: abi_math.c.ke_vec3 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec3)[0].type{ 0.05, 0.05, 0.05 }),
 };
 
 /// Environment cubemap driving both the skybox and image-based lighting. Only the first entity
@@ -68,16 +68,16 @@ pub const ke_mesh_component = extern struct {
     /// Resolved into `mesh` by the engine; a node authoring `mesh` directly would have the value
     /// overwritten.
     primitive: [32]u8 = std.mem.zeroes([32]u8),
-    base_color: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
-    roughness: f32 = std.mem.zeroes(f32),
+    base_color: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 1, 1, 1, 1 }),
+    roughness: f32 = 1,
     /// ke_alpha_mode.
-    alpha_mode: u32 = std.mem.zeroes(u32),
-    alpha_cutoff: f32 = std.mem.zeroes(f32),
-    ior: f32 = std.mem.zeroes(f32),
-    distortion_strength: f32 = std.mem.zeroes(f32),
+    alpha_mode: u32 = 0,
+    alpha_cutoff: f32 = 0.5,
+    ior: f32 = 1.5,
+    distortion_strength: f32 = 0.05,
     /// Which of the 32 view layers this renderable occupies. A camera draws it only when its
     /// cull_mask names one of these bits.
-    layers: u32 = std.mem.zeroes(u32),
+    layers: u32 = 1,
 };
 
 /// A textured quad in the plane, resolved into geometry and a material by the engine.
@@ -85,18 +85,18 @@ pub const ke_sprite2d_component = extern struct {
     /// Image to sample. Empty draws the plain tinted quad.
     texture: [128]u8 = std.mem.zeroes([128]u8),
     /// Rectangle of the image to draw, normalized: x, y, width, height.
-    region: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
+    region: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 0, 0, 1, 1 }),
     /// Size in world units, multiplying the node's scale.
-    size: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    size: abi_math.c.ke_vec2 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec2)[0].type{ 1, 1 }),
     /// Point of the quad the node's origin sits on, normalized; 0,0 is the bottom-left corner.
-    pivot: abi_math.c.ke_vec2 = std.mem.zeroes(abi_math.c.ke_vec2),
+    pivot: abi_math.c.ke_vec2 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec2)[0].type{ 0.5, 0.5 }),
     flip_h: u8 = std.mem.zeroes(u8),
     flip_v: u8 = std.mem.zeroes(u8),
     /// Multiplies the sampled image. Linear RGBA.
-    color: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
+    color: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 1, 1, 1, 1 }),
     /// ke_alpha_mode.
-    alpha_mode: u32 = std.mem.zeroes(u32),
-    alpha_cutoff: f32 = std.mem.zeroes(f32),
+    alpha_mode: u32 = 0,
+    alpha_cutoff: f32 = 0.5,
     /// The image resolved from `texture`.
     texture_handle: abi_render_handles.c.ke_texture_handle = std.mem.zeroes(abi_render_handles.c.ke_texture_handle),
     /// Whether the quad this sprite draws through has been attached.

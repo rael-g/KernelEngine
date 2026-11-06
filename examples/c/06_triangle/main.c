@@ -40,20 +40,20 @@ int main(void)
         .fullscreen = false,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window create failed", made_window);
 
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init failed", window_ready);
 
-    ke_gpu_device_webgpu_params dp = {
+    ke_gpu_device_webgpu_config dp = {
         .enable_validation = 1,
     };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device create", ke_gpu_device_webgpu_create(&dp, &gpu));
+    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target create", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
+    check("render target create", ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, NULL, &target));
 
     ke_gpu_shader_module_params vsp = {
         .code        = triangle_vs_wgsl,

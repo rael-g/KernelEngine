@@ -12,14 +12,18 @@ public static class GlfwWindowRegistration
 {
     /// <summary>
     /// Registers one <see cref="GlfwWindow"/>, created on first resolution with its providers from the
-    /// container and the given values, as itself, as <see cref="KernelEngine.Window.INativeWindow"/> and as <see cref="KernelEngine.Window.IWindow"/>. The library logs to the
+    /// container and the <see cref="GlfwWindowConfig"/> it holds, or the defaults when it holds none, as itself, as <see cref="KernelEngine.Window.INativeWindow"/> and as <see cref="KernelEngine.Window.IWindow"/>. The library logs to the
     /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddGlfwWindow(this IServiceCollection services, string? title = default, int width = default, int height = default, bool fullscreen = default)
+    public static IServiceCollection AddGlfwWindow(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new GlfwWindow(logger, sp.GetService<KernelEngine.Input.INativeInput>(), sp.GetService<KernelEngine.Configuration.INativeConfiguration>(), title, width, height, fullscreen)
-            : new GlfwWindow(sp.GetService<KernelEngine.Input.INativeInput>(), sp.GetService<KernelEngine.Configuration.INativeConfiguration>(), title, width, height, fullscreen));
+        services.AddSingleton(sp =>
+        {
+            var config = sp.GetService<Microsoft.Extensions.Options.IOptions<GlfwWindowConfig>>()?.Value ?? new GlfwWindowConfig();
+            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
+                ? new GlfwWindow(logger, sp.GetService<KernelEngine.Input.INativeInput>(), config.Title, config.Width, config.Height, config.Fullscreen)
+                : new GlfwWindow(sp.GetService<KernelEngine.Input.INativeInput>(), config.Title, config.Width, config.Height, config.Fullscreen);
+        });
         services.AddSingleton<KernelEngine.Window.INativeWindow>(sp => sp.GetRequiredService<GlfwWindow>());
         services.AddSingleton<KernelEngine.Window.IWindow>(sp => sp.GetRequiredService<GlfwWindow>());
         return services;

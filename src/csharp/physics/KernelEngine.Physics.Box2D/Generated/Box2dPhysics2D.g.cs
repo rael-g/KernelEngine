@@ -9,16 +9,19 @@ namespace KernelEngine.Physics.Box2D;
 public sealed unsafe partial class Box2dPhysics2D : KernelEngine.Physics.Physics2D
 {
     /// <summary>Creates a 2D physics world.</summary>
-    /// <param name="configuration">Holds gravity_x and gravity_y in section runtime.physics_2d; a missing key, or NULL here, selects (0, -9.81).</param>
-    public Box2dPhysics2D(KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(Create(configuration))
+    /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
+    /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
+    public Box2dPhysics2D(float gravityX = default, float gravityY = default) : base(Create(gravityX, gravityY))
     {
-        Hold(configuration?.Owner);
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(float gravityX, float gravityY)
     {
+        KernelEngine.Physics.Box2D.Native.ke_physics_2d_box2d_config config = default;
+        config.gravity_x = gravityX;
+        config.gravity_y = gravityY;
         KernelEngine.Physics.Native.ke_physics_2d_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create((configuration is null ? null : configuration.Native), &handle), "ke_physics_2d_box2d_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(&config, &handle), "ke_physics_2d_box2d_create");
         return handle;
     }
 }

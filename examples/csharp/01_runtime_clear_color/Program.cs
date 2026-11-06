@@ -1,4 +1,5 @@
-﻿using KernelEngine.Ecs;
+﻿using KernelEngine.Configuration;
+using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Io.Pool;
@@ -20,8 +21,10 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(1280, 720, "KernelEngine — 01 Runtime Clear Color"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f)));
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 01 Runtime Clear Color", Width = 1280, Height = 720 })
+    .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new System.Numerics.Vector4(0.15f, 0.20f, 0.35f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule());
 
 using var sp = services.BuildServiceProvider();
 var window = sp.GetRequiredService<IWindow>();

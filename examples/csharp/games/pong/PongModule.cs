@@ -7,8 +7,7 @@ using Microsoft.Extensions.DependencyInjection;
 namespace Pong;
 
 /// <summary>
-/// Wires Pong-specific node types and the scene-file surface of the components
-/// generated for them.
+/// Wires Pong-specific node types.
 /// </summary>
 public sealed class PongModule : IRuntimeModule
 {
@@ -25,11 +24,5 @@ public sealed class PongModule : IRuntimeModule
 
     public void OnLoad(IRuntime runtime, IServiceProvider services)
     {
-        var ecs = services.GetRequiredService<INativeEcs>();
-        var registry = services.GetRequiredService<ComponentRegistry>();
-
-        Paddle.RegisterSceneApply(registry, ecs);
-
-        Scoreboard.RegisterSceneApply(registry, ecs);
     }
 }

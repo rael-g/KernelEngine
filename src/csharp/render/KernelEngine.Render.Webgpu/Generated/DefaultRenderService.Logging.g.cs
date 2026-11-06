@@ -12,21 +12,20 @@ public sealed unsafe partial class DefaultRenderService
     /// <param name="device">Borrowed, must outlive the service.</param>
     /// <param name="target">Borrowed, must outlive the service; every frame acquires and presents it.</param>
     /// <param name="ecs">Borrowed, must outlive the service.</param>
-    /// <param name="shaderDir">Directory the shaders are loaded from; copied.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
-    /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST; zero selects RGBA16_FLOAT.</param>
-    /// <param name="depthFormat">Format of the frame's depth; zero selects D32_FLOAT.</param>
-    /// <param name="clearColor">Color the frame is cleared to; all four components zero read [render] clear_color_r/g/b/a from configuration, and a key that is absent takes 0.10, 0.15, 0.30, 1.0.</param>
-    /// <param name="configuration">Borrowed for the call only.</param>
-    public DefaultRenderService(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default, System.Numerics.Vector4 clearColor = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(CreateLogged(logger, device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat, clearColor, configuration))
+    /// <param name="shaderDir">Directory the shaders are loaded from; copied. Required.</param>
+    /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.</param>
+    /// <param name="depthFormat">Format of the frame's depth.</param>
+    /// <param name="clearColor">Color the frame is cleared to.</param>
+    public DefaultRenderService(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir = default, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default, System.Numerics.Vector4 clearColor = default) : base(CreateLogged(logger, device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, string? shaderDir, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor, KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(device, target, ecs, shaderDir, io, binder, colorFormat, depthFormat, clearColor, configuration);
+        return Create(device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor);
     }
 }

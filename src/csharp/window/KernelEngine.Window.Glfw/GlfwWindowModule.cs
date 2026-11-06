@@ -1,5 +1,3 @@
-﻿
-using KernelEngine.Configuration;
 using KernelEngine.Runtime;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -7,41 +5,19 @@ using Microsoft.Extensions.DependencyInjection;
 namespace KernelEngine.Window.Glfw;
 
 /// <summary>
-/// GLFW window as an <see cref="IRuntimeModule"/>. Registers <see cref="IWindow"/>
-/// during Configure. The host polls events: it calls <see cref="IWindow.PollEvents"/> on
-/// the window's thread before each <c>Tick</c>.
+/// GLFW window as an <see cref="IRuntimeModule"/>. Registers <see cref="IWindow"/> during
+/// Configure, created with the registered <see cref="GlfwWindowConfig"/>, or the defaults when
+/// none is registered. The host polls events: it calls <see cref="IWindow.PollEvents"/> on the
+/// window's thread before each <c>Tick</c>.
 /// </summary>
 public sealed class GlfwWindowModule : IRuntimeModule
 {
-    private readonly int? _width;
-    private readonly int? _height;
-    private readonly string? _title;
-
+    /// <inheritdoc/>
     public string Name => "Glfw.Window";
 
-    /// <summary>
-    /// Reads window settings from the Project file's <c>[runtime.window]</c>
-    /// section (width / height / title / fullscreen), falling back to
-    /// compile-time defaults if the section / file is absent.
-    /// </summary>
-    public GlfwWindowModule() { }
+    /// <inheritdoc/>
+    public void Configure(IServiceCollection services) => services.AddGlfwWindow();
 
-    /// <summary>
-    /// Inline overrides, bypassing the Project file. Useful for examples that
-    /// don't ship one.
-    /// </summary>
-    public GlfwWindowModule(int width, int height, string title)
-    {
-        _width = width;
-        _height = height;
-        _title = title;
-    }
-
-    public void Configure(IServiceCollection services)
-    {
-        services.TryAddConfigurationSingleton();
-        services.AddGlfwWindow(_title, _width ?? 0, _height ?? 0);
-    }
-
+    /// <inheritdoc/>
     public void OnLoad(IRuntime runtime, IServiceProvider services) { }
 }

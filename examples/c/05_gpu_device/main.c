@@ -7,12 +7,12 @@ int main(void)
 {
     printf("--- KernelEngine GPU Device Demo ---\n");
 
-    ke_gpu_device_webgpu_params params = {
+    ke_gpu_device_webgpu_config params = {
         .enable_validation = 1,
     };
 
     ke_gpu_device_handle gpu = { 0 };
-    ke_result made = ke_gpu_device_webgpu_create(&params, &gpu);
+    ke_result made = ke_gpu_device_webgpu_create(NULL, &params, &gpu);
     if (made != KE_OK)
     {
         printf("ERROR: ke_gpu_device_webgpu_create failed with result code 0x%08x\n", (unsigned)made);

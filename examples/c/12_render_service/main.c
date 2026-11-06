@@ -48,17 +48,17 @@ int main(void)
         .title = "c_demo_12 render core", .width = 800, .height = 600,
     };
     ke_window_handle win = { 0 };
-    ke_result made_window = ke_window_glfw_create(NULL, NULL, &wp, &win);
+    ke_result made_window = ke_window_glfw_create(NULL, &wp, &win);
     if (made_window != KE_OK) die_result("window", made_window);
     ke_result window_ready = win.ref->on_initialize(win.ref);
     if (window_ready != KE_OK) die_result("window init", window_ready);
 
-    ke_gpu_device_webgpu_params dp = { .enable_validation = 1 };
+    ke_gpu_device_webgpu_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target", ke_gpu_render_target_webgpu_window_create(&(ke_gpu_render_target_webgpu_window_params){ .device = gpu.ref, .window = win.ref }, &target));
+    check("render target", ke_gpu_render_target_webgpu_window_create(gpu.ref, win.ref, NULL, &target));
 
     ke_ecs_handle ecs = { 0 };
     ke_result made_ecs = ke_ecs_flecs_create(NULL, &ecs);
@@ -76,8 +76,8 @@ int main(void)
         &(ke_render_resource_binder_grouped_params){ .device = gpu.ref, .shader_dir = "shaders", .io = file_io.ref }, &binder));
 
     ke_render_service_handle core = { 0 };
-    check("render core", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu.ref, .target = target.ref, .ecs = ecs.ref, .shader_dir = "shaders", .io = file_io.ref, .binder = binder.ref }, &core));
+    check("render core", ke_render_service_create(gpu.ref, target.ref, ecs.ref, file_io.ref, binder.ref,
+        &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &core));
 
     if (gpu.ref->shader_language(gpu.ref) != KE_GPU_SHADER_LANG_WGSL) die("expected WGSL backend");
 

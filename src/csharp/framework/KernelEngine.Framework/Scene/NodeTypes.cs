@@ -11,13 +11,35 @@ namespace KernelEngine.Framework;
 public static class NodeTypes
 {
     private static readonly ConcurrentDictionary<Type, (bool? ReachesOnlyItself, NodeComponentUse[] Uses)> s_declared = new();
+    private static readonly ConcurrentDictionary<Type, Action<ComponentRegistry, KernelEngine.Ecs.INativeEcs>> s_registrations = new();
 
     /// <summary>
     /// Records what <paramref name="type"/> declares: <paramref name="reachesOnlyItself"/>, or
     /// null to take its base type's answer, and the components it adds to those of its base types.
     /// </summary>
-    public static void Declare(Type type, bool? reachesOnlyItself, NodeComponentUse[] uses) =>
+    /// <param name="type">The node type.</param>
+    /// <param name="reachesOnlyItself">Whether its behavior touches only its own entity, or null for its base type's answer.</param>
+    /// <param name="uses">The components it adds to those of its base types.</param>
+    /// <param name="registerComponent">Registers the component the type itself declares and the scene apply of it, or null when it declares none.</param>
+    public static void Declare(Type type, bool? reachesOnlyItself, NodeComponentUse[] uses,
+        Action<ComponentRegistry, KernelEngine.Ecs.INativeEcs>? registerComponent = null)
+    {
         s_declared[type] = (reachesOnlyItself, uses);
+        if (registerComponent is not null) s_registrations[type] = registerComponent;
+    }
+
+    /// <summary>
+    /// Registers with <paramref name="registry"/> and <paramref name="ecs"/> the component each type
+    /// of the chain of <paramref name="type"/> declares, its base types' first, skipping a type
+    /// already in <paramref name="registered"/> and adding each one it registers.
+    /// </summary>
+    public static void RegisterComponents(Type type, ComponentRegistry registry, KernelEngine.Ecs.INativeEcs ecs, ISet<Type> registered)
+    {
+        var chain = new Stack<Type>();
+        for (var t = type; t is not null; t = t.BaseType) chain.Push(t);
+        foreach (var t in chain)
+            if (s_registrations.TryGetValue(t, out var register) && registered.Add(t)) register(registry, ecs);
+    }
 
     /// <summary>Whether the behavior of <paramref name="type"/> touches nothing beyond its own entity; false when no type of its chain says.</summary>
     public static bool ReachesOnlyItself(Type type)

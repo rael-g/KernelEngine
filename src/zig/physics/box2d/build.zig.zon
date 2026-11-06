@@ -8,7 +8,6 @@
         .ke_logger = .{ .path = "../../logger" },
         .ke_result = .{ .path = "../../result" },
         .ke_common = .{ .path = "../../common" },
-        .abi_configuration = .{ .path = "../../abi/configuration" },
         .abi_physics = .{ .path = "../../abi/physics" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },

@@ -9,18 +9,17 @@ public sealed unsafe partial class WebgpuGpuDevice
 {
     /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
     /// <param name="logger">Receives every line the library logs.</param>
-    /// <param name="enableValidation">When non-zero, asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
-    /// <param name="taskPool">Optional, borrowed. When non-NULL, this device dispatches the compile of create_render_pipeline_async onto this task pool's worker pool. When NULL, the compile runs synchronously and the callback is invoked before returning.</param>
-    /// <param name="debugLabels">When non-zero, the labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
-    /// <param name="configuration">Optional, borrowed. Read once at creation.</param>
-    public WebgpuGpuDevice(KernelEngine.Logger.ILogger logger, bool enableValidation = default, KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool debugLabels = default, KernelEngine.Configuration.INativeConfiguration? configuration = default) : base(CreateLogged(logger, enableValidation, taskPool, debugLabels, configuration))
+    /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
+    /// <param name="enableValidation">Asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
+    /// <param name="debugLabels">The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
+    public WebgpuGpuDevice(KernelEngine.Logger.ILogger logger, KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool enableValidation = default, bool debugLabels = default) : base(CreateLogged(logger, taskPool, enableValidation, debugLabels))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_device_handle CreateLogged(KernelEngine.Logger.ILogger logger, bool enableValidation, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool debugLabels, KernelEngine.Configuration.INativeConfiguration? configuration)
+    private static KernelEngine.Render.Native.ke_gpu_device_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels)
     {
         ArgumentNullException.ThrowIfNull(logger);
         KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
-        return Create(enableValidation, taskPool, debugLabels, configuration);
+        return Create(taskPool, enableValidation, debugLabels);
     }
 }

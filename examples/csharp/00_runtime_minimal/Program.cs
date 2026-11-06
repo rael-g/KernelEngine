@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -22,7 +23,8 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "KernelEngine — 00 Runtime Minimal"));
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 00 Runtime Minimal", Width = 800, Height = 600 })
+    .Add<IRuntimeModule>(new GlfwWindowModule());
 #endregion
 
 #region load

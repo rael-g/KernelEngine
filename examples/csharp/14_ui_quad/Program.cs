@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using KernelEngine.Configuration;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
@@ -29,8 +30,10 @@ var services = new ServiceCollection()
     .AddStdFileSystem()
     .AddPoolIo()
     .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(960, 540, "KernelEngine — 14 UI Quad"))
-    .Add<IRuntimeModule>(new WebgpuRenderModule(shaderDir: ExamplePaths.ShaderDir, clearColor: new Vector4(0.10f, 0.12f, 0.16f, 1.0f)))
+    .AddConfig(new GlfwWindowConfig { Title = "KernelEngine — 14 UI Quad", Width = 960, Height = 540 })
+    .Add<IRuntimeModule>(new GlfwWindowModule())
+    .AddConfig(new DefaultRenderServiceConfig { ShaderDir = ExamplePaths.ShaderDir, ClearColor = new Vector4(0.10f, 0.12f, 0.16f, 1.0f) })
+    .Add<IRuntimeModule>(new WebgpuRenderModule())
     .Add<IRuntimeModule>(new FrameworkModule())
     .Add<IRuntimeModule>(new SceneNodesModule((tree, sp) =>
     {

@@ -153,8 +153,8 @@ typedef struct renderer
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
     check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders", .io = io }, &r->binder));
-    check("render service", ke_render_service_create(&(ke_render_service_params){
-        .device = gpu, .target = target, .ecs = ecs, .shader_dir = "shaders", .io = io, .binder = r->binder.ref }, &r->service));
+    check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref,
+        &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->service));
     ke_render_service *core = r->service.ref;
 
     ke_result made_view = ke_view_space_rh_create(&r->view_space);
@@ -169,9 +169,8 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
 
     check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
         .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .output = "shadow" }, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&(ke_render_cluster_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .camera = r->camera.ref,
-        .output = "clusters" }, &r->cluster));
+    check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref,
+        "clusters", NULL, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
         .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .output = "gbuffer" }, &r->gbuffer));
     check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
@@ -201,9 +200,9 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
-    ke_gpu_device_webgpu_params dp = { .enable_validation = 1, .debug_labels = renderdoc };
+    ke_gpu_device_webgpu_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(&dp, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
     ke_gpu_texture texture = { 0 };
     check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
