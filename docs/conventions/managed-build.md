@@ -10,7 +10,7 @@ names it and has MSBuild copy it next to its own assembly. The shared definition
 `src/csharp/Directory.Build.props` turns on `UseArtifactsOutput` and sets `ArtifactsPath` to
 `<repo>/build/artifacts` (`Directory.Build.props:4-5`); `tests/csharp/Directory.Build.props` does the
 same (`:4-5`). A project's build output is therefore `build/artifacts/bin/<ProjectName>/<config>/`,
-for example `build/artifacts/bin/00_runtime_minimal/debug/`.
+for example `build/artifacts/bin/pong/debug/`.
 
 ## How a project names its libraries
 
@@ -52,10 +52,10 @@ whatever `--prefix` the native build was given, so the two agree only when the n
 ## What reaches an executable
 
 The copy is an item of the library project, and an executable that references that project through
-`ProjectReference` receives it in its own output directory: the example `00_runtime_minimal` imports
+`ProjectReference` receives it in its own output directory: the example `pong` imports
 no targets file, and its output directory holds `libke_ecs_flecs.so`,
 `libke_input_default.so` and the other libraries of the projects it references
-(`ls build/artifacts/bin/00_runtime_minimal/debug`). A library a project does not declare is not
+(`ls build/artifacts/bin/pong/debug`). A library a project does not declare is not
 copied.
 
 On a Linux build the plugin libraries carry an absolute `RUNPATH` naming `<prefix>/lib`

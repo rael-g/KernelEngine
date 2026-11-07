@@ -6,7 +6,6 @@
           "index.md",
           "toc.yml",
           "*/toc.yml",
-          "guides/**.md",
           "architecture/**.md",
           "conventions/**.md",
           "formats/**.md"

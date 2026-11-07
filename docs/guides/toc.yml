@@ -1,8 +1,0 @@
-- name: "Guides"
-  href: index.md
-- name: "Start the engine from your own program"
-  href: minimal-host.md
-- name: "Put something on screen"
-  href: scene-on-screen.md
-- name: "Load a model into the scene"
-  href: load-a-model.md
