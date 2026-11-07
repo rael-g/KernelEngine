@@ -7,7 +7,6 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Io.Pool;
-using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
@@ -17,6 +16,7 @@ using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 const float metal0 = 0.0f; const float rough0 = 0.8f;
 const float metal1 = 1.0f; const float rough1 = 0.5f;
@@ -24,8 +24,7 @@ const float metal2 = 0.5f; const float rough2 = 0.5f;
 const float metal3 = 0.2f; const float rough3 = 0.6f;
 
 var services = new ServiceCollection()
-    .AddLogger()
-    .AddConsoleSink()
+    .AddLogging(logging => logging.AddConsole())
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()

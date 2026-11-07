@@ -13,12 +13,12 @@ public static class StbImageLoaderRegistration
     /// <summary>
     /// Registers one <see cref="StbImageLoader"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Asset.INativeImageLoader"/> and as <see cref="KernelEngine.Asset.IImageLoader"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddStbImageLoader(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new StbImageLoader(logger, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new StbImageLoader(loggerFactory, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
             : new StbImageLoader(sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
         services.AddSingleton<KernelEngine.Asset.INativeImageLoader>(sp => sp.GetRequiredService<StbImageLoader>());
         services.AddSingleton<KernelEngine.Asset.IImageLoader>(sp => sp.GetRequiredService<StbImageLoader>());

@@ -13,12 +13,12 @@ public static class AssimpAssetLoaderRegistration
     /// <summary>
     /// Registers one <see cref="AssimpAssetLoader"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Asset.INativeAssetLoader"/> and as <see cref="KernelEngine.Asset.IAssetLoader"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddAssimpAssetLoader(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new AssimpAssetLoader(logger, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new AssimpAssetLoader(loggerFactory, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
             : new AssimpAssetLoader(sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
         services.AddSingleton<KernelEngine.Asset.INativeAssetLoader>(sp => sp.GetRequiredService<AssimpAssetLoader>());
         services.AddSingleton<KernelEngine.Asset.IAssetLoader>(sp => sp.GetRequiredService<AssimpAssetLoader>());

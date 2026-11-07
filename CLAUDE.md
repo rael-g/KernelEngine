@@ -117,8 +117,7 @@ Thin wrappers expose the native vtables as managed types. Game code talks to the
 
 ```csharp
 var services = new ServiceCollection()
-    .AddLogger()
-    .AddConsoleSink()
+    .AddLogging(logging => logging.AddConsole())
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()

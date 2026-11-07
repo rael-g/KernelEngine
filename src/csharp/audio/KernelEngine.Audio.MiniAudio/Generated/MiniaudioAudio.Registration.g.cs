@@ -13,12 +13,12 @@ public static class MiniaudioAudioRegistration
     /// <summary>
     /// Registers one <see cref="MiniaudioAudio"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Audio.INativeAudio"/> and as <see cref="KernelEngine.Audio.IAudio"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddMiniaudioAudio(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new MiniaudioAudio(logger, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new MiniaudioAudio(loggerFactory, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
             : new MiniaudioAudio(sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
         services.AddSingleton<KernelEngine.Audio.INativeAudio>(sp => sp.GetRequiredService<MiniaudioAudio>());
         services.AddSingleton<KernelEngine.Audio.IAudio>(sp => sp.GetRequiredService<MiniaudioAudio>());

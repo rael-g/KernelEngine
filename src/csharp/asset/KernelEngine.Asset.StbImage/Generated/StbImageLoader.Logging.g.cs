@@ -7,17 +7,17 @@ namespace KernelEngine.Asset.StbImage;
 
 public sealed unsafe partial class StbImageLoader
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
-    public StbImageLoader(KernelEngine.Logger.ILogger logger, KernelEngine.Io.INativeIo io) : base(CreateLogged(logger, io))
+    public StbImageLoader(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, io))
     {
     }
 
-    private static KernelEngine.Asset.Native.ke_image_loader_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Asset.Native.ke_image_loader_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Asset.StbImage.Native.NativeMethods.asset_stb_image_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Asset.StbImage.Native.NativeMethods.asset_stb_image_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(io);
     }
 }

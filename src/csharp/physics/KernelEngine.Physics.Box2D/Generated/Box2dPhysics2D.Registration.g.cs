@@ -13,15 +13,15 @@ public static class Box2dPhysics2DRegistration
     /// <summary>
     /// Registers one <see cref="Box2dPhysics2D"/>, created on first resolution with its providers from the
     /// container and the <see cref="Box2dPhysics2DConfig"/> it holds, or the defaults when it holds none, as itself, as <see cref="KernelEngine.Physics.INativePhysics2d"/> and as <see cref="KernelEngine.Physics.IPhysics2D"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddBox2dPhysics2D(this IServiceCollection services)
     {
         services.AddSingleton(sp =>
         {
             var config = sp.GetService<Microsoft.Extensions.Options.IOptions<Box2dPhysics2DConfig>>()?.Value ?? new Box2dPhysics2DConfig();
-            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-                ? new Box2dPhysics2D(logger, config.GravityX, config.GravityY)
+            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+                ? new Box2dPhysics2D(loggerFactory, config.GravityX, config.GravityY)
                 : new Box2dPhysics2D(config.GravityX, config.GravityY);
         });
         services.AddSingleton<KernelEngine.Physics.INativePhysics2d>(sp => sp.GetRequiredService<Box2dPhysics2D>());

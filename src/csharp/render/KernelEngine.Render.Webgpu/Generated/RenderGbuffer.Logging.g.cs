@@ -7,22 +7,22 @@ namespace KernelEngine.Render.Webgpu;
 
 public sealed unsafe partial class RenderGbuffer
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
     /// <param name="service">Holds the resources it writes; borrowed.</param>
     /// <param name="device">Names the components the pass reads; borrowed.</param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
     /// <param name="output">The group it writes: albedo, normal and emissive under the suffixes of kernel_engine/render/resource_groups.h, each declared the size of the backbuffer.</param>
-    public RenderGbuffer(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default) : this(CreateLogged(logger, runtime, service, device, scene, frame, output))
+    public RenderGbuffer(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default) : this(CreateLogged(loggerFactory, runtime, service, device, scene, frame, output))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, service, device, scene, frame, output);
     }
 }

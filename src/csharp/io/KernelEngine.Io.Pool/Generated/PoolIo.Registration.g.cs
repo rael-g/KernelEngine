@@ -13,12 +13,12 @@ public static class PoolIoRegistration
     /// <summary>
     /// Registers one <see cref="PoolIo"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Io.INativeIo"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddPoolIo(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new PoolIo(logger, sp.GetRequiredService<KernelEngine.TaskPool.INativeTaskPool>(), sp.GetRequiredService<KernelEngine.FileSystem.INativeFileSystem>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new PoolIo(loggerFactory, sp.GetRequiredService<KernelEngine.TaskPool.INativeTaskPool>(), sp.GetRequiredService<KernelEngine.FileSystem.INativeFileSystem>())
             : new PoolIo(sp.GetRequiredService<KernelEngine.TaskPool.INativeTaskPool>(), sp.GetRequiredService<KernelEngine.FileSystem.INativeFileSystem>()));
         services.AddSingleton<KernelEngine.Io.INativeIo>(sp => sp.GetRequiredService<PoolIo>());
         return services;

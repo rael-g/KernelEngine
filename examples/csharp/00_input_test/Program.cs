@@ -5,7 +5,6 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
 using KernelEngine.Io.Pool;
-using KernelEngine.Logger;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
 using KernelEngine.TaskPool;
@@ -14,14 +13,14 @@ using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using KernelEngine.Framework.Native;
 
 using InputAction = KernelEngine.Framework.InputAction;
 
 var services = new ServiceCollection()
-    .AddLogger()
-    .AddConsoleSink()
+    .AddLogging(logging => logging.AddConsole())
     .AddInput()
     .AddSingleton(_ => KeyEdgeListener.Actions())
     .AddFlecsEcsRegistry()

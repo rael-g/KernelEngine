@@ -8,16 +8,16 @@ public static class InputServiceCollectionExtensions
 {
     /// <summary>
     /// Registers an <see cref="Input"/> singleton. The library logs to the registered
-    /// <see cref="ILogger"/>, or to stderr when there is none.
+    /// <see cref="Microsoft.Extensions.Logging.ILoggerFactory"/>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddInput(this IServiceCollection services)
     {
         services.AddSingleton(sp =>
         {
-            if (sp.GetService<ILogger>() is { } logger)
+            if (sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
                 unsafe
                 {
-                    Native.NativeMethods.input_default_set_log_callback(LogCallbackNative.Pointer, LogCallbackNative.Pin(logger.Log));
+                    Native.NativeMethods.input_default_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
                 }
             return new Input();
         });

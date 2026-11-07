@@ -20,5 +20,8 @@
     <ProjectReference Include="..\..\..\src\csharp\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="10.0.3" />
+  </ItemGroup>
 </Project>
 

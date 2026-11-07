@@ -7,21 +7,21 @@ namespace KernelEngine.Render.Webgpu;
 
 public sealed unsafe partial class DefaultRenderUi
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="runtime">Registers the pass's systems; borrowed, must outlive it.</param>
     /// <param name="ecs">Registers the quad and label components; borrowed.</param>
     /// <param name="service">Holds the frame's color, over which the pass draws at KE_RENDER_STAGE_OVERLAY; borrowed.</param>
     /// <param name="device">Borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    public DefaultRenderUi(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(logger, runtime, ecs, service, device, frame))
+    public DefaultRenderUi(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(loggerFactory, runtime, ecs, service, device, frame))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, ecs, service, device, frame);
     }
 }

@@ -7,7 +7,6 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
 using KernelEngine.Io.Pool;
-using KernelEngine.Logger;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
@@ -18,6 +17,7 @@ using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using Pong;
 
@@ -26,8 +26,7 @@ var services = new ServiceCollection()
     .AddConfig<GlfwWindowConfig>("runtime.window")
     .AddConfig<Box2dPhysics2DConfig>("runtime.physics_2d")
     .AddConfig<WebgpuWindowGpuRenderTargetConfig>("runtime.renderer")
-    .AddLogger()
-    .AddConsoleSink(LogLevel.Warning)
+    .AddLogging(logging => logging.AddConsole().SetMinimumLevel(LogLevel.Warning))
     .AddInput()
     .AddBox2dPhysics2D()
     .AddMiniaudioAudio()
