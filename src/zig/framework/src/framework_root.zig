@@ -14,6 +14,7 @@ comptime {
     _ = @import("component_registry.zig");
     _ = @import("scene_tree.zig");
     _ = @import("scene_hierarchy.zig");
+    _ = @import("node_types.zig");
     _ = @import("input_actions.zig");
     _ = @import("scene_loader.zig");
     _ = @import("scene_values.zig");

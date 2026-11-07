@@ -92,6 +92,11 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// Builds and binds the script an entity's declared type names.
 pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
 
+/// One call of a behaviour over the nodes of its type. The body walks them with next, which
+/// points self and fields at each node in turn; an on handler walks every pair of a node and an
+/// event, with event pointing at the event.
+pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Values a caller gives; a zero field takes its default.
 pub const ke_input_actions_config = extern struct {
     /// The configuration section the maps are read from; NULL reads "input".
@@ -173,3 +178,10 @@ pub extern fn ke_signal_bus_create(params: ?*const ke_signal_bus_params, out_bus
 /// Creates a component registry over ecs, registering the transform, 2D transform and world
 /// transform components on it with their field tables.
 pub extern fn ke_component_registry_create(ecs: ?*abi_ecs.c.ke_ecs, out_registry: ?*abi_component_registry.c.ke_component_registry_handle) abi_result.c.ke_result;
+
+/// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
+/// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component
+/// that marks a node readied, and the system that clears the events at PreUpdate. `runtime`,
+/// `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy
+/// unregisters every system they registered.
+pub extern fn ke_node_types_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;

@@ -17,6 +17,42 @@ pub const ke_query_id = u64;
 /// nothing in the engine wanted.
 pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a behaviour over the nodes of its type. The body walks them with next, which
+/// points self and fields at each node in turn; an on handler walks every pair of a node and an
+/// event, with event pointing at the event.
+pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One event a node type handles, and the behaviour that handles it.
+pub const ke_node_handler = extern struct {
+    event: ke_component_id = std.mem.zeroes(ke_component_id),
+    on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
+};
+
+/// A node type: its fields, the components its nodes also carry, and its behaviours.
+pub const ke_node_type_desc = extern struct {
+    /// The fields, registered as a component under the type's name.
+    fields: abi_ecs.c.ke_component_params = std.mem.zeroes(abi_ecs.c.ke_component_params),
+    /// Names of registered components every node of the type carries beside its fields.
+    with: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
+    with_count: u32 = std.mem.zeroes(u32),
+    /// Runs once per node, in the PreUpdate after the node is created, before its first update.
+    ready: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
+    /// Runs every tick, in Update.
+    update: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
+    /// Runs every fixed step, in FixedUpdate.
+    fixed_update: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
+    /// Runs in PostUpdate for each node and each event of the handler's type raised this tick.
+    on: ?[*]const ke_node_handler = std.mem.zeroes(?[*]const ke_node_handler),
+    on_count: u32 = std.mem.zeroes(u32),
+    /// Forwarded to every behaviour.
+    user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+};
+
 /// The components the plugins make addressable from a scene file. Each plugin adds its own; the
 /// host then registers all of them with an ecs and a component registry: each component under
 /// its name, size and field table, the table handed to the registry, with the apply callback the
@@ -41,4 +77,56 @@ pub const ke_scene_component_set_handle = extern struct {
 pub const ke_scene_hierarchy_handle = extern struct {
     ref: ?*ke_scene_hierarchy = std.mem.zeroes(?*ke_scene_hierarchy),
     destroy: ?*const fn (?*ke_scene_hierarchy) callconv(.c) void = null,
+};
+
+/// What a behaviour is given. Behaviours run one at a time, never two at once, so a body may
+/// read any node; it changes structure (a node, a component, an event) only through the calls
+/// that record into `commands`, applied after the body returns.
+pub const ke_node_ctx = extern struct {
+    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// The node next moved to; KE_ENTITY_INVALID before the first call of next.
+    self: ke_entity = std.mem.zeroes(ke_entity),
+    /// The node's own fields, the struct its type was registered with.
+    fields: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// The event an on handler is delivering; NULL in every other behaviour.
+    event: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+    /// Seconds since the previous tick, or the fixed timestep in fixed_update.
+    dt: f32 = std.mem.zeroes(f32),
+    /// The queue structural changes are recorded into.
+    commands: ?*abi_ecs.c.ke_ecs_commands = std.mem.zeroes(?*abi_ecs.c.ke_ecs_commands),
+    /// Moves to the next node, or the next pair of a node and an event.
+    next: ?*const fn (?*ke_node_ctx) callconv(.c) bool = null,
+    /// One of the node's components: its fields or one its type names in `with`.
+    get: ?*const fn (?*ke_node_ctx, ke_component_id) callconv(.c) ?*anyopaque = null,
+    /// The node's parent, KE_ENTITY_INVALID for a node at the root.
+    parent: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
+    /// The child of node named name, KE_ENTITY_INVALID when it has none.
+    child: ?*const fn (?*ke_node_ctx, ke_entity, ?[*:0]const u8) callconv(.c) ke_entity = null,
+    /// The value of an axis action, 0 without input actions.
+    axis: ?*const fn (?*ke_node_ctx, i32) callconv(.c) f32 = null,
+    /// Whether a button action was pressed this tick, false without input actions.
+    pressed: ?*const fn (?*ke_node_ctx, i32) callconv(.c) bool = null,
+    /// Records a node of type named name under parent, its fields and the components its type names
+    /// in `with` holding their declared defaults.
+    spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Records the destruction of node and its descendants.
+    destroy: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Records data as an event of type event, delivered to the on handlers of the PostUpdate of
+    /// this tick that run after it is applied, and gone at the next PreUpdate.
+    raise: ?*const fn (?*ke_node_ctx, ke_component_id, ?*const anyopaque, usize) callconv(.c) abi_result.c.ke_result = null,
+};
+
+/// Node types and the events between them: each behaviour of a registered type runs as a system
+/// of its phase over the nodes of the type, one behaviour at a time.
+pub const ke_node_types = extern struct {
+    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// Registers a node type and the systems of its behaviours.
+    register_type: ?*const fn (?*ke_node_types, ?*const ke_node_type_desc, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// Registers an event type.
+    register_event: ?*const fn (?*ke_node_types, ?*const abi_ecs.c.ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+};
+
+pub const ke_node_types_handle = extern struct {
+    ref: ?*ke_node_types = std.mem.zeroes(?*ke_node_types),
+    destroy: ?*const fn (?*ke_node_types) callconv(.c) void = null,
 };

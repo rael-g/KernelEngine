@@ -59,9 +59,176 @@ pub const SceneHierarchyHandle = struct {
 
 };
 
+pub const NodeCtx = struct {
+    ptr: *c.ke_node_ctx,
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_node_ctx {
+        return .{
+            .next = &struct {
+                fn call(self: ?*c.ke_node_ctx) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.next(state);
+                }
+            }.call,
+            .get = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_component_id) callconv(.c) ?*anyopaque {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*anyopaque)));
+                    return T.get(state, a0);
+                }
+            }.call,
+            .parent = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) c.ke_entity {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
+                    return T.parent(state, a0);
+                }
+            }.call,
+            .child = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity, a1: ?[*:0]const u8) callconv(.c) c.ke_entity {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
+                    return T.child(state, a0, std.mem.span(a1 orelse return std.mem.zeroes(c.ke_entity)));
+                }
+            }.call,
+            .axis = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: i32) callconv(.c) f32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(f32)));
+                    return T.axis(state, a0);
+                }
+            }.call,
+            .pressed = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: i32) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.pressed(state, a0);
+                }
+            }.call,
+            .spawn = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_component_id, a1: ?[*:0]const u8, a2: c.ke_entity, a3: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.spawn(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed)), a2) catch |failure| return resultOf(failure);
+                    (a3 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .destroy = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.destroy(state, a0) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .raise = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_component_id, a1: ?*const anyopaque, a2: usize) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.raise(state, a0, a1, a2) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+        };
+    }
+
+    /// Moves to the next node, or the next pair of a node and an event.
+    pub fn next(self: NodeCtx) bool {
+        return self.ptr.next.?(self.ptr);
+    }
+
+    /// One of the node's components: its fields or one its type names in `with`.
+    pub fn get(self: NodeCtx, cid: c.ke_component_id) ?*anyopaque {
+        return self.ptr.get.?(self.ptr, cid);
+    }
+
+    /// The node's parent, KE_ENTITY_INVALID for a node at the root.
+    pub fn parent(self: NodeCtx, node: c.ke_entity) c.ke_entity {
+        return self.ptr.parent.?(self.ptr, node);
+    }
+
+    /// The child of node named name, KE_ENTITY_INVALID when it has none.
+    pub fn child(self: NodeCtx, node: c.ke_entity, name: [:0]const u8) c.ke_entity {
+        return self.ptr.child.?(self.ptr, node, name.ptr);
+    }
+
+    /// The value of an axis action, 0 without input actions.
+    pub fn axis(self: NodeCtx, action: i32) f32 {
+        return self.ptr.axis.?(self.ptr, action);
+    }
+
+    /// Whether a button action was pressed this tick, false without input actions.
+    pub fn pressed(self: NodeCtx, action: i32) bool {
+        return self.ptr.pressed.?(self.ptr, action);
+    }
+
+    /// Records a node of type named name under parent, its fields and the components its type names
+    /// in `with` holding their declared defaults.
+    pub fn spawn(self: NodeCtx, @"type": c.ke_component_id, name: [:0]const u8, parent_: c.ke_entity) Error!c.ke_entity {
+        var written: c.ke_entity = undefined;
+        try checkResult(self.ptr.spawn.?(self.ptr, @"type", name.ptr, parent_, &written));
+        return written;
+    }
+
+    /// Records the destruction of node and its descendants.
+    pub fn destroy(self: NodeCtx, node: c.ke_entity) Error!void {
+        try checkResult(self.ptr.destroy.?(self.ptr, node));
+    }
+
+    /// Records data as an event of type event, delivered to the on handlers of the PostUpdate of
+    /// this tick that run after it is applied, and gone at the next PreUpdate.
+    pub fn raise(self: NodeCtx, event: c.ke_component_id, data: ?*const anyopaque, size: usize) Error!void {
+        try checkResult(self.ptr.raise.?(self.ptr, event, data, size));
+    }
+
+};
+
+pub const NodeTypes = struct {
+    ptr: *c.ke_node_types,
+    owner: ?c.ke_node_types_handle = null,
+
+    pub fn deinit(self: NodeTypes) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_node_types {
+        return .{
+            .register_type = &struct {
+                fn call(self: ?*c.ke_node_types, a0: ?*const c.ke_node_type_desc, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.registerType(state, a0) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .register_event = &struct {
+                fn call(self: ?*c.ke_node_types, a0: ?*const abi_ecs.c.ke_component_params, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.registerEvent(state, a0) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+        };
+    }
+
+    /// Registers a node type and the systems of its behaviours.
+    pub fn registerType(self: NodeTypes, desc: ?*const c.ke_node_type_desc) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.register_type.?(self.ptr, desc, &written));
+        return written;
+    }
+
+    /// Registers an event type.
+    pub fn registerEvent(self: NodeTypes, event: ?*const abi_ecs.c.ke_component_params) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.register_event.?(self.ptr, event, &written));
+        return written;
+    }
+
+};
+
 pub const SceneHierarchy = struct {
     ptr: *c.ke_scene_hierarchy,
 
 };
 
+pub const NodeHandler = c.ke_node_handler;
+pub const NodeTypeDesc = c.ke_node_type_desc;
 pub const SceneComponentSetHandle = c.ke_scene_component_set_handle;
+pub const NodeTypesHandle = c.ke_node_types_handle;

@@ -13,6 +13,7 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/framework/scene_component_set.h>
         \\#include <kernel_engine/framework/scene_hierarchy.h>
+        \\#include <kernel_engine/framework/node_types.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/render"));
