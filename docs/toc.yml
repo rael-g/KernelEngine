@@ -1,6 +1,3 @@
-- name: Guides
-  href: guides/
-  homepage: guides/index.md
 - name: Architecture
   href: architecture/
   homepage: architecture/index.md

@@ -37,21 +37,11 @@ dotnet test KernelEngine.slnx
 
 ## Run a first example
 
-A C example is built with the native tree:
+The example game is Pong, under `examples/csharp/games/pong`:
 
 ```bash
-build/native/bin/c_demo_01
+dotnet run --project examples/csharp/games/pong
 ```
-
-The smallest C# host is [00_runtime_minimal](https://github.com/rael-g/KernelEngine/tree/main/examples/csharp/00_runtime_minimal).
-It registers the ECS, the task pool, the runtime and a window module, loads the modules
-and ticks the loop.
-
-```bash
-dotnet run --project examples/csharp/00_runtime_minimal
-```
-
-More examples are under `examples/c` and `examples/csharp`.
 
 ## Contributing
 

@@ -1,29 +1,6 @@
 <Solution>
   <Folder Name="/examples/" />
   <Folder Name="/examples/csharp/">
-    <Project Path="examples/csharp/00_input_test/00_input_test.csproj" />
-    <Project Path="examples/csharp/00_runtime_minimal/00_runtime_minimal.csproj" />
-    <Project Path="examples/csharp/01_runtime_clear_color/01_runtime_clear_color.csproj" />
-    <Project Path="examples/csharp/01_window_scene/01_window_scene.csproj" />
-    <Project Path="examples/csharp/02_textured_quad/02_textured_quad.csproj" />
-    <Project Path="examples/csharp/03_pbr_directional/03_pbr_directional.csproj" />
-    <Project Path="examples/csharp/04_normal_map/04_normal_map.csproj" />
-    <Project Path="examples/csharp/05_skybox_ibl/05_skybox_ibl.csproj" />
-    <Project Path="examples/csharp/06_shadow_map/06_shadow_map.csproj" />
-    <Project Path="examples/csharp/07_point_lights/07_point_lights.csproj" />
-    <Project Path="examples/csharp/08_spot_lights/08_spot_lights.csproj" />
-    <Project Path="examples/csharp/09_many_lights/09_many_lights.csproj" />
-    <Project Path="examples/csharp/10_hdr_bloom/10_hdr_bloom.csproj" />
-    <Project Path="examples/csharp/12_asset_loading/12_asset_loading.csproj" />
-    <Project Path="examples/csharp/13_full_scene/13_full_scene.csproj" />
-    <Project Path="examples/csharp/14_ui_quad/14_ui_quad.csproj" />
-    <Project Path="examples/csharp/15_audio_test/15_audio_test.csproj" />
-    <Project Path="examples/csharp/16_physics_test/16_physics_test.csproj" />
-    <Project Path="examples/csharp/17_webgpu_clear/17_webgpu_clear.csproj" />
-    <Project Path="examples/csharp/18_webgpu_mesh/18_webgpu_mesh.csproj" />
-    <Project Path="examples/csharp/19_node_stress/node_stress.csproj" />
-    <Project Path="examples/csharp/19_transparency/19_transparency.csproj" />
-    <Project Path="examples/csharp/20_input_actions/20_input_actions.csproj" />
   </Folder>
   <Folder Name="/examples/csharp/games/">
     <Project Path="examples/csharp/games/pong/pong.csproj" />
@@ -77,5 +54,6 @@
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
     <Project Path="tests/integration/KernelEngine.Integration.Tests/KernelEngine.Integration.Tests.csproj" />
+    <Project Path="tests/stress/node_stress/node_stress.csproj" />
   </Folder>
 </Solution>

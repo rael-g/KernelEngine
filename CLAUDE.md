@@ -18,7 +18,6 @@ vcpkg itself is fetched automatically (`build/tools/vcpkg-<version>/`) — no ma
 zig build --prefix build/native --global-cache-dir build/zig-global       # configure + build + install, one step
 zig build test --prefix build/native --global-cache-dir build/zig-global  # every plugin's own Zig tests
 zig build docs --prefix build/native --global-cache-dir build/zig-global  # build/native/docs/engine/, pages generated from the sources
-build/native/bin/c_demo_01                                        # run a C example (c_demo_01.exe on Windows)
 build/native/bin/docir query <name> src                           # what the sources document about a symbol, a file or an idea
 ```
 
@@ -134,7 +133,7 @@ while (!window.ShouldClose()) runtime.Tick(dt);
 runtime.UnloadModules();
 ```
 
-Game code becomes a runtime module too, registering its own components and systems via `IRuntimeModule.OnLoad`. The smallest working host is [`examples/csharp/00_runtime_minimal/Program.cs`](examples/csharp/00_runtime_minimal/Program.cs) — copy that, not this snippet.
+Game code becomes a runtime module too, registering its own components and systems via `IRuntimeModule.OnLoad`. A complete host is [`examples/csharp/games/pong/Program.cs`](examples/csharp/games/pong/Program.cs) — copy that, not this snippet.
 
 A service locator is forbidden: injection happens in the orchestration area, never by asking a container for a dependency from inside engine code.
 

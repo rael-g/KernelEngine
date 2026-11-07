@@ -97,8 +97,8 @@ and does not prevent one.
 
 ## What it leaves out
 
-- **Running the examples.** The capture examples `visual` draws are the only ones started. No other C or
-  C# example runs, so a defect that only shows when one of them starts is not caught here.
+- **Running the examples.** No example is started; `visual` runs only the capture fixtures under
+  `tests/visual/`, so a defect that only shows when an example starts is not caught here.
 - **Coverage.** `scripts/coverage.cs` is not called.
 - **Artifacts.** The libraries it builds are discarded with the runner; the only upload is the images of
   a failed `visual`.

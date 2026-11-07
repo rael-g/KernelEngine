@@ -195,7 +195,7 @@ pub fn build(b: *std.Build) void {
         .@"tomlc99-dir" = tomlc99_dir,
     }, &.{}, .has_tests);
 
-    const window_glfw = ctx.member("ke_window_glfw", .{
+    _ = ctx.member("ke_window_glfw", .{
         .target = target,
         .optimize = optimize,
         .@"glfw-include" = vcpkg_include,
@@ -221,7 +221,7 @@ pub fn build(b: *std.Build) void {
         .@"stb-include" = vcpkg_include,
     }, &.{}, .has_tests);
 
-    const physics_2d_box2d = ctx.member("ke_physics_2d_box2d", .{
+    _ = ctx.member("ke_physics_2d_box2d", .{
         .target = target,
         .optimize = optimize,
         .@"box2d-include" = vcpkg_include,
@@ -371,7 +371,6 @@ pub fn build(b: *std.Build) void {
 
     var materials_dir_list: std.ArrayList([]const u8) = .empty;
     materials_dir_list.append(b.allocator, b.pathJoin(&.{ shader_lib_dir, "materials" })) catch @panic("OOM");
-    materials_dir_list.append(b.allocator, b.pathJoin(&.{ root, "examples/csharp/03_pbr_directional/materials" })) catch @panic("OOM");
     if (b.option([]const u8, "material-dirs", "'|'-separated directories of authored materials to compile beside the engine's")) |extra| {
         var it = std.mem.splitScalar(u8, extra, '|');
         while (it.next()) |dir| {
@@ -463,61 +462,6 @@ pub fn build(b: *std.Build) void {
         b.getInstallStep().dependOn(&copy_dlls_to_bin.step);
     }
 
-    const demo01 = ctx.example("c_demo_01", .{
-        .target = target,
-        .optimize = optimize,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "logger" }),
-            b.pathJoin(&.{ src_c, "physics" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-        }),
-        .libs = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
-    }, &.{&physics_2d_box2d.step});
-
-    const demo_step = b.step("demo01", "Build examples/c/01_minimal_log");
-    demo_step.dependOn(&demo01.step);
-
-    const demo05 = ctx.example("c_demo_05", .{
-        .target = target,
-        .optimize = optimize,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-    }, &.{&gpu_device_webgpu.step});
-
-    const demo06 = ctx.example("c_demo_06", .{
-        .target = target,
-        .optimize = optimize,
-        .@"shader-name" = "triangle",
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-        }),
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step });
-
     const demo15 = ctx.example("c_demo_15", .{
         .target = target,
         .optimize = optimize,
@@ -540,259 +484,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
         }),
     }, &.{ &gpu_render_target_texture.step, &gpu_device_webgpu.step });
-
-    const demo07 = ctx.example("c_demo_07", .{
-        .target = target,
-        .optimize = optimize,
-        .@"shader-name" = "rotate",
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-        }),
-        .@"link-m" = true,
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step });
-
-    const demo08 = ctx.example("c_demo_08", .{
-        .target = target,
-        .optimize = optimize,
-        .@"shader-name" = "mesh",
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-        }),
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step });
-
-    const demo09 = ctx.example("c_demo_09", .{
-        .target = target,
-        .optimize = optimize,
-        .@"shader-name" = "tex",
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-        }),
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step });
-
-    const demo10 = ctx.example("c_demo_10", .{
-        .target = target,
-        .optimize = optimize,
-        .@"shader-name" = "depth",
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-        }),
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step });
-
-    const demo12 = ctx.example("c_demo_12", .{
-        .target = target,
-        .optimize = optimize,
-        .slangc = ctx.slangc,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-            b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
-            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_c, "file_system" }),
-            b.pathJoin(&.{ src_c, "io" }),
-            b.pathJoin(&.{ src_c, "task_pool" }),
-            b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "io/pool/include" }),
-            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
-        }),
-    }, &.{ &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &ecs_flecs.step, &file_system_std.step, &io_pool.step, &task_pool_enki.step });
-
-    const demo13 = ctx.example("c_demo_13", .{
-        .target = target,
-        .optimize = optimize,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "spatial" }),
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "task_pool" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-            b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
-            b.pathJoin(&.{ src_zig, "view/space/include" }),
-            b.pathJoin(&.{ src_zig, "render/camera/include" }),
-            b.pathJoin(&.{ src_zig, "render/scene/include" }),
-            b.pathJoin(&.{ src_zig, "render/frame/include" }),
-            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
-            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
-            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
-            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
-            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
-            b.pathJoin(&.{ src_zig, "render/ui/include" }),
-            b.pathJoin(&.{ src_c, "text" }),
-            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
-            b.pathJoin(&.{ src_zig, "runtime/include" }),
-            b.pathJoin(&.{ src_c, "asset" }),
-            b.pathJoin(&.{ src_c, "framework" }),
-            b.pathJoin(&.{ src_zig, "framework/include" }),
-            b.pathJoin(&.{ src_c, "file_system" }),
-            b.pathJoin(&.{ src_c, "io" }),
-            b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "io/pool/include" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
-        }),
-    }, &.{
-        &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step,
-        &ecs_flecs.step,   &task_pool_enki.step,    &runtime.step, &file_system_std.step, &io_pool.step });
-
-    const demo14 = ctx.example("c_demo_14", .{
-        .target = target,
-        .optimize = optimize,
-        .@"include-dirs" = joinPaths(b, &.{
-            b.pathJoin(&.{ src_c, "spatial" }),
-            b.pathJoin(&.{ src_c, "configuration" }),
-            b.pathJoin(&.{ src_c, "window" }),
-            b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "task_pool" }),
-            b.pathJoin(&.{ src_c, "math" }),
-            b.pathJoin(&.{ src_zig, "common/include" }),
-            b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_c, "render" }),
-            b.pathJoin(&.{ src_c, "view" }),
-            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
-            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
-            b.pathJoin(&.{ src_zig, "render/service/include" }),
-            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
-            b.pathJoin(&.{ src_zig, "view/space/include" }),
-            b.pathJoin(&.{ src_zig, "render/camera/include" }),
-            b.pathJoin(&.{ src_zig, "render/scene/include" }),
-            b.pathJoin(&.{ src_zig, "render/frame/include" }),
-            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
-            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
-            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
-            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
-            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
-            b.pathJoin(&.{ src_zig, "render/ui/include" }),
-            b.pathJoin(&.{ src_c, "text" }),
-            b.pathJoin(&.{ src_c, "logger" }),
-            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
-            b.pathJoin(&.{ src_zig, "runtime/include" }),
-            b.pathJoin(&.{ src_c, "asset" }),
-            b.pathJoin(&.{ src_c, "framework" }),
-            b.pathJoin(&.{ src_zig, "framework/include" }),
-            b.pathJoin(&.{ src_c, "file_system" }),
-            b.pathJoin(&.{ src_c, "io" }),
-            b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "io/pool/include" }),
-        }),
-        .libs = joinPaths(b, &.{
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
-        }),
-        .@"link-m" = true,
-    }, &.{
-        &window_glfw.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,   &task_pool_enki.step,    &runtime.step, &file_system_std.step, &io_pool.step });
 
     const demo16 = ctx.example("c_demo_16", .{
         .target = target,
@@ -865,7 +556,7 @@ pub fn build(b: *std.Build) void {
         &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step, &file_system_std.step, &io_pool.step });
 
     const all_examples = [_]*std.Build.Step.InstallArtifact{
-        demo01, demo05, demo06, demo07, demo08, demo09, demo10, demo12, demo13, demo14, demo15, demo16,
+        demo15, demo16,
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
 }
