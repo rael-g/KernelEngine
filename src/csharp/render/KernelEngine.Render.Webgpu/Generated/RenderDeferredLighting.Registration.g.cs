@@ -13,8 +13,8 @@ public static class RenderDeferredLightingRegistration
     /// <summary>Registers one <see cref="RenderDeferredLighting"/>, created when the modules load with its providers from the container.</summary>
     public static IServiceCollection AddRenderDeferredLighting(this IServiceCollection services, bool iblEnabled = default, string? gbuffer = default, string? shadow = default, string? clusters = default)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderDeferredLighting(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), iblEnabled, sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), gbuffer, shadow, clusters)
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new RenderDeferredLighting(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), iblEnabled, sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), gbuffer, shadow, clusters)
             : new RenderDeferredLighting(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), iblEnabled, sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), gbuffer, shadow, clusters));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderDeferredLighting>());
         return services;

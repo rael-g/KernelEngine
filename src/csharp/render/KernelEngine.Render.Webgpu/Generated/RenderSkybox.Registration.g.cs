@@ -13,8 +13,8 @@ public static class RenderSkyboxRegistration
     /// <summary>Registers one <see cref="RenderSkybox"/>, created when the modules load with its providers from the container.</summary>
     public static IServiceCollection AddRenderSkybox(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderSkybox(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new RenderSkybox(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>())
             : new RenderSkybox(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>()));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderSkybox>());
         return services;

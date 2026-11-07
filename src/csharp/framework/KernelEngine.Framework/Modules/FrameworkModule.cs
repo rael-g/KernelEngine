@@ -40,7 +40,7 @@ public sealed class FrameworkModule : IRuntimeModule
 
     /// <summary>
     /// Registers the ECS registry, the signal bus, the scene tree and the component registry. The
-    /// framework library logs to the registered <see cref="KernelEngine.Logger.ILogger"/> once the
+    /// framework library logs to the registered <see cref="Microsoft.Extensions.Logging.ILoggerFactory"/> once the
     /// scene tree is created, or to stderr when there is none.
     /// </summary>
     /// <exception cref="InvalidOperationException">
@@ -76,8 +76,8 @@ public sealed class FrameworkModule : IRuntimeModule
             var runtime = (INativeRuntime)sp.GetRequiredService<IRuntime>();
             unsafe
             {
-                if (sp.GetService<KernelEngine.Logger.ILogger>() is { } logger)
-                    KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+                if (sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
+                    KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
                 ke_scene_tree_handle tree;
                 KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(
                     flecsEcs.Native, runtime.Native, &tree), "ke_scene_tree_create");

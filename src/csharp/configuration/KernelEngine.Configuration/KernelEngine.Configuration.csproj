@@ -26,6 +26,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
   </ItemGroup>
 </Project>

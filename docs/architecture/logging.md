@@ -13,8 +13,8 @@ is `src/zig/logger/log.zig`, the managed side is under `src/csharp/logger/`.
 | library destination | `@import("log").Destination` in each plugin root's `std_options` | every `std.log` line of the library | the line to the callback the host set, or to stderr |
 | library setter | `<library>_set_log_callback`, declared in each plugin's `<library>_log.h` | a callback and its context | them to the library's destination |
 | managed bridge | `LogCallback`, `LogCallbackNative`, generated from `ke_log_callback` | a managed handler | the callback pointer and the context a setter takes |
-| managed logger | `Logger`, `ILogger` | a `LogLevel`, a tag and a message | the event to every sink that admits it |
-| managed sink | `ILoggerSink` | events whose level reaches its `MinLevel` | whatever the sink does with them |
+| managed route | `NativeLogging` | an `ILoggerFactory` | the callback and one context per factory, which log each line to the factory's logger for its scope |
+| managed logging | `Microsoft.Extensions.Logging` | lines from managed code and from the route | them to the providers the host added, filtered by the levels it set |
 
 ## What ties the parts together
 
@@ -27,19 +27,14 @@ library a plugin routes logs under that library's own name.
 
 **Until a callback is set, lines go to stderr.** A null callback sends them back there.
 
-**The managed side reaches the setters through its wrappers.** The code that creates a library's
-objects hands the setter `LogCallbackNative.Pointer` and `LogCallbackNative.Pin(logger.Log)`, with
-the `ILogger` from the container, so a native line arrives as `ILogger.Log` with the scope as the
-tag.
+**One channel.** The code that creates a library's objects hands the setter
+`NativeLogging.Callback` and `NativeLogging.ContextOf(loggerFactory)`, with the `ILoggerFactory`
+from the container, so a native line is logged under the category of its scope, at the
+`Microsoft.Extensions.Logging` level of the same name, beside every managed line.
 
-**The filter is the sink's.** The managed logger has no level of its own; it offers an event to
-each sink whose `MinLevel` the event reaches, in the order the sinks were added.
-
-**Composition.** `AddLogger` registers the logger and, when it is first resolved, adds the
-`ILoggerSink` services registered by then. `AddConsoleSink` registers the console sink at the
-level the host gives it, which so filters native and managed lines alike.
+**The filter and the output are the host's.** The host composes them with `AddLogging`, as any
+.NET application does; a line below the level it set is dropped, native or managed.
 
 ## What the parts agree on without a contract
 
-- The console format, `[LEVEL] tag: message`.
 - The setter's name, `<library>_set_log_callback`, spelled from the library name by the `log` module.

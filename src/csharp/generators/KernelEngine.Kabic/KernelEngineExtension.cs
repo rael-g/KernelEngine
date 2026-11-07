@@ -9,7 +9,7 @@ namespace KernelEngine.Kabic;
 
 /// <summary>
 /// What a KernelEngine host needs of every class the factories extension projects: a constructor
-/// that sends the library's log to a <c>KernelEngine.Logger.ILogger</c> through the library's
+/// that sends the library's log to a <c>Microsoft.Extensions.Logging.ILoggerFactory</c> through the library's
 /// log-callback setter, and an <c>Add&lt;Class&gt;</c> registration into
 /// <c>Microsoft.Extensions.DependencyInjection</c> that resolves the providers and the logger and
 /// registers the instance as its contract's <c>INative</c> interface, and as the contract's managed
@@ -47,14 +47,14 @@ public sealed class KernelEngineExtension : IKabicExtension
         var parameters = FactoriesExtension.Parameters(f);
         var o = new StringBuilder(Header(f));
         o.Append($"public sealed unsafe partial class {f.ClassName}\n{{\n");
-        o.Append("    /// <summary>The same construction, with the library logging to <paramref name=\"logger\"/>.</summary>\n");
-        o.Append("    /// <param name=\"logger\">Receives every line the library logs.</param>\n");
+        o.Append("    /// <summary>The same construction, with the library logging to <paramref name=\"loggerFactory\"/>.</summary>\n");
+        o.Append("    /// <param name=\"loggerFactory\">Creates the logger of each scope the library logs under.</param>\n");
         foreach (var a in f.Arguments)
             o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
-        o.Append($"    public {f.ClassName}(KernelEngine.Logger.ILogger logger{(parameters.Length > 0 ? ", " + parameters : "")}) : {(f.Contract is null ? "this" : "base")}(CreateLogged(logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
-        o.Append($"    private static {(f.Contract is null ? f.Job.Namespace : f.Contract.Spec.NativeNamespace)}.{f.HandleType} CreateLogged(KernelEngine.Logger.ILogger logger{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
-        o.Append("        ArgumentNullException.ThrowIfNull(logger);\n");
-        o.Append($"        {f.Job.Namespace}.{f.Job.MethodsClass}.{setter}(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));\n");
+        o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(f.Contract is null ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
+        o.Append($"    private static {(f.Contract is null ? f.Job.Namespace : f.Contract.Spec.NativeNamespace)}.{f.HandleType} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
+        o.Append("        ArgumentNullException.ThrowIfNull(loggerFactory);\n");
+        o.Append($"        {f.Job.Namespace}.{f.Job.MethodsClass}.{setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
         o.Append($"        return Create({FactoriesExtension.Names(f)});\n    }}\n}}\n");
         return o.ToString();
     }
@@ -81,20 +81,20 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append($"public static class {f.ClassName}Registration\n{{\n");
         o.Append($"    /// <summary>\n    /// Registers one <see cref=\"{f.ClassName}\"/>, created on first resolution with its providers from the\n");
         o.Append($"    /// container and {(config is null ? "the given values" : $"the <see cref=\"{config}\"/> it holds, or the defaults when it holds none")}, as itself, as <see cref=\"{contractInterface}\"/>{(managedInterface is null ? "" : $" and as <see cref=\"{managedInterface}\"/>")}. The library logs to the\n");
-        o.Append("    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.\n    /// </summary>\n");
+        o.Append("    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.\n    /// </summary>\n");
         o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services{values})\n    {{\n");
         if (config is null)
         {
-            o.Append($"        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is {{ }} logger\n");
-            o.Append($"            ? new {f.ClassName}(logger{(args.Length > 0 ? ", " + args : "")})\n");
+            o.Append($"        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is {{ }} loggerFactory\n");
+            o.Append($"            ? new {f.ClassName}(loggerFactory{(args.Length > 0 ? ", " + args : "")})\n");
             o.Append($"            : new {f.ClassName}({args}));\n");
         }
         else
         {
             o.Append("        services.AddSingleton(sp =>\n        {\n");
             o.Append($"            var config = sp.GetService<Microsoft.Extensions.Options.IOptions<{config}>>()?.Value ?? new {config}();\n");
-            o.Append("            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger\n");
-            o.Append($"                ? new {f.ClassName}(logger{(args.Length > 0 ? ", " + args : "")})\n");
+            o.Append("            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory\n");
+            o.Append($"                ? new {f.ClassName}(loggerFactory{(args.Length > 0 ? ", " + args : "")})\n");
             o.Append($"                : new {f.ClassName}({args});\n        }});\n");
         }
         o.Append($"        services.AddSingleton<{contractInterface}>(sp => sp.GetRequiredService<{f.ClassName}>());\n");
@@ -125,13 +125,13 @@ public sealed class KernelEngineExtension : IKabicExtension
         {
             o.Append("        services.AddSingleton(sp =>\n        {\n");
             o.Append($"            var config = sp.GetService<Microsoft.Extensions.Options.IOptions<{config}>>()?.Value ?? new {config}();\n");
-            o.Append("            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger\n");
-            o.Append($"                ? new {f.ClassName}(logger, {args})\n                : new {f.ClassName}({args});\n        }});\n");
+            o.Append("            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory\n");
+            o.Append($"                ? new {f.ClassName}(loggerFactory, {args})\n                : new {f.ClassName}({args});\n        }});\n");
         }
         else
         {
-            o.Append($"        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is {{ }} logger\n");
-            o.Append($"            ? new {f.ClassName}(logger, {args})\n            : new {f.ClassName}({args}));\n");
+            o.Append($"        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is {{ }} loggerFactory\n");
+            o.Append($"            ? new {f.ClassName}(loggerFactory, {args})\n            : new {f.ClassName}({args}));\n");
         }
         o.Append($"        services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<{f.ClassName}>());\n");
         o.Append("        return services;\n    }\n}\n");

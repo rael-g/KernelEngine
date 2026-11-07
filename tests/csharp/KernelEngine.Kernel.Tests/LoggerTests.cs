@@ -1,5 +1,4 @@
-﻿
-using System;
+using Microsoft.Extensions.Logging;
 
 using Xunit;
 
@@ -8,36 +7,43 @@ namespace EngineTests;
 public class LoggerTests
 {
     [Fact]
-    public void Logger_CanLogWithSink()
+    public unsafe void A_line_a_native_library_logs_reaches_the_logger_factory_under_its_scope_at_its_level()
     {
-        var logger = new Logger();
-        var sink = new RecordingSink();
-        logger.AddSink(sink);
-
-        logger.Info("TestTag", "Testing C# logger interop");
-
-        Assert.Contains(sink.Entries, e => e.Tag == "TestTag" && e.Message == "Testing C# logger interop");
-    }
-
-    [Fact]
-    public unsafe void A_line_a_native_library_hands_its_log_callback_reaches_the_logger()
-    {
-        var logger = new Logger();
-        var sink = new RecordingSink();
-        logger.AddSink(sink);
+        var provider = new RecordingProvider();
+        using var factory = LoggerFactory.Create(logging => logging.AddProvider(provider).SetMinimumLevel(Microsoft.Extensions.Logging.LogLevel.Trace));
 
         var scope = "render_forward\0"u8.ToArray();
         var message = "pipeline compiled\0"u8.ToArray();
         fixed (byte* s = scope, m = message)
-            LogCallbackNative.Pointer(LogCallbackNative.Pin(logger.Log), LogLevel.Warning, (sbyte*)s, (sbyte*)m);
+            NativeLogging.Callback(NativeLogging.ContextOf(factory), KernelEngine.Logger.LogLevel.Warning, (sbyte*)s, (sbyte*)m);
 
-        Assert.Contains(sink.Entries, e => e.Level == LogLevel.Warning && e.Tag == "render_forward" && e.Message == "pipeline compiled");
+        Assert.Contains(provider.Entries, e => e.Level == Microsoft.Extensions.Logging.LogLevel.Warning && e.Category == "render_forward" && e.Message == "pipeline compiled");
     }
 
-    private sealed class RecordingSink : ILoggerSink
+    [Fact]
+    public void The_same_factory_always_yields_the_same_native_context()
     {
-        public LogLevel MinLevel => LogLevel.Trace;
-        public List<(LogLevel Level, string Tag, string Message)> Entries { get; } = [];
-        public void Log(LogLevel level, string tag, string message) => Entries.Add((level, tag, message));
+        using var factory = LoggerFactory.Create(_ => { });
+        unsafe
+        {
+            Assert.True(NativeLogging.ContextOf(factory) == NativeLogging.ContextOf(factory));
+        }
+    }
+
+    private sealed class RecordingProvider : ILoggerProvider
+    {
+        public List<(string Category, Microsoft.Extensions.Logging.LogLevel Level, string Message)> Entries { get; } = [];
+
+        public Microsoft.Extensions.Logging.ILogger CreateLogger(string categoryName) => new Recorder(this, categoryName);
+
+        public void Dispose() { }
+
+        private sealed class Recorder(RecordingProvider owner, string category) : Microsoft.Extensions.Logging.ILogger
+        {
+            public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+            public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+            public void Log<TState>(Microsoft.Extensions.Logging.LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter) =>
+                owner.Entries.Add((category, logLevel, formatter(state, exception)));
+        }
     }
 }

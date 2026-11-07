@@ -13,15 +13,15 @@ public static class WebgpuGpuDeviceRegistration
     /// <summary>
     /// Registers one <see cref="WebgpuGpuDevice"/>, created on first resolution with its providers from the
     /// container and the <see cref="WebgpuGpuDeviceConfig"/> it holds, or the defaults when it holds none, as itself, as <see cref="KernelEngine.Render.Gpu.INativeGpuDevice"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddWebgpuGpuDevice(this IServiceCollection services)
     {
         services.AddSingleton(sp =>
         {
             var config = sp.GetService<Microsoft.Extensions.Options.IOptions<WebgpuGpuDeviceConfig>>()?.Value ?? new WebgpuGpuDeviceConfig();
-            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-                ? new WebgpuGpuDevice(logger, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), config.EnableValidation, config.DebugLabels)
+            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+                ? new WebgpuGpuDevice(loggerFactory, sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), config.EnableValidation, config.DebugLabels)
                 : new WebgpuGpuDevice(sp.GetService<KernelEngine.TaskPool.INativeTaskPool>(), config.EnableValidation, config.DebugLabels);
         });
         services.AddSingleton<KernelEngine.Render.Gpu.INativeGpuDevice>(sp => sp.GetRequiredService<WebgpuGpuDevice>());

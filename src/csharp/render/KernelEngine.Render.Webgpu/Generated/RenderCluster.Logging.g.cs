@@ -7,8 +7,8 @@ namespace KernelEngine.Render.Webgpu;
 
 public sealed unsafe partial class RenderCluster
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
     /// <param name="service">Receives the published buffers; borrowed.</param>
     /// <param name="device">Borrowed.</param>
@@ -21,14 +21,14 @@ public sealed unsafe partial class RenderCluster
     /// <param name="gridY">Clusters down the screen.</param>
     /// <param name="gridZ">Depth slices.</param>
     /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
-    public RenderCluster(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(CreateLogged(logger, runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
+    public RenderCluster(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(CreateLogged(loggerFactory, runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle CreateLogged(KernelEngine.Logger.ILogger logger, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster);
     }
 }

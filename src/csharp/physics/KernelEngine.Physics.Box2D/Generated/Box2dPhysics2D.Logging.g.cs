@@ -7,18 +7,18 @@ namespace KernelEngine.Physics.Box2D;
 
 public sealed unsafe partial class Box2dPhysics2D
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
     /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2dPhysics2D(KernelEngine.Logger.ILogger logger, float gravityX = default, float gravityY = default) : base(CreateLogged(logger, gravityX, gravityY))
+    public Box2dPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, float gravityX = default, float gravityY = default) : base(CreateLogged(loggerFactory, gravityX, gravityY))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(KernelEngine.Logger.ILogger logger, float gravityX, float gravityY)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, float gravityX, float gravityY)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(gravityX, gravityY);
     }
 }

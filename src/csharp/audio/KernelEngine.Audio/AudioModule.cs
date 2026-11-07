@@ -25,8 +25,8 @@ public sealed unsafe class AudioModule : IRuntimeModule
         if (registry is null) return;
 
         var ecs = services.GetRequiredService<INativeEcs>();
-        if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
-            KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        if (services.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
+            KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         if (services.GetService<IAudio>() is INativeAudio audio)
             CreateSound(runtime, ecs, audio);
         KernelEngine.Framework.Native.ke_scene_component_set_handle set;

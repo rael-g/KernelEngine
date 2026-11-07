@@ -13,12 +13,12 @@ public static class StbFontLoaderRegistration
     /// <summary>
     /// Registers one <see cref="StbFontLoader"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Text.INativeFontLoader"/> and as <see cref="KernelEngine.Text.IFontLoader"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddStbFontLoader(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new StbFontLoader(logger, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new StbFontLoader(loggerFactory, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
             : new StbFontLoader(sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
         services.AddSingleton<KernelEngine.Text.INativeFontLoader>(sp => sp.GetRequiredService<StbFontLoader>());
         services.AddSingleton<KernelEngine.Text.IFontLoader>(sp => sp.GetRequiredService<StbFontLoader>());

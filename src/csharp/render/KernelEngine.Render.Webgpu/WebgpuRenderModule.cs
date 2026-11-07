@@ -65,8 +65,8 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             var shaderDir = sp.GetService<Microsoft.Extensions.Options.IOptions<DefaultRenderServiceConfig>>()?.Value.ShaderDir;
             var device = sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>();
             var io = sp.GetRequiredService<KernelEngine.Io.INativeIo>();
-            return sp.GetService<ILogger>() is { } logger
-                ? new GroupedRenderResourceBinder(logger, device, shaderDir, io)
+            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+                ? new GroupedRenderResourceBinder(loggerFactory, device, shaderDir, io)
                 : new GroupedRenderResourceBinder(device, shaderDir, io);
         });
         services.AddSingleton<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(sp => sp.GetRequiredService<GroupedRenderResourceBinder>());

@@ -13,12 +13,12 @@ public static class DefaultRenderSceneResolveRegistration
     /// <summary>
     /// Registers one <see cref="DefaultRenderSceneResolve"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Render.INativeRenderSceneResolve"/> and as <see cref="KernelEngine.Render.IRenderSceneResolve"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddDefaultRenderSceneResolve(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new DefaultRenderSceneResolve(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new DefaultRenderSceneResolve(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>())
             : new DefaultRenderSceneResolve(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>()));
         services.AddSingleton<KernelEngine.Render.INativeRenderSceneResolve>(sp => sp.GetRequiredService<DefaultRenderSceneResolve>());
         services.AddSingleton<KernelEngine.Render.IRenderSceneResolve>(sp => sp.GetRequiredService<DefaultRenderSceneResolve>());

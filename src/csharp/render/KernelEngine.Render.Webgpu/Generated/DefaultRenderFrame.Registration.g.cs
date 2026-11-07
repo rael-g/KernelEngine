@@ -13,12 +13,12 @@ public static class DefaultRenderFrameRegistration
     /// <summary>
     /// Registers one <see cref="DefaultRenderFrame"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Render.INativeRenderFrame"/> and as <see cref="KernelEngine.Render.IRenderFrame"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddDefaultRenderFrame(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new DefaultRenderFrame(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new DefaultRenderFrame(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>())
             : new DefaultRenderFrame(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>()));
         services.AddSingleton<KernelEngine.Render.INativeRenderFrame>(sp => sp.GetRequiredService<DefaultRenderFrame>());
         services.AddSingleton<KernelEngine.Render.IRenderFrame>(sp => sp.GetRequiredService<DefaultRenderFrame>());

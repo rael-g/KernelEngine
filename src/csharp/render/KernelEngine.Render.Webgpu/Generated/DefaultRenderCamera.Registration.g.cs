@@ -13,12 +13,12 @@ public static class DefaultRenderCameraRegistration
     /// <summary>
     /// Registers one <see cref="DefaultRenderCamera"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Render.INativeRenderCamera"/> and as <see cref="KernelEngine.Render.IRenderCamera"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddDefaultRenderCamera(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new DefaultRenderCamera(logger, sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new DefaultRenderCamera(loggerFactory, sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>())
             : new DefaultRenderCamera(sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>()));
         services.AddSingleton<KernelEngine.Render.INativeRenderCamera>(sp => sp.GetRequiredService<DefaultRenderCamera>());
         services.AddSingleton<KernelEngine.Render.IRenderCamera>(sp => sp.GetRequiredService<DefaultRenderCamera>());

@@ -19,7 +19,7 @@ public static class ServiceCollectionExtensions
     /// </param>
     public static IServiceCollection AddProjectConfig(this IServiceCollection services, string? path = null)
     {
-        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path)));
+        services.Replace(ServiceDescriptor.Singleton<IConfiguration>(sp => Load(sp, path)));
         services.TryAddSingleton<INativeConfiguration>(sp => (Configuration)sp.GetRequiredService<IConfiguration>());
         return services;
     }
@@ -31,14 +31,20 @@ public static class ServiceCollectionExtensions
     /// </summary>
     public static void TryAddConfigurationSingleton(this IServiceCollection services, string? path = null)
     {
-        services.TryAddSingleton<IConfiguration>(sp => Load(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), path));
+        services.TryAddSingleton<IConfiguration>(sp => Load(sp, path));
         services.TryAddSingleton<INativeConfiguration>(sp => (Configuration)sp.GetRequiredService<IConfiguration>());
     }
 
-    private static Configuration Load(KernelEngine.Io.INativeIo io, string? path)
+    private static unsafe Configuration Load(IServiceProvider sp, string? path)
     {
+        if (sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
+        {
+            var context = KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory);
+            KernelEngine.Configuration.Native.NativeMethods.configuration_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, context);
+            KernelEngine.Configuration.Native.NativeMethods.configuration_toml_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, context);
+        }
         var cfg = new Configuration();
-        cfg.LoadToml(io, ResolvePath(path ?? "Project")!);
+        cfg.LoadToml(sp.GetRequiredService<KernelEngine.Io.INativeIo>(), ResolvePath(path ?? "Project")!);
         return cfg;
     }
 

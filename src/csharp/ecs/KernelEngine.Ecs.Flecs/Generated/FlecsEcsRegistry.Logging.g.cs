@@ -7,17 +7,17 @@ namespace KernelEngine.Ecs.Flecs;
 
 public sealed unsafe partial class FlecsEcsRegistry
 {
-    /// <summary>The same construction, with the library logging to <paramref name="logger"/>.</summary>
-    /// <param name="logger">Receives every line the library logs.</param>
+    /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. 0 takes the default. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
-    public FlecsEcsRegistry(KernelEngine.Logger.ILogger logger, uint worldIdBase = default) : base(CreateLogged(logger, worldIdBase))
+    public FlecsEcsRegistry(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint worldIdBase = default) : base(CreateLogged(loggerFactory, worldIdBase))
     {
     }
 
-    private static KernelEngine.Ecs.Native.ke_ecs_handle CreateLogged(KernelEngine.Logger.ILogger logger, uint worldIdBase)
+    private static KernelEngine.Ecs.Native.ke_ecs_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint worldIdBase)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(worldIdBase);
     }
 }

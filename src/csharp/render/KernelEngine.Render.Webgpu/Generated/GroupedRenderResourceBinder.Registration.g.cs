@@ -13,12 +13,12 @@ public static class GroupedRenderResourceBinderRegistration
     /// <summary>
     /// Registers one <see cref="GroupedRenderResourceBinder"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.Render.Gpu.INativeRenderResourceBinder"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddGroupedRenderResourceBinder(this IServiceCollection services, string? shaderDir = default)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new GroupedRenderResourceBinder(logger, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), shaderDir, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new GroupedRenderResourceBinder(loggerFactory, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), shaderDir, sp.GetRequiredService<KernelEngine.Io.INativeIo>())
             : new GroupedRenderResourceBinder(sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), shaderDir, sp.GetRequiredService<KernelEngine.Io.INativeIo>()));
         services.AddSingleton<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(sp => sp.GetRequiredService<GroupedRenderResourceBinder>());
         return services;

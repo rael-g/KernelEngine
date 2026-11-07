@@ -7,7 +7,6 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Io.Pool;
-using KernelEngine.Logger;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Runtime;
@@ -17,6 +16,7 @@ using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 int LightCount = int.TryParse(Environment.GetEnvironmentVariable("LIGHT_COUNT"), out var lc) ? lc : 10000;
 bool EnableShadows = Environment.GetEnvironmentVariable("ENABLE_SHADOWS") != "0";
@@ -26,8 +26,7 @@ const float CorridorHeight = 6f;
 const float CorridorLength = 300f;
 
 var services = new ServiceCollection()
-    .AddLogger()
-    .AddConsoleSink()
+    .AddLogging(logging => logging.AddConsole())
     .AddFlecsEcsRegistry()
     .AddEnkiTaskPool()
     .AddStdFileSystem()

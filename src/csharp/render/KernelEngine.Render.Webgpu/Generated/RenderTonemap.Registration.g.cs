@@ -13,8 +13,8 @@ public static class RenderTonemapRegistration
     /// <summary>Registers one <see cref="RenderTonemap"/>, created when the modules load with its providers from the container.</summary>
     public static IServiceCollection AddRenderTonemap(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RenderTonemap(logger, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>())
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new RenderTonemap(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>())
             : new RenderTonemap(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>()));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderTonemap>());
         return services;

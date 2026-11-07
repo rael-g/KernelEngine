@@ -13,12 +13,12 @@ public static class RhViewSpaceRegistration
     /// <summary>
     /// Registers one <see cref="RhViewSpace"/>, created on first resolution with its providers from the
     /// container and the given values, as itself, as <see cref="KernelEngine.View.INativeViewSpace"/> and as <see cref="KernelEngine.View.IViewSpace"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddRhViewSpace(this IServiceCollection services)
     {
-        services.AddSingleton(sp => sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-            ? new RhViewSpace(logger)
+        services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+            ? new RhViewSpace(loggerFactory)
             : new RhViewSpace());
         services.AddSingleton<KernelEngine.View.INativeViewSpace>(sp => sp.GetRequiredService<RhViewSpace>());
         services.AddSingleton<KernelEngine.View.IViewSpace>(sp => sp.GetRequiredService<RhViewSpace>());

@@ -26,17 +26,17 @@ public sealed unsafe partial class Runtime : IRuntime
 
     /// <summary>
     /// Builds a runtime as the constructor above does, the runtime library logging to
-    /// <paramref name="logger"/>.
+    /// <paramref name="loggerFactory"/>.
     /// </summary>
-    public Runtime(INativeEcs ecs, INativeTaskPool taskPool, KernelEngine.Logger.ILogger logger)
-        : this(RoutingLog(ecs, logger), taskPool)
+    public Runtime(INativeEcs ecs, INativeTaskPool taskPool, Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+        : this(RoutingLog(ecs, loggerFactory), taskPool)
     {
     }
 
-    private static INativeEcs RoutingLog(INativeEcs ecs, KernelEngine.Logger.ILogger logger)
+    private static INativeEcs RoutingLog(INativeEcs ecs, Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
     {
-        ArgumentNullException.ThrowIfNull(logger);
-        KernelEngine.Runtime.Native.NativeMethods.runtime_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+        KernelEngine.Runtime.Native.NativeMethods.runtime_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return ecs;
     }
 

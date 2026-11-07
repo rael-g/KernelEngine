@@ -7,7 +7,6 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Input;
 using KernelEngine.Io.Pool;
-using KernelEngine.Logger;
 using KernelEngine.Physics;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render;
@@ -19,6 +18,7 @@ using KernelEngine.Window;
 using KernelEngine.Window.Glfw;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 using KernelEngine.Framework.Native;
 
@@ -29,8 +29,7 @@ const float FloorHalfW = 8f;
 const float FloorHalfH = 0.5f;
 
 var services = new ServiceCollection()
-    .AddLogger()
-    .AddConsoleSink()
+    .AddLogging(logging => logging.AddConsole())
     .AddInput()
     .AddSingleton(_ =>
     {

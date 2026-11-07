@@ -32,8 +32,8 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         var ecs = services.GetRequiredService<INativeEcs>();
         var physics = services.GetRequiredService<IPhysics2D>();
 
-        if (services.GetService<KernelEngine.Logger.ILogger>() is { } logger)
-            KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.LogCallbackNative.Pointer, KernelEngine.Logger.LogCallbackNative.Pin(logger.Log));
+        if (services.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
+            KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         var tree = services.GetRequiredService<KernelEngine.Framework.SceneTree>();
         var registry = services.GetRequiredService<KernelEngine.Framework.ComponentRegistry>();
 

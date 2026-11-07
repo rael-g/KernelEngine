@@ -13,15 +13,15 @@ public static class DefaultRenderServiceRegistration
     /// <summary>
     /// Registers one <see cref="DefaultRenderService"/>, created on first resolution with its providers from the
     /// container and the <see cref="DefaultRenderServiceConfig"/> it holds, or the defaults when it holds none, as itself, as <see cref="KernelEngine.Render.INativeRenderService"/> and as <see cref="KernelEngine.Render.IRenderService"/>. The library logs to the
-    /// registered <c>KernelEngine.Logger.ILogger</c>, or to stderr when there is none.
+    /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
     public static IServiceCollection AddDefaultRenderService(this IServiceCollection services)
     {
         services.AddSingleton(sp =>
         {
             var config = sp.GetService<Microsoft.Extensions.Options.IOptions<DefaultRenderServiceConfig>>()?.Value ?? new DefaultRenderServiceConfig();
-            return sp.GetService<KernelEngine.Logger.ILogger>() is { } logger
-                ? new DefaultRenderService(logger, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuRenderTarget>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Io.INativeIo>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(), config.ShaderDir, config.ColorFormat, config.DepthFormat, config.ClearColor)
+            return sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
+                ? new DefaultRenderService(loggerFactory, sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuRenderTarget>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Io.INativeIo>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(), config.ShaderDir, config.ColorFormat, config.DepthFormat, config.ClearColor)
                 : new DefaultRenderService(sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuRenderTarget>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Io.INativeIo>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeRenderResourceBinder>(), config.ShaderDir, config.ColorFormat, config.DepthFormat, config.ClearColor);
         });
         services.AddSingleton<KernelEngine.Render.INativeRenderService>(sp => sp.GetRequiredService<DefaultRenderService>());
