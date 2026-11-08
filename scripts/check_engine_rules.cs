@@ -35,6 +35,7 @@ var shaderBindingNumber = new Regex(@"vk::binding\s*\(|:\s*register\s*\(");
 var bindingNumber = new Regex(@"\.binding\s*=\s*[0-9]");
 var blockComment = new Regex(@"/\*(?![*!])");
 var exportFn = new Regex(@"^\s*(?:pub )?export fn (\w+)");
+var zeroDefault = new Regex(@"\b0 (takes|selects) the default|zero field takes its default|\b0 selects\b");
 var declared = new Regex(@"^\s*KE_\w*API\s[^;{#]*?\b(\w+)\s*\(", RegexOptions.Multiline);
 
 var plugins = sources.Where(s => s.Key.StartsWith("src/zig/", StringComparison.Ordinal)).ToList();
@@ -111,6 +112,10 @@ var rules = new List<Rule>
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
     new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 38,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
+    new("a config declares its [defaults] constant, and its field table names every field", 0,
+        factoryHeaders.Keys.SelectMany(h => ConfigGaps(h, string.Join('\n', sources[h])))),
+    new("no zero stands for a default", 0,
+        Lines(headers, l => zeroDefault.IsMatch(l))),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
     new("no identifier named after impl", 9,
@@ -152,6 +157,21 @@ Console.Error.WriteLine("STALE: fewer remain than the ceiling says; lower it in 
 return 1;
 
 static IEnumerable<string> Segments(string path) => path.Split('/');
+
+static IEnumerable<string> ConfigGaps(string header, string text)
+{
+    var bare = Regex.Replace(Regex.Replace(text, @"/\*.*?\*/", "", RegexOptions.Singleline), @"//[^\n]*", "");
+    foreach (Match config in Regex.Matches(bare, @"typedef struct (ke_\w+_config)\s*\{(.*?)\}\s*\1\s*;", RegexOptions.Singleline))
+    {
+        var name = config.Groups[1].Value;
+        if (!Regex.IsMatch(bare, $@"\b{name}\s+{name}_defaults\s*=")) yield return $"{header}: {name} has no {name}_defaults";
+        var table = Regex.Match(bare, $@"\b{name}_fields\[\]\s*=\s*\{{(.*?)\}};", RegexOptions.Singleline);
+        if (!table.Success) continue;
+        var listed = Regex.Matches(table.Groups[1].Value, $@"KE_CONFIG_\w*FIELD\(\s*{name}\s*,\s*(\w+)").Select(m => m.Groups[1].Value).ToHashSet();
+        foreach (Match field in Regex.Matches(config.Groups[2].Value, @"(\w+)\s*(?:\[[^\]]*\])?\s*;"))
+            if (!listed.Contains(field.Groups[1].Value)) yield return $"{header}: {name}.{field.Groups[1].Value} is not in {name}_fields";
+    }
+}
 
 static bool IsBuildFile(string path) => Path.GetFileName(path) == "build.zig";
 
