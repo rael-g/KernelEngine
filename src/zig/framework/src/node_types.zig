@@ -215,29 +215,31 @@ fn pressed(ctx: ?*abi_framework.c.ke_node_ctx, action: i32) callconv(.c) bool {
     return actions.was_action_pressed.?(actions, action);
 }
 
-/// Slot `spawn`. Records the node through the scene tree, then its type's components, each a copy
-/// of its prototype, and a status not yet readied.
-fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
-    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
-    const out = out_node orelse return R.code(error.InvalidArgument);
-    const s = w.behaviour.owner.state;
+fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out: *Entity) abi_result.c.ke_result {
     const t = findType(s, type_cid) orelse {
         log.warn("node types: spawning a type never registered ({d})", .{type_cid});
         return R.code(error.NotFound);
     };
-    const commands = w.api.commands;
     var node: Entity = invalid;
     var rc = s.tree.create_node_deferred.?(s.tree, name, under, commands, &node);
     if (rc != R.ok) return rc;
     for (t.columns, t.prototypes) |c, proto| {
-        rc = commands.?.attach.?(commands, node, c, proto.ptr, proto.len);
+        rc = commands.attach.?(commands, node, c, proto.ptr, proto.len);
         if (rc != R.ok) return rc;
     }
     const status: NodeStatus = .{ .readied = 0 };
-    rc = commands.?.attach.?(commands, node, s.status_cid, &status, @sizeOf(NodeStatus));
+    rc = commands.attach.?(commands, node, s.status_cid, &status, @sizeOf(NodeStatus));
     if (rc != R.ok) return rc;
     out.* = node;
     return R.ok;
+}
+
+/// Slot `spawn` of the ctx: the node types' spawn with the behaviour's commands.
+fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
+    const out = out_node orelse return R.code(error.InvalidArgument);
+    const commands = w.api.commands orelse return R.code(error.InvalidArgument);
+    return spawnNode(w.behaviour.owner.state, commands, type_cid, name, under, out);
 }
 
 /// Slot `destroy`. Records the destruction through the scene tree.
@@ -490,6 +492,15 @@ fn vtRegisterEvent(self: ?*abi_framework.c.ke_node_types, params_in: ?*const abi
 
 /// The destroy of the handle. Unregisters every system and frees the types, the events and the
 /// `State`.
+/// Slot `spawn`. Records the node through the scene tree, then its type's components, each a copy
+/// of its prototype, and a status not yet readied.
+fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    const commands = commands_in orelse return R.code(error.InvalidArgument);
+    const out = out_node orelse return R.code(error.InvalidArgument);
+    return spawnNode(s, commands, type_cid, name, under, out);
+}
+
 fn vtDestroy(self_in: ?*abi_framework.c.ke_node_types) callconv(.c) void {
     const s = stateOf(self_in) orelse return;
     for (s.types.items) |t| freeType(s, t);
@@ -520,7 +531,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -825,6 +836,24 @@ test "spawn records a node through the scene tree with each component of its typ
     try runSystem(registered[0], &rows);
     try f.tree.received(.create_node_deferred).times(1);
     try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 31))).times(3);
+}
+
+test "spawn outside a behaviour records into the given commands and refuses a type never registered" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var cid: Cid = 0;
+    const d = paddleDesc();
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    _ = f.tree.when(.create_node_deferred).writes(4, 32);
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    var node: Entity = invalid;
+    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &node));
+    try testing.expectEqual(@as(Entity, 32), node);
+    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 32))).times(3);
+    try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid + 99, "X", invalid, &node));
 }
 
 test "a node type without fields is refused" {

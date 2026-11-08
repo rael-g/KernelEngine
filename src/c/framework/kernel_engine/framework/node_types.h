@@ -145,6 +145,18 @@ extern "C"
         /// @param out_event [out] Receives the event's component id.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless event, or the ecs's code.
         ke_result (*register_event)(struct ke_node_types *self, const ke_component_params *event, ke_component_id *out_event);
+
+        /// Records a node of @p type named @p name under @p parent into @p commands, its fields
+        /// and the components its type names in `with` holding their declared defaults. The one
+        /// way a node is created: a behaviour's ctx->spawn is this call with its own commands.
+        /// @param commands The queue the node is recorded into.
+        /// @param name     [utf8]
+        /// @param parent   KE_ENTITY_INVALID places it at the root.
+        /// @param out_node [out] Usable as a reference at once; the node exists once the commands
+        ///                 are applied.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands; KE_RESULT_NOT_FOUND for a
+        ///         type never registered, or the queue's code.
+        ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name, ke_entity parent, ke_entity *out_node);
     } ke_node_types;
 
     /// [owner]

@@ -46,6 +46,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_node_types, handle),
     offsetof(ke_node_types, register_type),
     offsetof(ke_node_types, register_event),
+    offsetof(ke_node_types, spawn),
     sizeof(ke_node_types_handle),
     offsetof(ke_node_types_handle, ref),
     offsetof(ke_node_types_handle, destroy),

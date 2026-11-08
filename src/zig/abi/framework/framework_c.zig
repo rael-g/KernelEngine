@@ -124,6 +124,10 @@ pub const ke_node_types = extern struct {
     register_type: ?*const fn (?*ke_node_types, ?*const ke_node_type_desc, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Registers an event type.
     register_event: ?*const fn (?*ke_node_types, ?*const abi_ecs.c.ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// Records a node of type named name under parent into commands, its fields and the components
+    /// its type names in `with` holding their declared defaults. The one way a node is created: a
+    /// behaviour's ctx->spawn is this call with its own commands.
+    spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
 };
 
 pub const ke_node_types_handle = extern struct {

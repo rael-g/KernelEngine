@@ -204,6 +204,14 @@ pub const NodeTypes = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .spawn = &struct {
+                fn call(self: ?*c.ke_node_types, a0: ?*abi_ecs.c.ke_ecs_commands, a1: c.ke_component_id, a2: ?[*:0]const u8, a3: c.ke_entity, a4: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.spawn(state, a0, a1, std.mem.span(a2 orelse return resultOf(error.Failed)), a3) catch |failure| return resultOf(failure);
+                    (a4 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
         };
     }
 
@@ -218,6 +226,15 @@ pub const NodeTypes = struct {
     pub fn registerEvent(self: NodeTypes, event: ?*const abi_ecs.c.ke_component_params) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.register_event.?(self.ptr, event, &written));
+        return written;
+    }
+
+    /// Records a node of type named name under parent into commands, its fields and the components
+    /// its type names in `with` holding their declared defaults. The one way a node is created: a
+    /// behaviour's ctx->spawn is this call with its own commands.
+    pub fn spawn(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": c.ke_component_id, name: [:0]const u8, parent: c.ke_entity) Error!c.ke_entity {
+        var written: c.ke_entity = undefined;
+        try checkResult(self.ptr.spawn.?(self.ptr, commands, @"type", name.ptr, parent, &written));
         return written;
     }
 
