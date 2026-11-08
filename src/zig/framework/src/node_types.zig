@@ -20,6 +20,7 @@ const Entity = abi_ecs.c.ke_entity;
 const Cid = abi_ecs.c.ke_component_id;
 const invalid = abi_ecs.c.KE_ENTITY_INVALID;
 const status_name = "node_status";
+const base_type_name = "node";
 const prototype_alignment: std.mem.Alignment = .@"16";
 
 const NodeStatus = extern struct { readied: u8 };
@@ -513,6 +514,13 @@ fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ec
     return spawnNode(s, commands, type_cid, name, under, out);
 }
 
+/// Slot `carries`.
+fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, component: Cid) callconv(.c) bool {
+    const s = stateOf(self) orelse return false;
+    const t = findType(s, type_cid) orelse return false;
+    return std.mem.indexOfScalar(Cid, t.columns, component) != null;
+}
+
 fn vtDestroy(self_in: ?*abi_framework.c.ke_node_types) callconv(.c) void {
     const s = stateOf(self_in) orelse return;
     for (s.types.items) |t| freeType(s, t);
@@ -543,7 +551,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -552,6 +560,10 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
         .name_cid = name_meta.cid,
     };
     s.api.handle = s;
+    errdefer vtDestroy(&s.api);
+    var base = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
+    base.name = base_type_name;
+    _ = try registerType(s, &base);
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 
@@ -896,6 +908,18 @@ test "a node type without fields carries its tag and its with components, and fi
     rows.columns = .{ null, &rows.transforms, null, null };
     try R.check(registered[0].execute.?(&rows.sys, registered[0].user_data, 0.5));
     try testing.expect(seen > 0);
+}
+
+test "carries answers for the fields and the with components of a registered type only" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var cid: Cid = 0;
+    const d = paddleDesc();
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try testing.expect(f.types.ref.?.carries.?(f.types.ref, cid, transform2d_cid));
+    try testing.expect(!f.types.ref.?.carries.?(f.types.ref, cid, name_cid));
+    try testing.expect(!f.types.ref.?.carries.?(f.types.ref, cid + 99, transform2d_cid));
 }
 
 test "a nameless node type, or fields of zero size, is refused" {

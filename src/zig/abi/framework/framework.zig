@@ -212,6 +212,12 @@ pub const NodeTypes = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .carries = &struct {
+                fn call(self: ?*c.ke_node_types, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.carries(state, a0, a1);
+                }
+            }.call,
         };
     }
 
@@ -236,6 +242,11 @@ pub const NodeTypes = struct {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.spawn.?(self.ptr, commands, @"type", name.ptr, parent, &written));
         return written;
+    }
+
+    /// Whether a node of type carries component: its fields or one its type names in `with`.
+    pub fn carries(self: NodeTypes, @"type": c.ke_component_id, component: c.ke_component_id) bool {
+        return self.ptr.carries.?(self.ptr, @"type", component);
     }
 
 };

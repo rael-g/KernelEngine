@@ -122,7 +122,8 @@ pub const ke_node_ctx = extern struct {
 };
 
 /// Node types and the events between them: each behaviour of a registered type runs as a system
-/// of its phase over the nodes of the type, one behaviour at a time.
+/// of its phase over the nodes of the type, one behaviour at a time. A type named `node`, with
+/// no fields and no components, is registered from the start.
 pub const ke_node_types = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Registers a node type and the systems of its behaviours.
@@ -133,6 +134,8 @@ pub const ke_node_types = extern struct {
     /// its type names in `with` holding their declared defaults. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
     spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Whether a node of type carries component: its fields or one its type names in `with`.
+    carries: ?*const fn (?*ke_node_types, ke_component_id, ke_component_id) callconv(.c) bool = null,
 };
 
 pub const ke_node_types_handle = extern struct {

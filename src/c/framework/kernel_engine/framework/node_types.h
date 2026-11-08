@@ -132,7 +132,8 @@ extern "C"
     } ke_node_type_desc;
 
     /// Node types and the events between them: each behaviour of a registered type runs as a
-    /// system of its phase over the nodes of the type, one behaviour at a time.
+    /// system of its phase over the nodes of the type, one behaviour at a time. A type named
+    /// `node`, with no fields and no components, is registered from the start.
     typedef struct ke_node_types
     {
         void *handle;
@@ -163,6 +164,11 @@ extern "C"
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands; KE_RESULT_NOT_FOUND for a
         ///         type never registered, or the queue's code.
         ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name, ke_entity parent, ke_entity *out_node);
+
+        /// Whether a node of @p type carries @p component: its fields or one its type names in
+        /// `with`.
+        /// @return false for a type never registered.
+        bool (*carries)(struct ke_node_types *self, ke_component_id type, ke_component_id component);
     } ke_node_types;
 
     /// [owner]
