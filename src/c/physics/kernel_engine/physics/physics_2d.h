@@ -18,9 +18,9 @@ extern "C"
 
     typedef enum ke_body_type_2d
     {
-        KE_BODY_TYPE_STATIC    = 0, /**< Never moves; infinite mass. Floors, walls. */
-        KE_BODY_TYPE_KINEMATIC = 1, /**< Moved by code (set_position/set_velocity), unaffected by forces. */
-        KE_BODY_TYPE_DYNAMIC   = 2, /**< Driven by forces, collisions, gravity. */
+        KE_BODY_TYPE_2D_STATIC    = 0, /**< Never moves; infinite mass. Floors, walls. */
+        KE_BODY_TYPE_2D_KINEMATIC = 1, /**< Moved by code (set_position/set_velocity), unaffected by forces. */
+        KE_BODY_TYPE_2D_DYNAMIC   = 2, /**< Driven by forces, collisions, gravity. */
     } ke_body_type_2d;
 
     /**

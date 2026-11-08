@@ -8,11 +8,11 @@ pub const KE_BODY_2D_INVALID: ke_body_2d = .{ .bits = 0 };
 
 pub const ke_body_type_2d = c_uint;
 /// Never moves; infinite mass. Floors, walls.
-pub const KE_BODY_TYPE_STATIC: ke_body_type_2d = 0;
+pub const KE_BODY_TYPE_2D_STATIC: ke_body_type_2d = 0;
 /// Moved by code (set_position/set_velocity), unaffected by forces.
-pub const KE_BODY_TYPE_KINEMATIC: ke_body_type_2d = 1;
+pub const KE_BODY_TYPE_2D_KINEMATIC: ke_body_type_2d = 1;
 /// Driven by forces, collisions, gravity.
-pub const KE_BODY_TYPE_DYNAMIC: ke_body_type_2d = 2;
+pub const KE_BODY_TYPE_2D_DYNAMIC: ke_body_type_2d = 2;
 
 /// Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as "invalid".
 pub const ke_body_2d = extern struct {

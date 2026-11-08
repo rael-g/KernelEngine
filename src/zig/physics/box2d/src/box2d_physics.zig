@@ -106,8 +106,8 @@ fn createBody(
 
     var def = b2.b2DefaultBodyDef();
     def.type = switch (body_type) {
-        abi_physics.c.KE_BODY_TYPE_STATIC => b2.b2_staticBody,
-        abi_physics.c.KE_BODY_TYPE_KINEMATIC => b2.b2_kinematicBody,
+        abi_physics.c.KE_BODY_TYPE_2D_STATIC => b2.b2_staticBody,
+        abi_physics.c.KE_BODY_TYPE_2D_KINEMATIC => b2.b2_kinematicBody,
         else => b2.b2_dynamicBody,
     };
     def.position = .{ .x = position.x, .y = position.y };
@@ -379,7 +379,7 @@ test "creating a body returns a handle that is not the invalid sentinel" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try testing.expect(body.bits != 0);
 }
 
@@ -387,7 +387,7 @@ test "a box fixture attaches to an existing body" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, body, .{ .x = 1.0, .y = 1.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.3, 0.1, null));
 }
 
@@ -395,7 +395,7 @@ test "a circle fixture attaches to an existing body" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_circle_fixture.?(h.ref, body, 1.0, .{ .x = 0.0, .y = 0.0 }, 1.0, 0.3, 0.1, null));
 }
 
@@ -403,7 +403,7 @@ test "a body reports the position it was created at" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 10.0, 20.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 10.0, 20.0);
 
     var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
     h.ref.?.get_body_state.?(h.ref, body, &state);
@@ -416,7 +416,7 @@ test "setting a body position moves it and sets its angle" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     h.ref.?.set_body_position.?(h.ref, body, .{ .x = 5.0, .y = 5.0 }, 0.78);
 
     var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
@@ -431,7 +431,7 @@ test "setting a body velocity is readable back before any step" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     h.ref.?.set_body_velocity.?(h.ref, body, .{ .x = 1.0, .y = 2.0 });
 
     var state = std.mem.zeroes(abi_physics.c.ke_body_state_2d);
@@ -445,7 +445,7 @@ test "an impulse pushes a body along both axes it was applied on" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, body, .{ .x = 1.0, .y = 1.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.3, 0.1, null));
     h.ref.?.apply_impulse.?(h.ref, body, .{ .x = 10.0, .y = 10.0 });
 
@@ -462,7 +462,7 @@ test "destroying a body retires its handle" {
     const h = makeWorld(0.0, -9.81);
     defer h.destroy.?(h.ref);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     h.ref.?.destroy_body.?(h.ref, body);
 
     var state = abi_physics.c.ke_body_state_2d{
@@ -483,11 +483,11 @@ test "a rotation locked box never picks up spin when it bounces off a wall" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_STATIC, 2.0, 0.0);
     try testing.expect(wall.bits != 0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, .{ .x = 0.25, .y = 4.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, null));
 
-    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try testing.expect(ball.bits != 0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, ball, .{ .x = 0.18, .y = 0.18 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, null));
     h.ref.?.set_body_fixed_rotation.?(h.ref, ball, true);
@@ -509,10 +509,10 @@ test "a frictionless circle hitting a wall head on does not start spinning" {
     const h = makeWorld(0.0, 0.0);
     defer h.destroy.?(h.ref);
 
-    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_STATIC, 2.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, .{ .x = 0.25, .y = 4.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, null));
 
-    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_circle_fixture.?(h.ref, ball, 0.18, .{ .x = 0.0, .y = 0.0 }, 1.0, 0.0, 1.0, null));
     h.ref.?.set_body_velocity.?(h.ref, ball, .{ .x = 6.0, .y = 0.0 });
 
@@ -526,10 +526,10 @@ test "a frictionless circle hitting a wall head on does not start spinning" {
 }
 
 fn wallAndBall(h: abi_physics.c.ke_physics_2d_handle, wall_filter: ?*const abi_physics.c.ke_collision_filter_2d, ball_filter: ?*const abi_physics.c.ke_collision_filter_2d) !abi_physics.c.ke_body_2d {
-    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_STATIC, 2.0, 0.0);
+    const wall = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_STATIC, 2.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, wall, .{ .x = 0.25, .y = 4.0 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, wall_filter));
 
-    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 0.0);
+    const ball = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 0.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, ball, .{ .x = 0.18, .y = 0.18 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.0, 1.0, ball_filter));
     h.ref.?.set_body_velocity.?(h.ref, ball, .{ .x = 6.0, .y = 0.0 });
     return ball;
@@ -596,7 +596,7 @@ test "a zero gravity is applied as given and leaves a dynamic body where it was"
     defer h.destroy.?(h.ref);
     try testing.expect(h.ref != null);
 
-    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_DYNAMIC, 0.0, 2.0);
+    const body = try newBody(h, abi_physics.c.KE_BODY_TYPE_2D_DYNAMIC, 0.0, 2.0);
     try R.check(h.ref.?.add_box_fixture.?(h.ref, body, .{ .x = 0.5, .y = 0.5 }, .{ .x = 0.0, .y = 0.0 }, 0.0, 1.0, 0.3, 0.1, null));
     for (0..60) |_| h.ref.?.step.?(h.ref, 1.0 / 60.0);
 

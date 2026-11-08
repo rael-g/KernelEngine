@@ -159,17 +159,17 @@
       "doc": null,
       "values": [
         {
-          "name": "KE_BODY_TYPE_STATIC",
+          "name": "KE_BODY_TYPE_2D_STATIC",
           "value": 0,
           "doc": "Never moves; infinite mass. Floors, walls."
         },
         {
-          "name": "KE_BODY_TYPE_KINEMATIC",
+          "name": "KE_BODY_TYPE_2D_KINEMATIC",
           "value": 1,
           "doc": "Moved by code (set_position/set_velocity), unaffected by forces."
         },
         {
-          "name": "KE_BODY_TYPE_DYNAMIC",
+          "name": "KE_BODY_TYPE_2D_DYNAMIC",
           "value": 2,
           "doc": "Driven by forces, collisions, gravity."
         }
