@@ -46,14 +46,12 @@ ke_input_handle size=16 align=8
   destroy 8
 
 [window]
-ke_window size=56 align=8
+ke_window size=40 align=8
   handle 0
-  on_initialize 8
-  on_shutdown 16
-  should_close 24
-  poll_events 32
-  get_size 40
-  get_native_handle 48
+  should_close 8
+  poll_events 16
+  get_size 24
+  get_native_handle 32
 ke_window_handle size=16 align=8
   ref 0
   destroy 8

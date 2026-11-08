@@ -230,7 +230,6 @@ int main(int argc, char **argv)
     };
     ke_window_handle window = { 0 };
     check("window", ke_window_glfw_create(input.ref, &window_config, &window));
-    check("window initialize", window.ref->on_initialize(window.ref));
 
     ke_ecs_handle ecs = { 0 };
     check("ecs", ke_ecs_flecs_create(NULL, &ecs));
@@ -328,7 +327,6 @@ int main(int argc, char **argv)
     ecs.destroy(ecs.ref);
     target.destroy(target.ref);
     gpu.destroy(gpu.ref);
-    window.ref->on_shutdown(window.ref);
     window.destroy(window.ref);
     input.destroy(input.ref);
     toml.destroy(toml.ref);

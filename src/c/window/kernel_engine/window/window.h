@@ -17,15 +17,6 @@ extern "C"
     {
         void *handle;
 
-        /**
-         * [lifecycle:init] Performs backend-specific setup, right after creation.
-         * @return KE_OK, or the code of the setup the backend could not perform.
-         */
-        ke_result (*on_initialize)(struct ke_window *self);
-
-        /** [lifecycle:shutdown] Performs backend-specific teardown, right before destroy. */
-        void (*on_shutdown)(struct ke_window *self);
-
         /** Returns true once the user has requested the window to close. */
         bool (*should_close)(struct ke_window *self);
 

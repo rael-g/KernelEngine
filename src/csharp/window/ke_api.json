@@ -173,28 +173,6 @@
       ],
       "slots": [
         {
-          "name": "on_initialize",
-          "returns": "ke_result",
-          "tags": [
-            "lifecycle:init"
-          ],
-          "doc": "Performs backend-specific setup, right after creation.",
-          "return_doc": "KE_OK, or the code of the setup the backend could not perform.",
-          "params": [],
-          "receiver": "struct ke_window *"
-        },
-        {
-          "name": "on_shutdown",
-          "returns": "void",
-          "tags": [
-            "lifecycle:shutdown"
-          ],
-          "doc": "Performs backend-specific teardown, right before destroy.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_window *"
-        },
-        {
           "name": "should_close",
           "returns": "_Bool",
           "tags": [],

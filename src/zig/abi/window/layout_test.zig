@@ -27,15 +27,13 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_window_handle, translated("ke_window_handle"));
 }
 
-extern const layout_values: [12]c_ulonglong;
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_window),
         @offsetOf(abi.c.ke_window, "handle"),
-        @offsetOf(abi.c.ke_window, "on_initialize"),
-        @offsetOf(abi.c.ke_window, "on_shutdown"),
         @offsetOf(abi.c.ke_window, "should_close"),
         @offsetOf(abi.c.ke_window, "poll_events"),
         @offsetOf(abi.c.ke_window, "get_size"),

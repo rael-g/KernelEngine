@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using KernelEngine.Result.Native;
-
 namespace KernelEngine.Window.Native;
 
 public unsafe partial struct ke_window_handle

@@ -47,7 +47,6 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     }
 
     /// <summary>Wraps an owner <c>ke_window_handle</c> and runs window's startup lifecycle hook.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
     public Window(ke_window_handle handle)
     {
         if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
@@ -55,7 +54,6 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
         _owned = handle.@ref;
         _destroy = handle.destroy;
         _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
-        KernelEngine.NativeResults.ThrowIfFailed(_native->on_initialize(_native), "on_initialize");
     }
 
     /// <summary>Wraps a <c>ke_window*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -114,7 +112,6 @@ public unsafe partial class Window : IDisposable, INativeWindow, IWindow
     /// <summary>Destroys the native window once its last reference is released, then releases what it held.</summary>
     private void Teardown()
     {
-        _owned->on_shutdown(_owned);
         _destroy(_owned);
         foreach (var held in _held) held.DangerousRelease();
         _held.Clear();
