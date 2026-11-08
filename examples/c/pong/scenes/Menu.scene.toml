@@ -1,0 +1,45 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Ambient"
+type = "ambient_light"
+[entity.ambient_light]
+color = [1.0, 1.0, 1.0]
+
+[[entity]]
+name = "Camera"
+type = "camera"
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 1000.0
+
+[[entity]]
+name = "Controller"
+type = "pong.menu_controller"
+
+[[entity]]
+name   = "Title"
+parent = "Controller"
+type   = "label"
+[entity.label]
+text      = "Pong"
+font_size = 72.0
+color     = [0.95, 0.95, 0.95, 1.0]
+anchor    = [0.5, 0.0]
+offset    = [0.0, 140.0]
+
+[[entity]]
+name   = "Hint"
+parent = "Controller"
+type   = "label"
+[entity.label]
+text      = "Press Space to start"
+font_size = 72.0
+color     = [0.7, 0.7, 0.7, 1.0]
+anchor    = [0.5, 1.0]
+offset    = [0.0, -120.0]

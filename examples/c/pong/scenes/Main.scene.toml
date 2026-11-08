@@ -1,0 +1,87 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Ambient"
+type = "ambient_light"
+[entity.ambient_light]
+color = [1.0, 1.0, 1.0]
+
+[[entity]]
+name = "Camera"
+type = "camera"
+[entity.transform]
+position = [0.0, 0.0, 10.0]
+[entity.camera]
+orthographic      = true
+orthographic_size = 5.0
+near_plane        = 0.1
+far_plane         = 100.0
+
+[[entity]]
+name  = "WallTop"
+scene = "res://scenes/Wall.scene.toml"
+[entity.transform2d]
+position = [0.0, 4.5]
+
+[[entity]]
+name  = "WallBottom"
+scene = "res://scenes/Wall.scene.toml"
+[entity.transform2d]
+position = [0.0, -4.5]
+
+[[entity]]
+name  = "PaddleLeft"
+scene = "res://scenes/Paddle.scene.toml"
+[entity.transform2d]
+position = [-7.5, 0.0]
+[entity.paddle]
+move_action = "PaddleLeftMove"
+
+[[entity]]
+name  = "PaddleRight"
+scene = "res://scenes/Paddle.scene.toml"
+[entity.transform2d]
+position = [7.5, 0.0]
+[entity.paddle]
+move_action = "PaddleRightMove"
+
+[[entity]]
+name  = "Ball"
+scene = "res://scenes/Ball.scene.toml"
+
+[[entity]]
+name = "Scoreboard"
+type = "pong.scoreboard"
+
+[[entity]]
+name   = "ScoreLeft"
+parent = "Scoreboard"
+type   = "label"
+[entity.label]
+text      = "0"
+font_size = 56.0
+color     = [0.95, 0.95, 0.95, 1.0]
+anchor    = [0.30, 0.0]
+offset    = [0.0, 60.0]
+
+[[entity]]
+name   = "ScoreRight"
+parent = "Scoreboard"
+type   = "label"
+[entity.label]
+text      = "0"
+font_size = 56.0
+color     = [0.95, 0.95, 0.95, 1.0]
+anchor    = [0.70, 0.0]
+offset    = [0.0, 60.0]
+
+[[entity]]
+name   = "ScoreHint"
+parent = "Scoreboard"
+type   = "label"
+[entity.label]
+font_size = 56.0
+color     = [0.7, 0.7, 0.7, 1.0]
+anchor    = [0.5, 1.0]
+offset    = [0.0, -80.0]
