@@ -16,12 +16,12 @@ extern "C"
     {
         void *handle;
 
-        /// Records into @p commands every node the scene file at @p path declares, its first one
-        /// under @p parent, each spawned as a node of its type with the values its blocks write.
+        /// Records into @p commands every node the scene file at @p path declares, each one
+        /// without a parent of its own under @p parent, each spawned as a node of its type with the values its blocks write.
         /// The nodes exist once @p commands is applied.
         /// @param path     [utf8] A `res://` path is resolved by the asset resolver; any other is
         ///                 read as written.
-        /// @param parent   KE_ENTITY_INVALID places the first node at the root.
+        /// @param parent   KE_ENTITY_INVALID places them at the root.
         /// @param out_root [out,optional] Receives the first node; KE_ENTITY_INVALID for a file
         ///                 that declares none.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p path or @p commands, or a fault

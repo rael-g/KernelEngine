@@ -124,9 +124,9 @@ pub const ke_node_types_handle = extern struct {
 /// program calling the node types and the ecs would.
 pub const ke_scene_files = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Records into commands every node the scene file at path declares, its first one under parent,
-    /// each spawned as a node of its type with the values its blocks write. The nodes exist once
-    /// commands is applied.
+    /// Records into commands every node the scene file at path declares, each one without a parent
+    /// of its own under parent, each spawned as a node of its type with the values its blocks write.
+    /// The nodes exist once commands is applied.
     instantiate: ?*const fn (?*ke_scene_files, ?[*:0]const u8, ke_entity, ?*abi_ecs.c.ke_ecs_commands, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
 };
 

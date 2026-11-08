@@ -241,9 +241,9 @@ pub const SceneFiles = struct {
         };
     }
 
-    /// Records into commands every node the scene file at path declares, its first one under parent,
-    /// each spawned as a node of its type with the values its blocks write. The nodes exist once
-    /// commands is applied.
+    /// Records into commands every node the scene file at path declares, each one without a parent
+    /// of its own under parent, each spawned as a node of its type with the values its blocks write.
+    /// The nodes exist once commands is applied.
     pub fn instantiate(self: SceneFiles, path: [:0]const u8, parent: c.ke_entity, commands: ?*abi_ecs.c.ke_ecs_commands) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.instantiate.?(self.ptr, path.ptr, parent, commands, &written));

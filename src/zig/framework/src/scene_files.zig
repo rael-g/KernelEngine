@@ -170,8 +170,8 @@ fn freePending(pending: *std.ArrayList(Pending)) void {
     pending.deinit(heap.gpa);
 }
 
-/// The first entry of a file read for a referencing entry takes that entry's name, parent and
-/// blocks; every other entry has none.
+/// The first entry of a file read for a referencing entry takes that entry's name and blocks;
+/// every entry without a parent of its own goes under the parent.
 const Outer = struct {
     name: ?[*:0]const u8 = null,
     parent: Entity = invalid,
@@ -252,7 +252,7 @@ fn loadFile(load: *Load, path: [*:0]const u8, outer: Outer) R.Error!Entity {
     var i: c_int = 0;
     while (i < c.toml_array_nelem(entries)) : (i += 1) {
         const tbl = c.toml_table_at(entries, i) orelse continue;
-        const node = try processEntry(load, base_dir, tbl, &names, if (i == 0) outer else .{});
+        const node = try processEntry(load, base_dir, tbl, &names, if (i == 0) outer else .{ .parent = outer.parent });
         if (i == 0) first = node;
     }
     return first;
@@ -441,6 +441,24 @@ test "each entry spawns a node of its type, named, under the parent; an entry wi
     try testing.expectEqual(@as(Entity, 9), spawned[0].parent);
     try testing.expectEqual(@as(Cid, 1), spawned[1].tag);
     try testing.expectEqual(@as(Entity, 101), spawned[1].parent);
+}
+
+test "every entry without a parent of its own goes under the parent, not only the first" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    try served_files.put("/scenes/flat.scene.toml",
+        \\[[entity]]
+        \\name = "Ambient"
+        \\[[entity]]
+        \\name = "Camera"
+        \\[[entity]]
+        \\name = "Controller"
+    );
+    defer served_files.remove("/scenes/flat.scene.toml");
+    try R.check(f.instantiate("/scenes/flat.scene.toml", 9));
+    try testing.expectEqual(@as(usize, 3), spawned_count);
+    for (spawned[0..3]) |node| try testing.expectEqual(@as(Entity, 9), node.parent);
 }
 
 test "a block named in the type's namespace writes over the component's defaults, attached once" {
