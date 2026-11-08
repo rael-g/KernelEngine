@@ -167,8 +167,15 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
         .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
         .scene = r->scene.ref }, &r->frame));
 
-    check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .output = "shadow" }, &r->shadow));
+    ke_render_shadow_params shadow = ke_render_shadow_params_defaults;
+    shadow.scene = r->scene.ref;
+    shadow.frame = r->frame.ref;
+    shadow.runtime = rt;
+    shadow.service = core;
+    shadow.device = gpu;
+    shadow.view_space = r->view_space.ref;
+    shadow.output = "shadow";
+    check("shadow pass", ke_render_shadow_create(&shadow, &r->shadow));
     check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref,
         "clusters", NULL, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
@@ -232,9 +239,8 @@ int main(int argc, char **argv)
     ke_result made = ke_task_pool_enki_create(NULL, &pool);
     if (made != KE_OK) die_result("task pool", made);
 
-    ke_runtime_params rtp = { 0 };
     ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &rtp, &rt);
+    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, NULL, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
