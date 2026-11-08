@@ -185,6 +185,13 @@ fn get(ctx: ?*abi_framework.c.ke_node_ctx, cid: Cid) callconv(.c) ?*anyopaque {
     return null;
 }
 
+/// Slot `component`. Asks the ecs.
+fn component(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity, cid: Cid) callconv(.c) ?*anyopaque {
+    const w = walkOf(ctx) orelse return null;
+    const s = w.behaviour.owner.state;
+    return s.ecs.component_get.?(s.ecs, node, cid);
+}
+
 /// Slot `parent`. Asks the scene tree.
 fn parent(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) Entity {
     const w = walkOf(ctx) orelse return invalid;
@@ -291,6 +298,7 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
             .commands = sys.?.commands,
             .next = &next,
             .get = &get,
+            .component = &component,
             .parent = &parent,
             .child = &child,
             .axis = &axis,
@@ -515,10 +523,10 @@ fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ec
 }
 
 /// Slot `carries`.
-fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, component: Cid) callconv(.c) bool {
+fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, cid: Cid) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
     const t = findType(s, type_cid) orelse return false;
-    return std.mem.indexOfScalar(Cid, t.columns, component) != null;
+    return std.mem.indexOfScalar(Cid, t.columns, cid) != null;
 }
 
 fn vtDestroy(self_in: ?*abi_framework.c.ke_node_types) callconv(.c) void {
@@ -750,6 +758,39 @@ test "an update behaviour visits every node of its type with its fields and its 
         try testing.expectEqual(@as(u32, 1), p.visits);
         try testing.expectEqual(p.speed * 0.5, t[1]);
     }
+}
+
+var label_text: [8]u8 = .{0} ** 8;
+const label_cid: Cid = 60;
+const label_node: Entity = 30;
+
+fn labelOf(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_get)) ?*anyopaque {
+    return if (args[1] == label_node and args[2] == label_cid) &label_text else null;
+}
+
+fn writeLabel(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    while (ctx.?.next.?(ctx)) {
+        const text: *[8]u8 = @ptrCast(ctx.?.component.?(ctx, label_node, label_cid) orelse return R.code(error.NotFound));
+        text[0] += 1;
+        if (ctx.?.component.?(ctx, ctx.?.self, label_cid) != null) return R.code(error.InvalidArgument);
+    }
+    return R.ok;
+}
+
+test "component reaches another node's component and is null for one the node does not carry" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.ecs.when(.component_get).does(labelOf);
+    var d = paddleDesc();
+    d.update = writeLabel;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var rows: Rows = .{};
+    rows.build();
+    label_text[0] = 0;
+    try runSystem(registered[0], &rows);
+    try testing.expectEqual(@as(u8, 3), label_text[0]);
 }
 
 test "ready visits only the nodes not yet readied and marks them" {

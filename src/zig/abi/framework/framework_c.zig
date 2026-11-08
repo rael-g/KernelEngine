@@ -78,6 +78,8 @@ pub const ke_node_ctx = extern struct {
     next: ?*const fn (?*ke_node_ctx) callconv(.c) bool = null,
     /// One of the node's components: its fields or one its type names in `with`.
     get: ?*const fn (?*ke_node_ctx, ke_component_id) callconv(.c) ?*anyopaque = null,
+    /// Any node's component, the current node's or another's.
+    component: ?*const fn (?*ke_node_ctx, ke_entity, ke_component_id) callconv(.c) ?*anyopaque = null,
     /// The node's parent, KE_ENTITY_INVALID for a node at the root.
     parent: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
     /// The child of node named name, KE_ENTITY_INVALID when it has none.

@@ -34,6 +34,12 @@ pub const NodeCtx = struct {
                     return T.get(state, a0);
                 }
             }.call,
+            .component = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity, a1: c.ke_component_id) callconv(.c) ?*anyopaque {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*anyopaque)));
+                    return T.component(state, a0, a1);
+                }
+            }.call,
             .parent = &struct {
                 fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) c.ke_entity {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
@@ -91,6 +97,11 @@ pub const NodeCtx = struct {
     /// One of the node's components: its fields or one its type names in `with`.
     pub fn get(self: NodeCtx, cid: c.ke_component_id) ?*anyopaque {
         return self.ptr.get.?(self.ptr, cid);
+    }
+
+    /// Any node's component, the current node's or another's.
+    pub fn component(self: NodeCtx, node: c.ke_entity, cid: c.ke_component_id) ?*anyopaque {
+        return self.ptr.component.?(self.ptr, node, cid);
     }
 
     /// The node's parent, KE_ENTITY_INVALID for a node at the root.

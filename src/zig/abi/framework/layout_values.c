@@ -29,6 +29,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_node_ctx, commands),
     offsetof(ke_node_ctx, next),
     offsetof(ke_node_ctx, get),
+    offsetof(ke_node_ctx, component),
     offsetof(ke_node_ctx, parent),
     offsetof(ke_node_ctx, child),
     offsetof(ke_node_ctx, axis),

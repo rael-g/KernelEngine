@@ -55,6 +55,10 @@ extern "C"
         ///         does not carry.
         void *(*get)(ke_node_ctx *self, ke_component_id cid);
 
+        /// Any node's component, the current node's or another's.
+        /// @return The component's memory on @p node, NULL for a node that does not carry it.
+        void *(*component)(ke_node_ctx *self, ke_entity node, ke_component_id cid);
+
         /// The node's parent, KE_ENTITY_INVALID for a node at the root.
         ke_entity (*parent)(ke_node_ctx *self, ke_entity node);
 
