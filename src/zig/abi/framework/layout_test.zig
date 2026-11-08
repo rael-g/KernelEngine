@@ -23,6 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
     try expectSameLayout(abi.c.ke_node_handler, translated("ke_node_handler"));
     try expectSameLayout(abi.c.ke_node_type_desc, translated("ke_node_type_desc"));
     try expectSameLayout(abi.c.ke_scene_hierarchy_handle, translated("ke_scene_hierarchy_handle"));
@@ -38,11 +39,20 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
 }
 
-extern const layout_values: [51]c_ulonglong;
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_ACTION_NAME_MAX), @as(i128, abi.c.KE_ACTION_NAME_MAX));
+}
+
+extern const layout_values: [55]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_action_ref),
+        @offsetOf(abi.c.ke_action_ref, "name"),
+        @offsetOf(abi.c.ke_action_ref, "id"),
+        @offsetOf(abi.c.ke_action_ref, "resolved"),
         @sizeOf(abi.c.ke_node_handler),
         @offsetOf(abi.c.ke_node_handler, "event"),
         @offsetOf(abi.c.ke_node_handler, "on"),

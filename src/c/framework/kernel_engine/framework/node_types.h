@@ -15,6 +15,20 @@ extern "C"
 
     typedef struct ke_node_ctx ke_node_ctx;
 
+#define KE_ACTION_NAME_MAX 32
+
+    /// An input action named by a node's fields and resolved the first time a behaviour reads it.
+    /// A scene writes its name; zeroed memory is a reference not yet resolved.
+    typedef struct ke_action_ref
+    {
+        /// [utf8] The action's name in the input action maps.
+        char    name[KE_ACTION_NAME_MAX];
+        /// The action's id once resolved; meaningful only while resolved is true.
+        int32_t id;
+        /// Whether id holds the result of looking the name up.
+        bool    resolved;
+    } ke_action_ref;
+
     /// One call of a behaviour over the nodes of its type. The body walks them with
     /// next, which points self and fields at each node in turn; an on handler walks every
     /// pair of a node and an event, with event pointing at the event.
@@ -66,11 +80,14 @@ extern "C"
         /// @param name [utf8]
         ke_entity (*child)(ke_node_ctx *self, ke_entity node, const char *name);
 
-        /// The value of an axis action, 0 without input actions.
-        float (*axis)(ke_node_ctx *self, int32_t action);
+        /// The value of an axis action, 0 without input actions or for a name no map holds.
+        /// @param action Resolved by name on its first read, and kept resolved.
+        float (*axis)(ke_node_ctx *self, ke_action_ref *action);
 
-        /// Whether a button action was pressed this tick, false without input actions.
-        bool (*pressed)(ke_node_ctx *self, int32_t action);
+        /// Whether a button action was pressed this tick, false without input actions or for a
+        /// name no map holds.
+        /// @param action Resolved by name on its first read, and kept resolved.
+        bool (*pressed)(ke_node_ctx *self, ke_action_ref *action);
 
         /// Records a node of @p type named @p name under @p parent, its fields and the
         /// components its type names in `with` holding their declared defaults.

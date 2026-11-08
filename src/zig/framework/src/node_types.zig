@@ -213,17 +213,29 @@ fn child(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity, name: ?[*:0]const u8)
 }
 
 /// Slot `axis`. Asks the input actions, 0 without them.
-fn axis(ctx: ?*abi_framework.c.ke_node_ctx, action: i32) callconv(.c) f32 {
+fn axis(ctx: ?*abi_framework.c.ke_node_ctx, action: ?*abi_framework.c.ke_action_ref) callconv(.c) f32 {
     const w = walkOf(ctx) orelse return 0;
     const actions = w.behaviour.owner.state.actions orelse return 0;
-    return actions.get_axis1d.?(actions, action);
+    const id = resolve(actions, action orelse return 0) orelse return 0;
+    return actions.get_axis1d.?(actions, id);
 }
 
 /// Slot `pressed`. Asks the input actions, false without them.
-fn pressed(ctx: ?*abi_framework.c.ke_node_ctx, action: i32) callconv(.c) bool {
+fn pressed(ctx: ?*abi_framework.c.ke_node_ctx, action: ?*abi_framework.c.ke_action_ref) callconv(.c) bool {
     const w = walkOf(ctx) orelse return false;
     const actions = w.behaviour.owner.state.actions orelse return false;
-    return actions.was_action_pressed.?(actions, action);
+    const id = resolve(actions, action orelse return false) orelse return false;
+    return actions.was_action_pressed.?(actions, id);
+}
+
+/// Looks the reference's name up once and keeps the answer in it; null for a name no map holds.
+fn resolve(actions: *abi_input_actions.c.ke_input_actions, action: *abi_framework.c.ke_action_ref) ?i32 {
+    if (!action.resolved) {
+        action.id = actions.get_action_id.?(actions, @ptrCast(&action.name));
+        action.resolved = true;
+        if (action.id < 0) log.warn("node types: no input action is named {s}", .{std.mem.sliceTo(&action.name, 0)});
+    }
+    return if (action.id < 0) null else action.id;
 }
 
 fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out: *Entity) abi_result.c.ke_result {
@@ -812,6 +824,49 @@ fn writeLabel(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) a
         if (ctx.?.component.?(ctx, ctx.?.self, label_cid) != null) return R.code(error.InvalidArgument);
     }
     return R.ok;
+}
+
+var launch_ref = std.mem.zeroes(abi_framework.c.ke_action_ref);
+var launch_presses: u32 = 0;
+
+fn actionIdOf(args: zsub.For(abi_input_actions.c.ke_input_actions).Args(.get_action_id)) i32 {
+    return if (std.mem.eql(u8, std.mem.span(args[1].?), "Launch")) 0 else -1;
+}
+
+fn readLaunch(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    while (ctx.?.next.?(ctx)) {
+        if (ctx.?.pressed.?(ctx, &launch_ref)) launch_presses += 1;
+    }
+    return R.ok;
+}
+
+test "an action reference is resolved by name on its first read, action 0 among them, and kept" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var actions: zsub.For(abi_input_actions.c.ke_input_actions) = undefined;
+    try actions.init();
+    defer actions.deinit();
+    _ = actions.when(.get_action_id).does(actionIdOf);
+    _ = actions.when(.was_action_pressed).returns(true);
+    var with_actions: abi_framework.c.ke_node_types_handle = undefined;
+    registered_count = 0;
+    try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &with_actions));
+    defer with_actions.destroy.?(with_actions.ref);
+    var d = paddleDesc();
+    d.update = readLaunch;
+    var cid: Cid = 0;
+    try R.check(with_actions.ref.?.register_type.?(with_actions.ref, &d, &cid));
+    launch_ref = std.mem.zeroes(abi_framework.c.ke_action_ref);
+    @memcpy(launch_ref.name[0.."Launch".len], "Launch");
+    launch_presses = 0;
+    var rows: Rows = .{};
+    rows.build();
+    try runSystem(registered[registered_count - 1], &rows);
+    try testing.expectEqual(@as(u32, 3), launch_presses);
+    try testing.expect(launch_ref.resolved);
+    try testing.expectEqual(@as(i32, 0), launch_ref.id);
+    try actions.received(.get_action_id).times(1);
 }
 
 test "component reaches another node's component and is null for one the node does not carry" {

@@ -1,7 +1,6 @@
 #ifndef PONG_PONG_H_
 #define PONG_PONG_H_
 
-#include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>
 
@@ -13,7 +12,6 @@ typedef struct pong_game
     ke_ecs           *ecs;
     ke_node_types    *types;
     ke_scene_files   *scenes;
-    ke_input_actions *actions;
     /** [utf8] The font file every label is drawn with. */
     const char *font;
 
@@ -23,8 +21,8 @@ typedef struct pong_game
     ke_component_id transform2d;
     ke_component_id goal_scored;
     ke_component_id ball_launched;
-    int32_t         launch;
-    int32_t         quit;
+    ke_action_ref   launch;
+    ke_action_ref   quit;
 
     /** The node the current scene is instantiated under. */
     ke_entity scene;

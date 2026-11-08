@@ -3,6 +3,10 @@
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_action_ref),
+    offsetof(ke_action_ref, name),
+    offsetof(ke_action_ref, id),
+    offsetof(ke_action_ref, resolved),
     sizeof(ke_node_handler),
     offsetof(ke_node_handler, event),
     offsetof(ke_node_handler, on),

@@ -21,14 +21,13 @@
 
 typedef struct pong_paddle
 {
-    char    move_action[32];
-    float   speed;
-    float   half_height;
-    int32_t action;
+    ke_action_ref move_action;
+    float         speed;
+    float         half_height;
 } pong_paddle;
 
 static const ke_component_field pong_paddle_fields[] = {
-    { "move_action", KE_VARIANT_STRING, offsetof(pong_paddle, move_action), sizeof(((pong_paddle *)0)->move_action), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "move_action", KE_VARIANT_STRING, offsetof(pong_paddle, move_action.name), sizeof(((pong_paddle *)0)->move_action.name), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "speed", KE_VARIANT_FLOAT, offsetof(pong_paddle, speed), sizeof(float), { KE_VARIANT_FLOAT, { .f = 7.0 } }, NULL, 0 },
     { "half_height", KE_VARIANT_FLOAT, offsetof(pong_paddle, half_height), sizeof(float), { KE_VARIANT_FLOAT, { .f = 0.9 } }, NULL, 0 },
 };
@@ -110,14 +109,6 @@ static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *sound)
     return game->scenes->instantiate(game->scenes, sound, ctx->self, ctx->commands, NULL);
 }
 
-static ke_result paddle_ready(ke_node_ctx *ctx, void *user_data)
-{
-    pong_game *game = user_data;
-    KE_FOR_EACH_NODE(ctx, pong_paddle, paddle)
-        paddle->action = game->actions->get_action_id(game->actions, paddle->move_action);
-    return KE_OK;
-}
-
 static ke_result paddle_fixed_update(ke_node_ctx *ctx, void *user_data)
 {
     pong_game *game = user_data;
@@ -125,7 +116,7 @@ static ke_result paddle_fixed_update(ke_node_ctx *ctx, void *user_data)
     {
         ke_body2d_component *body = ctx->get(ctx, game->body);
         const ke_transform2d_component *pose = ctx->get(ctx, game->transform2d);
-        float vy = ctx->axis(ctx, paddle->action) * paddle->speed;
+        float vy = ctx->axis(ctx, &paddle->move_action) * paddle->speed;
         float max_y = PONG_FIELD_HALF_HEIGHT - PONG_WALL_HALF_THICKNESS - paddle->half_height;
         if (vy > 0 && pose->position.y >= max_y) vy = 0;
         if (vy < 0 && pose->position.y <= -max_y) vy = 0;
@@ -139,8 +130,8 @@ static ke_result ball_update(ke_node_ctx *ctx, void *user_data)
     pong_game *game = user_data;
     KE_FOR_EACH_NODE(ctx, pong_ball, ball)
     {
-        if (ctx->pressed(ctx, game->quit)) return change_scene(ctx, game, PONG_MENU_SCENE);
-        if (ctx->pressed(ctx, game->launch) && ball->awaiting_launch) ball->launch_requested = true;
+        if (ctx->pressed(ctx, &game->quit)) return change_scene(ctx, game, PONG_MENU_SCENE);
+        if (ctx->pressed(ctx, &game->launch) && ball->awaiting_launch) ball->launch_requested = true;
     }
     return KE_OK;
 }
@@ -260,8 +251,8 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
     pong_game *game = user_data;
     while (ctx->next(ctx))
     {
-        if (ctx->pressed(ctx, game->launch)) return change_scene(ctx, game, PONG_MAIN_SCENE);
-        if (ctx->pressed(ctx, game->quit)) game->quit_requested = true;
+        if (ctx->pressed(ctx, &game->launch)) return change_scene(ctx, game, PONG_MAIN_SCENE);
+        if (ctx->pressed(ctx, &game->quit)) game->quit_requested = true;
     }
     return KE_OK;
 }
@@ -297,15 +288,15 @@ ke_result pong_register(pong_game *game)
     if (!lookup(game->ecs, "label", &game->label) ||
         !lookup(game->ecs, "body2d", &game->body) || !lookup(game->ecs, "transform2d", &game->transform2d))
         return KE_RESULT_NOT_FOUND;
-    game->launch = game->actions->get_action_id(game->actions, "Launch");
-    game->quit = game->actions->get_action_id(game->actions, "Quit");
+    game->launch = (ke_action_ref){ .name = "Launch" };
+    game->quit = (ke_action_ref){ .name = "Quit" };
 
     const ke_node_handler board_handlers[] = {
         { .event = game->goal_scored, .on = scoreboard_on_goal },
         { .event = game->ball_launched, .on = scoreboard_on_launch },
     };
     const ke_node_type_desc descs[] = {
-        { .name = "pong.paddle", .fields = &pong_paddle_params, .with = pong_body_with, .with_count = 2, .ready = paddle_ready, .fixed_update = paddle_fixed_update, .user_data = game },
+        { .name = "pong.paddle", .fields = &pong_paddle_params, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
         { .name = "pong.ball", .fields = &pong_ball_params, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
         { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .ready = scoreboard_ready, .on = board_handlers, .on_count = 2, .user_data = game },
         { .name = "pong.menu_controller", .ready = menu_ready, .update = menu_update, .user_data = game },

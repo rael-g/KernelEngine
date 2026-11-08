@@ -10,6 +10,8 @@ pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
 
+pub const KE_ACTION_NAME_MAX = 32;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
@@ -19,6 +21,17 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// An input action named by a node's fields and resolved the first time a behaviour reads it. A
+/// scene writes its name; zeroed memory is a reference not yet resolved.
+pub const ke_action_ref = extern struct {
+    /// The action's name in the input action maps.
+    name: [32]u8 = std.mem.zeroes([32]u8),
+    /// The action's id once resolved; meaningful only while resolved is true.
+    id: i32 = std.mem.zeroes(i32),
+    /// Whether id holds the result of looking the name up.
+    resolved: bool = std.mem.zeroes(bool),
+};
 
 /// One event a node type handles, and the behaviour that handles it.
 pub const ke_node_handler = extern struct {
@@ -84,10 +97,11 @@ pub const ke_node_ctx = extern struct {
     parent: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
     /// The child of node named name, KE_ENTITY_INVALID when it has none.
     child: ?*const fn (?*ke_node_ctx, ke_entity, ?[*:0]const u8) callconv(.c) ke_entity = null,
-    /// The value of an axis action, 0 without input actions.
-    axis: ?*const fn (?*ke_node_ctx, i32) callconv(.c) f32 = null,
-    /// Whether a button action was pressed this tick, false without input actions.
-    pressed: ?*const fn (?*ke_node_ctx, i32) callconv(.c) bool = null,
+    /// The value of an axis action, 0 without input actions or for a name no map holds.
+    axis: ?*const fn (?*ke_node_ctx, ?*ke_action_ref) callconv(.c) f32 = null,
+    /// Whether a button action was pressed this tick, false without input actions or for a name no
+    /// map holds.
+    pressed: ?*const fn (?*ke_node_ctx, ?*ke_action_ref) callconv(.c) bool = null,
     /// Records a node of type named name under parent, its fields and the components its type names
     /// in `with` holding their declared defaults.
     spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,

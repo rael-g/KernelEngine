@@ -288,7 +288,6 @@ int main(int argc, char **argv)
     game.ecs = ecs.ref;
     game.types = types.ref;
     game.scenes = scenes.ref;
-    game.actions = actions.ref;
     check("pong types", pong_register(&game));
 
     frame_input in = { .input = input.ref, .actions = actions.ref };

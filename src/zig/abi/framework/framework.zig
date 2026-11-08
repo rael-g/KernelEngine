@@ -53,13 +53,13 @@ pub const NodeCtx = struct {
                 }
             }.call,
             .axis = &struct {
-                fn call(self: ?*c.ke_node_ctx, a0: i32) callconv(.c) f32 {
+                fn call(self: ?*c.ke_node_ctx, a0: ?*c.ke_action_ref) callconv(.c) f32 {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(f32)));
                     return T.axis(state, a0);
                 }
             }.call,
             .pressed = &struct {
-                fn call(self: ?*c.ke_node_ctx, a0: i32) callconv(.c) bool {
+                fn call(self: ?*c.ke_node_ctx, a0: ?*c.ke_action_ref) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
                     return T.pressed(state, a0);
                 }
@@ -114,13 +114,14 @@ pub const NodeCtx = struct {
         return self.ptr.child.?(self.ptr, node, name.ptr);
     }
 
-    /// The value of an axis action, 0 without input actions.
-    pub fn axis(self: NodeCtx, action: i32) f32 {
+    /// The value of an axis action, 0 without input actions or for a name no map holds.
+    pub fn axis(self: NodeCtx, action: ?*c.ke_action_ref) f32 {
         return self.ptr.axis.?(self.ptr, action);
     }
 
-    /// Whether a button action was pressed this tick, false without input actions.
-    pub fn pressed(self: NodeCtx, action: i32) bool {
+    /// Whether a button action was pressed this tick, false without input actions or for a name no
+    /// map holds.
+    pub fn pressed(self: NodeCtx, action: ?*c.ke_action_ref) bool {
         return self.ptr.pressed.?(self.ptr, action);
     }
 
@@ -272,6 +273,7 @@ pub const SceneHierarchy = struct {
 
 };
 
+pub const ActionRef = c.ke_action_ref;
 pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;
 pub const NodeTypesHandle = c.ke_node_types_handle;
