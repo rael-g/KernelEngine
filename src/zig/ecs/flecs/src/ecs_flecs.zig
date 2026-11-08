@@ -203,6 +203,12 @@ fn layoutFitsSize(fields: []const abi_ecs.c.ke_component_field, element_size: us
 }
 
 /// The field table remembered for `cid`, or null when none was ever recorded.
+fn isRegistered(s: *State, cid: abi_asset_resolver.c.ke_component_id) bool {
+    const qs = s.queries orelse return false;
+    for (qs[0..s.query_count]) |q| if (q.cid == cid) return true;
+    return false;
+}
+
 fn layoutOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?[]const abi_ecs.c.ke_component_field {
     const ls = s.layouts orelse return null;
     for (0..s.layout_count) |i| {
@@ -414,9 +420,10 @@ fn refuse(comptime fmt: []const u8, args: anytype) abi_result.c.ke_result {
 }
 
 /// Slot `component_lookup`. Reports the id and size of the component called by name through
-/// out_meta, with the remembered field table when there is one and a null table otherwise. A null
-/// out_meta only checks that the name exists. An unknown name, one with no type information, and a
-/// null argument answer false.
+/// out_meta, with the remembered field table when there is one and a null table otherwise; a tag
+/// registered with size 0 reports size and alignment 0. A null out_meta only checks that the name
+/// exists. An unknown name, an entity never registered as a component, and a null argument answer
+/// false.
 fn componentLookup(
     self_in: ?*abi_ecs.c.ke_ecs,
     name: [*c]const u8,
@@ -429,14 +436,14 @@ fn componentLookup(
     const e = c.ecs_lookup(s.world, name);
     if (e == 0) return false;
 
+    const cid: abi_asset_resolver.c.ke_component_id = @truncate(e);
     const ti = c.ecs_get_type_info(s.world, @intCast(e));
-    if (ti == null) return false;
+    if (ti == null and !isRegistered(s, cid)) return false;
 
     if (out_meta != null) {
-        const cid: abi_asset_resolver.c.ke_component_id = @truncate(e);
         out_meta.*.cid = cid;
-        out_meta.*.size = @intCast(ti.*.size);
-        out_meta.*.alignment = @intCast(ti.*.alignment);
+        out_meta.*.size = if (ti != null) @intCast(ti.*.size) else 0;
+        out_meta.*.alignment = if (ti != null) @intCast(ti.*.alignment) else 0;
         if (layoutOf(s, cid)) |f| {
             out_meta.*.fields = f.ptr;
             out_meta.*.field_count = @intCast(f.len);
@@ -858,6 +865,27 @@ test "a component keeps the alignment it was registered with, and a lookup repor
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "aligned4", &meta));
     try testing.expectEqual(@as(usize, 4), meta.alignment);
+}
+
+test "a tag registered with size zero is found by lookup with size zero" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "node.paddle", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "node.paddle", &meta));
+    try testing.expectEqual(cid, meta.cid);
+    try testing.expectEqual(@as(usize, 0), meta.size);
+}
+
+test "an entity that was never registered as a component is not found by lookup" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "scope.inner", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try testing.expect(!handle.ref.?.component_lookup.?(handle.ref, "scope", null));
 }
 
 test "an alignment of zero registers the alignment of max_align_t" {
