@@ -14,7 +14,7 @@ static const ke_component_field ke_sound_component_fields[] = {
     { "pitch", KE_VARIANT_FLOAT, offsetof(ke_sound_component, pitch), sizeof(((ke_sound_component *)0)->pitch), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
     { "loop", KE_VARIANT_BOOL, offsetof(ke_sound_component, loop), sizeof(((ke_sound_component *)0)->loop), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "playing", KE_VARIANT_BOOL, offsetof(ke_sound_component, playing), sizeof(((ke_sound_component *)0)->playing), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "release", KE_VARIANT_INT, offsetof(ke_sound_component, release), sizeof(((ke_sound_component *)0)->release), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "release", KE_VARIANT_INT, offsetof(ke_sound_component, release), sizeof(((ke_sound_component *)0)->release), { KE_VARIANT_NULL, { 0 } }, (const char *const[]){ "keep", "when_done" }, 2 },
 };
 
 #endif /* KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_ */

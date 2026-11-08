@@ -19,7 +19,7 @@ static const ke_component_field ke_body2d_component_fields[] = {
 };
 
 static const ke_component_field ke_collider2d_component_fields[] = {
-    { "kind", KE_VARIANT_INT, offsetof(ke_collider2d_component, kind), sizeof(((ke_collider2d_component *)0)->kind), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "kind", KE_VARIANT_INT, offsetof(ke_collider2d_component, kind), sizeof(((ke_collider2d_component *)0)->kind), { KE_VARIANT_NULL, { 0 } }, (const char *const[]){ "box", "circle" }, 2 },
     { "half_extents", KE_VARIANT_VEC2, offsetof(ke_collider2d_component, half_extents), sizeof(((ke_collider2d_component *)0)->half_extents), { KE_VARIANT_VEC2, { .v2 = { 0.5f, 0.5f } } }, NULL, 0 },
     { "radius", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, radius), sizeof(((ke_collider2d_component *)0)->radius), { KE_VARIANT_FLOAT, { .f = 0.5 } }, NULL, 0 },
     { "density", KE_VARIANT_FLOAT, offsetof(ke_collider2d_component, density), sizeof(((ke_collider2d_component *)0)->density), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },

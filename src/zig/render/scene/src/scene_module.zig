@@ -22,7 +22,6 @@ const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
-const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
 const label_resolve = @import("label_resolve.zig");
@@ -36,14 +35,14 @@ const Component = struct {
 };
 
 const components = [_]Component{
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(abi_render_components.c.ke_mesh_component), .alignment = @alignOf(abi_render_components.c.ke_mesh_component), .fields = &abi_render_contract.c.ke_mesh_component_fields, .field_count = abi_render_contract.c.ke_mesh_component_fields.len }, .apply = component_apply.ke_render_apply_mesh },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(abi_render_components.c.ke_camera_component), .alignment = @alignOf(abi_render_components.c.ke_camera_component), .fields = &abi_render_contract.c.ke_camera_component_fields, .field_count = abi_render_contract.c.ke_camera_component_fields.len }, .apply = component_apply.ke_render_apply_camera },
+    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(abi_render_components.c.ke_mesh_component), .alignment = @alignOf(abi_render_components.c.ke_mesh_component), .fields = &abi_render_contract.c.ke_mesh_component_fields, .field_count = abi_render_contract.c.ke_mesh_component_fields.len }, .apply = null },
+    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(abi_render_components.c.ke_camera_component), .alignment = @alignOf(abi_render_components.c.ke_camera_component), .fields = &abi_render_contract.c.ke_camera_component_fields, .field_count = abi_render_contract.c.ke_camera_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(abi_render_components.c.ke_directional_light_component), .alignment = @alignOf(abi_render_components.c.ke_directional_light_component), .fields = &abi_render_contract.c.ke_directional_light_component_fields, .field_count = abi_render_contract.c.ke_directional_light_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_point_light_component), .alignment = @alignOf(abi_render_components.c.ke_point_light_component), .fields = &abi_render_contract.c.ke_point_light_component_fields, .field_count = abi_render_contract.c.ke_point_light_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_spot_light_component), .alignment = @alignOf(abi_render_components.c.ke_spot_light_component), .fields = &abi_render_contract.c.ke_spot_light_component_fields, .field_count = abi_render_contract.c.ke_spot_light_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_ambient_light_component), .alignment = @alignOf(abi_render_components.c.ke_ambient_light_component), .fields = &abi_render_contract.c.ke_ambient_light_component_fields, .field_count = abi_render_contract.c.ke_ambient_light_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(abi_render_components.c.ke_skybox_component), .alignment = @alignOf(abi_render_components.c.ke_skybox_component) }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(abi_render_components.c.ke_sprite2d_component), .alignment = @alignOf(abi_render_components.c.ke_sprite2d_component), .fields = &abi_render_contract.c.ke_sprite2d_component_fields, .field_count = abi_render_contract.c.ke_sprite2d_component_fields.len }, .apply = component_apply.ke_render_apply_sprite2d },
+    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(abi_render_components.c.ke_sprite2d_component), .alignment = @alignOf(abi_render_components.c.ke_sprite2d_component), .fields = &abi_render_contract.c.ke_sprite2d_component_fields, .field_count = abi_render_contract.c.ke_sprite2d_component_fields.len }, .apply = null },
     .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, .apply = null },
 };
 

@@ -13,7 +13,7 @@ public partial struct MeshComponent
     public System.Numerics.Vector4 BaseColor;
 
     public float Roughness;
-    public uint AlphaMode;
+    public AlphaMode AlphaMode;
 
     public float AlphaCutoff;
 

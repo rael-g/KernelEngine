@@ -62,7 +62,8 @@ public sealed class FieldTablesExtension : IKabicExtension
             {
                 var variant = variants[KindOf(model, f)!]!.AsObject();
                 o.Append($"    {{ \"{f.TagValue("name") ?? f.Name}\", {variant["constant"]!.GetValue<string>()}, offsetof({s.Name}, {f.Name}), "
-                    + $"sizeof((({s.Name} *)0)->{f.Name}), {DefaultOf(f, KindOf(model, f)!, variants)}, NULL, 0 }},\n");
+                    + $"sizeof((({s.Name} *)0)->{f.Name}), {DefaultOf(model, f, KindOf(model, f)!, variants)}, "
+                    + (EnumOf(model, f) is { } e ? $"(const char *const[]){{ {string.Join(", ", EnumNames(e).Select(n => $"\"{n}\""))} }}, {EnumNames(e).Count}" : "NULL, 0") + " },\n");
             }
             o.Append("};\n\n");
         }
@@ -71,6 +72,26 @@ public sealed class FieldTablesExtension : IKabicExtension
     }
 
     static string ComponentName(ApiStruct s, Convention convention) => convention.StripPrefix(s.Name)[..^"_component".Length];
+
+    static ApiEnum? EnumOf(ApiModel model, ApiField f)
+    {
+        var type = f.Type.Replace("const ", "").Replace("enum ", "").Trim();
+        var e = model.Enums.FirstOrDefault(e => e.Name == type);
+        return e is not null && EnumNames(e).Count == e.Values.Count ? e : null;
+    }
+
+    static List<string> EnumNames(ApiEnum e)
+    {
+        var prefix = e.Name.ToUpperInvariant() + "_";
+        var names = new List<string>();
+        for (var i = 0; i < e.Values.Count; i++)
+        {
+            var v = e.Values[i];
+            if (!v.Name.StartsWith(prefix, StringComparison.Ordinal) || (v.RawValue.Length > 0 && v.RawValue != i.ToString(System.Globalization.CultureInfo.InvariantCulture))) return [];
+            names.Add(v.Name[prefix.Length..].ToLowerInvariant());
+        }
+        return names;
+    }
 
     static string? KindOf(ApiModel model, ApiField f)
     {
@@ -91,7 +112,7 @@ public sealed class FieldTablesExtension : IKabicExtension
         };
     }
 
-    static string DefaultOf(ApiField f, string kind, JsonObject variants)
+    static string DefaultOf(ApiModel model, ApiField f, string kind, JsonObject variants)
     {
         if (f.TagValue("default") is not { } raw) return $"{{ {variants["null"]!["constant"]!.GetValue<string>()}, {{ 0 }} }}";
         var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
@@ -99,7 +120,7 @@ public sealed class FieldTablesExtension : IKabicExtension
         {
             "string" => $"\"{raw}\"",
             "bool" => raw is "1" or "true" ? "true" : "false",
-            "int" => raw,
+            "int" => EnumOf(model, f) is { } e && e.Values.ToList().FindIndex(v => v.Name == raw) is var at and >= 0 ? at.ToString(System.Globalization.CultureInfo.InvariantCulture) : raw,
             "float" => CDouble(parts[0]),
             _ => "{ " + string.Join(", ", parts.Select(p => CDouble(p) + "f")) + " }",
         };

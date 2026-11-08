@@ -20,7 +20,7 @@ public static class MeshComponentDefaults
         {
             BaseColor = new System.Numerics.Vector4(1f, 1f, 1f, 1f),
             Roughness = 1f,
-            AlphaMode = 0,
+            AlphaMode = AlphaMode.Opaque,
             AlphaCutoff = 0.5f,
             Ior = 1.5f,
             DistortionStrength = 0.05f,

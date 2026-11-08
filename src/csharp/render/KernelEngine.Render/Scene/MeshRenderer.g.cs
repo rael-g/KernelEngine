@@ -32,9 +32,8 @@ public partial class MeshRenderer : Node3D
     [NativeField("Roughness", Component = typeof(MeshComponent))]
     public partial float Roughness { get; set; }
 
-    /// <summary>ke_alpha_mode.</summary>
     [NativeField("AlphaMode", Component = typeof(MeshComponent))]
-    public partial uint AlphaMode { get; set; }
+    public partial AlphaMode AlphaMode { get; set; }
 
     [NativeField("AlphaCutoff", Component = typeof(MeshComponent))]
     public partial float AlphaCutoff { get; set; }
