@@ -71,12 +71,12 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
 }
 
 /// The body of the "render.skybox" system, which the runtime calls as its `execute` in the render
-/// phase. Succeeds with no pass when the first query has no camera, or when the render service
+/// phase. Succeeds with no pass when the first query has no camera, the second no skybox, or when the render service
 /// gives no pass. A set that cannot be created ends the pass, fails with the binder's code and
 /// leaves `set` invalid until the next call. Each frame it draws one full-screen triangle over the frame's color, after rewriting the uniform with the inverse of the camera rotation and projection
 /// product. It recreates the set every call, because the environment texture and the
-/// depth view can change between frames, and a frame whose skybox query has no row passes the
-/// "none" texture handle as the environment.
+/// depth view can change between frames. A frame without a skybox draws nothing, so the frame keeps
+/// its clear color.
 fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const sm = moduleOf(user);
     const core = sm.core;
@@ -84,6 +84,11 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs.?[0].count == 0) return R.ok;
+
+    var sky_segc: usize = 0;
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
+    if (sky_segc == 0 or sky_segs.?[0].count == 0) return R.ok;
+    const env = (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap;
 
     const cam: *const abi_render_components.c.ke_camera_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[0]));
     const cam_wt: *const abi_spatial.c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[1]));
@@ -105,12 +110,6 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     zm.storeMat(frame.inv_sky_view_proj[0..], zm.inverse(sky_vp));
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
-    var sky_segc: usize = 0;
-    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
-    const env: abi_render_handles.c.ke_texture_handle = if (sky_segc != 0 and sky_segs.?[0].count != 0)
-        (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
-    else
-        .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
     const depth_view = pc.?.read.?(pc, abi_render.c.KE_RENDER_FRAME_DEPTH);
 
@@ -376,6 +375,33 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+const camera_row = struct {
+    var cam = std.mem.zeroes(abi_render_components.c.ke_camera_component);
+    var world = std.mem.zeroes(abi_spatial.c.ke_world_transform_component);
+    var entity = [1]abi_ecs.c.ke_entity{1};
+    var columns = [2]?*anyopaque{ &cam, &world };
+    var segs = [1]abi_ecs.c.ke_ecs_segment{.{ .entities = &entity, .count = 1, .columns = &columns, .column_count = 2 }};
+};
+
+fn cameraWithoutSkybox(_: ?*abi_runtime.c.ke_system_ctx, query: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    out_count.?.* = if (query == 0) 1 else 0;
+    return if (query == 0) &camera_row.segs else null;
+}
+
+test "a frame with a camera and no skybox opens no pass, keeping the clear color" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
+    try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
+    defer h.destroy.?(h.ref);
+    var sys = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    sys.view = cameraWithoutSkybox;
+    try R.check(system(&sys, h.ref, 0));
+    try rig.core.received(.begin_pass).never();
 }
 
 test "a missing frame is refused" {
