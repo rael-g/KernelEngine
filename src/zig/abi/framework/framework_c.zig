@@ -142,3 +142,18 @@ pub const ke_node_types_handle = extern struct {
     ref: ?*ke_node_types = std.mem.zeroes(?*ke_node_types),
     destroy: ?*const fn (?*ke_node_types) callconv(.c) void = null,
 };
+
+/// Scene files: a text that spawns nodes of registered types and writes their components, as a
+/// program calling the node types and the ecs would.
+pub const ke_scene_files = extern struct {
+    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// Records into commands every node the scene file at path declares, its first one under parent,
+    /// each spawned as a node of its type with the values its blocks write. The nodes exist once
+    /// commands is applied.
+    instantiate: ?*const fn (?*ke_scene_files, ?[*:0]const u8, ke_entity, ?*abi_ecs.c.ke_ecs_commands, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+};
+
+pub const ke_scene_files_handle = extern struct {
+    ref: ?*ke_scene_files = std.mem.zeroes(?*ke_scene_files),
+    destroy: ?*const fn (?*ke_scene_files) callconv(.c) void = null,
+};

@@ -251,6 +251,39 @@ pub const NodeTypes = struct {
 
 };
 
+pub const SceneFiles = struct {
+    ptr: *c.ke_scene_files,
+    owner: ?c.ke_scene_files_handle = null,
+
+    pub fn deinit(self: SceneFiles) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
+
+    /// The vtable whose slots call the methods of T, which embeds it as the named field.
+    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_scene_files {
+        return .{
+            .instantiate = &struct {
+                fn call(self: ?*c.ke_scene_files, a0: ?[*:0]const u8, a1: c.ke_entity, a2: ?*abi_ecs.c.ke_ecs_commands, a3: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.instantiate(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2) catch |failure| return resultOf(failure);
+                    (a3 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+        };
+    }
+
+    /// Records into commands every node the scene file at path declares, its first one under parent,
+    /// each spawned as a node of its type with the values its blocks write. The nodes exist once
+    /// commands is applied.
+    pub fn instantiate(self: SceneFiles, path: [:0]const u8, parent: c.ke_entity, commands: ?*abi_ecs.c.ke_ecs_commands) Error!c.ke_entity {
+        var written: c.ke_entity = undefined;
+        try checkResult(self.ptr.instantiate.?(self.ptr, path.ptr, parent, commands, &written));
+        return written;
+    }
+
+};
+
 pub const SceneHierarchy = struct {
     ptr: *c.ke_scene_hierarchy,
 
@@ -260,3 +293,4 @@ pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;
 pub const SceneComponentSetHandle = c.ke_scene_component_set_handle;
 pub const NodeTypesHandle = c.ke_node_types_handle;
+pub const SceneFilesHandle = c.ke_scene_files_handle;

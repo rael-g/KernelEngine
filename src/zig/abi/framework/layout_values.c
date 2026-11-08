@@ -2,6 +2,7 @@
 #include <kernel_engine/framework/scene_component_set.h>
 #include <kernel_engine/framework/scene_hierarchy.h>
 #include <kernel_engine/framework/node_types.h>
+#include <kernel_engine/framework/scene_files.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_node_handler),
     offsetof(ke_node_handler, event),
@@ -52,5 +53,11 @@ const unsigned long long layout_values[] = {
     sizeof(ke_node_types_handle),
     offsetof(ke_node_types_handle, ref),
     offsetof(ke_node_types_handle, destroy),
+    sizeof(ke_scene_files),
+    offsetof(ke_scene_files, handle),
+    offsetof(ke_scene_files, instantiate),
+    sizeof(ke_scene_files_handle),
+    offsetof(ke_scene_files_handle, ref),
+    offsetof(ke_scene_files_handle, destroy),
     0,
 };

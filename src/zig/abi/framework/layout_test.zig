@@ -31,6 +31,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_node_ctx, translated("ke_node_ctx"));
     try expectSameLayout(abi.c.ke_node_types, translated("ke_node_types"));
     try expectSameLayout(abi.c.ke_node_types_handle, translated("ke_node_types_handle"));
+    try expectSameLayout(abi.c.ke_scene_files, translated("ke_scene_files"));
+    try expectSameLayout(abi.c.ke_scene_files_handle, translated("ke_scene_files_handle"));
     if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
@@ -39,7 +41,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
 }
 
-extern const layout_values: [50]c_ulonglong;
+extern const layout_values: [56]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -93,6 +95,12 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_node_types_handle),
         @offsetOf(abi.c.ke_node_types_handle, "ref"),
         @offsetOf(abi.c.ke_node_types_handle, "destroy"),
+        @sizeOf(abi.c.ke_scene_files),
+        @offsetOf(abi.c.ke_scene_files, "handle"),
+        @offsetOf(abi.c.ke_scene_files, "instantiate"),
+        @sizeOf(abi.c.ke_scene_files_handle),
+        @offsetOf(abi.c.ke_scene_files_handle, "ref"),
+        @offsetOf(abi.c.ke_scene_files_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

@@ -35,6 +35,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/framework/signal_bus_create.h>
         \\#include <kernel_engine/framework/component_registry_create.h>
         \\#include <kernel_engine/framework/node_types_create.h>
+        \\#include <kernel_engine/framework/scene_files_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/asset"));

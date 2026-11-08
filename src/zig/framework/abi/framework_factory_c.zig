@@ -185,3 +185,8 @@ pub extern fn ke_component_registry_create(ecs: ?*abi_ecs.c.ke_ecs, out_registry
 /// `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy
 /// unregisters every system they registered.
 pub extern fn ke_node_types_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
+
+/// Creates scene files that spawn through `node_types`, look components up and write their
+/// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
+/// `io`; each must outlive the scene files.
+pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, out_files: ?*abi_framework.c.ke_scene_files_handle) abi_result.c.ke_result;
