@@ -180,6 +180,14 @@ pub const NodeTypes = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .find_type = &struct {
+                fn call(self: ?*c.ke_node_types, a0: ?[*:0]const u8, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.findType(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .carries = &struct {
                 fn call(self: ?*c.ke_node_types, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
@@ -209,6 +217,13 @@ pub const NodeTypes = struct {
     pub fn spawn(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": c.ke_component_id, name: [:0]const u8, parent: c.ke_entity) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.spawn.?(self.ptr, commands, @"type", name.ptr, parent, &written));
+        return written;
+    }
+
+    /// The id of the type registered under name.
+    pub fn findType(self: NodeTypes, name: [:0]const u8) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.find_type.?(self.ptr, name.ptr, &written));
         return written;
     }
 

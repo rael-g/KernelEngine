@@ -111,6 +111,8 @@ pub const ke_node_types = extern struct {
     /// its type names in `with` holding their declared defaults. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
     spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// The id of the type registered under name.
+    find_type: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Whether a node of type carries component: its fields or one its type names in `with`.
     carries: ?*const fn (?*ke_node_types, ke_component_id, ke_component_id) callconv(.c) bool = null,
 };

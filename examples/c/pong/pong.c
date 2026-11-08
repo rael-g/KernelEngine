@@ -292,7 +292,9 @@ ke_result pong_register(pong_game *game)
     if (made == KE_OK) made = types->register_event(types, &pong_ball_launched_params, &game->ball_launched);
     if (made != KE_OK) return made;
 
-    if (!lookup(game->ecs, "node.node", &game->node) || !lookup(game->ecs, "label", &game->label) ||
+    made = types->find_type(types, "node", &game->node);
+    if (made != KE_OK) return made;
+    if (!lookup(game->ecs, "label", &game->label) ||
         !lookup(game->ecs, "body2d", &game->body) || !lookup(game->ecs, "transform2d", &game->transform2d))
         return KE_RESULT_NOT_FOUND;
     game->launch = game->actions->get_action_id(game->actions, "Launch");

@@ -522,6 +522,23 @@ fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ec
     return spawnNode(s, commands, type_cid, name, under, out);
 }
 
+/// Slot `find_type`. Looks up the tag the type was registered under in the ecs.
+fn vtFindType(self: ?*abi_framework.c.ke_node_types, name_in: ?[*:0]const u8, out_type: ?*Cid) callconv(.c) abi_result.c.ke_result {
+    const out = out_type orelse return R.code(error.InvalidArgument);
+    out.* = abi_ecs.c.KE_COMPONENT_INVALID;
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    const name = name_in orelse return R.code(error.InvalidArgument);
+    const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return R.code(error.OutOfMemory);
+    defer heap.gpa.free(tag_name);
+    var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    if (!s.ecs.component_lookup.?(s.ecs, tag_name.ptr, &meta) or findType(s, meta.cid) == null) {
+        log.warn("node types: no type is registered as {s}", .{name});
+        return R.code(error.NotFound);
+    }
+    out.* = meta.cid;
+    return R.ok;
+}
+
 /// Slot `carries`.
 fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, cid: Cid) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
@@ -559,7 +576,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -614,8 +631,19 @@ fn recordSystem(args: zsub.For(abi_runtime.c.ke_runtime).Args(.register_system))
 
 var next_cid: Cid = 100;
 
+var tag_names: [16][32]u8 = undefined;
+var tag_cids: [16]Cid = undefined;
+var tag_count: usize = 0;
+
 fn registerComponent(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_register)) abi_result.c.ke_result {
     args[2].?.* = next_cid;
+    const name = std.mem.span(args[1].?.name.?);
+    if (tag_count < tag_names.len and name.len < tag_names[0].len) {
+        @memset(&tag_names[tag_count], 0);
+        @memcpy(tag_names[tag_count][0..name.len], name);
+        tag_cids[tag_count] = next_cid;
+        tag_count += 1;
+    }
     next_cid += 1;
     return R.ok;
 }
@@ -629,7 +657,15 @@ fn lookupComponent(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_lookup)) boo
     } else if (std.mem.eql(u8, name, "transform2d")) {
         meta.cid = transform2d_cid;
         meta.size = 8;
-    } else return false;
+    } else {
+        for (tag_names[0..tag_count], tag_cids[0..tag_count]) |*n, cid| {
+            if (std.mem.eql(u8, std.mem.sliceTo(n, 0), name)) {
+                meta.cid = cid;
+                return true;
+            }
+        }
+        return false;
+    }
     return true;
 }
 
@@ -641,6 +677,7 @@ const Fixture = struct {
 
     fn init(f: *Fixture) !void {
         registered_count = 0;
+        tag_count = 0;
         try f.ecs.init();
         try f.rt.init();
         try f.tree.init();
@@ -961,6 +998,22 @@ test "carries answers for the fields and the with components of a registered typ
     try testing.expect(f.types.ref.?.carries.?(f.types.ref, cid, transform2d_cid));
     try testing.expect(!f.types.ref.?.carries.?(f.types.ref, cid, name_cid));
     try testing.expect(!f.types.ref.?.carries.?(f.types.ref, cid + 99, transform2d_cid));
+}
+
+test "find_type answers the id of a type by its registered name, the base type among them" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var d = paddleDesc();
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var found: Cid = 0;
+    try R.check(f.types.ref.?.find_type.?(f.types.ref, "paddle", &found));
+    try testing.expectEqual(cid, found);
+    try R.check(f.types.ref.?.find_type.?(f.types.ref, "node", &found));
+    try testing.expect(found != 0 and found != cid);
+    try testing.expectError(error.NotFound, R.check(f.types.ref.?.find_type.?(f.types.ref, "transform2d", &found)));
+    try testing.expectEqual(@as(Cid, 0), found);
 }
 
 test "a nameless node type, or fields of zero size, is refused" {

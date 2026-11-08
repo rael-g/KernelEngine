@@ -38,7 +38,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
 }
 
-extern const layout_values: [50]c_ulonglong;
+extern const layout_values: [51]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -82,6 +82,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_types, "register_type"),
         @offsetOf(abi.c.ke_node_types, "register_event"),
         @offsetOf(abi.c.ke_node_types, "spawn"),
+        @offsetOf(abi.c.ke_node_types, "find_type"),
         @offsetOf(abi.c.ke_node_types, "carries"),
         @sizeOf(abi.c.ke_node_types_handle),
         @offsetOf(abi.c.ke_node_types_handle, "ref"),
