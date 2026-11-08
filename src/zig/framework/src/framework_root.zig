@@ -20,6 +20,5 @@ comptime {
     _ = @import("scene_values.zig");
     _ = @import("scene_names.zig");
     _ = @import("signal_bus.zig");
-    _ = @import("scene_component_set.zig");
     _ = @import("script_host.zig");
 }

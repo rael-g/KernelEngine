@@ -3,8 +3,6 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
 const abi_render_ui = @import("render_ui");
@@ -41,13 +39,6 @@ pub const RenderLabelResolve = struct {
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn renderSceneSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_scene_set_log_callback(callback, ctx);
-}
-
-/// Adds render's scene components to set: mesh, camera, the four lights, skybox, sprite and
-/// label, with their field tables, and the apply callbacks of the mesh, the camera and the
-/// sprite.
-pub fn renderSceneComponentsCreate(set: ?*abi_framework.c.ke_scene_component_set) Error!void {
-    try checkResult(c.ke_render_scene_components_create(set));
 }
 
 /// Registers the scene's render components and the update-phase systems

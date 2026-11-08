@@ -1,7 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/physics/body2d/body2d_module.h>
 #include <kernel_engine/physics/body2d/physics_body2d_log.h>
-#include <kernel_engine/physics/body2d/scene_components.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_physics_body2d_module_params),
     offsetof(ke_physics_body2d_module_params, runtime),

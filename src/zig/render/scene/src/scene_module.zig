@@ -1,6 +1,5 @@
-//! The scene side of render: the set of its scene components, and the update-phase systems that
-//! give a mesh, a sprite and a label the GPU resources and the font they name, behind one factory
-//! each.
+//! The scene side of render: the update-phase systems that give a mesh, a sprite and a label the
+//! GPU resources and the font they name, behind one factory each.
 
 const abi_render_contract = @import("abi_render_contract");
 const abi_spatial_contract = @import("abi_spatial_contract");
@@ -13,7 +12,6 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
 pub const abi_ecs = @import("abi_ecs");
-const abi_framework = @import("abi_framework");
 const abi_render = @import("abi_render");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
@@ -28,34 +26,6 @@ const label_resolve = @import("label_resolve.zig");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-
-const Component = struct {
-    component: abi_ecs.c.ke_component_params,
-    apply: abi_framework.c.ke_component_apply_fn,
-};
-
-const components = [_]Component{
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(abi_render_components.c.ke_mesh_component), .alignment = @alignOf(abi_render_components.c.ke_mesh_component), .fields = &abi_render_contract.c.ke_mesh_component_fields, .field_count = abi_render_contract.c.ke_mesh_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(abi_render_components.c.ke_camera_component), .alignment = @alignOf(abi_render_components.c.ke_camera_component), .fields = &abi_render_contract.c.ke_camera_component_fields, .field_count = abi_render_contract.c.ke_camera_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(abi_render_components.c.ke_directional_light_component), .alignment = @alignOf(abi_render_components.c.ke_directional_light_component), .fields = &abi_render_contract.c.ke_directional_light_component_fields, .field_count = abi_render_contract.c.ke_directional_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_point_light_component), .alignment = @alignOf(abi_render_components.c.ke_point_light_component), .fields = &abi_render_contract.c.ke_point_light_component_fields, .field_count = abi_render_contract.c.ke_point_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_spot_light_component), .alignment = @alignOf(abi_render_components.c.ke_spot_light_component), .fields = &abi_render_contract.c.ke_spot_light_component_fields, .field_count = abi_render_contract.c.ke_spot_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_ambient_light_component), .alignment = @alignOf(abi_render_components.c.ke_ambient_light_component), .fields = &abi_render_contract.c.ke_ambient_light_component_fields, .field_count = abi_render_contract.c.ke_ambient_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(abi_render_components.c.ke_skybox_component), .alignment = @alignOf(abi_render_components.c.ke_skybox_component) }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(abi_render_components.c.ke_sprite2d_component), .alignment = @alignOf(abi_render_components.c.ke_sprite2d_component), .fields = &abi_render_contract.c.ke_sprite2d_component_fields, .field_count = abi_render_contract.c.ke_sprite2d_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, .apply = null },
-};
-
-/// The factory of the scene components. Adds them in order and stops at the first one the set
-/// refuses.
-export fn ke_render_scene_components_create(set_in: ?*abi_framework.c.ke_scene_component_set) callconv(.c) abi_result.c.ke_result {
-    const set = set_in orelse return R.code(error.InvalidArgument);
-    for (&components) |*c| {
-        const added = set.add.?(set, &c.component, c.apply);
-        if (added != R.ok) return added;
-    }
-    return R.ok;
-}
 
 /// The state of one scene resolve. The factory allocates it and `destroyScene` frees it. The
 /// runtime receives the core and `sprite` as the contexts of the two systems, and their queries

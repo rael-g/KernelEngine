@@ -27,7 +27,6 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/framework/asset_resolver_create.h>
         \\#include <kernel_engine/framework/framework_log.h>
         \\#include <kernel_engine/framework/input_actions_create.h>
-        \\#include <kernel_engine/framework/scene_component_set_create.h>
         \\#include <kernel_engine/framework/scene_hierarchy_create.h>
         \\#include <kernel_engine/framework/scene_loader_create.h>
         \\#include <kernel_engine/framework/scene_tree_create.h>

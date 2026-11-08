@@ -65,11 +65,6 @@ pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -91,6 +86,11 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 
 /// Builds and binds the script an entity's declared type names.
 pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
+
+/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
+/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
+/// nothing in the engine wanted.
+pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
@@ -142,9 +142,6 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
 /// key_quad, each a key name such as "Space" or "W".
 pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
-
-/// Creates an empty scene component set, which the plugins fill through its `add` slot.
-pub extern fn ke_scene_component_set_create(out_set: ?*abi_framework.c.ke_scene_component_set_handle) abi_result.c.ke_result;
 
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the

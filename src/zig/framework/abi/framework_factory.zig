@@ -55,13 +55,6 @@ pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration,
     return written;
 }
 
-/// Creates an empty scene component set, which the plugins fill through its `add` slot.
-pub fn sceneComponentSetCreate() Error!abi_framework.c.ke_scene_component_set_handle {
-    var written: abi_framework.c.ke_scene_component_set_handle = undefined;
-    try checkResult(c.ke_scene_component_set_create(&written));
-    return written;
-}
-
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the
 /// names a scene_tree already registers them under, so a scene_tree must exist on this ecs

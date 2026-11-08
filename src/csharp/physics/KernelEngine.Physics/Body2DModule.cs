@@ -35,7 +35,6 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         if (services.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory)
             KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         var tree = services.GetRequiredService<KernelEngine.Framework.SceneTree>();
-        var registry = services.GetRequiredService<KernelEngine.Framework.ComponentRegistry>();
 
         var @params = new ke_physics_body2d_module_params
         {
@@ -49,18 +48,6 @@ public sealed unsafe class Body2DModule : IRuntimeModule
         KernelEngine.NativeResults.ThrowIfFailed(
             KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &handle), "ke_physics_body2d_module_create");
         _handle = handle;
-
-        KernelEngine.Framework.Native.ke_scene_component_set_handle set;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
-        try
-        {
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_scene_components_create(set.@ref), "ke_physics_scene_components_create");
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ((INativeEcs)ecs).Native, ((KernelEngine.Framework.INativeComponentRegistry)registry).Native), "register_into");
-        }
-        finally
-        {
-            set.destroy(set.@ref);
-        }
     }
 
     /// <inheritdoc />

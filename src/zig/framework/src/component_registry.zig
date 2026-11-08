@@ -23,7 +23,7 @@ const apply_initial_capacity: u32 = 16;
 /// `field_count`) are written by separate registration slots, so either half may stay unset.
 const ApplyEntry = struct {
     cid: abi_asset_resolver.c.ke_component_id,
-    fn_ptr: abi_framework.c.ke_component_apply_fn,
+    fn_ptr: abi_component_registry.c.ke_component_apply_fn,
     ctx: ?*anyopaque,
     fields: ?[*]const abi_ecs.c.ke_component_field,
     field_count: u32,
@@ -88,7 +88,7 @@ fn entryFor(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{OutOfMem
 fn registerComponentApply(
     self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
-    apply_fn: abi_framework.c.ke_component_apply_fn,
+    apply_fn: abi_component_registry.c.ke_component_apply_fn,
     ctx: ?*anyopaque,
 ) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -144,7 +144,7 @@ fn getComponentApply(
     self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     out_ctx: [*c]?*anyopaque,
-) callconv(.c) abi_framework.c.ke_component_apply_fn {
+) callconv(.c) abi_component_registry.c.ke_component_apply_fn {
     const self = self_in orelse return null;
     if (self.handle == null) return null;
     const s = stateOf(self);
@@ -243,7 +243,7 @@ fn registerBuiltin(
     e: *abi_ecs.c.ke_ecs,
     name: [*c]const u8,
     comptime T: type,
-    apply_fn: abi_framework.c.ke_component_apply_fn,
+    apply_fn: abi_component_registry.c.ke_component_apply_fn,
     fields: ?[*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 ) R.Error!void {

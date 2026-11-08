@@ -17,10 +17,6 @@ namespace KernelEngine.Framework.Native;
 
 public static unsafe partial class NativeMethods
 {
-    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_component_set_create", ExactSpelling = true)]
-    [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_component_set_create(ke_scene_component_set_handle* out_set);
-
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_component_registry_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
     public static extern KernelEngine.Result.Native.Result component_registry_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_component_registry_handle* out_registry);

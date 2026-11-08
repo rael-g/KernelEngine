@@ -3,8 +3,6 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
 const abi_render_ui = @import("render_ui");
@@ -63,11 +61,6 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
 /// What the label resolve needs to give a label the font it names.
 pub const ke_render_label_resolve_params = extern struct {
     /// Registers the system; borrowed, must outlive it.
@@ -107,11 +100,6 @@ pub extern fn ke_render_label_resolve_create(params: ?*const ke_render_label_res
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_scene_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
-
-/// Adds render's scene components to set: mesh, camera, the four lights, skybox, sprite and
-/// label, with their field tables, and the apply callbacks of the mesh, the camera and the
-/// sprite.
-pub extern fn ke_render_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;
 
 /// Registers the scene's render components and the update-phase systems
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A

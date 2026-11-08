@@ -3,8 +3,6 @@
 const std = @import("std");
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -18,11 +16,6 @@ pub const ke_entity = u64;
 pub const ke_module_id = u64;
 pub const ke_query_id = u64;
 pub const ke_system_id = u64;
-
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -55,10 +48,6 @@ pub const ke_sound_module_handle = extern struct {
     ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
     destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
-
-/// Adds audio's scene components to set: the sound, with its field table, so a [entity.sound]
-/// block applies.
-pub extern fn ke_audio_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

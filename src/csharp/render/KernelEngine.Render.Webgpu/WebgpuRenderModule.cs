@@ -101,22 +101,6 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
         _renderService = RenderService.Borrow(core);
         foreach (var pass in services.GetServices<IRuntimeModule>().OfType<IResolveOnLoad>().ToList())
             pass.Resolve(services);
-
-        if (services.GetService<KernelEngine.Framework.ComponentRegistry>() is not { } registry)
-            return;
-        var ec = services.GetRequiredService<INativeEcs>().Native;
-        var wd = ((KernelEngine.Framework.INativeComponentRegistry)registry).Native;
-        KernelEngine.Framework.Native.ke_scene_component_set_handle set;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_component_set_create(&set), "ke_scene_component_set_create");
-        try
-        {
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_components_create(set.@ref), "ke_render_scene_components_create");
-            KernelEngine.NativeResults.ThrowIfFailed(set.@ref->register_into(set.@ref, ec, wd), "register_into");
-        }
-        finally
-        {
-            set.destroy(set.@ref);
-        }
     }
 
     /// <inheritdoc/>

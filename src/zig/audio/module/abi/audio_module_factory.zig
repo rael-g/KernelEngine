@@ -3,8 +3,6 @@
 const std = @import("std");
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -33,12 +31,6 @@ pub const SoundModule = struct {
     }
 
 };
-
-/// Adds audio's scene components to set: the sound, with its field table, so a [entity.sound]
-/// block applies.
-pub fn audioSceneComponentsCreate(set: ?*abi_framework.c.ke_scene_component_set) Error!void {
-    try checkResult(c.ke_audio_scene_components_create(set));
-}
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
