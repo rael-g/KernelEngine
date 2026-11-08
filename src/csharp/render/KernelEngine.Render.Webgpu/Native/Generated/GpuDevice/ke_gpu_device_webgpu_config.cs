@@ -2,7 +2,6 @@ using System.Numerics;
 
 using global::KernelEngine.Logger;
 
-using KernelEngine.Configuration.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.TaskPool.Native;

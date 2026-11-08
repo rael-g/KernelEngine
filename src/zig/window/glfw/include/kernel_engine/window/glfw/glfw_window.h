@@ -2,7 +2,6 @@
 #ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/window/window.h>
 
 #ifndef KE_WINDOW_API
@@ -39,14 +38,6 @@ static const ke_window_glfw_config ke_window_glfw_config_defaults = {
     .width = 1280,
     .height = 720,
     .fullscreen = false,
-};
-
-/** The keys a configuration section fills a ke_window_glfw_config from. */
-static const ke_config_field ke_window_glfw_config_fields[] = {
-    KE_CONFIG_FIELD(ke_window_glfw_config, title),
-    KE_CONFIG_FIELD(ke_window_glfw_config, width),
-    KE_CONFIG_FIELD(ke_window_glfw_config, height),
-    KE_CONFIG_FIELD(ke_window_glfw_config, fullscreen),
 };
 
 /**

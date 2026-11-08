@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -41,12 +40,6 @@ typedef struct ke_gpu_device_webgpu_config
 static const ke_gpu_device_webgpu_config ke_gpu_device_webgpu_config_defaults = {
     .enable_validation = true,
     .debug_labels = false,
-};
-
-/** The keys a configuration section fills a ke_gpu_device_webgpu_config from. */
-static const ke_config_field ke_gpu_device_webgpu_config_fields[] = {
-    KE_CONFIG_FIELD(ke_gpu_device_webgpu_config, enable_validation),
-    KE_CONFIG_FIELD(ke_gpu_device_webgpu_config, debug_labels),
 };
 
 /**

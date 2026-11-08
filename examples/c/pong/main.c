@@ -222,7 +222,10 @@ int main(int argc, char **argv)
     ke_input_handle input = { 0 };
     check("input", ke_input_create(&input));
     ke_window_glfw_config window_config = ke_window_glfw_config_defaults;
-    check("window config", cfg->fill(cfg, "runtime.window", KE_CONFIG_FIELDS(ke_window_glfw_config_fields), &window_config));
+    window_config.title = cfg->get_string(cfg, "runtime.window", "title", window_config.title);
+    window_config.width = (int32_t)cfg->get_int(cfg, "runtime.window", "width", window_config.width);
+    window_config.height = (int32_t)cfg->get_int(cfg, "runtime.window", "height", window_config.height);
+    window_config.fullscreen = cfg->get_bool(cfg, "runtime.window", "fullscreen", window_config.fullscreen);
     ke_window_handle window = { 0 };
     check("window", ke_window_glfw_create(input.ref, &window_config, &window));
 
@@ -235,7 +238,7 @@ int main(int argc, char **argv)
     check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ 0 }, &gpu));
     ke_gpu_render_target_handle target = { 0 };
     ke_gpu_render_target_webgpu_window_config target_config = ke_gpu_render_target_webgpu_window_config_defaults;
-    check("target config", cfg->fill(cfg, "runtime.renderer", KE_CONFIG_FIELDS(ke_gpu_render_target_webgpu_window_config_fields), &target_config));
+    if (strcmp(cfg->get_string(cfg, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0) target_config.present_mode = KE_GPU_PRESENT_MODE_MAILBOX;
     check("window target", ke_gpu_render_target_webgpu_window_create(gpu.ref, window.ref, &target_config, &target));
 
     ke_font_loader_handle fonts = { 0 };
@@ -248,13 +251,17 @@ int main(int argc, char **argv)
 
     ke_render_service_config service_config = ke_render_service_config_defaults;
     service_config.shader_dir = shader_dir;
-    check("render config", cfg->fill(cfg, "render", KE_CONFIG_FIELDS(ke_render_service_config_fields), &service_config));
+    service_config.clear_color.x = (float)cfg->get_double(cfg, "render", "clear_color.0", service_config.clear_color.x);
+    service_config.clear_color.y = (float)cfg->get_double(cfg, "render", "clear_color.1", service_config.clear_color.y);
+    service_config.clear_color.z = (float)cfg->get_double(cfg, "render", "clear_color.2", service_config.clear_color.z);
+    service_config.clear_color.w = (float)cfg->get_double(cfg, "render", "clear_color.3", service_config.clear_color.w);
     renderer render;
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config);
 
     ke_physics_2d_handle physics = { 0 };
     ke_physics_2d_box2d_config physics_config = ke_physics_2d_box2d_config_defaults;
-    check("physics config", cfg->fill(cfg, "runtime.physics_2d", KE_CONFIG_FIELDS(ke_physics_2d_box2d_config_fields), &physics_config));
+    physics_config.gravity_x = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_x", physics_config.gravity_x);
+    physics_config.gravity_y = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_y", physics_config.gravity_y);
     check("physics", ke_physics_2d_box2d_create(&physics_config, &physics));
     ke_physics_body2d_module_handle bodies = { 0 };
     check("body2d module", ke_physics_body2d_module_create(&(ke_physics_body2d_module_params){

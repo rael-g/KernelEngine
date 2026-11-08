@@ -6,7 +6,6 @@ using global::KernelEngine.Logger;
 using global::KernelEngine.Render;
 
 using KernelEngine.Common.Native;
-using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Render.Native;

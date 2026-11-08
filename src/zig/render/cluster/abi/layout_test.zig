@@ -26,9 +26,6 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_cluster_config, translated("ke_render_cluster_config"));
     try expectSameLayout(abi.c.ke_render_cluster_handle, translated("ke_render_cluster_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
-    if (@hasDecl(c, "ke_configuration_child_func")) try expectSameLayout(abi.c.ke_configuration_child_func, c.ke_configuration_child_func);
-    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);

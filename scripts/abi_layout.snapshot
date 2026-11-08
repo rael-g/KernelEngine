@@ -86,13 +86,7 @@ ke_file_system_handle size=16 align=8
   destroy 8
 
 [configuration]
-ke_config_field size=32 align=8
-  key 0
-  type 8
-  offset 12
-  size 16
-  enum_names 24
-ke_configuration size=104 align=8
+ke_configuration size=96 align=8
   handle 0
   get_int 8
   get_double 16
@@ -104,8 +98,7 @@ ke_configuration size=104 align=8
   set_string 64
   subscribe 72
   unsubscribe 80
-  fill 88
-  for_each_child 96
+  for_each_child 88
 ke_configuration_handle size=16 align=8
   ref 0
   destroy 8

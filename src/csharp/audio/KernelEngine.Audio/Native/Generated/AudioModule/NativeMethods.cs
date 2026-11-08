@@ -4,7 +4,6 @@ using System.Runtime.InteropServices;
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
-using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;

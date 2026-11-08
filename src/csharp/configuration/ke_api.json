@@ -153,81 +153,9 @@
         }
       ],
       "external": true
-    },
-    {
-      "name": "ke_config_type",
-      "doc": "How a field of a config struct is stored.",
-      "values": [
-        {
-          "name": "KE_CONFIG_INT",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_CONFIG_FLOAT",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_CONFIG_DOUBLE",
-          "value": 2,
-          "doc": null
-        },
-        {
-          "name": "KE_CONFIG_BOOL",
-          "value": 3,
-          "doc": null
-        },
-        {
-          "name": "KE_CONFIG_STRING",
-          "value": 4,
-          "doc": null
-        }
-      ]
     }
   ],
-  "structs": [
-    {
-      "name": "ke_config_field",
-      "doc": "One field of a config struct: the key naming it, where it lives and how it is stored.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "key",
-          "type": "const char *",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "type",
-          "type": "ke_config_type",
-          "tags": [],
-          "doc": "A float field larger than one float is a vector, read element by element from the keys \u0060 \u003Ckey \u003E.0\u0060, \u0060 \u003Ckey \u003E.1\u0060, and so on."
-        },
-        {
-          "name": "offset",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "size",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "enum_names",
-          "type": "const char *const *",
-          "tags": [
-            "borrowed",
-            "optional"
-          ],
-          "doc": "The names an integer field\u0027s key may hold, in value order and ended by NULL; a name stands for its index. NULL leaves the field numeric."
-        }
-      ]
-    }
-  ],
+  "structs": [],
   "vtables": [
     {
       "name": "ke_configuration",
@@ -508,48 +436,6 @@
               "type": "ke_configuration_subscription",
               "tags": [],
               "doc": null
-            }
-          ],
-          "receiver": "struct ke_configuration *"
-        },
-        {
-          "name": "fill",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Writes into config the value the store holds for each field\u0027s key in section; a field whose key the store does not hold keeps what config held, so a caller starts from the struct\u0027s defaults. A key holding a type the field cannot take is logged and leaves the field; an integer is accepted by a float or double field, and a name from the field\u0027s enum names by an integer field. A string field points at the store\u0027s copy, valid as get_string\u0027s result is.",
-          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null argument or a field whose size does not fit its type; fields before it are already written.",
-          "params": [
-            {
-              "name": "section",
-              "type": "const char *",
-              "tags": [
-                "borrowed",
-                "utf8"
-              ],
-              "doc": "The section the struct\u0027s keys live in."
-            },
-            {
-              "name": "fields",
-              "type": "const ke_config_field *",
-              "tags": [
-                "borrowed",
-                "array_of:field_count"
-              ],
-              "doc": "The struct\u0027s field table."
-            },
-            {
-              "name": "field_count",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": "Number of entries in fields."
-            },
-            {
-              "name": "config",
-              "type": "void *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "The struct to fill."
             }
           ],
           "receiver": "struct ke_configuration *"

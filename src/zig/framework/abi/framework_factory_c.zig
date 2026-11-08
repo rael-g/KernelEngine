@@ -126,8 +126,6 @@ pub const ke_signal_bus_params = extern struct {
 
 pub const ke_input_actions_config_defaults: ke_input_actions_config = .{ .section = "input" };
 
-pub const ke_input_actions_config_fields: [1]abi_configuration.c.ke_config_field = .{ .{ .key = "section", .@"type" = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(ke_input_actions_config, "section"), .size = @sizeOf(?[*:0]const u8) } };
-
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
 /// loader. project_root may be NULL — res:// resolution is then disabled; only absolute or

@@ -10,15 +10,6 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const ConfigType = enum(c.ke_config_type) {
-    int = 0,
-    float = 1,
-    double = 2,
-    @"bool" = 3,
-    string = 4,
-    _,
-};
-
 pub const Configuration = struct {
     ptr: *c.ke_configuration,
     owner: ?c.ke_configuration_handle = null,
@@ -94,13 +85,6 @@ pub const Configuration = struct {
                     return T.unsubscribe(state, a0);
                 }
             }.call,
-            .fill = &struct {
-                fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: ?[*]const c.ke_config_field, a2: u32, a3: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.fill(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |items| items[0..a2] else &.{}, a3) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
             .for_each_child = &struct {
                 fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: c.ke_configuration_child_func, a2: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -162,15 +146,6 @@ pub const Configuration = struct {
         return self.ptr.unsubscribe.?(self.ptr, sub);
     }
 
-    /// Writes into config the value the store holds for each field's key in section; a field whose
-    /// key the store does not hold keeps what config held, so a caller starts from the struct's
-    /// defaults. A key holding a type the field cannot take is logged and leaves the field; an
-    /// integer is accepted by a float or double field, and a name from the field's enum names by an
-    /// integer field. A string field points at the store's copy, valid as get_string's result is.
-    pub fn fill(self: Configuration, section: [:0]const u8, fields: []const c.ke_config_field, config: ?*anyopaque) Error!void {
-        try checkResult(self.ptr.fill.?(self.ptr, section.ptr, fields.ptr, @intCast(fields.len), config));
-    }
-
     /// Lists the sections directly under section, once each, in the order their first key was
     /// stored. A section is under another when its name is the other's followed by a dot and one
     /// more name; it is listed when it or any section under it holds a key.
@@ -209,6 +184,5 @@ pub const ConfigurationSource = struct {
 
 };
 
-pub const ConfigField = c.ke_config_field;
 pub const ConfigurationHandle = c.ke_configuration_handle;
 pub const ConfigurationSourceHandle = c.ke_configuration_source_handle;

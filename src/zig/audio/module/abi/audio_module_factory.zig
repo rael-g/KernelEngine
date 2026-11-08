@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const abi_audio = @import("audio");
-const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");

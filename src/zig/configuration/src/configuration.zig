@@ -305,113 +305,6 @@ fn destroy(self: [*c]abi_configuration.c.ke_configuration) callconv(.c) void {
     gpa.destroy(st);
 }
 
-/// Writes `value` into the integer field at `at`, whose width is `size`; false for a width no
-/// integer has.
-fn writeInt(at: [*]u8, size: u32, value: i64) bool {
-    switch (size) {
-        1 => std.mem.writeInt(u8, at[0..1], @truncate(@as(u64, @bitCast(value))), .little),
-        2 => std.mem.writeInt(u16, at[0..2], @truncate(@as(u64, @bitCast(value))), .little),
-        4 => std.mem.writeInt(u32, at[0..4], @truncate(@as(u64, @bitCast(value))), .little),
-        8 => std.mem.writeInt(u64, at[0..8], @bitCast(value), .little),
-        else => return false,
-    }
-    return true;
-}
-
-/// Writes `value` into the float or double field at `at`; false when the field's size is neither.
-fn writeReal(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: f64) bool {
-    if (field.type == abi_configuration.c.KE_CONFIG_FLOAT and field.size == @sizeOf(f32)) {
-        const v: f32 = @floatCast(value);
-        @memcpy(at[0..@sizeOf(f32)], std.mem.asBytes(&v));
-        return true;
-    }
-    if (field.type == abi_configuration.c.KE_CONFIG_DOUBLE and field.size == @sizeOf(f64)) {
-        @memcpy(at[0..@sizeOf(f64)], std.mem.asBytes(&value));
-        return true;
-    }
-    return false;
-}
-
-fn writeBool(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: bool) bool {
-    if (field.size != @sizeOf(bool)) return false;
-    at[0] = @intFromBool(value);
-    return true;
-}
-
-fn writeString(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: [*c]const u8) bool {
-    if (field.size != @sizeOf([*c]const u8)) return false;
-    @memcpy(at[0..@sizeOf([*c]const u8)], std.mem.asBytes(&value));
-    return true;
-}
-
-/// The index of `name` among the field's enum names, or null when it has none of them.
-fn enumIndex(field: *const abi_configuration.c.ke_config_field, name: []const u8) ?i64 {
-    const names: [*]const ?[*:0]const u8 = @ptrCast(field.enum_names orelse return null);
-    var i: usize = 0;
-    while (names[i]) |candidate| : (i += 1) {
-        if (std.mem.eql(u8, std.mem.span(candidate), name)) return @intCast(i);
-    }
-    return null;
-}
-
-/// Writes the entry's value into the field, or logs and leaves the field when it cannot take
-/// that type.
-fn writeStored(at: [*]u8, field: *const abi_configuration.c.ke_config_field, section: []const u8, value: Value) void {
-    const written = switch (field.type) {
-        abi_configuration.c.KE_CONFIG_INT => switch (value) {
-            .int => |v| writeInt(at, field.size, v),
-            .string => |v| if (enumIndex(field, v)) |i| writeInt(at, field.size, i) else false,
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_FLOAT, abi_configuration.c.KE_CONFIG_DOUBLE => switch (value) {
-            .double => |v| writeReal(at, field, v),
-            .int => |v| writeReal(at, field, @floatFromInt(v)),
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_BOOL => switch (value) {
-            .boolean => |v| writeBool(at, field, v),
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_STRING => switch (value) {
-            .string => |v| writeString(at, field, v.ptr),
-            else => false,
-        },
-        else => false,
-    };
-    if (!written) log.warn("{s}.{s} holds a {t}, which the field cannot take; the field is left as it was", .{ section, field.key.?, value });
-}
-
-/// Writes each element of a vector field from `<key>.<index>`, leaving an element whose key is
-/// absent.
-fn writeVector(st: *State, at: [*]u8, field: *const abi_configuration.c.ke_config_field, section: []const u8) R.Error!void {
-    const key = std.mem.span(field.key.?);
-    const element: abi_configuration.c.ke_config_field = .{ .key = field.key, .type = field.type, .offset = 0, .size = @sizeOf(f32), .enum_names = null };
-    for (0..field.size / @sizeOf(f32)) |i| {
-        const element_key = std.fmt.allocPrint(gpa, "{s}.{d}", .{ key, i }) catch return error.OutOfMemory;
-        defer gpa.free(element_key);
-        if (findEntry(st, section, element_key)) |e| writeStored(at + i * @sizeOf(f32), &element, section, e.value);
-    }
-}
-
-/// Slot `fill`. Reads the store and writes only into `out_config`, so no subscriber runs.
-fn fill(self: [*c]abi_configuration.c.ke_configuration, section_c: [*c]const u8, fields: [*c]const abi_configuration.c.ke_config_field, field_count: u32, out_config: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-    if (self == null or section_c == null or out_config == null) return R.code(error.InvalidArgument);
-    if (fields == null and field_count != 0) return R.code(error.InvalidArgument);
-    const st = state(self);
-    const section = std.mem.span(section_c);
-    const base: [*]u8 = @ptrCast(out_config.?);
-    for (0..field_count) |i| {
-        const field: *const abi_configuration.c.ke_config_field = @ptrCast(fields + i);
-        const at = base + field.offset;
-        const key = field.key orelse return R.code(error.InvalidArgument);
-        if (field.type == abi_configuration.c.KE_CONFIG_FLOAT and field.size > @sizeOf(f32)) {
-            if (field.size % @sizeOf(f32) != 0) return R.code(error.InvalidArgument);
-            writeVector(st, at, field, section) catch |err| return R.code(err);
-        } else if (findEntry(st, section, std.mem.span(key))) |e| writeStored(at, field, section, e.value);
-    }
-    return R.ok;
-}
-
 /// Allocates a store and writes a handle whose `ref` is its `api` table and whose `destroy` frees
 /// it. Fails with out of memory, leaving the handle zeroed.
 export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configuration_handle) callconv(.c) abi_result.c.ke_result {
@@ -434,7 +327,6 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
             .set_string = setString,
             .subscribe = subscribe,
             .unsubscribe = unsubscribe,
-            .fill = fill,
             .for_each_child = forEachChild,
         },
         .entries = .empty,
@@ -444,28 +336,6 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
     out.* = .{ .ref = &st.api, .destroy = destroy };
     return R.ok;
 }
-
-const FilledConfig = extern struct {
-    count: u32,
-    scale: f32,
-    enabled: bool,
-    title: [*c]const u8,
-    mode: u32,
-    tint: [4]f32,
-};
-
-const filled_defaults: FilledConfig = .{ .count = 3, .scale = -9.5, .enabled = true, .title = "untitled", .mode = 0, .tint = .{ 1, 1, 1, 1 } };
-
-const mode_names = [_][*c]const u8{ "fifo", "mailbox", "immediate", null };
-
-const filled_fields = [_]abi_configuration.c.ke_config_field{
-    .{ .key = "count", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "count"), .size = 4, .enum_names = null },
-    .{ .key = "scale", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "scale"), .size = 4, .enum_names = null },
-    .{ .key = "enabled", .type = abi_configuration.c.KE_CONFIG_BOOL, .offset = @offsetOf(FilledConfig, "enabled"), .size = 1, .enum_names = null },
-    .{ .key = "title", .type = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(FilledConfig, "title"), .size = @sizeOf([*c]const u8), .enum_names = null },
-    .{ .key = "mode", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "mode"), .size = 4, .enum_names = @ptrCast(&mode_names) },
-    .{ .key = "tint", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "tint"), .size = 16, .enum_names = null },
-};
 
 const TestProbe = struct {
     calls: u32 = 0,
@@ -590,65 +460,7 @@ test "null args rejected on write" {
     try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_string.?(c, "s", "k", null)));
 }
 
-test "filling from an empty section leaves every field as the caller set it" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    var config = filled_defaults;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 3), config.count);
-    try std.testing.expectEqual(@as(f32, -9.5), config.scale);
-    try std.testing.expect(config.enabled);
-    try std.testing.expectEqualStrings("untitled", std.mem.span(config.title));
-}
-
-test "filling writes each stored value, a zero among them, and an integer reaches a float field" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    try R.check(h.ref.?.set_int.?(h.ref, "app", "count", 0));
-    try R.check(h.ref.?.set_int.?(h.ref, "app", "scale", 2));
-    try R.check(h.ref.?.set_bool.?(h.ref, "app", "enabled", false));
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "title", "pong"));
-    var config = filled_defaults;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 0), config.count);
-    try std.testing.expectEqual(@as(f32, 2.0), config.scale);
-    try std.testing.expect(!config.enabled);
-    try std.testing.expectEqualStrings("pong", std.mem.span(config.title));
-}
-
-test "an enum field takes the name of one of its values, and a vector its elements by index" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "mode", "immediate"));
-    try R.check(h.ref.?.set_double.?(h.ref, "app", "tint.0", 0.25));
-    try R.check(h.ref.?.set_int.?(h.ref, "app", "tint.2", 0));
-    var config = filled_defaults;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 2), config.mode);
-    try std.testing.expectEqual([4]f32{ 0.25, 1, 0, 1 }, config.tint);
-}
-
-test "a key of a type its field cannot take, or a name its enum lacks, leaves the field" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "count", "many"));
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "mode", "vsync"));
-    var config = filled_defaults;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 3), config.count);
-    try std.testing.expectEqual(@as(u32, 0), config.mode);
-}
-
-test "filling with a null section, table or struct is refused" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    var config: FilledConfig = undefined;
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, null, &filled_fields, filled_fields.len, &config)));
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", null, 1, &config)));
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, null)));
-}
-
-test "creating, filling and destroying a configuration leaves no block allocated" {
+test "creating, writing and destroying a configuration leaves no block allocated" {
     const h = try madeStore();
     const cfg = h.ref;
     try R.check(cfg.?.set_int.?(cfg, "shadow", "resolution", 2048));

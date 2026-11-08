@@ -37,11 +37,6 @@ extern "C"
         .section = "input",
     };
 
-    /** The keys a configuration section fills a ke_input_actions_config from. */
-    static const ke_config_field ke_input_actions_config_fields[] = {
-        KE_CONFIG_FIELD(ke_input_actions_config, section),
-    };
-
     /// Creates the action maps, adding through the map's own slots every map the configuration
     /// describes under the section: `<section>.map.<Map>` holds `priority` (default 0) and
     /// `enabled` (default true); `<section>.map.<Map>.action.<Action>` holds `type` (Button,

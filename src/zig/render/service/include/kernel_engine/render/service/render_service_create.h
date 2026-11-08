@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SERVICE_RENDER_SERVICE_CREATE_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -46,14 +45,6 @@ static const ke_render_service_config ke_render_service_config_defaults = {
     .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
     .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
     .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f },
-};
-
-/** The keys a configuration section fills a ke_render_service_config from. */
-static const ke_config_field ke_render_service_config_fields[] = {
-    KE_CONFIG_FIELD(ke_render_service_config, shader_dir),
-    KE_CONFIG_ENUM_FIELD(ke_render_service_config, color_format, NULL),
-    KE_CONFIG_ENUM_FIELD(ke_render_service_config, depth_format, NULL),
-    KE_CONFIG_VECTOR_FIELD(ke_render_service_config, clear_color),
 };
 
 /**

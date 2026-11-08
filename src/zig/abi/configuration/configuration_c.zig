@@ -7,14 +7,6 @@ pub const ke_configuration_subscription = u32;
 
 pub const KE_CONFIGURATION_SUBSCRIPTION_NONE = 4294967295;
 
-/// How a field of a config struct is stored.
-pub const ke_config_type = c_uint;
-pub const KE_CONFIG_INT: ke_config_type = 0;
-pub const KE_CONFIG_FLOAT: ke_config_type = 1;
-pub const KE_CONFIG_DOUBLE: ke_config_type = 2;
-pub const KE_CONFIG_BOOL: ke_config_type = 3;
-pub const KE_CONFIG_STRING: ke_config_type = 4;
-
 /// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
 /// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
 /// section changed and does nothing else.
@@ -22,19 +14,6 @@ pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
-/// One field of a config struct: the key naming it, where it lives and how it is stored.
-pub const ke_config_field = extern struct {
-    key: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// A float field larger than one float is a vector, read element by element from the keys ` <key
-    /// >.0`, ` <key >.1`, and so on.
-    @"type": ke_config_type = std.mem.zeroes(ke_config_type),
-    offset: u32 = std.mem.zeroes(u32),
-    size: u32 = std.mem.zeroes(u32),
-    /// The names an integer field's key may hold, in value order and ended by NULL; a name stands
-    /// for its index. NULL leaves the field numeric.
-    enum_names: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
-};
 
 /// A typed (section, key) to value store.
 pub const ke_configuration = extern struct {
@@ -60,12 +39,6 @@ pub const ke_configuration = extern struct {
     subscribe: ?*const fn (?*ke_configuration, ?[*:0]const u8, ke_configuration_change_func, ?*anyopaque) callconv(.c) ke_configuration_subscription = null,
     /// Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.
     unsubscribe: ?*const fn (?*ke_configuration, ke_configuration_subscription) callconv(.c) void = null,
-    /// Writes into config the value the store holds for each field's key in section; a field whose
-    /// key the store does not hold keeps what config held, so a caller starts from the struct's
-    /// defaults. A key holding a type the field cannot take is logged and leaves the field; an
-    /// integer is accepted by a float or double field, and a name from the field's enum names by an
-    /// integer field. A string field points at the store's copy, valid as get_string's result is.
-    fill: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*]const ke_config_field, u32, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
     /// Lists the sections directly under section, once each, in the order their first key was
     /// stored. A section is under another when its name is the other's followed by a dot and one
     /// more name; it is listed when it or any section under it holds a key.

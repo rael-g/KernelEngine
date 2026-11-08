@@ -1,7 +1,6 @@
 #ifndef KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
-#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -57,14 +56,6 @@ extern "C"
         .grid_y = 9,
         .grid_z = 24,
         .max_lights_per_cluster = 64,
-    };
-
-    /** The keys a configuration section fills a ke_render_cluster_config from. */
-    static const ke_config_field ke_render_cluster_config_fields[] = {
-        KE_CONFIG_FIELD(ke_render_cluster_config, grid_x),
-        KE_CONFIG_FIELD(ke_render_cluster_config, grid_y),
-        KE_CONFIG_FIELD(ke_render_cluster_config, grid_z),
-        KE_CONFIG_FIELD(ke_render_cluster_config, max_lights_per_cluster),
     };
 
     /**

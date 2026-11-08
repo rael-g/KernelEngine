@@ -36,12 +36,6 @@ public interface IConfiguration : IDisposable
     uint Subscribe(string section, nint cb, nint ctx);
     /// <summary>Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.</summary>
     void Unsubscribe(uint sub);
-    /// <summary>Writes into config the value the store holds for each field's key in section; a field whose key the store does not hold keeps what config held, so a caller starts from the struct's defaults. A key holding a type the field cannot take is logged and leaves the field; an integer is accepted by a float or double field, and a name from the field's enum names by an integer field. A string field points at the store's copy, valid as get_string's result is.</summary>
-    /// <param name="section">The section the struct's keys live in.</param>
-    /// <param name="fields">The struct's field table.</param>
-    /// <param name="config">The struct to fill.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void Fill(string section, ReadOnlySpan<ConfigField> fields, nint config);
     /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>
     /// <param name="section">The parent; "" lists the top-level sections.</param>
     /// <param name="each">Called once per child section.</param>

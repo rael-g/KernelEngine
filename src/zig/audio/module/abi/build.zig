@@ -6,7 +6,6 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("audio_module_factory.zig") });
     abi.addImport("audio", b.dependency("abi_audio", .{}).module("abi"));
-    abi.addImport("configuration", b.dependency("abi_configuration", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));

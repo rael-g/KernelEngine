@@ -28,9 +28,6 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
     if (@hasDecl(c, "ke_audio_voice")) try expectSameLayout(abi.c.ke_audio_voice, c.ke_audio_voice);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
-    if (@hasDecl(c, "ke_configuration_child_func")) try expectSameLayout(abi.c.ke_configuration_child_func, c.ke_configuration_child_func);
-    if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
     if (@hasDecl(c, "ke_module_id")) try expectSameLayout(abi.c.ke_module_id, c.ke_module_id);

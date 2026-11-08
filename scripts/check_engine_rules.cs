@@ -112,7 +112,7 @@ var rules = new List<Rule>
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
     new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 38,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
-    new("a config declares its [defaults] constant, and its field table names every field", 0,
+    new("a config declares its [defaults] constant", 0,
         factoryHeaders.Keys.SelectMany(h => ConfigGaps(h, string.Join('\n', sources[h])))),
     new("no zero stands for a default", 0,
         Lines(headers, l => zeroDefault.IsMatch(l))),
@@ -165,11 +165,6 @@ static IEnumerable<string> ConfigGaps(string header, string text)
     {
         var name = config.Groups[1].Value;
         if (!Regex.IsMatch(bare, $@"\b{name}\s+{name}_defaults\s*=")) yield return $"{header}: {name} has no {name}_defaults";
-        var table = Regex.Match(bare, $@"\b{name}_fields\[\]\s*=\s*\{{(.*?)\}};", RegexOptions.Singleline);
-        if (!table.Success) continue;
-        var listed = Regex.Matches(table.Groups[1].Value, $@"KE_CONFIG_\w*FIELD\(\s*{name}\s*,\s*(\w+)").Select(m => m.Groups[1].Value).ToHashSet();
-        foreach (Match field in Regex.Matches(config.Groups[2].Value, @"(\w+)\s*(?:\[[^\]]*\])?\s*;"))
-            if (!listed.Contains(field.Groups[1].Value)) yield return $"{header}: {name}.{field.Groups[1].Value} is not in {name}_fields";
     }
 }
 
