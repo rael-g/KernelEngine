@@ -2,6 +2,7 @@
 
 #include <kernel_engine/physics/components.h>
 #include <kernel_engine/render/ui/components.h>
+#include <kernel_engine/sdk/field.h>
 #include <kernel_engine/spatial/transform.h>
 
 #include <math.h>
@@ -29,9 +30,9 @@ typedef struct pong_paddle
 static const pong_paddle pong_paddle_initial = { .speed = 7.0f, .half_height = 0.9f };
 
 static const ke_component_field pong_paddle_fields[] = {
-    { "move_action", KE_VARIANT_STRING, offsetof(pong_paddle, move_action.name), sizeof(((pong_paddle *)0)->move_action.name), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "speed", KE_VARIANT_FLOAT, offsetof(pong_paddle, speed), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "half_height", KE_VARIANT_FLOAT, offsetof(pong_paddle, half_height), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    KE_FIELD(pong_paddle, move_action),
+    KE_FIELD(pong_paddle, speed),
+    KE_FIELD(pong_paddle, half_height),
 };
 
 typedef struct pong_ball
@@ -48,10 +49,10 @@ typedef struct pong_ball
 static const pong_ball pong_ball_initial = { .initial_speed = 6.0f, .awaiting_launch = true };
 
 static const ke_component_field pong_ball_fields[] = {
-    { "hit_sound", KE_VARIANT_STRING, offsetof(pong_ball, hit_sound), sizeof(((pong_ball *)0)->hit_sound), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "score_sound", KE_VARIANT_STRING, offsetof(pong_ball, score_sound), sizeof(((pong_ball *)0)->score_sound), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "initial_speed", KE_VARIANT_FLOAT, offsetof(pong_ball, initial_speed), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "awaiting_launch", KE_VARIANT_BOOL, offsetof(pong_ball, awaiting_launch), sizeof(bool), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    KE_FIELD(pong_ball, hit_sound),
+    KE_FIELD(pong_ball, score_sound),
+    KE_FIELD(pong_ball, initial_speed),
+    KE_FIELD(pong_ball, awaiting_launch),
 };
 
 typedef struct pong_scoreboard
@@ -61,8 +62,8 @@ typedef struct pong_scoreboard
 } pong_scoreboard;
 
 static const ke_component_field pong_scoreboard_fields[] = {
-    { "left", KE_VARIANT_INT, offsetof(pong_scoreboard, left), sizeof(int32_t), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "right", KE_VARIANT_INT, offsetof(pong_scoreboard, right), sizeof(int32_t), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    KE_FIELD(pong_scoreboard, left),
+    KE_FIELD(pong_scoreboard, right),
 };
 
 typedef struct pong_goal_scored

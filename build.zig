@@ -579,6 +579,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ root, "src/sdk/c" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "input/default/include" }),
             b.pathJoin(&.{ src_zig, "io/pool/include" }),
