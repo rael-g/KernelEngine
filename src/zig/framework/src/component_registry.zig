@@ -373,7 +373,7 @@ test "a short name a single component answers to resolves to it, and the full na
     const h = aliasRegistry(&ecs);
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     var paddle: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &paddle));
+    try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &paddle));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
 
@@ -393,11 +393,11 @@ test "a short name two components answer to is refused as an invalid argument" {
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "tennis.paddle"));
@@ -415,11 +415,11 @@ test "a short name that is also a registered component name is refused" {
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "marker", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "marker", "game.marker"));
 

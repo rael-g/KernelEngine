@@ -2796,7 +2796,7 @@ test "spawn hands the system body an id it can actually use" {
 
     const e = f.ecs();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     for (probe.ids, 0..) |id, i| {
         try testing.expect(id != abi_ecs.c.KE_ENTITY_INVALID);
         for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
@@ -2817,7 +2817,7 @@ test "an entity spawned with no components still exists after the barrier" {
 
     const e = f.ecs();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try R.check(e.entity_destroy.?(e, probe.ids[0]));
     var revived: ?*anyopaque = null;
     try testing.expectError(error.InvalidArgument, R.check(e.component_add.?(e, probe.ids[0], cid, &revived)));
@@ -2849,7 +2849,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
     resetDeferApplied();
 
     var probe = MutatorProbe{};
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("Mutator", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -2867,7 +2867,7 @@ test "a recorded attach the ecs refuses fails the tick and names the system" {
     resetDeferApplied();
 
     var probe = MutatorProbe{ .target = 42 };
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refused_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refused_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("Refused", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -2939,7 +2939,7 @@ test "an attach whose payload size differs from the component size is refused wi
     resetDeferApplied();
 
     var probe = RefusalProbe{};
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("WrongSize", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &wrongSizeBody;

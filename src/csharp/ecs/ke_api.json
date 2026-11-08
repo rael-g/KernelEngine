@@ -583,7 +583,7 @@
           "name": "alignment",
           "type": "size_t",
           "tags": [],
-          "doc": "A power of two; 0 selects the alignment of max_align_t."
+          "doc": "A power of two for a sized component; ignored for a tag of size 0."
         },
         {
           "name": "fields",
