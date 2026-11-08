@@ -20,6 +20,9 @@ public unsafe partial struct ConfigField
     [NativeTypeName("uint32_t")]
     public uint Size;
 
-    [NativeTypeName("ke_config_value")]
-    public ConfigValue DefaultValue;
+    [NativeTypeName("const char *const *")]
+    public sbyte** EnumNames;
+
+    [NativeTypeName("uint32_t")]
+    public uint EnumCount;
 }

@@ -2,13 +2,13 @@
 #include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/configuration/configuration_source.h>
 const unsigned long long layout_values[] = {
-    sizeof(ke_config_value),
     sizeof(ke_config_field),
     offsetof(ke_config_field, key),
     offsetof(ke_config_field, type),
     offsetof(ke_config_field, offset),
     offsetof(ke_config_field, size),
-    offsetof(ke_config_field, default_value),
+    offsetof(ke_config_field, enum_names),
+    offsetof(ke_config_field, enum_count),
     sizeof(ke_configuration),
     offsetof(ke_configuration, handle),
     offsetof(ke_configuration, get_int),

@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_config_value, translated("ke_config_value"));
     try expectSameLayout(abi.c.ke_config_field, translated("ke_config_field"));
     try expectSameLayout(abi.c.ke_configuration, translated("ke_configuration"));
     try expectSameLayout(abi.c.ke_configuration_handle, translated("ke_configuration_handle"));
@@ -53,13 +52,13 @@ extern const layout_values: [31]c_ulonglong;
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_config_value),
         @sizeOf(abi.c.ke_config_field),
         @offsetOf(abi.c.ke_config_field, "key"),
         @offsetOf(abi.c.ke_config_field, "type"),
         @offsetOf(abi.c.ke_config_field, "offset"),
         @offsetOf(abi.c.ke_config_field, "size"),
-        @offsetOf(abi.c.ke_config_field, "default_value"),
+        @offsetOf(abi.c.ke_config_field, "enum_names"),
+        @offsetOf(abi.c.ke_config_field, "enum_count"),
         @sizeOf(abi.c.ke_configuration),
         @offsetOf(abi.c.ke_configuration, "handle"),
         @offsetOf(abi.c.ke_configuration, "get_int"),

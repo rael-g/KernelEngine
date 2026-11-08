@@ -274,7 +274,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         Handle->unsubscribe(Handle, sub);
     }
 
-    /// <summary>Fills a config struct: writes each field's default, then the value the store holds for the field's key in section. A key holding a type the field cannot take is logged and leaves the default; an integer is accepted by a float or double field. A string field points at the store's copy, valid as get_string's result is.</summary>
+    /// <summary>Writes into config the value the store holds for each field's key in section; a field whose key the store does not hold keeps what config held, so a caller starts from the struct's defaults. A key holding a type the field cannot take is logged and leaves the field; an integer is accepted by a float or double field, and a name from the field's enum names by an integer field. A string field points at the store's copy, valid as get_string's result is.</summary>
     /// <param name="section">The section the struct's keys live in.</param>
     /// <param name="fields">The struct's field table.</param>
     /// <param name="config">The struct to fill.</param>
