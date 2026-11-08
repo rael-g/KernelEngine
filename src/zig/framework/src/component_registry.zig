@@ -16,7 +16,6 @@ const heap = @import("heap");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
-const apply = @import("components_apply.zig");
 
 const apply_initial_capacity: u32 = 16;
 
@@ -287,8 +286,8 @@ export fn ke_component_registry_create(
 }
 
 fn registerBuiltins(registry: *abi_component_registry.c.ke_component_registry, e: *abi_ecs.c.ke_ecs) R.Error!void {
-    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, apply.ke_framework_apply_transform, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
-    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, apply.ke_framework_apply_transform2d, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, null, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, null, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
     try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, null, null, 0);
 }
 

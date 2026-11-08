@@ -8,7 +8,6 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
 comptime {
-    _ = @import("components_apply.zig");
     _ = @import("mesh_shape.zig");
     _ = @import("asset_resolver.zig");
     _ = @import("component_registry.zig");
