@@ -40,11 +40,13 @@ const Behaviour = struct {
     queries: [2]abi_runtime.c.ke_query_decl = undefined,
 };
 
-/// A registered node type: the component ids its nodes carry, the fields first, with the size and
-/// the default-seeded bytes of each, and the behaviours it runs.
+/// A registered node type: its tag, the component ids its nodes carry, the fields first when it
+/// has them, with the size and the default-seeded bytes of each, and the behaviours it runs. A
+/// behaviour's query reads the tag first, so a component's column is its index plus one.
 const Type = struct {
     state: *State,
-    cid: Cid,
+    tag: Cid,
+    has_fields: bool,
     columns: []Cid,
     sizes: []usize,
     prototypes: [][]align(16) u8,
@@ -83,7 +85,7 @@ fn stateOf(self: ?*abi_framework.c.ke_node_types) ?*State {
 }
 
 fn findType(s: *State, cid: Cid) ?*Type {
-    for (s.types.items) |t| if (t.cid == cid) return t;
+    for (s.types.items) |t| if (t.tag == cid) return t;
     return null;
 }
 
@@ -163,12 +165,13 @@ fn next(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) bool {
             return false;
         }
         if (w.behaviour.kind == .ready) {
-            const status: *NodeStatus = @ptrCast(column(w, w.behaviour.owner.columns.len, @sizeOf(NodeStatus)) orelse continue);
+            const status: *NodeStatus = @ptrCast(column(w, w.behaviour.owner.columns.len + 1, @sizeOf(NodeStatus)) orelse continue);
             if (status.readied != 0) continue;
             status.readied = 1;
         }
         w.api.self = w.segs[w.seg].entities.?[w.row];
-        w.api.fields = column(w, 0, w.behaviour.owner.sizes[0]);
+        const t = w.behaviour.owner;
+        w.api.fields = if (t.has_fields) column(w, 1, t.sizes[0]) else null;
         return true;
     }
 }
@@ -177,7 +180,7 @@ fn next(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) bool {
 fn get(ctx: ?*abi_framework.c.ke_node_ctx, cid: Cid) callconv(.c) ?*anyopaque {
     const w = walkOf(ctx) orelse return null;
     if (w.api.self == invalid) return null;
-    for (w.behaviour.owner.columns, w.behaviour.owner.sizes, 0..) |c, size, i| if (c == cid) return column(w, i, size);
+    for (w.behaviour.owner.columns, w.behaviour.owner.sizes, 0..) |c, size, i| if (c == cid) return column(w, i + 1, size);
     return null;
 }
 
@@ -222,6 +225,8 @@ fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, nam
     };
     var node: Entity = invalid;
     var rc = s.tree.create_node_deferred.?(s.tree, name, under, commands, &node);
+    if (rc != R.ok) return rc;
+    rc = commands.attach.?(commands, node, t.tag, null, 0);
     if (rc != R.ok) return rc;
     for (t.columns, t.prototypes) |c, proto| {
         rc = commands.attach.?(commands, node, c, proto.ptr, proto.len);
@@ -357,11 +362,12 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     };
     const name = std.fmt.allocPrintSentinel(heap.gpa, "{s}.{s}{s}{s}", .{ type_name, suffix, if (event) |_| "." else "", if (event) |e| e.name else "" }, 0) catch return error.OutOfMemory;
     errdefer heap.gpa.free(name);
-    const extra: usize = if (kind == .ready) 1 else 0;
+    const extra: usize = if (kind == .ready) 2 else 1;
     const terms = heap.gpa.alloc(abi_runtime.c.ke_component_access, t.columns.len + extra) catch return error.OutOfMemory;
     errdefer heap.gpa.free(terms);
-    for (t.columns, 0..) |c, i| terms[i] = .{ .cid = c, .access = abi_runtime.c.KE_ACCESS_WRITE };
-    if (kind == .ready) terms[t.columns.len] = .{ .cid = s.status_cid, .access = abi_runtime.c.KE_ACCESS_WRITE };
+    terms[0] = .{ .cid = t.tag, .access = abi_runtime.c.KE_ACCESS_READ };
+    for (t.columns, 1..) |c, i| terms[i] = .{ .cid = c, .access = abi_runtime.c.KE_ACCESS_WRITE };
+    if (kind == .ready) terms[t.columns.len + 1] = .{ .cid = s.status_cid, .access = abi_runtime.c.KE_ACCESS_WRITE };
 
     const b = heap.gpa.create(Behaviour) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(b);
@@ -398,11 +404,11 @@ fn prototypeOf(s: *State, size: usize, fields: ?[*]const abi_ecs.c.ke_component_
 }
 
 fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Error!Cid {
-    const name = desc.fields.name orelse return error.InvalidArgument;
-    if (desc.fields.size == 0) {
-        log.warn("node types: type {s} has no fields; a node type is registered with its fields struct", .{name});
+    const name = desc.name orelse return error.InvalidArgument;
+    if (desc.fields) |f| if (f.size == 0 or f.name == null) {
+        log.warn("node types: type {s} has fields without a name or a size", .{name});
         return error.InvalidArgument;
-    }
+    };
     const handlers: []const abi_framework.c.ke_node_handler = if (desc.on_count == 0) &.{} else (desc.on orelse return error.InvalidArgument)[0..desc.on_count];
     for (handlers) |h| {
         if (h.on == null) return error.InvalidArgument;
@@ -412,19 +418,16 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         }
     }
 
-    const count = 1 + desc.with_count;
+    const own: usize = if (desc.fields != null) 1 else 0;
+    const count = own + desc.with_count;
     const t = heap.gpa.create(Type) catch return error.OutOfMemory;
-    t.* = .{ .state = s, .cid = 0, .columns = &.{}, .sizes = &.{}, .prototypes = &.{}, .user_data = desc.user_data };
+    t.* = .{ .state = s, .tag = 0, .has_fields = own == 1, .columns = &.{}, .sizes = &.{}, .prototypes = &.{}, .user_data = desc.user_data };
     errdefer freeType(s, t);
     t.columns = heap.gpa.alloc(Cid, count) catch return error.OutOfMemory;
     t.sizes = heap.gpa.alloc(usize, count) catch return error.OutOfMemory;
     t.prototypes = heap.gpa.alloc([]align(16) u8, count) catch return error.OutOfMemory;
     for (t.prototypes) |*p| p.* = &.{};
 
-    try R.check(s.ecs.component_register.?(s.ecs, &desc.fields, &t.cid));
-    t.columns[0] = t.cid;
-    t.sizes[0] = desc.fields.size;
-    t.prototypes[0] = try prototypeOf(s, desc.fields.size, desc.fields.fields, desc.fields.field_count);
     for (0..desc.with_count) |i| {
         const with_name = desc.with.?[i] orelse return error.InvalidArgument;
         var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
@@ -432,9 +435,18 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
             log.warn("node types: type {s} carries {s}, which is not registered", .{ name, with_name });
             return error.NotFound;
         }
-        t.columns[1 + i] = meta.cid;
-        t.sizes[1 + i] = meta.size;
-        t.prototypes[1 + i] = try prototypeOf(s, meta.size, meta.fields, meta.field_count);
+        t.columns[own + i] = meta.cid;
+        t.sizes[own + i] = meta.size;
+        t.prototypes[own + i] = try prototypeOf(s, meta.size, meta.fields, meta.field_count);
+    }
+    const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
+    defer heap.gpa.free(tag_name);
+    const tag: abi_ecs.c.ke_component_params = .{ .name = tag_name.ptr, .size = 0, .alignment = 0 };
+    try R.check(s.ecs.component_register.?(s.ecs, &tag, &t.tag));
+    if (desc.fields) |f| {
+        try R.check(s.ecs.component_register.?(s.ecs, f, &t.columns[0]));
+        t.sizes[0] = f.size;
+        t.prototypes[0] = try prototypeOf(s, f.size, f.fields, f.field_count);
     }
 
     const type_name = std.mem.span(name);
@@ -444,7 +456,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     for (handlers) |h| try addBehaviour(s, t, .on, h.on, findEvent(s, h.event), type_name);
 
     s.types.append(heap.gpa, t) catch return error.OutOfMemory;
-    return t.cid;
+    return t.tag;
 }
 
 /// Slot `register_type`.
@@ -627,10 +639,12 @@ const Fixture = struct {
 };
 
 const with_transform = [_][*:0]const u8{"transform2d"};
+const paddle_fields: abi_ecs.c.ke_component_params = .{ .name = "pong.paddle", .size = @sizeOf(Paddle), .alignment = @alignOf(Paddle) };
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
-    d.fields = .{ .name = "pong.paddle", .size = @sizeOf(Paddle), .alignment = @alignOf(Paddle) };
+    d.name = "paddle";
+    d.fields = &paddle_fields;
     d.with = @ptrCast(&with_transform);
     d.with_count = 1;
     return d;
@@ -643,7 +657,7 @@ const Rows = struct {
     status: [3]NodeStatus = .{ .{ .readied = 0 }, .{ .readied = 1 }, .{ .readied = 0 } },
     goals: [2]Goal = .{ .{ .left = 1 }, .{ .left = 0 } },
     goal_entities: [2]Entity = .{ 20, 21 },
-    columns: [3]?*anyopaque = undefined,
+    columns: [4]?*anyopaque = undefined,
     goal_columns: [1]?*anyopaque = undefined,
     segs: [2]abi_ecs.c.ke_ecs_segment = undefined,
     goal_segs: [1]abi_ecs.c.ke_ecs_segment = undefined,
@@ -651,21 +665,21 @@ const Rows = struct {
     with_events: bool = false,
 
     fn build(r: *Rows) void {
-        r.columns = .{ &r.paddles, &r.transforms, &r.status };
+        r.columns = .{ null, &r.paddles, &r.transforms, &r.status };
         r.goal_columns = .{&r.goals};
         r.segs = .{
-            .{ .entities = &r.entities, .count = 2, .columns = &r.columns, .column_count = 3 },
-            .{ .entities = r.entities[2..].ptr, .count = 1, .columns = undefined, .column_count = 3 },
+            .{ .entities = &r.entities, .count = 2, .columns = &r.columns, .column_count = 4 },
+            .{ .entities = r.entities[2..].ptr, .count = 1, .columns = undefined, .column_count = 4 },
         };
         r.goal_segs = .{.{ .entities = &r.goal_entities, .count = 2, .columns = &r.goal_columns, .column_count = 1 }};
         r.sys = .{ .handle = r, .view = &view };
     }
 
-    var second_columns: [3]?*anyopaque = undefined;
+    var second_columns: [4]?*anyopaque = undefined;
 
     fn view(sys: ?*abi_runtime.c.ke_system_ctx, query: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
         const r: *Rows = @ptrCast(@alignCast(sys.?.handle));
-        second_columns = .{ @ptrCast(&r.paddles[2]), @ptrCast(&r.transforms[2]), @ptrCast(&r.status[2]) };
+        second_columns = .{ null, @ptrCast(&r.paddles[2]), @ptrCast(&r.transforms[2]), @ptrCast(&r.status[2]) };
         r.segs[1].columns = &second_columns;
         if (r.with_events and query == 0) {
             out_count.?.* = 1;
@@ -835,7 +849,7 @@ test "spawn records a node through the scene tree with each component of its typ
     rows.sys.commands = commands.api();
     try runSystem(registered[0], &rows);
     try f.tree.received(.create_node_deferred).times(1);
-    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 31))).times(3);
+    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 31))).times(4);
 }
 
 test "spawn outside a behaviour records into the given commands and refuses a type never registered" {
@@ -852,17 +866,49 @@ test "spawn outside a behaviour records into the given commands and refuses a ty
     var node: Entity = invalid;
     try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &node));
     try testing.expectEqual(@as(Entity, 32), node);
-    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 32))).times(3);
+    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 32))).times(4);
     try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid + 99, "X", invalid, &node));
 }
 
-test "a node type without fields is refused" {
+fn countBare(ctx: ?*abi_framework.c.ke_node_ctx, user: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const seen: *u32 = @ptrCast(@alignCast(user.?));
+    while (ctx.?.next.?(ctx)) {
+        if (ctx.?.fields != null or ctx.?.get.?(ctx, transform2d_cid) == null) return R.code(error.InvalidArgument);
+        seen.* += 1;
+    }
+    return R.ok;
+}
+
+test "a node type without fields carries its tag and its with components, and fields are null" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
+    var seen: u32 = 0;
     var d = paddleDesc();
-    d.fields.size = 0;
+    d.fields = null;
+    d.update = countBare;
+    d.user_data = &seen;
     var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    try testing.expectEqual(@as(u32, 2), registered[0].queries.?[0].term_count);
+    var rows: Rows = .{};
+    rows.build();
+    rows.columns = .{ null, &rows.transforms, null, null };
+    try R.check(registered[0].execute.?(&rows.sys, registered[0].user_data, 0.5));
+    try testing.expect(seen > 0);
+}
+
+test "a nameless node type, or fields of zero size, is refused" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var cid: Cid = 0;
+    var d = paddleDesc();
+    d.name = null;
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    const empty: abi_ecs.c.ke_component_params = .{ .name = "empty", .size = 0, .alignment = 0 };
+    d = paddleDesc();
+    d.fields = &empty;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
 }

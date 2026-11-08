@@ -33,7 +33,8 @@ extern "C"
         /// The node next moved to; KE_ENTITY_INVALID before the first call of next.
         ke_entity self;
 
-        /// The node's own fields, the struct its type was registered with.
+        /// The node's own fields, the struct its type was registered with; NULL for a type
+        /// without fields.
         void *fields;
 
         /// The event an on handler is delivering; NULL in every other behaviour.
@@ -95,11 +96,16 @@ extern "C"
         ke_node_behaviour_fn on;
     } ke_node_handler;
 
-    /// A node type: its fields, the components its nodes also carry, and its behaviours.
+    /// A node type: its name, its own fields, the components its nodes also carry, and its
+    /// behaviours.
     typedef struct ke_node_type_desc
     {
-        /// [expand] The fields, registered as a component under the type's name.
-        ke_component_params fields;
+        /// [utf8] The type's name; its nodes carry a tag registered as `node.<name>`.
+        const char *name;
+
+        /// [borrowed, default:none] The type's own fields, registered as a component; NULL for a
+        /// type made only of the components it names in `with`.
+        const ke_component_params *fields;
 
         /// [array_of:with_count, utf8, default:empty] Names of registered components every
         /// node of the type carries beside its fields.
@@ -134,9 +140,9 @@ extern "C"
         /// Registers a node type and the systems of its behaviours.
         /// @param desc [borrowed] Read during the call; the field table and the names it points
         ///             at must outlive the node types.
-        /// @param out_type [out] Receives the type's component id.
-        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a zero size or a
-        ///         behaviour-less handler; KE_RESULT_NOT_FOUND for a `with` name or a handler's
+        /// @param out_type [out] Receives the id of the type's tag.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, fields of zero
+        ///         size or a behaviour-less handler; KE_RESULT_NOT_FOUND for a `with` name or a handler's
         ///         event never registered; the ecs's or the runtime's code when it refuses.
         ke_result (*register_type)(struct ke_node_types *self, const ke_node_type_desc *desc, ke_component_id *out_type);
 

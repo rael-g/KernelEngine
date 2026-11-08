@@ -33,10 +33,14 @@ pub const ke_node_handler = extern struct {
     on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
 };
 
-/// A node type: its fields, the components its nodes also carry, and its behaviours.
+/// A node type: its name, its own fields, the components its nodes also carry, and its
+/// behaviours.
 pub const ke_node_type_desc = extern struct {
-    /// The fields, registered as a component under the type's name.
-    fields: abi_ecs.c.ke_component_params = std.mem.zeroes(abi_ecs.c.ke_component_params),
+    /// The type's name; its nodes carry a tag registered as `node. <name >`.
+    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The type's own fields, registered as a component; NULL for a type made only of the components
+    /// it names in `with`.
+    fields: ?*const abi_ecs.c.ke_component_params = std.mem.zeroes(?*const abi_ecs.c.ke_component_params),
     /// Names of registered components every node of the type carries beside its fields.
     with: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
     with_count: u32 = std.mem.zeroes(u32),
@@ -86,7 +90,8 @@ pub const ke_node_ctx = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// The node next moved to; KE_ENTITY_INVALID before the first call of next.
     self: ke_entity = std.mem.zeroes(ke_entity),
-    /// The node's own fields, the struct its type was registered with.
+    /// The node's own fields, the struct its type was registered with; NULL for a type without
+    /// fields.
     fields: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// The event an on handler is delivering; NULL in every other behaviour.
     event: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
