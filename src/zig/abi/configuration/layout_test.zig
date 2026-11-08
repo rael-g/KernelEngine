@@ -47,7 +47,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.c.KE_CONFIGURATION_SUBSCRIPTION_NONE));
 }
 
-extern const layout_values: [31]c_ulonglong;
+extern const layout_values: [30]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -58,7 +58,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_config_field, "offset"),
         @offsetOf(abi.c.ke_config_field, "size"),
         @offsetOf(abi.c.ke_config_field, "enum_names"),
-        @offsetOf(abi.c.ke_config_field, "enum_count"),
         @sizeOf(abi.c.ke_configuration),
         @offsetOf(abi.c.ke_configuration, "handle"),
         @offsetOf(abi.c.ke_configuration, "get_int"),

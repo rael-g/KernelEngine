@@ -288,7 +288,7 @@ export fn ke_physics_2d_box2d_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
-    out.* = create(config orelse &.{}) catch |err| {
+    out.* = create(config orelse &abi_factory.c.ke_physics_2d_box2d_config_defaults) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
         return R.code(err);
     };

@@ -18,7 +18,7 @@ public sealed record DefaultRenderServiceConfig : KernelEngine.Configuration.ICo
     public KernelEngine.Render.GpuTextureFormat DepthFormat { get; init; } = KernelEngine.Render.GpuTextureFormat.D32Float;
 
     /// <summary>Color the frame is cleared to.</summary>
-    public System.Numerics.Vector4 ClearColor { get; init; } = new System.Numerics.Vector4(0.10f, 0.15f, 0.30f, 1f);
+    public System.Numerics.Vector4 ClearColor { get; init; } = new System.Numerics.Vector4(0.10f, 0.15f, 0.30f, 1.0f);
 
     /// <inheritdoc/>
     public static DefaultRenderServiceConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)

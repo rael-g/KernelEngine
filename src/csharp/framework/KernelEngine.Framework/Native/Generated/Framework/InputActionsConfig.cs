@@ -14,8 +14,8 @@ using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
 
-public unsafe partial struct ke_input_actions_config
+public unsafe partial struct InputActionsConfig
 {
     [NativeTypeName("const char *")]
-    public sbyte* section;
+    public sbyte* Section;
 }

@@ -141,18 +141,24 @@ typedef struct renderer
 } renderer;
 
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io,
-                             ke_asset_resolver *assets, const char *shader_dir, ke_vec4 clear_color)
+                             ke_asset_resolver *assets, const ke_render_service_config *service_config)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = shader_dir, .io = io }, &r->binder));
-    check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref,
-        &(ke_render_service_config){ .shader_dir = shader_dir, .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = clear_color }, &r->service));
+    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = service_config->shader_dir, .io = io }, &r->binder));
+    check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref, service_config, &r->service));
     ke_render_service *core = r->service.ref;
     check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
     check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
     check("frame", ke_render_frame_create(&(ke_render_frame_params){ .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref, .scene = r->scene.ref }, &r->frame));
-    check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .output = "shadow" }, &r->shadow));
+    ke_render_shadow_params shadow = ke_render_shadow_params_defaults;
+    shadow.scene = r->scene.ref;
+    shadow.frame = r->frame.ref;
+    shadow.runtime = rt;
+    shadow.service = core;
+    shadow.device = gpu;
+    shadow.view_space = r->view_space.ref;
+    shadow.output = "shadow";
+    check("shadow pass", ke_render_shadow_create(&shadow, &r->shadow));
     check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref, "clusters", NULL, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
         .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .output = "gbuffer" }, &r->gbuffer));
@@ -185,13 +191,6 @@ static void renderer_destroy(renderer *r)
     r->view_space.destroy(r->view_space.ref);
 }
 
-static ke_gpu_present_mode present_mode_of(const char *name)
-{
-    if (strcmp(name, "mailbox") == 0) return KE_GPU_PRESENT_MODE_MAILBOX;
-    if (strcmp(name, "immediate") == 0) return KE_GPU_PRESENT_MODE_IMMEDIATE;
-    return KE_GPU_PRESENT_MODE_FIFO;
-}
-
 int main(int argc, char **argv)
 {
     char project_dir[PATH_CAPACITY], shader_dir[PATH_CAPACITY], project_file[PATH_CAPACITY];
@@ -222,12 +221,8 @@ int main(int argc, char **argv)
 
     ke_input_handle input = { 0 };
     check("input", ke_input_create(&input));
-    ke_window_glfw_config window_config = {
-        .title = cfg->get_string(cfg, "runtime.window", "title", "Pong"),
-        .width = (int32_t)cfg->get_int(cfg, "runtime.window", "width", 960),
-        .height = (int32_t)cfg->get_int(cfg, "runtime.window", "height", 540),
-        .fullscreen = cfg->get_bool(cfg, "runtime.window", "fullscreen", false),
-    };
+    ke_window_glfw_config window_config = ke_window_glfw_config_defaults;
+    check("window config", cfg->fill(cfg, "runtime.window", KE_CONFIG_FIELDS(ke_window_glfw_config_fields), &window_config));
     ke_window_handle window = { 0 };
     check("window", ke_window_glfw_create(input.ref, &window_config, &window));
 
@@ -239,8 +234,9 @@ int main(int argc, char **argv)
     ke_gpu_device_handle gpu = { 0 };
     check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ 0 }, &gpu));
     ke_gpu_render_target_handle target = { 0 };
-    check("window target", ke_gpu_render_target_webgpu_window_create(gpu.ref, window.ref,
-        &(ke_gpu_render_target_webgpu_window_config){ .present_mode = present_mode_of(cfg->get_string(cfg, "runtime.renderer", "present_mode", "fifo")) }, &target));
+    ke_gpu_render_target_webgpu_window_config target_config = ke_gpu_render_target_webgpu_window_config_defaults;
+    check("target config", cfg->fill(cfg, "runtime.renderer", KE_CONFIG_FIELDS(ke_gpu_render_target_webgpu_window_config_fields), &target_config));
+    check("window target", ke_gpu_render_target_webgpu_window_create(gpu.ref, window.ref, &target_config, &target));
 
     ke_font_loader_handle fonts = { 0 };
     check("font loader", ke_font_loader_stb_create(io.ref, &fonts));
@@ -250,19 +246,16 @@ int main(int argc, char **argv)
     ke_scene_tree_handle tree = { 0 };
     check("scene tree", ke_scene_tree_create(ecs.ref, rt.ref, &tree));
 
-    const ke_vec4 clear_color = {
-        (float)cfg->get_double(cfg, "render", "clear_color.0", 0.0),
-        (float)cfg->get_double(cfg, "render", "clear_color.1", 0.0),
-        (float)cfg->get_double(cfg, "render", "clear_color.2", 0.0),
-        (float)cfg->get_double(cfg, "render", "clear_color.3", 1.0),
-    };
+    ke_render_service_config service_config = ke_render_service_config_defaults;
+    service_config.shader_dir = shader_dir;
+    check("render config", cfg->fill(cfg, "render", KE_CONFIG_FIELDS(ke_render_service_config_fields), &service_config));
     renderer render;
-    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, shader_dir, clear_color);
+    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config);
 
     ke_physics_2d_handle physics = { 0 };
-    check("physics", ke_physics_2d_box2d_create(&(ke_physics_2d_box2d_config){
-        .gravity_x = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_x", 0.0),
-        .gravity_y = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_y", 0.0) }, &physics));
+    ke_physics_2d_box2d_config physics_config = ke_physics_2d_box2d_config_defaults;
+    check("physics config", cfg->fill(cfg, "runtime.physics_2d", KE_CONFIG_FIELDS(ke_physics_2d_box2d_config_fields), &physics_config));
+    check("physics", ke_physics_2d_box2d_create(&physics_config, &physics));
     ke_physics_body2d_module_handle bodies = { 0 };
     check("body2d module", ke_physics_body2d_module_create(&(ke_physics_body2d_module_params){
         .runtime = rt.ref, .ecs = ecs.ref, .physics = physics.ref, .scene_tree = tree.ref }, &bodies));

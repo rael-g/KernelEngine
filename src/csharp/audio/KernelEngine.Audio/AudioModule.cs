@@ -32,7 +32,7 @@ public sealed unsafe class AudioModule : IRuntimeModule
         var root = System.Text.Encoding.UTF8.GetBytes(System.AppContext.BaseDirectory + '\0');
         fixed (byte* r = root)
         {
-            var config = new KernelEngine.Audio.Native.ke_sound_module_config { root = (sbyte*)r };
+            var config = new KernelEngine.Audio.Native.SoundModuleConfig { Root = (sbyte*)r };
             KernelEngine.Audio.Native.ke_sound_module_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(((INativeRuntime)runtime).Native, ecs.Native, audio.Native, &config, &handle), "ke_sound_module_create");
             _sound = handle;

@@ -22,7 +22,4 @@ public unsafe partial struct ConfigField
 
     [NativeTypeName("const char *const *")]
     public sbyte** EnumNames;
-
-    [NativeTypeName("uint32_t")]
-    public uint EnumCount;
 }

@@ -106,7 +106,7 @@ public sealed class KernelEngineExtension : IKabicExtension
 
     private static string Values(Factory f, bool configured) =>
         string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative") && !(configured && a.Field is not null))
-            .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = default"));
+            .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = {a.Default ?? "default"}"));
 
     private static string PassRegistration(Factory f, bool configured)
     {

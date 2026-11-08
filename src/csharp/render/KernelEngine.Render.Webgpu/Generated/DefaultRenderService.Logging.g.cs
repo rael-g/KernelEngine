@@ -18,7 +18,7 @@ public sealed unsafe partial class DefaultRenderService
     /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.</param>
     /// <param name="depthFormat">Format of the frame's depth.</param>
     /// <param name="clearColor">Color the frame is cleared to.</param>
-    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir = default, KernelEngine.Render.GpuTextureFormat colorFormat = default, KernelEngine.Render.GpuTextureFormat depthFormat = default, System.Numerics.Vector4 clearColor = default) : base(CreateLogged(loggerFactory, device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor))
+    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir = default, KernelEngine.Render.GpuTextureFormat colorFormat = KernelEngine.Render.GpuTextureFormat.Rgba16Float, KernelEngine.Render.GpuTextureFormat depthFormat = KernelEngine.Render.GpuTextureFormat.D32Float, System.Numerics.Vector4 clearColor = default) : base(CreateLogged(loggerFactory, device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor))
     {
     }
 

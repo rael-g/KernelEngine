@@ -44,10 +44,9 @@ extern "C"
         ke_config_type  type;
         uint32_t        offset;
         uint32_t        size;
-        /// [borrowed,optional,array_of:enum_count] The names an integer field's key may hold, in
-        /// value order; a name stands for its index. NULL leaves the field numeric.
+        /// [borrowed,optional] The names an integer field's key may hold, in value order and
+        /// ended by NULL; a name stands for its index. NULL leaves the field numeric.
         const char *const *enum_names;
-        uint32_t           enum_count;
     } ke_config_field;
 
 /** The ke_config_type of member @p m of config struct @p T, taken from the member's own type. */
@@ -59,13 +58,13 @@ extern "C"
     char *: KE_CONFIG_STRING, const char *: KE_CONFIG_STRING)
 
 /** The field-table entry of member @p m of config struct @p T, keyed by the member's name. */
-#define KE_CONFIG_FIELD(T, m) { #m, KE_CONFIG_TYPE_OF(T, m), (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), NULL, 0 }
+#define KE_CONFIG_FIELD(T, m) { #m, KE_CONFIG_TYPE_OF(T, m), (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), NULL }
 
-/** The field-table entry of an enum member @p m of @p T whose key may hold one of @p names. */
-#define KE_CONFIG_ENUM_FIELD(T, m, names) { #m, KE_CONFIG_INT, (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), (names), (uint32_t)(sizeof(names) / sizeof((names)[0])) }
+/** The field-table entry of an enum member @p m of @p T whose key may hold one of @p names, a list ended by NULL; NULL reads the enum as a number. */
+#define KE_CONFIG_ENUM_FIELD(T, m, names) { #m, KE_CONFIG_INT, (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), (names) }
 
 /** The field-table entry of a member @p m of @p T made of floats, such as a vector, read element by element. */
-#define KE_CONFIG_VECTOR_FIELD(T, m) { #m, KE_CONFIG_FLOAT, (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), NULL, 0 }
+#define KE_CONFIG_VECTOR_FIELD(T, m) { #m, KE_CONFIG_FLOAT, (uint32_t)offsetof(T, m), (uint32_t)sizeof(((T *)0)->m), NULL }
 
 /** Expands a field table into the `fields` and `field_count` arguments of ke_configuration.fill. */
 #define KE_CONFIG_FIELDS(table) (table), (uint32_t)(sizeof(table) / sizeof((table)[0]))

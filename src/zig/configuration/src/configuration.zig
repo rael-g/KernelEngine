@@ -346,9 +346,9 @@ fn writeString(at: [*]u8, field: *const abi_configuration.c.ke_config_field, val
 
 /// The index of `name` among the field's enum names, or null when it has none of them.
 fn enumIndex(field: *const abi_configuration.c.ke_config_field, name: []const u8) ?i64 {
-    const names = field.enum_names orelse return null;
-    for (0..field.enum_count) |i| {
-        const candidate = names[i] orelse continue;
+    const names: [*]const ?[*:0]const u8 = @ptrCast(field.enum_names orelse return null);
+    var i: usize = 0;
+    while (names[i]) |candidate| : (i += 1) {
         if (std.mem.eql(u8, std.mem.span(candidate), name)) return @intCast(i);
     }
     return null;
@@ -385,7 +385,7 @@ fn writeStored(at: [*]u8, field: *const abi_configuration.c.ke_config_field, sec
 /// absent.
 fn writeVector(st: *State, at: [*]u8, field: *const abi_configuration.c.ke_config_field, section: []const u8) R.Error!void {
     const key = std.mem.span(field.key.?);
-    const element: abi_configuration.c.ke_config_field = .{ .key = field.key, .type = field.type, .offset = 0, .size = @sizeOf(f32), .enum_names = null, .enum_count = 0 };
+    const element: abi_configuration.c.ke_config_field = .{ .key = field.key, .type = field.type, .offset = 0, .size = @sizeOf(f32), .enum_names = null };
     for (0..field.size / @sizeOf(f32)) |i| {
         const element_key = std.fmt.allocPrint(gpa, "{s}.{d}", .{ key, i }) catch return error.OutOfMemory;
         defer gpa.free(element_key);
@@ -456,15 +456,15 @@ const FilledConfig = extern struct {
 
 const filled_defaults: FilledConfig = .{ .count = 3, .scale = -9.5, .enabled = true, .title = "untitled", .mode = 0, .tint = .{ 1, 1, 1, 1 } };
 
-const mode_names = [_][*c]const u8{ "fifo", "mailbox", "immediate" };
+const mode_names = [_][*c]const u8{ "fifo", "mailbox", "immediate", null };
 
 const filled_fields = [_]abi_configuration.c.ke_config_field{
-    .{ .key = "count", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "count"), .size = 4, .enum_names = null, .enum_count = 0 },
-    .{ .key = "scale", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "scale"), .size = 4, .enum_names = null, .enum_count = 0 },
-    .{ .key = "enabled", .type = abi_configuration.c.KE_CONFIG_BOOL, .offset = @offsetOf(FilledConfig, "enabled"), .size = 1, .enum_names = null, .enum_count = 0 },
-    .{ .key = "title", .type = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(FilledConfig, "title"), .size = @sizeOf([*c]const u8), .enum_names = null, .enum_count = 0 },
-    .{ .key = "mode", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "mode"), .size = 4, .enum_names = &mode_names, .enum_count = mode_names.len },
-    .{ .key = "tint", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "tint"), .size = 16, .enum_names = null, .enum_count = 0 },
+    .{ .key = "count", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "count"), .size = 4, .enum_names = null },
+    .{ .key = "scale", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "scale"), .size = 4, .enum_names = null },
+    .{ .key = "enabled", .type = abi_configuration.c.KE_CONFIG_BOOL, .offset = @offsetOf(FilledConfig, "enabled"), .size = 1, .enum_names = null },
+    .{ .key = "title", .type = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(FilledConfig, "title"), .size = @sizeOf([*c]const u8), .enum_names = null },
+    .{ .key = "mode", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "mode"), .size = 4, .enum_names = @ptrCast(&mode_names) },
+    .{ .key = "tint", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "tint"), .size = 16, .enum_names = null },
 };
 
 const TestProbe = struct {

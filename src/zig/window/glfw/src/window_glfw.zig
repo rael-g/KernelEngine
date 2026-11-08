@@ -40,7 +40,7 @@ export fn ke_window_glfw_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_window orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_window.c.ke_window_handle);
-    out.* = create(input, config orelse &.{}) catch |err| {
+    out.* = create(input, config orelse &abi_window_glfw_factory.c.ke_window_glfw_config_defaults) catch |err| {
         log.warn("creating the window failed: {t}", .{err});
         return R.code(err);
     };

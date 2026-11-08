@@ -26,24 +26,22 @@ const log = std.log.scoped(.render_shadow);
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-/// The shape of the shadow map: the params' fields of the same names, zero taking these values.
+/// The shape of the shadow map, copied from the params' fields of the same names.
 const Shape = struct {
-    resolution: u32 = 1024,
-    light_distance: f32 = 25.0,
-    extent: f32 = 20.0,
-    near_plane: f32 = 0.1,
-    far_plane: f32 = 50.0,
+    resolution: u32,
+    light_distance: f32,
+    extent: f32,
+    near_plane: f32,
+    far_plane: f32,
 };
 
-fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_params) Shape {
-    const d = Shape{};
-    return .{
-        .resolution = if (p.resolution != 0) p.resolution else d.resolution,
-        .light_distance = if (p.light_distance != 0.0) p.light_distance else d.light_distance,
-        .extent = if (p.extent != 0.0) p.extent else d.extent,
-        .near_plane = if (p.near_plane != 0.0) p.near_plane else d.near_plane,
-        .far_plane = if (p.far_plane != 0.0) p.far_plane else d.far_plane,
-    };
+/// A map without texels, an empty area or a near plane not before the far one is refused.
+fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_params) R.Error!Shape {
+    if (p.resolution == 0 or !(p.extent > 0.0) or !(p.near_plane < p.far_plane)) {
+        log.warn("shadow pass: resolution {d}, extent {d}, near {d} and far {d} describe no shadow map", .{ p.resolution, p.extent, p.near_plane, p.far_plane });
+        return error.InvalidArgument;
+    }
+    return .{ .resolution = p.resolution, .light_distance = p.light_distance, .extent = p.extent, .near_plane = p.near_plane, .far_plane = p.far_plane };
 }
 
 const ShadowObj = extern struct { model: [16]f32 };
@@ -71,7 +69,7 @@ const ShadowModule = struct {
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     ndc: abi_render_gpu.c.ke_ndc_convention = undefined,
     view_space: *abi_view.c.ke_view_space = undefined,
-    params: Shape = .{},
+    params: Shape = undefined,
     names: [3]?[:0]u8 = .{ null, null, null },
     mesh_cid: abi_asset_resolver.c.ke_component_id = undefined,
     world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
@@ -207,7 +205,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.c.ke_render_shad
     sh.device = dev;
     sh.ndc = p.device.?.get_ndc_convention.?(p.device);
     sh.view_space = p.view_space.?;
-    sh.params = shapeOf(p);
+    sh.params = try shapeOf(p);
     sh.mesh_cid = mesh_cid;
     sh.world_transform_cid = world_transform_cid;
     sh.light_cid = light_cid;

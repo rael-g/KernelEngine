@@ -9,7 +9,7 @@ namespace KernelEngine.Physics.Box2D;
 public sealed record Box2dPhysics2DConfig : KernelEngine.Configuration.IConfigSection<Box2dPhysics2DConfig>
 {
     /// <summary>Horizontal gravity, in metres per second squared.</summary>
-    public float GravityX { get; init; } = 0f;
+    public float GravityX { get; init; } = 0.0f;
 
     /// <summary>Vertical gravity, in metres per second squared.</summary>
     public float GravityY { get; init; } = -9.81f;

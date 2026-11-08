@@ -9,8 +9,8 @@ public sealed unsafe partial class FlecsEcsRegistry
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. 0 takes the default. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
-    public FlecsEcsRegistry(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint worldIdBase = default) : base(CreateLogged(loggerFactory, worldIdBase))
+    /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
+    public FlecsEcsRegistry(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint worldIdBase = 1048576) : base(CreateLogged(loggerFactory, worldIdBase))
     {
     }
 

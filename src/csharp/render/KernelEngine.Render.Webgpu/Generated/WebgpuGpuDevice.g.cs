@@ -12,7 +12,7 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
     /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
     /// <param name="enableValidation">Asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
     /// <param name="debugLabels">The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
-    public WebgpuGpuDevice(KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool enableValidation = default, bool debugLabels = default) : base(Create(taskPool, enableValidation, debugLabels))
+    public WebgpuGpuDevice(KernelEngine.TaskPool.INativeTaskPool? taskPool = default, bool enableValidation = true, bool debugLabels = false) : base(Create(taskPool, enableValidation, debugLabels))
     {
         Hold(taskPool?.Owner);
     }

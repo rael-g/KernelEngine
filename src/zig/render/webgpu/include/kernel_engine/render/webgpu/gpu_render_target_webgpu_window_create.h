@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_RENDER_TARGET_WEBGPU_WINDOW_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -40,9 +41,19 @@ typedef enum ke_gpu_present_mode
 /// [bag] The values a window render target is created with, each applied as given.
 typedef struct ke_gpu_render_target_webgpu_window_config
 {
-    /// [default:KE_GPU_PRESENT_MODE_FIFO] How presented frames reach the screen.
+    /// How presented frames reach the screen.
     ke_gpu_present_mode present_mode;
 } ke_gpu_render_target_webgpu_window_config;
+
+/** [defaults] The target a caller gets when it sets nothing. */
+static const ke_gpu_render_target_webgpu_window_config ke_gpu_render_target_webgpu_window_config_defaults = {
+    .present_mode = KE_GPU_PRESENT_MODE_FIFO,
+};
+
+/** The keys a configuration section fills a ke_gpu_render_target_webgpu_window_config from. */
+static const ke_config_field ke_gpu_render_target_webgpu_window_config_fields[] = {
+    KE_CONFIG_ENUM_FIELD(ke_gpu_render_target_webgpu_window_config, present_mode, ((const char *const[]){ "fifo", "mailbox", "immediate", NULL })),
+};
 
 /**
  * @brief Creates a render target presenting into a window, sized to the window's client area.

@@ -16,12 +16,12 @@ public sealed unsafe partial class RenderShadow : IDisposable
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
     /// <param name="output">The shadow group it writes: the map under the group's own name, and the light and depth under the suffixes of kernel_engine/render/resource_groups.h.</param>
-    /// <param name="resolution">Edge of the square shadow map, in texels. 0 takes the default.</param>
-    /// <param name="lightDistance">How far back along the light the shadow camera sits. 0 takes the default.</param>
-    /// <param name="extent">Width and height of the shadowed area, in world units. 0 takes the default.</param>
-    /// <param name="nearPlane">Near plane of the shadow camera. 0 takes the default.</param>
-    /// <param name="farPlane">Far plane of the shadow camera. 0 takes the default.</param>
-    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint resolution = default, float lightDistance = default, float extent = default, float nearPlane = default, float farPlane = default) : this(Create(runtime, service, device, viewSpace, scene, frame, output, resolution, lightDistance, extent, nearPlane, farPlane))
+    /// <param name="resolution">Edge of the square shadow map, in texels.</param>
+    /// <param name="lightDistance">How far back along the light the shadow camera sits.</param>
+    /// <param name="extent">Width and height of the shadowed area, in world units.</param>
+    /// <param name="nearPlane">Near plane of the shadow camera.</param>
+    /// <param name="farPlane">Far plane of the shadow camera.</param>
+    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint resolution = 1024, float lightDistance = 25.0f, float extent = 20.0f, float nearPlane = 0.1f, float farPlane = 50.0f) : this(Create(runtime, service, device, viewSpace, scene, frame, output, resolution, lightDistance, extent, nearPlane, farPlane))
     {
         Hold(runtime.Owner);
         Hold(service.Owner);

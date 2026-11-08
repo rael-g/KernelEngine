@@ -363,7 +363,7 @@ pub export fn ke_gpu_device_webgpu_create(
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const given = config orelse &abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config{};
+    const given = config orelse &abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config_defaults;
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (given.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
     if (given.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;

@@ -3,14 +3,15 @@ using System.Numerics;
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 
+using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public unsafe partial struct ke_sound_module_config
+public unsafe partial struct SoundModuleConfig
 {
     [NativeTypeName("const char *")]
-    public sbyte* root;
+    public sbyte* Root;
 }

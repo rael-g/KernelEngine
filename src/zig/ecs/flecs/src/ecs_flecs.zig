@@ -106,7 +106,7 @@ const RegisteredQuery = struct {
     term_count: usize,
 };
 
-const default_world_id_base: u32 = 1 << 20;
+const default_world_id_base: u32 = abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults.world_id_base;
 
 /// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
 /// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
@@ -703,8 +703,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// The factory the plugin exports. A null config, or a zero `world_id_base` in it, takes
-/// `default_world_id_base`. A failure after the world exists finalizes it and frees the state,
+/// The factory the plugin exports. A null config takes the header's defaults. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
 export fn ke_ecs_flecs_create(
     config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config,
@@ -720,10 +719,7 @@ export fn ke_ecs_flecs_create(
 }
 
 fn create(config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
-    const world_id_base: u32 = blk: {
-        const p = config orelse break :blk default_world_id_base;
-        break :blk if (p.*.world_id_base == 0) default_world_id_base else p.*.world_id_base;
-    };
+    const world_id_base = (config orelse &abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults).*.world_id_base;
 
     installFlecsOsApi();
 
@@ -1067,7 +1063,7 @@ test "a reserved id can never be one the world's own allocator will issue" {
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config{ .world_id_base = 0 };
+    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults;
     var probe: abi_ecs.c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&config, &probe));
     const low = stateOf(probe.ref.?).reserve_low;

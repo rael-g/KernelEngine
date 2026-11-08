@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_AUDIO_MODULE_SOUND_MODULE_H_
 
 #include <kernel_engine/audio/audio.h>
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/runtime/runtime.h>
@@ -24,12 +25,22 @@
 extern "C" {
 #endif
 
-/// [bag] Values a caller gives; a zero field takes its default.
+/// The values the sound module is created with.
 typedef struct ke_sound_module_config
 {
     /// [borrowed,utf8] Directory a clip's path is joined to; copied. NULL uses the path as written.
     const char *root;
 } ke_sound_module_config;
+
+/** [defaults] The module a caller gets when it sets nothing: paths used as written. */
+static const ke_sound_module_config ke_sound_module_config_defaults = {
+    .root = NULL,
+};
+
+/** The keys a configuration section fills a ke_sound_module_config from. */
+static const ke_config_field ke_sound_module_config_fields[] = {
+    KE_CONFIG_FIELD(ke_sound_module_config, root),
+};
 
 typedef struct ke_sound_module ke_sound_module;
 

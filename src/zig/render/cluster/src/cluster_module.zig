@@ -452,7 +452,7 @@ export fn ke_render_cluster_create(
 
     const cm = gpa.create(ClusterModule) catch |err| return R.code(err);
     cm.* = .{};
-    setup(cm, &p, config orelse &.{}) catch |err| {
+    setup(cm, &p, config orelse &abi_render_cluster_factory.c.ke_render_cluster_config_defaults) catch |err| {
         destroyModule(cm);
         gpa.destroy(cm);
         return R.code(err);

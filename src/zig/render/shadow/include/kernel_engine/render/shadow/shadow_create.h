@@ -48,17 +48,26 @@ extern "C"
         /// [utf8] The shadow group it writes: the map under the group's own name, and the
         /// light and depth under the suffixes of kernel_engine/render/resource_groups.h.
         const char *output;
-        /// Edge of the square shadow map, in texels. 0 takes the default.
+        /// Edge of the square shadow map, in texels.
         uint32_t resolution;
-        /// How far back along the light the shadow camera sits. 0 takes the default.
+        /// How far back along the light the shadow camera sits.
         float    light_distance;
-        /// Width and height of the shadowed area, in world units. 0 takes the default.
+        /// Width and height of the shadowed area, in world units.
         float    extent;
-        /// Near plane of the shadow camera. 0 takes the default.
+        /// Near plane of the shadow camera.
         float    near_plane;
-        /// Far plane of the shadow camera. 0 takes the default.
+        /// Far plane of the shadow camera.
         float    far_plane;
     } ke_render_shadow_params;
+
+    /** [defaults] The shadow map's shape when the caller keeps it; the dependencies are the caller's to set. */
+    static const ke_render_shadow_params ke_render_shadow_params_defaults = {
+        .resolution = 1024,
+        .light_distance = 25.0f,
+        .extent = 20.0f,
+        .near_plane = 0.1f,
+        .far_plane = 50.0f,
+    };
 
     /// [owner]
     typedef struct ke_render_shadow_handle

@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_audio = @import("audio");
+const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
@@ -12,6 +13,7 @@ pub const ke_sound_module = opaque {};
 pub const ke_audio_sound = u32;
 pub const ke_audio_voice = u32;
 pub const ke_component_id = u32;
+pub const ke_configuration_subscription = u32;
 pub const ke_entity = u64;
 pub const ke_module_id = u64;
 pub const ke_query_id = u64;
@@ -23,6 +25,14 @@ pub const ke_system_id = u64;
 /// library's lines to stderr, which is also where they go until it is set. Called on whichever
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
+/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
+/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
+/// section changed and does nothing else.
+pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
+/// Receives one child section of the section being listed.
+pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
@@ -38,16 +48,20 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Values a caller gives; a zero field takes its default.
+/// The values the sound module is created with.
 pub const ke_sound_module_config = extern struct {
     /// Directory a clip's path is joined to; copied. NULL uses the path as written.
-    root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    root: ?[*:0]const u8 = "0",
 };
 
 pub const ke_sound_module_handle = extern struct {
     ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
     destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
+
+pub const ke_sound_module_config_defaults: ke_sound_module_config = .{  };
+
+pub const ke_sound_module_config_fields: [1]abi_configuration.c.ke_config_field = .{ .{ .key = "root", .@"type" = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(ke_sound_module_config, "root"), .size = @sizeOf(?[*:0]const u8) } };
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

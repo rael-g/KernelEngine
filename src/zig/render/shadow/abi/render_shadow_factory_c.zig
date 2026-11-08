@@ -79,22 +79,24 @@ pub const ke_render_shadow_params = extern struct {
     /// The shadow group it writes: the map under the group's own name, and the light and depth under
     /// the suffixes of kernel_engine/render/resource_groups.h.
     output: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Edge of the square shadow map, in texels. 0 takes the default.
-    resolution: u32 = std.mem.zeroes(u32),
-    /// How far back along the light the shadow camera sits. 0 takes the default.
-    light_distance: f32 = std.mem.zeroes(f32),
-    /// Width and height of the shadowed area, in world units. 0 takes the default.
-    extent: f32 = std.mem.zeroes(f32),
-    /// Near plane of the shadow camera. 0 takes the default.
-    near_plane: f32 = std.mem.zeroes(f32),
-    /// Far plane of the shadow camera. 0 takes the default.
-    far_plane: f32 = std.mem.zeroes(f32),
+    /// Edge of the square shadow map, in texels.
+    resolution: u32 = 1024,
+    /// How far back along the light the shadow camera sits.
+    light_distance: f32 = 25.0,
+    /// Width and height of the shadowed area, in world units.
+    extent: f32 = 20.0,
+    /// Near plane of the shadow camera.
+    near_plane: f32 = 0.1,
+    /// Far plane of the shadow camera.
+    far_plane: f32 = 50.0,
 };
 
 pub const ke_render_shadow_handle = extern struct {
     ref: ?*ke_render_shadow = std.mem.zeroes(?*ke_render_shadow),
     destroy: ?*const fn (?*ke_render_shadow) callconv(.c) void = null,
 };
+
+pub const ke_render_shadow_params_defaults: ke_render_shadow_params = .{ .resolution = 1024, .light_distance = 25.0, .extent = 20.0, .near_plane = 0.1, .far_plane = 50.0 };
 
 /// Sends every line ke_render_shadow logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -28,13 +29,25 @@ extern "C"
 /// [bag] The values a WebGPU device is created with, each applied as given.
 typedef struct ke_gpu_device_webgpu_config
 {
-    /// [default:true] Asks the underlying graphics API to validate every call, which takes effect
+    /// Asks the underlying graphics API to validate every call, which takes effect
     /// only where that API's validation layers are installed.
     bool enable_validation;
-    /// [default:false] The labels and debug groups given through ke_gpu_device reach the
+    /// The labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool debug_labels;
 } ke_gpu_device_webgpu_config;
+
+/** [defaults] The device a caller gets when it sets nothing. */
+static const ke_gpu_device_webgpu_config ke_gpu_device_webgpu_config_defaults = {
+    .enable_validation = true,
+    .debug_labels = false,
+};
+
+/** The keys a configuration section fills a ke_gpu_device_webgpu_config from. */
+static const ke_config_field ke_gpu_device_webgpu_config_fields[] = {
+    KE_CONFIG_FIELD(ke_gpu_device_webgpu_config, enable_validation),
+    KE_CONFIG_FIELD(ke_gpu_device_webgpu_config, debug_labels),
+};
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.

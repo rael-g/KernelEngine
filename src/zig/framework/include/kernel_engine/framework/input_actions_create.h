@@ -25,12 +25,22 @@ extern "C"
 #endif
 #endif
 
-    /// [bag] Values a caller gives; a zero field takes its default.
+    /// The values the action maps are created with.
     typedef struct ke_input_actions_config
     {
-        /// [borrowed,utf8] The configuration section the maps are read from; NULL reads "input".
+        /// [borrowed,utf8] The configuration section the maps are read from.
         const char *section;
     } ke_input_actions_config;
+
+    /** [defaults] The maps a caller gets when it sets nothing: read from "input". */
+    static const ke_input_actions_config ke_input_actions_config_defaults = {
+        .section = "input",
+    };
+
+    /** The keys a configuration section fills a ke_input_actions_config from. */
+    static const ke_config_field ke_input_actions_config_fields[] = {
+        KE_CONFIG_FIELD(ke_input_actions_config, section),
+    };
 
     /// Creates the action maps, adding through the map's own slots every map the configuration
     /// describes under the section: `<section>.map.<Map>` holds `priority` (default 0) and

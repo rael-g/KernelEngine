@@ -1,6 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 #define KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/physics/physics_2d.h>
 
 #ifndef KE_PHYSICS_BOX2D_API
@@ -23,9 +24,21 @@ extern "C" {
 
 /// [bag] The values a world is created with, each applied as given.
 typedef struct ke_physics_2d_box2d_config {
-    float gravity_x; /**< [default:0] Horizontal gravity, in metres per second squared. */
-    float gravity_y; /**< [default:-9.81] Vertical gravity, in metres per second squared. */
+    float gravity_x; /**< Horizontal gravity, in metres per second squared. */
+    float gravity_y; /**< Vertical gravity, in metres per second squared. */
 } ke_physics_2d_box2d_config;
+
+/** [defaults] The world a caller gets when it sets nothing. */
+static const ke_physics_2d_box2d_config ke_physics_2d_box2d_config_defaults = {
+    .gravity_x = 0.0f,
+    .gravity_y = -9.81f,
+};
+
+/** The keys a configuration section fills a ke_physics_2d_box2d_config from. */
+static const ke_config_field ke_physics_2d_box2d_config_fields[] = {
+    KE_CONFIG_FIELD(ke_physics_2d_box2d_config, gravity_x),
+    KE_CONFIG_FIELD(ke_physics_2d_box2d_config, gravity_y),
+};
 
 /**
  * @brief Creates a 2D physics world.

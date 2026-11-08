@@ -1203,8 +1203,9 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 
 /// The factory. Creates a runtime over an ecs and a task pool that it does not own: it keeps the
 /// pointers and never frees them. A null ecs or task pool fails with `invalid_argument`, and an
-/// allocation failure with `out_of_memory`. The params pointer may be null, and a zero in
-/// `fixed_dt`, `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The
+/// allocation failure with `out_of_memory`. A null params pointer takes the header's defaults; a
+/// `fixed_dt` or `fixed_dt_max_accum` that is not greater than zero, or no system per phase, fails
+/// with `invalid_argument`. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
 export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
@@ -1212,6 +1213,10 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or task_pool == null) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
+    }
+    const p: *const abi_runtime_factory.c.ke_runtime_params = if (params != null) params else &abi_runtime_factory.c.ke_runtime_params_defaults;
+    if (!(p.fixed_dt > 0.0) or !(p.fixed_dt_max_accum > 0.0) or p.max_systems_per_phase == 0) {
+        return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs a positive fixed step, catch-up budget and system count"));
     }
 
     const h_mem = cAlloc(RuntimeHandle, 1) orelse {
@@ -1225,10 +1230,10 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.state.exclusive = .empty;
     h.state.self_ordered = .empty;
 
-    h.state.fixed_dt = if (params != null and params.*.fixed_dt > 0.0) params.*.fixed_dt else (1.0 / 60.0);
-    h.state.fixed_dt_max_accum = if (params != null and params.*.fixed_dt_max_accum > 0.0) params.*.fixed_dt_max_accum else 0.25;
+    h.state.fixed_dt = p.fixed_dt;
+    h.state.fixed_dt_max_accum = p.fixed_dt_max_accum;
 
-    const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
+    const max_per_phase: u32 = p.max_systems_per_phase;
     h.state.max_systems_per_phase = max_per_phase;
     h.state.extract_scratch = .{};
     const n: usize = @as(usize, max_per_phase) * KE_RUNTIME_PHASE_COUNT;
@@ -1318,7 +1323,7 @@ const Fixture = struct {
         var eh: abi_ecs.c.ke_ecs_handle = undefined;
         try R.check(ke_ecs_flecs_create(null, &eh));
 
-        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+        var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
         const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
@@ -1656,7 +1661,7 @@ const BareRuntime = struct {
     runtime_h: abi_runtime.c.ke_runtime_handle = undefined,
 
     fn init(self: *BareRuntime) !void {
-        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+        var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
         self.runtime_h = createdRuntime(&self.ecs, &self.task_pool, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
@@ -2150,11 +2155,26 @@ test "a system registered from a render body is queued instead of waiting on the
     try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
+test "a zero fixed step, catch-up budget or system count is refused, not replaced by a default" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    rp.fixed_dt = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+    rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    rp.fixed_dt_max_accum = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+    rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    rp.max_systems_per_phase = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+}
+
 test "creating a runtime without an ecs is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
     const rh = createdRuntime(null, f.task_pool_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -2163,7 +2183,7 @@ test "creating a runtime without a task pool is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
     const rh = createdRuntime(f.ecs_h.ref, null, &rp);
     try testing.expect(rh.ref == null);
 }

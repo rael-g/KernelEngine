@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -40,15 +41,31 @@ extern "C"
     /// [bag] The values a light-cluster pass is created with, each applied as given.
     typedef struct ke_render_cluster_config
     {
-        /// [default:16] Clusters across the screen.
+        /// Clusters across the screen.
         uint32_t grid_x;
-        /// [default:9] Clusters down the screen.
+        /// Clusters down the screen.
         uint32_t grid_y;
-        /// [default:24] Depth slices.
+        /// Depth slices.
         uint32_t grid_z;
-        /// [default:64] Lights one cluster can list.
+        /// Lights one cluster can list.
         uint32_t max_lights_per_cluster;
     } ke_render_cluster_config;
+
+    /** [defaults] The grid a caller gets when it sets nothing. */
+    static const ke_render_cluster_config ke_render_cluster_config_defaults = {
+        .grid_x = 16,
+        .grid_y = 9,
+        .grid_z = 24,
+        .max_lights_per_cluster = 64,
+    };
+
+    /** The keys a configuration section fills a ke_render_cluster_config from. */
+    static const ke_config_field ke_render_cluster_config_fields[] = {
+        KE_CONFIG_FIELD(ke_render_cluster_config, grid_x),
+        KE_CONFIG_FIELD(ke_render_cluster_config, grid_y),
+        KE_CONFIG_FIELD(ke_render_cluster_config, grid_z),
+        KE_CONFIG_FIELD(ke_render_cluster_config, max_lights_per_cluster),
+    };
 
     /**
      * @brief Creates a light-cluster pass and registers its render-phase system.

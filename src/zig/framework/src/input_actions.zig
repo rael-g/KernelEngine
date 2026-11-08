@@ -708,7 +708,12 @@ export fn ke_input_actions_create(
     s.api.get_axis3d = vtGetAxis3d;
 
     if (configuration) |cfg| {
-        const section_name: [*:0]const u8 = if (config) |cf| (if (cf.section) |sec| @ptrCast(sec) else "input") else "input";
+        const given = config orelse &abi_framework_factory.c.ke_input_actions_config_defaults;
+        const section_name: [*:0]const u8 = @ptrCast(given.section orelse {
+            log.warn("input actions: the config names no section", .{});
+            vtDestroy(&s.api);
+            return R.code(error.InvalidArgument);
+        });
         const maps = std.fmt.allocPrintSentinel(heap.gpa, "{s}.map", .{std.mem.span(section_name)}, 0) catch {
             vtDestroy(&s.api);
             return R.code(error.OutOfMemory);

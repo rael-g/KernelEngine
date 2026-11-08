@@ -879,20 +879,26 @@
         {
           "name": "fixed_dt",
           "type": "float",
-          "tags": [],
-          "doc": "Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60."
+          "tags": [
+            "default:0.016666668"
+          ],
+          "doc": "Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero."
         },
         {
           "name": "fixed_dt_max_accum",
           "type": "float",
-          "tags": [],
-          "doc": "Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects 0.25."
+          "tags": [
+            "default:0.25"
+          ],
+          "doc": "Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than zero."
         },
         {
           "name": "max_systems_per_phase",
           "type": "uint32_t",
-          "tags": [],
-          "doc": "Most systems one phase may hold; registering past it fails. 0 selects 256."
+          "tags": [
+            "default:256"
+          ],
+          "doc": "Most systems one phase may hold; registering past it fails."
         }
       ]
     }
@@ -2057,5 +2063,30 @@
     "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
     "ke_task_func": "ke_result (*)(void *)",
     "ke_task_on_complete_func": "void (*)(ke_task *, void *, ke_result)"
-  }
+  },
+  "data": [
+    {
+      "name": "ke_runtime_params_defaults",
+      "type": "ke_runtime_params",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": "0.016666668"
+          },
+          {
+            "kind": "Number",
+            "text": "0.25"
+          },
+          {
+            "kind": "Number",
+            "text": "256"
+          }
+        ]
+      }
+    }
+  ]
 }

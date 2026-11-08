@@ -21,7 +21,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <param name="gridY">Clusters down the screen.</param>
     /// <param name="gridZ">Depth slices.</param>
     /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = default, uint gridY = default, uint gridZ = default, uint maxLightsPerCluster = default) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint gridX = 16, uint gridY = 9, uint gridZ = 24, uint maxLightsPerCluster = 64) : this(Create(runtime, service, device, viewSpace, camera, scene, frame, output, gridX, gridY, gridZ, maxLightsPerCluster))
     {
         Hold(runtime.Owner);
         Hold(service.Owner);

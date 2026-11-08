@@ -26,10 +26,15 @@ typedef struct ke_ecs_flecs_config
 {
     /// First id the world's own allocator may issue. Ids below it form the pool
     /// entity_reserve draws from, so this doubles as that pool's capacity — the
-    /// world's own side is unbounded. 0 takes the default. Raise it for a world
+    /// world's own side is unbounded. Raise it for a world
     /// whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.
     uint32_t world_id_base;
 } ke_ecs_flecs_config;
+
+/** [defaults] The world a caller gets when it sets nothing. */
+static const ke_ecs_flecs_config ke_ecs_flecs_config_defaults = {
+    .world_id_base = 1048576,
+};
 
 /// Creates a ke_ecs vtable backed by an internally-owned world.
 /// Also installs process-wide log and abort handlers: a check flecs fails makes the

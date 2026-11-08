@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 
 using global::KernelEngine.Logger;
 
+using KernelEngine.Configuration.Native;
 using KernelEngine.Physics.Native;
 using KernelEngine.Result.Native;
 

@@ -31,10 +31,9 @@ pub const ke_config_field = extern struct {
     @"type": ke_config_type = std.mem.zeroes(ke_config_type),
     offset: u32 = std.mem.zeroes(u32),
     size: u32 = std.mem.zeroes(u32),
-    /// The names an integer field's key may hold, in value order; a name stands for its index. NULL
-    /// leaves the field numeric.
-    enum_names: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
-    enum_count: u32 = std.mem.zeroes(u32),
+    /// The names an integer field's key may hold, in value order and ended by NULL; a name stands
+    /// for its index. NULL leaves the field numeric.
+    enum_names: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
 };
 
 /// A typed (section, key) to value store.

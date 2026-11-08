@@ -2,6 +2,7 @@
 #ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 
+#include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/window/window.h>
 
 #ifndef KE_WINDOW_API
@@ -26,11 +27,27 @@ struct ke_input;
 
 /// [bag] The values a window is created with, each applied as given.
 typedef struct ke_window_glfw_config {
-    const char *title;  /**< [borrowed,utf8,default:KernelEngine] Window title. */
-    int32_t     width;      /**< [default:1280] Client width in pixels. */
-    int32_t     height;     /**< [default:720] Client height in pixels. */
-    bool        fullscreen; /**< [default:false] Whether the window covers the primary monitor. */
+    const char *title;  /**< [borrowed,utf8] Window title. */
+    int32_t     width;      /**< Client width in pixels. */
+    int32_t     height;     /**< Client height in pixels. */
+    bool        fullscreen; /**< Whether the window covers the primary monitor. */
 } ke_window_glfw_config;
+
+/** [defaults] The values a window takes when its caller sets none. */
+static const ke_window_glfw_config ke_window_glfw_config_defaults = {
+    .title = "KernelEngine",
+    .width = 1280,
+    .height = 720,
+    .fullscreen = false,
+};
+
+/** The keys a configuration section fills a ke_window_glfw_config from. */
+static const ke_config_field ke_window_glfw_config_fields[] = {
+    KE_CONFIG_FIELD(ke_window_glfw_config, title),
+    KE_CONFIG_FIELD(ke_window_glfw_config, width),
+    KE_CONFIG_FIELD(ke_window_glfw_config, height),
+    KE_CONFIG_FIELD(ke_window_glfw_config, fullscreen),
+};
 
 /**
  * Creates a window and starts it.

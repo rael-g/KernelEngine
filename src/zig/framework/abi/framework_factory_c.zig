@@ -97,10 +97,10 @@ pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// Values a caller gives; a zero field takes its default.
+/// The values the action maps are created with.
 pub const ke_input_actions_config = extern struct {
-    /// The configuration section the maps are read from; NULL reads "input".
-    section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The configuration section the maps are read from.
+    section: ?[*:0]const u8 = "input",
 };
 
 /// Sizing for one script host. The defaults are conveniences, not ceilings. [bag] Instances need
@@ -123,6 +123,10 @@ pub const ke_signal_bus_params = extern struct {
     /// Total payload bytes per frame; 0 uses the default.
     payload_capacity: u32 = std.mem.zeroes(u32),
 };
+
+pub const ke_input_actions_config_defaults: ke_input_actions_config = .{ .section = "input" };
+
+pub const ke_input_actions_config_fields: [1]abi_configuration.c.ke_config_field = .{ .{ .key = "section", .@"type" = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(ke_input_actions_config, "section"), .size = @sizeOf(?[*:0]const u8) } };
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either

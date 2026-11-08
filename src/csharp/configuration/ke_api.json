@@ -221,16 +221,9 @@
           "type": "const char *const *",
           "tags": [
             "borrowed",
-            "optional",
-            "array_of:enum_count"
+            "optional"
           ],
-          "doc": "The names an integer field\u0027s key may hold, in value order; a name stands for its index. NULL leaves the field numeric."
-        },
-        {
-          "name": "enum_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
+          "doc": "The names an integer field\u0027s key may hold, in value order and ended by NULL; a name stands for its index. NULL leaves the field numeric."
         }
       ]
     }
