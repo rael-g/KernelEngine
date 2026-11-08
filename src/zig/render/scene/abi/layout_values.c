@@ -9,6 +9,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_label_resolve_params, ui),
     offsetof(ke_render_label_resolve_params, resolver),
     offsetof(ke_render_label_resolve_params, scene),
+    offsetof(ke_render_label_resolve_params, default_font),
     sizeof(ke_render_scene_resolve_params),
     offsetof(ke_render_scene_resolve_params, runtime),
     offsetof(ke_render_scene_resolve_params, ecs),

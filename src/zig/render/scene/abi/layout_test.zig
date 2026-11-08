@@ -56,7 +56,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [15]c_ulonglong;
+extern const layout_values: [16]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -67,6 +67,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_label_resolve_params, "ui"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "resolver"),
         @offsetOf(abi.c.ke_render_label_resolve_params, "scene"),
+        @offsetOf(abi.c.ke_render_label_resolve_params, "default_font"),
         @sizeOf(abi.c.ke_render_scene_resolve_params),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "runtime"),
         @offsetOf(abi.c.ke_render_scene_resolve_params, "ecs"),

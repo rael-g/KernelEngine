@@ -81,6 +81,7 @@ name   = "ScoreHint"
 parent = "Scoreboard"
 type   = "label"
 [entity.label]
+text      = "Press Space to launch"
 font_size = 56.0
 color     = [0.7, 0.7, 0.7, 1.0]
 anchor    = [0.5, 1.0]

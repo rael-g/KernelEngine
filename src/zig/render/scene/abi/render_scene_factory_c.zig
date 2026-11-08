@@ -73,6 +73,8 @@ pub const ke_render_label_resolve_params = extern struct {
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
     /// Names the label component; borrowed.
     scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+    /// The font a label that names none draws with; copied. NULL leaves such a label without text.
+    default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 /// What the scene resolve needs to register the components and upload what they name.

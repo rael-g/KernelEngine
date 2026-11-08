@@ -47,6 +47,9 @@ extern "C"
         /// Reads the font a label names; optional, borrowed. Without it every label is reported.
         ke_asset_resolver *resolver; ///< [optional]
         ke_render_scene_resolve *scene; ///< Names the label component; borrowed.
+        /// [optional,utf8] The font a label that names none draws with; copied. NULL leaves such a
+        /// label without text.
+        const char *default_font;
     } ke_render_label_resolve_params;
 
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's

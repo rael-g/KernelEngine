@@ -141,7 +141,7 @@ typedef struct renderer
 } renderer;
 
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io,
-                             ke_asset_resolver *assets, const ke_render_service_config *service_config)
+                             ke_asset_resolver *assets, const ke_render_service_config *service_config, const char *font)
 {
     check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = service_config->shader_dir, .io = io }, &r->binder));
     check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref, service_config, &r->service));
@@ -170,7 +170,7 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){ .runtime = rt, .service = core, .device = gpu, .frame = r->frame.ref }, &r->tonemap));
     check("ui pass", ke_render_ui_create(&(ke_render_ui_params){ .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .frame = r->frame.ref }, &r->ui));
     check("label resolve", ke_render_label_resolve_create(&(ke_render_label_resolve_params){
-        .runtime = rt, .service = core, .ui = r->ui.ref, .resolver = assets, .scene = r->scene.ref }, &r->labels));
+        .runtime = rt, .service = core, .ui = r->ui.ref, .resolver = assets, .scene = r->scene.ref, .default_font = font }, &r->labels));
 }
 
 static void renderer_destroy(renderer *r)
@@ -198,8 +198,9 @@ int main(int argc, char **argv)
     beside(shader_dir, argv[0], "shaders");
     snprintf(project_file, sizeof project_file, "%s/Project", project_dir);
 
-    pong_game game = { .font = argc > 1 ? argv[1] : find_font() };
-    if (!game.font)
+    pong_game game = { 0 };
+    const char *font = argc > 1 ? argv[1] : find_font();
+    if (!font)
     {
         fprintf(stderr, "no TrueType font found; pass one as the first argument\n");
         return 1;
@@ -256,7 +257,7 @@ int main(int argc, char **argv)
     service_config.clear_color.z = (float)cfg->get_double(cfg, "render", "clear_color.2", service_config.clear_color.z);
     service_config.clear_color.w = (float)cfg->get_double(cfg, "render", "clear_color.3", service_config.clear_color.w);
     renderer render;
-    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config);
+    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config, font);
 
     ke_physics_2d_handle physics = { 0 };
     ke_physics_2d_box2d_config physics_config = ke_physics_2d_box2d_config_defaults;

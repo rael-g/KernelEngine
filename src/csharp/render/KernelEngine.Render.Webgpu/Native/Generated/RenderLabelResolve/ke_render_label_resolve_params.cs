@@ -25,4 +25,7 @@ public unsafe partial struct ke_render_label_resolve_params
 
     [NativeTypeName("ke_render_scene_resolve *")]
     public KernelEngine.Render.Native.ke_render_scene_resolve* scene;
+
+    [NativeTypeName("const char *")]
+    public sbyte* default_font;
 }

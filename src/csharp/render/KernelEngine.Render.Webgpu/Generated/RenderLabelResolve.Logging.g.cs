@@ -14,14 +14,15 @@ public sealed unsafe partial class RenderLabelResolve
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
     /// <param name="resolver">Reads the font a label names; optional, borrowed. Without it every label is reported.</param>
     /// <param name="scene">Names the label component; borrowed.</param>
-    public RenderLabelResolve(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(CreateLogged(loggerFactory, runtime, service, ui, resolver, scene))
+    /// <param name="defaultFont">The font a label that names none draws with; copied. NULL leaves such a label without text.</param>
+    public RenderLabelResolve(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene, string? defaultFont = default) : this(CreateLogged(loggerFactory, runtime, service, ui, resolver, scene, defaultFont))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene, string? defaultFont)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, service, ui, resolver, scene);
+        return Create(runtime, service, ui, resolver, scene, defaultFont);
     }
 }

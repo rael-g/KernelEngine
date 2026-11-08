@@ -12,9 +12,6 @@ typedef struct pong_game
     ke_ecs           *ecs;
     ke_node_types    *types;
     ke_scene_files   *scenes;
-    /** [utf8] The font file every label is drawn with. */
-    const char *font;
-
     ke_component_id node;
     ke_component_id label;
     ke_component_id body;

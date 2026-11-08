@@ -163,6 +163,7 @@ const label_resolve_before = [_][*c]const u8{"render.ui.labels"};
 fn destroyLabel(self: ?*abi_render_scene_factory.c.ke_render_label_resolve) callconv(.c) void {
     const st: *LabelResolve = @ptrCast(@alignCast(self orelse return));
     _ = st.runtime.unregister_system.?(st.runtime, st.system);
+    if (st.state.default_font) |d| gpa.free(d);
     gpa.destroy(st);
 }
 
@@ -180,6 +181,10 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
+    if (p.default_font) |d| st.state.default_font = gpa.dupeZ(u8, std.mem.span(d)) catch |err| {
+        gpa.destroy(st);
+        return R.code(err);
+    };
     st.terms = .{.{ .cid = p.scene.?.component_ids.?(p.scene).?.label, .access = abi_runtime.c.KE_ACCESS_WRITE }};
     st.queries = .{.{ .terms = st.terms[0..].ptr, .term_count = 1 }};
     var label = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
@@ -194,6 +199,7 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
     var system_id: abi_runtime.c.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &label, &system_id);
     if (registered != R.ok) {
+        if (st.state.default_font) |d| gpa.free(d);
         gpa.destroy(st);
         return registered;
     }
@@ -294,7 +300,7 @@ test "the label resolve registers its system, and fails when the runtime refuses
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
+    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene, .default_font = "res://default.ttf" };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
     try R.check(ke_render_label_resolve_create(&p, &h));
     try rig.rt.received(.register_system).times(1);

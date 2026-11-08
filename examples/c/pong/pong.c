@@ -85,12 +85,6 @@ static ke_label_component *child_label(ke_node_ctx *ctx, pong_game *game, const 
     return child == KE_ENTITY_INVALID ? NULL : ctx->component(ctx, child, game->label);
 }
 
-static void label_font(ke_node_ctx *ctx, pong_game *game, const char *name)
-{
-    ke_label_component *label = child_label(ctx, game, name);
-    if (label) snprintf(label->font, sizeof label->font, "%s", game->font);
-}
-
 static void label_text(ke_node_ctx *ctx, pong_game *game, const char *name, const char *text)
 {
     ke_label_component *label = child_label(ctx, game, name);
@@ -196,19 +190,6 @@ static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
     return KE_OK;
 }
 
-static ke_result scoreboard_ready(ke_node_ctx *ctx, void *user_data)
-{
-    pong_game *game = user_data;
-    while (ctx->next(ctx))
-    {
-        label_font(ctx, game, "ScoreLeft");
-        label_font(ctx, game, "ScoreRight");
-        label_font(ctx, game, "ScoreHint");
-        label_text(ctx, game, "ScoreHint", PONG_LAUNCH_HINT);
-    }
-    return KE_OK;
-}
-
 static ke_result scoreboard_on_goal(ke_node_ctx *ctx, void *user_data)
 {
     pong_game *game = user_data;
@@ -232,17 +213,6 @@ static ke_result scoreboard_on_launch(ke_node_ctx *ctx, void *user_data)
     pong_game *game = user_data;
     while (ctx->next(ctx))
         label_text(ctx, game, "ScoreHint", "");
-    return KE_OK;
-}
-
-static ke_result menu_ready(ke_node_ctx *ctx, void *user_data)
-{
-    pong_game *game = user_data;
-    while (ctx->next(ctx))
-    {
-        label_font(ctx, game, "Title");
-        label_font(ctx, game, "Hint");
-    }
     return KE_OK;
 }
 
@@ -298,8 +268,8 @@ ke_result pong_register(pong_game *game)
     const ke_node_type_desc descs[] = {
         { .name = "pong.paddle", .fields = &pong_paddle_params, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
         { .name = "pong.ball", .fields = &pong_ball_params, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
-        { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .ready = scoreboard_ready, .on = board_handlers, .on_count = 2, .user_data = game },
-        { .name = "pong.menu_controller", .ready = menu_ready, .update = menu_update, .user_data = game },
+        { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .on = board_handlers, .on_count = 2, .user_data = game },
+        { .name = "pong.menu_controller", .update = menu_update, .user_data = game },
     };
     for (size_t i = 0; i < sizeof descs / sizeof descs[0]; ++i)
     {
