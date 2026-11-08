@@ -47,6 +47,9 @@ pub const ke_node_type_desc = extern struct {
     /// The type's own fields, registered as a component; NULL for a type made only of the components
     /// it names in `with`.
     fields: ?*const abi_ecs.c.ke_component_params = std.mem.zeroes(?*const abi_ecs.c.ke_component_params),
+    /// `fields->size` bytes copied into the fields of each node spawned; NULL starts them at the
+    /// defaults of the field table, or zeroed without one.
+    initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
     /// Names of registered components every node of the type carries beside its fields.
     with: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
     with_count: u32 = std.mem.zeroes(u32),

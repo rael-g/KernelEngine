@@ -438,6 +438,10 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         log.warn("node types: type {s} has fields without a name or a size", .{name});
         return error.InvalidArgument;
     };
+    if (desc.initial != null and desc.fields == null) {
+        log.warn("node types: type {s} has initial bytes but no fields", .{name});
+        return error.InvalidArgument;
+    }
     const handlers: []const abi_framework.c.ke_node_handler = if (desc.on_count == 0) &.{} else (desc.on orelse return error.InvalidArgument)[0..desc.on_count];
     for (handlers) |h| {
         if (h.on == null) return error.InvalidArgument;
@@ -476,6 +480,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         try R.check(s.ecs.component_register.?(s.ecs, f, &t.columns[0]));
         t.sizes[0] = f.size;
         t.prototypes[0] = try prototypeOf(s, f.size, f.fields, f.field_count);
+        if (desc.initial) |bytes| @memcpy(t.prototypes[0], @as([*]const u8, @ptrCast(bytes))[0..f.size]);
     }
 
     const type_name = std.mem.span(name);
@@ -1142,6 +1147,45 @@ test "destroying the node types unregisters every system they registered" {
     f.tree.deinit();
     f.rt.deinit();
     f.ecs.deinit();
+}
+
+var attached_paddle: Paddle = .{ .speed = 0, .visits = 0 };
+var paddle_column: Cid = 0;
+
+fn capturePaddle(args: zsub.For(abi_ecs.c.ke_ecs_commands).Args(.attach)) abi_result.c.ke_result {
+    if (args[2] == paddle_column) attached_paddle = @as(*const Paddle, @ptrCast(@alignCast(args[3].?))).*;
+    return R.ok;
+}
+
+test "a type's initial bytes are the fields each spawned node starts with" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const initial: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.initial = &initial;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    _ = commands.when(.attach).does(capturePaddle);
+    var node: Entity = invalid;
+    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &node));
+    try testing.expectEqual(initial, attached_paddle);
+}
+
+test "initial bytes without fields are refused" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const initial: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.fields = null;
+    d.initial = &initial;
+    var cid: Cid = 0;
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
 }
 
 test "the node types leak nothing" {

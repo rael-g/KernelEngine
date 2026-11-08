@@ -13,6 +13,7 @@ const unsigned long long layout_values[] = {
     sizeof(ke_node_type_desc),
     offsetof(ke_node_type_desc, name),
     offsetof(ke_node_type_desc, fields),
+    offsetof(ke_node_type_desc, initial),
     offsetof(ke_node_type_desc, with),
     offsetof(ke_node_type_desc, with_count),
     offsetof(ke_node_type_desc, ready),

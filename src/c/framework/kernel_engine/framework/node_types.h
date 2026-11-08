@@ -131,6 +131,10 @@ extern "C"
         /// type made only of the components it names in `with`.
         const ke_component_params *fields;
 
+        /// [borrowed, default:none] `fields->size` bytes copied into the fields of each node
+        /// spawned; NULL starts them at the defaults of the field table, or zeroed without one.
+        const void *initial;
+
         /// [array_of:with_count, utf8, default:empty] Names of registered components every
         /// node of the type carries beside its fields.
         const char *const *with;
@@ -163,11 +167,11 @@ extern "C"
         void *handle;
 
         /// Registers a node type and the systems of its behaviours.
-        /// @param desc [borrowed] Read during the call; the field table and the names it points
-        ///             at must outlive the node types.
+        /// @param desc [borrowed] Read during the call, `initial` copied; the field table and the
+        ///             names it points at must outlive the node types.
         /// @param out_type [out] Receives the id of the type's tag.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, fields of zero
-        ///         size or a behaviour-less handler; KE_RESULT_NOT_FOUND for a `with` name or a handler's
+        ///         size, `initial` without fields or a behaviour-less handler; KE_RESULT_NOT_FOUND for a `with` name or a handler's
         ///         event never registered; the ecs's or the runtime's code when it refuses.
         ke_result (*register_type)(struct ke_node_types *self, const ke_node_type_desc *desc, ke_component_id *out_type);
 

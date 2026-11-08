@@ -26,10 +26,12 @@ typedef struct pong_paddle
     float         half_height;
 } pong_paddle;
 
+static const pong_paddle pong_paddle_initial = { .speed = 7.0f, .half_height = 0.9f };
+
 static const ke_component_field pong_paddle_fields[] = {
     { "move_action", KE_VARIANT_STRING, offsetof(pong_paddle, move_action.name), sizeof(((pong_paddle *)0)->move_action.name), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "speed", KE_VARIANT_FLOAT, offsetof(pong_paddle, speed), sizeof(float), { KE_VARIANT_FLOAT, { .f = 7.0 } }, NULL, 0 },
-    { "half_height", KE_VARIANT_FLOAT, offsetof(pong_paddle, half_height), sizeof(float), { KE_VARIANT_FLOAT, { .f = 0.9 } }, NULL, 0 },
+    { "speed", KE_VARIANT_FLOAT, offsetof(pong_paddle, speed), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "half_height", KE_VARIANT_FLOAT, offsetof(pong_paddle, half_height), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
 typedef struct pong_ball
@@ -43,11 +45,13 @@ typedef struct pong_ball
     int32_t launches;
 } pong_ball;
 
+static const pong_ball pong_ball_initial = { .initial_speed = 6.0f, .awaiting_launch = true };
+
 static const ke_component_field pong_ball_fields[] = {
     { "hit_sound", KE_VARIANT_STRING, offsetof(pong_ball, hit_sound), sizeof(((pong_ball *)0)->hit_sound), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "score_sound", KE_VARIANT_STRING, offsetof(pong_ball, score_sound), sizeof(((pong_ball *)0)->score_sound), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
-    { "initial_speed", KE_VARIANT_FLOAT, offsetof(pong_ball, initial_speed), sizeof(float), { KE_VARIANT_FLOAT, { .f = 6.0 } }, NULL, 0 },
-    { "awaiting_launch", KE_VARIANT_BOOL, offsetof(pong_ball, awaiting_launch), sizeof(bool), { KE_VARIANT_BOOL, { .b = true } }, NULL, 0 },
+    { "initial_speed", KE_VARIANT_FLOAT, offsetof(pong_ball, initial_speed), sizeof(float), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
+    { "awaiting_launch", KE_VARIANT_BOOL, offsetof(pong_ball, awaiting_launch), sizeof(bool), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
 typedef struct pong_scoreboard
@@ -266,8 +270,8 @@ ke_result pong_register(pong_game *game)
         { .event = game->ball_launched, .on = scoreboard_on_launch },
     };
     const ke_node_type_desc descs[] = {
-        { .name = "pong.paddle", .fields = &pong_paddle_params, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
-        { .name = "pong.ball", .fields = &pong_ball_params, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
+        { .name = "pong.paddle", .fields = &pong_paddle_params, .initial = &pong_paddle_initial, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
+        { .name = "pong.ball", .fields = &pong_ball_params, .initial = &pong_ball_initial, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
         { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .on = board_handlers, .on_count = 2, .user_data = game },
         { .name = "pong.menu_controller", .update = menu_update, .user_data = game },
     };
