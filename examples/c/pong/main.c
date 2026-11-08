@@ -302,7 +302,7 @@ int main(int argc, char **argv)
         .name = "pong.first_scene", .phase = KE_PHASE_STARTUP, .user_data = &first, .execute = load_first_scene, .exclusive = true }, &first_system));
 
     double previous = now_seconds();
-    while (!window.ref->should_close(window.ref) && !game.quit_requested)
+    while (!window.ref->should_close(window.ref) && !rt.ref->exit_requested(rt.ref))
     {
         window.ref->poll_events(window.ref);
         double current = now_seconds();

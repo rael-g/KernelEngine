@@ -59,7 +59,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ACCESS_WRITE), @as(i64, abi.c.KE_ACCESS_WRITE));
 }
 
-extern const layout_values: [51]c_ulonglong;
+extern const layout_values: [53]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -106,6 +106,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_runtime, "tick"),
         @offsetOf(abi.c.ke_runtime, "flush_render"),
         @offsetOf(abi.c.ke_runtime, "unload_modules"),
+        @offsetOf(abi.c.ke_runtime, "request_exit"),
+        @offsetOf(abi.c.ke_runtime, "exit_requested"),
         @sizeOf(abi.c.ke_runtime_handle),
         @offsetOf(abi.c.ke_runtime_handle, "ref"),
         @offsetOf(abi.c.ke_runtime_handle, "destroy"),

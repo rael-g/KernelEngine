@@ -44,7 +44,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_ACTION_NAME_MAX), @as(i128, abi.c.KE_ACTION_NAME_MAX));
 }
 
-extern const layout_values: [55]c_ulonglong;
+extern const layout_values: [56]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -87,6 +87,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_ctx, "spawn"),
         @offsetOf(abi.c.ke_node_ctx, "destroy"),
         @offsetOf(abi.c.ke_node_ctx, "raise"),
+        @offsetOf(abi.c.ke_node_ctx, "exit"),
         @sizeOf(abi.c.ke_node_types),
         @offsetOf(abi.c.ke_node_types, "handle"),
         @offsetOf(abi.c.ke_node_types, "register_type"),

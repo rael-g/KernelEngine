@@ -222,7 +222,7 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
     while (ctx->next(ctx))
     {
         if (ctx->pressed(ctx, &game->launch)) return change_scene(ctx, game, PONG_MAIN_SCENE);
-        if (ctx->pressed(ctx, &game->quit)) game->quit_requested = true;
+        if (ctx->pressed(ctx, &game->quit)) ctx->exit(ctx);
     }
     return KE_OK;
 }

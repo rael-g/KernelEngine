@@ -199,6 +199,7 @@ const RuntimeState = struct {
     next_system_id: u64,
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
+    exit: std.atomic.Value(bool),
     fixed_accumulator: f32,
     started: bool,
     shut_down: bool,
@@ -1131,6 +1132,20 @@ fn reported(failure: PhaseFailure, comptime what: []const u8) abi_result.c.ke_re
 /// failure. A tick returns
 /// before that phase finishes, so a failure of the phase reaches the caller only here or at the
 /// next tick.
+/// Slot `request_exit`. Sets the flag the host reads; a null runtime is ignored.
+fn runtimeRequestExit(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
+    const rt = self orelse return;
+    if (rt.handle == null) return;
+    handleOf(rt).state.exit.store(true, .release);
+}
+
+/// Slot `exit_requested`. False for a null runtime.
+fn runtimeExitRequested(self: ?*abi_runtime.c.ke_runtime) callconv(.c) bool {
+    const rt = self orelse return false;
+    if (rt.handle == null) return false;
+    return handleOf(rt).state.exit.load(.acquire);
+}
+
 fn runtimeFlushRender(self: ?*abi_runtime.c.ke_runtime) callconv(.c) abi_result.c.ke_result {
     if (self == null or self.?.handle == null) {
         return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
@@ -1261,6 +1276,9 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
     h.api.unload_modules = &runtimeUnloadModules;
+    h.api.request_exit = &runtimeRequestExit;
+    h.api.exit_requested = &runtimeExitRequested;
+    h.state.exit = std.atomic.Value(bool).init(false);
 
     out.* = .{ .ref = &h.api, .destroy = &runtimeDestroy };
     return R.ok;
@@ -2153,6 +2171,15 @@ test "a system registered from a render body is queued instead of waiting on the
 
     try testing.expect(ticked(r.rt(), 0.001));
     try testing.expectEqual(@as(u32, 1), m.late_runs);
+}
+
+test "a request to exit is recorded and read back, and a fresh runtime has none" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    const rt = f.runtime_h.ref;
+    try testing.expect(!rt.?.exit_requested.?(rt));
+    rt.?.request_exit.?(rt);
+    try testing.expect(rt.?.exit_requested.?(rt));
 }
 
 test "a zero fixed step, catch-up budget or system count is refused, not replaced by a default" {

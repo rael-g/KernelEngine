@@ -274,6 +274,13 @@ fn destroy(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) abi_re
     return s.tree.destroy_node_deferred.?(s.tree, node, w.api.commands);
 }
 
+/// Slot `exit`. Forwards the request to the runtime.
+fn exit(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) void {
+    const w = walkOf(ctx) orelse return;
+    const rt = w.behaviour.owner.state.runtime;
+    rt.request_exit.?(rt);
+}
+
 /// Slot `raise`. Records an entity carrying a copy of `data` as the event.
 fn raise(ctx: ?*abi_framework.c.ke_node_ctx, event_cid: Cid, data: ?*const anyopaque, size: usize) callconv(.c) abi_result.c.ke_result {
     const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
@@ -318,6 +325,7 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
             .spawn = &spawn,
             .destroy = &destroy,
             .raise = &raise,
+            .exit = &exit,
         },
         .behaviour = b,
         .segs = &.{},
@@ -867,6 +875,25 @@ test "an action reference is resolved by name on its first read, action 0 among 
     try testing.expect(launch_ref.resolved);
     try testing.expectEqual(@as(i32, 0), launch_ref.id);
     try actions.received(.get_action_id).times(1);
+}
+
+fn askExit(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    ctx.?.exit.?(ctx);
+    return R.ok;
+}
+
+test "exit forwards the request to the runtime" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var d = paddleDesc();
+    d.update = askExit;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var rows: Rows = .{};
+    rows.build();
+    try runSystem(registered[0], &rows);
+    try f.rt.received(.request_exit).times(1);
 }
 
 test "component reaches another node's component and is null for one the node does not carry" {

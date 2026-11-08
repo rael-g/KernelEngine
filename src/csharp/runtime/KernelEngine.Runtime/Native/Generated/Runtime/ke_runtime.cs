@@ -43,4 +43,10 @@ public unsafe partial struct ke_runtime
 
     [NativeTypeName("void (*)(ke_runtime *)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, void> unload_modules;
+
+    [NativeTypeName("void (*)(ke_runtime *)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, void> request_exit;
+
+    [NativeTypeName("bool (*)(ke_runtime *)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, bool> exit_requested;
 }

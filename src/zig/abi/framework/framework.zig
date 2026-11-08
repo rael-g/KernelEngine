@@ -86,6 +86,12 @@ pub const NodeCtx = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .exit = &struct {
+                fn call(self: ?*c.ke_node_ctx) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.exit(state);
+                }
+            }.call,
         };
     }
 
@@ -142,6 +148,11 @@ pub const NodeCtx = struct {
     /// this tick that run after it is applied, and gone at the next PreUpdate.
     pub fn raise(self: NodeCtx, event: c.ke_component_id, data: ?*const anyopaque, size: usize) Error!void {
         try checkResult(self.ptr.raise.?(self.ptr, event, data, size));
+    }
+
+    /// Asks the runtime for the program to end; the host stops once it reads the request.
+    pub fn exit(self: NodeCtx) void {
+        return self.ptr.exit.?(self.ptr);
     }
 
 };

@@ -45,6 +45,8 @@ const unsigned long long layout_values[] = {
     offsetof(ke_runtime, tick),
     offsetof(ke_runtime, flush_render),
     offsetof(ke_runtime, unload_modules),
+    offsetof(ke_runtime, request_exit),
+    offsetof(ke_runtime, exit_requested),
     sizeof(ke_runtime_handle),
     offsetof(ke_runtime_handle, ref),
     offsetof(ke_runtime_handle, destroy),

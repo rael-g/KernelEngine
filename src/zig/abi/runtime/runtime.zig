@@ -112,6 +112,18 @@ pub const Runtime = struct {
                     return T.unloadModules(state);
                 }
             }.call,
+            .request_exit = &struct {
+                fn call(self: ?*c.ke_runtime) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.requestExit(state);
+                }
+            }.call,
+            .exit_requested = &struct {
+                fn call(self: ?*c.ke_runtime) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.exitRequested(state);
+                }
+            }.call,
         };
     }
 
@@ -185,6 +197,17 @@ pub const Runtime = struct {
     /// host that did not. A second call does nothing.
     pub fn unloadModules(self: Runtime) void {
         return self.ptr.unload_modules.?(self.ptr);
+    }
+
+    /// Records that the program should end; any system or the host may ask, from any thread. Nothing
+    /// stops: the host ends its loop when it reads exit_requested.
+    pub fn requestExit(self: Runtime) void {
+        return self.ptr.request_exit.?(self.ptr);
+    }
+
+    /// Whether a request to end the program was recorded.
+    pub fn exitRequested(self: Runtime) bool {
+        return self.ptr.exit_requested.?(self.ptr);
     }
 
     /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.

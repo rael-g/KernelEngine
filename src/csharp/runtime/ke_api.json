@@ -1456,6 +1456,24 @@
           "return_doc": null,
           "params": [],
           "receiver": "ke_runtime *"
+        },
+        {
+          "name": "request_exit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Records that the program should end; any system or the host may ask, from any thread. Nothing stops: the host ends its loop when it reads exit_requested.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "exit_requested",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether a request to end the program was recorded.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_runtime *"
         }
       ]
     },

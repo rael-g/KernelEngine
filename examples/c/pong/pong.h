@@ -23,8 +23,6 @@ typedef struct pong_game
 
     /** The node the current scene is instantiated under. */
     ke_entity scene;
-    /** Set once the menu asks the game to close. */
-    bool quit_requested;
 } pong_game;
 
 /**

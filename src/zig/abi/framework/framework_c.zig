@@ -110,6 +110,8 @@ pub const ke_node_ctx = extern struct {
     /// Records data as an event of type event, delivered to the on handlers of the PostUpdate of
     /// this tick that run after it is applied, and gone at the next PreUpdate.
     raise: ?*const fn (?*ke_node_ctx, ke_component_id, ?*const anyopaque, usize) callconv(.c) abi_result.c.ke_result = null,
+    /// Asks the runtime for the program to end; the host stops once it reads the request.
+    exit: ?*const fn (?*ke_node_ctx) callconv(.c) void = null,
 };
 
 /// Node types and the events between them: each behaviour of a registered type runs as a system

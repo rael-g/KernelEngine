@@ -108,6 +108,9 @@ extern "C"
         /// @return KE_OK; KE_RESULT_NOT_FOUND for an event never registered,
         ///         KE_RESULT_INVALID_ARGUMENT for a size that is not the event's, or the queue's code.
         ke_result (*raise)(ke_node_ctx *self, ke_component_id event, const void *data, size_t size);
+
+        /// Asks the runtime for the program to end; the host stops once it reads the request.
+        void (*exit)(ke_node_ctx *self);
     };
 
     /// One event a node type handles, and the behaviour that handles it.

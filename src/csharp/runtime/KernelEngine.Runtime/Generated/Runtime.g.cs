@@ -374,6 +374,18 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         Handle->unload_modules(Handle);
     }
 
+    /// <summary>Records that the program should end; any system or the host may ask, from any thread. Nothing stops: the host ends its loop when it reads exit_requested.</summary>
+    public void RequestExit()
+    {
+        Handle->request_exit(Handle);
+    }
+
+    /// <summary>Whether a request to end the program was recorded.</summary>
+    public bool ExitRequested()
+    {
+        return Handle->exit_requested(Handle);
+    }
+
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
     public void Dispose()
     {

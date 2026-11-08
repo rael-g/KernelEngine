@@ -186,6 +186,11 @@ pub const ke_runtime = extern struct {
     /// everything a module's unload hook uses is still alive; destroying the runtime calls it for a
     /// host that did not. A second call does nothing.
     unload_modules: ?*const fn (?*ke_runtime) callconv(.c) void = null,
+    /// Records that the program should end; any system or the host may ask, from any thread. Nothing
+    /// stops: the host ends its loop when it reads exit_requested.
+    request_exit: ?*const fn (?*ke_runtime) callconv(.c) void = null,
+    /// Whether a request to end the program was recorded.
+    exit_requested: ?*const fn (?*ke_runtime) callconv(.c) bool = null,
 };
 
 pub const ke_runtime_handle = extern struct {

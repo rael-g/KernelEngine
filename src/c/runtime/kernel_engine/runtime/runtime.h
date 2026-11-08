@@ -225,6 +225,13 @@ typedef struct ke_runtime {
     /// while everything a module's unload hook uses is still alive; destroying the runtime calls
     /// it for a host that did not. A second call does nothing.
     void (*unload_modules)(ke_runtime *self);
+
+    /// Records that the program should end; any system or the host may ask, from any thread.
+    /// Nothing stops: the host ends its loop when it reads exit_requested.
+    void (*request_exit)(ke_runtime *self);
+
+    /// Whether a request to end the program was recorded.
+    bool (*exit_requested)(ke_runtime *self);
 } ke_runtime;
 
 /// [owner]
