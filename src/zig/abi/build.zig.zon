@@ -13,6 +13,7 @@
         .abi_configuration = .{ .path = "configuration" },
         .abi_ecs = .{ .path = "ecs" },
         .abi_ecs_variant = .{ .path = "ecs_variant" },
+        .abi_engine_node_types = .{ .path = "engine_node_types" },
         .abi_file_system = .{ .path = "file_system" },
         .abi_framework = .{ .path = "framework" },
         .abi_framework_components = .{ .path = "framework_components" },

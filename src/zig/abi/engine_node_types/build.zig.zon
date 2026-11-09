@@ -1,0 +1,18 @@
+.{
+    .name = .abi_engine_node_types,
+    .version = "0.1.0",
+    .fingerprint = 0xe62c4acc4b94a23f,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_audio_components = .{ .path = "../audio_components" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_framework = .{ .path = "../framework" },
+        .abi_physics_components = .{ .path = "../physics_components" },
+        .abi_render_components = .{ .path = "../render_components" },
+        .abi_render_handles = .{ .path = "../render_handles" },
+        .abi_result = .{ .path = "../result" },
+        .abi_spatial = .{ .path = "../spatial" },
+        .abi_ui_components = .{ .path = "../ui_components" },
+    },
+    .paths = .{"."},
+}

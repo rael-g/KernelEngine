@@ -121,8 +121,8 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                     fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
                     fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
                     fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
-                    var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
-                    fieldsTexts.Add(fieldsEnumNamesAt);
+                    var fieldsEnumNamesAt = fields[fieldsAt].EnumNames.Length == 0 ? 0 : Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                    if (fieldsEnumNamesAt != 0) fieldsTexts.Add(fieldsEnumNamesAt);
                     for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
                     {
                         fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));
@@ -329,8 +329,8 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                     fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
                     fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
                     fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
-                    var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
-                    fieldsTexts.Add(fieldsEnumNamesAt);
+                    var fieldsEnumNamesAt = fields[fieldsAt].EnumNames.Length == 0 ? 0 : Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                    if (fieldsEnumNamesAt != 0) fieldsTexts.Add(fieldsEnumNamesAt);
                     for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
                     {
                         fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));

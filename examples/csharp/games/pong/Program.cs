@@ -86,7 +86,7 @@ using var actions = new DefaultInputActions(runtime, input, config, "input");
 using var types = new DefaultNodeTypes(runtime, ecs, tree, actions);
 using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
 
-EngineNodeTypes.Register(types);
+types.RegisterEngineNodeTypes();
 var game = new Game(types);
 
 game.OpenSlot((INativeEcsCommands)runtime.Commands(), $"res://scenes/{config.GetString("project", "default_scene", "Menu")}.scene.toml");

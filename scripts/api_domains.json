@@ -846,6 +846,34 @@
       ]
     },
     {
+      "name": "engine_node_types",
+      "headers": [
+        "src/c/framework/kernel_engine/framework/engine_node_types.h"
+      ],
+      "includeDirs": [
+        "src/c/framework",
+        "src/c/audio",
+        "src/c/physics",
+        "src/c/render",
+        "src/c/spatial",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/framework/engine_node_types.ke_api.json",
+      "namespace": "KernelEngine.Framework.Nodes",
+      "nativeNamespace": "KernelEngine.Framework.Nodes.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Common",
+        "KernelEngine.Render",
+        "KernelEngine.Physics",
+        "KernelEngine.Audio.Native"
+      ]
+    },
+    {
       "name": "input_actions",
       "headers": [
         "src/c/framework/kernel_engine/framework/input_actions.h"

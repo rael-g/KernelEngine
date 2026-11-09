@@ -21,35 +21,6 @@ static class Bytes
     public static byte[] Of<T>(T value) where T : unmanaged => MemoryMarshal.AsBytes(new[] { value }.AsSpan()).ToArray();
 }
 
-/// <summary>The engine's node types the scenes name, with the values their nodes are born with.</summary>
-static class EngineNodeTypes
-{
-    /// <summary>Registers the engine node types Pong's scenes use.</summary>
-    public static void Register(INodeTypes types)
-    {
-        var transform = Bytes.Of(new TransformComponent { Rotation = Quaternion.Identity, Scale = Vector3.One });
-        var transform2d = Bytes.Of(new Transform2dComponent { Scale = Vector2.One });
-        var camera = Bytes.Of(new CameraComponent { Fov = 60.0f, NearPlane = 0.1f, FarPlane = 1000.0f, OrthographicSize = 5.0f, CullMask = 0xFFFFFFFFu });
-        var ambient = Bytes.Of(new AmbientLightComponent { Color = new Vector3(0.05f) });
-        var sprite = Bytes.Of(new Sprite2dComponent { Region = new Vector4(0, 0, 1, 1), Size = Vector2.One, Pivot = new Vector2(0.5f), Color = Vector4.One, AlphaMode = AlphaMode.Opaque, AlphaCutoff = 0.5f });
-        var label = new LabelComponent { FontSize = 32.0f };
-        label.Color[0] = 1.0f; label.Color[1] = 1.0f; label.Color[2] = 1.0f; label.Color[3] = 1.0f;
-        var body = Bytes.Of(new Body2dComponent { GravityScale = 1.0f });
-        var collider = Bytes.Of(new Collider2dComponent { HalfExtents = new Vector2(0.5f), Radius = 0.5f, Density = 1.0f, Friction = 0.3f, Layer = 1, Mask = 0xFFFFFFFFu });
-        var sound = Bytes.Of(new SoundComponent { Volume = 1.0f, Pitch = 1.0f });
-
-        types.RegisterType("ambient_light", with: [new() { Name = "ambient_light", Initial = ambient }, new() { Name = "transform", Initial = transform }]);
-        types.RegisterType("body2d", with: [new() { Name = "body2d", Initial = body }, new() { Name = "transform2d", Initial = transform2d }]);
-        types.RegisterType("camera", with: [new() { Name = "camera", Initial = camera }, new() { Name = "transform", Initial = transform }]);
-        types.RegisterType("collider2d", with: [new() { Name = "collider2d", Initial = collider }, new() { Name = "transform2d", Initial = transform2d }]);
-        types.RegisterType("label", with: [new() { Name = "label", Initial = Bytes.Of(label) }, new() { Name = "transform", Initial = transform }]);
-        types.RegisterType("sound", with: [new() { Name = "sound", Initial = sound }, new() { Name = "transform", Initial = transform }]);
-        types.RegisterType("sprite2d", with: [new() { Name = "sprite2d", Initial = sprite }, new() { Name = "transform2d", Initial = transform2d }]);
-        types.RegisterType("transform2d", with: [new() { Name = "transform2d", Initial = transform2d }]);
-        types.RegisterType("transform", with: [new() { Name = "transform", Initial = transform }]);
-    }
-}
-
 struct Paddle
 {
     public ActionRef MoveAction;
@@ -104,7 +75,7 @@ static class Layout
     /// <summary>The alignment the runtime gives <typeparamref name="T"/>.</summary>
     public static nuint AlignOf<T>() where T : unmanaged
     {
-        var probe = new Probe<T>();
+        var probe = new Probe<T> { Head = 1 };
         return (nuint)Unsafe.ByteOffset(ref probe.Head, ref Unsafe.As<T, byte>(ref probe.Value));
     }
 
@@ -159,10 +130,7 @@ sealed class Game
         _launch.NameText = "Launch";
         _quit.NameText = "Quit";
 
-        NodeWith[] bodyWith = [
-            new() { Name = "body2d", Initial = Bytes.Of(new Body2dComponent { GravityScale = 1.0f }) },
-            new() { Name = "transform2d", Initial = Bytes.Of(new Transform2dComponent { Scale = Vector2.One }) },
-        ];
+        var bodyWith = EngineNodeTypes.Body2dNodeWith;
 
         var paddle = new Paddle();
         types.RegisterType("pong.paddle", (nuint)Unsafe.SizeOf<Paddle>(), Layout.AlignOf<Paddle>(),
