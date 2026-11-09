@@ -6,12 +6,12 @@
 namespace KernelEngine.Physics.Box2D;
 
 /// <summary>Creates a 2D physics world.</summary>
-public sealed unsafe partial class Box2dPhysics2D : KernelEngine.Physics.Physics2D
+public sealed unsafe partial class Box2DPhysics2D : KernelEngine.Physics.Physics2D
 {
     /// <summary>Creates a 2D physics world.</summary>
     /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
     /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2dPhysics2D(float gravityX, float gravityY) : base(Create(gravityX, gravityY))
+    public Box2DPhysics2D(float gravityX, float gravityY) : base(Create(gravityX, gravityY))
     {
     }
 

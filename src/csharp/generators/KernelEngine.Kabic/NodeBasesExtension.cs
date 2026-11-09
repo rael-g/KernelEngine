@@ -47,7 +47,8 @@ public sealed class NodeBasesExtension : IKabicExtension
         o.Append($"/// <summary>A node carrying <c>{registered}</c>: what a node type deriving from it reaches of it, and how it is born.</summary>\n");
         o.Append($"public abstract partial class {name} : {component.TagValue("base") ?? "Node"}\n{{\n");
         o.Append($"    /// <summary>The <c>{registered}</c> of the node a behaviour is visiting.</summary>\n");
-        var accessor = Idioms.Pascal(registered) == name ? type : Idioms.Pascal(registered);
+        var accessor = Idioms.Pascal(registered) != name ? Idioms.Pascal(registered)
+            : System.Text.RegularExpressions.Regex.Replace(name, "[0-9]+D$", "") is { Length: > 0 } bare && bare != name ? bare : type;
         o.Append($"    protected ref {type} {accessor} => ref Component<{type}>(\"{registered}\");\n\n");
         o.Append("    /// <inheritdoc/>\n");
         o.Append($"    protected internal override IEnumerable<NodeWith> With => [.. base.With, {born}];\n");

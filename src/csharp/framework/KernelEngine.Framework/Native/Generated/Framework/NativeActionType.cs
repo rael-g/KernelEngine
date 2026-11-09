@@ -19,7 +19,7 @@ namespace KernelEngine.Framework.Native;
 public enum NativeActionType : uint
 {
     Button = 0,
-    Axis1d = 1,
-    Axis2d = 2,
-    Axis3d = 3,
+    Axis1D = 1,
+    Axis2D = 2,
+    Axis3D = 3,
 }

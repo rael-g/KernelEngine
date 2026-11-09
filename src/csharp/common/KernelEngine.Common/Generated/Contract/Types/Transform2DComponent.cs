@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace KernelEngine.Common;
 
-public partial struct Transform2dComponent
+public partial struct Transform2DComponent
 {
     public System.Numerics.Vector2 Position;
 

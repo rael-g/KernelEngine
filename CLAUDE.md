@@ -126,7 +126,7 @@ engine.Run();
 partial class Paddle : Body2D
 {
     [Export] public partial float Speed { get; set; }
-    void FixedUpdate() => Body2d.Velocity = new Vector2(0, Speed);
+    void FixedUpdate() => Body.Velocity = new Vector2(0, Speed);
 }
 ```
 

@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace KernelEngine.Physics;
 
-public partial struct Collider2dComponent
+public partial struct Collider2DComponent
 {
     public ShapeKind2d Kind;
     public System.Numerics.Vector2 HalfExtents;

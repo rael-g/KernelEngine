@@ -31,8 +31,8 @@ partial class Paddle : Body2D
     {
         var vy = Axis(MoveAction) * Speed;
         var maxY = FieldHalfHeight - WallHalfThickness - HalfHeight;
-        if (vy > 0 && Transform2d.Position.Y >= maxY) vy = 0;
-        if (vy < 0 && Transform2d.Position.Y <= -maxY) vy = 0;
-        Body2d.Velocity = new Vector2(0.0f, vy);
+        if (vy > 0 && Transform2D.Position.Y >= maxY) vy = 0;
+        if (vy < 0 && Transform2D.Position.Y <= -maxY) vy = 0;
+        Body.Velocity = new Vector2(0.0f, vy);
     }
 }

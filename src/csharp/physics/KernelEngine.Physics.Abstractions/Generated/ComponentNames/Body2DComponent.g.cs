@@ -3,7 +3,7 @@
 
 namespace KernelEngine.Physics;
 
-public partial struct Body2dComponent : global::KernelEngine.Interop.IComponentName
+public partial struct Body2DComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "body2d";

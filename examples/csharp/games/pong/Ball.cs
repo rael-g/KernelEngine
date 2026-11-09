@@ -56,15 +56,15 @@ partial class Ball(Game game) : Body2D
         if (LaunchRequested) Serve();
         if (AwaitingLaunch) return;
 
-        var bounced = LastVelocity.X != 0 && (Body2d.Velocity.X > 0) != (LastVelocity.X > 0);
-        LastVelocity = Body2d.Velocity;
+        var bounced = LastVelocity.X != 0 && (Body.Velocity.X > 0) != (LastVelocity.X > 0);
+        LastVelocity = Body.Velocity;
         if (bounced) PlaySound(HitSound, HitVolume);
 
-        var leftScored = Transform2d.Position.X > FieldHalfWidth + GoalLineMargin;
-        if (!leftScored && Transform2d.Position.X >= -FieldHalfWidth - GoalLineMargin) return;
+        var leftScored = Transform2D.Position.X > FieldHalfWidth + GoalLineMargin;
+        if (!leftScored && Transform2D.Position.X >= -FieldHalfWidth - GoalLineMargin) return;
         Raise(new GoalScored { LeftScored = leftScored });
-        Transform2d.Position = Vector2.Zero;
-        Body2d.Velocity = Vector2.Zero;
+        Transform2D.Position = Vector2.Zero;
+        Body.Velocity = Vector2.Zero;
         LastVelocity = Vector2.Zero;
         AwaitingLaunch = true;
         PlaySound(ScoreSound, ScoreVolume);
@@ -78,7 +78,7 @@ partial class Ball(Game game) : Body2D
         var dirX = Launches % 2 == 0 ? 1.0f : -1.0f;
         Launches++;
         var dirY = (Random.Shared.NextSingle() - 0.5f) * ServeSpread;
-        Body2d.Velocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
-        LastVelocity = Body2d.Velocity;
+        Body.Velocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
+        LastVelocity = Body.Velocity;
     }
 }

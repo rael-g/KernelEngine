@@ -6,14 +6,14 @@
 namespace KernelEngine.Physics;
 
 /// <summary>Registers the system that creates, steps, and syncs 2D bodies.</summary>
-public sealed unsafe partial class PhysicsBody2dModule : IDisposable
+public sealed unsafe partial class PhysicsBody2DModule : IDisposable
 {
     /// <summary>Registers the system that creates, steps, and syncs 2D bodies.</summary>
     /// <param name="runtime">Registers the system; borrowed, must outlive the module.</param>
     /// <param name="ecs">Resolves the component ids; borrowed.</param>
     /// <param name="physics">The world to drive; borrowed.</param>
     /// <param name="sceneTree">Tells when a collider's ancestors may have changed; borrowed, must outlive the module.</param>
-    public PhysicsBody2dModule(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : this(Create(runtime, ecs, physics, sceneTree))
+    public PhysicsBody2DModule(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : this(Create(runtime, ecs, physics, sceneTree))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -25,7 +25,7 @@ public sealed unsafe partial class PhysicsBody2dModule : IDisposable
 
     private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
 
-    private PhysicsBody2dModule(KernelEngine.Physics.Native.ke_physics_body2d_module_handle handle) => _handle = handle;
+    private PhysicsBody2DModule(KernelEngine.Physics.Native.ke_physics_body2d_module_handle handle) => _handle = handle;
 
     private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
     {

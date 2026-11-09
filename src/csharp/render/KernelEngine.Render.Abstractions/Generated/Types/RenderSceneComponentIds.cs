@@ -13,7 +13,7 @@ public partial struct RenderSceneComponentIds
     public global::KernelEngine.Ecs.ComponentId SpotLight;
     public global::KernelEngine.Ecs.ComponentId AmbientLight;
     public global::KernelEngine.Ecs.ComponentId Skybox;
-    public global::KernelEngine.Ecs.ComponentId Sprite2d;
+    public global::KernelEngine.Ecs.ComponentId Sprite2D;
     public global::KernelEngine.Ecs.ComponentId Label;
     public global::KernelEngine.Ecs.ComponentId WorldTransform;
 }

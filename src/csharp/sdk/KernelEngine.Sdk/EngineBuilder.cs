@@ -159,8 +159,8 @@ public sealed class EngineBuilder
     {
         var gx = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0);
         var gy = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0);
-        var world = new Box2dPhysics2D(p.Logging, gx, gy);
-        return [world, new Physics.PhysicsBody2dModule(p.Logging, p.Runtime, p.Ecs, world, p.Tree)];
+        var world = new Box2DPhysics2D(p.Logging, gx, gy);
+        return [world, new Physics.PhysicsBody2DModule(p.Logging, p.Runtime, p.Ecs, world, p.Tree)];
     }
 
     /// <summary>The default audio: miniaudio, and the module playing the sound components.</summary>

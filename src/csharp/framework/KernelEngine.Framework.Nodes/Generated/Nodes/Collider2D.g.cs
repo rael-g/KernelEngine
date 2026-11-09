@@ -14,8 +14,8 @@ namespace KernelEngine.Framework.Nodes;
 public abstract partial class Collider2D : Node2D
 {
     /// <summary>The <c>collider2d</c> of the node a behaviour is visiting.</summary>
-    protected ref Collider2dComponent Collider2d => ref Component<Collider2dComponent>("collider2d");
+    protected ref Collider2DComponent Collider => ref Component<Collider2DComponent>("collider2d");
 
     /// <inheritdoc/>
-    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("collider2d", EngineNodeTypes.Collider2dNodeInitial)];
+    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("collider2d", EngineNodeTypes.Collider2DNodeInitial)];
 }

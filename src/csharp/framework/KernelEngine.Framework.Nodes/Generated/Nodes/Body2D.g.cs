@@ -14,8 +14,8 @@ namespace KernelEngine.Framework.Nodes;
 public abstract partial class Body2D : Node2D
 {
     /// <summary>The <c>body2d</c> of the node a behaviour is visiting.</summary>
-    protected ref Body2dComponent Body2d => ref Component<Body2dComponent>("body2d");
+    protected ref Body2DComponent Body => ref Component<Body2DComponent>("body2d");
 
     /// <inheritdoc/>
-    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("body2d", EngineNodeTypes.Body2dNodeInitial)];
+    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("body2d", EngineNodeTypes.Body2DNodeInitial)];
 }

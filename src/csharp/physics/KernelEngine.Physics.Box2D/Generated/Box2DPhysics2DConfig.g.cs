@@ -5,8 +5,8 @@
 
 namespace KernelEngine.Physics.Box2D;
 
-/// <summary>The values <see cref="Box2dPhysics2D"/> is created with, each starting at its default.</summary>
-public sealed record Box2dPhysics2DConfig : KernelEngine.Configuration.IConfigSection<Box2dPhysics2DConfig>
+/// <summary>The values <see cref="Box2DPhysics2D"/> is created with, each starting at its default.</summary>
+public sealed record Box2DPhysics2DConfig : KernelEngine.Configuration.IConfigSection<Box2DPhysics2DConfig>
 {
     /// <summary>Horizontal gravity, in metres per second squared.</summary>
     public float GravityX { get; init; } = 0f;
@@ -15,9 +15,9 @@ public sealed record Box2dPhysics2DConfig : KernelEngine.Configuration.IConfigSe
     public float GravityY { get; init; } = 0f;
 
     /// <inheritdoc/>
-    public static Box2dPhysics2DConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)
+    public static Box2DPhysics2DConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)
     {
-        var defaults = new Box2dPhysics2DConfig();
+        var defaults = new Box2DPhysics2DConfig();
         return new()
         {
             GravityX = (float)configuration.GetDouble(section, "gravity_x", defaults.GravityX),
@@ -26,14 +26,14 @@ public sealed record Box2dPhysics2DConfig : KernelEngine.Configuration.IConfigSe
     }
 
     /// <inheritdoc/>
-    public Box2dPhysics2DConfig Value => this;
+    public Box2DPhysics2DConfig Value => this;
 }
 
-public sealed unsafe partial class Box2dPhysics2D
+public sealed unsafe partial class Box2DPhysics2D
 {
     /// <summary>Creates a 2D physics world.</summary>
     /// <param name="config">The values it is created with.</param>
-    public Box2dPhysics2D(Box2dPhysics2DConfig config) : this(config.GravityX, config.GravityY)
+    public Box2DPhysics2D(Box2DPhysics2DConfig config) : this(config.GravityX, config.GravityY)
     {
     }
 }

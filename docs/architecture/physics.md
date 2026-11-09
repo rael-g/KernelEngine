@@ -36,8 +36,8 @@ a body only once the scene tree's hierarchy generation, the set of bodies or the
 colliders has changed.
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
-plus one, with `KE_BODY_2D_INVALID` as zero. The managed `AddBox2dPhysics2D` creates it with the gravity of
-"runtime.physics_2d"; `Body2DModule` creates the module in `OnLoad`.
+plus one, with `KE_BODY_2D_INVALID` as zero. The SDK's `EngineBuilder.DefaultPhysics` creates it with the gravity of
+"runtime.physics_2d", beside the `PhysicsBody2DModule` that syncs the bodies.
 
 ## What the parts agree on without a contract
 

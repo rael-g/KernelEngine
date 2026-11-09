@@ -51,7 +51,7 @@ public interface IInputActions : IDisposable
     bool IsActionDown(int actionId);
     bool WasActionPressed(int actionId);
     bool WasActionReleased(int actionId);
-    float GetAxis1d(int actionId);
-    (float OutX, float OutY) GetAxis2d(int actionId);
-    (float OutX, float OutY, float OutZ) GetAxis3d(int actionId);
+    float GetAxis1D(int actionId);
+    (float OutX, float OutY) GetAxis2D(int actionId);
+    (float OutX, float OutY, float OutZ) GetAxis3D(int actionId);
 }

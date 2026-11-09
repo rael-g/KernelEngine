@@ -10,9 +10,9 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Render;
 
 /// <summary>The text of <c>ke_sprite2d_component</c>'s fixed character arrays.</summary>
-public static class Sprite2dComponentText
+public static class Sprite2DComponentText
 {
-    extension(ref Sprite2dComponent self)
+    extension(ref Sprite2DComponent self)
     {
         /// <summary><c>texture</c> as text.</summary>
         public string Texture

@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Physics;
 
-public sealed unsafe partial class PhysicsBody2dModule
+public sealed unsafe partial class PhysicsBody2DModule
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
@@ -13,7 +13,7 @@ public sealed unsafe partial class PhysicsBody2dModule
     /// <param name="ecs">Resolves the component ids; borrowed.</param>
     /// <param name="physics">The world to drive; borrowed.</param>
     /// <param name="sceneTree">Tells when a collider's ancestors may have changed; borrowed, must outlive the module.</param>
-    public PhysicsBody2dModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : this(CreateLogged(loggerFactory, runtime, ecs, physics, sceneTree))
+    public PhysicsBody2DModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : this(CreateLogged(loggerFactory, runtime, ecs, physics, sceneTree))
     {
     }
 

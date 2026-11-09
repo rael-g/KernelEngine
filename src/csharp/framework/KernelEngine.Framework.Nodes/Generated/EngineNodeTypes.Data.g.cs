@@ -30,11 +30,11 @@ public static class EngineNodeTypes
     }
 
     /// <summary>The value of <c>ke_transform2d_node_initial</c>.</summary>
-    public static Transform2dComponent Transform2dNodeInitial
+    public static Transform2DComponent Transform2DNodeInitial
     {
         get
         {
-            var value = new Transform2dComponent();
+            var value = new Transform2DComponent();
             value.Scale = new System.Numerics.Vector2(1.0f, 1.0f);
             return value;
         }
@@ -127,11 +127,11 @@ public static class EngineNodeTypes
     }
 
     /// <summary>The value of <c>ke_sprite2d_node_initial</c>.</summary>
-    public static Sprite2dComponent Sprite2dNodeInitial
+    public static Sprite2DComponent Sprite2DNodeInitial
     {
         get
         {
-            var value = new Sprite2dComponent();
+            var value = new Sprite2DComponent();
             value.Region = new System.Numerics.Vector4(0.0f, 0.0f, 1.0f, 1.0f);
             value.Size = new System.Numerics.Vector2(1.0f, 1.0f);
             value.Pivot = new System.Numerics.Vector2(0.5f, 0.5f);
@@ -158,22 +158,22 @@ public static class EngineNodeTypes
     }
 
     /// <summary>The value of <c>ke_body2d_node_initial</c>.</summary>
-    public static Body2dComponent Body2dNodeInitial
+    public static Body2DComponent Body2DNodeInitial
     {
         get
         {
-            var value = new Body2dComponent();
+            var value = new Body2DComponent();
             value.GravityScale = 1.0f;
             return value;
         }
     }
 
     /// <summary>The value of <c>ke_collider2d_node_initial</c>.</summary>
-    public static Collider2dComponent Collider2dNodeInitial
+    public static Collider2DComponent Collider2DNodeInitial
     {
         get
         {
-            var value = new Collider2dComponent();
+            var value = new Collider2DComponent();
             value.HalfExtents = new System.Numerics.Vector2(0.5f, 0.5f);
             value.Radius = 0.5f;
             value.Density = 1.0f;
@@ -203,9 +203,9 @@ public static class EngineNodeTypes
     ];
 
     /// <summary>The entries of <c>ke_body2d_node_with</c>.</summary>
-    public static NodeWith[] Body2dNodeWith => [
-        new() { Name = "body2d", Initial = Bytes(Body2dNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2dNodeInitial) },
+    public static NodeWith[] Body2DNodeWith => [
+        new() { Name = "body2d", Initial = Bytes(Body2DNodeInitial) },
+        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_camera_node_with</c>.</summary>
@@ -215,9 +215,9 @@ public static class EngineNodeTypes
     ];
 
     /// <summary>The entries of <c>ke_collider2d_node_with</c>.</summary>
-    public static NodeWith[] Collider2dNodeWith => [
-        new() { Name = "collider2d", Initial = Bytes(Collider2dNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2dNodeInitial) },
+    public static NodeWith[] Collider2DNodeWith => [
+        new() { Name = "collider2d", Initial = Bytes(Collider2DNodeInitial) },
+        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_directional_light_node_with</c>.</summary>
@@ -263,14 +263,14 @@ public static class EngineNodeTypes
     ];
 
     /// <summary>The entries of <c>ke_sprite2d_node_with</c>.</summary>
-    public static NodeWith[] Sprite2dNodeWith => [
-        new() { Name = "sprite2d", Initial = Bytes(Sprite2dNodeInitial) },
-        new() { Name = "transform2d", Initial = Bytes(Transform2dNodeInitial) },
+    public static NodeWith[] Sprite2DNodeWith => [
+        new() { Name = "sprite2d", Initial = Bytes(Sprite2DNodeInitial) },
+        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_transform2d_node_with</c>.</summary>
-    public static NodeWith[] Transform2dNodeWith => [
-        new() { Name = "transform2d", Initial = Bytes(Transform2dNodeInitial) },
+    public static NodeWith[] Transform2DNodeWith => [
+        new() { Name = "transform2d", Initial = Bytes(Transform2DNodeInitial) },
     ];
 
     /// <summary>The entries of <c>ke_transform_node_with</c>.</summary>
@@ -282,9 +282,9 @@ public static class EngineNodeTypes
     public static void RegisterEngineNodeTypes(this INodeTypes self)
     {
         self.RegisterType(name: "ambient_light", with: AmbientLightNodeWith);
-        self.RegisterType(name: "body2d", with: Body2dNodeWith);
+        self.RegisterType(name: "body2d", with: Body2DNodeWith);
         self.RegisterType(name: "camera", with: CameraNodeWith);
-        self.RegisterType(name: "collider2d", with: Collider2dNodeWith);
+        self.RegisterType(name: "collider2d", with: Collider2DNodeWith);
         self.RegisterType(name: "directional_light", with: DirectionalLightNodeWith);
         self.RegisterType(name: "label", with: LabelNodeWith);
         self.RegisterType(name: "mesh", with: MeshNodeWith);
@@ -292,8 +292,8 @@ public static class EngineNodeTypes
         self.RegisterType(name: "skybox", with: SkyboxNodeWith);
         self.RegisterType(name: "sound", with: SoundNodeWith);
         self.RegisterType(name: "spot_light", with: SpotLightNodeWith);
-        self.RegisterType(name: "sprite2d", with: Sprite2dNodeWith);
-        self.RegisterType(name: "transform2d", with: Transform2dNodeWith);
+        self.RegisterType(name: "sprite2d", with: Sprite2DNodeWith);
+        self.RegisterType(name: "transform2d", with: Transform2DNodeWith);
         self.RegisterType(name: "transform", with: TransformNodeWith);
     }
 

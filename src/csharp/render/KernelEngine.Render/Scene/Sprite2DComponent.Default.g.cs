@@ -10,12 +10,12 @@ using KernelEngine.Render.Native;
 namespace KernelEngine.Render;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_sprite2d_component</c>.</summary>
-public static class Sprite2dComponentDefaults
+public static class Sprite2DComponentDefaults
 {
-    extension(Sprite2dComponent)
+    extension(Sprite2DComponent)
     {
         /// <summary>The value every <c>[default:]</c> field of <c>ke_sprite2d_component</c> declares.</summary>
-        public static Sprite2dComponent Default => new()
+        public static Sprite2DComponent Default => new()
         {
             Region = new System.Numerics.Vector4(0f, 0f, 1f, 1f),
             Size = new System.Numerics.Vector2(1f, 1f),

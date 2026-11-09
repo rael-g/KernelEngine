@@ -5,10 +5,10 @@
 
 namespace KernelEngine.Common;
 
-public partial struct Transform2dComponent
+public partial struct Transform2DComponent
 {
     /// <summary>The value every <c>[default:]</c> field of <c>ke_transform2d_component</c> declares.</summary>
-    public static Transform2dComponent Default => new()
+    public static Transform2DComponent Default => new()
     {
         Scale = new System.Numerics.Vector2(1f, 1f),
     };
