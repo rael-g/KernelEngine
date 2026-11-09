@@ -16,7 +16,6 @@ const heap = @import("heap");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 
-const apply = @import("components_apply.zig");
 
 const apply_initial_capacity: u32 = 16;
 
@@ -24,7 +23,7 @@ const apply_initial_capacity: u32 = 16;
 /// `field_count`) are written by separate registration slots, so either half may stay unset.
 const ApplyEntry = struct {
     cid: abi_asset_resolver.c.ke_component_id,
-    fn_ptr: abi_framework.c.ke_component_apply_fn,
+    fn_ptr: abi_component_registry.c.ke_component_apply_fn,
     ctx: ?*anyopaque,
     fields: ?[*]const abi_ecs.c.ke_component_field,
     field_count: u32,
@@ -89,7 +88,7 @@ fn entryFor(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{OutOfMem
 fn registerComponentApply(
     self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
-    apply_fn: abi_framework.c.ke_component_apply_fn,
+    apply_fn: abi_component_registry.c.ke_component_apply_fn,
     ctx: ?*anyopaque,
 ) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
@@ -145,7 +144,7 @@ fn getComponentApply(
     self_in: ?*abi_component_registry.c.ke_component_registry,
     cid: abi_asset_resolver.c.ke_component_id,
     out_ctx: [*c]?*anyopaque,
-) callconv(.c) abi_framework.c.ke_component_apply_fn {
+) callconv(.c) abi_component_registry.c.ke_component_apply_fn {
     const self = self_in orelse return null;
     if (self.handle == null) return null;
     const s = stateOf(self);
@@ -244,7 +243,7 @@ fn registerBuiltin(
     e: *abi_ecs.c.ke_ecs,
     name: [*c]const u8,
     comptime T: type,
-    apply_fn: abi_framework.c.ke_component_apply_fn,
+    apply_fn: abi_component_registry.c.ke_component_apply_fn,
     fields: ?[*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 ) R.Error!void {
@@ -287,8 +286,8 @@ export fn ke_component_registry_create(
 }
 
 fn registerBuiltins(registry: *abi_component_registry.c.ke_component_registry, e: *abi_ecs.c.ke_ecs) R.Error!void {
-    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, apply.ke_framework_apply_transform, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
-    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, apply.ke_framework_apply_transform2d, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, abi_spatial.c.ke_transform_component, null, &abi_spatial_contract.c.ke_transform_component_fields, abi_spatial_contract.c.ke_transform_component_fields.len);
+    try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM2D, abi_spatial.c.ke_transform2d_component, null, &abi_spatial_contract.c.ke_transform2d_component_fields, abi_spatial_contract.c.ke_transform2d_component_fields.len);
     try registerBuiltin(registry, e, abi_spatial_contract.c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi_spatial.c.ke_world_transform_component, null, null, 0);
 }
 
@@ -374,7 +373,7 @@ test "a short name a single component answers to resolves to it, and the full na
     const h = aliasRegistry(&ecs);
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     var paddle: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &paddle));
+    try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &paddle));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
 
@@ -394,11 +393,11 @@ test "a short name two components answer to is refused as an invalid argument" {
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "pong.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "tennis.paddle", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "pong.paddle"));
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "paddle", "tennis.paddle"));
@@ -416,11 +415,11 @@ test "a short name that is also a registered component name is refused" {
     const w: *abi_component_registry.c.ke_component_registry = h.ref.?;
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "marker", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
+        try R.check(ecs.vtable.component_register.?(&ecs.vtable, &abi_ecs.c.ke_component_params{ .name = "game.marker", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &ignored));
     }
     try testing.expectEqual(R.ok, w.register_component_alias.?(w, "marker", "game.marker"));
 

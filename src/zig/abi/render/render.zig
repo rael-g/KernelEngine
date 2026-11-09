@@ -97,10 +97,16 @@ pub const RenderService = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
-            .cid = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) c.ke_component_id {
+            .frame_color = &struct {
+                fn call(self: ?*c.ke_render_service) callconv(.c) c.ke_component_id {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
-                    return T.cid(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_component_id)));
+                    return T.frameColor(state);
+                }
+            }.call,
+            .frame_depth = &struct {
+                fn call(self: ?*c.ke_render_service) callconv(.c) c.ke_component_id {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
+                    return T.frameDepth(state);
                 }
             }.call,
             .begin_pass = &struct {
@@ -198,27 +204,27 @@ pub const RenderService = struct {
                 }
             }.call,
             .resource_view = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) c.ke_gpu_texture_view {
+                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture_view {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
-                    return T.resourceView(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
+                    return T.resourceView(state, a0);
                 }
             }.call,
             .resource_texture = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) c.ke_gpu_texture {
+                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture)));
-                    return T.resourceTexture(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_gpu_texture)));
+                    return T.resourceTexture(state, a0);
                 }
             }.call,
             .resource_buffer = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) c.ke_gpu_buffer {
+                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_buffer {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_buffer)));
-                    return T.resourceBuffer(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_gpu_buffer)));
+                    return T.resourceBuffer(state, a0);
                 }
             }.call,
             .resource_buffer_size = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) u64 {
+                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) u64 {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u64)));
-                    return T.resourceBufferSize(state, std.mem.span(a0 orelse return std.mem.zeroes(u64)));
+                    return T.resourceBufferSize(state, a0);
                 }
             }.call,
             .backbuffer_size = &struct {
@@ -350,9 +356,9 @@ pub const RenderService = struct {
                 }
             }.call,
             .resource_format = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
+                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format)));
-                    return T.resourceFormat(state, std.mem.span(a0 orelse return std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format)));
+                    return T.resourceFormat(state, a0);
                 }
             }.call,
             .resource_generation = &struct {
@@ -384,36 +390,44 @@ pub const RenderService = struct {
         };
     }
 
-    /// Declares a transient resource the service allocates and recycles.
+    /// Declares a transient resource the service allocates and recycles; every call declares a new
+    /// one.
     pub fn declare(self: RenderService, params: ?*const c.ke_render_resource_params) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.declare.?(self.ptr, params, &written));
         return written;
     }
 
-    /// Imports an externally-owned texture under `name`.
+    /// Imports an externally-owned texture, labeled `name`.
     pub fn importTexture(self: RenderService, name: [:0]const u8, tex: c.ke_gpu_texture) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.import_texture.?(self.ptr, name.ptr, tex, &written));
         return written;
     }
 
-    /// Mints a tag cid under `name` with no GPU payload.
+    /// Mints a resource with no GPU payload, labeled `name`, that passes order on.
     pub fn importTag(self: RenderService, name: [:0]const u8) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.import_tag.?(self.ptr, name.ptr, &written));
         return written;
     }
 
-    /// Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.
+    /// Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.
     pub fn importBuffer(self: RenderService, name: [:0]const u8, buffer: c.ke_gpu_buffer, size: u64) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.import_buffer.?(self.ptr, name.ptr, buffer, size, &written));
         return written;
     }
 
-    pub fn cid(self: RenderService, name: [:0]const u8) c.ke_component_id {
-        return self.ptr.cid.?(self.ptr, name.ptr);
+    /// The tag a pass that joined the chain writes in its access list, and that the system ending
+    /// the frame reads.
+    pub fn frameColor(self: RenderService) c.ke_component_id {
+        return self.ptr.frame_color.?(self.ptr);
+    }
+
+    /// The frame's depth texture, cleared when the frame begins.
+    pub fn frameDepth(self: RenderService) c.ke_component_id {
+        return self.ptr.frame_depth.?(self.ptr);
     }
 
     /// Opens a pass's recording context, from inside a render system's body.
@@ -426,10 +440,10 @@ pub const RenderService = struct {
         return self.ptr.end_pass.?(self.ptr, ctx);
     }
 
-    /// Acquires the service's render target as the backbuffer (a built-in resource named
-    /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
-    /// depth. When the target has nothing to draw into this frame it succeeds without beginning one,
-    /// and begin_pass then opens no pass; it fails with the target's code when acquiring failed.
+    /// Acquires the service's render target as the backbuffer, clears the per-pass command slot
+    /// table, and clears the frame's color and depth. When the target has nothing to draw into this
+    /// frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the
+    /// target's code when acquiring failed.
     pub fn beginFrame(self: RenderService) Error!void {
         try checkResult(self.ptr.begin_frame.?(self.ptr));
     }
@@ -499,25 +513,25 @@ pub const RenderService = struct {
         return self.ptr.texture_view.?(self.ptr, h);
     }
 
-    /// The GPU view of a declared transient resource, by name.
-    pub fn resourceView(self: RenderService, name: [:0]const u8) c.ke_gpu_texture_view {
-        return self.ptr.resource_view.?(self.ptr, name.ptr);
+    /// The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.
+    pub fn resourceView(self: RenderService, resource: c.ke_component_id) c.ke_gpu_texture_view {
+        return self.ptr.resource_view.?(self.ptr, resource);
     }
 
     /// The raw GPU texture behind a declared resource, for the copy operations that take a texture
     /// rather than a view.
-    pub fn resourceTexture(self: RenderService, name: [:0]const u8) c.ke_gpu_texture {
-        return self.ptr.resource_texture.?(self.ptr, name.ptr);
+    pub fn resourceTexture(self: RenderService, resource: c.ke_component_id) c.ke_gpu_texture {
+        return self.ptr.resource_texture.?(self.ptr, resource);
     }
 
-    /// The GPU buffer published under `name` via import_buffer.
-    pub fn resourceBuffer(self: RenderService, name: [:0]const u8) c.ke_gpu_buffer {
-        return self.ptr.resource_buffer.?(self.ptr, name.ptr);
+    /// The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.
+    pub fn resourceBuffer(self: RenderService, resource: c.ke_component_id) c.ke_gpu_buffer {
+        return self.ptr.resource_buffer.?(self.ptr, resource);
     }
 
-    /// The size (bytes) of the buffer published under `name`.
-    pub fn resourceBufferSize(self: RenderService, name: [:0]const u8) u64 {
-        return self.ptr.resource_buffer_size.?(self.ptr, name.ptr);
+    /// The size (bytes) of the buffer published via import_buffer; 0 for another id.
+    pub fn resourceBufferSize(self: RenderService, resource: c.ke_component_id) u64 {
+        return self.ptr.resource_buffer_size.?(self.ptr, resource);
     }
 
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per frame at
@@ -632,10 +646,10 @@ pub const RenderService = struct {
         return self.ptr.backbuffer_format.?(self.ptr);
     }
 
-    /// Texel format of the named texture resource, the format a pipeline drawing into it declares;
-    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.
-    pub fn resourceFormat(self: RenderService, name: [:0]const u8) abi_render_gpu.c.ke_gpu_texture_format {
-        return self.ptr.resource_format.?(self.ptr, name.ptr);
+    /// Texel format of a texture resource, the format a pipeline drawing into it declares;
+    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.
+    pub fn resourceFormat(self: RenderService, resource: c.ke_component_id) abi_render_gpu.c.ke_gpu_texture_format {
+        return self.ptr.resource_format.?(self.ptr, resource);
     }
 
     /// Counts the times the targets declared relative to the backbuffer were recreated, which
@@ -800,6 +814,9 @@ pub const RenderLighting = c.ke_render_lighting;
 pub const RenderPassIo = c.ke_render_pass_io;
 pub const CameraFrustum = c.ke_camera_frustum;
 pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
+pub const RenderGbufferResources = c.ke_render_gbuffer_resources;
+pub const RenderShadowResources = c.ke_render_shadow_resources;
+pub const RenderClusterResources = c.ke_render_cluster_resources;
 pub const RenderServiceHandle = c.ke_render_service_handle;
 pub const RenderCameraHandle = c.ke_render_camera_handle;
 pub const RenderFrameHandle = c.ke_render_frame_handle;

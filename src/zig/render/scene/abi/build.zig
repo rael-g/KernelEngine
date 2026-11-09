@@ -7,10 +7,9 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_scene_factory.zig") });
     abi.addImport("asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
-    abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
-    abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
+    abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));
     abi.addImport("render_ui", b.dependency("abi_render_ui", .{}).module("abi"));
     abi.addImport("render_ui_factory", b.dependency("abi_render_ui_factory", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
@@ -19,7 +18,6 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/scene/label_resolve_create.h>
         \\#include <kernel_engine/render/scene/render_scene_log.h>
-        \\#include <kernel_engine/render/scene/scene_components.h>
         \\#include <kernel_engine/render/scene/scene_resolve_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
@@ -30,20 +28,19 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/spatial"));
-    translated.addIncludePath(b.path("../../../../c/framework"));
-    translated.addIncludePath(b.path("../../../framework/include"));
-    translated.addIncludePath(b.path("../../../../c/runtime"));
-    translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/logger"));
+    translated.addIncludePath(b.path("../../../../c/spatial"));
+    translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../../../../c/audio"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../../../../c/file_system"));
+    translated.addIncludePath(b.path("../../../../c/framework"));
     translated.addIncludePath(b.path("../../../../c/input"));
     translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../../../../c/physics"));
     translated.addIncludePath(b.path("../../../../c/resource_cache"));
-    translated.addIncludePath(b.path("../../../../c/view"));
+    translated.addIncludePath(b.path("../../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/window"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../ui/include"));
@@ -66,20 +63,19 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
-    tests.root_module.addIncludePath(b.path("../../../../c/framework"));
-    tests.root_module.addIncludePath(b.path("../../../framework/include"));
-    tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
-    tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
+    tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
+    tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../../c/file_system"));
+    tests.root_module.addIncludePath(b.path("../../../../c/framework"));
     tests.root_module.addIncludePath(b.path("../../../../c/input"));
     tests.root_module.addIncludePath(b.path("../../../../c/io"));
     tests.root_module.addIncludePath(b.path("../../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../../c/resource_cache"));
-    tests.root_module.addIncludePath(b.path("../../../../c/view"));
+    tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../../c/window"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../ui/include"));

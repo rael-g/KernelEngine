@@ -67,4 +67,11 @@ public interface IRuntime : IDisposable
     void Flush();
     /// <summary>Waits for any pending render phase, runs the shutdown phase if a tick ever ran, then calls every module's unload hook in the reverse of registration order. The host calls it while everything a module's unload hook uses is still alive; destroying the runtime calls it for a host that did not. A second call does nothing.</summary>
     void UnloadModules();
+    /// <summary>Records that the program should end; any system or the host may ask, from any thread. Nothing stops: the host ends its loop when it reads exit_requested.</summary>
+    void RequestExit();
+    /// <summary>Whether a request to end the program was recorded.</summary>
+    bool ExitRequested();
+    /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
+    /// <returns>The queue, owned by the runtime.</returns>
+    nint Commands();
 }

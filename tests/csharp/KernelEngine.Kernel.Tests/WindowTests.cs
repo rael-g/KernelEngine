@@ -9,23 +9,8 @@ namespace EngineTests;
 [Collection("KernelRegistry")]
 public unsafe class WindowTests
 {
-    private static int _initializeCalled = 0;
-    private static int _shutdownCalled = 0;
     private static int _destroyCalled = 0;
     private static int _shouldCloseCalled = 0;
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static global::KernelEngine.Result.Native.Result MockInitialize(ke_window* window)
-    {
-        _initializeCalled++;
-        return global::KernelEngine.Result.Native.Result.Ok;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
-    private static void MockShutdown(ke_window* window)
-    {
-        _shutdownCalled++;
-    }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(System.Runtime.CompilerServices.CallConvCdecl)])]
     private static void MockDestroy(ke_window* window)
@@ -44,24 +29,17 @@ public unsafe class WindowTests
         new ke_window_handle { @ref = ptr, destroy = &MockDestroy };
 
     [Fact]
-    public void Lifecycle_CallsNativeFunctions()
+    public void Dispose_DestroysTheNativeWindow()
     {
-        _initializeCalled = 0;
-        _shutdownCalled = 0;
         _destroyCalled = 0;
 
         ke_window* mock = (ke_window*)NativeMemory.Alloc((nuint)sizeof(ke_window));
         NativeMemory.Clear(mock, (nuint)sizeof(ke_window));
 
-        mock->on_initialize = &MockInitialize;
-        mock->on_shutdown = &MockShutdown;
-
         {
             using var window = new Window(MakeHandle(mock));
-            Assert.Equal(1, _initializeCalled);
         }
 
-        Assert.Equal(1, _shutdownCalled);
         Assert.Equal(1, _destroyCalled);
 
         NativeMemory.Free(mock);
@@ -74,9 +52,6 @@ public unsafe class WindowTests
 
         ke_window* mock = (ke_window*)NativeMemory.Alloc((nuint)sizeof(ke_window));
         NativeMemory.Clear(mock, (nuint)sizeof(ke_window));
-
-        mock->on_initialize = &MockInitialize;
-        mock->on_shutdown = &MockShutdown;
         mock->should_close = &MockShouldClose;
 
         using (var window = new Window(MakeHandle(mock)))

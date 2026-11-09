@@ -21,7 +21,7 @@ if (tracked.Count == 0)
 var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(rootDir, p)));
 
 var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
-var abort = new Regex(@"std\.debug\.assert|\bassert\(|@panic\(|process\.abort|std\.debug\.panic|\babort\(");
+var abort = new Regex(@"@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
@@ -35,6 +35,8 @@ var shaderBindingNumber = new Regex(@"vk::binding\s*\(|:\s*register\s*\(");
 var bindingNumber = new Regex(@"\.binding\s*=\s*[0-9]");
 var blockComment = new Regex(@"/\*(?![*!])");
 var exportFn = new Regex(@"^\s*(?:pub )?export fn (\w+)");
+var zeroDefault = new Regex(@"\b0 (takes|selects) the default|zero field takes its default|\b0 selects\b");
+var defaultsConstant = new Regex(@"\bstatic const \w+ \w+_defaults\s*=");
 var declared = new Regex(@"^\s*KE_\w*API\s[^;{#]*?\b(\w+)\s*\(", RegexOptions.Multiline);
 
 var plugins = sources.Where(s => s.Key.StartsWith("src/zig/", StringComparison.Ordinal)).ToList();
@@ -60,7 +62,7 @@ var rules = new List<Rule>
     new("no InternalsVisibleTo", 0,
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(cs|csproj|props|targets)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)),
             l => l.Contains("InternalsVisibleTo", StringComparison.Ordinal))),
-    new("no assert, abort or panic in engine code; a failure is a ke_result", 0,
+    new("no abort or panic in engine code; a caller's failure is a ke_result", 0,
         Lines(zig, l => abort.IsMatch(l), outsideTests: true).Concat(Lines(native, l => abort.IsMatch(l)))),
     new("no failure turned into a crash with `catch unreachable` or `orelse unreachable`", 4,
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
@@ -109,8 +111,12 @@ var rules = new List<Rule>
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 38,
+    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 30,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
+    new("a contract declares no defaults", 0,
+        Lines(headers, l => defaultsConstant.IsMatch(l))),
+    new("no zero stands for a default", 0,
+        Lines(headers, l => zeroDefault.IsMatch(l))),
     new("no file named after impl", 0,
         tracked.Where(p => p.StartsWith("src/", StringComparison.Ordinal) && implName.IsMatch(Path.GetFileNameWithoutExtension(p)))),
     new("no identifier named after impl", 9,

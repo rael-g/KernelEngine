@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/ecs/commands.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -225,6 +226,19 @@ typedef struct ke_runtime {
     /// while everything a module's unload hook uses is still alive; destroying the runtime calls
     /// it for a host that did not. A second call does nothing.
     void (*unload_modules)(ke_runtime *self);
+
+    /// Records that the program should end; any system or the host may ask, from any thread.
+    /// Nothing stops: the host ends its loop when it reads exit_requested.
+    void (*request_exit)(ke_runtime *self);
+
+    /// Whether a request to end the program was recorded.
+    bool (*exit_requested)(ke_runtime *self);
+
+    /// The queue the host records structural changes into between ticks, as a system records into
+    /// its own; the next tick applies it before any phase runs. Only the thread that ticks records
+    /// into it, and never during a tick.
+    /// @return [borrowed] The queue, owned by the runtime.
+    ke_ecs_commands *(*commands)(ke_runtime *self);
 } ke_runtime;
 
 /// [owner]

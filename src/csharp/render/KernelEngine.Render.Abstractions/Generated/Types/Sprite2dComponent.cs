@@ -14,7 +14,7 @@ public partial struct Sprite2dComponent
     public byte FlipH;
     public byte FlipV;
     public System.Numerics.Vector4 Color;
-    public uint AlphaMode;
+    public AlphaMode AlphaMode;
 
     public float AlphaCutoff;
     public TextureHandle TextureHandle;

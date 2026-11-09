@@ -2,8 +2,6 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
@@ -44,11 +42,6 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
 /// Construction parameters for the 2D body reconciliation system.
 pub const ke_physics_body2d_module_params = extern struct {
     /// Registers the system; borrowed, must outlive the module.
@@ -72,7 +65,3 @@ pub extern fn ke_physics_body2d_module_create(params: ?*const ke_physics_body2d_
 /// Sends every line ke_physics_body2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_physics_body2d_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
-
-/// Adds physics's scene components to set: the 2D body and the 2D collider, with their field
-/// tables, so [entity.body2d] and [entity.collider2d] blocks apply.
-pub extern fn ke_physics_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;

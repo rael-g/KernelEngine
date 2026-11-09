@@ -1,6 +1,5 @@
-//! The scene side of render: the set of its scene components, and the update-phase systems that
-//! give a mesh, a sprite and a label the GPU resources and the font they name, behind one factory
-//! each.
+//! The scene side of render: the update-phase systems that give a mesh, a sprite and a label the
+//! GPU resources and the font they name, behind one factory each.
 
 const abi_render_contract = @import("abi_render_contract");
 const abi_spatial_contract = @import("abi_spatial_contract");
@@ -9,12 +8,13 @@ const abi_render_components = @import("abi_render_components");
 const abi_scene_loader = @import("abi_scene_loader");
 const abi_ui_components = @import("abi_ui_components");
 const std = @import("std");
+const log = std.log.scoped(.render_scene);
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
 pub const abi_ecs = @import("abi_ecs");
-const abi_framework = @import("abi_framework");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
@@ -22,41 +22,12 @@ const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
-const component_apply = @import("component_apply.zig");
 const mesh_resolve = @import("mesh_resolve.zig");
 const sprite_resolve = @import("sprite_resolve.zig");
 const label_resolve = @import("label_resolve.zig");
 
 const heap = @import("heap");
 const gpa = heap.gpa;
-
-const Component = struct {
-    component: abi_ecs.c.ke_component_params,
-    apply: abi_framework.c.ke_component_apply_fn,
-};
-
-const components = [_]Component{
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_MESH, .size = @sizeOf(abi_render_components.c.ke_mesh_component), .alignment = @alignOf(abi_render_components.c.ke_mesh_component), .fields = &abi_render_contract.c.ke_mesh_component_fields, .field_count = abi_render_contract.c.ke_mesh_component_fields.len }, .apply = component_apply.ke_render_apply_mesh },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_CAMERA, .size = @sizeOf(abi_render_components.c.ke_camera_component), .alignment = @alignOf(abi_render_components.c.ke_camera_component), .fields = &abi_render_contract.c.ke_camera_component_fields, .field_count = abi_render_contract.c.ke_camera_component_fields.len }, .apply = component_apply.ke_render_apply_camera },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = @sizeOf(abi_render_components.c.ke_directional_light_component), .alignment = @alignOf(abi_render_components.c.ke_directional_light_component), .fields = &abi_render_contract.c.ke_directional_light_component_fields, .field_count = abi_render_contract.c.ke_directional_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_POINT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_point_light_component), .alignment = @alignOf(abi_render_components.c.ke_point_light_component), .fields = &abi_render_contract.c.ke_point_light_component_fields, .field_count = abi_render_contract.c.ke_point_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPOT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_spot_light_component), .alignment = @alignOf(abi_render_components.c.ke_spot_light_component), .fields = &abi_render_contract.c.ke_spot_light_component_fields, .field_count = abi_render_contract.c.ke_spot_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, .size = @sizeOf(abi_render_components.c.ke_ambient_light_component), .alignment = @alignOf(abi_render_components.c.ke_ambient_light_component), .fields = &abi_render_contract.c.ke_ambient_light_component_fields, .field_count = abi_render_contract.c.ke_ambient_light_component_fields.len }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, .size = @sizeOf(abi_render_components.c.ke_skybox_component), .alignment = @alignOf(abi_render_components.c.ke_skybox_component) }, .apply = null },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, .size = @sizeOf(abi_render_components.c.ke_sprite2d_component), .alignment = @alignOf(abi_render_components.c.ke_sprite2d_component), .fields = &abi_render_contract.c.ke_sprite2d_component_fields, .field_count = abi_render_contract.c.ke_sprite2d_component_fields.len }, .apply = component_apply.ke_render_apply_sprite2d },
-    .{ .component = .{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, .apply = null },
-};
-
-/// The factory of the scene components. Adds them in order and stops at the first one the set
-/// refuses.
-export fn ke_render_scene_components_create(set_in: ?*abi_framework.c.ke_scene_component_set) callconv(.c) abi_result.c.ke_result {
-    const set = set_in orelse return R.code(error.InvalidArgument);
-    for (&components) |*c| {
-        const added = set.add.?(set, &c.component, c.apply);
-        if (added != R.ok) return added;
-    }
-    return R.ok;
-}
 
 /// The state of one scene resolve. The factory allocates it and `destroyScene` frees it. The
 /// runtime receives the core and `sprite` as the contexts of the two systems, and their queries
@@ -194,23 +165,32 @@ const label_resolve_before = [_][*c]const u8{"render.ui.labels"};
 fn destroyLabel(self: ?*abi_render_scene_factory.c.ke_render_label_resolve) callconv(.c) void {
     const st: *LabelResolve = @ptrCast(@alignCast(self orelse return));
     _ = st.runtime.unregister_system.?(st.runtime, st.system);
+    if (st.state.default_font) |d| gpa.free(d);
     gpa.destroy(st);
 }
 
 /// The factory declared in label_resolve_create.h. A missing runtime, service or ui fails as an
 /// invalid argument, a failed allocation as out of memory, and the runtime refusing the system
 /// with the runtime's code.
-export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_factory.c.ke_render_label_resolve_params, out_resolve: [*c]abi_render_scene_factory.c.ke_render_label_resolve_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config_in: ?*const abi_render_scene_factory.c.ke_render_label_resolve_config, out_resolve: [*c]abi_render_scene_factory.c.ke_render_label_resolve_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_resolve orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
+    const p = context_in orelse return R.code(error.InvalidArgument);
+    const config = config_in orelse {
+        log.warn("label resolve: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     const core = p.service orelse return R.code(error.InvalidArgument);
-    const ui = p.ui orelse return R.code(error.InvalidArgument);
+    const ui = ui_in orelse return R.code(error.InvalidArgument);
     if (p.scene == null) return R.code(error.InvalidArgument);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
-    st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
+    st.state = .{ .core = core, .ui = ui, .resolver = resolver };
+    if (config.default_font) |d| st.state.default_font = gpa.dupeZ(u8, std.mem.span(d)) catch |err| {
+        gpa.destroy(st);
+        return R.code(err);
+    };
     st.terms = .{.{ .cid = p.scene.?.component_ids.?(p.scene).?.label, .access = abi_runtime.c.KE_ACCESS_WRITE }};
     st.queries = .{.{ .terms = st.terms[0..].ptr, .term_count = 1 }};
     var label = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
@@ -225,6 +205,7 @@ export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_fac
     var system_id: abi_runtime.c.ke_system_id = 0;
     const registered = rt.register_system.?(rt, &label, &system_id);
     if (registered != R.ok) {
+        if (st.state.default_font) |d| gpa.free(d);
         gpa.destroy(st);
         return registered;
     }
@@ -253,7 +234,8 @@ const Rig = struct {
 
     fn init(self: *Rig) !void {
         try self.core.init();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         try self.rt.init();
         _ = self.rt.when(.register_system).writesFresh(2);
         try self.ecs.init();
@@ -325,14 +307,16 @@ test "the label resolve registers its system, and fails when the runtime refuses
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = &ui;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = "res://default.ttf" };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &h));
+    try R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h));
     try rig.rt.received(.register_system).times(1);
     h.destroy.?(h.ref);
 
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    try testing.expect(ke_render_label_resolve_create(&p, &h) != R.ok);
+    try testing.expect(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h) != R.ok);
     try testing.expect(h.ref == null);
 }
 
@@ -341,9 +325,11 @@ test "destroying the label resolve unregisters its system" {
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = &ui;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = null };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &h));
+    try R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -354,9 +340,11 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .scene = &test_scene};
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = null;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = null };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h)));
     try testing.expect(h.ref == null);
 }
 

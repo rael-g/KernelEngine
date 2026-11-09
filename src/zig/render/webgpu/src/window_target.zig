@@ -268,7 +268,7 @@ export fn ke_gpu_render_target_webgpu_window_create(
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const given = config orelse &abi_gpu_device_webgpu_factory.c.ke_gpu_render_target_webgpu_window_config{};
+    const given = config orelse return fail(error.InvalidArgument, "window target: no config");
     if (given.present_mode > abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_IMMEDIATE) {
         return fail(error.InvalidArgument, "window target: the present mode is not a ke_gpu_present_mode");
     }

@@ -9,7 +9,7 @@ namespace KernelEngine.Render.Webgpu;
 public sealed record WebgpuWindowGpuRenderTargetConfig : KernelEngine.Configuration.IConfigSection<WebgpuWindowGpuRenderTargetConfig>
 {
     /// <summary>How presented frames reach the screen.</summary>
-    public KernelEngine.Render.Webgpu.Native.GpuPresentMode PresentMode { get; init; } = KernelEngine.Render.Webgpu.Native.GpuPresentMode.Fifo;
+    public KernelEngine.Render.Webgpu.Native.GpuPresentMode PresentMode { get; init; } = default(KernelEngine.Render.Webgpu.Native.GpuPresentMode);
 
     /// <inheritdoc/>
     public static WebgpuWindowGpuRenderTargetConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)

@@ -31,14 +31,15 @@ typedef struct ke_render_service_config
 {
     /// [utf8] Directory the shaders are loaded from; copied. Required.
     const char           *shader_dir;
-    /// [default:KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT] Format of the frame's color up to
+    /// Format of the frame's color up to
     /// KE_RENDER_STAGE_HDR_POST.
     ke_gpu_texture_format color_format;
-    /// [default:KE_GPU_TEXTURE_FORMAT_D32_FLOAT] Format of the frame's depth.
+    /// Format of the frame's depth.
     ke_gpu_texture_format depth_format;
-    /// [default:0.10 0.15 0.30 1] Color the frame is cleared to.
+    /// Color the frame is cleared to.
     ke_vec4               clear_color;
 } ke_render_service_config;
+
 
 /**
  * @brief Creates a render service whose frames draw into @p target.

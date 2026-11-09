@@ -305,99 +305,6 @@ fn destroy(self: [*c]abi_configuration.c.ke_configuration) callconv(.c) void {
     gpa.destroy(st);
 }
 
-/// Writes `value` into the integer field at `at`, whose width is `size`; false for a width no
-/// integer has.
-fn writeInt(at: [*]u8, size: u32, value: i64) bool {
-    switch (size) {
-        1 => std.mem.writeInt(u8, at[0..1], @truncate(@as(u64, @bitCast(value))), .little),
-        2 => std.mem.writeInt(u16, at[0..2], @truncate(@as(u64, @bitCast(value))), .little),
-        4 => std.mem.writeInt(u32, at[0..4], @truncate(@as(u64, @bitCast(value))), .little),
-        8 => std.mem.writeInt(u64, at[0..8], @bitCast(value), .little),
-        else => return false,
-    }
-    return true;
-}
-
-/// Writes `value` into the float or double field at `at`; false when the field's size is neither.
-fn writeReal(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: f64) bool {
-    if (field.type == abi_configuration.c.KE_CONFIG_FLOAT and field.size == @sizeOf(f32)) {
-        const v: f32 = @floatCast(value);
-        @memcpy(at[0..@sizeOf(f32)], std.mem.asBytes(&v));
-        return true;
-    }
-    if (field.type == abi_configuration.c.KE_CONFIG_DOUBLE and field.size == @sizeOf(f64)) {
-        @memcpy(at[0..@sizeOf(f64)], std.mem.asBytes(&value));
-        return true;
-    }
-    return false;
-}
-
-fn writeBool(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: bool) bool {
-    if (field.size != @sizeOf(bool)) return false;
-    at[0] = @intFromBool(value);
-    return true;
-}
-
-fn writeString(at: [*]u8, field: *const abi_configuration.c.ke_config_field, value: [*c]const u8) bool {
-    if (field.size != @sizeOf([*c]const u8)) return false;
-    @memcpy(at[0..@sizeOf([*c]const u8)], std.mem.asBytes(&value));
-    return true;
-}
-
-fn writeDefault(at: [*]u8, field: *const abi_configuration.c.ke_config_field) bool {
-    const d = field.default_value;
-    return switch (field.type) {
-        abi_configuration.c.KE_CONFIG_INT => writeInt(at, field.size, d.i),
-        abi_configuration.c.KE_CONFIG_FLOAT, abi_configuration.c.KE_CONFIG_DOUBLE => writeReal(at, field, d.d),
-        abi_configuration.c.KE_CONFIG_BOOL => writeBool(at, field, d.b),
-        abi_configuration.c.KE_CONFIG_STRING => writeString(at, field, d.s),
-        else => false,
-    };
-}
-
-/// Writes the entry's value over the default, or logs and keeps the default when the field cannot
-/// take that type.
-fn writeStored(at: [*]u8, field: *const abi_configuration.c.ke_config_field, section: []const u8, value: Value) void {
-    const written = switch (field.type) {
-        abi_configuration.c.KE_CONFIG_INT => switch (value) {
-            .int => |v| writeInt(at, field.size, v),
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_FLOAT, abi_configuration.c.KE_CONFIG_DOUBLE => switch (value) {
-            .double => |v| writeReal(at, field, v),
-            .int => |v| writeReal(at, field, @floatFromInt(v)),
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_BOOL => switch (value) {
-            .boolean => |v| writeBool(at, field, v),
-            else => false,
-        },
-        abi_configuration.c.KE_CONFIG_STRING => switch (value) {
-            .string => |v| writeString(at, field, v.ptr),
-            else => false,
-        },
-        else => false,
-    };
-    if (!written) log.warn("{s}.{s} holds a {t}, which the field cannot take; the default stands", .{ section, field.key.?, value });
-}
-
-/// Slot `fill`. Reads the store and writes only into `out_config`, so no subscriber runs.
-fn fill(self: [*c]abi_configuration.c.ke_configuration, section_c: [*c]const u8, fields: [*c]const abi_configuration.c.ke_config_field, field_count: u32, out_config: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-    if (self == null or section_c == null or out_config == null) return R.code(error.InvalidArgument);
-    if (fields == null and field_count != 0) return R.code(error.InvalidArgument);
-    const st = state(self);
-    const section = std.mem.span(section_c);
-    const base: [*]u8 = @ptrCast(out_config.?);
-    for (0..field_count) |i| {
-        const field: *const abi_configuration.c.ke_config_field = @ptrCast(fields + i);
-        const at = base + field.offset;
-        const key = field.key orelse return R.code(error.InvalidArgument);
-        if (!writeDefault(at, field)) return R.code(error.InvalidArgument);
-        if (findEntry(st, section, std.mem.span(key))) |e| writeStored(at, field, section, e.value);
-    }
-    return R.ok;
-}
-
 /// Allocates a store and writes a handle whose `ref` is its `api` table and whose `destroy` frees
 /// it. Fails with out of memory, leaving the handle zeroed.
 export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configuration_handle) callconv(.c) abi_result.c.ke_result {
@@ -420,7 +327,6 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
             .set_string = setString,
             .subscribe = subscribe,
             .unsubscribe = unsubscribe,
-            .fill = fill,
             .for_each_child = forEachChild,
         },
         .entries = .empty,
@@ -430,20 +336,6 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
     out.* = .{ .ref = &st.api, .destroy = destroy };
     return R.ok;
 }
-
-const FilledConfig = extern struct {
-    count: u32,
-    scale: f32,
-    enabled: bool,
-    title: [*c]const u8,
-};
-
-const filled_fields = [_]abi_configuration.c.ke_config_field{
-    .{ .key = "count", .type = abi_configuration.c.KE_CONFIG_INT, .offset = @offsetOf(FilledConfig, "count"), .size = 4, .default_value = .{ .i = 3 } },
-    .{ .key = "scale", .type = abi_configuration.c.KE_CONFIG_FLOAT, .offset = @offsetOf(FilledConfig, "scale"), .size = 4, .default_value = .{ .d = -9.5 } },
-    .{ .key = "enabled", .type = abi_configuration.c.KE_CONFIG_BOOL, .offset = @offsetOf(FilledConfig, "enabled"), .size = 1, .default_value = .{ .b = true } },
-    .{ .key = "title", .type = abi_configuration.c.KE_CONFIG_STRING, .offset = @offsetOf(FilledConfig, "title"), .size = @sizeOf([*c]const u8), .default_value = .{ .s = "untitled" } },
-};
 
 const TestProbe = struct {
     calls: u32 = 0,
@@ -568,50 +460,7 @@ test "null args rejected on write" {
     try std.testing.expectError(error.InvalidArgument, R.check(c.?.set_string.?(c, "s", "k", null)));
 }
 
-test "filling from an empty section writes every default" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    var config: FilledConfig = undefined;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 3), config.count);
-    try std.testing.expectEqual(@as(f32, -9.5), config.scale);
-    try std.testing.expect(config.enabled);
-    try std.testing.expectEqualStrings("untitled", std.mem.span(config.title));
-}
-
-test "filling lays the stored values over the defaults and an integer reaches a float field" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    try R.check(h.ref.?.set_int.?(h.ref, "app", "scale", 2));
-    try R.check(h.ref.?.set_bool.?(h.ref, "app", "enabled", false));
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "title", "pong"));
-    var config: FilledConfig = undefined;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 3), config.count);
-    try std.testing.expectEqual(@as(f32, 2.0), config.scale);
-    try std.testing.expect(!config.enabled);
-    try std.testing.expectEqualStrings("pong", std.mem.span(config.title));
-}
-
-test "a key of a type its field cannot take leaves the default" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    try R.check(h.ref.?.set_string.?(h.ref, "app", "count", "many"));
-    var config: FilledConfig = undefined;
-    try R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, &config));
-    try std.testing.expectEqual(@as(u32, 3), config.count);
-}
-
-test "filling with a null section, table or struct is refused" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    var config: FilledConfig = undefined;
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, null, &filled_fields, filled_fields.len, &config)));
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", null, 1, &config)));
-    try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.fill.?(h.ref, "app", &filled_fields, filled_fields.len, null)));
-}
-
-test "creating, filling and destroying a configuration leaves no block allocated" {
+test "creating, writing and destroying a configuration leaves no block allocated" {
     const h = try madeStore();
     const cfg = h.ref;
     try R.check(cfg.?.set_int.?(cfg, "shadow", "resolution", 2048));

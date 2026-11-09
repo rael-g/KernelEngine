@@ -44,6 +44,11 @@
         .ke_render_scene = .{ .path = "src/zig/render/scene" },
         .c_demo_15 = .{ .path = "tests/visual/offscreen_capture" },
         .c_demo_16 = .{ .path = "tests/visual/forward_capture" },
+        .c_pong = .{ .path = "examples/c/pong" },
+        .liberation_fonts = .{
+            .url = "https://github.com/liberationfonts/liberation-fonts/files/7261482/liberation-fonts-ttf-2.1.5.tar.gz",
+            .hash = "N-V-__8AAJ2zQgClfH6xXskc5AbOSJORHz42XpIzT7AgZ9IG",
+        },
         .docir = .{
             .url = "https://github.com/rael-g/docir/archive/92fa1477310221be30e8781d582e02b905a6cfd0.tar.gz",
             .hash = "docir-0.2.0-dEniGgTnCAB0aSs5nozhZqPcCNPRFnraLliHTUGGog_y",

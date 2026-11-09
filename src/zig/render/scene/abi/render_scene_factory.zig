@@ -3,10 +3,9 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_context = @import("render_context");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -29,9 +28,9 @@ pub const RenderLabelResolve = struct {
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
     /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
     /// handle's ref is NULL on failure.
-    pub fn create(params: ?*const c.ke_render_label_resolve_params) Error!RenderLabelResolve {
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const c.ke_render_label_resolve_config) Error!RenderLabelResolve {
         var written: c.ke_render_label_resolve_handle = undefined;
-        try checkResult(c.ke_render_label_resolve_create(params, &written));
+        try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -41,13 +40,6 @@ pub const RenderLabelResolve = struct {
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn renderSceneSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_scene_set_log_callback(callback, ctx);
-}
-
-/// Adds render's scene components to set: mesh, camera, the four lights, skybox, sprite and
-/// label, with their field tables, and the apply callbacks of the mesh, the camera and the
-/// sprite.
-pub fn renderSceneComponentsCreate(set: ?*abi_framework.c.ke_scene_component_set) Error!void {
-    try checkResult(c.ke_render_scene_components_create(set));
 }
 
 /// Registers the scene's render components and the update-phase systems
@@ -60,6 +52,6 @@ pub fn renderSceneResolveCreate(params: ?*const c.ke_render_scene_resolve_params
     return written;
 }
 
-pub const RenderLabelResolveParams = c.ke_render_label_resolve_params;
+pub const RenderLabelResolveConfig = c.ke_render_label_resolve_config;
 pub const RenderSceneResolveParams = c.ke_render_scene_resolve_params;
 pub const RenderLabelResolveHandle = c.ke_render_label_resolve_handle;

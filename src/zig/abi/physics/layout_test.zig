@@ -32,9 +32,9 @@ test "every record is laid out as the header lays it out" {
 
 test "every enum value is the header's value" {
     @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_STATIC), @as(i64, abi.c.KE_BODY_TYPE_STATIC));
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_KINEMATIC), @as(i64, abi.c.KE_BODY_TYPE_KINEMATIC));
-    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_DYNAMIC), @as(i64, abi.c.KE_BODY_TYPE_DYNAMIC));
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_2D_STATIC), @as(i64, abi.c.KE_BODY_TYPE_2D_STATIC));
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_2D_KINEMATIC), @as(i64, abi.c.KE_BODY_TYPE_2D_KINEMATIC));
+    try std.testing.expectEqual(@as(i64, c.KE_BODY_TYPE_2D_DYNAMIC), @as(i64, abi.c.KE_BODY_TYPE_2D_DYNAMIC));
 }
 
 test "every constant is the header's value" {

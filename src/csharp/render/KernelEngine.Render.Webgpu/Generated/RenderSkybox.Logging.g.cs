@@ -9,20 +9,22 @@ public sealed unsafe partial class RenderSkybox
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Holds the frame's color and depth; borrowed.</param>
-    /// <param name="device">Borrowed.</param>
-    /// <param name="camera">Names the components the pass reads; borrowed.</param>
-    /// <param name="scene">Names the components the pass reads; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    public RenderSkybox(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(CreateLogged(loggerFactory, runtime, service, device, camera, scene, frame))
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
+    public RenderSkybox(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_skybox_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_skybox_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_skybox_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, service, device, camera, scene, frame);
+        return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame);
     }
 }

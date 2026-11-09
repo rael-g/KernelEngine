@@ -3,6 +3,7 @@
 
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/context.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
@@ -39,22 +40,27 @@ extern "C"
     } ke_render_label_resolve_handle;
 
     /// [bag] What the label resolve needs to give a label the font it names.
-    typedef struct ke_render_label_resolve_params
+    /// [bag] The values the label resolve is created with.
+    typedef struct ke_render_label_resolve_config
     {
-        ke_runtime        *runtime;   ///< Registers the system; borrowed, must outlive it.
-        ke_render_service *service;   ///< Uploads the glyph atlas; borrowed, must outlive it.
-        ke_render_ui      *ui;        ///< Registers the font; borrowed, must outlive it.
-        /// Reads the font a label names; optional, borrowed. Without it every label is reported.
-        ke_asset_resolver *resolver; ///< [optional]
-        ke_render_scene_resolve *scene; ///< Names the label component; borrowed.
-    } ke_render_label_resolve_params;
+        /// [optional,utf8] The font a label that names none draws with; copied. NULL leaves such a
+        /// label without text.
+        const char *default_font;
+    } ke_render_label_resolve_config;
+
 
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
     /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
     /// handle's ref is NULL on failure.
+    /// @param context [borrowed] The parts it is built on; read during the call.
+    /// @param ui Registers the font; borrowed, must outlive it.
+    /// @param resolver [optional] Reads the font a label names; borrowed. Without it every label is
+    ///                 reported.
+    /// @param config [borrowed] Its values; Required; every field is read as given.
     /// @param out_resolve [out] Receives the handle; left zeroed on failure.
     KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
-        const ke_render_label_resolve_params *params, ke_render_label_resolve_handle *out_resolve);
+        const ke_render_context *context, ke_render_ui *ui, ke_asset_resolver *resolver,
+        const ke_render_label_resolve_config *config, ke_render_label_resolve_handle *out_resolve);
 
 #ifdef __cplusplus
 }

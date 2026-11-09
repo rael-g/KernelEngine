@@ -40,7 +40,11 @@ export fn ke_window_glfw_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_window orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_window.c.ke_window_handle);
-    out.* = create(input, config orelse &.{}) catch |err| {
+    const given = config orelse {
+        log.warn("creating the window failed: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
+    out.* = create(input, given) catch |err| {
         log.warn("creating the window failed: {t}", .{err});
         return R.code(err);
     };
@@ -68,14 +72,6 @@ fn create(input: ?*abi_input.c.ke_input, given: *const Config) R.Error!abi_windo
     }
 
     return .{ .ref = core.toApi(), .destroy = core_mod.Core.destroyApi };
-}
-
-test "a config left at its defaults gives a 1280 by 720 window titled KernelEngine" {
-    const settings = try settingsOf(&.{});
-    try std.testing.expectEqualStrings("KernelEngine", std.mem.span(settings.title));
-    try std.testing.expectEqual(@as(u32, 1280), settings.width);
-    try std.testing.expectEqual(@as(u32, 720), settings.height);
-    try std.testing.expect(!settings.fullscreen);
 }
 
 test "a given config is applied as given" {

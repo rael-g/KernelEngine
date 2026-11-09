@@ -13,13 +13,21 @@ const R = @import("result").Result(.{});
 
 const std = @import("std");
 
-/// Borrows the services `bake` calls and frees none of them. A null `resolver` is not rejected
-/// here: `bake` reports each label that reaches it.
+/// Borrows the services `bake` calls and frees none of them; `default_font` is owned by the label
+/// resolve that holds the state. A null `resolver` is not rejected here: `bake` reports each label
+/// that reaches it.
 pub const State = struct {
     core: *abi_render.c.ke_render_service,
     ui: *abi_render_ui.c.ke_render_ui,
     resolver: ?*abi_asset_resolver.c.ke_asset_resolver,
+    default_font: ?[:0]const u8 = null,
 };
+
+/// The font a label draws with: the one it names, or the default when it names none.
+fn fontPathOf(st: *const State, l: *const abi_ui_components.c.ke_label_component) ?[*:0]const u8 {
+    if (l.font[0] != 0) return @ptrCast(&l.font);
+    return if (st.default_font) |d| d.ptr else null;
+}
 
 const log = std.log.scoped(.render_scene);
 
@@ -34,8 +42,8 @@ fn reportUnresolved(path: []const u8, reason: []const u8) void {
 /// font, or `KE_UI_FONT_FAILED` after `reportUnresolved` has named the
 /// step that failed. The resolver's font data is released by the time it returns, on every path
 /// that received it.
-fn bake(st: *State, l: *abi_ui_components.c.ke_label_component) abi_ui_components.c.ke_ui_font_handle {
-    const path = std.mem.sliceTo(&l.font, 0);
+fn bake(st: *State, l: *abi_ui_components.c.ke_label_component, font_path: [*:0]const u8) abi_ui_components.c.ke_ui_font_handle {
+    const path = std.mem.span(font_path);
 
     const resolver = st.resolver orelse {
         reportUnresolved(path, "the label resolve was given no asset resolver");
@@ -55,7 +63,7 @@ fn bake(st: *State, l: *abi_ui_components.c.ke_label_component) abi_ui_component
     };
 
     var data: ?*abi_text.c.ke_font_data = null;
-    if (resolver.resolve_font.?(resolver, @ptrCast(&l.font), l.font_size, first_codepoint, codepoint_count, atlas_size, &data) != abi_result.c.KE_OK) {
+    if (resolver.resolve_font.?(resolver, font_path, l.font_size, first_codepoint, codepoint_count, atlas_size, &data) != abi_result.c.KE_OK) {
         reportUnresolved(path, "the asset resolver could not read it");
         return abi_ui_components.c.KE_UI_FONT_FAILED;
     }
@@ -94,8 +102,9 @@ pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) cal
         var i: usize = 0;
         while (i < segs.?[s].count) : (i += 1) {
             const l: *abi_ui_components.c.ke_label_component = @ptrCast(&labels[i]);
-            if (l.font[0] == 0 or l.font_handle.bits != abi_render_handles.c.KE_HANDLE_NONE) continue;
-            l.font_handle = bake(st, l);
+            if (l.font_handle.bits != abi_render_handles.c.KE_HANDLE_NONE) continue;
+            const font_path = fontPathOf(st, l) orelse continue;
+            l.font_handle = bake(st, l, font_path);
         }
     }
     return R.ok;
@@ -110,13 +119,25 @@ fn labelNaming(path: []const u8) abi_ui_components.c.ke_label_component {
     return l;
 }
 
+test "a label naming no font draws with the default, and with none when there is no default" {
+    var core = std.mem.zeroes(abi_render.c.ke_render_service);
+    var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
+    var st = State{ .core = &core, .ui = &ui, .resolver = null };
+    var unnamed = labelNaming("");
+    try testing.expect(fontPathOf(&st, &unnamed) == null);
+    st.default_font = "res://default.ttf";
+    try testing.expectEqualStrings("res://default.ttf", std.mem.span(fontPathOf(&st, &unnamed).?));
+    var named = labelNaming("res://own.ttf");
+    try testing.expectEqualStrings("res://own.ttf", std.mem.span(fontPathOf(&st, &named).?));
+}
+
 test "a label whose font never resolved gets the failed-font handle" {
     var core = std.mem.zeroes(abi_render.c.ke_render_service);
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
     var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
-    try testing.expectEqual(@as(u32, std.math.maxInt(u32)), bake(&st, &l).bits);
+    try testing.expectEqual(@as(u32, std.math.maxInt(u32)), bake(&st, &l, fontPathOf(&st, &l).?).bits);
 }
 
 test "a font that failed to resolve is not retried on the next tick" {
@@ -125,7 +146,7 @@ test "a font that failed to resolve is not retried on the next tick" {
     var st = State{ .core = &core, .ui = &ui, .resolver = null };
     var l = labelNaming("res://font.ttf");
 
-    l.font_handle = bake(&st, &l);
+    l.font_handle = bake(&st, &l, fontPathOf(&st, &l).?);
 
     const skips = l.font[0] == 0 or l.font_handle.bits != abi_render_handles.c.KE_HANDLE_NONE;
     try testing.expect(skips);

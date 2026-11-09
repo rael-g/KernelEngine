@@ -9,7 +9,7 @@ namespace KernelEngine.Render.Webgpu;
 public sealed record WebgpuGpuDeviceConfig : KernelEngine.Configuration.IConfigSection<WebgpuGpuDeviceConfig>
 {
     /// <summary>Asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</summary>
-    public bool EnableValidation { get; init; } = true;
+    public bool EnableValidation { get; init; } = false;
 
     /// <summary>The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</summary>
     public bool DebugLabels { get; init; } = false;

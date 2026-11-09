@@ -42,9 +42,8 @@ public partial class Sprite2D : Node2D
     [NativeField("Color", Component = typeof(Sprite2dComponent))]
     public partial System.Numerics.Vector4 Color { get; set; }
 
-    /// <summary>ke_alpha_mode.</summary>
     [NativeField("AlphaMode", Component = typeof(Sprite2dComponent))]
-    public partial uint AlphaMode { get; set; }
+    public partial AlphaMode AlphaMode { get; set; }
 
     [NativeField("AlphaCutoff", Component = typeof(Sprite2dComponent))]
     public partial float AlphaCutoff { get; set; }

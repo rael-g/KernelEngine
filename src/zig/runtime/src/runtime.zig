@@ -199,6 +199,10 @@ const RuntimeState = struct {
     next_system_id: u64,
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
+    exit: std.atomic.Value(bool),
+    host_q: DeferQueue,
+    host_state: context.CtxState,
+    host_commands: abi_ecs.c.ke_ecs_commands,
     fixed_accumulator: f32,
     started: bool,
     shut_down: bool,
@@ -1074,6 +1078,8 @@ fn runtimeTickBody(self: ?*abi_runtime.c.ke_runtime, dt: f32) abi_result.c.ke_re
     }
     const h = handleOf(self.?);
 
+    deferFlush(&h.state.host_q, h.state.ecs) catch |err| return R.code(reportFailure(err, "applying the host's commands failed"));
+    freeHostQueue(h);
     var failure = runtimePrepareSystems(h);
     if (!failure.failed() and !h.state.started) {
         h.state.started = true;
@@ -1131,6 +1137,20 @@ fn reported(failure: PhaseFailure, comptime what: []const u8) abi_result.c.ke_re
 /// failure. A tick returns
 /// before that phase finishes, so a failure of the phase reaches the caller only here or at the
 /// next tick.
+/// Slot `request_exit`. Sets the flag the host reads; a null runtime is ignored.
+fn runtimeRequestExit(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
+    const rt = self orelse return;
+    if (rt.handle == null) return;
+    handleOf(rt).state.exit.store(true, .release);
+}
+
+/// Slot `exit_requested`. False for a null runtime.
+fn runtimeExitRequested(self: ?*abi_runtime.c.ke_runtime) callconv(.c) bool {
+    const rt = self orelse return false;
+    if (rt.handle == null) return false;
+    return handleOf(rt).state.exit.load(.acquire);
+}
+
 fn runtimeFlushRender(self: ?*abi_runtime.c.ke_runtime) callconv(.c) abi_result.c.ke_result {
     if (self == null or self.?.handle == null) {
         return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
@@ -1169,9 +1189,24 @@ fn runtimeUnloadModules(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 /// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
 /// ever started, calls `runtimeUnloadModules`, and releases the pending and
 /// registered systems and the scratch. The ecs and the task pool are not touched.
+/// Frees the buffers of the host's queue once it has been applied, leaving it empty.
+fn freeHostQueue(h: *RuntimeHandle) void {
+    if (h.state.host_q.cmds) |cmds| cFree(DeferCommand, cmds, h.state.host_q.capacity);
+    if (h.state.host_q.arena) |arena| cFree(u8, arena, h.state.host_q.arena_capacity);
+    h.state.host_q = .{};
+}
+
+/// Slot `commands`. The host's queue, bound to the runtime's ecs.
+fn runtimeCommands(self: ?*abi_runtime.c.ke_runtime) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
+    const rt = self orelse return null;
+    if (rt.handle == null) return null;
+    return &handleOf(rt).state.host_commands;
+}
+
 fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
+    freeHostQueue(h);
 
     runtimeUnloadModules(self);
 
@@ -1203,8 +1238,9 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 
 /// The factory. Creates a runtime over an ecs and a task pool that it does not own: it keeps the
 /// pointers and never frees them. A null ecs or task pool fails with `invalid_argument`, and an
-/// allocation failure with `out_of_memory`. The params pointer may be null, and a zero in
-/// `fixed_dt`, `fixed_dt_max_accum` or `max_systems_per_phase` takes that field's default. The
+/// allocation failure with `out_of_memory`. A null params pointer takes the header's defaults; a
+/// `fixed_dt` or `fixed_dt_max_accum` that is not greater than zero, or no system per phase, fails
+/// with `invalid_argument`. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
 export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
@@ -1212,6 +1248,11 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or task_pool == null) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
+    }
+    if (params == null) return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs its params"));
+    const p: *const abi_runtime_factory.c.ke_runtime_params = params;
+    if (!(p.fixed_dt > 0.0) or !(p.fixed_dt_max_accum > 0.0) or p.max_systems_per_phase == 0) {
+        return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs a positive fixed step, catch-up budget and system count"));
     }
 
     const h_mem = cAlloc(RuntimeHandle, 1) orelse {
@@ -1225,10 +1266,10 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.state.exclusive = .empty;
     h.state.self_ordered = .empty;
 
-    h.state.fixed_dt = if (params != null and params.*.fixed_dt > 0.0) params.*.fixed_dt else (1.0 / 60.0);
-    h.state.fixed_dt_max_accum = if (params != null and params.*.fixed_dt_max_accum > 0.0) params.*.fixed_dt_max_accum else 0.25;
+    h.state.fixed_dt = p.fixed_dt;
+    h.state.fixed_dt_max_accum = p.fixed_dt_max_accum;
 
-    const max_per_phase: u32 = if (params != null and params.*.max_systems_per_phase > 0) params.*.max_systems_per_phase else 256;
+    const max_per_phase: u32 = p.max_systems_per_phase;
     h.state.max_systems_per_phase = max_per_phase;
     h.state.extract_scratch = .{};
     const n: usize = @as(usize, max_per_phase) * KE_RUNTIME_PHASE_COUNT;
@@ -1256,11 +1297,26 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
     h.api.unload_modules = &runtimeUnloadModules;
+    h.api.request_exit = &runtimeRequestExit;
+    h.api.exit_requested = &runtimeExitRequested;
+    h.state.exit = std.atomic.Value(bool).init(false);
+    h.api.commands = &runtimeCommands;
+    h.state.host_q = .{};
+    h.state.host_state = std.mem.zeroInit(context.CtxState, .{ .ecs = ecs.?, .system_name = "host", .defer_q = &h.state.host_q });
+    h.state.host_commands = .{
+        .handle = &h.state.host_state,
+        .spawn = &context.commandsSpawn,
+        .attach = &context.commandsAttach,
+        .detach = &context.commandsDetach,
+        .despawn = &context.commandsDespawn,
+        .@"defer" = &context.commandsDefer,
+    };
 
     out.* = .{ .ref = &h.api, .destroy = &runtimeDestroy };
     return R.ok;
 }
 
+const test_params: abi_runtime_factory.c.ke_runtime_params = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
 const testing = std.testing;
 
 fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_runtime.c.ke_system_id {
@@ -1291,6 +1347,9 @@ fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_
     return h;
 }
 
+const test_world_id_base: u32 = 1048576;
+const test_workers: u32 = std.math.maxInt(u32);
+
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *abi_ecs.c.ke_ecs_handle) callconv(.c) abi_result.c.ke_result;
 extern fn ke_task_pool_enki_create(params: ?*const anyopaque, out_task_pool: *abi_task_pool.c.ke_task_pool_handle) callconv(.c) abi_result.c.ke_result;
 
@@ -1313,12 +1372,12 @@ const Fixture = struct {
 
     fn init() !Fixture {
         var sh: abi_task_pool.c.ke_task_pool_handle = undefined;
-        try R.check(ke_task_pool_enki_create(null, &sh));
+        try R.check(ke_task_pool_enki_create(&test_workers, &sh));
 
         var eh: abi_ecs.c.ke_ecs_handle = undefined;
-        try R.check(ke_ecs_flecs_create(null, &eh));
+        try R.check(ke_ecs_flecs_create(&test_world_id_base, &eh));
 
-        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+        var rp = test_params;
         const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
@@ -1656,7 +1715,7 @@ const BareRuntime = struct {
     runtime_h: abi_runtime.c.ke_runtime_handle = undefined,
 
     fn init(self: *BareRuntime) !void {
-        var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+        var rp = test_params;
         self.runtime_h = createdRuntime(&self.ecs, &self.task_pool, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
@@ -2150,11 +2209,35 @@ test "a system registered from a render body is queued instead of waiting on the
     try testing.expectEqual(@as(u32, 1), m.late_runs);
 }
 
+test "a request to exit is recorded and read back, and a fresh runtime has none" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    const rt = f.runtime_h.ref;
+    try testing.expect(!rt.?.exit_requested.?(rt));
+    rt.?.request_exit.?(rt);
+    try testing.expect(rt.?.exit_requested.?(rt));
+}
+
+test "a zero fixed step, catch-up budget or system count is refused, not replaced by a default" {
+    var f = try Fixture.init();
+    defer f.deinit();
+
+    var rp = test_params;
+    rp.fixed_dt = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+    rp = test_params;
+    rp.fixed_dt_max_accum = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+    rp = test_params;
+    rp.max_systems_per_phase = 0;
+    try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
+}
+
 test "creating a runtime without an ecs is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+    var rp = test_params;
     const rh = createdRuntime(null, f.task_pool_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -2163,7 +2246,7 @@ test "creating a runtime without a task pool is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = std.mem.zeroes(abi_runtime_factory.c.ke_runtime_params);
+    var rp = test_params;
     const rh = createdRuntime(f.ecs_h.ref, null, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -2763,6 +2846,23 @@ test "a deferred spawn is applied at the wave barrier" {
     try testing.expectEqual(@as(u32, 3), deferAppliedCount());
 }
 
+test "the host's commands are applied at the start of the next tick" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    const e = f.ecs();
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "host_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    const commands = f.rt().commands.?(f.rt()).?;
+    var entity: abi_asset_resolver.c.ke_entity = abi_ecs.c.KE_ENTITY_INVALID;
+    try R.check(commands.spawn.?(commands, &entity));
+    const value: u32 = 42;
+    try R.check(commands.attach.?(commands, entity, cid, &value, @sizeOf(u32)));
+    try testing.expect(e.component_get.?(e, entity, cid) == null);
+    try testing.expect(f.tick(1.0 / 60.0));
+    const held: *const u32 = @ptrCast(@alignCast(e.component_get.?(e, entity, cid).?));
+    try testing.expectEqual(@as(u32, 42), held.*);
+}
+
 test "spawn hands the system body an id it can actually use" {
     var f = try Fixture.init();
     defer f.deinit();
@@ -2776,7 +2876,7 @@ test "spawn hands the system body an id it can actually use" {
 
     const e = f.ecs();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "spawned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     for (probe.ids, 0..) |id, i| {
         try testing.expect(id != abi_ecs.c.KE_ENTITY_INVALID);
         for (probe.ids[i + 1 ..]) |other| try testing.expect(id != other);
@@ -2797,7 +2897,7 @@ test "an entity spawned with no components still exists after the barrier" {
 
     const e = f.ecs();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "exists_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try R.check(e.entity_destroy.?(e, probe.ids[0]));
     var revived: ?*anyopaque = null;
     try testing.expectError(error.InvalidArgument, R.check(e.component_add.?(e, probe.ids[0], cid, &revived)));
@@ -2829,7 +2929,7 @@ test "deferred attach detach and despawn are applied at the barrier" {
     resetDeferApplied();
 
     var probe = MutatorProbe{};
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "mutator_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("Mutator", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -2847,7 +2947,7 @@ test "a recorded attach the ecs refuses fails the tick and names the system" {
     resetDeferApplied();
 
     var probe = MutatorProbe{ .target = 42 };
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refused_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refused_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("Refused", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &mutatorBody;
@@ -2919,7 +3019,7 @@ test "an attach whose payload size differs from the component size is refused wi
     resetDeferApplied();
 
     var probe = RefusalProbe{};
-    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 0, .fields = null, .field_count = 0 }, &probe.cid));
+    try R.check(f.ecs().component_register.?(f.ecs(), &abi_ecs.c.ke_component_params{ .name = "refusal_probe", .size = 1, .alignment = 1, .fields = null, .field_count = 0 }, &probe.cid));
     var sys = systemParams("WrongSize", abi_runtime.c.KE_PHASE_UPDATE);
     sys.user_data = &probe;
     sys.execute = &wrongSizeBody;
@@ -2964,7 +3064,7 @@ test "the defer queue drains between ticks" {
 
 test "a zero size component registers as a usable tag" {
     var h: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(null, &h));
+    try R.check(ke_ecs_flecs_create(&test_world_id_base, &h));
     defer h.destroy.?(h.ref);
 
     const ecs: *abi_ecs.c.ke_ecs = @ptrCast(h.ref);

@@ -10,8 +10,8 @@ namespace KernelEngine.Runtime.Tests;
 
 public class ModulePatternTests : IDisposable
 {
-    private readonly EnkiTaskPool _taskPool = new();
-    private readonly FlecsEcsRegistry _ecs = new();
+    private readonly EnkiTaskPool _taskPool = new(uint.MaxValue);
+    private readonly FlecsEcsRegistry _ecs = new(1048576);
 
     public void Dispose()
     {

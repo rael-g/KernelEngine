@@ -38,7 +38,7 @@ pub const ke_component_params = extern struct {
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// Bytes per entity; 0 registers a tag (no storage).
     size: usize = std.mem.zeroes(usize),
-    /// A power of two; 0 selects the alignment of max_align_t.
+    /// A power of two for a sized component; ignored for a tag of size 0.
     alignment: usize = std.mem.zeroes(usize),
     /// The type's field layout, normally its field table; must outlive the ecs. NULL registers the
     /// size alone.

@@ -171,6 +171,8 @@ pub const CoreState = struct {
     sized_w: u32,
     sized_h: u32,
     resource_generation: u32,
+    frame_color: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID,
+    frame_depth: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID,
 
     frame_live: bool,
 
@@ -232,6 +234,12 @@ pub const CoreState = struct {
     }
 
     /// Scans the entries by name; null when none carries it.
+    pub fn findId(self: *CoreState, cid: abi_asset_resolver.c.ke_component_id) ?*Resource {
+        if (cid == abi_ecs.c.KE_COMPONENT_INVALID) return null;
+        for (self.resources.items) |*r| if (r.cid == cid) return r;
+        return null;
+    }
+
     pub fn find(self: *CoreState, name: [*c]const u8) ?*Resource {
         var i: u32 = 0;
         while (i < self.resources.items.len) : (i += 1) {
@@ -426,7 +434,8 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
         .import_texture = resource_table.importTexture,
         .import_tag = resource_table.importTag,
         .import_buffer = resource_table.importBuffer,
-        .cid = resource_table.cidOf,
+        .frame_color = resource_table.frameColor,
+        .frame_depth = resource_table.frameDepth,
         .begin_pass = pass_recording.beginPass,
         .end_pass = pass_recording.endPass,
         .begin_frame = frame_lifecycle.beginFrame,
@@ -767,7 +776,7 @@ const Target = struct {
 
 fn serviceOf(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, ecs: ?*abi_ecs.c.ke_ecs, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [*c]const u8) abi_render.c.ke_render_service_handle {
     var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
-    _ = ke_render_service_create(device, target, ecs, io, binder, &.{ .shader_dir = shader_dir }, &h);
+    _ = ke_render_service_create(device, target, ecs, io, binder, &.{ .shader_dir = shader_dir, .color_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = .{ .x = 0.1, .y = 0.15, .z = 0.3, .w = 1 } }, &h);
     return h;
 }
 
@@ -891,19 +900,19 @@ test "a target declared relative to the backbuffer is recreated when the backbuf
     desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
-    _ = declared(svc, &desc);
-    const first = svc.*.resource_view.?(svc, "hdr");
+    const hdr = declared(svc, &desc);
+    const first = svc.*.resource_view.?(svc, hdr);
 
     try R.check(svc.*.begin_frame.?(svc));
     _ = svc.*.end_frame.?(svc);
-    try testing.expectEqual(first, svc.*.resource_view.?(svc, "hdr"));
+    try testing.expectEqual(first, svc.*.resource_view.?(svc, hdr));
     try testing.expectEqual(@as(u32, 0), svc.*.resource_generation.?(svc));
 
     target.width = 640;
     target.height = 360;
     try R.check(svc.*.begin_frame.?(svc));
     _ = svc.*.end_frame.?(svc);
-    try testing.expect(svc.*.resource_view.?(svc, "hdr") != first);
+    try testing.expect(svc.*.resource_view.?(svc, hdr) != first);
     try testing.expectEqual(@as(u32, 1), svc.*.resource_generation.?(svc));
 
     h.destroy.?(svc);
@@ -1018,7 +1027,7 @@ test "a render pass is opened under the name its pass declared" {
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
 
-    const writes = [_]?[*:0]const u8{"backbuffer"};
+    const writes = [_]abi_asset_resolver.c.ke_component_id{svc.*.frame_depth.?(svc)};
     var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.name = "render.named";
     io.writes = &writes;
@@ -1040,6 +1049,8 @@ const PassHarness = struct {
     gpu: Gpu,
     target: Target,
     h: abi_render.c.ke_render_service_handle,
+    src: abi_asset_resolver.c.ke_component_id,
+    dst: abi_asset_resolver.c.ke_component_id,
 
     fn init(self: *PassHarness) !void {
         try self.sd.init();
@@ -1047,14 +1058,15 @@ const PassHarness = struct {
         self.target.init();
         self.h = serviceOf(self.gpu.dev.api(), self.target.api(), self.gpu.ecs.api(), self.sd.api(), self.gpu.binder.api(), self.sd.path());
         const svc = self.h.ref orelse return error.TestUnexpectedResult;
-        for ([_][*:0]const u8{ "src", "dst" }) |name| {
+        for ([_][*:0]const u8{ "src", "dst" }, [_]*abi_asset_resolver.c.ke_component_id{ &self.src, &self.dst }) |name, out| {
             var desc = std.mem.zeroes(abi_render.c.ke_render_resource_params);
             desc.name = name;
             desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
             desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
             desc.scale_x = 1.0;
             desc.scale_y = 1.0;
-            try testing.expect(declared(svc, &desc) != abi_ecs.c.KE_COMPONENT_INVALID);
+            out.* = declared(svc, &desc);
+            try testing.expect(out.* != abi_ecs.c.KE_COMPONENT_INVALID);
         }
     }
 
@@ -1141,7 +1153,7 @@ test "a pass outside the chain clears its write and samples no color" {
     try ph.begin();
     const svc = ph.h.ref.?;
 
-    const writes = [_]?[*:0]const u8{"dst"};
+    const writes = [_]abi_asset_resolver.c.ke_component_id{ph.dst};
     var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
@@ -1163,7 +1175,7 @@ test "a pass asking for the frame's depth has it attached loaded" {
     defer ph.deinit();
     try ph.begin();
 
-    const writes = [_]?[*:0]const u8{"dst"};
+    const writes = [_]abi_asset_resolver.c.ke_component_id{ph.dst};
     var io = std.mem.zeroes(abi_render.c.ke_render_pass_io);
     io.writes = &writes;
     io.writes_count = 1;
@@ -1218,7 +1230,7 @@ test "joining the chain refuses a stage out of range" {
     try testing.expectEqual(abi_render.c.KE_RENDER_CHAIN_NONE, link);
 }
 
-test "declaring a name again with the same description answers the same resource, and another description is refused" {
+test "declaring a label again declares a resource of its own" {
     var ph: PassHarness = undefined;
     try ph.init();
     defer ph.deinit();
@@ -1230,9 +1242,9 @@ test "declaring a name again with the same description answers the same resource
     desc.size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
     desc.scale_x = 1.0;
     desc.scale_y = 1.0;
-    try testing.expectEqual(svc.*.cid.?(svc, "src"), declared(svc, &desc));
-    desc.format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM;
-    try testing.expectEqual(@as(abi_asset_resolver.c.ke_component_id, abi_ecs.c.KE_COMPONENT_INVALID), declared(svc, &desc));
+    const again = declared(svc, &desc);
+    try testing.expect(again != abi_ecs.c.KE_COMPONENT_INVALID);
+    try testing.expect(again != ph.src);
 }
 
 test "a compute pass replays at the end of the frame under its name and with the debug groups recorded into it" {

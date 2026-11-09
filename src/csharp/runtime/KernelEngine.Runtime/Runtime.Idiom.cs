@@ -18,7 +18,7 @@ public sealed unsafe partial class Runtime : IRuntime
     /// the runtime lives.
     /// </summary>
     public Runtime(INativeEcs ecs, INativeTaskPool taskPool)
-        : this(NativeEcsOf(ecs), NativeTaskPoolOf(taskPool), null)
+        : this(NativeEcsOf(ecs), NativeTaskPoolOf(taskPool), Sixty())
     {
         Hold(ecs.Owner);
         Hold(taskPool.Owner);
@@ -32,6 +32,17 @@ public sealed unsafe partial class Runtime : IRuntime
         : this(RoutingLog(ecs, loggerFactory), taskPool)
     {
     }
+
+    private static readonly Native.ke_runtime_params* SixtyPerSecond = SixtyPerSecondParams();
+
+    private static Native.ke_runtime_params* SixtyPerSecondParams()
+    {
+        var p = (Native.ke_runtime_params*)System.Runtime.InteropServices.NativeMemory.Alloc((nuint)sizeof(Native.ke_runtime_params));
+        *p = new Native.ke_runtime_params { fixed_dt = 1.0f / 60.0f, fixed_dt_max_accum = 0.25f, max_systems_per_phase = 256 };
+        return p;
+    }
+
+    private static Native.ke_runtime_params* Sixty() => SixtyPerSecond;
 
     private static INativeEcs RoutingLog(INativeEcs ecs, Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
     {

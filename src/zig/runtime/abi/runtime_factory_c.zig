@@ -13,6 +13,11 @@ pub const ke_module_id = u64;
 pub const ke_query_id = u64;
 pub const ke_system_id = u64;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -41,12 +46,12 @@ pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*an
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 pub const ke_runtime_params = extern struct {
-    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
+    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     fixed_dt: f32 = std.mem.zeroes(f32),
-    /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects
-    /// 0.25.
+    /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than
+    /// zero.
     fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
-    /// Most systems one phase may hold; registering past it fails. 0 selects 256.
+    /// Most systems one phase may hold; registering past it fails.
     max_systems_per_phase: u32 = std.mem.zeroes(u32),
 };
 

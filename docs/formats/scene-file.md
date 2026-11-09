@@ -116,29 +116,16 @@ A block key is applied in up to three ways, and they do not fail alike.
 1. **The generated field table.** The key is matched to a field and the value written by the field's
    type (`component_fields_apply.zig:18-36`). A value the field cannot take writes nothing, and the key
    is **claimed** all the same, so no "no field" error follows.
-2. **An apply callback**, for what a table cannot describe. It claims the keys it owns
-   (`keyIs`, `components_apply.zig:15-21`), and a value outside its domain fails the load with the
-   callback's own message.
-3. **A callback that returns false without an error** fails the load with
-   `component '<name>' was given a value it cannot hold` (`scene_loader.zig:342-351`).
+2. **An apply callback**, which only managed code still registers. It claims the keys it owns, and
+   a value outside its domain fails the load with the callback's own message; one that returns
+   false without an error fails the load with `component '<name>' was given a value it cannot hold`.
 
-A callback may be written in managed code: a game node's apply reads each supported property by
-its key and **ignores** a value of the wrong type or an enum name that does not parse
+A managed game node's apply reads each supported property by its key and **ignores** a value of
+the wrong type or an enum name that does not parse
 ([node-types.md](../architecture/node-types.md)).
 
-The callbacks the engine ships:
-
-| component | key | domain | stored as |
-|---|---|---|---|
-| `transform` | `rotation_euler` | three numbers, **degrees** | the quaternion `rotation` (`components_apply.zig:64-85`) |
-| `transform` | `scale` as `[x, y]` | two numbers | `scale.z` is set to `1` (`components_apply.zig:80-82`) |
-| `transform2d` | `rotation` | a number, **degrees** | radians (`components_apply.zig:45-63`) |
-| `camera` | `fov_degrees` | a number strictly between 0 and 180 | `fov`, which the camera reads in degrees (`src/zig/render/module/src/component_apply.zig`) |
-| `mesh`, `sprite2d` | `alpha_mode` | the string `'opaque'`, `'mask'` or `'blend'` | the enumerator (`component_apply.zig:51-92`) |
-
-Outside its domain, each of the rotation, field-of-view and alpha keys fails the load: a
-`rotation_euler` that is not three numbers, a `rotation` that is not a number, an `alpha_mode` that is
-not one of the three strings (an integer included), a `fov_degrees` of `0` or `180`.
+An integer field whose header type is an enum takes the enumerator's name as well, lower case and
+without the enum's prefix: `alpha_mode = "blend"`, `kind = "circle"`.
 
 ## Connections
 

@@ -6,10 +6,9 @@
     .dependencies = .{
         .abi_asset_resolver = .{ .path = "../../../abi/asset_resolver" },
         .abi_ecs = .{ .path = "../../../abi/ecs" },
-        .abi_ecs_variant = .{ .path = "../../../abi/ecs_variant" },
-        .abi_framework = .{ .path = "../../../abi/framework" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_render = .{ .path = "../../../abi/render" },
+        .abi_render_context = .{ .path = "../../../abi/render_context" },
         .abi_render_ui = .{ .path = "../../../abi/render_ui" },
         .abi_render_ui_factory = .{ .path = "../../ui/abi" },
         .abi_result = .{ .path = "../../../abi/result" },

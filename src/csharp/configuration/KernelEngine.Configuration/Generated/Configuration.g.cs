@@ -274,26 +274,6 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         Handle->unsubscribe(Handle, sub);
     }
 
-    /// <summary>Fills a config struct: writes each field's default, then the value the store holds for the field's key in section. A key holding a type the field cannot take is logged and leaves the default; an integer is accepted by a float or double field. A string field points at the store's copy, valid as get_string's result is.</summary>
-    /// <param name="section">The section the struct's keys live in.</param>
-    /// <param name="fields">The struct's field table.</param>
-    /// <param name="config">The struct to fill.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Fill(string section, ReadOnlySpan<ConfigField> fields, nint config)
-    {
-        var sectionText = section ?? "";
-        var sectionSize = System.Text.Encoding.UTF8.GetMaxByteCount(sectionText.Length) + 1;
-        Span<byte> sectionBytes = sectionSize <= 512 ? stackalloc byte[512] : new byte[sectionSize];
-        sectionBytes[System.Text.Encoding.UTF8.GetBytes(sectionText, sectionBytes)] = 0;
-        fixed (byte* sectionPtr = sectionBytes)
-        {
-            fixed (ConfigField* fieldsPtr = fields)
-            {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->fill(Handle, (sbyte*)sectionPtr, fieldsPtr, (uint)fields.Length, (void*)config), "fill");
-            }
-        }
-    }
-
     /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>
     /// <param name="section">The parent; "" lists the top-level sections.</param>
     /// <param name="each">Called once per child section.</param>

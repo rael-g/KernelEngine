@@ -22,7 +22,7 @@ public static class Sprite2dComponentDefaults
             Size = new System.Numerics.Vector2(1f, 1f),
             Pivot = new System.Numerics.Vector2(0.5f, 0.5f),
             Color = new System.Numerics.Vector4(1f, 1f, 1f, 1f),
-            AlphaMode = 0,
+            AlphaMode = AlphaMode.Opaque,
             AlphaCutoff = 0.5f,
         };
     }

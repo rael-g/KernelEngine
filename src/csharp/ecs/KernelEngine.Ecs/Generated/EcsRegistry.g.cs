@@ -87,7 +87,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With `fields` the layouts are compared field by field; without them, only the size and the alignment are compared.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
-    /// <param name="alignment">A power of two; 0 selects the alignment of max_align_t.</param>
+    /// <param name="alignment">A power of two for a sized component; ignored for a tag of size 0.</param>
     /// <param name="fields">The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.</param>
     /// <returns>Receives the component's id; KE_COMPONENT_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

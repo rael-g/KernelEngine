@@ -26,16 +26,17 @@ typedef struct ke_ecs_flecs_config
 {
     /// First id the world's own allocator may issue. Ids below it form the pool
     /// entity_reserve draws from, so this doubles as that pool's capacity — the
-    /// world's own side is unbounded. 0 takes the default. Raise it for a world
+    /// world's own side is unbounded. Raise it for a world
     /// whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.
     uint32_t world_id_base;
 } ke_ecs_flecs_config;
+
 
 /// Creates a ke_ecs vtable backed by an internally-owned world.
 /// Also installs process-wide log and abort handlers: a check flecs fails makes the
 /// slot that called it return KE_RESULT_INVALID_ARGUMENT, and an internal failure of
 /// flecs logs flecs's message and the stack before flecs ends the process.
-/// @param config [borrowed,optional] NULL takes every default.
+/// @param config [borrowed] Required; every field is read as given.
 /// @param out_ecs [out] Receives the ECS; left zeroed on failure.
 /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_ecs or a world_id_base that leaves
 ///         no reserve pool; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_NOT_INITIALIZED when flecs cannot

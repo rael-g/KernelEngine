@@ -40,9 +40,6 @@ public unsafe partial struct ke_configuration
     [NativeTypeName("void (*)(struct ke_configuration *, ke_configuration_subscription)")]
     public delegate* unmanaged[Cdecl]<ke_configuration*, uint, void> unsubscribe;
 
-    [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, const ke_config_field *, uint32_t, void *)")]
-    public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, ConfigField*, uint, void*, KernelEngine.Result.Native.Result> fill;
-
     [NativeTypeName("ke_result (*)(struct ke_configuration *, const char *, ke_configuration_child_func, void *)")]
     public delegate* unmanaged[Cdecl]<ke_configuration*, sbyte*, delegate* unmanaged[Cdecl]<sbyte*, void*, void>, void*, KernelEngine.Result.Native.Result> for_each_child;
 }

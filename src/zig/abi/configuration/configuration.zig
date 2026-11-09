@@ -10,15 +10,6 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const ConfigType = enum(c.ke_config_type) {
-    int = 0,
-    float = 1,
-    double = 2,
-    @"bool" = 3,
-    string = 4,
-    _,
-};
-
 pub const Configuration = struct {
     ptr: *c.ke_configuration,
     owner: ?c.ke_configuration_handle = null,
@@ -94,13 +85,6 @@ pub const Configuration = struct {
                     return T.unsubscribe(state, a0);
                 }
             }.call,
-            .fill = &struct {
-                fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: ?[*]const c.ke_config_field, a2: u32, a3: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.fill(state, std.mem.span(a0 orelse return resultOf(error.Failed)), if (a1) |items| items[0..a2] else &.{}, a3) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
             .for_each_child = &struct {
                 fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: c.ke_configuration_child_func, a2: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -162,14 +146,6 @@ pub const Configuration = struct {
         return self.ptr.unsubscribe.?(self.ptr, sub);
     }
 
-    /// Fills a config struct: writes each field's default, then the value the store holds for the
-    /// field's key in section. A key holding a type the field cannot take is logged and leaves the
-    /// default; an integer is accepted by a float or double field. A string field points at the
-    /// store's copy, valid as get_string's result is.
-    pub fn fill(self: Configuration, section: [:0]const u8, fields: []const c.ke_config_field, config: ?*anyopaque) Error!void {
-        try checkResult(self.ptr.fill.?(self.ptr, section.ptr, fields.ptr, @intCast(fields.len), config));
-    }
-
     /// Lists the sections directly under section, once each, in the order their first key was
     /// stored. A section is under another when its name is the other's followed by a dot and one
     /// more name; it is listed when it or any section under it holds a key.
@@ -208,7 +184,5 @@ pub const ConfigurationSource = struct {
 
 };
 
-pub const ConfigValue = c.ke_config_value;
-pub const ConfigField = c.ke_config_field;
 pub const ConfigurationHandle = c.ke_configuration_handle;
 pub const ConfigurationSourceHandle = c.ke_configuration_source_handle;

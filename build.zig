@@ -555,10 +555,180 @@ pub fn build(b: *std.Build) void {
         &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
         &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step, &file_system_std.step, &io_pool.step });
 
+    const pong = ctx.example("c_pong", .{
+        .target = target,
+        .optimize = optimize,
+        .@"include-dirs" = joinPaths(b, &.{
+            b.pathJoin(&.{ src_c, "asset" }),
+            b.pathJoin(&.{ src_c, "audio" }),
+            b.pathJoin(&.{ src_c, "configuration" }),
+            b.pathJoin(&.{ src_c, "ecs" }),
+            b.pathJoin(&.{ src_c, "file_system" }),
+            b.pathJoin(&.{ src_c, "framework" }),
+            b.pathJoin(&.{ src_c, "input" }),
+            b.pathJoin(&.{ src_c, "io" }),
+            b.pathJoin(&.{ src_c, "logger" }),
+            b.pathJoin(&.{ src_c, "math" }),
+            b.pathJoin(&.{ src_c, "physics" }),
+            b.pathJoin(&.{ src_c, "render" }),
+            b.pathJoin(&.{ src_c, "resource_cache" }),
+            b.pathJoin(&.{ src_c, "result" }),
+            b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "task_pool" }),
+            b.pathJoin(&.{ src_c, "text" }),
+            b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_c, "window" }),
+            b.pathJoin(&.{ root, "src/sdk/c" }),
+            b.pathJoin(&.{ src_zig, "window/glfw/include" }),
+            b.pathJoin(&.{ src_zig, "input/default/include" }),
+            b.pathJoin(&.{ src_zig, "io/pool/include" }),
+            b.pathJoin(&.{ src_zig, "file_system/std/include" }),
+            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
+            b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
+            b.pathJoin(&.{ src_zig, "runtime/include" }),
+            b.pathJoin(&.{ src_zig, "framework/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/toml/include" }),
+            b.pathJoin(&.{ src_zig, "audio/miniaudio/include" }),
+            b.pathJoin(&.{ src_zig, "audio/module/include" }),
+            b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
+            b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
+            b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
+            b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
+            b.pathJoin(&.{ src_zig, "render/service/include" }),
+            b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
+            b.pathJoin(&.{ src_zig, "view/space/include" }),
+            b.pathJoin(&.{ src_zig, "render/camera/include" }),
+            b.pathJoin(&.{ src_zig, "render/scene/include" }),
+            b.pathJoin(&.{ src_zig, "render/frame/include" }),
+            b.pathJoin(&.{ src_zig, "render/shadow/include" }),
+            b.pathJoin(&.{ src_zig, "render/cluster/include" }),
+            b.pathJoin(&.{ src_zig, "render/gbuffer/include" }),
+            b.pathJoin(&.{ src_zig, "render/deferred_lighting/include" }),
+            b.pathJoin(&.{ src_zig, "render/forward/include" }),
+            b.pathJoin(&.{ src_zig, "render/tonemap/include" }),
+            b.pathJoin(&.{ src_zig, "render/ui/include" }),
+            b.pathJoin(&.{ src_zig, "common/include" }),
+            vcpkg_include,
+        }),
+        .libs = joinPaths(b, &.{
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration_toml") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_miniaudio") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_audio_module") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_text_stb_truetype") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_view_space") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_camera") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_scene") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_frame") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_shadow") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_cluster") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_gbuffer") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_forward") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_ui") }),
+        }),
+    }, &.{ctx.plugins_step});
+    const pong_dir = b.pathJoin(&.{ root, "examples/c/pong" });
+    b.getInstallStep().dependOn(&b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ pong_dir, "Project" }) }, "bin/pong/Project").step);
+    b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ pong_dir, "scenes" }) }, .install_dir = .bin, .install_subdir = "pong/scenes" }).step);
+    b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ root, "examples/assets/sounds" }) }, .install_dir = .bin, .install_subdir = "pong/assets/sounds" }).step);
+    b.getInstallStep().dependOn(&b.addInstallFile(b.dependency("liberation_fonts", .{}).path("LiberationSans-Regular.ttf"), "bin/pong/assets/fonts/LiberationSans-Regular.ttf").step);
+
     const all_examples = [_]*std.Build.Step.InstallArtifact{
-        demo15, demo16,
+        demo15, demo16, pong,
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
+    installSdk(&ctx, src_c, b.pathJoin(&.{ root, "src/sdk/c" }), b.pathJoin(&.{ src_zig, "common/include" }));
+}
+
+/// Makes the install prefix a C SDK: every contract, factory and SDK header under `include/`, and
+/// beside the libraries a CMake package (`lib/cmake/KernelEngine`) and pkg-config files
+/// (`lib/pkgconfig`) naming each of them.
+fn installSdk(ctx: *Ctx, src_c: []const u8, sdk_include: []const u8, common_include: []const u8) void {
+    const b = ctx.b;
+    var include_dirs: std.ArrayList([]const u8) = .empty;
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var domains = std.Io.Dir.openDirAbsolute(io, src_c, .{ .iterate = true }) catch @panic("src/c cannot be read");
+    defer domains.close(io);
+    var it = domains.iterate();
+    while (it.next(io) catch null) |entry| {
+        if (entry.kind == .directory) include_dirs.append(b.allocator, b.pathJoin(&.{ src_c, entry.name })) catch @panic("OOM");
+    }
+    include_dirs.appendSlice(b.allocator, ctx.plugin_includes.items) catch @panic("OOM");
+    include_dirs.appendSlice(b.allocator, &.{ sdk_include, common_include }) catch @panic("OOM");
+    for (include_dirs.items) |dir| {
+        std.Io.Dir.accessAbsolute(io, dir, .{}) catch continue;
+        b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = dir }, .install_dir = .header, .install_subdir = "", .include_extensions = &.{".h"} }).step);
+    }
+
+    var cmake: std.Io.Writer.Allocating = .init(b.allocator);
+    const w = &cmake.writer;
+    w.writeAll(
+        \\get_filename_component(_ke_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+        \\if(NOT TARGET KernelEngine::headers)
+        \\  add_library(KernelEngine::headers INTERFACE IMPORTED)
+        \\  set_target_properties(KernelEngine::headers PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_ke_prefix}/include")
+        \\endif()
+        \\
+    ) catch @panic("OOM");
+    var pkgconfig = b.addWriteFiles();
+    _ = pkgconfig.add("kernel_engine.pc",
+        \\prefix=${pcfiledir}/../..
+        \\includedir=${prefix}/include
+        \\
+        \\Name: kernel_engine
+        \\Description: The headers of the KernelEngine C SDK
+        \\Version: 0.1.0
+        \\Cflags: -I${includedir}
+        \\
+    );
+    for (ctx.libraries.items) |lib| {
+        w.print(
+            \\if(NOT TARGET KernelEngine::{0s})
+            \\  add_library(KernelEngine::{0s} SHARED IMPORTED)
+            \\  if(WIN32)
+            \\    set_target_properties(KernelEngine::{0s} PROPERTIES IMPORTED_LOCATION "${{_ke_prefix}}/bin/{0s}.dll" IMPORTED_IMPLIB "${{_ke_prefix}}/lib/{0s}.lib")
+            \\  else()
+            \\    set_target_properties(KernelEngine::{0s} PROPERTIES IMPORTED_LOCATION "${{_ke_prefix}}/lib/${{CMAKE_SHARED_LIBRARY_PREFIX}}{0s}${{CMAKE_SHARED_LIBRARY_SUFFIX}}")
+            \\  endif()
+            \\  set_target_properties(KernelEngine::{0s} PROPERTIES INTERFACE_LINK_LIBRARIES KernelEngine::headers)
+            \\endif()
+            \\
+        , .{lib}) catch @panic("OOM");
+        _ = pkgconfig.add(b.fmt("kernel_engine-{s}.pc", .{lib}), b.fmt(
+            \\prefix=${{pcfiledir}}/../..
+            \\libdir=${{prefix}}/lib
+            \\
+            \\Name: kernel_engine-{0s}
+            \\Description: The {0s} library of the KernelEngine C SDK
+            \\Version: 0.1.0
+            \\Requires: kernel_engine
+            \\Libs: -L${{libdir}} -l{0s} -Wl,-rpath,${{libdir}}
+            \\
+        , .{lib}));
+    }
+    w.writeAll("unset(_ke_prefix)\n") catch @panic("OOM");
+    const config = b.addWriteFiles().add("KernelEngineConfig.cmake", cmake.written());
+    b.getInstallStep().dependOn(&b.addInstallFileWithDir(config, .lib, "cmake/KernelEngine/KernelEngineConfig.cmake").step);
+    b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = pkgconfig.getDirectory(), .install_dir = .lib, .install_subdir = "pkgconfig" }).step);
 }
 
 const Tests = enum { has_tests, no_tests };
@@ -574,6 +744,8 @@ const Ctx = struct {
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
+    libraries: std.ArrayList([]const u8) = .empty,
+    plugin_includes: std.ArrayList([]const u8) = .empty,
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -719,6 +891,8 @@ const Ctx = struct {
         orderTranslations(artifact, ctx.vcpkg_step, deps);
         const install = b.addInstallArtifact(artifact, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } });
         ctx.libraries_step.dependOn(&install.step);
+        ctx.libraries.append(b.allocator, artifact.name) catch @panic("OOM");
+        ctx.plugin_includes.append(b.allocator, dependency.builder.pathFromRoot("include")) catch @panic("OOM");
 
         switch (tests) {
             .no_tests => {},

@@ -5,24 +5,30 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the pass's render-phase system. A missing runtime, service, device or gbuffer fails as an invalid argument.</summary>
+/// <summary>Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer with an invalid id, fails as an invalid argument.</summary>
 public sealed unsafe partial class RenderDeferredLighting : IDisposable
 {
-    /// <summary>Registers the pass's render-phase system. A missing runtime, service, device or gbuffer fails as an invalid argument.</summary>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Holds the resources it reads and writes; borrowed.</param>
-    /// <param name="device">Borrowed.</param>
-    /// <param name="iblEnabled"></param>
-    /// <param name="scene">Names the components the pass reads; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="gbuffer">The gbuffer group it lights.</param>
-    /// <param name="shadow">Optional shadow group; without one the shadow is the neutral one.</param>
-    /// <param name="clusters">Optional cluster group; without one no clustered light is bound.</param>
-    public RenderDeferredLighting(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? gbuffer = default, string? shadow = default, string? clusters = default) : this(Create(runtime, service, device, iblEnabled, scene, frame, gbuffer, shadow, clusters))
+    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer with an invalid id, fails as an invalid argument.</summary>
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
+    /// <param name="iblEnabled">Whether the pass samples the sky for image-based light.</param>
+    /// <param name="gbuffer">The gbuffer it lights.</param>
+    /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
+    /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
+    public RenderDeferredLighting(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, gbuffer, shadow, clusters))
     {
         Hold(runtime.Owner);
+        Hold(ecs.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
+        Hold(viewSpace.Owner);
+        Hold(camera.Owner);
         Hold(scene.Owner);
         Hold(frame.Owner);
     }
@@ -51,33 +57,32 @@ public sealed unsafe partial class RenderDeferredLighting : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? gbuffer, string? shadow, string? clusters)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
     {
         ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(viewSpace);
+        ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        var gbufferBytes = gbuffer is null ? null : System.Text.Encoding.UTF8.GetBytes(gbuffer + "\0");
-        var shadowBytes = shadow is null ? null : System.Text.Encoding.UTF8.GetBytes(shadow + "\0");
-        var clustersBytes = clusters is null ? null : System.Text.Encoding.UTF8.GetBytes(clusters + "\0");
-        fixed (byte* gbufferPtr = gbufferBytes)
-        fixed (byte* shadowPtr = shadowBytes)
-        fixed (byte* clustersPtr = clustersBytes)
-        {
-            KernelEngine.Render.Webgpu.Native.RenderDeferredLightingParams config = default;
-            config.Runtime = runtime.Native;
-            config.Service = service.Native;
-            config.Device = device.Native;
-            config.IblEnabled = iblEnabled;
-            config.Scene = scene.Native;
-            config.Frame = frame.Native;
-            config.Gbuffer = (sbyte*)gbufferPtr;
-            config.Shadow = (sbyte*)shadowPtr;
-            config.Clusters = (sbyte*)clustersPtr;
-            KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&config, &handle), "ke_render_deferred_lighting_create");
-            return handle;
-        }
+        KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_config config = default;
+        config.ibl_enabled = iblEnabled;
+        config.gbuffer = gbuffer;
+        config.shadow = shadow;
+        config.clusters = clusters;
+        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
+        context.Runtime = runtime.Native;
+        context.Ecs = ecs.Native;
+        context.Service = service.Native;
+        context.Device = device.Native;
+        context.ViewSpace = viewSpace.Native;
+        context.Camera = camera.Native;
+        context.Scene = scene.Native;
+        context.Frame = frame.Native;
+        KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&context, &config, &handle), "ke_render_deferred_lighting_create");
+        return handle;
     }
 }

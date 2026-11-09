@@ -167,17 +167,19 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
         .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
         .scene = r->scene.ref }, &r->frame));
 
-    check("shadow pass", ke_render_shadow_create(&(ke_render_shadow_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .view_space = r->view_space.ref, .output = "shadow" }, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref,
-        "clusters", NULL, &r->cluster));
-    check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .output = "gbuffer" }, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
-        .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &r->deferred));
-    check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){
-        .runtime = rt, .service = core, .device = gpu, .frame = r->frame.ref }, &r->tonemap));
+    const ke_render_context context = {
+        .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
+        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
+    };
+    ke_render_shadow_resources shadow;
+    ke_render_cluster_resources clusters;
+    ke_render_gbuffer_resources gbuffer;
+    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
+    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true, .gbuffer = gbuffer, .shadow = shadow, .clusters = clusters };
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
+    check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
 }
 
 static void renderer_destroy(renderer *r)
@@ -225,21 +227,20 @@ int main(int argc, char **argv)
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(NULL, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_flecs_config){ .world_id_base = 1048576 }, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
     ke_task_pool_handle pool = { 0 };
-    ke_result made = ke_task_pool_enki_create(NULL, &pool);
+    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_enki_params){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool);
     if (made != KE_OK) die_result("task pool", made);
 
-    ke_runtime_params rtp = { 0 };
     ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &rtp, &rt);
+    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_params){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(NULL, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_std_params){ .root = "." }, &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);

@@ -15,7 +15,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Construction parameters for ke_file_system_std_create.
 pub const ke_file_system_std_params = extern struct {
-    /// The directory relative paths are resolved against; null takes the working directory of the
+    /// The directory relative paths are resolved against; "." for the working directory of the
     /// process.
     root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };

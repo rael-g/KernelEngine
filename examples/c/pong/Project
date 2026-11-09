@@ -1,0 +1,32 @@
+[project]
+default_scene = "Menu"
+
+[runtime.window]
+width = 960
+height = 540
+title = "KernelEngine — Pong (C)"
+fullscreen = false
+
+[runtime.renderer]
+present_mode = "fifo"
+
+[runtime.physics_2d]
+gravity_x = 0.0
+gravity_y = 0.0
+
+[render]
+clear_color = [0.04, 0.04, 0.08, 1.0]
+
+[input.map.Pong.action.PaddleLeftMove]
+type = "Axis1D"
+bindings = [{ kind = "key_pair", negative = "S", positive = "W" }]
+
+[input.map.Pong.action.PaddleRightMove]
+type = "Axis1D"
+bindings = [{ kind = "key_pair", negative = "Down", positive = "Up" }]
+
+[input.map.Pong.action.Launch]
+bindings = [{ kind = "key", key = "Space" }]
+
+[input.map.Pong.action.Quit]
+bindings = [{ kind = "key", key = "Escape" }]

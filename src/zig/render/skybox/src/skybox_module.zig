@@ -3,7 +3,6 @@
 //! creation and teardown of that pass, behind the one factory it exports.
 
 const abi_framework = @import("abi_framework");
-const abi_render_contract = @import("abi_render_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
@@ -16,6 +15,7 @@ const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_skybox_factory = @import("abi_render_skybox_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -71,12 +71,12 @@ inline fn moduleOf(user: ?*anyopaque) *SkyboxModule {
 }
 
 /// The body of the "render.skybox" system, which the runtime calls as its `execute` in the render
-/// phase. Succeeds with no pass when the first query has no camera, or when the render service
+/// phase. Succeeds with no pass when the first query has no camera, the second no skybox, or when the render service
 /// gives no pass. A set that cannot be created ends the pass, fails with the binder's code and
 /// leaves `set` invalid until the next call. Each frame it draws one full-screen triangle over the frame's color, after rewriting the uniform with the inverse of the camera rotation and projection
 /// product. It recreates the set every call, because the environment texture and the
-/// depth view can change between frames, and a frame whose skybox query has no row passes the
-/// "none" texture handle as the environment.
+/// depth view can change between frames. A frame without a skybox draws nothing, so the frame keeps
+/// its clear color.
 fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const sm = moduleOf(user);
     const core = sm.core;
@@ -84,6 +84,11 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs.?[0].count == 0) return R.ok;
+
+    var sky_segc: usize = 0;
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
+    if (sky_segc == 0 or sky_segs.?[0].count == 0) return R.ok;
+    const env = (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap;
 
     const cam: *const abi_render_components.c.ke_camera_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[0]));
     const cam_wt: *const abi_spatial.c.ke_world_transform_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[1]));
@@ -105,14 +110,8 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     zm.storeMat(frame.inv_sky_view_proj[0..], zm.inverse(sky_vp));
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
-    var sky_segc: usize = 0;
-    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
-    const env: abi_render_handles.c.ke_texture_handle = if (sky_segc != 0 and sky_segs.?[0].count != 0)
-        (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
-    else
-        .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
     const env_view = core.*.texture_view.?(core, env);
-    const depth_view = pc.?.read.?(pc, abi_render.c.KE_RENDER_FRAME_DEPTH);
+    const depth_view = pc.?.read.?(pc, core.*.frame_depth.?(core));
 
     const bindings = [3]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "sky", .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
@@ -142,7 +141,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// `destroyModule` to release.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skybox_params) R.Error!void {
+fn setup(sm: *SkyboxModule, p: *const abi_render_context.c.ke_render_context) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     sm.core = core;
@@ -158,7 +157,7 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skyb
 
     sm.io.name = "render.skybox";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_SKY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &sm.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
 
     sm.binder = core.*.resource_binder.?(core).?;
     try R.check(sm.binder.create_shader_layout.?(sm.binder, &shader_layout, &sm.layout));
@@ -199,8 +198,8 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skyb
     }, &sm.frame_uniform));
 
     sm.access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.c.KE_ACCESS_READ },
+        .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.frame_depth.?(core), .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = world_transform_cid, .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = abi_runtime.c.KE_ACCESS_READ },
@@ -237,10 +236,10 @@ fn destroyHandle(self: ?*abi_render_skybox_factory.c.ke_render_skybox) callconv(
 /// service, device or camera fails as an invalid argument, and a module that
 /// cannot be allocated as out of memory. When `setup` or the registration fails, it fails with
 /// that step's code and leaves the handle zeroed.
-export fn ke_render_skybox_create(params_in: ?*const abi_render_skybox_factory.c.ke_render_skybox_params, out_skybox: [*c]abi_render_skybox_factory.c.ke_render_skybox_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_skybox_create(context_in: ?*const abi_render_context.c.ke_render_context, out_skybox: [*c]abi_render_skybox_factory.c.ke_render_skybox_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_skybox orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
+    const p = context_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.camera == null)
         return R.code(error.InvalidArgument);
@@ -313,7 +312,8 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.join_chain).writesFresh(3);
         _ = self.core.when(.chain_format).does(chainFormat);
@@ -346,7 +346,7 @@ test "creating and destroying the skybox pass leaves no block allocated and no G
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
+    try R.check(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -358,7 +358,7 @@ test "destroying the skybox pass unregisters every system it registered" {
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h));
+    try R.check(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -372,10 +372,37 @@ test "a skybox pass whose shader fails to load releases what it had created" {
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expect(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h) != R.ok);
+    try testing.expect(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+const camera_row = struct {
+    var cam = std.mem.zeroes(abi_render_components.c.ke_camera_component);
+    var world = std.mem.zeroes(abi_spatial.c.ke_world_transform_component);
+    var entity = [1]abi_ecs.c.ke_entity{1};
+    var columns = [2]?*anyopaque{ &cam, &world };
+    var segs = [1]abi_ecs.c.ke_ecs_segment{.{ .entities = &entity, .count = 1, .columns = &columns, .column_count = 2 }};
+};
+
+fn cameraWithoutSkybox(_: ?*abi_runtime.c.ke_system_ctx, query: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    out_count.?.* = if (query == 0) 1 else 0;
+    return if (query == 0) &camera_row.segs else null;
+}
+
+test "a frame with a camera and no skybox opens no pass, keeping the clear color" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
+    var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
+    try R.check(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h));
+    defer h.destroy.?(h.ref);
+    var sys = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    sys.view = cameraWithoutSkybox;
+    try R.check(system(&sys, h.ref, 0));
+    try rig.core.received(.begin_pass).never();
 }
 
 test "a missing frame is refused" {
@@ -384,7 +411,7 @@ test "a missing frame is refused" {
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h)));
 }
 
 test "a missing scene is refused" {
@@ -393,7 +420,7 @@ test "a missing scene is refused" {
     defer rig.deinit();
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_skybox_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h)));
 }
 
 test "a skybox pass the runtime refuses to register releases what it had created" {
@@ -403,7 +430,7 @@ test "a skybox pass the runtime refuses to register releases what it had created
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
     var h: abi_render_skybox_factory.c.ke_render_skybox_handle = undefined;
-    try testing.expect(ke_render_skybox_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera, }, &h) != R.ok);
+    try testing.expect(ke_render_skybox_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .camera = &camera }), &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

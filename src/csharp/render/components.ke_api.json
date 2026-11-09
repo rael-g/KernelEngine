@@ -633,11 +633,11 @@
         },
         {
           "name": "alpha_mode",
-          "type": "uint32_t",
+          "type": "ke_alpha_mode",
           "tags": [
-            "default:0"
+            "default:KE_ALPHA_MODE_OPAQUE"
           ],
-          "doc": "ke_alpha_mode."
+          "doc": null
         },
         {
           "name": "alpha_cutoff",
@@ -738,11 +738,11 @@
         },
         {
           "name": "alpha_mode",
-          "type": "uint32_t",
+          "type": "ke_alpha_mode",
           "tags": [
-            "default:0"
+            "default:KE_ALPHA_MODE_OPAQUE"
           ],
-          "doc": "ke_alpha_mode."
+          "doc": null
         },
         {
           "name": "alpha_cutoff",

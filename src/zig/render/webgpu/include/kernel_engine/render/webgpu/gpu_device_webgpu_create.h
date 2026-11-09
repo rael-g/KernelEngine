@@ -28,19 +28,20 @@ extern "C"
 /// [bag] The values a WebGPU device is created with, each applied as given.
 typedef struct ke_gpu_device_webgpu_config
 {
-    /// [default:true] Asks the underlying graphics API to validate every call, which takes effect
+    /// Asks the underlying graphics API to validate every call, which takes effect
     /// only where that API's validation layers are installed.
     bool enable_validation;
-    /// [default:false] The labels and debug groups given through ke_gpu_device reach the
+    /// The labels and debug groups given through ke_gpu_device reach the
     /// underlying graphics API, where capture tools read them.
     bool debug_labels;
 } ke_gpu_device_webgpu_config;
+
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
  * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
  *        workers; NULL compiles synchronously, invoking the callback before returning.
- * @param config [borrowed,optional] The device's values; NULL selects the default of each.
+ * @param config [borrowed] The device's values; Required; every field is read as given.
  * @param out_device [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or a failure code; call @c handle.destroy(handle.ref) to release the handle
  *         when done.

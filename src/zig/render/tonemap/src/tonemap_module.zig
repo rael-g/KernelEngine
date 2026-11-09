@@ -10,6 +10,7 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_tonemap").logFn };
 
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_tonemap_factory = @import("abi_render_tonemap_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -92,14 +93,14 @@ fn system(_: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(
 /// failure surfaces at creation.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_tonemap_params) R.Error!void {
+fn setup(tm: *TonemapModule, p: *const abi_render_context.c.ke_render_context) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     tm.core = core;
     tm.device = p.device.?;
 
     tm.io.name = "render.tonemap";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP, abi_render.c.KE_RENDER_CHAIN_REPLACE, &tm.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
     const format = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP);
 
     var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
@@ -126,7 +127,7 @@ fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_to
     if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return error.General;
 
     tm.access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE },
         .{ .cid = p.frame.?.frame_cid.?(p.frame), .access = abi_runtime.c.KE_ACCESS_READ },
     };
 }
@@ -153,10 +154,10 @@ fn destroyHandle(self: ?*abi_render_tonemap_factory.c.ke_render_tonemap) callcon
 /// invalid argument and a failed allocation as out of memory. A failure in `setup`, or the runtime
 /// refusing `system`, fails with its code and leaves the handle zeroed. On success the runtime
 /// holds the module as the context of `system`, and the handle frees it.
-export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory.c.ke_render_tonemap_params, out_tonemap: [*c]abi_render_tonemap_factory.c.ke_render_tonemap_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_tonemap_create(context_in: ?*const abi_render_context.c.ke_render_context, out_tonemap: [*c]abi_render_tonemap_factory.c.ke_render_tonemap_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_tonemap orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
+    const p = context_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.service == null or p.device == null or p.frame == null) return R.code(error.InvalidArgument);
 
@@ -171,7 +172,7 @@ export fn ke_render_tonemap_create(params_in: ?*const abi_render_tonemap_factory
     return R.ok;
 }
 
-fn register(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_tonemap_params, rt: *abi_runtime.c.ke_runtime) R.Error!void {
+fn register(tm: *TonemapModule, p: *const abi_render_context.c.ke_render_context, rt: *abi_runtime.c.ke_runtime) R.Error!void {
     try setup(tm, p);
     var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     params.name = "render.tonemap";
@@ -205,7 +206,8 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.join_chain).writesFresh(3);
         _ = self.core.when(.chain_format).does(chainFormat);
@@ -237,8 +239,8 @@ fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.k
 
 var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
 
-fn testParams(rig: *Rig) abi_render_tonemap_factory.c.ke_render_tonemap_params {
-    return .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .frame = &test_frame };
+fn testParams(rig: *Rig) abi_render_context.c.ke_render_context {
+    return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .frame = &test_frame });
 }
 
 test "creating and destroying the tonemap pass leaves no block allocated and no GPU resource live" {

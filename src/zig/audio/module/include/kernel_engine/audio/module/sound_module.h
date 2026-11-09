@@ -24,12 +24,13 @@
 extern "C" {
 #endif
 
-/// [bag] Values a caller gives; a zero field takes its default.
+/// The values the sound module is created with.
 typedef struct ke_sound_module_config
 {
     /// [borrowed,utf8] Directory a clip's path is joined to; copied. NULL uses the path as written.
     const char *root;
 } ke_sound_module_config;
+
 
 typedef struct ke_sound_module ke_sound_module;
 
@@ -46,7 +47,7 @@ typedef struct ke_sound_module_handle
  * @param runtime [borrowed] Registers the system; must outlive the module.
  * @param ecs [borrowed] Resolves the component id.
  * @param audio [borrowed] Loads the clips and plays their voices; must outlive the module.
- * @param config [borrowed,optional] NULL takes every default.
+ * @param config [borrowed] Required; every field is read as given.
  * @param out_module [out] Receives the module; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p runtime, @p ecs, @p audio or
  *         @p out_module; KE_RESULT_OUT_OF_MEMORY; the code of the ECS or the runtime when it

@@ -1,6 +1,5 @@
 #include <stddef.h>
 #include <kernel_engine/render/component_fields.h>
-#include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/render/service/pass_context.h>
 #include <kernel_engine/render/ui/component_fields.h>
 const unsigned long long layout_values[] = {

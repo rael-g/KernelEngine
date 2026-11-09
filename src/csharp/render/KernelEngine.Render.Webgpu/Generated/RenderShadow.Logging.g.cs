@@ -9,26 +9,27 @@ public sealed unsafe partial class RenderShadow
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Holds the resources it writes; borrowed.</param>
-    /// <param name="device">Borrowed.</param>
-    /// <param name="viewSpace">Builds the light's view and projection; borrowed.</param>
-    /// <param name="scene">Names the components the pass reads; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="output">The shadow group it writes: the map under the group's own name, and the light and depth under the suffixes of kernel_engine/render/resource_groups.h.</param>
-    /// <param name="resolution">Edge of the square shadow map, in texels. 0 takes the default.</param>
-    /// <param name="lightDistance">How far back along the light the shadow camera sits. 0 takes the default.</param>
-    /// <param name="extent">Width and height of the shadowed area, in world units. 0 takes the default.</param>
-    /// <param name="nearPlane">Near plane of the shadow camera. 0 takes the default.</param>
-    /// <param name="farPlane">Far plane of the shadow camera. 0 takes the default.</param>
-    public RenderShadow(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output = default, uint resolution = default, float lightDistance = default, float extent = default, float nearPlane = default, float farPlane = default) : this(CreateLogged(loggerFactory, runtime, service, device, viewSpace, scene, frame, output, resolution, lightDistance, extent, nearPlane, farPlane))
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
+    /// <param name="resolution">Edge of the square shadow map, in texels.</param>
+    /// <param name="lightDistance">How far back along the light the shadow camera sits.</param>
+    /// <param name="extent">Width and height of the shadowed area, in world units.</param>
+    /// <param name="nearPlane">Near plane of the shadow camera.</param>
+    /// <param name="farPlane">Far plane of the shadow camera.</param>
+    public RenderShadow(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane)
+    private static (KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle Handle, KernelEngine.Render.RenderShadowResources Resources) CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, service, device, viewSpace, scene, frame, output, resolution, lightDistance, extent, nearPlane, farPlane);
+        return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane);
     }
 }

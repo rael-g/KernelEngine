@@ -9,7 +9,7 @@ namespace KernelEngine.FileSystem.Std;
 public sealed unsafe partial class StdFileSystem : KernelEngine.FileSystem.FileSystem
 {
     /// <summary>Creates a ke_file_system over the operating system's files, through Zig's standard library.</summary>
-    /// <param name="root">The directory relative paths are resolved against; null takes the working directory of the process.</param>
+    /// <param name="root">The directory relative paths are resolved against; "." for the working directory of the process.</param>
     public StdFileSystem(string? root = default) : base(Create(root))
     {
     }

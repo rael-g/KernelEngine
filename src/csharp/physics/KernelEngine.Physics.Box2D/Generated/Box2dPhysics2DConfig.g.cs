@@ -12,7 +12,7 @@ public sealed record Box2dPhysics2DConfig : KernelEngine.Configuration.IConfigSe
     public float GravityX { get; init; } = 0f;
 
     /// <summary>Vertical gravity, in metres per second squared.</summary>
-    public float GravityY { get; init; } = -9.81f;
+    public float GravityY { get; init; } = 0f;
 
     /// <inheritdoc/>
     public static Box2dPhysics2DConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)

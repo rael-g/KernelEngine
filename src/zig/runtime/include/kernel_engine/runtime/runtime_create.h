@@ -20,20 +20,21 @@ extern "C" {
 
 /// [bag]
 typedef struct ke_runtime_params {
-    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
+    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     float fixed_dt;
 
     /// Largest catch-up budget a tick may accumulate, in seconds; excess is
-    /// discarded. 0 selects 0.25.
+    /// discarded; greater than zero.
     float fixed_dt_max_accum;
 
-    /// Most systems one phase may hold; registering past it fails. 0 selects 256.
+    /// Most systems one phase may hold; registering past it fails.
     uint32_t max_systems_per_phase;
 } ke_runtime_params;
 
+
 /**
  * Creates a runtime over @p ecs and @p task_pool, both borrowed for its lifetime.
- * @param params [borrowed,optional] NULL takes every default.
+ * @param params [borrowed] Required; every field is read as given.
  * @param out_runtime [out] Receives the runtime; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p task_pool or @p out_runtime;
  *         KE_RESULT_OUT_OF_MEMORY.

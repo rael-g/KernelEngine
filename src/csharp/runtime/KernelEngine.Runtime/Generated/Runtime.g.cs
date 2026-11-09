@@ -75,7 +75,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     }
 
     /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
-    /// <param name="@params">NULL takes every default.</param>
+    /// <param name="@params">Required; every field is read as given.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_params* @params)
     {
@@ -372,6 +372,25 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     public void UnloadModules()
     {
         Handle->unload_modules(Handle);
+    }
+
+    /// <summary>Records that the program should end; any system or the host may ask, from any thread. Nothing stops: the host ends its loop when it reads exit_requested.</summary>
+    public void RequestExit()
+    {
+        Handle->request_exit(Handle);
+    }
+
+    /// <summary>Whether a request to end the program was recorded.</summary>
+    public bool ExitRequested()
+    {
+        return Handle->exit_requested(Handle);
+    }
+
+    /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
+    /// <returns>The queue, owned by the runtime.</returns>
+    public nint Commands()
+    {
+        return (nint)Handle->commands(Handle);
     }
 
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>

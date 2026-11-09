@@ -6,10 +6,6 @@ const abi_result = @import("result");
 /// OS-level window abstraction.
 pub const ke_window = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Performs backend-specific setup, right after creation.
-    on_initialize: ?*const fn (?*ke_window) callconv(.c) abi_result.c.ke_result = null,
-    /// Performs backend-specific teardown, right before destroy.
-    on_shutdown: ?*const fn (?*ke_window) callconv(.c) void = null,
     /// Returns true once the user has requested the window to close.
     should_close: ?*const fn (?*ke_window) callconv(.c) bool = null,
     /// Processes pending OS events. Call once per frame.

@@ -8,8 +8,8 @@ namespace KernelEngine.Runtime.Tests;
 
 public class RuntimeTests : IDisposable
 {
-    private readonly EnkiTaskPool _taskPool = new();
-    private readonly FlecsEcsRegistry _ecs = new();
+    private readonly EnkiTaskPool _taskPool = new(uint.MaxValue);
+    private readonly FlecsEcsRegistry _ecs = new(1048576);
 
     public void Dispose()
     {
@@ -27,8 +27,8 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Dispose_OfItsDependenciesFirst_LeavesTheRuntimeUsableUntilItIsDisposed()
     {
-        var ecs = new FlecsEcsRegistry();
-        var taskPool = new EnkiTaskPool();
+        var ecs = new FlecsEcsRegistry(1048576);
+        var taskPool = new EnkiTaskPool(uint.MaxValue);
         IRuntime runtime = new Runtime(ecs, taskPool);
         var unloadCount = 0;
         runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);

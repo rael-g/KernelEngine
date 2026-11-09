@@ -3,10 +3,9 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_context = @import("render_context");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -42,6 +41,11 @@ pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gp
 /// Receives the outcome of mapping a buffer for reading.
 pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu_buffer, ?*anyopaque) callconv(.c) void;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -63,23 +67,11 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
-/// What the label resolve needs to give a label the font it names.
-pub const ke_render_label_resolve_params = extern struct {
-    /// Registers the system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Uploads the glyph atlas; borrowed, must outlive it.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Registers the font; borrowed, must outlive it.
-    ui: ?*abi_render_ui.c.ke_render_ui = std.mem.zeroes(?*abi_render_ui.c.ke_render_ui),
-    /// Reads the font a label names; optional, borrowed. Without it every label is reported.
-    resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
-    /// Names the label component; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+/// What the label resolve needs to give a label the font it names. [bag] The values the label
+/// resolve is created with.
+pub const ke_render_label_resolve_config = extern struct {
+    /// The font a label that names none draws with; copied. NULL leaves such a label without text.
+    default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 /// What the scene resolve needs to register the components and upload what they name.
@@ -102,16 +94,11 @@ pub const ke_render_label_resolve_handle = extern struct {
 /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
 /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
 /// handle's ref is NULL on failure.
-pub extern fn ke_render_label_resolve_create(params: ?*const ke_render_label_resolve_params, out_resolve: ?*ke_render_label_resolve_handle) abi_result.c.ke_result;
+pub extern fn ke_render_label_resolve_create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const ke_render_label_resolve_config, out_resolve: ?*ke_render_label_resolve_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_scene_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
-
-/// Adds render's scene components to set: mesh, camera, the four lights, skybox, sprite and
-/// label, with their field tables, and the apply callbacks of the mesh, the camera and the
-/// sprite.
-pub extern fn ke_render_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;
 
 /// Registers the scene's render components and the update-phase systems
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A

@@ -106,7 +106,7 @@ const RegisteredQuery = struct {
     term_count: usize,
 };
 
-const default_world_id_base: u32 = 1 << 20;
+const test_config: abi_ecs_flecs_factory.c.ke_ecs_flecs_config = .{ .world_id_base = 1048576 };
 
 /// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
 /// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
@@ -203,6 +203,12 @@ fn layoutFitsSize(fields: []const abi_ecs.c.ke_component_field, element_size: us
 }
 
 /// The field table remembered for `cid`, or null when none was ever recorded.
+fn isRegistered(s: *State, cid: abi_asset_resolver.c.ke_component_id) bool {
+    const qs = s.queries orelse return false;
+    for (qs[0..s.query_count]) |q| if (q.cid == cid) return true;
+    return false;
+}
+
 fn layoutOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?[]const abi_ecs.c.ke_component_field {
     const ls = s.layouts orelse return null;
     for (0..s.layout_count) |i| {
@@ -331,8 +337,8 @@ fn componentRegister(
     const s = stateOf(self);
     const name = params.*.name.?;
     const size = params.*.size;
-    const alignment: usize = if (params.*.alignment == 0) @alignOf(c.max_align_t) else params.*.alignment;
-    if (!std.math.isPowerOfTwo(alignment)) {
+    const alignment: usize = params.*.alignment;
+    if (size != 0 and (alignment == 0 or !std.math.isPowerOfTwo(alignment))) {
         return refuse("component '{s}': alignment {d} is not a power of two", .{ name, alignment });
     }
     const fields = params.*.fields;
@@ -414,9 +420,10 @@ fn refuse(comptime fmt: []const u8, args: anytype) abi_result.c.ke_result {
 }
 
 /// Slot `component_lookup`. Reports the id and size of the component called by name through
-/// out_meta, with the remembered field table when there is one and a null table otherwise. A null
-/// out_meta only checks that the name exists. An unknown name, one with no type information, and a
-/// null argument answer false.
+/// out_meta, with the remembered field table when there is one and a null table otherwise; a tag
+/// registered with size 0 reports size and alignment 0. A null out_meta only checks that the name
+/// exists. An unknown name, an entity never registered as a component, and a null argument answer
+/// false.
 fn componentLookup(
     self_in: ?*abi_ecs.c.ke_ecs,
     name: [*c]const u8,
@@ -429,14 +436,14 @@ fn componentLookup(
     const e = c.ecs_lookup(s.world, name);
     if (e == 0) return false;
 
+    const cid: abi_asset_resolver.c.ke_component_id = @truncate(e);
     const ti = c.ecs_get_type_info(s.world, @intCast(e));
-    if (ti == null) return false;
+    if (ti == null and !isRegistered(s, cid)) return false;
 
     if (out_meta != null) {
-        const cid: abi_asset_resolver.c.ke_component_id = @truncate(e);
         out_meta.*.cid = cid;
-        out_meta.*.size = @intCast(ti.*.size);
-        out_meta.*.alignment = @intCast(ti.*.alignment);
+        out_meta.*.size = if (ti != null) @intCast(ti.*.size) else 0;
+        out_meta.*.alignment = if (ti != null) @intCast(ti.*.alignment) else 0;
         if (layoutOf(s, cid)) |f| {
             out_meta.*.fields = f.ptr;
             out_meta.*.field_count = @intCast(f.len);
@@ -696,8 +703,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// The factory the plugin exports. A null config, or a zero `world_id_base` in it, takes
-/// `default_world_id_base`. A failure after the world exists finalizes it and frees the state,
+/// The factory the plugin exports. A null config takes the header's defaults. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
 export fn ke_ecs_flecs_create(
     config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config,
@@ -713,10 +719,14 @@ export fn ke_ecs_flecs_create(
 }
 
 fn create(config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
-    const world_id_base: u32 = blk: {
-        const p = config orelse break :blk default_world_id_base;
-        break :blk if (p.*.world_id_base == 0) default_world_id_base else p.*.world_id_base;
-    };
+    const world_id_base = (config orelse {
+        log.warn("creating the ECS needs its config", .{});
+        return error.InvalidArgument;
+    }).*.world_id_base;
+    if (world_id_base == 0) {
+        log.warn("creating the ECS needs a world id base above 0, the capacity of entity_reserve", .{});
+        return error.InvalidArgument;
+    }
 
     installFlecsOsApi();
 
@@ -782,7 +792,7 @@ test {
 
 fn made() !abi_ecs.c.ke_ecs_handle {
     var h: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(null, &h));
+    try R.check(ke_ecs_flecs_create(&test_config, &h));
     return h;
 }
 
@@ -842,10 +852,10 @@ test "componentRegister rejects re-registering a name with a different size" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 8, .alignment = 0, .fields = null, .field_count = 0 });
+    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expect(first != 0);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 16, .alignment = 0, .fields = null, .field_count = 0 }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 16, .alignment = 4, .fields = null, .field_count = 0 }));
 }
 
 test "a component keeps the alignment it was registered with, and a lookup reports it" {
@@ -860,17 +870,33 @@ test "a component keeps the alignment it was registered with, and a lookup repor
     try testing.expectEqual(@as(usize, 4), meta.alignment);
 }
 
-test "an alignment of zero registers the alignment of max_align_t" {
+test "a tag registered with size zero is found by lookup with size zero" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    {
-        var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &ignored));
-    }
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "node.paddle", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
-    try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "unaligned", &meta));
-    try testing.expectEqual(@as(usize, @alignOf(c.max_align_t)), meta.alignment);
+    try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "node.paddle", &meta));
+    try testing.expectEqual(cid, meta.cid);
+    try testing.expectEqual(@as(usize, 0), meta.size);
+}
+
+test "an entity that was never registered as a component is not found by lookup" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "scope.inner", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try testing.expect(!handle.ref.?.component_lookup.?(handle.ref, "scope", null));
+}
+
+test "a sized component with an alignment of zero is refused, not given a default" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var ignored: abi_asset_resolver.c.ke_component_id = 0;
+    try testing.expectError(error.InvalidArgument, R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &ignored)));
 }
 
 test "componentRegister rejects re-registering a name with a different alignment" {
@@ -934,18 +960,18 @@ test "componentRegister rejects a second layout the size check cannot tell apart
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len });
+    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
     try testing.expect(first != 0);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 0, .fields = &swapped_b, .field_count = swapped_b.len }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_b, .field_count = swapped_b.len }));
 }
 
 test "componentRegister accepts a second registration describing the same layout" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len });
-    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len });
+    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
     try testing.expectEqual(first, second);
 }
 
@@ -953,8 +979,8 @@ test "a registrant with no table still joins one that has one, on size alone" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const described = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len });
-    const tableless = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 0, .fields = null, .field_count = 0 });
+    const described = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const tableless = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expectEqual(described, tableless);
 }
 
@@ -963,10 +989,10 @@ test "the table of the first registrant to carry one describes the component aft
     defer handle.destroy.?(handle.ref);
 
     var tableless: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, &tableless));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &tableless));
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }, &ignored));
+        try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }, &ignored));
     }
 
     var meta: abi_ecs.c.ke_component_meta = undefined;
@@ -980,15 +1006,15 @@ test "componentRegister refuses a table describing bytes the component does not 
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "too_small", .size = 4, .alignment = 0, .fields = &swapped_a, .field_count = swapped_a.len }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "too_small", .size = 4, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }));
 }
 
 test "componentRegister is idempotent for a repeated identical size" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 0, .fields = null, .field_count = 0 });
-    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 0, .fields = null, .field_count = 0 });
+    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
+    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expectEqual(first, second);
 }
 
@@ -1029,17 +1055,17 @@ test "a reserved id can never be one the world's own allocator will issue" {
 
     const reserved = try reserve(handle);
     try testing.expect(reserved != 0);
-    try testing.expect(reserved < default_world_id_base);
+    try testing.expect(reserved < test_config.world_id_base);
 
     var i: usize = 0;
     while (i < 64) : (i += 1) {
         const created = try spawn(handle);
-        try testing.expect(created >= default_world_id_base);
+        try testing.expect(created >= test_config.world_id_base);
     }
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config{ .world_id_base = 0 };
+    var config = test_config;
     var probe: abi_ecs.c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&config, &probe));
     const low = stateOf(probe.ref.?).reserve_low;
@@ -1107,7 +1133,7 @@ test "a reserved id is not in the world until something materializes it" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "reserve_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "reserve_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 
@@ -1121,7 +1147,7 @@ test "attaching to a reserved id materializes it without a separate call" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "attach_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "attach_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
 
     const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
@@ -1136,7 +1162,7 @@ test "materializing an id twice is a no-op rather than a second entity" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "twice_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "twice_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try R.check(e.entity_materialize.?(handle.ref, reserved));
     const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
@@ -1153,7 +1179,7 @@ test "materializing an id the world already owns leaves it alone" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "owned_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "owned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const created = try spawn(handle);
     const slot = (try attach(handle, created, cid)) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
@@ -1186,7 +1212,7 @@ test "a reserved entity that was destroyed does not come back on the next attach
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "revive_probe", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "revive_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect((try attach(handle, reserved, cid)) != null);
 
@@ -1295,9 +1321,9 @@ test "registering the same component tuple twice returns one query, and another 
     const e = handle.ref.?.*;
 
     var a: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_a", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &a));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_a", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &a));
     var b: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_b", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &b));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_b", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &b));
     const ab = [_]abi_asset_resolver.c.ke_component_id{ a, b };
     const ba = [_]abi_asset_resolver.c.ke_component_id{ b, a };
 
@@ -1313,10 +1339,10 @@ test "resolving a query into too small an array reports every segment it matches
     const e = handle.ref.?.*;
 
     var shared: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "resolve_shared", .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, &shared));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "resolve_shared", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &shared));
     var extras: [4]abi_asset_resolver.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "resolve_x0", "resolve_x1", "resolve_x2", "resolve_x3" };
-    for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, cid));
+    for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
     for (0..16) |mask| {
         const entity = try spawn(handle);
@@ -1349,7 +1375,7 @@ test "a query over twelve components resolves with a column for each" {
 
     var cids: [12]abi_asset_resolver.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
-    for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 0, .fields = null, .field_count = 0 }, cid));
+    for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
     const entity = try spawn(handle);
     for (cids) |cid| try testing.expect((try attach(handle, entity, cid)) != null);
@@ -1370,7 +1396,7 @@ test "a query over twelve components resolves with a column for each" {
 test "creating, filling and destroying an ecs leaves no block allocated" {
     const handle = try made();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "leak_probe", .size = 8, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "leak_probe", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const entity = try spawn(handle);
     try testing.expect((try attach(handle, entity, cid)) != null);
     handle.destroy.?(handle.ref);

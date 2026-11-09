@@ -1,0 +1,31 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Root"
+type = "pong.ball"
+[entity.ball]
+hit_sound    = "assets/sounds/hit.wav"
+hit_volume   = 0.5
+score_sound  = "assets/sounds/score.wav"
+score_volume = 0.6
+[entity.body2d]
+type           = "dynamic"
+fixed_rotation = true
+
+[[entity]]
+name   = "Shape"
+parent = "Root"
+type   = "collider2d"
+[entity.collider2d]
+half_extents = [0.18, 0.18]
+restitution  = 1.0
+friction     = 0.0
+
+[[entity]]
+name   = "Visual"
+parent = "Root"
+type   = "sprite2d"
+[entity.sprite2d]
+size  = [0.36, 0.36]
+color = [0.95, 0.95, 0.95, 1.0]

@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
+    abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("render_ui", b.dependency("abi_render_ui", .{}).module("abi"));

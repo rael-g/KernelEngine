@@ -1200,7 +1200,7 @@ test "a transform position reaches the component" {
     try testing.expectEqual(@as(f32, 3.0), t.position.z);
 }
 
-test "a two dimensional rotation authored in degrees reaches the component as radians" {
+test "a two dimensional pose reaches the component as authored" {
     var f: Fixture = undefined;
     try f.init();
     defer f.deinit();
@@ -1212,7 +1212,7 @@ test "a two dimensional rotation authored in degrees reaches the component as ra
         \\name = "Flat"
         \\[entity.transform2d]
         \\position = [1.0, 2.0]
-        \\rotation = 90.0
+        \\rotation = 1.5707964
         \\scale    = [3.0, 4.0]
         \\depth    = 5.0
         \\
@@ -1229,68 +1229,6 @@ test "a two dimensional rotation authored in degrees reaches the component as ra
     try testing.expectEqual(@as(f32, 3.0), t.scale.x);
     try testing.expectEqual(@as(f32, 4.0), t.scale.y);
     try testing.expectEqual(@as(f32, 5.0), t.depth);
-}
-
-test "a rotation authored as euler degrees reaches the component as a quaternion" {
-    var f: Fixture = undefined;
-    try f.init();
-    defer f.deinit();
-
-    var scene = TempScene.init();
-    defer scene.deinit();
-    try scene.put("main.scene.toml",
-        \\[[entity]]
-        \\name = "Turned"
-        \\[entity.transform]
-        \\rotation_euler = [0.0, 90.0, 0.0]
-        \\
-    );
-
-    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-    const e = f.find("Turned");
-    try testing.expect(e != abi_ecs.c.KE_ENTITY_INVALID);
-
-    const t = f.comp(abi_spatial.c.ke_transform_component, abi_spatial_contract.c.KE_COMPONENT_NAME_TRANSFORM, e) orelse return error.MissingComponent;
-    try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.x, 1e-5);
-    try testing.expectApproxEqAbs(@as(f32, 0.70710678), t.rotation.y, 1e-5);
-    try testing.expectApproxEqAbs(@as(f32, 0.0), t.rotation.z, 1e-5);
-    try testing.expectApproxEqAbs(@as(f32, 0.70710678), t.rotation.w, 1e-5);
-}
-
-test "a key only the domain callback knows is not reported as unknown" {
-    var f: Fixture = undefined;
-    try f.init();
-    defer f.deinit();
-
-    var scene = TempScene.init();
-    defer scene.deinit();
-    try scene.put("main.scene.toml",
-        \\[[entity]]
-        \\name = "Turned"
-        \\[entity.transform]
-        \\rotation_euler = [0.0, 90.0, 0.0]
-        \\
-    );
-
-    try testing.expect(f.load(try scene.cPath("main.scene.toml")));
-}
-
-test "a value only the domain callback can judge fails the load when it rejects it" {
-    var f: Fixture = undefined;
-    try f.init();
-    defer f.deinit();
-
-    var scene = TempScene.init();
-    defer scene.deinit();
-    try scene.put("main.scene.toml",
-        \\[[entity]]
-        \\name = "Turned"
-        \\[entity.transform]
-        \\rotation_euler = "ninety"
-        \\
-    );
-
-    try testing.expect(!f.load(try scene.cPath("main.scene.toml")));
 }
 
 test "every sprite2d field the table describes reaches the component" {

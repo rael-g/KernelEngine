@@ -23,8 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_config_value, translated("ke_config_value"));
-    try expectSameLayout(abi.c.ke_config_field, translated("ke_config_field"));
     try expectSameLayout(abi.c.ke_configuration, translated("ke_configuration"));
     try expectSameLayout(abi.c.ke_configuration_handle, translated("ke_configuration_handle"));
     try expectSameLayout(abi.c.ke_configuration_source, translated("ke_configuration_source"));
@@ -34,32 +32,16 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_configuration_subscription")) try expectSameLayout(abi.c.ke_configuration_subscription, c.ke_configuration_subscription);
 }
 
-test "every enum value is the header's value" {
-    @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_INT), @as(i64, abi.c.KE_CONFIG_INT));
-    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_FLOAT), @as(i64, abi.c.KE_CONFIG_FLOAT));
-    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_DOUBLE), @as(i64, abi.c.KE_CONFIG_DOUBLE));
-    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_BOOL), @as(i64, abi.c.KE_CONFIG_BOOL));
-    try std.testing.expectEqual(@as(i64, c.KE_CONFIG_STRING), @as(i64, abi.c.KE_CONFIG_STRING));
-}
-
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_CONFIGURATION_SUBSCRIPTION_NONE), @as(i128, abi.c.KE_CONFIGURATION_SUBSCRIPTION_NONE));
 }
 
-extern const layout_values: [31]c_ulonglong;
+extern const layout_values: [23]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_config_value),
-        @sizeOf(abi.c.ke_config_field),
-        @offsetOf(abi.c.ke_config_field, "key"),
-        @offsetOf(abi.c.ke_config_field, "type"),
-        @offsetOf(abi.c.ke_config_field, "offset"),
-        @offsetOf(abi.c.ke_config_field, "size"),
-        @offsetOf(abi.c.ke_config_field, "default_value"),
         @sizeOf(abi.c.ke_configuration),
         @offsetOf(abi.c.ke_configuration, "handle"),
         @offsetOf(abi.c.ke_configuration, "get_int"),
@@ -72,7 +54,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_configuration, "set_string"),
         @offsetOf(abi.c.ke_configuration, "subscribe"),
         @offsetOf(abi.c.ke_configuration, "unsubscribe"),
-        @offsetOf(abi.c.ke_configuration, "fill"),
         @offsetOf(abi.c.ke_configuration, "for_each_child"),
         @sizeOf(abi.c.ke_configuration_handle),
         @offsetOf(abi.c.ke_configuration_handle, "ref"),

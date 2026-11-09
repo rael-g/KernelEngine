@@ -8,6 +8,7 @@ const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
+const abi_input = @import("input");
 const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
@@ -48,17 +49,12 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W".
-pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
+/// key_quad, each a key name such as "Space" or "W". Given a runtime, it registers the PreUpdate
+/// system "input.actions", which advances input's frame and evaluates the maps against its
+/// snapshot before any behaviour reads an action; destroying the maps unregisters it.
+pub fn inputActionsCreate(runtime: ?*abi_runtime.c.ke_runtime, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(configuration, config, &written));
-    return written;
-}
-
-/// Creates an empty scene component set, which the plugins fill through its `add` slot.
-pub fn sceneComponentSetCreate() Error!abi_framework.c.ke_scene_component_set_handle {
-    var written: abi_framework.c.ke_scene_component_set_handle = undefined;
-    try checkResult(c.ke_scene_component_set_create(&written));
+    try checkResult(c.ke_input_actions_create(runtime, input, configuration, config, &written));
     return written;
 }
 
@@ -116,6 +112,28 @@ pub fn signalBusCreate(params: ?*const c.ke_signal_bus_params) Error!abi_signal_
 pub fn componentRegistryCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_component_registry.c.ke_component_registry_handle {
     var written: abi_component_registry.c.ke_component_registry_handle = undefined;
     try checkResult(c.ke_component_registry_create(ecs, &written));
+    return written;
+}
+
+/// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
+/// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component
+/// that marks a node readied, and the system that clears the events at PreUpdate. `runtime`,
+/// `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy
+/// unregisters every system they registered.
+pub fn nodeTypesCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions) Error!abi_framework.c.ke_node_types_handle {
+    var written: abi_framework.c.ke_node_types_handle = undefined;
+    try checkResult(c.ke_node_types_create(runtime, ecs, scene_tree, input_actions, &written));
+    return written;
+}
+
+/// Creates scene files that spawn through `node_types`, look components up and write their
+/// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
+/// `io`; each must outlive the scene files. It registers through `node_types` the node type
+/// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
+/// when its path changes; the scene files must outlive every tick that runs it.
+pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_framework.c.ke_scene_files_handle {
+    var written: abi_framework.c.ke_scene_files_handle = undefined;
+    try checkResult(c.ke_scene_files_create(ecs, node_types, assets, io, &written));
     return written;
 }
 

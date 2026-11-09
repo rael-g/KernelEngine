@@ -21,7 +21,11 @@ public unsafe partial class InputActions
     private static ke_input_actions_handle Create(KernelEngine.Configuration.INativeConfiguration? configuration)
     {
         ke_input_actions_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(configuration is null ? null : configuration.Native, null, &handle), "ke_input_actions_create");
+        fixed (byte* section = "input\0"u8)
+        {
+            var config = new KernelEngine.Framework.Native.InputActionsConfig { Section = (sbyte*)section };
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create(null, null, configuration is null ? null : configuration.Native, &config, &handle), "ke_input_actions_create");
+        }
         return handle;
     }
 }

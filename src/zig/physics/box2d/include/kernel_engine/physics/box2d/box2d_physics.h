@@ -23,13 +23,14 @@ extern "C" {
 
 /// [bag] The values a world is created with, each applied as given.
 typedef struct ke_physics_2d_box2d_config {
-    float gravity_x; /**< [default:0] Horizontal gravity, in metres per second squared. */
-    float gravity_y; /**< [default:-9.81] Vertical gravity, in metres per second squared. */
+    float gravity_x; /**< Horizontal gravity, in metres per second squared. */
+    float gravity_y; /**< Vertical gravity, in metres per second squared. */
 } ke_physics_2d_box2d_config;
+
 
 /**
  * @brief Creates a 2D physics world.
- * @param config [borrowed,optional] The world's values; NULL selects the default of each.
+ * @param config [borrowed] The world's values; Required; every field is read as given.
  * @param out_world [out] Receives the world; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_world or a gravity that is not finite;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.

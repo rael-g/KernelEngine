@@ -24,8 +24,11 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_result (*)(struct ke_render_service *, const char *, ke_gpu_buffer, uint64_t, ke_component_id *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong, ulong, global::KernelEngine.Ecs.ComponentId*, KernelEngine.Result.Native.Result> import_buffer;
 
-    [NativeTypeName("ke_component_id (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, global::KernelEngine.Ecs.ComponentId> cid;
+    [NativeTypeName("ke_component_id (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId> frame_color;
+
+    [NativeTypeName("ke_component_id (*)(struct ke_render_service *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId> frame_depth;
 
     [NativeTypeName("struct ke_render_pass_ctx *(*)(struct ke_render_service *, const ke_render_pass_io *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, RenderPassIo*, ke_render_pass_ctx*> begin_pass;
@@ -69,17 +72,17 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, ke_texture_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.TextureHandle, ulong> texture_view;
 
-    [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_view;
+    [NativeTypeName("ke_gpu_texture_view (*)(struct ke_render_service *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId, ulong> resource_view;
 
-    [NativeTypeName("ke_gpu_texture (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_texture;
+    [NativeTypeName("ke_gpu_texture (*)(struct ke_render_service *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId, ulong> resource_texture;
 
-    [NativeTypeName("ke_gpu_buffer (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_buffer;
+    [NativeTypeName("ke_gpu_buffer (*)(struct ke_render_service *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId, ulong> resource_buffer;
 
-    [NativeTypeName("uint64_t (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, ulong> resource_buffer_size;
+    [NativeTypeName("uint64_t (*)(struct ke_render_service *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId, ulong> resource_buffer_size;
 
     [NativeTypeName("void (*)(struct ke_render_service *, uint32_t *, uint32_t *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint*, uint*, void> backbuffer_size;
@@ -144,8 +147,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.GpuTextureFormat> backbuffer_format;
 
-    [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *, const char *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, sbyte*, global::KernelEngine.Render.GpuTextureFormat> resource_format;
+    [NativeTypeName("ke_gpu_texture_format (*)(struct ke_render_service *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Ecs.ComponentId, global::KernelEngine.Render.GpuTextureFormat> resource_format;
 
     [NativeTypeName("uint32_t (*)(struct ke_render_service *)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, uint> resource_generation;

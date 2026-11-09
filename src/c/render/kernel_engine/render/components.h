@@ -86,7 +86,7 @@ extern "C"
 
         ke_vec4  base_color; ///< [default:1 1 1 1,name:color]
         float    roughness; ///< [default:1]
-        uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
+        ke_alpha_mode alpha_mode; ///< [default:KE_ALPHA_MODE_OPAQUE]
         float    alpha_cutoff; ///< [default:0.5]
         float    ior; ///< [default:1.5]
         float    distortion_strength; ///< [default:0.05]
@@ -114,7 +114,7 @@ extern "C"
         uint8_t  flip_v; ///< [bool]
         /// Multiplies the sampled image. Linear RGBA.
         ke_vec4  color; ///< [default:1 1 1 1]
-        uint32_t alpha_mode; ///< [default:0] ke_alpha_mode.
+        ke_alpha_mode alpha_mode; ///< [default:KE_ALPHA_MODE_OPAQUE]
         float    alpha_cutoff; ///< [default:0.5]
 
         /// [internal] The image resolved from `texture`.

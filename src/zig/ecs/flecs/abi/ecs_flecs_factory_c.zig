@@ -18,9 +18,9 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 pub const ke_ecs_flecs_config = extern struct {
     /// First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws
-    /// from, so this doubles as that pool's capacity — the world's own side is unbounded. 0 takes
-    /// the default. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of
-    /// memory once it is spent.
+    /// from, so this doubles as that pool's capacity — the world's own side is unbounded. Raise it
+    /// for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is
+    /// spent.
     world_id_base: u32 = std.mem.zeroes(u32),
 };
 

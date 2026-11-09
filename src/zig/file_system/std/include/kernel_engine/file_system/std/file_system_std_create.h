@@ -20,16 +20,16 @@ extern "C"
 /** [bag] Construction parameters for ke_file_system_std_create. */
 typedef struct ke_file_system_std_params
 {
-    /// [default:null] [utf8] The directory relative paths are resolved against; null takes the working
-    /// directory of the process.
+    /// [utf8] The directory relative paths are resolved against; "." for the working directory of
+    /// the process.
     const char *root;
 } ke_file_system_std_params;
 
 /**
  * Creates a ke_file_system over the operating system's files, through Zig's standard library.
- * @param params [borrowed,optional] Construction parameters; NULL takes every default.
+ * @param params [borrowed] Construction parameters; required.
  * @param out_file_system [out] Receives the file system; left zeroed on failure.
- * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_file_system, KE_RESULT_NOT_FOUND for a
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p params, root or @p out_file_system, KE_RESULT_NOT_FOUND for a
  *         root that names no directory, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_IO.
  */
 KE_FILE_SYSTEM_STD_API ke_result ke_file_system_std_create(const ke_file_system_std_params *params,

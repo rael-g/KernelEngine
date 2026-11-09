@@ -3,8 +3,6 @@
 const std = @import("std");
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -19,17 +17,17 @@ pub const ke_module_id = u64;
 pub const ke_query_id = u64;
 pub const ke_system_id = u64;
 
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
 /// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the
 /// library's lines to stderr, which is also where they go until it is set. Called on whichever
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
@@ -45,7 +43,7 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Values a caller gives; a zero field takes its default.
+/// The values the sound module is created with.
 pub const ke_sound_module_config = extern struct {
     /// Directory a clip's path is joined to; copied. NULL uses the path as written.
     root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
@@ -55,10 +53,6 @@ pub const ke_sound_module_handle = extern struct {
     ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
     destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
-
-/// Adds audio's scene components to set: the sound, with its field table, so a [entity.sound]
-/// block applies.
-pub extern fn ke_audio_scene_components_create(set: ?*abi_framework.c.ke_scene_component_set) abi_result.c.ke_result;
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

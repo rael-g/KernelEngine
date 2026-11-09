@@ -5,19 +5,27 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
+/// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and replaces the frame's color with its tonemapped copy.</summary>
 public sealed unsafe partial class RenderTonemap : IDisposable
 {
-    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Holds the frame's color; borrowed, must outlive it.</param>
-    /// <param name="device">The pass runs inside its frame; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    public RenderTonemap(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame) : this(Create(runtime, service, device, frame))
+    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and replaces the frame's color with its tonemapped copy.</summary>
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
+    public RenderTonemap(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame))
     {
         Hold(runtime.Owner);
+        Hold(ecs.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
+        Hold(viewSpace.Owner);
+        Hold(camera.Owner);
+        Hold(scene.Owner);
         Hold(frame.Owner);
     }
 
@@ -45,19 +53,27 @@ public sealed unsafe partial class RenderTonemap : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_tonemap_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderFrame frame)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_tonemap_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
     {
         ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(viewSpace);
+        ArgumentNullException.ThrowIfNull(camera);
+        ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.RenderTonemapParams config = default;
-        config.Runtime = runtime.Native;
-        config.Service = service.Native;
-        config.Device = device.Native;
-        config.Frame = frame.Native;
+        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
+        context.Runtime = runtime.Native;
+        context.Ecs = ecs.Native;
+        context.Service = service.Native;
+        context.Device = device.Native;
+        context.ViewSpace = viewSpace.Native;
+        context.Camera = camera.Native;
+        context.Scene = scene.Native;
+        context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_tonemap_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&config, &handle), "ke_render_tonemap_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_tonemap_create(&context, &handle), "ke_render_tonemap_create");
         return handle;
     }
 }

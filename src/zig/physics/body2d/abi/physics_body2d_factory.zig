@@ -2,8 +2,6 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
-const abi_framework = @import("framework");
 const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
@@ -38,12 +36,6 @@ pub const PhysicsBody2dModule = struct {
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub fn physicsBody2dSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_physics_body2d_set_log_callback(callback, ctx);
-}
-
-/// Adds physics's scene components to set: the 2D body and the 2D collider, with their field
-/// tables, so [entity.body2d] and [entity.collider2d] blocks apply.
-pub fn physicsSceneComponentsCreate(set: ?*abi_framework.c.ke_scene_component_set) Error!void {
-    try checkResult(c.ke_physics_scene_components_create(set));
 }
 
 pub const PhysicsBody2dModuleParams = c.ke_physics_body2d_module_params;

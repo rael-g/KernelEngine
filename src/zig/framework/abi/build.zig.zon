@@ -11,6 +11,7 @@
         .abi_ecs_variant = .{ .path = "../../abi/ecs_variant" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_image_loader = .{ .path = "../../abi/image_loader" },
+        .abi_input = .{ .path = "../../abi/input" },
         .abi_input_actions = .{ .path = "../../abi/input_actions" },
         .abi_io = .{ .path = "../../abi/io" },
         .abi_logger = .{ .path = "../../abi/logger" },

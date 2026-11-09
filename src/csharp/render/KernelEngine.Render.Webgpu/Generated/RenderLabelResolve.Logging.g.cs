@@ -9,19 +9,25 @@ public sealed unsafe partial class RenderLabelResolve
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="runtime">Registers the system; borrowed, must outlive it.</param>
-    /// <param name="service">Uploads the glyph atlas; borrowed, must outlive it.</param>
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
-    /// <param name="resolver">Reads the font a label names; optional, borrowed. Without it every label is reported.</param>
-    /// <param name="scene">Names the label component; borrowed.</param>
-    public RenderLabelResolve(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene) : this(CreateLogged(loggerFactory, runtime, service, ui, resolver, scene))
+    /// <param name="resolver">Reads the font a label names; borrowed. Without it every label is reported.</param>
+    /// <param name="defaultFont">The font a label that names none draws with; copied. NULL leaves such a label without text.</param>
+    public RenderLabelResolve(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver = default, string? defaultFont = default) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, defaultFont))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, string? defaultFont)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, service, ui, resolver, scene);
+        return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, defaultFont);
     }
 }

@@ -9,8 +9,8 @@ namespace KernelEngine.Ecs.Flecs;
 public sealed unsafe partial class FlecsEcsRegistry : KernelEngine.Ecs.EcsRegistry
 {
     /// <summary>Creates a ke_ecs vtable backed by an internally-owned world. Also installs process-wide log and abort handlers: a check flecs fails makes the slot that called it return KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the stack before flecs ends the process.</summary>
-    /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. 0 takes the default. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
-    public FlecsEcsRegistry(uint worldIdBase = default) : base(Create(worldIdBase))
+    /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
+    public FlecsEcsRegistry(uint worldIdBase) : base(Create(worldIdBase))
     {
     }
 

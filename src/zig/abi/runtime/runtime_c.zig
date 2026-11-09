@@ -42,6 +42,11 @@ pub const ke_access = c_uint;
 pub const KE_ACCESS_READ: ke_access = 1;
 pub const KE_ACCESS_WRITE: ke_access = 2;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -55,11 +60,6 @@ pub const ke_module_unload_fn = ?*const fn (?*ke_runtime, ?*anyopaque) callconv(
 /// runtime logs the system's name. The remaining bodies of the same wave still run — they were
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// A structural operation applied when the queue holding it is drained. `user` points at the
-/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
-/// queue stops there: the operations recorded after it are dropped.
-pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// Body of a scheduled task, run on a worker thread.
 pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -135,12 +135,12 @@ pub const ke_runtime_system_params = extern struct {
 };
 
 pub const ke_runtime_params = extern struct {
-    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds. 0 selects 1/60.
+    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     fixed_dt: f32 = std.mem.zeroes(f32),
-    /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded. 0 selects
-    /// 0.25.
+    /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than
+    /// zero.
     fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
-    /// Most systems one phase may hold; registering past it fails. 0 selects 256.
+    /// Most systems one phase may hold; registering past it fails.
     max_systems_per_phase: u32 = std.mem.zeroes(u32),
 };
 
@@ -186,6 +186,15 @@ pub const ke_runtime = extern struct {
     /// everything a module's unload hook uses is still alive; destroying the runtime calls it for a
     /// host that did not. A second call does nothing.
     unload_modules: ?*const fn (?*ke_runtime) callconv(.c) void = null,
+    /// Records that the program should end; any system or the host may ask, from any thread. Nothing
+    /// stops: the host ends its loop when it reads exit_requested.
+    request_exit: ?*const fn (?*ke_runtime) callconv(.c) void = null,
+    /// Whether a request to end the program was recorded.
+    exit_requested: ?*const fn (?*ke_runtime) callconv(.c) bool = null,
+    /// The queue the host records structural changes into between ticks, as a system records into
+    /// its own; the next tick applies it before any phase runs. Only the thread that ticks records
+    /// into it, and never during a tick.
+    commands: ?*const fn (?*ke_runtime) callconv(.c) ?*abi_ecs.c.ke_ecs_commands = null,
 };
 
 pub const ke_runtime_handle = extern struct {

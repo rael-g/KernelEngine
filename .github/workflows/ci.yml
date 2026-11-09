@@ -116,6 +116,10 @@ jobs:
       - name: Smoke test, a headless example run to its end
         run: dotnet run scripts/verify.cs -- smoke
 
+      - name: SDK, the C Pong built with CMake against the install
+        if: runner.os == 'Linux'
+        run: dotnet run scripts/verify.cs -- sdk
+
       - name: Gates
         if: runner.os == 'Linux'
         run: dotnet run scripts/verify.cs -- gates

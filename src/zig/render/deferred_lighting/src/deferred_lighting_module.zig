@@ -3,7 +3,6 @@
 //! teardown of that pass, behind the one factory it exports.
 
 const abi_framework = @import("abi_framework");
-const abi_render_contract = @import("abi_render_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
@@ -14,6 +13,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_deferred_lighting_factory = @import("abi_render_deferred_lighting_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -48,11 +48,9 @@ const DeferredLightingModule = struct {
     world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
     skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
 
-    albedo: ?[:0]u8 = null,
-    normal: ?[:0]u8 = null,
-    emissive: ?[:0]u8 = null,
-    shadow: ?[:0]u8 = null,
-    clusters: ?[:0]u8 = null,
+    gbuffer: abi_render.c.ke_render_gbuffer_resources = undefined,
+    shadow: abi_render.c.ke_render_shadow_resources = undefined,
+    clusters: abi_render.c.ke_render_cluster_resources = undefined,
 
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
@@ -77,7 +75,7 @@ inline fn moduleOf(user: ?*anyopaque) *DeferredLightingModule {
 /// Recreates `frame_set` over the feature bindings: the shadow map and
 /// matrix, the environment cubemap and the cluster light lists. The black cube stands in for the
 /// environment when `ibl_enabled` is false, and the white texture for the shadow map when the pass
-/// was given no shadow group or the group published none. It runs
+/// was given no shadow map. It runs
 /// from `setup`, and from `system` when the sky cubemap changes; the set it replaces is
 /// destroyed. A failure is logged and not returned, and `frame_set` is then invalid.
 fn rebuildFrameSet(dl: *DeferredLightingModule) void {
@@ -88,7 +86,7 @@ fn rebuildFrameSet(dl: *DeferredLightingModule) void {
     const ibl_view = if (dl.ibl_enabled) env_view else black_cube_view;
 
     var bindings: [Features.count]abi_render_gpu.c.ke_render_shader_binding = undefined;
-    Features.fill(core, ibl_view, nameOf(dl.shadow), nameOf(dl.clusters), &bindings);
+    Features.fill(core, ibl_view, dl.shadow, dl.clusters, &bindings);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
     if (dl.binder.create_set.?(dl.binder, dl.layout, null, "deferred_lighting.frame_set", &bindings, bindings.len, &dl.frame_set) != R.ok)
         log.err("deferred frame set creation failed", .{});
@@ -128,10 +126,10 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
         rebuildFrameSet(dl);
     }
 
-    const albedo_view = pc.?.read.?(pc, dl.albedo.?.ptr);
-    const normal_view = pc.?.read.?(pc, dl.normal.?.ptr);
-    const emissive_view = pc.?.read.?(pc, dl.emissive.?.ptr);
-    const depth_view = pc.?.read.?(pc, abi_render.c.KE_RENDER_FRAME_DEPTH);
+    const albedo_view = pc.?.read.?(pc, dl.gbuffer.albedo);
+    const normal_view = pc.?.read.?(pc, dl.gbuffer.normal);
+    const emissive_view = pc.?.read.?(pc, dl.gbuffer.emissive);
+    const depth_view = pc.?.read.?(pc, core.*.frame_depth.?(core));
     const gbuffer_bindings = [4]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "g_albedo", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = albedo_view, .sampler = 0 },
         .{ .name = "g_normal", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = normal_view, .sampler = 0 },
@@ -162,7 +160,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// release through `destroyModule`.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params) R.Error!void {
+fn setup(dl: *DeferredLightingModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
     const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
@@ -170,21 +168,18 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_fac
     const frame_cid = p.frame.?.frame_cid.?(p.frame);
     dl.core = core;
     dl.device = p.device.?;
-    dl.ibl_enabled = p.ibl_enabled;
+    dl.ibl_enabled = config.ibl_enabled;
     dl.camera_cid = camera_cid;
     dl.world_transform_cid = world_transform_cid;
     dl.skybox_cid = skybox_cid;
     dl.env_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
 
-    const group = std.mem.span(p.gbuffer.?);
-    dl.albedo = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_ALBEDO }, 0) catch return error.OutOfMemory;
-    dl.normal = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_NORMAL }, 0) catch return error.OutOfMemory;
-    dl.emissive = std.fmt.allocPrintSentinel(gpa, "{s}{s}", .{ group, abi_render_contract.c.KE_RENDER_GBUFFER_EMISSIVE }, 0) catch return error.OutOfMemory;
+    dl.gbuffer = config.gbuffer;
+    dl.shadow = config.shadow;
+    dl.clusters = config.clusters;
     dl.io.name = "render.deferred_lighting";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_OPAQUE, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &dl.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
-    if (p.shadow != null) dl.shadow = gpa.dupeZ(u8, std.mem.span(p.shadow.?)) catch return error.OutOfMemory;
-    if (p.clusters != null) dl.clusters = gpa.dupeZ(u8, std.mem.span(p.clusters.?)) catch return error.OutOfMemory;
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
 
     dl.binder = core.*.resource_binder.?(core).?;
     try R.check(dl.binder.create_shader_layout.?(dl.binder, &shader_layout, &dl.layout));
@@ -219,14 +214,14 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_fac
     rebuildFrameSet(dl);
 
     var ac: u32 = 0;
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE };
+    dl.access[ac] = .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE };
     ac += 1;
-    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| {
-        const n = name orelse continue;
-        dl.access[ac] = .{ .cid = core.*.cid.?(core, n.ptr), .access = abi_runtime.c.KE_ACCESS_READ };
+    for ([_]abi_asset_resolver.c.ke_component_id{ dl.gbuffer.albedo, dl.gbuffer.normal, dl.gbuffer.emissive, dl.shadow.map, dl.clusters.tag }) |read| {
+        if (read == abi_ecs.c.KE_COMPONENT_INVALID) continue;
+        dl.access[ac] = .{ .cid = read, .access = abi_runtime.c.KE_ACCESS_READ };
         ac += 1;
     }
-    dl.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.c.KE_ACCESS_READ };
+    dl.access[ac] = .{ .cid = core.*.frame_depth.?(core), .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
     dl.access[ac] = .{ .cid = camera_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
@@ -243,12 +238,11 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_deferred_lighting_fac
     dl.queries = .{ .{ .terms = dl.queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = dl.queries_terms[2..].ptr, .term_count = 1 } };
 }
 
-/// Gives the link back and releases the names, the sets and the layout the block holds, those still
+/// Gives the link back and releases the sets and the layout the block holds, those still
 /// absent skipped. It leaves the pipeline and the shader modules alone, and does not free the
 /// block, so it can release a partly built one.
 fn destroyModule(dl: *const DeferredLightingModule) void {
     if (dl.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) dl.core.*.leave_chain.?(dl.core, dl.io.chain);
-    for ([_]?[:0]u8{ dl.albedo, dl.normal, dl.emissive, dl.shadow, dl.clusters }) |name| if (name) |n| gpa.free(n);
     if (dl.layout == abi_render_gpu.c.KE_RENDER_BINDING_INVALID) return;
     dl.binder.destroy_set.?(dl.binder, dl.gbuffer_set);
     dl.binder.destroy_set.?(dl.binder, dl.frame_set);
@@ -268,17 +262,24 @@ fn destroyHandle(self: ?*abi_render_deferred_lighting_factory.c.ke_render_deferr
 /// On success the handle's `ref` is the block and its `destroy` is `destroyHandle`. A missing
 /// runtime, service, device or gbuffer fails as an invalid argument. A failed setup or a refused
 /// registration fails with its code and leaves the handle zeroed, after the block is released.
-export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_params, out_lighting: [*c]abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_deferred_lighting_create(context_in: ?*const abi_render_context.c.ke_render_context, config_in: ?*const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config, out_lighting: [*c]abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_lighting orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.gbuffer == null)
+    const p = context_in orelse return R.code(error.InvalidArgument);
+    const config = config_in orelse {
+        log.warn("deferred lighting: no config", .{});
         return R.code(error.InvalidArgument);
+    };
+    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
+    if (p.scene == null or p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
+    if (config.gbuffer.albedo == abi_ecs.c.KE_COMPONENT_INVALID or config.gbuffer.normal == abi_ecs.c.KE_COMPONENT_INVALID or config.gbuffer.emissive == abi_ecs.c.KE_COMPONENT_INVALID) {
+        log.warn("deferred lighting: no gbuffer to light", .{});
+        return R.code(error.InvalidArgument);
+    }
 
     const dl = gpa.create(DeferredLightingModule) catch |err| return R.code(err);
     dl.* = .{};
-    setup(dl, p) catch |err| {
+    setup(dl, p, config) catch |err| {
         destroyModule(dl);
         gpa.destroy(dl);
         return R.code(err);
@@ -308,12 +309,11 @@ export fn ke_render_deferred_lighting_create(params_in: ?*const abi_render_defer
 }
 
 
-fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
-    return if (name) |n| n.ptr else null;
-}
-
-
 const testing = std.testing;
+
+const test_gbuffer: abi_render.c.ke_render_gbuffer_resources = .{ .albedo = 21, .normal = 22, .emissive = 23 };
+const test_shadow: abi_render.c.ke_render_shadow_resources = .{ .map = 24, .light = 25 };
+const test_clusters = std.mem.zeroInit(abi_render.c.ke_render_cluster_resources, .{ .tag = 26 });
 
 const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
 
@@ -347,7 +347,8 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.resource_view).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
@@ -382,7 +383,7 @@ test "creating and destroying the deferred lighting pass leaves no block allocat
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -393,7 +394,7 @@ test "destroying the deferred lighting pass unregisters every system it register
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -406,7 +407,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -417,7 +418,7 @@ test "a missing frame is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h)));
 }
 
 test "a missing scene is refused" {
@@ -425,7 +426,7 @@ test "a missing scene is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h)));
 }
 
 test "a deferred lighting pass the runtime refuses to register releases what it had created" {
@@ -434,7 +435,7 @@ test "a deferred lighting pass the runtime refuses to register releases what it 
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .gbuffer = "gbuffer", .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .gbuffer = test_gbuffer, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

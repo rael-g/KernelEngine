@@ -2,9 +2,11 @@
 #define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/context.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -33,32 +35,24 @@ extern "C"
     typedef struct ke_render_shadow ke_render_shadow;
 
     /** [bag]
-     * What the directional shadow pass draws and the shape of its map. A scene larger than
+     * The shape of the directional shadow pass's map. A scene larger than
      * `extent` loses shadows outside it, and a caster farther than `light_distance` stops
-     * casting. The names are copied.
+     * casting.
      */
-    typedef struct ke_render_shadow_params
+    typedef struct ke_render_shadow_config
     {
-        ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service;    ///< Holds the resources it writes; borrowed.
-        ke_gpu_device     *device;     ///< Borrowed.
-        ke_view_space     *view_space; ///< Builds the light's view and projection; borrowed.
-        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
-        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
-        /// [utf8] The shadow group it writes: the map under the group's own name, and the
-        /// light and depth under the suffixes of kernel_engine/render/resource_groups.h.
-        const char *output;
-        /// Edge of the square shadow map, in texels. 0 takes the default.
+        /// Edge of the square shadow map, in texels.
         uint32_t resolution;
-        /// How far back along the light the shadow camera sits. 0 takes the default.
+        /// How far back along the light the shadow camera sits.
         float    light_distance;
-        /// Width and height of the shadowed area, in world units. 0 takes the default.
+        /// Width and height of the shadowed area, in world units.
         float    extent;
-        /// Near plane of the shadow camera. 0 takes the default.
+        /// Near plane of the shadow camera.
         float    near_plane;
-        /// Far plane of the shadow camera. 0 takes the default.
+        /// Far plane of the shadow camera.
         float    far_plane;
-    } ke_render_shadow_params;
+    } ke_render_shadow_config;
+
 
     /// [owner]
     typedef struct ke_render_shadow_handle
@@ -67,11 +61,15 @@ extern "C"
         void (*destroy)(ke_render_shadow *self);
     } ke_render_shadow_handle;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, view space
-    /// or output fails as an invalid argument.
+    /// Registers the pass's render-phase system. A missing runtime, service, device or view space
+    /// fails as an invalid argument.
+    /// @param context [borrowed] The parts the pass is built on; read during the call.
+    /// @param config [borrowed] The map's shape; Required; every field is read as given.
+    /// @param out_resources [out] Receives the ids of the map and the light it writes; every id
+    ///                      KE_COMPONENT_INVALID on failure.
     /// @param out_shadow [out] Receives the handle; left zeroed on failure.
     KE_RENDER_SHADOW_API ke_result ke_render_shadow_create(
-        const ke_render_shadow_params *params, ke_render_shadow_handle *out_shadow);
+        const ke_render_context *context, const ke_render_shadow_config *config, ke_render_shadow_resources *out_resources, ke_render_shadow_handle *out_shadow);
 
 #ifdef __cplusplus
 }

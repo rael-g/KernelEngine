@@ -1,6 +1,5 @@
 //! Keeps the entity components of 2D bodies and colliders in agreement with a `ke_physics_2d`
-//! world, through two fixed-post-update-phase systems. It also exports the set of those components
-//! a scene file can author.
+//! world, through two fixed-post-update-phase systems.
 
 const abi_framework_components = @import("abi_framework_components");
 const abi_physics_contract = @import("abi_physics_contract");
@@ -13,7 +12,6 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_physics_body2d").logFn };
 
 const abi_ecs = @import("abi_ecs");
-const abi_framework = @import("abi_framework");
 const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_physics_body2d_factory = @import("abi_physics_body2d_factory");
@@ -365,22 +363,6 @@ fn create(pr: *const abi_physics_body2d_factory.c.ke_physics_body2d_module_param
     try R.check(rt.*.register_system.?(rt, &cp, &m.collider_system));
 
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
-}
-
-const components = [_]abi_ecs.c.ke_component_params{
-    .{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics_components.c.ke_body2d_component), .alignment = @alignOf(abi_physics_components.c.ke_body2d_component), .fields = &abi_physics_contract.c.ke_body2d_component_fields, .field_count = abi_physics_contract.c.ke_body2d_component_fields.len },
-    .{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_COLLIDER2D, .size = @sizeOf(abi_physics_components.c.ke_collider2d_component), .alignment = @alignOf(abi_physics_components.c.ke_collider2d_component), .fields = &abi_physics_contract.c.ke_collider2d_component_fields, .field_count = abi_physics_contract.c.ke_collider2d_component_fields.len },
-};
-
-/// The factory of the scene components. Adds them in order and stops at the first one the set
-/// refuses.
-export fn ke_physics_scene_components_create(set_in: ?*abi_framework.c.ke_scene_component_set) callconv(.c) abi_result.c.ke_result {
-    const set = set_in orelse return R.code(error.InvalidArgument);
-    for (&components) |*component| {
-        const added = set.add.?(set, component, null);
-        if (added != R.ok) return added;
-    }
-    return R.ok;
 }
 
 const testing = std.testing;

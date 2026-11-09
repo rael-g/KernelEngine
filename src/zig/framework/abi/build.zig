@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("image_loader", b.dependency("abi_image_loader", .{}).module("abi"));
+    abi.addImport("input", b.dependency("abi_input", .{}).module("abi"));
     abi.addImport("input_actions", b.dependency("abi_input_actions", .{}).module("abi"));
     abi.addImport("io", b.dependency("abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
@@ -27,13 +28,14 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/framework/asset_resolver_create.h>
         \\#include <kernel_engine/framework/framework_log.h>
         \\#include <kernel_engine/framework/input_actions_create.h>
-        \\#include <kernel_engine/framework/scene_component_set_create.h>
         \\#include <kernel_engine/framework/scene_hierarchy_create.h>
         \\#include <kernel_engine/framework/scene_loader_create.h>
         \\#include <kernel_engine/framework/scene_tree_create.h>
         \\#include <kernel_engine/framework/script_host_create.h>
         \\#include <kernel_engine/framework/signal_bus_create.h>
         \\#include <kernel_engine/framework/component_registry_create.h>
+        \\#include <kernel_engine/framework/node_types_create.h>
+        \\#include <kernel_engine/framework/scene_files_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/asset"));

@@ -12,7 +12,7 @@ namespace KernelEngine.Configuration.Tests;
 public class ServiceCollectionExtensionsTests
 {
     private static IServiceCollection WithIo() =>
-        new ServiceCollection().AddEnkiTaskPool().AddStdFileSystem().AddPoolIo();
+        new ServiceCollection().AddEnkiTaskPool(workerCount: uint.MaxValue).AddStdFileSystem(root: ".").AddPoolIo();
 
     [Fact]
     public void AddProjectConfig_RegistersSingleton()

@@ -15,7 +15,7 @@ public static class FlecsEcsRegistryRegistration
     /// container and the given values, as itself, as <see cref="KernelEngine.Ecs.INativeEcs"/> and as <see cref="KernelEngine.Ecs.IEcsRegistry"/>. The library logs to the
     /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddFlecsEcsRegistry(this IServiceCollection services, uint worldIdBase = default)
+    public static IServiceCollection AddFlecsEcsRegistry(this IServiceCollection services, uint worldIdBase)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
             ? new FlecsEcsRegistry(loggerFactory, worldIdBase)

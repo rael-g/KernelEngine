@@ -12,7 +12,7 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">The window presented into; must outlive the target.</param>
     /// <param name="presentMode">How presented frames reach the screen.</param>
-    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode = default) : base(CreateLogged(loggerFactory, device, window, presentMode))
+    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode) : base(CreateLogged(loggerFactory, device, window, presentMode))
     {
     }
 

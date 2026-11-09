@@ -31,8 +31,6 @@ pub const Core = struct {
             .initialized = false,
         };
         self.api.handle = self;
-        self.api.on_initialize = onInitialize;
-        self.api.on_shutdown = onShutdown;
         self.api.should_close = shouldClose;
         self.api.poll_events = pollEvents;
         self.api.get_size = getSize;
@@ -60,7 +58,7 @@ pub const Core = struct {
         return @ptrCast(@alignCast(s.handle));
     }
 
-    /// Stops the device but keeps `dev`, so `initialize` can start the same device again.
+    /// Stops the device before `destroyApi` destroys it.
     fn shutdownInternal(self: *Core) void {
         if (self.dev) |dev| dev.shutdown();
         self.initialized = false;
@@ -75,20 +73,6 @@ pub const Core = struct {
         if (self.dev) |dev| dev.destroy();
         self.dev = null;
         heap.gpa.destroy(self);
-    }
-
-    /// The `on_initialize` slot. The factory already started the device, so this only checks the
-    /// table; a null table is an invalid argument.
-    fn onInitialize(self_in: ?*abi_window.c.ke_window) callconv(.c) abi_result.c.ke_result {
-        if (from(self_in) == null) return R.code(error.InvalidArgument);
-        return R.ok;
-    }
-
-    /// The `on_shutdown` slot. Stops the device through `shutdownInternal` and keeps the Core; a
-    /// null table is ignored.
-    fn onShutdown(self_in: ?*abi_window.c.ke_window) callconv(.c) void {
-        const self = from(self_in) orelse return;
-        self.shutdownInternal();
     }
 
     /// A missing handle or device answers that the window should close.
@@ -335,13 +319,10 @@ test "poll_events drives the device" {
     try testing.expectEqual(@as(u32, 1), dev.poll_calls);
 }
 
-test "shutdown reaches the device" {
+test "destroying the window shuts the device down" {
     var dev = FakeDevice{};
     const core = makeCore(&dev, null);
-    defer destroyCore(core);
-
-    const api = core.toApi();
-    api.on_shutdown.?(api);
+    destroyCore(core);
     try testing.expect(dev.shutdown_calls >= 1);
 }
 
@@ -355,7 +336,6 @@ test "the C ABI slots tolerate a null self" {
     try testing.expectEqual(true, api.should_close.?(null));
     try testing.expectEqual(@as(?*anyopaque, null), api.get_native_handle.?(null));
     api.get_size.?(null, null, null);
-    api.on_shutdown.?(null);
     Core.destroyApi(null);
 }
 

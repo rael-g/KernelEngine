@@ -23,9 +23,10 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_render_shadow_params, translated("ke_render_shadow_params"));
+    try expectSameLayout(abi.c.ke_render_shadow_config, translated("ke_render_shadow_config"));
     try expectSameLayout(abi.c.ke_render_shadow_handle, translated("ke_render_shadow_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
@@ -55,24 +56,17 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [17]c_ulonglong;
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_render_shadow_params),
-        @offsetOf(abi.c.ke_render_shadow_params, "runtime"),
-        @offsetOf(abi.c.ke_render_shadow_params, "service"),
-        @offsetOf(abi.c.ke_render_shadow_params, "device"),
-        @offsetOf(abi.c.ke_render_shadow_params, "view_space"),
-        @offsetOf(abi.c.ke_render_shadow_params, "scene"),
-        @offsetOf(abi.c.ke_render_shadow_params, "frame"),
-        @offsetOf(abi.c.ke_render_shadow_params, "output"),
-        @offsetOf(abi.c.ke_render_shadow_params, "resolution"),
-        @offsetOf(abi.c.ke_render_shadow_params, "light_distance"),
-        @offsetOf(abi.c.ke_render_shadow_params, "extent"),
-        @offsetOf(abi.c.ke_render_shadow_params, "near_plane"),
-        @offsetOf(abi.c.ke_render_shadow_params, "far_plane"),
+        @sizeOf(abi.c.ke_render_shadow_config),
+        @offsetOf(abi.c.ke_render_shadow_config, "resolution"),
+        @offsetOf(abi.c.ke_render_shadow_config, "light_distance"),
+        @offsetOf(abi.c.ke_render_shadow_config, "extent"),
+        @offsetOf(abi.c.ke_render_shadow_config, "near_plane"),
+        @offsetOf(abi.c.ke_render_shadow_config, "far_plane"),
         @sizeOf(abi.c.ke_render_shadow_handle),
         @offsetOf(abi.c.ke_render_shadow_handle, "ref"),
         @offsetOf(abi.c.ke_render_shadow_handle, "destroy"),

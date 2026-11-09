@@ -30,11 +30,6 @@ pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
 
-/// The tag a pass that joined the chain writes in its access list, and that the system ending
-/// the frame reads.
-pub const KE_RENDER_FRAME_COLOR = "frame.color";
-/// The frame's depth texture, cleared when the frame begins; a pass samples it by this name.
-pub const KE_RENDER_FRAME_DEPTH = "frame.depth";
 pub const KE_RENDER_CHAIN_NONE = 0;
 
 pub const ke_render_resource_type = c_uint;
@@ -84,6 +79,7 @@ pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gp
 pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu_buffer, ?*anyopaque) callconv(.c) void;
 
 pub const ke_render_resource_params = extern struct {
+    /// The label the resource is debugged under; the service makes it unique.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     @"type": ke_render_resource_type = std.mem.zeroes(ke_render_resource_type),
     format: abi_render_gpu.c.ke_gpu_texture_format = std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format),
@@ -134,11 +130,11 @@ pub const ke_render_lighting = extern struct {
 pub const ke_render_pass_io = extern struct {
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass begins.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The tags the pass reads.
-    reads: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
+    /// The resources the pass reads.
+    reads: ?[*]const ke_component_id = std.mem.zeroes(?[*]const ke_component_id),
     reads_count: u32 = std.mem.zeroes(u32),
-    /// The tags the pass writes.
-    writes: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
+    /// The resources the pass writes.
+    writes: ?[*]const ke_component_id = std.mem.zeroes(?[*]const ke_component_id),
     writes_count: u32 = std.mem.zeroes(u32),
     /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
     chain: ke_render_chain_link = std.mem.zeroes(ke_render_chain_link),
@@ -169,25 +165,71 @@ pub const ke_render_scene_component_ids = extern struct {
     world_transform: ke_component_id = std.mem.zeroes(ke_component_id),
 };
 
+/// The resources a gbuffer pass writes, as the render service's ids. Every id
+/// KE_COMPONENT_INVALID stands for no gbuffer.
+pub const ke_render_gbuffer_resources = extern struct {
+    /// The base color.
+    albedo: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The world normal.
+    normal: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The emitted light.
+    emissive: ke_component_id = std.mem.zeroes(ke_component_id),
+};
+
+/// The resources a directional shadow pass writes, as the render service's ids. Every id
+/// KE_COMPONENT_INVALID stands for no shadow, which a reader meets with the neutral one.
+pub const ke_render_shadow_resources = extern struct {
+    /// The shadow map.
+    map: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The buffer holding the light's view-projection.
+    light: ke_component_id = std.mem.zeroes(ke_component_id),
+};
+
+/// The resources a light-cluster pass writes, as the render service's ids. Every id
+/// KE_COMPONENT_INVALID stands for no clustered light.
+pub const ke_render_cluster_resources = extern struct {
+    /// The tag the pass writes, which orders its readers after it.
+    tag: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The clustered point lights.
+    point_lights: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The clustered spot lights.
+    spot_lights: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The point light indices of each cluster.
+    point_indices: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The point light count of each cluster.
+    point_counts: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The spot light indices of each cluster.
+    spot_indices: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The spot light count of each cluster.
+    spot_counts: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// The cluster grid parameters.
+    grid: ke_component_id = std.mem.zeroes(ke_component_id),
+};
+
 pub const ke_render_service = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Declares a transient resource the service allocates and recycles.
+    /// Declares a transient resource the service allocates and recycles; every call declares a new
+    /// one.
     declare: ?*const fn (?*ke_render_service, ?*const ke_render_resource_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Imports an externally-owned texture under `name`.
+    /// Imports an externally-owned texture, labeled `name`.
     import_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8, ke_gpu_texture, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Mints a tag cid under `name` with no GPU payload.
+    /// Mints a resource with no GPU payload, labeled `name`, that passes order on.
     import_tag: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.
+    /// Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.
     import_buffer: ?*const fn (?*ke_render_service, ?[*:0]const u8, ke_gpu_buffer, u64, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    cid: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) ke_component_id = null,
+    /// The tag a pass that joined the chain writes in its access list, and that the system ending
+    /// the frame reads.
+    frame_color: ?*const fn (?*ke_render_service) callconv(.c) ke_component_id = null,
+    /// The frame's depth texture, cleared when the frame begins.
+    frame_depth: ?*const fn (?*ke_render_service) callconv(.c) ke_component_id = null,
     /// Opens a pass's recording context, from inside a render system's body.
     begin_pass: ?*const fn (?*ke_render_service, ?*const ke_render_pass_io) callconv(.c) ?*abi_render_contract.c.ke_render_pass_ctx = null,
     /// Closes a recording context opened by begin_pass.
     end_pass: ?*const fn (?*ke_render_service, ?*abi_render_contract.c.ke_render_pass_ctx) callconv(.c) void = null,
-    /// Acquires the service's render target as the backbuffer (a built-in resource named
-    /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
-    /// depth. When the target has nothing to draw into this frame it succeeds without beginning one,
-    /// and begin_pass then opens no pass; it fails with the target's code when acquiring failed.
+    /// Acquires the service's render target as the backbuffer, clears the per-pass command slot
+    /// table, and clears the frame's color and depth. When the target has nothing to draw into this
+    /// frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the
+    /// target's code when acquiring failed.
     begin_frame: ?*const fn (?*ke_render_service) callconv(.c) abi_result.c.ke_result = null,
     /// Submits the passes outside the chain in the order they ended, then the chain in its order,
     /// then draws the frame's color into the backbuffer and presents the render target. A link whose
@@ -213,15 +255,15 @@ pub const ke_render_service = extern struct {
     upload_cubemap: ?*const fn (?*ke_render_service, ?[*:0]const u8, u32, ?[*]const u8, usize, ?*abi_render_handles.c.ke_texture_handle) callconv(.c) abi_result.c.ke_result = null,
     /// The GPU view for a texture/cubemap handle.
     texture_view: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_texture_handle) callconv(.c) ke_gpu_texture_view = null,
-    /// The GPU view of a declared transient resource, by name.
-    resource_view: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) ke_gpu_texture_view = null,
+    /// The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.
+    resource_view: ?*const fn (?*ke_render_service, ke_component_id) callconv(.c) ke_gpu_texture_view = null,
     /// The raw GPU texture behind a declared resource, for the copy operations that take a texture
     /// rather than a view.
-    resource_texture: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) ke_gpu_texture = null,
-    /// The GPU buffer published under `name` via import_buffer.
-    resource_buffer: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) ke_gpu_buffer = null,
-    /// The size (bytes) of the buffer published under `name`.
-    resource_buffer_size: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) u64 = null,
+    resource_texture: ?*const fn (?*ke_render_service, ke_component_id) callconv(.c) ke_gpu_texture = null,
+    /// The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.
+    resource_buffer: ?*const fn (?*ke_render_service, ke_component_id) callconv(.c) ke_gpu_buffer = null,
+    /// The size (bytes) of the buffer published via import_buffer; 0 for another id.
+    resource_buffer_size: ?*const fn (?*ke_render_service, ke_component_id) callconv(.c) u64 = null,
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per frame at
     /// begin_frame, so a caller earlier in the tick reads the previous frame's size.
     backbuffer_size: ?*const fn (?*ke_render_service, ?*u32, ?*u32) callconv(.c) void = null,
@@ -269,9 +311,9 @@ pub const ke_render_service = extern struct {
     resource_binder: ?*const fn (?*ke_render_service) callconv(.c) ?*abi_render_gpu.c.ke_render_resource_binder = null,
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     backbuffer_format: ?*const fn (?*ke_render_service) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format = null,
-    /// Texel format of the named texture resource, the format a pipeline drawing into it declares;
-    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.
-    resource_format: ?*const fn (?*ke_render_service, ?[*:0]const u8) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format = null,
+    /// Texel format of a texture resource, the format a pipeline drawing into it declares;
+    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.
+    resource_format: ?*const fn (?*ke_render_service, ke_component_id) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format = null,
     /// Counts the times the targets declared relative to the backbuffer were recreated, which
     /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a
     /// declared target's view, a bind group for instance, rebuilds it when the count changes.

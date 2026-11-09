@@ -40,15 +40,16 @@ typedef enum ke_gpu_present_mode
 /// [bag] The values a window render target is created with, each applied as given.
 typedef struct ke_gpu_render_target_webgpu_window_config
 {
-    /// [default:KE_GPU_PRESENT_MODE_FIFO] How presented frames reach the screen.
+    /// How presented frames reach the screen.
     ke_gpu_present_mode present_mode;
 } ke_gpu_render_target_webgpu_window_config;
+
 
 /**
  * @brief Creates a render target presenting into a window, sized to the window's client area.
  * @param device A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.
  * @param window [borrowed] The window presented into; must outlive the target.
- * @param config [borrowed,optional] The target's values; NULL selects the default of each.
+ * @param config [borrowed] The target's values; Required; every field is read as given.
  * @param out_target [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or on failure: KE_RESULT_INVALID_ARGUMENT for a device from another backend, a
  *         NULL window or a present mode that is not a ke_gpu_present_mode; KE_RESULT_NOT_SUPPORTED

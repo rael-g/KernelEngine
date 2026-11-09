@@ -21,19 +21,6 @@ pub const Window = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_window {
         return .{
-            .on_initialize = &struct {
-                fn call(self: ?*c.ke_window) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.onInitialize(state) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .on_shutdown = &struct {
-                fn call(self: ?*c.ke_window) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.onShutdown(state);
-                }
-            }.call,
             .should_close = &struct {
                 fn call(self: ?*c.ke_window) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
@@ -59,16 +46,6 @@ pub const Window = struct {
                 }
             }.call,
         };
-    }
-
-    /// Performs backend-specific setup, right after creation.
-    pub fn onInitialize(self: Window) Error!void {
-        try checkResult(self.ptr.on_initialize.?(self.ptr));
-    }
-
-    /// Performs backend-specific teardown, right before destroy.
-    pub fn onShutdown(self: Window) void {
-        return self.ptr.on_shutdown.?(self.ptr);
     }
 
     /// Returns true once the user has requested the window to close.
