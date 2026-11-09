@@ -36,7 +36,7 @@ public unsafe partial struct ke_ecs
     public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId, nuint> component_size;
 
     [NativeTypeName("ke_result (*)(struct ke_ecs *, void *, const ke_component_field *, const ke_variant *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, void*, ComponentField*, Variant*, KernelEngine.Result.Native.Result> component_field_write;
+    public delegate* unmanaged[Cdecl]<ke_ecs*, void*, ke_component_field*, Variant*, KernelEngine.Result.Native.Result> component_field_write;
 
     [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_component_id *, size_t, ke_query_id *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId*, nuint, ulong*, KernelEngine.Result.Native.Result> query_register;

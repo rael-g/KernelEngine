@@ -20,8 +20,17 @@ public unsafe partial struct ke_node_type_desc
     [NativeTypeName("const char *")]
     public sbyte* name;
 
-    [NativeTypeName("const ke_component_params *")]
-    public KernelEngine.Ecs.Native.ke_component_params* fields;
+    [NativeTypeName("size_t")]
+    public nuint fields_size;
+
+    [NativeTypeName("size_t")]
+    public nuint fields_alignment;
+
+    [NativeTypeName("const ke_component_field *")]
+    public KernelEngine.Ecs.Native.ke_component_field* fields;
+
+    [NativeTypeName("uint32_t")]
+    public uint field_count;
 
     [NativeTypeName("const void *")]
     public void* initial;

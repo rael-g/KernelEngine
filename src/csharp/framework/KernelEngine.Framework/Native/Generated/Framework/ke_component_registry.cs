@@ -20,10 +20,10 @@ public unsafe partial struct ke_component_registry
     public void* handle;
 
     [NativeTypeName("ke_result (*)(struct ke_component_registry *, ke_component_id, const ke_component_field *, uint32_t)")]
-    public delegate* unmanaged[Cdecl]<ke_component_registry*, global::KernelEngine.Ecs.ComponentId, KernelEngine.Ecs.Native.ComponentField*, uint, KernelEngine.Result.Native.Result> register_component_fields;
+    public delegate* unmanaged[Cdecl]<ke_component_registry*, global::KernelEngine.Ecs.ComponentId, KernelEngine.Ecs.Native.ke_component_field*, uint, KernelEngine.Result.Native.Result> register_component_fields;
 
     [NativeTypeName("const ke_component_field *(*)(struct ke_component_registry *, ke_component_id, uint32_t *)")]
-    public delegate* unmanaged[Cdecl]<ke_component_registry*, global::KernelEngine.Ecs.ComponentId, uint*, KernelEngine.Ecs.Native.ComponentField*> get_component_fields;
+    public delegate* unmanaged[Cdecl]<ke_component_registry*, global::KernelEngine.Ecs.ComponentId, uint*, KernelEngine.Ecs.Native.ke_component_field*> get_component_fields;
 
     [NativeTypeName("ke_result (*)(struct ke_component_registry *, ke_component_id, ke_component_apply_fn, void *)")]
     public delegate* unmanaged[Cdecl]<ke_component_registry*, global::KernelEngine.Ecs.ComponentId, delegate* unmanaged[Cdecl]<void*, void*, KernelEngine.Ecs.Native.VariantTableEntry*, uint, KernelEngine.Result.Native.Result>, void*, KernelEngine.Result.Native.Result> register_component_apply;

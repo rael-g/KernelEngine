@@ -48,7 +48,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SCENE_SLOT, abi.c.KE_COMPONENT_NAME_SCENE_SLOT);
 }
 
-extern const layout_values: [73]c_ulonglong;
+extern const layout_values: [76]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -67,7 +67,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_action_ref, "resolved"),
         @sizeOf(abi.c.ke_node_type_desc),
         @offsetOf(abi.c.ke_node_type_desc, "name"),
+        @offsetOf(abi.c.ke_node_type_desc, "fields_size"),
+        @offsetOf(abi.c.ke_node_type_desc, "fields_alignment"),
         @offsetOf(abi.c.ke_node_type_desc, "fields"),
+        @offsetOf(abi.c.ke_node_type_desc, "field_count"),
         @offsetOf(abi.c.ke_node_type_desc, "initial"),
         @offsetOf(abi.c.ke_node_type_desc, "initial_size"),
         @offsetOf(abi.c.ke_node_type_desc, "with"),

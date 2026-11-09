@@ -507,14 +507,18 @@
     },
     {
       "name": "ke_component_field",
-      "doc": null,
-      "tags": [],
+      "doc": "One field of a component: where it lies, what a scene writes into it, and the names an integer field may be written as.",
+      "tags": [
+        "borrowed"
+      ],
       "fields": [
         {
           "name": "name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The name a scene writes the field by."
         },
         {
           "name": "type",
@@ -544,10 +548,11 @@
           "name": "enum_names",
           "type": "const char *const *",
           "tags": [
-            "borrowed",
-            "optional"
+            "utf8",
+            "array_of:enum_count",
+            "default:empty"
           ],
-          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. NULL leaves the field numeric."
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. None leaves the field numeric."
         },
         {
           "name": "enum_count",
@@ -594,7 +599,7 @@
             "optional",
             "array_of:field_count"
           ],
-          "doc": "The type\u0027s field layout, normally its field table; must outlive the ecs. NULL registers the size alone."
+          "doc": "The type\u0027s field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone."
         },
         {
           "name": "field_count",
@@ -786,13 +791,35 @@
           "doc": "The type\u0027s name; its nodes carry a tag registered as \u0060node. \u003Cname \u003E\u0060."
         },
         {
-          "name": "fields",
-          "type": "const ke_component_params *",
+          "name": "fields_size",
+          "type": "size_t",
           "tags": [
-            "borrowed",
-            "default:none"
+            "default:0"
           ],
-          "doc": "The type\u0027s own fields, registered as a component; NULL for a type made only of the components it names in \u0060with\u0060."
+          "doc": "The bytes of the type\u0027s own fields, registered as a component under the type\u0027s name; 0 for a type made only of the components it names in \u0060with\u0060."
+        },
+        {
+          "name": "fields_alignment",
+          "type": "size_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "The alignment of the fields, a power of two when \u0060fields_size\u0060 is not 0."
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "array_of:field_count",
+            "default:empty"
+          ],
+          "doc": "The fields\u0027 table, copied by the ecs."
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
         },
         {
           "name": "initial",
@@ -807,7 +834,7 @@
           "name": "initial_size",
           "type": "size_t",
           "tags": [],
-          "doc": "\u0060fields-\u003Esize\u0060, or 0 to start them zeroed."
+          "doc": "\u0060fields_size\u0060, or 0 to start them zeroed."
         },
         {
           "name": "with",
@@ -1765,7 +1792,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Registers a node type and the systems of its behaviours.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, fields of zero size, \u0060initial\u0060 without fields, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for a \u0060with\u0060 name or an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for a \u0060with\u0060 name or an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
           "params": [
             {
               "name": "desc",
@@ -1773,7 +1800,7 @@
               "tags": [
                 "borrowed"
               ],
-              "doc": "Read during the call, \u0060initial\u0060 copied; the field table and the names it points at must outlive the node types."
+              "doc": "Read during the call; \u0060initial\u0060 and the field table are copied."
             },
             {
               "name": "out_type",

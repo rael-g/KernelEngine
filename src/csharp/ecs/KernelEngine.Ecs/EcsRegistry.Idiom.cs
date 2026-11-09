@@ -69,21 +69,11 @@ public static unsafe class ComponentLayoutRegistration
     /// </summary>
     public static ComponentId RegisterLaidOutComponent<T>(this INativeEcs ecs, string name) where T : unmanaged, IComponentLayout
     {
-        var fields = T.Fields;
-        var native = (global::KernelEngine.Ecs.Native.ComponentField*)NativeMemory.AllocZeroed((nuint)fields.Length, (nuint)sizeof(global::KernelEngine.Ecs.Native.ComponentField));
-        for (var i = 0; i < fields.Length; i++)
-        {
-            native[i].Name = (sbyte*)Marshal.StringToCoTaskMemUTF8(fields[i].Name);
-            native[i].Type = (VariantType)(uint)fields[i].Kind;
-            native[i].Offset = fields[i].Offset;
-            native[i].Size = fields[i].Size;
-            if (fields[i].EnumNames is not { } names) continue;
-            var table = (sbyte**)NativeMemory.Alloc((nuint)names.Length, (nuint)sizeof(sbyte*));
-            for (var n = 0; n < names.Length; n++) table[n] = (sbyte*)Marshal.StringToCoTaskMemUTF8(names[n]);
-            native[i].EnumNames = table;
-            native[i].EnumCount = (uint)names.Length;
-        }
-        return EcsRegistry.Borrow(ecs.Native).ComponentRegister(name, (nuint)sizeof(T), (nuint)(sizeof(LayoutProbe<T>) - sizeof(T)), new ReadOnlySpan<global::KernelEngine.Ecs.Native.ComponentField>(native, fields.Length));
+        var layout = T.Fields;
+        var fields = new ComponentField[layout.Length];
+        for (var i = 0; i < layout.Length; i++)
+            fields[i] = new ComponentField { Name = layout[i].Name, Type = (VariantType)(uint)layout[i].Kind, Offset = layout[i].Offset, Size = layout[i].Size, EnumNames = layout[i].EnumNames };
+        return EcsRegistry.Borrow(ecs.Native).ComponentRegister(name, (nuint)sizeof(T), (nuint)(sizeof(LayoutProbe<T>) - sizeof(T)), fields);
     }
 
     private readonly struct LayoutProbe<T>(byte head, T value) where T : unmanaged

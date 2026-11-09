@@ -565,14 +565,18 @@
     },
     {
       "name": "ke_component_field",
-      "doc": null,
-      "tags": [],
+      "doc": "One field of a component: where it lies, what a scene writes into it, and the names an integer field may be written as.",
+      "tags": [
+        "borrowed"
+      ],
       "fields": [
         {
           "name": "name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The name a scene writes the field by."
         },
         {
           "name": "type",
@@ -602,10 +606,11 @@
           "name": "enum_names",
           "type": "const char *const *",
           "tags": [
-            "borrowed",
-            "optional"
+            "utf8",
+            "array_of:enum_count",
+            "default:empty"
           ],
-          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. NULL leaves the field numeric."
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. None leaves the field numeric."
         },
         {
           "name": "enum_count",

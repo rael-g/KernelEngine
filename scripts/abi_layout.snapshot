@@ -1098,20 +1098,23 @@ ke_action_ref size=40 align=4
   name 0
   id 32
   resolved 36
-ke_node_type_desc size=104 align=8
+ke_node_type_desc size=128 align=8
   name 0
-  fields 8
-  initial 16
-  initial_size 24
-  with 32
-  with_count 40
-  ready 48
-  update 56
-  fixed_update 64
-  events 72
-  event_count 80
-  on 88
-  user_data 96
+  fields_size 8
+  fields_alignment 16
+  fields 24
+  field_count 32
+  initial 40
+  initial_size 48
+  with 56
+  with_count 64
+  ready 72
+  update 80
+  fixed_update 88
+  events 96
+  event_count 104
+  on 112
+  user_data 120
 ke_node_ctx size=160 align=8
   handle 0
   self 8

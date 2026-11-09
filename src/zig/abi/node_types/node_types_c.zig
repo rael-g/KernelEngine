@@ -56,12 +56,17 @@ pub const ke_action_ref = extern struct {
 pub const ke_node_type_desc = extern struct {
     /// The type's name; its nodes carry a tag registered as `node. <name >`.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The type's own fields, registered as a component; NULL for a type made only of the components
-    /// it names in `with`.
-    fields: ?*const abi_ecs.c.ke_component_params = std.mem.zeroes(?*const abi_ecs.c.ke_component_params),
+    /// The bytes of the type's own fields, registered as a component under the type's name; 0 for a
+    /// type made only of the components it names in `with`.
+    fields_size: usize = 0,
+    /// The alignment of the fields, a power of two when `fields_size` is not 0.
+    fields_alignment: usize = 0,
+    /// The fields' table, copied by the ecs.
+    fields: ?[*]const abi_ecs.c.ke_component_field = std.mem.zeroes(?[*]const abi_ecs.c.ke_component_field),
+    field_count: u32 = std.mem.zeroes(u32),
     /// The bytes copied into the fields of each node spawned; none starts them zeroed.
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
-    /// `fields->size`, or 0 to start them zeroed.
+    /// `fields_size`, or 0 to start them zeroed.
     initial_size: usize = std.mem.zeroes(usize),
     /// Registered components every node of the type carries beside its fields, each with the value
     /// it is born with.

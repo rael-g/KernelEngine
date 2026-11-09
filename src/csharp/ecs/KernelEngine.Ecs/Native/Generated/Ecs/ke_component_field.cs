@@ -7,26 +7,26 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Ecs.Native;
 
-public unsafe partial struct ComponentField
+public unsafe partial struct ke_component_field
 {
     [NativeTypeName("const char *")]
-    public sbyte* Name;
+    public sbyte* name;
 
     [NativeTypeName("ke_variant_type")]
-    public global::KernelEngine.Ecs.VariantType Type;
+    public global::KernelEngine.Ecs.VariantType type;
 
     [NativeTypeName("uint32_t")]
-    public uint Offset;
+    public uint offset;
 
     [NativeTypeName("uint32_t")]
-    public uint Size;
+    public uint size;
 
     [NativeTypeName("ke_variant")]
-    public Variant DefaultValue;
+    public Variant default_value;
 
     [NativeTypeName("const char *const *")]
-    public sbyte** EnumNames;
+    public sbyte** enum_names;
 
     [NativeTypeName("uint32_t")]
-    public uint EnumCount;
+    public uint enum_count;
 }

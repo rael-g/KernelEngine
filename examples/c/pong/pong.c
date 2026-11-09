@@ -85,9 +85,6 @@ typedef struct pong_ball_launched
     bool launched;
 } pong_ball_launched;
 
-static const ke_component_params pong_paddle_params = KE_COMPONENT(pong_paddle, "pong.paddle", pong_paddle_fields);
-static const ke_component_params pong_ball_params = KE_COMPONENT(pong_ball, "pong.ball", pong_ball_fields);
-static const ke_component_params pong_scoreboard_params = KE_COMPONENT(pong_scoreboard, "pong.scoreboard", pong_scoreboard_fields);
 static const ke_component_params pong_goal_scored_params = KE_COMPONENT_UNTABLED(pong_goal_scored, "pong.goal_scored");
 static const ke_component_params pong_ball_launched_params = KE_COMPONENT_UNTABLED(pong_ball_launched, "pong.ball_launched");
 
@@ -277,9 +274,9 @@ ke_result pong_register(pong_game *game)
 
     const ke_component_id board_events[] = { game->goal_scored, game->ball_launched };
     const ke_node_type_desc descs[] = {
-        { .name = "pong.paddle", .fields = &pong_paddle_params, .initial = &pong_paddle_initial, .initial_size = sizeof pong_paddle_initial, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
-        { .name = "pong.ball", .fields = &pong_ball_params, .initial = &pong_ball_initial, .initial_size = sizeof pong_ball_initial, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
-        { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .events = board_events, .event_count = 2, .on = scoreboard_on, .user_data = game },
+        { .name = "pong.paddle", KE_NODE_FIELDS(pong_paddle, pong_paddle_fields), .initial = &pong_paddle_initial, .initial_size = sizeof pong_paddle_initial, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
+        { .name = "pong.ball", KE_NODE_FIELDS(pong_ball, pong_ball_fields), .initial = &pong_ball_initial, .initial_size = sizeof pong_ball_initial, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
+        { .name = "pong.scoreboard", KE_NODE_FIELDS(pong_scoreboard, pong_scoreboard_fields), .events = board_events, .event_count = 2, .on = scoreboard_on, .user_data = game },
         { .name = "pong.menu_controller", .update = menu_update, .user_data = game },
     };
     for (size_t i = 0; i < sizeof descs / sizeof descs[0]; ++i)

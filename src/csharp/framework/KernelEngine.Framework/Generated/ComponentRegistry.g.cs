@@ -95,18 +95,39 @@ public unsafe partial class ComponentRegistry : IDisposable, INativeComponentReg
     /// <exception cref="Exception">The native call failed.</exception>
     public void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields)
     {
-        fixed (ComponentField* fieldsPtr = fields)
+        var fieldsPins = new System.Buffers.MemoryHandle[fields.Length];
+        var fieldsTexts = new List<nint>();
+        var fieldsNative = new ke_component_field[fields.Length];
+        try
         {
-            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_component_fields(Handle, cid, fieldsPtr, (uint)fields.Length)), "register_component_fields");
+            for (var fieldsAt = 0; fieldsAt < fields.Length; fieldsAt++)
+            {
+                fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].Name));
+                fieldsNative[fieldsAt].name = (sbyte*)fieldsTexts[^1];
+                fieldsNative[fieldsAt].type = fields[fieldsAt].Type;
+                fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
+                fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
+                fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
+                var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                fieldsTexts.Add(fieldsEnumNamesAt);
+                for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
+                {
+                    fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));
+                    Marshal.WriteIntPtr(fieldsEnumNamesAt, fieldsEach * nint.Size, fieldsTexts[^1]);
+                }
+                fieldsNative[fieldsAt].enum_names = (sbyte**)fieldsEnumNamesAt;
+                fieldsNative[fieldsAt].enum_count = (uint)fields[fieldsAt].EnumNames.Length;
+            }
+            fixed (ke_component_field* fieldsPtr = fieldsNative)
+            {
+                KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_component_fields(Handle, cid, fieldsPtr, (uint)fields.Length)), "register_component_fields");
+            }
         }
-    }
-
-    /// <summary>Field table registered for `cid`, or NULL.</summary>
-    public ReadOnlySpan<ComponentField> GetComponentFields(ComponentId cid)
-    {
-        uint outCountLocal = 0;
-        var front = Handle->get_component_fields(Handle, cid, &outCountLocal);
-        return front == null ? default : new ReadOnlySpan<ComponentField>(front, (int)outCountLocal);
+        finally
+        {
+            for (var fieldsAt = 0; fieldsAt < fieldsPins.Length; fieldsAt++) fieldsPins[fieldsAt].Dispose();
+            foreach (var fieldsText in fieldsTexts) Marshal.FreeCoTaskMem(fieldsText);
+        }
     }
 
     /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>

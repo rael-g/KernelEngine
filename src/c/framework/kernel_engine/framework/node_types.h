@@ -153,15 +153,22 @@ extern "C"
         /// [utf8] The type's name; its nodes carry a tag registered as `node.<name>`.
         const char *name;
 
-        /// [borrowed, default:none] The type's own fields, registered as a component; NULL for a
-        /// type made only of the components it names in `with`.
-        const ke_component_params *fields;
+        /// [default:0] The bytes of the type's own fields, registered as a component under the type's name;
+        /// 0 for a type made only of the components it names in `with`.
+        size_t fields_size;
+
+        /// [default:0] The alignment of the fields, a power of two when `fields_size` is not 0.
+        size_t fields_alignment;
+
+        /// [array_of:field_count, default:empty] The fields' table, copied by the ecs.
+        const ke_component_field *fields;
+        uint32_t                  field_count;
 
         /// [array_of:initial_size, default:empty] The bytes copied into the fields of each node
         /// spawned; none starts them zeroed.
         const void *initial;
 
-        /// `fields->size`, or 0 to start them zeroed.
+        /// `fields_size`, or 0 to start them zeroed.
         size_t initial_size;
 
         /// [array_of:with_count, default:empty] Registered components every node of the type
@@ -199,11 +206,10 @@ extern "C"
         void *handle;
 
         /// Registers a node type and the systems of its behaviours.
-        /// @param desc [borrowed] Read during the call, `initial` copied; the field table and the
-        ///             names it points at must outlive the node types.
+        /// @param desc [borrowed] Read during the call; `initial` and the field table are copied.
         /// @param out_type [out] Receives the id of the type's tag.
-        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, fields of zero
-        ///         size, `initial` without fields, an initial whose size is not its component's, or
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes
+        ///         without `fields_size`, `initial` without fields, an initial whose size is not its component's, or
         ///         events without `on`; KE_RESULT_NOT_FOUND for a `with` name or an event never
         ///         registered; the ecs's or the runtime's code when it refuses.
         ke_result (*register_type)(struct ke_node_types *self, const ke_node_type_desc *desc, ke_component_id *out_type);

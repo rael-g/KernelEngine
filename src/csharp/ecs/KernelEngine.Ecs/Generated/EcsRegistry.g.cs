@@ -88,7 +88,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
     /// <param name="alignment">A power of two for a sized component; ignored for a tag of size 0.</param>
-    /// <param name="fields">The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.</param>
+    /// <param name="fields">The type's field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone.</param>
     /// <returns>Receives the component's id; KE_COMPONENT_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId ComponentRegister(string name, nuint size, nuint alignment, ReadOnlySpan<ComponentField> fields)
@@ -99,17 +99,46 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (ComponentField* fieldsPtr = fields)
+            var fieldsPins = new System.Buffers.MemoryHandle[fields.Length];
+            var fieldsTexts = new List<nint>();
+            var fieldsNative = new ke_component_field[fields.Length];
+            try
             {
-                ke_component_params @params = default;
-                @params.name = (sbyte*)namePtr;
-                @params.size = size;
-                @params.alignment = alignment;
-                @params.fields = fieldsPtr;
-                @params.field_count = (uint)fields.Length;
-                ComponentId resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, &@params, &resultOut), "component_register");
-                return resultOut;
+                for (var fieldsAt = 0; fieldsAt < fields.Length; fieldsAt++)
+                {
+                    fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].Name));
+                    fieldsNative[fieldsAt].name = (sbyte*)fieldsTexts[^1];
+                    fieldsNative[fieldsAt].type = fields[fieldsAt].Type;
+                    fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
+                    fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
+                    fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
+                    var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                    fieldsTexts.Add(fieldsEnumNamesAt);
+                    for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
+                    {
+                        fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));
+                        Marshal.WriteIntPtr(fieldsEnumNamesAt, fieldsEach * nint.Size, fieldsTexts[^1]);
+                    }
+                    fieldsNative[fieldsAt].enum_names = (sbyte**)fieldsEnumNamesAt;
+                    fieldsNative[fieldsAt].enum_count = (uint)fields[fieldsAt].EnumNames.Length;
+                }
+                fixed (ke_component_field* fieldsPtr = fieldsNative)
+                {
+                    ke_component_params @params = default;
+                    @params.name = (sbyte*)namePtr;
+                    @params.size = size;
+                    @params.alignment = alignment;
+                    @params.fields = fieldsPtr;
+                    @params.field_count = (uint)fields.Length;
+                    ComponentId resultOut = default;
+                    KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, &@params, &resultOut), "component_register");
+                    return resultOut;
+                }
+            }
+            finally
+            {
+                for (var fieldsAt = 0; fieldsAt < fieldsPins.Length; fieldsAt++) fieldsPins[fieldsAt].Dispose();
+                foreach (var fieldsText in fieldsTexts) Marshal.FreeCoTaskMem(fieldsText);
             }
         }
     }
@@ -160,16 +189,6 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public nuint ComponentSize(ComponentId cid)
     {
         return Handle->component_size(Handle, cid);
-    }
-
-    /// <summary>Writes value into component at the place field describes, converted to the field's type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field's width; a string is cut to the field's size and stays NUL-terminated.</summary>
-    /// <param name="component">The component's memory.</param>
-    /// <param name="field">Where in the component, and of which type and size.</param>
-    /// <param name="@value">The value to write.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void ComponentFieldWrite(nint component, ComponentField field, Variant @value)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_field_write(Handle, (void*)component, (ComponentField*)&field, (Variant*)&@value), "component_field_write");
     }
 
     /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>

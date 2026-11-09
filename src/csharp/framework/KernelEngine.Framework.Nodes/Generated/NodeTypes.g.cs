@@ -88,7 +88,9 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
 
     /// <summary>Registers a node type and the systems of its behaviours.</summary>
     /// <param name="name">The type's name; its nodes carry a tag registered as `node. &lt;name &gt;`.</param>
-    /// <param name="fields">The type's own fields, registered as a component; NULL for a type made only of the components it names in `with`.</param>
+    /// <param name="fieldsSize">The bytes of the type's own fields, registered as a component under the type's name; 0 for a type made only of the components it names in `with`.</param>
+    /// <param name="fieldsAlignment">The alignment of the fields, a power of two when `fields_size` is not 0.</param>
+    /// <param name="fields">The fields' table, copied by the ecs.</param>
     /// <param name="initial">The bytes copied into the fields of each node spawned; none starts them zeroed.</param>
     /// <param name="with">Registered components every node of the type carries beside its fields, each with the value it is born with.</param>
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
@@ -98,7 +100,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
     /// <param name="on">Runs in PostUpdate for each node and each event raised this tick of a type in `events`; the ctx's `event_type` says which.</param>
     /// <returns>Receives the id of the type's tag.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId RegisterType(string name, nint fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null)
+    public ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -106,75 +108,110 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (byte* initialPtr = initial)
+            var fieldsPins = new System.Buffers.MemoryHandle[fields.Length];
+            var fieldsTexts = new List<nint>();
+            var fieldsNative = new ke_component_field[fields.Length];
+            try
             {
-                var withPins = new System.Buffers.MemoryHandle[with.Length];
-                var withTexts = new nint[with.Length * 1];
-                var withNative = new ke_node_with[with.Length];
-                try
+                for (var fieldsAt = 0; fieldsAt < fields.Length; fieldsAt++)
                 {
-                    for (var withAt = 0; withAt < with.Length; withAt++)
+                    fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].Name));
+                    fieldsNative[fieldsAt].name = (sbyte*)fieldsTexts[^1];
+                    fieldsNative[fieldsAt].type = fields[fieldsAt].Type;
+                    fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
+                    fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
+                    fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
+                    var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                    fieldsTexts.Add(fieldsEnumNamesAt);
+                    for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
                     {
-                        withTexts[withAt * 1 + 0] = Marshal.StringToCoTaskMemUTF8(with[withAt].Name);
-                        withNative[withAt].name = (sbyte*)withTexts[withAt * 1 + 0];
-                        withPins[withAt] = with[withAt].Initial.Pin();
-                        withNative[withAt].initial = (void*)withPins[withAt].Pointer;
-                        withNative[withAt].initial_size = (nuint)with[withAt].Initial.Length;
+                        fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));
+                        Marshal.WriteIntPtr(fieldsEnumNamesAt, fieldsEach * nint.Size, fieldsTexts[^1]);
                     }
-                    fixed (ke_node_with* withPtr = withNative)
+                    fieldsNative[fieldsAt].enum_names = (sbyte**)fieldsEnumNamesAt;
+                    fieldsNative[fieldsAt].enum_count = (uint)fields[fieldsAt].EnumNames.Length;
+                }
+                fixed (ke_component_field* fieldsPtr = fieldsNative)
+                {
+                    fixed (byte* initialPtr = initial)
                     {
-                        fixed (ComponentId* eventsPtr = events)
+                        var withPins = new System.Buffers.MemoryHandle[with.Length];
+                        var withTexts = new List<nint>();
+                        var withNative = new ke_node_with[with.Length];
+                        try
                         {
-                            var userDataHandle = ready is null && update is null && fixedUpdate is null && on is null
-                                ? default
-                                : GCHandle.Alloc(new RegisterTypeClosures { Ready = ready, Update = update, FixedUpdate = fixedUpdate, On = on });
-                            ke_node_type_desc desc = default;
-                            desc.name = (sbyte*)namePtr;
-                            desc.fields = (ke_component_params*)fields;
-                            desc.initial = (void*)initialPtr;
-                            desc.initial_size = (nuint)initial.Length;
-                            desc.with = withPtr;
-                            desc.with_count = (uint)with.Length;
-                            desc.ready = ready is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeReadyTrampoline;
-                            desc.update = update is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeUpdateTrampoline;
-                            desc.fixed_update = fixedUpdate is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeFixedUpdateTrampoline;
-                            desc.events = eventsPtr;
-                            desc.event_count = (uint)events.Length;
-                            desc.on = on is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeOnTrampoline;
-                            desc.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);
-                            s_parkedCallbackException = null;
-                            ComponentId resultOut = default;
-                            KernelEngine.Result.Native.Result rc;
-                            bool ok;
-                            try
+                            for (var withAt = 0; withAt < with.Length; withAt++)
                             {
-                                ok = (rc = Handle->register_type(Handle, &desc, &resultOut)) == KernelEngine.Result.Native.Result.Ok;
+                                withTexts.Add(Marshal.StringToCoTaskMemUTF8(with[withAt].Name));
+                                withNative[withAt].name = (sbyte*)withTexts[^1];
+                                withPins[withAt] = with[withAt].Initial.Pin();
+                                withNative[withAt].initial = (void*)withPins[withAt].Pointer;
+                                withNative[withAt].initial_size = (nuint)with[withAt].Initial.Length;
                             }
-                            catch
+                            fixed (ke_node_with* withPtr = withNative)
                             {
-                                if (userDataHandle.IsAllocated) userDataHandle.Free();
-                                throw;
+                                fixed (ComponentId* eventsPtr = events)
+                                {
+                                    var userDataHandle = ready is null && update is null && fixedUpdate is null && on is null
+                                        ? default
+                                        : GCHandle.Alloc(new RegisterTypeClosures { Ready = ready, Update = update, FixedUpdate = fixedUpdate, On = on });
+                                    ke_node_type_desc desc = default;
+                                    desc.name = (sbyte*)namePtr;
+                                    desc.fields_size = fieldsSize;
+                                    desc.fields_alignment = fieldsAlignment;
+                                    desc.fields = fieldsPtr;
+                                    desc.field_count = (uint)fields.Length;
+                                    desc.initial = (void*)initialPtr;
+                                    desc.initial_size = (nuint)initial.Length;
+                                    desc.with = withPtr;
+                                    desc.with_count = (uint)with.Length;
+                                    desc.ready = ready is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeReadyTrampoline;
+                                    desc.update = update is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeUpdateTrampoline;
+                                    desc.fixed_update = fixedUpdate is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeFixedUpdateTrampoline;
+                                    desc.events = eventsPtr;
+                                    desc.event_count = (uint)events.Length;
+                                    desc.on = on is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeOnTrampoline;
+                                    desc.user_data = (void*)GCHandle.ToIntPtr(userDataHandle);
+                                    s_parkedCallbackException = null;
+                                    ComponentId resultOut = default;
+                                    KernelEngine.Result.Native.Result rc;
+                                    bool ok;
+                                    try
+                                    {
+                                        ok = (rc = Handle->register_type(Handle, &desc, &resultOut)) == KernelEngine.Result.Native.Result.Ok;
+                                    }
+                                    catch
+                                    {
+                                        if (userDataHandle.IsAllocated) userDataHandle.Free();
+                                        throw;
+                                    }
+                                    if (s_parkedCallbackException is { } parked)
+                                    {
+                                        s_parkedCallbackException = null;
+                                        throw parked;
+                                    }
+                                    if (!ok)
+                                    {
+                                        if (userDataHandle.IsAllocated) userDataHandle.Free();
+                                        throw KernelEngine.NativeResults.FromCode(rc, "register_type");
+                                    }
+                                    if (userDataHandle.IsAllocated) _retainedUserData[resultOut] = userDataHandle;
+                                    return resultOut;
+                                }
                             }
-                            if (s_parkedCallbackException is { } parked)
-                            {
-                                s_parkedCallbackException = null;
-                                throw parked;
-                            }
-                            if (!ok)
-                            {
-                                if (userDataHandle.IsAllocated) userDataHandle.Free();
-                                throw KernelEngine.NativeResults.FromCode(rc, "register_type");
-                            }
-                            if (userDataHandle.IsAllocated) _retainedUserData[resultOut] = userDataHandle;
-                            return resultOut;
+                        }
+                        finally
+                        {
+                            for (var withAt = 0; withAt < withPins.Length; withAt++) withPins[withAt].Dispose();
+                            foreach (var withText in withTexts) Marshal.FreeCoTaskMem(withText);
                         }
                     }
                 }
-                finally
-                {
-                    for (var withAt = 0; withAt < withPins.Length; withAt++) withPins[withAt].Dispose();
-                    foreach (var withText in withTexts) Marshal.FreeCoTaskMem(withText);
-                }
+            }
+            finally
+            {
+                for (var fieldsAt = 0; fieldsAt < fieldsPins.Length; fieldsAt++) fieldsPins[fieldsAt].Dispose();
+                foreach (var fieldsText in fieldsTexts) Marshal.FreeCoTaskMem(fieldsText);
             }
         }
     }
@@ -268,7 +305,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
     /// <param name="alignment">A power of two for a sized component; ignored for a tag of size 0.</param>
-    /// <param name="fields">The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.</param>
+    /// <param name="fields">The type's field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone.</param>
     /// <returns>Receives the event's component id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId RegisterEvent(string name, nuint size, nuint alignment, ReadOnlySpan<ComponentField> fields)
@@ -279,17 +316,46 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            fixed (ComponentField* fieldsPtr = fields)
+            var fieldsPins = new System.Buffers.MemoryHandle[fields.Length];
+            var fieldsTexts = new List<nint>();
+            var fieldsNative = new ke_component_field[fields.Length];
+            try
             {
-                ke_component_params @event = default;
-                @event.name = (sbyte*)namePtr;
-                @event.size = size;
-                @event.alignment = alignment;
-                @event.fields = fieldsPtr;
-                @event.field_count = (uint)fields.Length;
-                ComponentId resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_event(Handle, &@event, &resultOut)), "register_event");
-                return resultOut;
+                for (var fieldsAt = 0; fieldsAt < fields.Length; fieldsAt++)
+                {
+                    fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].Name));
+                    fieldsNative[fieldsAt].name = (sbyte*)fieldsTexts[^1];
+                    fieldsNative[fieldsAt].type = fields[fieldsAt].Type;
+                    fieldsNative[fieldsAt].offset = fields[fieldsAt].Offset;
+                    fieldsNative[fieldsAt].size = fields[fieldsAt].Size;
+                    fieldsNative[fieldsAt].default_value = fields[fieldsAt].DefaultValue;
+                    var fieldsEnumNamesAt = Marshal.AllocCoTaskMem(fields[fieldsAt].EnumNames.Length * nint.Size);
+                    fieldsTexts.Add(fieldsEnumNamesAt);
+                    for (var fieldsEach = 0; fieldsEach < fields[fieldsAt].EnumNames.Length; fieldsEach++)
+                    {
+                        fieldsTexts.Add(Marshal.StringToCoTaskMemUTF8(fields[fieldsAt].EnumNames.Span[fieldsEach]));
+                        Marshal.WriteIntPtr(fieldsEnumNamesAt, fieldsEach * nint.Size, fieldsTexts[^1]);
+                    }
+                    fieldsNative[fieldsAt].enum_names = (sbyte**)fieldsEnumNamesAt;
+                    fieldsNative[fieldsAt].enum_count = (uint)fields[fieldsAt].EnumNames.Length;
+                }
+                fixed (ke_component_field* fieldsPtr = fieldsNative)
+                {
+                    ke_component_params @event = default;
+                    @event.name = (sbyte*)namePtr;
+                    @event.size = size;
+                    @event.alignment = alignment;
+                    @event.fields = fieldsPtr;
+                    @event.field_count = (uint)fields.Length;
+                    ComponentId resultOut = default;
+                    KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_event(Handle, &@event, &resultOut)), "register_event");
+                    return resultOut;
+                }
+            }
+            finally
+            {
+                for (var fieldsAt = 0; fieldsAt < fieldsPins.Length; fieldsAt++) fieldsPins[fieldsAt].Dispose();
+                foreach (var fieldsText in fieldsTexts) Marshal.FreeCoTaskMem(fieldsText);
             }
         }
     }

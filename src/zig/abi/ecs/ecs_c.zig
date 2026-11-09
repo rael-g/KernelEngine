@@ -17,7 +17,10 @@ pub const KE_COMPONENT_INVALID = 0;
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
+/// One field of a component: where it lies, what a scene writes into it, and the names an
+/// integer field may be written as.
 pub const ke_component_field = extern struct {
+    /// The name a scene writes the field by.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     @"type": abi_ecs_variant.c.ke_variant_type = std.mem.zeroes(abi_ecs_variant.c.ke_variant_type),
     offset: u32 = std.mem.zeroes(u32),
@@ -26,8 +29,8 @@ pub const ke_component_field = extern struct {
     /// default and zero stands.
     default_value: abi_ecs_variant.c.ke_variant = std.mem.zeroes(abi_ecs_variant.c.ke_variant),
     /// The names a scene may write for an integer field, in value order; a name stands for its
-    /// index. NULL leaves the field numeric.
-    enum_names: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    /// index. None leaves the field numeric.
+    enum_names: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
     /// Entries in `enum_names`.
     enum_count: u32 = std.mem.zeroes(u32),
 };
@@ -40,8 +43,8 @@ pub const ke_component_params = extern struct {
     size: usize = std.mem.zeroes(usize),
     /// A power of two for a sized component; ignored for a tag of size 0.
     alignment: usize = std.mem.zeroes(usize),
-    /// The type's field layout, normally its field table; must outlive the ecs. NULL registers the
-    /// size alone.
+    /// The type's field layout, normally its field table; copied with every name it reaches, so it
+    /// only has to live for the call. NULL registers the size alone.
     fields: ?[*]const ke_component_field = std.mem.zeroes(?[*]const ke_component_field),
     /// Entries in `fields`; 0 when `fields` is NULL.
     field_count: u32 = std.mem.zeroes(u32),

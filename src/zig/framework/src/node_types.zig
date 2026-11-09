@@ -480,12 +480,8 @@ fn prototypeOf(size: usize, initial: ?*const anyopaque, initial_size: usize, typ
 
 fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Error!Cid {
     const name = desc.name orelse return error.InvalidArgument;
-    if (desc.fields) |f| if (f.size == 0 or f.name == null) {
-        log.warn("node types: type {s} has fields without a name or a size", .{name});
-        return error.InvalidArgument;
-    };
-    if (desc.initial != null and desc.fields == null) {
-        log.warn("node types: type {s} has initial bytes but no fields", .{name});
+    if (desc.fields_size == 0 and (desc.field_count != 0 or desc.initial != null)) {
+        log.warn("node types: type {s} has a field table or initial bytes but no fields", .{name});
         return error.InvalidArgument;
     }
     const events: []const Cid = if (desc.event_count == 0) &.{} else (desc.events orelse return error.InvalidArgument)[0..desc.event_count];
@@ -500,7 +496,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         }
     }
 
-    const own: usize = if (desc.fields != null) 1 else 0;
+    const own: usize = if (desc.fields_size != 0) 1 else 0;
     const count = own + desc.with_count;
     const t = heap.gpa.create(Type) catch return error.OutOfMemory;
     t.* = .{ .state = s, .tag = 0, .has_fields = own == 1, .columns = &.{}, .sizes = &.{}, .prototypes = &.{}, .user_data = desc.user_data };
@@ -525,10 +521,11 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     defer heap.gpa.free(tag_name);
     const tag: abi_ecs.c.ke_component_params = .{ .name = tag_name.ptr, .size = 0, .alignment = 0 };
     try R.check(s.ecs.component_register.?(s.ecs, &tag, &t.tag));
-    if (desc.fields) |f| {
-        try R.check(s.ecs.component_register.?(s.ecs, f, &t.columns[0]));
-        t.sizes[0] = f.size;
-        t.prototypes[0] = try prototypeOf(f.size, desc.initial, desc.initial_size, name);
+    if (desc.fields_size != 0) {
+        const fields: abi_ecs.c.ke_component_params = .{ .name = name, .size = desc.fields_size, .alignment = desc.fields_alignment, .fields = desc.fields, .field_count = desc.field_count };
+        try R.check(s.ecs.component_register.?(s.ecs, &fields, &t.columns[0]));
+        t.sizes[0] = desc.fields_size;
+        t.prototypes[0] = try prototypeOf(desc.fields_size, desc.initial, desc.initial_size, name);
     }
 
     const type_name = std.mem.span(name);
@@ -794,12 +791,12 @@ const Fixture = struct {
 };
 
 const with_transform = [_]abi_framework.c.ke_node_with{.{ .name = "transform2d", .initial = null }};
-const paddle_fields: abi_ecs.c.ke_component_params = .{ .name = "pong.paddle", .size = @sizeOf(Paddle), .alignment = @alignOf(Paddle) };
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     d.name = "paddle";
-    d.fields = &paddle_fields;
+    d.fields_size = @sizeOf(Paddle);
+    d.fields_alignment = @alignOf(Paddle);
     d.with = &with_transform;
     d.with_count = 1;
     return d;
@@ -1174,7 +1171,7 @@ test "a node type without fields carries its tag and its with components, and fi
     defer f.deinit();
     var seen: u32 = 0;
     var d = paddleDesc();
-    d.fields = null;
+    d.fields_size = 0;
     d.update = countBare;
     d.user_data = &seen;
     var cid: Cid = 0;
@@ -1226,7 +1223,7 @@ test "find_component answers the id of a registered component and refuses an unk
     try testing.expectEqual(@as(Cid, 0), found);
 }
 
-test "a nameless node type, or fields of zero size, is refused" {
+test "a nameless node type, or a field table without fields, is refused" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -1234,9 +1231,11 @@ test "a nameless node type, or fields of zero size, is refused" {
     var d = paddleDesc();
     d.name = null;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-    const empty: abi_ecs.c.ke_component_params = .{ .name = "empty", .size = 0, .alignment = 0 };
+    const table = [_]abi_ecs.c.ke_component_field{.{ .name = "speed", .offset = 0, .size = 4 }};
     d = paddleDesc();
-    d.fields = &empty;
+    d.fields_size = 0;
+    d.fields = &table;
+    d.field_count = 1;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
 }
@@ -1360,7 +1359,7 @@ test "initial bytes without fields are refused" {
     defer f.deinit();
     const initial: Paddle = .{ .speed = 7, .visits = 2 };
     var d = paddleDesc();
-    d.fields = null;
+    d.fields_size = 0;
     d.initial = &initial;
     d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;

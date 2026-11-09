@@ -27,8 +27,6 @@ public interface IComponentRegistry : IDisposable
     /// <param name="fields">The table.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void RegisterComponentFields(ComponentId cid, ReadOnlySpan<ComponentField> fields);
-    /// <summary>Field table registered for `cid`, or NULL.</summary>
-    ReadOnlySpan<ComponentField> GetComponentFields(ComponentId cid);
     /// <summary>Registers the callback consulted for what a field table cannot describe. Replaces any callback registered for the same component.</summary>
     /// <param name="cid">The component the callback answers for.</param>
     /// <param name="apply">Consulted after the field table.</param>

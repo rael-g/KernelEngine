@@ -19,7 +19,9 @@ public interface INodeTypes : IDisposable
 {
     /// <summary>Registers a node type and the systems of its behaviours.</summary>
     /// <param name="name">The type's name; its nodes carry a tag registered as `node. &lt;name &gt;`.</param>
-    /// <param name="fields">The type's own fields, registered as a component; NULL for a type made only of the components it names in `with`.</param>
+    /// <param name="fieldsSize">The bytes of the type's own fields, registered as a component under the type's name; 0 for a type made only of the components it names in `with`.</param>
+    /// <param name="fieldsAlignment">The alignment of the fields, a power of two when `fields_size` is not 0.</param>
+    /// <param name="fields">The fields' table, copied by the ecs.</param>
     /// <param name="initial">The bytes copied into the fields of each node spawned; none starts them zeroed.</param>
     /// <param name="with">Registered components every node of the type carries beside its fields, each with the value it is born with.</param>
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
@@ -29,12 +31,12 @@ public interface INodeTypes : IDisposable
     /// <param name="on">Runs in PostUpdate for each node and each event raised this tick of a type in `events`; the ctx's `event_type` says which.</param>
     /// <returns>Receives the id of the type's tag.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId RegisterType(string name, nint fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null);
+    ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null);
     /// <summary>Registers an event type.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
     /// <param name="alignment">A power of two for a sized component; ignored for a tag of size 0.</param>
-    /// <param name="fields">The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.</param>
+    /// <param name="fields">The type's field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone.</param>
     /// <returns>Receives the event's component id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ComponentId RegisterEvent(string name, nuint size, nuint alignment, ReadOnlySpan<ComponentField> fields);

@@ -92,23 +92,30 @@ struct BallLaunched
     public bool Launched;
 }
 
-/// <summary>The field tables Pong's components are registered with, kept for as long as the process runs.</summary>
-static unsafe class FieldTables
+/// <summary>The layout of a component struct, as its node type is registered with.</summary>
+static class Layout
 {
-    /// <summary>The description of <typeparamref name="T"/> registered as <paramref name="name"/> with <paramref name="fields"/>.</summary>
-    public static nint Component<T>(string name, params (string Name, VariantType Type, int Offset, int Size)[] fields) where T : unmanaged
+    struct Probe<T> where T : unmanaged
     {
-        var table = (ComponentField*)NativeMemory.AllocZeroed((nuint)(sizeof(ComponentField) * fields.Length));
-        for (var i = 0; i < fields.Length; i++)
-            table[i] = new ComponentField { Name = (sbyte*)Marshal.StringToCoTaskMemUTF8(fields[i].Name), Type = fields[i].Type, Offset = (uint)fields[i].Offset, Size = (uint)fields[i].Size };
-        var described = (ke_component_params*)NativeMemory.AllocZeroed((nuint)sizeof(ke_component_params));
-        *described = new ke_component_params { name = (sbyte*)Marshal.StringToCoTaskMemUTF8(name), size = (nuint)sizeof(T), alignment = 4, fields = table, field_count = (uint)fields.Length };
-        return (nint)described;
+        public byte Head;
+        public T Value;
     }
 
-    /// <summary>The offset of <paramref name="field"/> inside <paramref name="value"/>.</summary>
-    public static int Offset<T, TField>(ref T value, ref TField field) where T : unmanaged =>
-        (int)Unsafe.ByteOffset(ref Unsafe.As<T, byte>(ref value), ref Unsafe.As<TField, byte>(ref field));
+    /// <summary>The alignment the runtime gives <typeparamref name="T"/>.</summary>
+    public static nuint AlignOf<T>() where T : unmanaged
+    {
+        var probe = new Probe<T>();
+        return (nuint)Unsafe.ByteOffset(ref probe.Head, ref Unsafe.As<T, byte>(ref probe.Value));
+    }
+
+    /// <summary>The field table entry of <paramref name="field"/>, a member of <paramref name="value"/>.</summary>
+    public static ComponentField Field<T, TField>(string name, VariantType type, ref T value, ref TField field, int size) where T : unmanaged => new()
+    {
+        Name = name,
+        Type = type,
+        Offset = (uint)Unsafe.ByteOffset(ref Unsafe.As<T, byte>(ref value), ref Unsafe.As<TField, byte>(ref field)),
+        Size = (uint)size,
+    };
 }
 
 /// <summary>Pong's node types, and the ids they look up once.</summary>
@@ -158,30 +165,33 @@ sealed class Game
         ];
 
         var paddle = new Paddle();
-        types.RegisterType("pong.paddle",
-            FieldTables.Component<Paddle>("pong.paddle",
-                ("move_action", VariantType.String, FieldTables.Offset(ref paddle, ref paddle.MoveAction), 32),
-                ("speed", VariantType.Float, FieldTables.Offset(ref paddle, ref paddle.Speed), sizeof(float)),
-                ("half_height", VariantType.Float, FieldTables.Offset(ref paddle, ref paddle.HalfHeight), sizeof(float))),
+        types.RegisterType("pong.paddle", (nuint)Unsafe.SizeOf<Paddle>(), Layout.AlignOf<Paddle>(),
+            [
+                Layout.Field("move_action", VariantType.String, ref paddle, ref paddle.MoveAction, 32),
+                Layout.Field("speed", VariantType.Float, ref paddle, ref paddle.Speed, sizeof(float)),
+                Layout.Field("half_height", VariantType.Float, ref paddle, ref paddle.HalfHeight, sizeof(float)),
+            ],
             Bytes.Of(new Paddle { Speed = 7.0f, HalfHeight = 0.9f }), bodyWith, fixedUpdate: PaddleFixedUpdate);
 
         var ball = new Ball();
-        types.RegisterType("pong.ball",
-            FieldTables.Component<Ball>("pong.ball",
-                ("hit_sound", VariantType.String, FieldTables.Offset(ref ball, ref ball.HitSound), 256),
-                ("hit_volume", VariantType.Float, FieldTables.Offset(ref ball, ref ball.HitVolume), sizeof(float)),
-                ("score_sound", VariantType.String, FieldTables.Offset(ref ball, ref ball.ScoreSound), 256),
-                ("score_volume", VariantType.Float, FieldTables.Offset(ref ball, ref ball.ScoreVolume), sizeof(float)),
-                ("initial_speed", VariantType.Float, FieldTables.Offset(ref ball, ref ball.InitialSpeed), sizeof(float)),
-                ("awaiting_launch", VariantType.Bool, FieldTables.Offset(ref ball, ref ball.AwaitingLaunch), sizeof(bool))),
+        types.RegisterType("pong.ball", (nuint)Unsafe.SizeOf<Ball>(), Layout.AlignOf<Ball>(),
+            [
+                Layout.Field("hit_sound", VariantType.String, ref ball, ref ball.HitSound, 256),
+                Layout.Field("hit_volume", VariantType.Float, ref ball, ref ball.HitVolume, sizeof(float)),
+                Layout.Field("score_sound", VariantType.String, ref ball, ref ball.ScoreSound, 256),
+                Layout.Field("score_volume", VariantType.Float, ref ball, ref ball.ScoreVolume, sizeof(float)),
+                Layout.Field("initial_speed", VariantType.Float, ref ball, ref ball.InitialSpeed, sizeof(float)),
+                Layout.Field("awaiting_launch", VariantType.Bool, ref ball, ref ball.AwaitingLaunch, sizeof(bool)),
+            ],
             Bytes.Of(new Ball { HitVolume = 1.0f, ScoreVolume = 1.0f, InitialSpeed = 6.0f, AwaitingLaunch = true }), bodyWith,
             update: BallUpdate, fixedUpdate: BallFixedUpdate);
 
         var board = new Scoreboard();
-        types.RegisterType("pong.scoreboard",
-            FieldTables.Component<Scoreboard>("pong.scoreboard",
-                ("left", VariantType.Int, FieldTables.Offset(ref board, ref board.Left), sizeof(int)),
-                ("right", VariantType.Int, FieldTables.Offset(ref board, ref board.Right), sizeof(int))),
+        types.RegisterType("pong.scoreboard", (nuint)Unsafe.SizeOf<Scoreboard>(), Layout.AlignOf<Scoreboard>(),
+            [
+                Layout.Field("left", VariantType.Int, ref board, ref board.Left, sizeof(int)),
+                Layout.Field("right", VariantType.Int, ref board, ref board.Right, sizeof(int)),
+            ],
             events: [_goalScored, _ballLaunched], on: ScoreboardOn);
 
         types.RegisterType("pong.menu_controller", update: MenuUpdate);
