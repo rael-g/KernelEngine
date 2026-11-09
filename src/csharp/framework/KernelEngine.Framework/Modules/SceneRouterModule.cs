@@ -57,8 +57,9 @@ public sealed class SceneRouterModule : IRuntimeModule
             scriptHost.BindNativeEntity(node, entity);
         });
 
-        runtime.RegisterSystem("Scene.Router.Initial", RuntimePhase.Startup, (ctx, _) =>
+        runtime.RegisterSystem("Scene.Router.Initial", RuntimePhase.Startup, (systemCtx, _) =>
         {
+            nint ctx; unsafe { ctx = (nint)((KernelEngine.Runtime.INativeSystemCtx)systemCtx).Native; }
             using (scriptHost.EnterSystem(ctx))
             {
                 foreach (var d in declarations) scriptHost.DeclareNodeType(d.Type, d.Name);
@@ -67,8 +68,9 @@ public sealed class SceneRouterModule : IRuntimeModule
             }
         }, exclusive: true);
 
-        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (ctx, _) =>
+        runtime.RegisterSystem("Scene.Router.Flush", RuntimePhase.PreUpdate, (systemCtx, _) =>
         {
+            nint ctx; unsafe { ctx = (nint)((KernelEngine.Runtime.INativeSystemCtx)systemCtx).Native; }
             using (scriptHost.EnterSystem(ctx))
                 router.Flush(KernelEngine.Runtime.SystemCtx.Of(ctx).Commands);
         }, exclusive: true);

@@ -15,11 +15,14 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
 
-public unsafe partial struct NodeComponent
+public unsafe partial struct ke_node_component
 {
     [NativeTypeName("ke_component_id")]
-    public global::KernelEngine.Ecs.ComponentId Component;
+    public global::KernelEngine.Ecs.ComponentId component;
 
     [NativeTypeName("const void *")]
-    public void* Data;
+    public void* data;
+
+    [NativeTypeName("size_t")]
+    public nuint size;
 }

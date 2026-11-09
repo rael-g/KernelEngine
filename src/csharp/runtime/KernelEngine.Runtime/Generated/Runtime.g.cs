@@ -87,6 +87,16 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
+    /// <summary>Wraps an owner <c>ke_runtime_handle</c> and runs runtime's startup lifecycle hook.</summary>
+    public Runtime(ke_runtime_handle handle)
+    {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _owned = handle.@ref;
+        _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+    }
+
     /// <summary>Wraps a <c>ke_runtime*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
     public static Runtime Borrow(ke_runtime* native) => new(native, borrowed: true);
 
@@ -307,7 +317,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is SystemExecute handler)
             {
-                handler((nint)arg0, arg2);
+                handler(SystemCtx.Borrow(arg0), arg2);
                 return KernelEngine.Result.Native.Result.Ok;
             }
             return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_system_execute_fn: no handler is registered"));
@@ -388,9 +398,9 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
 
     /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
     /// <returns>The queue, owned by the runtime.</returns>
-    public nint Commands()
+    public IEcsCommands Commands()
     {
-        return (nint)Handle->commands(Handle);
+        return EcsCommands.Borrow(Handle->commands(Handle));
     }
 
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>

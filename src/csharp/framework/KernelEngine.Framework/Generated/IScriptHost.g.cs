@@ -44,10 +44,10 @@ public interface IScriptHost : IDisposable
     void Unbind(Entity entity);
     /// <summary>Records bind into `commands`; the binding takes effect when `commands` is applied. A bind that fails at that point is dropped.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void BindDeferred(Entity entity, uint type, object instance, INativeEcsCommands commands);
+    void BindDeferred(Entity entity, uint type, object instance, IEcsCommands commands);
     /// <summary>Records unbind into `commands`; the binding is dropped when `commands` is applied.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void UnbindDeferred(Entity entity, INativeEcsCommands commands);
+    void UnbindDeferred(Entity entity, IEcsCommands commands);
     /// <summary>The instance bound to `entity`. False when none is, which is a normal answer, not a failure.</summary>
     bool TryInstanceOf(Entity entity, out uint outType, out object? outInstance);
     /// <summary>How many entities are currently bound as instances of `type`.</summary>

@@ -9,17 +9,19 @@ extern "C"
 {
 #endif
 
+    /// [borrowed] One field of a component: where it lies, what a scene writes into it, and the
+    /// names an integer field may be written as.
     typedef struct ke_component_field
     {
-        const char     *name;
+        const char     *name; ///< [utf8] The name a scene writes the field by.
         ke_variant_type type;
         uint32_t        offset;
         uint32_t        size;
         /// What the field holds when nothing authors it. KE_VARIANT_NULL means
         /// the header declared no default and zero stands.
         ke_variant      default_value;
-        /// [borrowed,optional] The names a scene may write for an integer field, in value order;
-        /// a name stands for its index. NULL leaves the field numeric.
+        /// [utf8, array_of:enum_count, default:empty] The names a scene may write for an integer
+        /// field, in value order; a name stands for its index. None leaves the field numeric.
         const char *const *enum_names;
         uint32_t           enum_count; ///< Entries in `enum_names`.
     } ke_component_field;

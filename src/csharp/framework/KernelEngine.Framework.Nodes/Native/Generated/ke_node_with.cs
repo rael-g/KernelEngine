@@ -15,11 +15,14 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
 
-public unsafe partial struct NodeWith
+public unsafe partial struct ke_node_with
 {
     [NativeTypeName("const char *")]
-    public sbyte* Name;
+    public sbyte* name;
 
     [NativeTypeName("const void *")]
-    public void* Initial;
+    public void* initial;
+
+    [NativeTypeName("size_t")]
+    public nuint initial_size;
 }

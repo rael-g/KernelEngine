@@ -19,7 +19,7 @@ public unsafe partial struct ke_component_params
     public nuint alignment;
 
     [NativeTypeName("const ke_component_field *")]
-    public ComponentField* fields;
+    public ke_component_field* fields;
 
     [NativeTypeName("uint32_t")]
     public uint field_count;

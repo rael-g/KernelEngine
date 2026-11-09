@@ -27,6 +27,9 @@ public unsafe partial struct ke_node_ctx
     [NativeTypeName("const void *")]
     public void* @event;
 
+    [NativeTypeName("ke_component_id")]
+    public global::KernelEngine.Ecs.ComponentId event_type;
+
     public float dt;
 
     [NativeTypeName("ke_ecs_commands *")]
@@ -63,7 +66,7 @@ public unsafe partial struct ke_node_ctx
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, ActionRef*, bool> pressed;
 
     [NativeTypeName("ke_result (*)(ke_node_ctx *, ke_component_id, const char *, ke_entity, const ke_node_component *, uint32_t, ke_entity *)")]
-    public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.ComponentId, sbyte*, global::KernelEngine.Ecs.Entity, NodeComponent*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn;
+    public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.ComponentId, sbyte*, global::KernelEngine.Ecs.Entity, ke_node_component*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn;
 
     [NativeTypeName("ke_result (*)(ke_node_ctx *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.Entity, KernelEngine.Result.Native.Result> destroy;

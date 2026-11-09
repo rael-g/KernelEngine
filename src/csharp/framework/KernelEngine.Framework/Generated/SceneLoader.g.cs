@@ -106,7 +106,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
     /// <param name="path">Path to the scene file; a `res://` path is the project root joined with the rest, as for an included scene, and any other is read as load reads it.</param>
     /// <param name="parent">The node the scene is attached under; KE_ENTITY_INVALID attaches it at the root.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Instantiate(string path, Entity parent, INativeEcsCommands commands)
+    public void Instantiate(string path, Entity parent, IEcsCommands commands)
     {
         var pathText = path ?? "";
         var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
@@ -114,7 +114,7 @@ public unsafe partial class SceneLoader : IDisposable, INativeSceneLoader, IScen
         pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
         fixed (byte* pathPtr = pathBytes)
         {
-            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->instantiate(Handle, (sbyte*)pathPtr, parent, commands.Native)), "instantiate");
+            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->instantiate(Handle, (sbyte*)pathPtr, parent, ((INativeEcsCommands)commands).Native)), "instantiate");
         }
     }
 

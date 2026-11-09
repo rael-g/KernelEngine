@@ -106,8 +106,9 @@ public sealed class SceneNodesModule : IRuntimeModule
             runtime.RegisterSystem("Scene.Signals.Clear", RuntimePhase.PreUpdate, (_, _) =>
                 signals.ClearFrame(), accessList: []);
 
-            runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (ctx, _) =>
+            runtime.RegisterSystem("Scene.Signals.Deliver", RuntimePhase.PostUpdate, (systemCtx, _) =>
             {
+                nint ctx; unsafe { ctx = (nint)((KernelEngine.Runtime.INativeSystemCtx)systemCtx).Native; }
                 var list = signals.Deliveries();
                 if (list.IsEmpty) return;
                 using (scriptHost.EnterSystem(ctx))
@@ -151,8 +152,9 @@ public sealed class SceneNodesModule : IRuntimeModule
 
                 var queries = new[] { new QueryDecl { Terms = terms } };
 
-                runtime.RegisterSystem(name, phase, (ctx, dt) =>
+                runtime.RegisterSystem(name, phase, (systemCtx, dt) =>
                 {
+                    nint ctx; unsafe { ctx = (nint)((KernelEngine.Runtime.INativeSystemCtx)systemCtx).Native; }
                     var view = new View(scriptHost, dt, ctx);
                     using (scriptHost.EnterSystem(ctx))
                     {

@@ -11,7 +11,7 @@ namespace KernelEngine.Runtime;
 /// the ABI's own constructor wants. Everything else is generated in
 /// <c>Generated/Runtime.g.cs</c>.
 /// </summary>
-public sealed unsafe partial class Runtime : IRuntime
+public unsafe partial class Runtime : IRuntime
 {
     /// <summary>
     /// Builds a runtime over borrowed ECS storage and a borrowed task pool, both kept alive while

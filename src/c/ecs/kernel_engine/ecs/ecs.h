@@ -24,7 +24,7 @@ extern "C"
         const char               *name;        ///< [borrowed,utf8] Unique component name.
         size_t                    size;        ///< Bytes per entity; 0 registers a tag (no storage).
         size_t                    alignment;   ///< A power of two for a sized component; ignored for a tag of size 0.
-        const ke_component_field *fields;      ///< [borrowed,optional,array_of:field_count] The type's field layout, normally its field table; must outlive the ecs. NULL registers the size alone.
+        const ke_component_field *fields;      ///< [borrowed,optional,array_of:field_count] The type's field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone.
         uint32_t                  field_count; ///< Entries in `fields`; 0 when `fields` is NULL.
     } ke_component_params;
 

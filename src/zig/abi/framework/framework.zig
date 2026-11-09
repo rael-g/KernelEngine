@@ -347,7 +347,6 @@ pub const SceneHierarchy = struct {
 pub const NodeComponent = c.ke_node_component;
 pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
-pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;
 pub const SceneSlotComponent = c.ke_scene_slot_component;
 pub const NodeTypesHandle = c.ke_node_types_handle;

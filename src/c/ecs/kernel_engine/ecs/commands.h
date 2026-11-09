@@ -18,7 +18,7 @@ typedef struct ke_ecs_commands ke_ecs_commands;
 /// and the queue stops there: the operations recorded after it are dropped.
 typedef ke_result (*ke_defer_fn)(ke_ecs *ecs, void *user);
 
-/// A queue of structural mutations. Every operation records its intent and
+/// [lent] A queue of structural mutations. Every operation records its intent and
 /// returns; none changes the world while it runs. The queue is applied, in the order the
 /// operations were recorded, by whoever owns it, and an operation's effect is not
 /// observable before then. A caller needing a change visible at once uses ke_ecs, which

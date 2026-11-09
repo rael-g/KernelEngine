@@ -2,8 +2,8 @@
   "_comment": "Hand-authored manifest and the only input of the kabic pipeline. Each `domains` entry drives extraction to ke_api.json and the C#, C and Zig backends (kabic generate); each `bindings` entry configures ClangSharp (kabic bindings). Adding a domain here is what migrating it to kabic means mechanically. Never a derived artifact.",
   "convention": {
     "format": { "csharp": "../.editorconfig" },
-    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_component_registry.resolve_component" ],
-    "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_field_write", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
+    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_component_registry.resolve_component", "ke_ecs.component_field_write", "ke_component_registry.get_component_fields" ],
+    "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
     "names": { "factory": [ { "match": "^(.*)_create$", "replace": "$1" } ], "csharp-type": [ { "match": "^ke_task$", "replace": "NativeTask" }, { "match": "^ke_action_type$", "replace": "NativeActionType" }, { "match": "^ke_ecs$", "replace": "EcsRegistry" }, { "match": "^ke_physics_2d$", "replace": "Physics2D" }, { "match": "^ke_body_type_2d$", "replace": "BodyType2D" }, { "match": "^ke_phase$", "replace": "RuntimePhase" }, { "match": "^ke_access$", "replace": "RuntimeAccess" } ] },
     "types": { "csharp": { "ke_vec2": "System.Numerics.Vector2", "ke_vec3": "System.Numerics.Vector3", "ke_vec4": "System.Numerics.Vector4", "ke_quat": "System.Numerics.Quaternion", "ke_mat4": "System.Numerics.Matrix4x4" } },
     "symbolPrefix": "ke_",
@@ -798,6 +798,82 @@
       ]
     },
     {
+      "name": "node_types",
+      "providers": [
+        "ke_node_ctx"
+      ],
+      "headers": [
+        "src/c/framework/kernel_engine/framework/node_types.h"
+      ],
+      "includeDirs": [
+        "src/c/framework",
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/framework/node_types.ke_api.json",
+      "namespace": "KernelEngine.Framework.Nodes",
+      "nativeNamespace": "KernelEngine.Framework.Nodes.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native"
+      ]
+    },
+    {
+      "name": "scene_files",
+      "headers": [
+        "src/c/framework/kernel_engine/framework/scene_files.h"
+      ],
+      "auxHeaders": [
+        "src/c/framework/kernel_engine/framework/node_types.h"
+      ],
+      "includeDirs": [
+        "src/c/framework",
+        "src/zig/framework/include",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/framework/scene_files.ke_api.json",
+      "namespace": "KernelEngine.Framework.Nodes",
+      "nativeNamespace": "KernelEngine.Framework.Nodes.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native"
+      ]
+    },
+    {
+      "name": "engine_node_types",
+      "headers": [
+        "src/c/framework/kernel_engine/framework/engine_node_types.h"
+      ],
+      "includeDirs": [
+        "src/c/framework",
+        "src/c/audio",
+        "src/c/physics",
+        "src/c/render",
+        "src/c/spatial",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/framework/engine_node_types.ke_api.json",
+      "namespace": "KernelEngine.Framework.Nodes",
+      "nativeNamespace": "KernelEngine.Framework.Nodes.Native",
+      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated",
+      "usings": [
+        "KernelEngine.Ecs.Native",
+        "KernelEngine.Common",
+        "KernelEngine.Render",
+        "KernelEngine.Physics",
+        "KernelEngine.Audio.Native"
+      ]
+    },
+    {
       "name": "input_actions",
       "headers": [
         "src/c/framework/kernel_engine/framework/input_actions.h"
@@ -952,7 +1028,7 @@
     "nodes": {},
     "fieldTables": {},
     "configs": { "interface": "src/csharp/configuration/KernelEngine.Configuration/Generated/ConfigSection.g.cs", "bindings": ["Glfw", "Box2D", "GpuDevice", "GpuWindowTarget", "RenderServiceFactory", "Cluster"] },
-    "factories": { "bindings": ["Assimp", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType"] }
+    "factories": { "bindings": ["Assimp", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule"] }
   },
   "bindings": [
     {

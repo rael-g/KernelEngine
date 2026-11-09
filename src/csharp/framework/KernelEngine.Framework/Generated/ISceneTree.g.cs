@@ -24,13 +24,13 @@ public interface ISceneTree : IDisposable
     /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body. Fails as an invalid argument for a null tree, commands or out_node, and with the queue's code when it refuses the recording.</summary>
     /// <returns>Receives the reserved id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    Entity CreateNodeDeferred(string name, Entity parent, INativeEcsCommands commands);
+    Entity CreateNodeDeferred(string name, Entity parent, IEcsCommands commands);
     /// <summary>Destroys a node and all its descendants, each child before its parent. The node is gone when the call returns. Fails as an invalid argument for a null tree or the invalid entity, and as not found for an entity that is not a node.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void DestroyNode(Entity entity);
     /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an invalid argument for a null commands, and with the queue's code when it refuses the recording.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    void DestroyNodeDeferred(Entity entity, INativeEcsCommands commands);
+    void DestroyNodeDeferred(Entity entity, IEcsCommands commands);
     /// <summary>Destroys every child of the root and leaves the root. Keeps going past a subtree the ecs refuses and returns the first failure.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void DestroyAll();

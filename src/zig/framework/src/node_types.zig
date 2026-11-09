@@ -269,8 +269,12 @@ fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, nam
     };
     const components: []const abi_framework.c.ke_node_component = if (count == 0) &.{} else (components_in orelse return R.code(error.InvalidArgument))[0..count];
     for (components) |given| {
-        if (given.data == null or std.mem.indexOfScalar(Cid, t.columns, given.component) == null) {
+        const at = std.mem.indexOfScalar(Cid, t.columns, given.component) orelse {
             log.warn("node types: a spawn gives component {d}, which its type does not carry", .{given.component});
+            return R.code(error.InvalidArgument);
+        };
+        if (given.data == null or given.size != t.sizes[at]) {
+            log.warn("node types: a spawn gives component {d} {d} bytes, not its {d}", .{ given.component, given.size, t.sizes[at] });
             return R.code(error.InvalidArgument);
         }
     }
@@ -370,6 +374,7 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
     };
     w.api.handle = &w;
     if (b.kind == .on) {
+        w.api.event_type = b.event.?.cid;
         w.events = viewOf(sys, 0);
         w.segs = viewOf(sys, 1);
         while (w.ev_seg < w.events.len and w.events[w.ev_seg].count == 0) w.ev_seg += 1;
@@ -463,7 +468,11 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     try R.check(s.runtime.register_system.?(s.runtime, &params, &b.system));
 }
 
-fn prototypeOf(size: usize, initial: ?*const anyopaque) R.Error![]align(16) u8 {
+fn prototypeOf(size: usize, initial: ?*const anyopaque, initial_size: usize, type_name: [*:0]const u8) R.Error![]align(16) u8 {
+    if (if (initial == null) initial_size != 0 else initial_size != size) {
+        log.warn("node types: type {s} gives an initial of {d} bytes to a component of {d}", .{ type_name, initial_size, size });
+        return error.InvalidArgument;
+    }
     const p = heap.gpa.alignedAlloc(u8, prototype_alignment, size) catch return error.OutOfMemory;
     if (initial) |bytes| @memcpy(p, @as([*]const u8, @ptrCast(bytes))[0..size]) else @memset(p, 0);
     return p;
@@ -471,24 +480,23 @@ fn prototypeOf(size: usize, initial: ?*const anyopaque) R.Error![]align(16) u8 {
 
 fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Error!Cid {
     const name = desc.name orelse return error.InvalidArgument;
-    if (desc.fields) |f| if (f.size == 0 or f.name == null) {
-        log.warn("node types: type {s} has fields without a name or a size", .{name});
-        return error.InvalidArgument;
-    };
-    if (desc.initial != null and desc.fields == null) {
-        log.warn("node types: type {s} has initial bytes but no fields", .{name});
+    if (desc.fields_size == 0 and (desc.field_count != 0 or desc.initial != null)) {
+        log.warn("node types: type {s} has a field table or initial bytes but no fields", .{name});
         return error.InvalidArgument;
     }
-    const handlers: []const abi_framework.c.ke_node_handler = if (desc.on_count == 0) &.{} else (desc.on orelse return error.InvalidArgument)[0..desc.on_count];
-    for (handlers) |h| {
-        if (h.on == null) return error.InvalidArgument;
-        if (findEvent(s, h.event) == null) {
-            log.warn("node types: type {s} handles an event never registered ({d})", .{ name, h.event });
+    const events: []const Cid = if (desc.event_count == 0) &.{} else (desc.events orelse return error.InvalidArgument)[0..desc.event_count];
+    if (events.len > 0 and desc.on == null) {
+        log.warn("node types: type {s} names events but no on behaviour", .{name});
+        return error.InvalidArgument;
+    }
+    for (events) |event| {
+        if (findEvent(s, event) == null) {
+            log.warn("node types: type {s} handles an event never registered ({d})", .{ name, event });
             return error.NotFound;
         }
     }
 
-    const own: usize = if (desc.fields != null) 1 else 0;
+    const own: usize = if (desc.fields_size != 0) 1 else 0;
     const count = own + desc.with_count;
     const t = heap.gpa.create(Type) catch return error.OutOfMemory;
     t.* = .{ .state = s, .tag = 0, .has_fields = own == 1, .columns = &.{}, .sizes = &.{}, .prototypes = &.{}, .user_data = desc.user_data };
@@ -507,23 +515,24 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         }
         t.columns[own + i] = meta.cid;
         t.sizes[own + i] = meta.size;
-        t.prototypes[own + i] = try prototypeOf(meta.size, desc.with.?[i].initial);
+        t.prototypes[own + i] = try prototypeOf(meta.size, desc.with.?[i].initial, desc.with.?[i].initial_size, name);
     }
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(tag_name);
     const tag: abi_ecs.c.ke_component_params = .{ .name = tag_name.ptr, .size = 0, .alignment = 0 };
     try R.check(s.ecs.component_register.?(s.ecs, &tag, &t.tag));
-    if (desc.fields) |f| {
-        try R.check(s.ecs.component_register.?(s.ecs, f, &t.columns[0]));
-        t.sizes[0] = f.size;
-        t.prototypes[0] = try prototypeOf(f.size, desc.initial);
+    if (desc.fields_size != 0) {
+        const fields: abi_ecs.c.ke_component_params = .{ .name = name, .size = desc.fields_size, .alignment = desc.fields_alignment, .fields = desc.fields, .field_count = desc.field_count };
+        try R.check(s.ecs.component_register.?(s.ecs, &fields, &t.columns[0]));
+        t.sizes[0] = desc.fields_size;
+        t.prototypes[0] = try prototypeOf(desc.fields_size, desc.initial, desc.initial_size, name);
     }
 
     const type_name = std.mem.span(name);
     if (desc.ready != null) try addBehaviour(s, t, .ready, desc.ready, null, type_name);
     if (desc.update != null) try addBehaviour(s, t, .update, desc.update, null, type_name);
     if (desc.fixed_update != null) try addBehaviour(s, t, .fixed_update, desc.fixed_update, null, type_name);
-    for (handlers) |h| try addBehaviour(s, t, .on, h.on, findEvent(s, h.event), type_name);
+    for (events) |event| try addBehaviour(s, t, .on, desc.on, findEvent(s, event), type_name);
 
     s.types.append(heap.gpa, t) catch return error.OutOfMemory;
     return t.tag;
@@ -782,12 +791,12 @@ const Fixture = struct {
 };
 
 const with_transform = [_]abi_framework.c.ke_node_with{.{ .name = "transform2d", .initial = null }};
-const paddle_fields: abi_ecs.c.ke_component_params = .{ .name = "pong.paddle", .size = @sizeOf(Paddle), .alignment = @alignOf(Paddle) };
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     d.name = "paddle";
-    d.fields = &paddle_fields;
+    d.fields_size = @sizeOf(Paddle);
+    d.fields_alignment = @alignOf(Paddle);
     d.with = &with_transform;
     d.with_count = 1;
     return d;
@@ -1002,6 +1011,7 @@ var pairs: u32 = 0;
 fn countGoals(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     while (ctx.?.next.?(ctx)) {
         const g: *const Goal = @ptrCast(ctx.?.event.?);
+        if (ctx.?.event_type == 0) return R.code(error.General);
         pairs += 1;
         lefts += g.left;
     }
@@ -1015,10 +1025,11 @@ test "an on handler visits each pair of a node and an event raised this tick" {
     const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
-    const handlers = [_]abi_framework.c.ke_node_handler{.{ .event = goal_cid, .on = countGoals }};
+    const events = [_]Cid{goal_cid};
     var d = paddleDesc();
-    d.on = &handlers;
-    d.on_count = 1;
+    d.events = &events;
+    d.event_count = 1;
+    d.on = countGoals;
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(abi_runtime.c.KE_PHASE_PRE_UPDATE, registered[0].phase);
@@ -1160,7 +1171,7 @@ test "a node type without fields carries its tag and its with components, and fi
     defer f.deinit();
     var seen: u32 = 0;
     var d = paddleDesc();
-    d.fields = null;
+    d.fields_size = 0;
     d.update = countBare;
     d.user_data = &seen;
     var cid: Cid = 0;
@@ -1212,7 +1223,7 @@ test "find_component answers the id of a registered component and refuses an unk
     try testing.expectEqual(@as(Cid, 0), found);
 }
 
-test "a nameless node type, or fields of zero size, is refused" {
+test "a nameless node type, or a field table without fields, is refused" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
@@ -1220,9 +1231,11 @@ test "a nameless node type, or fields of zero size, is refused" {
     var d = paddleDesc();
     d.name = null;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-    const empty: abi_ecs.c.ke_component_params = .{ .name = "empty", .size = 0, .alignment = 0 };
+    const table = [_]abi_ecs.c.ke_component_field{.{ .name = "speed", .offset = 0, .size = 4 }};
     d = paddleDesc();
-    d.fields = &empty;
+    d.fields_size = 0;
+    d.fields = &table;
+    d.field_count = 1;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     try testing.expectEqual(@as(usize, 0), registered_count);
 }
@@ -1273,6 +1286,7 @@ test "a type's initial bytes are the fields each spawned node starts with" {
     const initial: Paddle = .{ .speed = 7, .visits = 2 };
     var d = paddleDesc();
     d.initial = &initial;
+    d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
@@ -1292,6 +1306,7 @@ test "a component given to the spawn replaces its type's initial value, and one 
     const initial: Paddle = .{ .speed = 7, .visits = 2 };
     var d = paddleDesc();
     d.initial = &initial;
+    d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
@@ -1300,12 +1315,26 @@ test "a component given to the spawn replaces its type's initial value, and one 
     defer commands.deinit();
     _ = commands.when(.attach).does(capturePaddle);
     const given: Paddle = .{ .speed = 3, .visits = 9 };
-    const components = [_]abi_framework.c.ke_node_component{.{ .component = paddle_column, .data = &given }};
+    const components = [_]abi_framework.c.ke_node_component{.{ .component = paddle_column, .data = &given, .size = @sizeOf(Paddle) }};
     var node: Entity = invalid;
     try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &components, 1, &node));
     try testing.expectEqual(given, attached_paddle);
-    const foreign = [_]abi_framework.c.ke_node_component{.{ .component = 999, .data = &given }};
+    const foreign = [_]abi_framework.c.ke_node_component{.{ .component = 999, .data = &given, .size = @sizeOf(Paddle) }};
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &foreign, 1, &node));
+    const short = [_]abi_framework.c.ke_node_component{.{ .component = paddle_column, .data = &given, .size = @sizeOf(Paddle) - 1 }};
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &short, 1, &node));
+}
+
+test "an initial whose size is not its component's is refused" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const initial: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.initial = &initial;
+    d.initial_size = @sizeOf(Paddle) + 1;
+    var cid: Cid = 0;
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
 }
 
 test "initial answers the bytes a type's nodes are born with in a component it carries, and null otherwise" {
@@ -1315,6 +1344,7 @@ test "initial answers the bytes a type's nodes are born with in a component it c
     const born: Paddle = .{ .speed = 7, .visits = 2 };
     var d = paddleDesc();
     d.initial = &born;
+    d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     const fields_cid = findType(stateOf(f.types.ref).?, cid).?.columns[0];
@@ -1329,8 +1359,9 @@ test "initial bytes without fields are refused" {
     defer f.deinit();
     const initial: Paddle = .{ .speed = 7, .visits = 2 };
     var d = paddleDesc();
-    d.fields = null;
+    d.fields_size = 0;
     d.initial = &initial;
+    d.initial_size = @sizeOf(Paddle);
     var cid: Cid = 0;
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
 }

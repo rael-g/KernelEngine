@@ -283,14 +283,6 @@ const slot_fields = [_]abi_ecs.c.ke_component_field{
     .{ .name = "path", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = @offsetOf(Slot, "path"), .size = @sizeOf(@FieldType(Slot, "path")) },
 };
 
-const slot_params: abi_ecs.c.ke_component_params = .{
-    .name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT,
-    .size = @sizeOf(Slot),
-    .alignment = @alignOf(Slot),
-    .fields = &slot_fields,
-    .field_count = slot_fields.len,
-};
-
 /// The update behaviour of the `scene_slot` node type: a slot whose path differs from the one it
 /// last instantiated has its children destroyed and the file at its path instantiated under it. A
 /// file that cannot be instantiated is reported and not retried until the path changes again.
@@ -337,7 +329,10 @@ export fn ke_scene_files_create(
     s.api.handle = s;
     var slot_desc = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     slot_desc.name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT;
-    slot_desc.fields = &slot_params;
+    slot_desc.fields_size = @sizeOf(Slot);
+    slot_desc.fields_alignment = @alignOf(Slot);
+    slot_desc.fields = &slot_fields;
+    slot_desc.field_count = slot_fields.len;
     slot_desc.update = slotUpdate;
     slot_desc.user_data = s;
     var tag: Cid = abi_ecs.c.KE_COMPONENT_INVALID;

@@ -33,6 +33,8 @@ extern "C"
     /// The resolver does NOT take ownership of either loader.
     /// @p project_root may be NULL — res:// resolution is
     /// then disabled; only absolute or CWD-relative paths work.
+    /// @param image_loader [borrowed,optional] NULL refuses every texture.
+    /// @param font_loader [borrowed,optional] NULL refuses every font.
     /// @param io [borrowed] What every file the resolver opens is read through; must outlive the
     ///        resolver.
     /// @param out_resolver [out] Receives the resolver; left zeroed on failure.

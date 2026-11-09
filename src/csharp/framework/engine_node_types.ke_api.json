@@ -1,0 +1,6160 @@
+{
+  "enums": [
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sound_release",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SOUND_RELEASE_KEEP",
+          "value": 0,
+          "doc": "The entity stays when the sound ends, ready to play again."
+        },
+        {
+          "name": "KE_SOUND_RELEASE_WHEN_DONE",
+          "value": 1,
+          "doc": "The entity is destroyed when the sound ends."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body_type_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_BODY_TYPE_2D_STATIC",
+          "value": 0,
+          "doc": "Never moves; infinite mass. Floors, walls."
+        },
+        {
+          "name": "KE_BODY_TYPE_2D_KINEMATIC",
+          "value": 1,
+          "doc": "Moved by code (set_position/set_velocity), unaffected by forces."
+        },
+        {
+          "name": "KE_BODY_TYPE_2D_DYNAMIC",
+          "value": 2,
+          "doc": "Driven by forces, collisions, gravity."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shape_kind_2d",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SHAPE_KIND_2D_BOX",
+          "value": 0,
+          "doc": "Axis-aligned box, sized by half_extents."
+        },
+        {
+          "name": "KE_SHAPE_KIND_2D_CIRCLE",
+          "value": 1,
+          "doc": "Circle centered on the node, sized by radius."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_alpha_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_ALPHA_MODE_OPAQUE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_MASK",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ALPHA_MODE_BLEND",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform_component",
+      "doc": "An entity\u0027s authored 3D pose.",
+      "tags": [
+        "table",
+        "node:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [
+            "default:0 0 0 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform2d_component",
+      "doc": "An entity\u0027s authored 2D pose, read and written as one unit.",
+      "tags": [
+        "table",
+        "node:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians, CCW positive."
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "depth",
+          "type": "float",
+          "tags": [],
+          "doc": "Where the plane sits along Z."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_world_transform_component",
+      "doc": "An entity\u0027s place in world space, composed down the hierarchy. Written by the hierarchy alone.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "matrix",
+          "type": "ke_mat4",
+          "tags": [
+            "output"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sound_component",
+      "doc": "One playback of an audio clip. The sound plays while playing is set: setting it starts the clip from its beginning, clearing it stops the clip, and the clip reaching its end clears it. Two sounds of the same clip play at once, each on its own. The clip is loaded on the first update that sees the component and released on the first update in which the entity no longer holds it.",
+      "tags": [
+        "table",
+        "node:Sound",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "path",
+          "type": "char[256]",
+          "tags": [],
+          "doc": "Path to the audio file, resolved against the project\u0027s base directory."
+        },
+        {
+          "name": "volume",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Linear gain, 0..1."
+        },
+        {
+          "name": "pitch",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Playback rate; 1 is the recorded pitch."
+        },
+        {
+          "name": "loop",
+          "type": "bool",
+          "tags": [],
+          "doc": "Plays the clip again from its beginning each time it ends, until playing is cleared."
+        },
+        {
+          "name": "playing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "release",
+          "type": "ke_sound_release",
+          "tags": [],
+          "doc": "What happens to the entity when the clip ends."
+        },
+        {
+          "name": "clip",
+          "type": "ke_audio_sound",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The loaded clip, assigned when the component is reconciled. Callers do not write it."
+        },
+        {
+          "name": "voice",
+          "type": "ke_audio_voice",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The playback in progress, assigned while the clip plays. Callers do not write it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": "One field of a component: where it lies, what a scene writes into it, and the names an integer field may be written as.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The name a scene writes the field by."
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        },
+        {
+          "name": "enum_names",
+          "type": "const char *const *",
+          "tags": [
+            "utf8",
+            "array_of:enum_count",
+            "default:empty"
+          ],
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. None leaves the field numeric."
+        },
+        {
+          "name": "enum_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060enum_names\u0060."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_params",
+      "doc": "What a component type is registered with.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "Unique component name."
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "Bytes per entity; 0 registers a tag (no storage)."
+        },
+        {
+          "name": "alignment",
+          "type": "size_t",
+          "tags": [],
+          "doc": "A power of two for a sized component; ignored for a tag of size 0."
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "borrowed",
+            "optional",
+            "array_of:field_count"
+          ],
+          "doc": "The type\u0027s field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone."
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_meta",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alignment",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "array_of:field_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_segment",
+      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "entities",
+          "type": "const ke_entity *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": "The entities this segment matched."
+        },
+        {
+          "name": "count",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "columns",
+          "type": "void **",
+          "tags": [
+            "array_of:column_count"
+          ],
+          "doc": "One base pointer per query term."
+        },
+        {
+          "name": "column_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_component",
+      "doc": "A component a spawned node starts with in place of its type\u0027s initial value.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "component",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": "One of the components the type carries."
+        },
+        {
+          "name": "data",
+          "type": "const void *",
+          "tags": [
+            "array_of:size"
+          ],
+          "doc": "The component\u0027s bytes, copied by the spawn."
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "The component\u0027s registered size."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_with",
+      "doc": "A component every node of a type carries beside its fields, and how it is born.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The registered component\u0027s name."
+        },
+        {
+          "name": "initial",
+          "type": "const void *",
+          "tags": [
+            "array_of:initial_size"
+          ],
+          "doc": "The bytes each node starts with; none starts it zeroed."
+        },
+        {
+          "name": "initial_size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "The component\u0027s registered size, or 0 to start it zeroed."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_action_ref",
+      "doc": "An input action named by a node\u0027s fields and resolved the first time a behaviour reads it. A scene writes its name; zeroed memory is a reference not yet resolved.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "name",
+          "type": "char[32]",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The action\u0027s name in the input action maps."
+        },
+        {
+          "name": "id",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "The action\u0027s id once resolved; meaningful only while resolved is true."
+        },
+        {
+          "name": "resolved",
+          "type": "bool",
+          "tags": [],
+          "doc": "Whether id holds the result of looking the name up."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_type_desc",
+      "doc": "A node type: its name, its own fields, the components its nodes also carry, and its behaviours.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The type\u0027s name; its nodes carry a tag registered as \u0060node. \u003Cname \u003E\u0060."
+        },
+        {
+          "name": "fields_size",
+          "type": "size_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "The bytes of the type\u0027s own fields, registered as a component under the type\u0027s name; 0 for a type made only of the components it names in \u0060with\u0060."
+        },
+        {
+          "name": "fields_alignment",
+          "type": "size_t",
+          "tags": [
+            "default:0"
+          ],
+          "doc": "The alignment of the fields, a power of two when \u0060fields_size\u0060 is not 0."
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "array_of:field_count",
+            "default:empty"
+          ],
+          "doc": "The fields\u0027 table, copied by the ecs."
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "initial",
+          "type": "const void *",
+          "tags": [
+            "array_of:initial_size",
+            "default:empty"
+          ],
+          "doc": "The bytes copied into the fields of each node spawned; none starts them zeroed."
+        },
+        {
+          "name": "initial_size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "\u0060fields_size\u0060, or 0 to start them zeroed."
+        },
+        {
+          "name": "with",
+          "type": "const ke_node_with *",
+          "tags": [
+            "array_of:with_count",
+            "default:empty"
+          ],
+          "doc": "Registered components every node of the type carries beside its fields, each with the value it is born with."
+        },
+        {
+          "name": "with_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "ready",
+          "type": "ke_node_behaviour_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "default:none"
+          ],
+          "doc": "Runs once per node, in the PreUpdate after the node is created, before its first update."
+        },
+        {
+          "name": "update",
+          "type": "ke_node_behaviour_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "default:none"
+          ],
+          "doc": "Runs every tick, in Update."
+        },
+        {
+          "name": "fixed_update",
+          "type": "ke_node_behaviour_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "default:none"
+          ],
+          "doc": "Runs every fixed step, in FixedUpdate."
+        },
+        {
+          "name": "events",
+          "type": "const ke_component_id *",
+          "tags": [
+            "array_of:event_count",
+            "default:empty"
+          ],
+          "doc": "The event types \u0060on\u0060 handles."
+        },
+        {
+          "name": "event_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "on",
+          "type": "ke_node_behaviour_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "default:none"
+          ],
+          "doc": "Runs in PostUpdate for each node and each event raised this tick of a type in \u0060events\u0060; the ctx\u0027s \u0060event_type\u0060 says which."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded to every behaviour."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body_2d",
+      "doc": "Opaque rigid-body handle owned by a ke_physics_2d instance. 0 is reserved as \u0022invalid\u0022.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_collision_filter_2d",
+      "doc": "Which of the 32 collision layers a fixture occupies, and which it tests against. Two fixtures touch only when each one\u0027s layer bit is set in the other\u0027s mask, so a mask written on one side alone never produces a contact.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body_state_2d",
+      "doc": "Snapshot of a body\u0027s pose \u002B motion at a point in time. Position is the body\u0027s local origin in world space; angle is in radians.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angle",
+          "type": "float",
+          "tags": [],
+          "doc": "radians, CCW positive"
+        },
+        {
+          "name": "velocity_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "velocity_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "angular_velocity",
+          "type": "float",
+          "tags": [],
+          "doc": "radians per second"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_body2d_component",
+      "doc": "A 2D rigid body. Holds the motion of its entity; its pose is the entity\u0027s ke_transform2d_component, which the body is created at, which moves it when written, and which the simulation writes each tick. The entity is the identity of the body: a caller never acquires, passes, or releases a body handle. The body is destroyed on the first update in which the entity no longer holds the component.",
+      "tags": [
+        "table",
+        "node:Body2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_body_type_2d",
+          "tags": [],
+          "doc": "Read when the body is created; a later change does not reach it."
+        },
+        {
+          "name": "velocity",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "impulse",
+          "type": "ke_vec2",
+          "tags": [],
+          "doc": "Added to the body\u0027s momentum before the next step, in newton-seconds, then cleared. Writes in between add up."
+        },
+        {
+          "name": "angular_velocity",
+          "type": "float",
+          "tags": [],
+          "doc": "Radians per second, CCW positive."
+        },
+        {
+          "name": "gravity_scale",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Multiplies world gravity for this body alone. 1 = normal, 0 = weightless. Read when the body is created."
+        },
+        {
+          "name": "fixed_rotation",
+          "type": "bool",
+          "tags": [],
+          "doc": "Keeps the body\u0027s angle fixed against every torque, including contacts. Read when the body is created."
+        },
+        {
+          "name": "body",
+          "type": "ke_body_2d",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The body for this entity, assigned when the component is reconciled. Callers do not write it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_collider2d_component",
+      "doc": "One collision fixture, attached to the nearest ancestor that carries a ke_body2d_component. The fixture is attached by reconciling this component against the hierarchy. A caller never names a body.",
+      "tags": [
+        "table",
+        "node:Collider2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "ke_shape_kind_2d",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "half_extents",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": "Half-width and half-height from the node\u0027s origin. Read for a box shape."
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": "Read for a circle shape."
+        },
+        {
+          "name": "density",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Mass per unit area. Drives the owning body\u0027s mass and inertia."
+        },
+        {
+          "name": "friction",
+          "type": "float",
+          "tags": [
+            "default:0.3"
+          ],
+          "doc": "Coulomb friction against other fixtures. 0 is frictionless."
+        },
+        {
+          "name": "restitution",
+          "type": "float",
+          "tags": [],
+          "doc": "Bounciness. 0 absorbs the impact, 1 returns all of it."
+        },
+        {
+          "name": "layer",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Which of the 32 collision layers this shape occupies."
+        },
+        {
+          "name": "mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": "Which layers this shape tests against. Two shapes touch only when each one\u0027s layer bit is set in the other\u0027s mask."
+        },
+        {
+          "name": "attached",
+          "type": "bool",
+          "tags": [
+            "internal"
+          ],
+          "doc": "Whether the fixture has been attached to its body. Set once the ancestor body exists. Callers do not write it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_texture_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_material_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_cubemap_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_shadow_map_handle",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_camera_component",
+      "doc": "Scene node that drives the per-frame view/projection. The first entity with a Camera in the ECS becomes the active camera.",
+      "tags": [
+        "table",
+        "node:Camera",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fov",
+          "type": "float",
+          "tags": [
+            "default:60"
+          ],
+          "doc": null
+        },
+        {
+          "name": "near_plane",
+          "type": "float",
+          "tags": [
+            "default:0.1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "far_plane",
+          "type": "float",
+          "tags": [
+            "default:1000"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic_size",
+          "type": "float",
+          "tags": [
+            "default:5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "orthographic",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "cull_mask",
+          "type": "uint32_t",
+          "tags": [
+            "default:4294967295"
+          ],
+          "doc": "Which of the 32 view layers this camera draws. A renderable is skipped unless one of its own layer bits is set here."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_directional_light_component",
+      "doc": "Directional light node. Its properties give the light\u0027s direction, color, intensity and ambient term.",
+      "tags": [
+        "table",
+        "node:DirectionalLight",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 1 0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ambient",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.2 0.2 0.2"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_point_light_component",
+      "doc": "Point light node \u2014 emits light in all directions from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:PointLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "radius",
+          "type": "float",
+          "tags": [
+            "default:10"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_spot_light_component",
+      "doc": "Spot light node \u2014 emits a cone of light from this entity\u0027s world position.",
+      "tags": [
+        "table",
+        "node:SpotLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "direction",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0 -1 0"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:1 1 1"
+          ],
+          "doc": "Linear RGB."
+        },
+        {
+          "name": "intensity",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "range",
+          "type": "float",
+          "tags": [
+            "default:20"
+          ],
+          "doc": null
+        },
+        {
+          "name": "inner_angle",
+          "type": "float",
+          "tags": [
+            "default:25"
+          ],
+          "doc": null
+        },
+        {
+          "name": "outer_angle",
+          "type": "float",
+          "tags": [
+            "default:35"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ambient_light_component",
+      "doc": "Scene-wide ambient light node. First entity with this component wins.",
+      "tags": [
+        "table",
+        "node:AmbientLight",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "color",
+          "type": "ke_vec3",
+          "tags": [
+            "default:0.05 0.05 0.05"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_skybox_component",
+      "doc": "Environment cubemap driving both the skybox and image-based lighting. Only the first entity carrying one wins per frame.",
+      "tags": [
+        "node:Skybox",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "cubemap",
+          "type": "ke_texture_handle",
+          "tags": [
+            "name:cubemap_handle"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mesh_component",
+      "doc": "Renders a mesh with a material. \u0060mesh\u0060 and \u0060material\u0060 double as output: the engine fills them, at KE_PHASE_UPDATE, whenever \u0060primitive\u0060 names a known shape and/or the surface fields below have not already resolved to a valid handle. A caller holding real handles writes them and leaves \u0060primitive\u0060 empty; the engine only acts where a handle is still invalid.",
+      "tags": [
+        "table",
+        "node:MeshRenderer",
+        "base:Node3D",
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "mesh",
+          "type": "ke_mesh_handle",
+          "tags": [
+            "name:mesh_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "material",
+          "type": "ke_material_handle",
+          "tags": [
+            "name:material_handle"
+          ],
+          "doc": null
+        },
+        {
+          "name": "primitive",
+          "type": "char[32]",
+          "tags": [
+            "name:mesh"
+          ],
+          "doc": "Resolved into \u0060mesh\u0060 by the engine; a node authoring \u0060mesh\u0060 directly would have the value overwritten."
+        },
+        {
+          "name": "base_color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1",
+            "name:color"
+          ],
+          "doc": null
+        },
+        {
+          "name": "roughness",
+          "type": "float",
+          "tags": [
+            "default:1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_mode",
+          "type": "ke_alpha_mode",
+          "tags": [
+            "default:KE_ALPHA_MODE_OPAQUE"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "ior",
+          "type": "float",
+          "tags": [
+            "default:1.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "distortion_strength",
+          "type": "float",
+          "tags": [
+            "default:0.05"
+          ],
+          "doc": null
+        },
+        {
+          "name": "layers",
+          "type": "uint32_t",
+          "tags": [
+            "default:1"
+          ],
+          "doc": "Which of the 32 view layers this renderable occupies. A camera draws it only when its cull_mask names one of these bits."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_sprite2d_component",
+      "doc": "A textured quad in the plane, resolved into geometry and a material by the engine.",
+      "tags": [
+        "table",
+        "node:Sprite2D",
+        "base:Node2D"
+      ],
+      "fields": [
+        {
+          "name": "texture",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Image to sample. Empty draws the plain tinted quad."
+        },
+        {
+          "name": "region",
+          "type": "ke_vec4",
+          "tags": [
+            "default:0 0 1 1"
+          ],
+          "doc": "Rectangle of the image to draw, normalized: x, y, width, height."
+        },
+        {
+          "name": "size",
+          "type": "ke_vec2",
+          "tags": [
+            "default:1 1"
+          ],
+          "doc": "Size in world units, multiplying the node\u0027s scale."
+        },
+        {
+          "name": "pivot",
+          "type": "ke_vec2",
+          "tags": [
+            "default:0.5 0.5"
+          ],
+          "doc": "Point of the quad the node\u0027s origin sits on, normalized; 0,0 is the bottom-left corner."
+        },
+        {
+          "name": "flip_h",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "flip_v",
+          "type": "uint8_t",
+          "tags": [
+            "bool"
+          ],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "ke_vec4",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": "Multiplies the sampled image. Linear RGBA."
+        },
+        {
+          "name": "alpha_mode",
+          "type": "ke_alpha_mode",
+          "tags": [
+            "default:KE_ALPHA_MODE_OPAQUE"
+          ],
+          "doc": null
+        },
+        {
+          "name": "alpha_cutoff",
+          "type": "float",
+          "tags": [
+            "default:0.5"
+          ],
+          "doc": null
+        },
+        {
+          "name": "texture_handle",
+          "type": "ke_texture_handle",
+          "tags": [
+            "internal"
+          ],
+          "doc": "The image resolved from \u0060texture\u0060."
+        },
+        {
+          "name": "attached",
+          "type": "uint8_t",
+          "tags": [
+            "internal",
+            "bool"
+          ],
+          "doc": "Whether the quad this sprite draws through has been attached."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ui_font_handle",
+      "doc": null,
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_label_glyph_quad",
+      "doc": "One shaped glyph: the screen-space rectangle it draws to and the atlas rectangle it samples from.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "dst_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_h",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ui_quad_component",
+      "doc": "A single screen-space UI quad. A quad of zero size is skipped.",
+      "tags": [
+        "table"
+      ],
+      "fields": [
+        {
+          "name": "texture_bits",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Full generational texture handle bits; UINT32_MAX = the built-in white."
+        },
+        {
+          "name": "dst_x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dst_h",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v0",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "u1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "v1",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": "Premultiplied alpha RGBA."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_label_component",
+      "doc": "A screen-space text label. Text, anchor, offset, color and font are the caller\u0027s input; glyph_count and glyphs[] are output, written each KE_PHASE_UPDATE tick.",
+      "tags": [
+        "table",
+        "node:Label",
+        "base:Node3D"
+      ],
+      "fields": [
+        {
+          "name": "font",
+          "type": "char[128]",
+          "tags": [],
+          "doc": "Font file to draw with."
+        },
+        {
+          "name": "font_size",
+          "type": "float",
+          "tags": [
+            "default:32"
+          ],
+          "doc": "Size the font is baked at, in pixels."
+        },
+        {
+          "name": "font_handle",
+          "type": "ke_ui_font_handle",
+          "tags": [
+            "internal",
+            "name:font_handle"
+          ],
+          "doc": "Resolved from \u0060font\u0060."
+        },
+        {
+          "name": "anchor",
+          "type": "float[2]",
+          "tags": [],
+          "doc": "Anchor in normalized [0..1] of the backbuffer. (0,0) = top-left, (1,1) = bottom-right."
+        },
+        {
+          "name": "offset",
+          "type": "float[2]",
+          "tags": [],
+          "doc": "Pixel offset applied AFTER anchor positioning."
+        },
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [
+            "default:1 1 1 1"
+          ],
+          "doc": null
+        },
+        {
+          "name": "text",
+          "type": "char[256]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "glyph_count",
+          "type": "uint32_t",
+          "tags": [
+            "internal",
+            "output"
+          ],
+          "doc": "Written by the engine each tick; a node authoring it would have the value overwritten on the next tick."
+        },
+        {
+          "name": "glyphs",
+          "type": "ke_label_glyph_quad[256]",
+          "tags": [
+            "internal",
+            "output"
+          ],
+          "doc": "Shaped output, see glyph_count."
+        }
+      ],
+      "external": true
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_audio",
+      "doc": "Audio playback. Every slot is safe to call from a system body.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "load_sound",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Loads a sound for repeated playback; the backend autodetects the format.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_sound; KE_RESULT_NOT_FOUND when the file cannot be opened; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The audio file, read through the io the backend was created with."
+            },
+            {
+              "name": "out_sound",
+              "type": "ke_audio_sound *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the sound; KE_AUDIO_SOUND_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "unload_sound",
+          "returns": "void",
+          "tags": [],
+          "doc": "Releases a previously loaded sound; safe on KE_AUDIO_SOUND_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "voice_start",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Starts a new playback of a loaded sound, independent of every other playback of it. The voice holds a reference on the sound until it is stopped.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for KE_AUDIO_SOUND_INVALID or a null out_voice; KE_RESULT_NOT_FOUND for a sound that is not loaded; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the backend cannot start it.",
+          "params": [
+            {
+              "name": "sound",
+              "type": "ke_audio_sound",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": "Playback volume in 0..1."
+            },
+            {
+              "name": "pitch",
+              "type": "float",
+              "tags": [],
+              "doc": "Playback rate, 1 for the recorded pitch."
+            },
+            {
+              "name": "loop",
+              "type": "bool",
+              "tags": [],
+              "doc": "Restarts the voice when it ends, so it plays until stopped."
+            },
+            {
+              "name": "out_voice",
+              "type": "ke_audio_voice *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the voice; KE_AUDIO_VOICE_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "voice_playing",
+          "returns": "bool",
+          "tags": [],
+          "doc": "True while the voice is playing; false once it reached its end, and for a stopped or unknown voice.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "voice",
+              "type": "ke_audio_voice",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "voice_stop",
+          "returns": "void",
+          "tags": [],
+          "doc": "Stops the voice and releases it, along with its reference on the sound; safe on KE_AUDIO_VOICE_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "voice",
+              "type": "ke_audio_voice",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        },
+        {
+          "name": "set_master_volume",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets a global multiplier applied on top of per-sound volumes (0..1).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "volume",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_audio *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_audio_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_audio *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_audio *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs",
+      "doc": "Entity lifetime and component storage.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "entity_create",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a fresh entity with no components. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the entity; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_destroy",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Destroys an entity and all its components; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_component_params *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The name, size, alignment and field table of the type."
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id; KE_COMPONENT_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_lookup",
+          "returns": "bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Looks up a previously registered component by name.",
+          "return_doc": "false if no component of that name is registered.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Component name to find."
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size, and field metadata."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_add",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive, the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_data",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_remove",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Detaches a component from an entity; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component. The pointer is valid until the next structural change on this ecs.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_size",
+          "returns": "size_t",
+          "tags": [],
+          "doc": "Byte size of a registered component\u0027s element; 0 for a tag or unknown cid.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_field_write",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Writes value into component at the place field describes, converted to the field\u0027s type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field\u0027s width; a string is cut to the field\u0027s size and stays NUL-terminated.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does not convert to the field\u0027s type or a size the type cannot have, writing nothing.",
+          "params": [
+            {
+              "name": "component",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The component\u0027s memory."
+            },
+            {
+              "name": "field",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Where in the component, and of which type and size."
+            },
+            {
+              "name": "value",
+              "type": "const ke_variant *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The value to write."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a query over a component tuple (entities matching ALL cids).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than the backend\u0027s queries hold, or one the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "cids",
+              "type": "const ke_component_id *",
+              "tags": [
+                "borrowed",
+                "array_of:cid_count"
+              ],
+              "doc": "Component tuple to match."
+            },
+            {
+              "name": "cid_count",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Number of components in the tuple."
+            },
+            {
+              "name": "out_query",
+              "type": "ke_query_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the query; KE_QUERY_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_resolve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "query",
+              "type": "ke_query_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_segments",
+              "type": "ke_ecs_segment *",
+              "tags": [
+                "out",
+                "array_of:max_segments"
+              ],
+              "doc": "Receives the matched segments."
+            },
+            {
+              "name": "max_segments",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Capacity of out_segments."
+            },
+            {
+              "name": "out_columns",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the cid_count entries starting at index i * cid_count, cid_count being the length of the tuple the query was registered with."
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them; zero on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_reserve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve was handed out.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_materialize",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_commands",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.",
+      "tags": [
+        "lent"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_ENTITY_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "attach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, when \u0060size\u0060 is neither 0 nor the registered size of \u0060cid\u0060.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "detach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "despawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records destroying \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "defer",
+          "returns": "ke_result",
+          "tags": [
+            "internal"
+          ],
+          "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:user_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_ctx",
+      "doc": "What a behaviour is given. Behaviours run one at a time, never two at once, so a body may read any node; it changes structure (a node, a component, an event) only through the calls that record into \u0060commands\u0060, applied after the body returns.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "self",
+          "type": "ke_entity",
+          "tags": [],
+          "doc": "The node next moved to; KE_ENTITY_INVALID before the first call of next."
+        },
+        {
+          "name": "fields",
+          "type": "void *",
+          "tags": [
+            "typed"
+          ],
+          "doc": "The node\u0027s own fields, the struct its type was registered with; NULL for a type without fields."
+        },
+        {
+          "name": "event",
+          "type": "const void *",
+          "tags": [
+            "typed"
+          ],
+          "doc": "The event an on handler is delivering; NULL in every other behaviour."
+        },
+        {
+          "name": "event_type",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": "The type of \u0060event\u0060; KE_COMPONENT_INVALID in every other behaviour."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "Seconds since the previous tick, or the fixed timestep in fixed_update."
+        },
+        {
+          "name": "commands",
+          "type": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue structural changes are recorded into."
+        }
+      ],
+      "slots": [
+        {
+          "name": "next",
+          "returns": "bool",
+          "tags": [],
+          "doc": "Moves to the next node, or the next pair of a node and an event.",
+          "return_doc": "false when there is none left.",
+          "params": [],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "One of the node\u0027s components: its fields or one its type names in \u0060with\u0060.",
+          "return_doc": "The component\u0027s memory for the current node, NULL for a component the type does not carry.",
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "typed"
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "component",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Any node\u0027s component, the current node\u0027s or another\u0027s.",
+          "return_doc": "The component\u0027s memory on node, NULL for a node that does not carry it.",
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "typed"
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "parent",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The node\u0027s parent, KE_ENTITY_INVALID for a node at the root.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "child",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The child of node named name, KE_ENTITY_INVALID when it has none.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "first_child",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The first child of node, KE_ENTITY_INVALID when it has none.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "next_sibling",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The child after node under the same parent, KE_ENTITY_INVALID after the last.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "ancestor",
+          "returns": "ke_entity",
+          "tags": [],
+          "doc": "The nearest ancestor of node holding component, KE_ENTITY_INVALID when none does.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "axis",
+          "returns": "float",
+          "tags": [],
+          "doc": "The value of an axis action, 0 without input actions or for a name no map holds.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action",
+              "type": "ke_action_ref *",
+              "tags": [
+                "inout"
+              ],
+              "doc": "Resolved by name on its first read, and kept resolved."
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "pressed",
+          "returns": "bool",
+          "tags": [],
+          "doc": "Whether a button action was pressed this tick, false without input actions or for a name no map holds.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "action",
+              "type": "ke_action_ref *",
+              "tags": [
+                "inout"
+              ],
+              "doc": "Resolved by name on its first read, and kept resolved."
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records a node of type named name under parent, its fields and the components its type names in \u0060with\u0060 holding their initial values.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry or one whose size is not its registered size; KE_RESULT_NOT_FOUND for a type never registered, or the queue\u0027s code.",
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": "KE_ENTITY_INVALID places it at the root."
+            },
+            {
+              "name": "components",
+              "type": "const ke_node_component *",
+              "tags": [
+                "array_of:component_count",
+                "default:empty"
+              ],
+              "doc": "Components the node starts with in place of its type\u0027s initial values."
+            },
+            {
+              "name": "component_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_node",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Usable as a reference at once; the node exists once the commands are applied."
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "destroy",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the destruction of node and its descendants.",
+          "return_doc": "KE_OK, or the queue\u0027s code.",
+          "params": [
+            {
+              "name": "node",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "raise",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records data as an event of type event, delivered to the on handlers of the PostUpdate of this tick that run after it is applied, and gone at the next PreUpdate.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for an event never registered, KE_RESULT_INVALID_ARGUMENT for a size that is not the event\u0027s, or the queue\u0027s code.",
+          "params": [
+            {
+              "name": "event",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": "Copied."
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "exit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Asks the runtime for the program to end; the host stops once it reads the request.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_node_ctx *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_types",
+      "doc": "Node types and the events between them: each behaviour of a registered type runs as a system of its phase over the nodes of the type, one behaviour at a time. A type named \u0060node\u0060, with no fields and no components, is registered from the start.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "register_type",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a node type and the systems of its behaviours.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, a table or initial bytes without \u0060fields_size\u0060, \u0060initial\u0060 without fields, an initial whose size is not its component\u0027s, or events without \u0060on\u0060; KE_RESULT_NOT_FOUND for a \u0060with\u0060 name or an event never registered; the ecs\u0027s or the runtime\u0027s code when it refuses.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_node_type_desc *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Read during the call; \u0060initial\u0060 and the field table are copied."
+            },
+            {
+              "name": "out_type",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id of the type\u0027s tag."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "register_event",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers an event type.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless event, or the ecs\u0027s code.",
+          "params": [
+            {
+              "name": "event",
+              "type": "const ke_component_params *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Its name, size and field table."
+            },
+            {
+              "name": "out_event",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the event\u0027s component id."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records a node of type named name under parent into commands, its fields and the components its type names in \u0060with\u0060 holding their initial values. The one way a node is created: a behaviour\u0027s ctx-\u003Espawn is this call with its own commands.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands, a component the type does not carry or one whose size is not its registered size; KE_RESULT_NOT_FOUND for a type never registered, or the queue\u0027s code.",
+          "params": [
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [],
+              "doc": "The queue the node is recorded into."
+            },
+            {
+              "name": "type",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": "KE_ENTITY_INVALID places it at the root."
+            },
+            {
+              "name": "components",
+              "type": "const ke_node_component *",
+              "tags": [
+                "array_of:component_count",
+                "default:empty"
+              ],
+              "doc": "Components the node starts with in place of its type\u0027s initial values."
+            },
+            {
+              "name": "component_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_node",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Usable as a reference at once; the node exists once the commands are applied."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "find_type",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The id of the type registered under name.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null name or out_type; KE_RESULT_NOT_FOUND for a name no type was registered under.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The name its desc gave, \u0060node\u0060 for the base type."
+            },
+            {
+              "name": "out_type",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_COMPONENT_INVALID when none has the name."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "find_component",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The id of the component registered under name, an engine component named by its \u0060KE_COMPONENT_NAME_*\u0060 constant or one the game registered.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null name or out_component; KE_RESULT_NOT_FOUND for a name no component was registered under.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_component",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_COMPONENT_INVALID when none has the name."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "initial",
+          "returns": "const void *",
+          "tags": [],
+          "doc": "The bytes a node of type is born with in component.",
+          "return_doc": "The component\u0027s registered size of bytes, valid while the node types live; NULL when the type was never registered or does not carry the component.",
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "carries",
+          "returns": "bool",
+          "tags": [],
+          "doc": "Whether a node of type carries component: its fields or one its type names in \u0060with\u0060.",
+          "return_doc": "false for a type never registered.",
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_node_types_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_node_types *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_node_types *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_physics_2d",
+      "doc": "A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe \u2014 call all methods on the same thread.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "set_gravity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets world gravity (m/s^2). Default is (0, -9.81).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "gravity",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "step",
+          "returns": "void",
+          "tags": [],
+          "doc": "Advances the simulation by dt seconds. Variable steps are accepted, but deterministic replay requires the caller to supply a fixed one.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "create_body",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a body at the given world position.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null out_body, or KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "type",
+              "type": "ke_body_type_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "position",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_body",
+              "type": "ke_body_2d *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the body; KE_BODY_2D_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "destroy_body",
+          "returns": "void",
+          "tags": [],
+          "doc": "Destroys the body and all its fixtures. Safe on KE_BODY_2D_INVALID.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "add_box_fixture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Attaches a box fixture, sized by its half-extents and placed at the given offset from the body origin.",
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.",
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "half_extents",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset_angle",
+              "type": "float",
+              "tags": [],
+              "doc": "Radians, CCW positive, about the offset center."
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "optional"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "add_circle_fixture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Attaches a circle fixture at the given offset from the body origin.",
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND for a body that does not exist.",
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "radius",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "offset",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "density",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "friction",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "restitution",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "filter",
+              "type": "const ke_collision_filter_2d *",
+              "tags": [
+                "optional"
+              ],
+              "doc": "Layers the fixture occupies and tests against. NULL leaves it colliding with everything."
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "get_body_state",
+          "returns": "void",
+          "tags": [],
+          "doc": "Reads the body\u0027s current pose and motion.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out",
+              "type": "ke_body_state_2d *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives position, angle, and velocities."
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_position",
+          "returns": "void",
+          "tags": [],
+          "doc": "Teleports the body and skips collision response.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "position",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "angle",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_velocity",
+          "returns": "void",
+          "tags": [],
+          "doc": "Sets linear velocity directly (m/s).",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "velocity",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "apply_impulse",
+          "returns": "void",
+          "tags": [],
+          "doc": "Applies a linear impulse (kg*m/s) at the body center.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "impulse",
+              "type": "ke_vec2",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_fixed_rotation",
+          "returns": "void",
+          "tags": [],
+          "doc": "Locks or unlocks the body\u0027s rotation. A locked body keeps its current angle and ignores every torque, including the one a contact imparts. Bodies start unlocked.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "fixed",
+              "type": "bool",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        },
+        {
+          "name": "set_body_gravity_scale",
+          "returns": "void",
+          "tags": [],
+          "doc": "Scales world gravity for this body alone. 1 leaves it at the world\u0027s value, 0 makes the body weightless, and a negative value makes it fall upward.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "body",
+              "type": "ke_body_2d",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "scale",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_physics_2d *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_physics_2d_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_physics_2d *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_physics_2d *"
+        }
+      ],
+      "external": true
+    }
+  ],
+  "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_defer_fn",
+      "returns": "ke_result",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world. A failure is returned, and the queue stops there: the operations recorded after it are dropped.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_node_behaviour_fn",
+      "returns": "ke_result",
+      "doc": "One call of a behaviour over the nodes of its type. The body walks them with next, which points self and fields at each node in turn; an on handler walks every pair of a node and an event, with event pointing at the event.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "ke_node_ctx *",
+          "tags": [],
+          "doc": "What the body works with for the duration of the call."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "The desc\u0027s user_data."
+        }
+      ]
+    }
+  ],
+  "id_types": [],
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
+  "type_aliases": {
+    "ke_audio_sound": "uint32_t",
+    "ke_audio_voice": "uint32_t",
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_query_id": "uint64_t",
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
+    "ke_node_behaviour_fn": "ke_result (*)(ke_node_ctx *, void *)"
+  },
+  "data": [
+    {
+      "name": "ke_transform_node_initial",
+      "type": "ke_transform_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_transform2d_node_initial",
+      "type": "ke_transform2d_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_camera_node_initial",
+      "type": "ke_camera_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": "60.0"
+          },
+          {
+            "kind": "Number",
+            "text": "0.1"
+          },
+          {
+            "kind": "Number",
+            "text": "1000.0"
+          },
+          {
+            "kind": "Number",
+            "text": "5.0"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": "4294967295"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_directional_light_node_initial",
+      "type": "ke_directional_light_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.2"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "0.5"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.2"
+              },
+              {
+                "kind": "Number",
+                "text": "0.2"
+              },
+              {
+                "kind": "Number",
+                "text": "0.2"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_point_light_node_initial",
+      "type": "ke_point_light_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": "10.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_spot_light_node_initial",
+      "type": "ke_spot_light_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "-1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "0.0"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": "20.0"
+          },
+          {
+            "kind": "Number",
+            "text": "25.0"
+          },
+          {
+            "kind": "Number",
+            "text": "35.0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_ambient_light_node_initial",
+      "type": "ke_ambient_light_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.05"
+              },
+              {
+                "kind": "Number",
+                "text": "0.05"
+              },
+              {
+                "kind": "Number",
+                "text": "0.05"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_mesh_node_initial",
+      "type": "ke_mesh_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Name",
+            "text": "KE_ALPHA_MODE_OPAQUE"
+          },
+          {
+            "kind": "Number",
+            "text": "0.5"
+          },
+          {
+            "kind": "Number",
+            "text": "1.5"
+          },
+          {
+            "kind": "Number",
+            "text": "0.05"
+          },
+          {
+            "kind": "Number",
+            "text": "1"
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_sprite2d_node_initial",
+      "type": "ke_sprite2d_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "0.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.5"
+              },
+              {
+                "kind": "Number",
+                "text": "0.5"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Name",
+            "text": "KE_ALPHA_MODE_OPAQUE"
+          },
+          {
+            "kind": "Number",
+            "text": "0.5"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_label_node_initial",
+      "type": "ke_label_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": "32.0"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              },
+              {
+                "kind": "Number",
+                "text": "1.0"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_body2d_node_initial",
+      "type": "ke_body2d_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_collider2d_node_initial",
+      "type": "ke_collider2d_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "Number",
+                "text": "0.5"
+              },
+              {
+                "kind": "Number",
+                "text": "0.5"
+              }
+            ]
+          },
+          {
+            "kind": "Number",
+            "text": "0.5"
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": "0.3"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": "1"
+          },
+          {
+            "kind": "Number",
+            "text": "4294967295"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_sound_node_initial",
+      "type": "ke_sound_component",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": "1.0"
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          },
+          {
+            "kind": "Number",
+            "text": ""
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_ambient_light_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022ambient_light\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_ambient_light_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_ambient_light_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_body2d_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022body2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_body2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_body2d_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform2d_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_camera_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022camera\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_camera_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_camera_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_collider2d_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022collider2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_collider2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_collider2d_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform2d_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_directional_light_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022directional_light\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_directional_light_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_directional_light_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_label_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022label\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_label_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_label_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_mesh_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022mesh\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_mesh_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_mesh_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_point_light_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022point_light\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_point_light_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_point_light_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_skybox_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022skybox\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": "0"
+              },
+              {
+                "kind": "Number",
+                "text": "0"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_sound_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022sound\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_sound_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_sound_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_spot_light_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022spot_light\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_spot_light_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_spot_light_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_sprite2d_node_with",
+      "type": "ke_node_with[2]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022sprite2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_sprite2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_sprite2d_component"
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform2d_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_transform2d_node_with",
+      "type": "ke_node_with[1]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform2d\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform2d_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform2d_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_transform_node_with",
+      "type": "ke_node_with[1]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_initial"
+              },
+              {
+                "kind": "SizeOf",
+                "text": "const ke_transform_component"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "ke_engine_node_types",
+      "type": "ke_node_type_desc[14]",
+      "readonly": true,
+      "value": {
+        "kind": "List",
+        "text": "",
+        "items": [
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022ambient_light\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_ambient_light_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022body2d\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_body2d_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022camera\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_camera_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022collider2d\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_collider2d_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022directional_light\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_directional_light_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022label\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_label_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022mesh\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_mesh_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022point_light\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_point_light_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022skybox\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_skybox_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022sound\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_sound_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022spot_light\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_spot_light_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022sprite2d\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_sprite2d_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform2d\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform2d_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "1"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022transform\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Name",
+                "text": "ke_transform_node_with"
+              },
+              {
+                "kind": "Number",
+                "text": "1"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "constants": [
+    {
+      "name": "KE_ENGINE_NODE_TYPE_COUNT",
+      "type": "int",
+      "value": "14",
+      "doc": "The number of entries in \u0060ke_engine_node_types\u0060."
+    }
+  ]
+}

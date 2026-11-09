@@ -1,0 +1,11 @@
+.{
+    .name = .abi_node_types,
+    .version = "0.1.0",
+    .fingerprint = 0x536a744c10945371,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}
