@@ -124,6 +124,12 @@ pub const Runtime = struct {
                     return T.exitRequested(state);
                 }
             }.call,
+            .commands = &struct {
+                fn call(self: ?*c.ke_runtime) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*abi_ecs.c.ke_ecs_commands)));
+                    return T.commands(state);
+                }
+            }.call,
         };
     }
 
@@ -208,6 +214,13 @@ pub const Runtime = struct {
     /// Whether a request to end the program was recorded.
     pub fn exitRequested(self: Runtime) bool {
         return self.ptr.exit_requested.?(self.ptr);
+    }
+
+    /// The queue the host records structural changes into between ticks, as a system records into
+    /// its own; the next tick applies it before any phase runs. Only the thread that ticks records
+    /// into it, and never during a tick.
+    pub fn commands(self: Runtime) ?*abi_ecs.c.ke_ecs_commands {
+        return self.ptr.commands.?(self.ptr);
     }
 
     /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.

@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/ecs/commands.h>
 #include <stdbool.h>
 #include <stdint.h>
 
@@ -232,6 +233,12 @@ typedef struct ke_runtime {
 
     /// Whether a request to end the program was recorded.
     bool (*exit_requested)(ke_runtime *self);
+
+    /// The queue the host records structural changes into between ticks, as a system records into
+    /// its own; the next tick applies it before any phase runs. Only the thread that ticks records
+    /// into it, and never during a tick.
+    /// @return [borrowed] The queue, owned by the runtime.
+    ke_ecs_commands *(*commands)(ke_runtime *self);
 } ke_runtime;
 
 /// [owner]

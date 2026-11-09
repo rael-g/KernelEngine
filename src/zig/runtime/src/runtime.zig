@@ -200,6 +200,9 @@ const RuntimeState = struct {
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
     exit: std.atomic.Value(bool),
+    host_q: DeferQueue,
+    host_state: context.CtxState,
+    host_commands: abi_ecs.c.ke_ecs_commands,
     fixed_accumulator: f32,
     started: bool,
     shut_down: bool,
@@ -1075,6 +1078,8 @@ fn runtimeTickBody(self: ?*abi_runtime.c.ke_runtime, dt: f32) abi_result.c.ke_re
     }
     const h = handleOf(self.?);
 
+    deferFlush(&h.state.host_q, h.state.ecs) catch |err| return R.code(reportFailure(err, "applying the host's commands failed"));
+    freeHostQueue(h);
     var failure = runtimePrepareSystems(h);
     if (!failure.failed() and !h.state.started) {
         h.state.started = true;
@@ -1184,9 +1189,24 @@ fn runtimeUnloadModules(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 /// The handle's `destroy`. It joins the render phase, runs `KE_PHASE_SHUTDOWN` if the runtime
 /// ever started, calls `runtimeUnloadModules`, and releases the pending and
 /// registered systems and the scratch. The ecs and the task pool are not touched.
+/// Frees the buffers of the host's queue once it has been applied, leaving it empty.
+fn freeHostQueue(h: *RuntimeHandle) void {
+    if (h.state.host_q.cmds) |cmds| cFree(DeferCommand, cmds, h.state.host_q.capacity);
+    if (h.state.host_q.arena) |arena| cFree(u8, arena, h.state.host_q.arena_capacity);
+    h.state.host_q = .{};
+}
+
+/// Slot `commands`. The host's queue, bound to the runtime's ecs.
+fn runtimeCommands(self: ?*abi_runtime.c.ke_runtime) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
+    const rt = self orelse return null;
+    if (rt.handle == null) return null;
+    return &handleOf(rt).state.host_commands;
+}
+
 fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
     if (self == null or self.?.handle == null) return;
     const h = handleOf(self.?);
+    freeHostQueue(h);
 
     runtimeUnloadModules(self);
 
@@ -1280,6 +1300,17 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.api.request_exit = &runtimeRequestExit;
     h.api.exit_requested = &runtimeExitRequested;
     h.state.exit = std.atomic.Value(bool).init(false);
+    h.api.commands = &runtimeCommands;
+    h.state.host_q = .{};
+    h.state.host_state = std.mem.zeroInit(context.CtxState, .{ .ecs = ecs.?, .system_name = "host", .defer_q = &h.state.host_q });
+    h.state.host_commands = .{
+        .handle = &h.state.host_state,
+        .spawn = &context.commandsSpawn,
+        .attach = &context.commandsAttach,
+        .detach = &context.commandsDetach,
+        .despawn = &context.commandsDespawn,
+        .@"defer" = &context.commandsDefer,
+    };
 
     out.* = .{ .ref = &h.api, .destroy = &runtimeDestroy };
     return R.ok;
@@ -2813,6 +2844,23 @@ test "a deferred spawn is applied at the wave barrier" {
     try testing.expect(f.tick(1.0 / 60.0));
     try testing.expectEqual(@as(u32, 1), probe.calls.load(.acquire));
     try testing.expectEqual(@as(u32, 3), deferAppliedCount());
+}
+
+test "the host's commands are applied at the start of the next tick" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    const e = f.ecs();
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "host_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    const commands = f.rt().commands.?(f.rt()).?;
+    var entity: abi_asset_resolver.c.ke_entity = abi_ecs.c.KE_ENTITY_INVALID;
+    try R.check(commands.spawn.?(commands, &entity));
+    const value: u32 = 42;
+    try R.check(commands.attach.?(commands, entity, cid, &value, @sizeOf(u32)));
+    try testing.expect(e.component_get.?(e, entity, cid) == null);
+    try testing.expect(f.tick(1.0 / 60.0));
+    const held: *const u32 = @ptrCast(@alignCast(e.component_get.?(e, entity, cid).?));
+    try testing.expectEqual(@as(u32, 42), held.*);
 }
 
 test "spawn hands the system body an id it can actually use" {

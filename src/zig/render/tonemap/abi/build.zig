@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_tonemap_factory.zig") });
+    abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
     abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));

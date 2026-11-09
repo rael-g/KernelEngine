@@ -71,4 +71,7 @@ public interface IRuntime : IDisposable
     void RequestExit();
     /// <summary>Whether a request to end the program was recorded.</summary>
     bool ExitRequested();
+    /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
+    /// <returns>The queue, owned by the runtime.</returns>
+    nint Commands();
 }

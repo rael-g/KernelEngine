@@ -386,6 +386,13 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         return Handle->exit_requested(Handle);
     }
 
+    /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
+    /// <returns>The queue, owned by the runtime.</returns>
+    public nint Commands()
+    {
+        return (nint)Handle->commands(Handle);
+    }
+
     /// <summary>Releases the native runtime, and rethrows whatever a teardown handler threw once the native stack has unwound.</summary>
     public void Dispose()
     {

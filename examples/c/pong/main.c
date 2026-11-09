@@ -32,7 +32,6 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
-#include <kernel_engine/runtime/system_ctx.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
 #include <kernel_engine/view/space/view_space_rh_create.h>
@@ -90,19 +89,6 @@ static double now_seconds(void)
     struct timespec t;
     timespec_get(&t, TIME_UTC);
     return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
-}
-
-typedef struct first_scene
-{
-    pong_game *game;
-    char       path[PATH_CAPACITY];
-} first_scene;
-
-static ke_result load_first_scene(ke_system_ctx *ctx, void *user_data, float dt)
-{
-    (void)dt;
-    first_scene *first = user_data;
-    return pong_open_slot(first->game, ctx->commands, first->path);
 }
 
 typedef struct renderer
@@ -277,11 +263,9 @@ int main(int argc, char **argv)
     game.scenes = scenes.ref;
     check("pong types", pong_register(&game));
 
-    first_scene first = { .game = &game };
-    snprintf(first.path, sizeof first.path, "res://scenes/%s.scene.toml", cfg->get_string(cfg, "project", "default_scene", "Menu"));
-    ke_system_id first_system = 0;
-    check("first scene system", rt.ref->register_system(rt.ref, &(ke_runtime_system_params){
-        .name = "pong.first_scene", .phase = KE_PHASE_STARTUP, .user_data = &first, .execute = load_first_scene, .exclusive = true }, &first_system));
+    char first_scene[PATH_CAPACITY];
+    snprintf(first_scene, sizeof first_scene, "res://scenes/%s.scene.toml", cfg->get_string(cfg, "project", "default_scene", "Menu"));
+    check("first scene", pong_open_slot(&game, rt.ref->commands(rt.ref), first_scene));
 
     double previous = now_seconds();
     while (!window.ref->should_close(window.ref) && !rt.ref->exit_requested(rt.ref))
