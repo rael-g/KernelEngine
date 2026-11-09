@@ -116,14 +116,14 @@ public sealed class Engine : IDisposable
     public NodeWorld Nodes { get; }
 
     /// <summary>
-    /// Opens the scene <paramref name="firstScene"/> of the project's scenes directory, or the
-    /// project file's <c>project.default_scene</c>, and ticks until the window closes or a node exits.
+    /// Opens the scene file at <paramref name="firstScene"/> (a <c>res://</c> path, as <c>Scenes</c> names
+    /// them), or the scene of the project's scenes directory the project file's
+    /// <c>project.default_scene</c> names, and ticks until the window closes or a node exits.
     /// </summary>
     public void Run(string? firstScene = null)
     {
-        var scene = firstScene ?? Parts.Configuration.GetString("project", "default_scene", "Main");
         var slot = new SceneSlotComponent();
-        slot.Path = $"res://scenes/{scene}.scene.toml";
+        slot.Path = firstScene ?? $"res://scenes/{Parts.Configuration.GetString("project", "default_scene", "Main")}.scene.toml";
         Types.Spawn(Parts.Runtime.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
 
         var clock = Stopwatch.StartNew();

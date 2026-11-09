@@ -47,7 +47,7 @@ partial class Ball(Game game) : Body2D
 
     void Update()
     {
-        if (Pressed(game.Quit)) ChangeScene("res://scenes/Menu.scene.toml");
+        if (Pressed(game.Quit)) ChangeScene(Scenes.Menu);
         else if (Pressed(game.Launch) && AwaitingLaunch) LaunchRequested = true;
     }
 
