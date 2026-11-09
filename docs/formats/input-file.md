@@ -92,9 +92,8 @@ fails with `KE_ERROR_INVALID_ARGUMENT` (`:541-544`, `:610-616`).
 
 ## Where the file is found
 
-`AddInputActions<TEnum>(path)` loads in the singleton factory, so at the map's first resolution, from `path` resolved against
-`AppContext.BaseDirectory`, or `actions.input` there when `path` is null
-(`src/csharp/framework/KernelEngine.Framework/Input/InputActionsServiceCollectionExtensions.cs:17-21`).
+The maps are read from the configuration `ke_input_actions_create` is given, under the section its
+config names; the C# SDK's engine gives it the project file and the section "input".
 An enum member with no `[action.<Name>]` table is not an error; its queries read false and zero
 (`InputActionMap.cs:33-37`, `50-59`). The Project file's `[input] actions` key is read only by the
 `ke` command-line tool (`formats/project-file.md`).
