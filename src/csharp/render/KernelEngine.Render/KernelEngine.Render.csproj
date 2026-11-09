@@ -7,7 +7,6 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
-
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
@@ -15,7 +14,7 @@
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime.Abstractions\KernelEngine.Runtime.Abstractions.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
-    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- Node, for this domain's node types -->
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
   </ItemGroup>
 

@@ -14,10 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Body2DModule P/Invokes the reconciliation plugin directly; it is backend-agnostic,
-         so it ships with the physics domain rather than with any one backend.
-         Declared before the import: the copy items are built from @(NativeDep) at the
-         import's own position, so a later declaration would be invisible to it. -->
+
     <NativeDep Include="ke_physics_body2d" />
   </ItemGroup>
 

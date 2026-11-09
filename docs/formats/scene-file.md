@@ -1,173 +1,58 @@
 # Scene file
 
-A scene file is TOML, conventionally named `<name>.scene.toml` (`examples/csharp/games/pong/scenes/`),
-parsed with tomlc99 (`toml_parse_file`, `src/zig/framework/src/scene_loader.zig:611`) and loaded by
-`ke_scene_loader.load` (`scene_loader.h:31`). The rules below are the ones `scene_loader.zig` enforces.
-
-What the loader **fails** on: a component block naming a component no module registered, or a short
-name two components answer to, a block key no field or callback consumed, a retired or mis-written
-block, and a bad `parent`, `target`, `signal` or `handler`.
-
-It also fails on a top-level key other than `entity` and `scene`, a key of the `[scene]` table other
-than `version`, a `version` other than 2, the one the loader reads, and a key on an entity that is
-neither `name`, `parent`, `scene`, `type`, `connect` nor a component block, so a misspelt
-`nmae = "x"` fails (`checkHeader`, `applyComponentBlocks`). The `[scene]` table is optional.
+A scene file is TOML, named `<name>.scene.toml` by convention (`examples/csharp/games/pong/scenes/`).
+`ke_scene_files.instantiate` reads it and spawns its nodes through `ke_node_types`, as a program
+calling `spawn_named` would; `ke_scene_files.open` puts the first one in a scene slot, and a node
+changes it with `ctx->change_scene`. The rules below are the ones `scene_files.zig` enforces.
 
 ## Shape
 
-The file is an array of `[[entity]]` tables. A file with no `[[entity]]` loads successfully and
-creates nothing (`scene_loader.zig:622-625`). Entities are created in file order.
+The file is an array of `[[entity]]` tables, spawned in file order; a file with none spawns
+nothing. An optional `[scene]` table holds `version`, which must be 2.
 
 ```toml
 [[entity]]
-name = "Player"
+name = "Ball"
+type = "pong.ball"
 
-[entity.transform]
-position = [0.0, 1.0, 0.0]
+[entity.transform2d]
+position = [0.0, 0.0]
 
-[[entity.connect]]
-signal = "hit"
-target = "Hud"
+[entity.ball]
+initial_speed = 6.0
 ```
 
 ## Keys on an entity
 
 | key | meaning |
 |---|---|
-| `name` | Required, unless the entity is the root of an included scene whose includer supplies one (`scene_loader.zig:518`). |
-| `parent` | The `name` of one entity **declared earlier in the same file**. A name no earlier entity has, or one two entities share, fails the load. Without it the entity attaches to the scene tree's root. |
-| `scene` | Path of another scene file, instantiated in place of a node. See *Including a scene*. |
-| `type` | A script type name, handed to the registered script factory once the entity's components are applied (`:246`, dispatch at the end of `processEntity`). |
-| `[entity.<component>]` | A component block. See below. |
-| `[[entity.connect]]` | A signal connection. See below. |
+| `name` | Required, unless the entry is the first of a scene another entry references, which takes the referencing entry's name. |
+| `parent` | The `name` of one entry declared earlier in the same file; without it the node goes under the parent the file is instantiated under. |
+| `type` | The node type, as registered (`pong.ball`, `label`); without it the base type `node`. |
+| `scene` | Another scene file, instantiated in place of a node; its first entry takes this entry's name, parent and blocks. An entry names a scene or a type, never both. |
+| `[entity.<component>]` | A block of values written over what a node of the type is born with. |
 
-## Names
+## Blocks and values
 
-A scene file spells four kinds of name, and the loader treats them differently.
+A block names a component the node's type carries, by its registered name (`transform2d`, `sound`),
+or by the name inside the type's namespace (`[entity.ball]` for the fields of `pong.ball`). Each key
+names a field of the component's field table and is written through the ecs's
+`component_field_write`, which converts the value to the field's type:
 
-| written as | names | matched how |
-|---|---|---|
-| `[entity.<name>]` | a component | as written, then as the short name of one component (`resolve_component` of `ke_component_registry`) |
-| a key inside a block | a field of that component | as written, against the field table (`component_fields_apply.zig:18-36`) |
-| `type = "<name>"` | a node type | **normalized**, qualified name first, then short name |
-| `signal = "<name>"` | a signal | as written, against the signals declared to the bus (`scene_loader.zig:446`) |
-| `parent`, `target` | an entity of the same file | as written; a name two entities share cannot be referred to (`NameMap.find`) |
+| TOML | written as |
+|---|---|
+| boolean, integer, float, string | the same kind; an integer and a float convert to each other |
+| an array of 2, 3 or 4 numbers | a vector of that width |
+| a string for a field with enum names | the index of the name (`release = "when_done"`) |
 
-**Component and field names are snake_case and spelled by the header.** A component's name is its
-struct's name without the `ke_` prefix and the `_component` suffix, emitted beside the struct as a
-`KE_COMPONENT_NAME_*` macro (`src/c/spatial/kernel_engine/spatial/component_fields.h:9-11`:
-`transform`, `transform2d`, `world_transform`); a field's key is the field's name in the header. A
-block name is not normalized: `[entity.Transform2D]` is not `[entity.transform2d]`. A game-authored
-node's own component is registered under the node type's normalized qualified name, `pong.paddle`,
-and its short name, `paddle`, is an alias a block may use while no other component answers to it;
-otherwise the block writes the qualified name, quoted because of the dot: `[entity."pong.paddle"]`.
-Its property keys are the properties in snake_case (`NodePropertyGenerator`;
-[node-types.md](../architecture/node-types.md)).
+## What fails
 
-**A node type is normalized.** `+` becomes `.`, and an uppercase letter starts a new `_`-separated word
-unless it follows `.`, `_`, a digit or another uppercase letter that is not the start of a lowercase run.
-So `Pong.Ball`, `Pong+Ball` and `pong.ball` are one name, `Sprite2D` is `sprite2d`, `HTTPServer` is
-`http_server`, and normalizing a normalized name changes nothing. The native loader normalizes the string
-before it calls the script factory, so the factory receives the one spelling
-(`normalizeTypeName`, `scene_loader.zig:194-229`; tests `:1898-1932`); the managed registry normalizes
-the names it registers with the same rule. What the normalized name is looked up in, and what a short
-name may collide with, is in [node-types.md](../architecture/node-types.md).
-A scene that names a type nobody registered, or a short name two types answer to, fails the load with
-the registry's message (the managed factory's exception reaches the loader as its failure,
-`Generated/SceneLoader.g.cs:135-152`).
+The load fails, with the reason logged, on: a top-level key other than `entity` and `scene`; a
+`[scene]` key other than `version`, or another version; an entry key that is not one of the keys
+above; a block the type does not carry, a component with no field table, a key no field has, or a
+value the field cannot hold; an entry without a name; a `parent` no earlier entry has, or one two
+entries share; an entry naming both a scene and a type; a type never registered; a missing file or
+one that does not parse. `[[entity.connect]]` is refused: a node raises an event instead.
 
-**A type and a block are separate namespaces.** `type = "pong.paddle"` resolves a node type;
-`[entity.paddle]` is the component that node declares. Neither implies the other: a block without a `type`
-gives an entity that carries the component and no managed node, and a `type` without the block binds the
-node over the component's defaults. When both are present the block is applied first and the factory
-runs after it, so a node binds onto the values the scene authored
-(`processEntity`, `scene_loader.zig:571`, `:615`; `Node.GeneratedSeed`, `Node.cs:208-212`).
-
-## Component blocks
-
-A table named `[entity.<name>]` is a component block, `<name>` being the name a module registered
-the component under, or its short name. The loader resolves it through the component registry and fails when no
-module registered it or when the short name is ambiguous. The component must also have a field table, an apply callback, or both registered in the
-component registry ([framework.md](../architecture/framework.md)).
-
-For a component the entity does not yet have, the loader zeroes it and seeds the defaults the field
-table declares (`:350-354`). It then applies the block's keys through the field table, then through
-the apply callback for whatever a table cannot describe (`:363-374`).
-
-**Every key in the block must be taken by one of the two.** A key neither consumed is an error:
-`component '<name>' has no field '<key>'` (`:377`). A typo cannot pass silently.
-
-Three blocks are refused by name:
-
-- `[entity.components]` and `[entity.properties]` are retired; the error says to write
-  `[entity.<component>]` directly (`:391-397`).
-- `[entity.connect]` in the singular is refused, since a connection is `[[entity.connect]]` (`:386`,
-  `:421`).
-- The two components the scene tree owns, name and hierarchy, cannot be authored (`:399-404`).
-
-Values read from TOML become variants: string, integer, float, boolean, an array of numbers or a nested
-table (`scene_loader.zig:91-145`). An array of two, three or four-or-more numbers becomes a vector of 2, 3 or
-4 components (elements past the fourth are dropped); an array of any other length reads as null (`:96-117`).
-
-## Values
-
-A block key is applied in up to three ways, and they do not fail alike.
-
-1. **The generated field table.** The key is matched to a field and the value written by the field's
-   type (`component_fields_apply.zig:18-36`). A value the field cannot take writes nothing, and the key
-   is **claimed** all the same, so no "no field" error follows.
-2. **An apply callback**, which only managed code still registers. It claims the keys it owns, and
-   a value outside its domain fails the load with the callback's own message; one that returns
-   false without an error fails the load with `component '<name>' was given a value it cannot hold`.
-
-A managed game node's apply reads each supported property by its key and **ignores** a value of
-the wrong type or an enum name that does not parse
-([node-types.md](../architecture/node-types.md)).
-
-An integer field whose header type is an enum takes the enumerator's name as well, lower case and
-without the enum's prefix: `alpha_mode = "blend"`, `kind = "circle"`.
-
-## Connections
-
-`[[entity.connect]]` wires a signal this entity emits to another entity. `signal` and `target` are
-both required; `handler` is an optional integer between 0 and 2³²−1, `0` when absent, and one out of
-that range fails the load (`applyConnections`).
-
-- `target` is the `name` of an entity in the same file, in **any** position: connections are resolved
-  in a second pass after every entity exists (`:700-708`).
-- `signal` must be one a node type declared to the signal bus (`signal_lookup`); an unknown name
-  fails the load, and the name is matched as written, which for a managed node is the payload
-  struct's own name ([framework.md](../architecture/framework.md)).
-- **A connection reaches only inside its own file.** The name table is per file: each call of
-  `loadSceneRecursive` makes its own and frees it on return (`scene_loader.zig:627`). An included scene
-  publishes one name to the file that includes it, the including entity's `name`, bound to the included
-  scene's root (`:597`). A `target` in the including file therefore cannot name an entity inside the
-  subscene other than its root, and a connection inside the subscene cannot name an entity of the
-  including file; either fails the load with `connect targets '<name>', which this scene declares no
-  entity for` (`:470-473`).
-- A `[[entity.connect]]` written on the **including** entity (the one with `scene =`) has the included
-  root as its source, and its target is resolved in the including file (`:700-708`).
-- A scene that declares a connection while the loader has no signal bus fails the load.
-
-## Including a scene
-
-`scene = "<path>"` loads another scene file and attaches its first entity at this point, under the
-entity's `parent` (or the root). The included file's first entity takes this entity's `name`, and this
-entity's own component blocks and `type` are applied on top of it (`:580-625`).
-
-A path beginning with `res://` is the project root joined with the rest. A path starting with `/` or
-a drive letter is used as written. Any other path is relative to the directory of the file that names
-it (`scene_loader.zig:173-190`).
-
-## Instantiating at runtime
-
-`instantiate` records into an ecs command queue the load of a scene file under a parent node, and
-the scene's first entity becomes that node's child when the queue is applied, so a system can create
-nodes from a file without touching the tree mid-wave (`vtInstantiate`, `scene_loader.zig`). A `res://`
-path is resolved as an included scene's is, and any other is read as `load` reads it. A failed instantiation logs, removes what it made and fails the
-application with its code.
-
-## Failure
-
-The first failure ends the load and returns `false`. Entities already created for that file stay in
-the tree: the loader does not remove them (`loadSceneRecursive`, `scene_loader.zig:601-673`).
+A `res://` path is resolved by the asset resolver against the project root; an absolute path is read
+as written, and any other against the directory of the file that names it.

@@ -9,7 +9,6 @@
         .abi_render_contract = .{ .path = "../../abi/render_contract" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_ui_components = .{ .path = "../../abi/ui_components" },
-        .abi_scene_loader = .{ .path = "../../abi/scene_loader" },
         .abi_render_handles = .{ .path = "../../abi/render_handles" },
         .abi_mesh = .{ .path = "../../abi/mesh" },
         .abi_math = .{ .path = "../../abi/math" },

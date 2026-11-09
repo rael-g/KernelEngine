@@ -1,7 +1,7 @@
 # Project file
 
-The Project file is a TOML file named `Project`, with no extension, next to the executable
-(`AddProjectConfig`, `src/csharp/configuration/KernelEngine.Configuration/ServiceCollectionExtensions.cs`).
+The Project file is a TOML file named `Project`, with no extension, in the project directory the
+SDK is built from (`EngineBuilder.Build`).
 The engine loads it into the `ke_configuration` store; how that works is in
 `architecture/configuration.md`. This document says how a key is addressed and which code reads it.
 
@@ -18,29 +18,16 @@ file against a list of keys.
 
 ## Which code reads a section
 
-No plugin reads the store. A factory takes its values as a `_config` struct whose defaults its
-header names, and its generated `<Class>Config` record is what a host registers, either in code or
-from a section of the store it names:
+No plugin reads the store. A factory takes its values as its `_config` struct, filled completely by
+the host. The C# SDK fills them from the store as it makes each part, and the C Pong does the same
+by hand; the keys the SDK reads are:
 
-```csharp
-.AddConfig(new GlfwWindowConfig { Title = "Pong", Width = 1280, Height = 720 })
-.AddConfig<Box2dPhysics2DConfig>("runtime.physics_2d")
-.AddConfig<DefaultRenderServiceConfig>("render", config => config with { ShaderDir = shaders })
-```
-
-A section's keys are the names of the config's fields; an absent key keeps the field's default, an
-enum is written as the name of its value (`present_mode = "fifo"`) and a vector as an array
-(`ConfigSectionExtensions`, `src/csharp/configuration/KernelEngine.Configuration/Generated/ConfigSection.g.cs`).
-The section a host names is its own choice; the records the engine generates are listed in the
-`configs` section of `scripts/api_domains.json`.
-
-Besides those records, `SceneRouterModule` reads `[project] default_scene` (`SceneRouterModule.cs`).
-
-## Keys read only by the command-line tool
-
-The `ke` tool parses the same file with a TOML library of its own, not through the store
-(`ProjectManifest`, `src/csharp/cli/KernelEngine.Cli/ProjectManifest.cs`). It reads `ke.modules`,
-an array of module ids it edits when it adds or removes a module; `input.actions`, a path to the
-`.input` file it appends actions to (`InputActionsFile.cs`); and any dotted path given to its
-`get config` and `set config` commands. It finds the file by walking up from the current directory
-(or `--project`) for a file named `Project` (`ProjectContext.cs`).
+| section | keys | read for |
+|---|---|---|
+| `runtime.window` | `title`, `width`, `height`, `fullscreen` | the window |
+| `runtime` | `fixed_dt`, `fixed_dt_max_accum`, `max_systems_per_phase` | the runtime |
+| `runtime.renderer` | `present_mode` (`fifo` or `mailbox`) | the window render target |
+| `runtime.physics_2d` | `gravity_x`, `gravity_y` | the 2D physics world |
+| `render` | `clear_color` | the render service |
+| `project` | `default_scene` | the scene `Engine.Run` opens without an argument |
+| `input` | the maps, actions and bindings under `input.map` | the input actions |

@@ -4,9 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- New runtime-native framework. Built example-by-example during R6
-         migration; copies from .Legacy only what's needed, marks native
-         candidates along the way. NO unsafe blocks. -->
+
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>KernelEngine.Framework</RootNamespace>
   </PropertyGroup>
@@ -25,7 +23,7 @@
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
     <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool\KernelEngine.TaskPool.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window\KernelEngine.Window.csproj" />
-    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" /> <!-- ke_render_service, handed back to the renderer -->
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />

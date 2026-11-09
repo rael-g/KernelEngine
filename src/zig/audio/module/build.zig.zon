@@ -6,7 +6,6 @@
     .dependencies = .{
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_audio_contract = .{ .path = "../../abi/audio_contract" },
-        .abi_scene_loader = .{ .path = "../../abi/scene_loader" },
         .abi_audio_components = .{ .path = "../../abi/audio_components" },
         .ke_result = .{ .path = "../../result" },
         .abi_audio = .{ .path = "../../abi/audio" },
