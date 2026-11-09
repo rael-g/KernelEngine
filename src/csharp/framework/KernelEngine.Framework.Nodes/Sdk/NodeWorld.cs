@@ -10,6 +10,14 @@ namespace KernelEngine.Framework.Nodes;
 /// </summary>
 public sealed class NodeWorld(INodeTypes types, Microsoft.Extensions.Logging.ILoggerFactory? logging = null)
 {
+    /// <summary>A reference to the input action named <paramref name="name"/>, resolved the first time a node reads it.</summary>
+    public static Native.ActionRef Action(string name)
+    {
+        var action = new Native.ActionRef();
+        action.Name = name;
+        return action;
+    }
+
     readonly Dictionary<string, ComponentId> _components = [];
     readonly Dictionary<Type, ComponentId> _events = [];
 

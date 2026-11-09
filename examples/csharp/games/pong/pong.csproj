@@ -16,6 +16,7 @@
     <Content Include="scenes/**/*.scene.toml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <AdditionalFiles Include="scenes/**/*.scene.toml" />
     <Content Include="../../../assets/sounds/*" Link="assets/sounds/%(Filename)%(Extension)">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
