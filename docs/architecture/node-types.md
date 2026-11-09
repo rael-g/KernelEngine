@@ -44,4 +44,4 @@ the SDK's `Node`; no pointer reaches the game's code.
 - A C# node type's field names: the snake case of its property names.
 - An event type registered by `NodeWorld.RegisterEvent<T>` is named by the full name of `T`.
 - Diagnostics: "KENG001" a node type that is not partial, "KENG002" an instance field that is not
-  readonly, "KENG003" an exported property a field table cannot describe, "KENG004" a string property without `[MaxLength]`.
+  readonly, "KENG003" an exported property a field table cannot describe, "KENG004" a string property without `[MaxLength]`, "KENG005" the instance handed out as `this`, read by a lambda or a local function, or awaited in an async method.

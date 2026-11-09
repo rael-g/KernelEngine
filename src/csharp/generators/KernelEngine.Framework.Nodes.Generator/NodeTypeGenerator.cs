@@ -11,8 +11,10 @@ namespace KernelEngine.Framework.Nodes.Generator;
 /// <summary>
 /// Completes every partial class marked <c>[NodeType]</c>: its partial properties become the fields of
 /// its nodes, laid out in one struct the node type registers, the exported ones in its field table;
-/// the value the constructor gives them is the value a node is born with; <c>Ready</c>, <c>Update</c>,
-/// <c>FixedUpdate</c> and every <c>[On&lt;T&gt;]</c> method become its behaviours. Everything it writes is a
+/// what <c>Initial()</c> writes to them is the value a node is born with; <c>Ready</c>, <c>Update</c>,
+/// <c>FixedUpdate</c> and every <c>[On&lt;T&gt;]</c> method become its behaviours. The instance is a cursor over
+/// the type's nodes, so <c>this</c> handed out, a lambda or local function reading the node, and an async
+/// instance method are errors. Everything it writes is a
 /// call to the node types' API.
 /// </summary>
 [Generator]
@@ -35,6 +37,10 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         "Property {0} of node type {1} is a {2}, which a scene cannot write; export a number, a bool, a vector, an ActionRef or an inline array of bytes",
         "KernelEngine.Nodes", DiagnosticSeverity.Error, true);
 
+    static readonly DiagnosticDescriptor Escape = new("KENG005", "A node type's instance does not escape",
+        "{0} keeps node type {1}'s instance past the node it is bound to; the instance moves to the next node when the behaviour does, so pass values, not the node",
+        "KernelEngine.Nodes", DiagnosticSeverity.Error, true);
+
     /// <inheritdoc/>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
@@ -42,8 +48,40 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         var types = context.SyntaxProvider.ForAttributeWithMetadataName(Attribute,
             static (node, _) => node is ClassDeclarationSyntax,
             static (ctx, _) => (Symbol: (INamedTypeSymbol)ctx.TargetSymbol, Syntax: (ClassDeclarationSyntax)ctx.TargetNode,
-                Name: (string)ctx.Attributes[0].ConstructorArguments[0].Value!));
-        context.RegisterSourceOutput(types, static (spc, t) => Emit(spc, t.Symbol, t.Syntax, t.Name));
+                Name: (string)ctx.Attributes[0].ConstructorArguments[0].Value!,
+                Escapes: Escapes((INamedTypeSymbol)ctx.TargetSymbol, (ClassDeclarationSyntax)ctx.TargetNode, ctx.SemanticModel)));
+        context.RegisterSourceOutput(types, static (spc, t) =>
+        {
+            foreach (var (what, at) in t.Escapes) spc.ReportDiagnostic(Diagnostic.Create(Escape, at, what, t.Symbol.Name));
+            Emit(spc, t.Symbol, t.Syntax, t.Name);
+        });
+    }
+
+    static ImmutableArray<(string What, Location At)> Escapes(INamedTypeSymbol type, ClassDeclarationSyntax syntax, SemanticModel model)
+    {
+        var found = ImmutableArray.CreateBuilder<(string, Location)>();
+        bool Instance(SyntaxNode node) => node is ThisExpressionSyntax or BaseExpressionSyntax
+            || (node is SimpleNameSyntax && model.GetSymbolInfo(node).Symbol is { IsStatic: false, Kind: SymbolKind.Field or SymbolKind.Property or SymbolKind.Method or SymbolKind.Event } member
+                && member.ContainingType is { } owner && Derives(type, owner));
+        foreach (var node in syntax.DescendantNodes())
+        {
+            if (node is ThisExpressionSyntax self && self.Parent is not MemberAccessExpressionSyntax { Expression: ThisExpressionSyntax } && self.Parent is not ConditionalAccessExpressionSyntax)
+                found.Add(("'this'", self.GetLocation()));
+            else if (node is AnonymousFunctionExpressionSyntax lambda && !lambda.Modifiers.Any(m => m.ValueText == "static") && lambda.Body.DescendantNodesAndSelf().Any(Instance))
+                found.Add(("A lambda reading the node", lambda.GetLocation()));
+            else if (node is LocalFunctionStatementSyntax local && !local.Modifiers.Any(m => m.ValueText == "static") && local.DescendantNodes().Any(Instance))
+                found.Add(($"Local function {local.Identifier.ValueText}", local.Identifier.GetLocation()));
+            else if (node is MethodDeclarationSyntax method && method.Modifiers.Any(m => m.ValueText == "async") && !method.Modifiers.Any(m => m.ValueText == "static"))
+                found.Add(($"Async method {method.Identifier.ValueText}", method.Identifier.GetLocation()));
+        }
+        return found.ToImmutable();
+    }
+
+    static bool Derives(INamedTypeSymbol type, INamedTypeSymbol owner)
+    {
+        for (var t = type; t is not null; t = t.BaseType)
+            if (SymbolEqualityComparer.Default.Equals(t, owner.OriginalDefinition)) return true;
+        return false;
     }
 
     static void Emit(SourceProductionContext spc, INamedTypeSymbol type, ClassDeclarationSyntax syntax, string name)
