@@ -29,6 +29,8 @@ Build output converges entirely under the given `--prefix` (e.g. `build/native/{
 
 **Every native test is a Zig test living inside the implementation file it covers.** There is no C++ test suite; the two GTest binaries that predated the move to Zig are gone. A plugin declares its tests with `b.addTest` against its own source, run via `b.addRunArtifact` and hung off a `b.step("test", ...)` — see any `src/zig/<plugin>/build.zig`.
 
+No test needs a human eye: every test answers by itself, in a gate or a test run, and the games are the only thing a person looks at. A feature or a game lands with its tests.
+
 An implementation has unit tests only, and every contract it depends on is a substitute configured in the test; it never reads the machine's files or runs another plugin. A test that composes real implementations is an integration test; it is written in the language whose surface it exercises — Zig or C for a native composition, C# for the managed layer.
 
 The root `test` step runs all of them. It cannot go stale: `Ctx.member` takes a required `.has_tests` / `.no_tests` argument, so a new plugin does not compile until that question is answered, and the plugin's tests are configured by the same `b.dependency` call as its library, so the two can never drift. Give a plugin a single test root that transitively imports its other files — a hand-written list of test roots lets a new test file go silently unrun, and lets two roots that import each other run the same test twice.
