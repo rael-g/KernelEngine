@@ -129,6 +129,7 @@ fn copyFields(source: []const abi_ecs.c.ke_component_field) error{OutOfMemory}![
             f.default_value.unnamed_0.s = try dupText(from.default_value.unnamed_0.s);
         }
         f.name = try dupText(from.name);
+        if (from.enum_count == 0) continue;
         if (from.enum_names) |names| {
             const copied = try heap.gpa.alloc(?[*:0]const u8, from.enum_count);
             @memset(copied, null);
@@ -1073,6 +1074,19 @@ test "a field table is copied, names and enum names with it, so the caller's may
     try testing.expectEqual(@as(u32, 0), meta.fields.?[0].offset);
     const names: [*]const ?[*:0]const u8 = @ptrCast(meta.fields.?[0].enum_names);
     try testing.expectEqualStrings("fast", std.mem.span(names[0].?));
+}
+
+test "a field with no enum names is copied without a list, whatever pointer came with the count of zero" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var none = [_]?[*:0]const u8{null};
+    const fields = [_]abi_ecs.c.ke_component_field{.{ .name = "name", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = 0, .size = 4, .enum_names = @ptrCast(&none), .enum_count = 0 }};
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "no_enum", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
+    var meta: abi_ecs.c.ke_component_meta = undefined;
+    try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "no_enum", &meta));
+    try testing.expect(meta.fields.?[0].enum_names == null);
 }
 
 test "componentRegister refuses a table describing bytes the component does not have" {
