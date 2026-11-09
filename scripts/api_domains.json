@@ -1011,6 +1011,11 @@
       "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
   },
   "extensions": {
+    "nodeBases": {
+      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated/Nodes",
+      "namespace": "KernelEngine.Framework.Nodes",
+      "usings": ["KernelEngine.Common", "KernelEngine.Render", "KernelEngine.Physics", "KernelEngine.Audio.Native"]
+    },
     "resultCodes": {
       "out": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",
       "general": "InvalidOperationException",

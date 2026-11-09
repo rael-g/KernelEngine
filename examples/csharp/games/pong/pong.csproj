@@ -40,5 +40,7 @@
     <ProjectReference Include="..\..\..\..\src\csharp\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
     <ProjectReference Include="..\..\..\..\src\csharp\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
+    <ProjectReference Include="..\..\..\..\src\csharp\generators\KernelEngine.Framework.Nodes.Generator\KernelEngine.Framework.Nodes.Generator.csproj"
+                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>
