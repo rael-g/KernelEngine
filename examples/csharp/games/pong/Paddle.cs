@@ -29,7 +29,7 @@ partial class Paddle : Body2D
 
     void FixedUpdate()
     {
-        var vy = Axis(ref MoveAction) * Speed;
+        var vy = Axis(MoveAction) * Speed;
         var maxY = FieldHalfHeight - WallHalfThickness - HalfHeight;
         if (vy > 0 && Transform2d.Position.Y >= maxY) vy = 0;
         if (vy < 0 && Transform2d.Position.Y <= -maxY) vy = 0;
