@@ -31,8 +31,8 @@ from the bytes the type was registered with, unless a spawn gives the component.
 **One C# instance stands for every node of its type.** `NodeWorld.Register` hands the instance to
 `RegisterInto`, which the generator writes; a behaviour binds the instance to the node `next`
 moves to, so a partial property reads and writes that node's fields. Outside a behaviour the
-properties are the bytes a node is born with, which is why the value the constructor gives them
-becomes the type's initial value.
+properties are the bytes a node is born with, which is why what `Initial()` writes to them, once
+when the type is registered, becomes the type's initial value.
 
 **The generator writes calls, not memory.** What it emits uses only `RegisterType`, `INodeCtx` and
 the SDK's `Node`; no pointer reaches the game's code.
@@ -44,4 +44,4 @@ the SDK's `Node`; no pointer reaches the game's code.
 - A C# node type's field names: the snake case of its property names.
 - An event type registered by `NodeWorld.RegisterEvent<T>` is named by the full name of `T`.
 - Diagnostics: "KENG001" a node type that is not partial, "KENG002" an instance field that is not
-  readonly, "KENG003" an exported property a field table cannot describe.
+  readonly, "KENG003" an exported property a field table cannot describe, "KENG004" a string property without `[MaxLength]`.

@@ -6,7 +6,9 @@ namespace KernelEngine.Framework.Nodes;
 /// <summary>
 /// A node type as C#: one instance stands for every node of the type, and while a behaviour runs it
 /// is bound to the node the behaviour is visiting, so its properties are that node's memory and its
-/// methods act on that node. Outside a behaviour its properties are the value a node is born with.
+/// methods act on that node. Outside a behaviour its properties are the value a node is born with:
+/// a method <c>void Initial()</c> runs once per type, when the type is registered, and what it writes
+/// is the type's initial value; it never runs when a node is born.
 /// </summary>
 public abstract class Node
 {
