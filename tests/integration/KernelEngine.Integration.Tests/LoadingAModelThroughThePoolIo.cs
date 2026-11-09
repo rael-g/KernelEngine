@@ -4,8 +4,6 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Io.Pool;
 using KernelEngine.TaskPool.Enki;
 
-using Microsoft.Extensions.DependencyInjection;
-
 using Xunit;
 
 namespace KernelEngine.Integration.Tests;
@@ -15,13 +13,10 @@ public class LoadingAModelThroughThePoolIo
     [Fact]
     public void AGltfAndTheBufferItNamesAreReadIntoMeshesAndMaterials()
     {
-        using var services = new ServiceCollection()
-            .AddEnkiTaskPool(workerCount: uint.MaxValue)
-            .AddStdFileSystem(root: ".")
-            .AddPoolIo()
-            .AddAssimpAssetLoader()
-            .BuildServiceProvider();
-        var loader = services.GetRequiredService<AssimpAssetLoader>();
+        using var pool = new EnkiTaskPool(null, uint.MaxValue);
+        using var files = new StdFileSystem(null, ".");
+        using var io = new PoolIo(null, pool, files);
+        using var loader = new AssimpAssetLoader(null, io);
 
         using var model = loader.LoadModel(Path.Combine(AppContext.BaseDirectory, "assets", "Box.gltf"));
 

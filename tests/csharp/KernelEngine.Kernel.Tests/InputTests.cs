@@ -30,12 +30,6 @@ public class InputTests
     }
 
     [Fact]
-    public void Input_Current_ThrowsWhenNotSet()
-    {
-        Assert.Throws<InvalidOperationException>(() => InputContext.Current);
-    }
-
-    [Fact]
     public void InputReaderExtensions_WorkCorrectly()
     {
         using var input = new Input();

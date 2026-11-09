@@ -14,8 +14,7 @@ works inside is on the generated page of its file. Contracts are under `src/c/ru
 | module | none; `ke_runtime_module_params` | the host or a plugin | the runtime, in `on_load` | components and systems it registers |
 | system | `ke_runtime_system_params` | a module | `ke_system_ctx`, a delta time | structural changes, recorded in `ke_ecs_commands` |
 
-The runtime borrows the ecs and the task pool from the host and never frees them. In the managed
-layer `LoadModules` registers every `IRuntimeModule` of the service provider, in the order they were added.
+The runtime borrows the ecs and the task pool from the host and never frees them.
 
 ## A tick
 
