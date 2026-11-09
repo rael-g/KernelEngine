@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\KernelEngine.Framework\KernelEngine.Framework.csproj" />
+    <ProjectReference Include="..\..\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
+    <ProjectReference Include="..\..\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_framework" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+</Project>
