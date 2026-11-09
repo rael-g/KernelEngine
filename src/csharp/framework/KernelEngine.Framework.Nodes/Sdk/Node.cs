@@ -54,6 +54,23 @@ public abstract class Node
     /// <summary><paramref name="node"/>'s component registered under <paramref name="name"/>.</summary>
     protected ref T Component<T>(Entity node, string name) where T : unmanaged => ref Ctx.Component<T>(node, World.Component(name));
 
+    /// <summary><paramref name="node"/>'s component of type <typeparamref name="T"/>.</summary>
+    protected ref T Get<T>(Entity node) where T : unmanaged, KernelEngine.Interop.IComponentName =>
+        ref Ctx.Component<T>(node, World.Component(T.RegisteredName));
+
+    /// <summary>The component of type <typeparamref name="T"/> of the current node's child named <paramref name="name"/>.</summary>
+    /// <exception cref="InvalidOperationException">The node has no child of that name.</exception>
+    protected ref T Child<T>(string name) where T : unmanaged, KernelEngine.Interop.IComponentName
+    {
+        var child = Child(name);
+        if (child == default) throw new InvalidOperationException($"the node has no child named {name}");
+        return ref Get<T>(child);
+    }
+
+    /// <summary>Records a node of the type named <paramref name="type"/> under the current node, born holding <paramref name="component"/>.</summary>
+    protected Entity Spawn<T>(string type, string name, T component) where T : unmanaged, KernelEngine.Interop.IComponentName =>
+        Ctx.Spawn(World.Type(type), name, Self, [NodeComponent.Of(World.Component(T.RegisteredName), component)]);
+
     /// <summary>The child of the current node named <paramref name="name"/>; the default entity when it has none.</summary>
     protected Entity Child(string name) => Ctx.Child(Self, name);
 

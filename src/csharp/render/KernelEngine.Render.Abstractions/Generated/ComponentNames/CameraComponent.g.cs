@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Render;
 
-public partial struct CameraComponent
+public partial struct CameraComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "camera";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

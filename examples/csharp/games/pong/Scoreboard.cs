@@ -28,9 +28,5 @@ partial class Scoreboard : Node
     [On<BallLaunched>]
     void OnLaunched(BallLaunched _) => Show("ScoreHint", "");
 
-    void Show(string child, string text)
-    {
-        var node = Child(child);
-        if (node != default) Component<LabelComponent>(node, "label").TextText = text;
-    }
+    void Show(string child, string text) => Child<LabelComponent>(child).TextText = text;
 }

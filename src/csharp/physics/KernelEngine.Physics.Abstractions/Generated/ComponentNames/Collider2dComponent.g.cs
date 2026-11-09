@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Physics;
 
-public partial struct Collider2dComponent
+public partial struct Collider2dComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "collider2d";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

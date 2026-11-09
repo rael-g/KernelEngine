@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Render;
 
-public partial struct LabelComponent
+public partial struct LabelComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "label";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

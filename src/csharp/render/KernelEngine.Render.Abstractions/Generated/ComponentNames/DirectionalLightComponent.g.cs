@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Render;
 
-public partial struct DirectionalLightComponent
+public partial struct DirectionalLightComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "directional_light";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

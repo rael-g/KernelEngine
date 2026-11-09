@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Audio.Native;
 
-public partial struct SoundComponent
+public partial struct SoundComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "sound";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

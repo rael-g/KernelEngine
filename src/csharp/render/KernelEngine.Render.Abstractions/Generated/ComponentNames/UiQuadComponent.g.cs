@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Render;
 
-public partial struct UiQuadComponent
+public partial struct UiQuadComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "ui_quad";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }
