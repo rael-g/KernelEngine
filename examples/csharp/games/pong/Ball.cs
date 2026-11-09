@@ -1,8 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.Numerics;
 
-using KernelEngine.Audio;
-using KernelEngine.Audio.Native;
 using KernelEngine.Framework.Nodes;
 
 namespace Pong;
@@ -60,7 +58,7 @@ partial class Ball(Game game) : Body2D
 
         var bounced = LastVelocity.X != 0 && (Body2d.Velocity.X > 0) != (LastVelocity.X > 0);
         LastVelocity = Body2d.Velocity;
-        if (bounced) Play(HitSound, HitVolume);
+        if (bounced) PlaySound(HitSound, HitVolume);
 
         var leftScored = Transform2d.Position.X > FieldHalfWidth + GoalLineMargin;
         if (!leftScored && Transform2d.Position.X >= -FieldHalfWidth - GoalLineMargin) return;
@@ -69,7 +67,7 @@ partial class Ball(Game game) : Body2D
         Body2d.Velocity = Vector2.Zero;
         LastVelocity = Vector2.Zero;
         AwaitingLaunch = true;
-        Play(ScoreSound, ScoreVolume);
+        PlaySound(ScoreSound, ScoreVolume);
     }
 
     void Serve()
@@ -82,15 +80,5 @@ partial class Ball(Game game) : Body2D
         var dirY = (Random.Shared.NextSingle() - 0.5f) * ServeSpread;
         Body2d.Velocity = Vector2.Normalize(new Vector2(dirX, dirY)) * InitialSpeed;
         LastVelocity = Body2d.Velocity;
-    }
-
-    void Play(string path, float volume)
-    {
-        var sound = EngineNodeTypes.SoundNodeInitial;
-        sound.Path = path;
-        sound.Volume = volume;
-        sound.Playing = true;
-        sound.Release = SoundRelease.WhenDone;
-        Spawn("sound", "Sound", sound);
     }
 }

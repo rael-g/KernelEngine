@@ -1,3 +1,5 @@
+using KernelEngine.Audio;
+using KernelEngine.Audio.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Framework.Nodes.Native;
 
@@ -74,9 +76,26 @@ public abstract class Node
         return ref Get<T>(child);
     }
 
-    /// <summary>Records a node of the type named <paramref name="type"/> under the current node, born holding <paramref name="component"/>.</summary>
-    protected Entity Spawn<T>(string type, string name, T component) where T : unmanaged, KernelEngine.Interop.IComponentName =>
-        Ctx.Spawn(World.Type(type), name, Self, [NodeComponent.Of(World.Component(T.RegisteredName), component)]);
+    /// <summary>
+    /// Records a node under the current node of the engine node type named after <typeparamref name="T"/>
+    /// (a sound for <c>SoundComponent</c>), born holding <paramref name="component"/>.
+    /// </summary>
+    protected Entity Spawn<T>(string name, T component) where T : unmanaged, KernelEngine.Interop.IComponentName =>
+        Ctx.Spawn(World.Type(T.RegisteredName), name, Self, [NodeComponent.Of(World.Component(T.RegisteredName), component)]);
+
+    /// <summary>
+    /// Plays the sound file at <paramref name="path"/> once at <paramref name="volume"/>, as a sound node
+    /// under the current node that is destroyed when the sound ends.
+    /// </summary>
+    protected Entity PlaySound(string path, float volume)
+    {
+        var sound = EngineNodeTypes.SoundNodeInitial;
+        sound.Path = path;
+        sound.Volume = volume;
+        sound.Playing = true;
+        sound.Release = SoundRelease.WhenDone;
+        return Spawn("Sound", sound);
+    }
 
     /// <summary>The child of the current node named <paramref name="name"/>; the default entity when it has none.</summary>
     protected Entity Child(string name) => Ctx.Child(Self, name);
