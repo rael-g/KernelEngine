@@ -237,7 +237,7 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
 
 ke_result pong_load_scene(pong_game *game, ke_ecs_commands *commands, const char *path)
 {
-    ke_result spawned = game->types->spawn(game->types, commands, game->node, "Scene", KE_ENTITY_INVALID, &game->scene);
+    ke_result spawned = game->types->spawn(game->types, commands, game->node, "Scene", KE_ENTITY_INVALID, NULL, 0, &game->scene);
     if (spawned != KE_OK) return spawned;
     return game->scenes->instantiate(game->scenes, path, game->scene, commands, NULL);
 }

@@ -238,18 +238,29 @@ fn resolve(actions: *abi_input_actions.c.ke_input_actions, action: *abi_framewor
     return if (action.id < 0) null else action.id;
 }
 
-fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out: *Entity) abi_result.c.ke_result {
+fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, components_in: ?[*]const abi_framework.c.ke_node_component, count: u32, out: *Entity) abi_result.c.ke_result {
     const t = findType(s, type_cid) orelse {
         log.warn("node types: spawning a type never registered ({d})", .{type_cid});
         return R.code(error.NotFound);
     };
+    const components: []const abi_framework.c.ke_node_component = if (count == 0) &.{} else (components_in orelse return R.code(error.InvalidArgument))[0..count];
+    for (components) |given| {
+        if (given.data == null or std.mem.indexOfScalar(Cid, t.columns, given.component) == null) {
+            log.warn("node types: a spawn gives component {d}, which its type does not carry", .{given.component});
+            return R.code(error.InvalidArgument);
+        }
+    }
     var node: Entity = invalid;
     var rc = s.tree.create_node_deferred.?(s.tree, name, under, commands, &node);
     if (rc != R.ok) return rc;
     rc = commands.attach.?(commands, node, t.tag, null, 0);
     if (rc != R.ok) return rc;
     for (t.columns, t.prototypes) |c, proto| {
-        rc = commands.attach.?(commands, node, c, proto.ptr, proto.len);
+        var data: ?*const anyopaque = proto.ptr;
+        for (components) |given| {
+            if (given.component == c) data = given.data;
+        }
+        rc = commands.attach.?(commands, node, c, data, proto.len);
         if (rc != R.ok) return rc;
     }
     const status: NodeStatus = .{ .readied = 0 };
@@ -260,11 +271,11 @@ fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, nam
 }
 
 /// Slot `spawn` of the ctx: the node types' spawn with the behaviour's commands.
-fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8, under: Entity, components: ?[*]const abi_framework.c.ke_node_component, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
     const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
     const out = out_node orelse return R.code(error.InvalidArgument);
     const commands = w.api.commands orelse return R.code(error.InvalidArgument);
-    return spawnNode(w.behaviour.owner.state, commands, type_cid, name, under, out);
+    return spawnNode(w.behaviour.owner.state, commands, type_cid, name, under, components, count, out);
 }
 
 /// Slot `destroy`. Records the destruction through the scene tree.
@@ -540,11 +551,11 @@ fn vtRegisterEvent(self: ?*abi_framework.c.ke_node_types, params_in: ?*const abi
 /// `State`.
 /// Slot `spawn`. Records the node through the scene tree, then its type's components, each a copy
 /// of its prototype, and a status not yet readied.
-fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ecs_commands, type_cid: Cid, name: ?[*:0]const u8, under: Entity, components: ?[*]const abi_framework.c.ke_node_component, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
     const commands = commands_in orelse return R.code(error.InvalidArgument);
     const out = out_node orelse return R.code(error.InvalidArgument);
-    return spawnNode(s, commands, type_cid, name, under, out);
+    return spawnNode(s, commands, type_cid, name, under, components, count, out);
 }
 
 /// Slot `find_type`. Looks up the tag the type was registered under in the ecs.
@@ -1020,7 +1031,7 @@ test "raise records an entity carrying the event and refuses a size that is not 
 fn spawnPaddle(ctx: ?*abi_framework.c.ke_node_ctx, user: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const cid: *const Cid = @ptrCast(@alignCast(user.?));
     var node: Entity = invalid;
-    return ctx.?.spawn.?(ctx, cid.*, "Paddle", invalid, &node);
+    return ctx.?.spawn.?(ctx, cid.*, "Paddle", invalid, null, 0, &node);
 }
 
 test "spawn records a node through the scene tree with each component of its type and its status" {
@@ -1056,10 +1067,10 @@ test "spawn outside a behaviour records into the given commands and refuses a ty
     try commands.init();
     defer commands.deinit();
     var node: Entity = invalid;
-    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &node));
+    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, null, 0, &node));
     try testing.expectEqual(@as(Entity, 32), node);
     try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 32))).times(4);
-    try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid + 99, "X", invalid, &node));
+    try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid + 99, "X", invalid, null, 0, &node));
 }
 
 fn countBare(ctx: ?*abi_framework.c.ke_node_ctx, user: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
@@ -1198,8 +1209,31 @@ test "a type's initial bytes are the fields each spawned node starts with" {
     defer commands.deinit();
     _ = commands.when(.attach).does(capturePaddle);
     var node: Entity = invalid;
-    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &node));
+    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, null, 0, &node));
     try testing.expectEqual(initial, attached_paddle);
+}
+
+test "a component given to the spawn replaces its type's initial value, and one the type does not carry is refused" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const initial: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.initial = &initial;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    _ = commands.when(.attach).does(capturePaddle);
+    const given: Paddle = .{ .speed = 3, .visits = 9 };
+    const components = [_]abi_framework.c.ke_node_component{.{ .component = paddle_column, .data = &given }};
+    var node: Entity = invalid;
+    try R.check(f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &components, 1, &node));
+    try testing.expectEqual(given, attached_paddle);
+    const foreign = [_]abi_framework.c.ke_node_component{.{ .component = 999, .data = &given }};
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &foreign, 1, &node));
 }
 
 test "initial bytes without fields are refused" {

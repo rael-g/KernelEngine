@@ -65,10 +65,10 @@ pub const NodeCtx = struct {
                 }
             }.call,
             .spawn = &struct {
-                fn call(self: ?*c.ke_node_ctx, a0: c.ke_component_id, a1: ?[*:0]const u8, a2: c.ke_entity, a3: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_component_id, a1: ?[*:0]const u8, a2: c.ke_entity, a3: ?[*]const c.ke_node_component, a4: u32, a5: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.spawn(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed)), a2) catch |failure| return resultOf(failure);
-                    (a3 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.spawn(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed)), a2, if (a3) |items| items[0..a4] else &.{}) catch |failure| return resultOf(failure);
+                    (a5 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -133,9 +133,9 @@ pub const NodeCtx = struct {
 
     /// Records a node of type named name under parent, its fields and the components its type names
     /// in `with` holding their declared defaults.
-    pub fn spawn(self: NodeCtx, @"type": c.ke_component_id, name: [:0]const u8, parent_: c.ke_entity) Error!c.ke_entity {
+    pub fn spawn(self: NodeCtx, @"type": c.ke_component_id, name: [:0]const u8, parent_: c.ke_entity, components: []const c.ke_node_component) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
-        try checkResult(self.ptr.spawn.?(self.ptr, @"type", name.ptr, parent_, &written));
+        try checkResult(self.ptr.spawn.?(self.ptr, @"type", name.ptr, parent_, components.ptr, @intCast(components.len), &written));
         return written;
     }
 
@@ -185,10 +185,10 @@ pub const NodeTypes = struct {
                 }
             }.call,
             .spawn = &struct {
-                fn call(self: ?*c.ke_node_types, a0: ?*abi_ecs.c.ke_ecs_commands, a1: c.ke_component_id, a2: ?[*:0]const u8, a3: c.ke_entity, a4: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_node_types, a0: ?*abi_ecs.c.ke_ecs_commands, a1: c.ke_component_id, a2: ?[*:0]const u8, a3: c.ke_entity, a4: ?[*]const c.ke_node_component, a5: u32, a6: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.spawn(state, a0, a1, std.mem.span(a2 orelse return resultOf(error.Failed)), a3) catch |failure| return resultOf(failure);
-                    (a4 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.spawn(state, a0, a1, std.mem.span(a2 orelse return resultOf(error.Failed)), a3, if (a4) |items| items[0..a5] else &.{}) catch |failure| return resultOf(failure);
+                    (a6 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -234,9 +234,9 @@ pub const NodeTypes = struct {
     /// Records a node of type named name under parent into commands, its fields and the components
     /// its type names in `with` holding their declared defaults. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
-    pub fn spawn(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": c.ke_component_id, name: [:0]const u8, parent: c.ke_entity) Error!c.ke_entity {
+    pub fn spawn(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": c.ke_component_id, name: [:0]const u8, parent: c.ke_entity, components: []const c.ke_node_component) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
-        try checkResult(self.ptr.spawn.?(self.ptr, commands, @"type", name.ptr, parent, &written));
+        try checkResult(self.ptr.spawn.?(self.ptr, commands, @"type", name.ptr, parent, components.ptr, @intCast(components.len), &written));
         return written;
     }
 
@@ -300,6 +300,7 @@ pub const SceneHierarchy = struct {
 
 };
 
+pub const NodeComponent = c.ke_node_component;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;

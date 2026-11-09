@@ -22,6 +22,14 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
+/// A component a spawned node starts with in place of its type's initial value.
+pub const ke_node_component = extern struct {
+    /// One of the components the type carries.
+    component: ke_component_id = std.mem.zeroes(ke_component_id),
+    /// Its registered size of bytes, copied by the spawn.
+    data: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+};
+
 /// An input action named by a node's fields and resolved the first time a behaviour reads it. A
 /// scene writes its name; zeroed memory is a reference not yet resolved.
 pub const ke_action_ref = extern struct {
@@ -107,7 +115,7 @@ pub const ke_node_ctx = extern struct {
     pressed: ?*const fn (?*ke_node_ctx, ?*ke_action_ref) callconv(.c) bool = null,
     /// Records a node of type named name under parent, its fields and the components its type names
     /// in `with` holding their declared defaults.
-    spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Records the destruction of node and its descendants.
     destroy: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Records data as an event of type event, delivered to the on handlers of the PostUpdate of
@@ -129,7 +137,7 @@ pub const ke_node_types = extern struct {
     /// Records a node of type named name under parent into commands, its fields and the components
     /// its type names in `with` holding their declared defaults. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
-    spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the type registered under name.
     find_type: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the component registered under name, an engine component named by its

@@ -13,6 +13,13 @@ extern "C"
 {
 #endif
 
+    /// A component a spawned node starts with in place of its type's initial value.
+    typedef struct ke_node_component
+    {
+        ke_component_id component; ///< One of the components the type carries.
+        const void     *data;      ///< [borrowed] Its registered size of bytes, copied by the spawn.
+    } ke_node_component;
+
     typedef struct ke_node_ctx ke_node_ctx;
 
 #define KE_ACTION_NAME_MAX 32
@@ -93,10 +100,14 @@ extern "C"
         /// components its type names in `with` holding their declared defaults.
         /// @param name   [utf8]
         /// @param parent KE_ENTITY_INVALID places it at the root.
+        /// @param components [array_of:component_count, default:empty] Components the node starts
+        ///                   with in place of its type's initial values.
         /// @param out_node [out] Usable as a reference at once; the node exists once the commands
         ///                 are applied.
-        /// @return KE_OK; KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
-        ke_result (*spawn)(ke_node_ctx *self, ke_component_id type, const char *name, ke_entity parent, ke_entity *out_node);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry;
+        ///         KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
+        ke_result (*spawn)(ke_node_ctx *self, ke_component_id type, const char *name, ke_entity parent,
+                           const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
 
         /// Records the destruction of @p node and its descendants.
         /// @return KE_OK, or the queue's code.
@@ -187,11 +198,14 @@ extern "C"
         /// @param commands The queue the node is recorded into.
         /// @param name     [utf8]
         /// @param parent   KE_ENTITY_INVALID places it at the root.
+        /// @param components [array_of:component_count, default:empty] Components the node starts
+        ///                   with in place of its type's initial values.
         /// @param out_node [out] Usable as a reference at once; the node exists once the commands
         ///                 are applied.
-        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands; KE_RESULT_NOT_FOUND for a
-        ///         type never registered, or the queue's code.
-        ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name, ke_entity parent, ke_entity *out_node);
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands or a component the type
+        ///         does not carry; KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
+        ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name,
+                           ke_entity parent, const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
 
         /// The id of the type registered under @p name.
         /// @param name [utf8] The name its desc gave, `node` for the base type.

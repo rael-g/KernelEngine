@@ -216,7 +216,7 @@ fn processEntry(load: *Load, base_dir: []const u8, tbl: *c.toml_table_t, names: 
     }).cid;
 
     var node: Entity = invalid;
-    try R.check(s.types.spawn.?(s.types, load.commands, tag, name, parent, &node));
+    try R.check(s.types.spawn.?(s.types, load.commands, tag, name, parent, null, 0, &node));
 
     var pending: std.ArrayList(Pending) = .empty;
     defer freePending(&pending);
@@ -357,7 +357,7 @@ fn spawnNode(args: zsub.For(abi_framework.c.ke_node_types).Args(.spawn)) abi_res
     @memcpy(row.name[0..name.len], name);
     spawned[spawned_count] = row;
     spawned_count += 1;
-    args[5].?.* = 100 + spawned_count;
+    args[7].?.* = 100 + spawned_count;
     return R.ok;
 }
 
