@@ -3,7 +3,9 @@ version = 2
 
 [[entity]]
 name = "Root"
-type = "pong.wall"
+type = "body2d"
+[entity.body2d]
+type = "static"
 
 [[entity]]
 name   = "Shape"

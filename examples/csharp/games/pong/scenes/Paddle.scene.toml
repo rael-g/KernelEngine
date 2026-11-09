@@ -4,6 +4,8 @@ version = 2
 [[entity]]
 name = "Root"
 type = "pong.paddle"
+[entity.body2d]
+type = "kinematic"
 
 [[entity]]
 name   = "Shape"

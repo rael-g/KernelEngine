@@ -32,7 +32,7 @@ library a plugin routes logs under that library's own name.
 from the container, so a native line is logged under the category of its scope, at the
 `Microsoft.Extensions.Logging` level of the same name, beside every managed line.
 
-**The filter and the output are the host's.** The host composes them with `AddLogging`, as any
+**The filter and the output are the host's.** The host composes them with the logging builder, as any
 .NET application does; a line below the level it set is dropped, native or managed.
 
 ## What the parts agree on without a contract
