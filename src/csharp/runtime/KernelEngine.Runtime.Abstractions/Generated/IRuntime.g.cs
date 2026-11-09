@@ -19,7 +19,7 @@ public delegate void ModuleUnload(IRuntime runtime);
 /// <summary>One call of a system body. The runtime calls it once per tick the system's phase runs, or once per slice when the system declared per_entity. A body runs on a worker thread; the code it returns is carried to the thread driving the tick, which tick() then fails with, and the runtime logs the system's name. The remaining bodies of the same wave still run — they were already dispatched — but no later phase of that tick starts.</summary>
 /// <param name="ctx">The body's only doorway to component memory for this call. Opaque; pass it to the entry points that take one.</param>
 /// <param name="dt">Seconds since the previous tick, or the fixed timestep in the three fixed phases.</param>
-public delegate void SystemExecute(nint ctx, float dt);
+public delegate void SystemExecute(ISystemCtx ctx, float dt);
 
 /// <summary>The runtime contract game code depends on, so a caller names a capability rather than the <see cref="Runtime"/> that carries it.</summary>
 public interface IRuntime : IDisposable
@@ -73,5 +73,5 @@ public interface IRuntime : IDisposable
     bool ExitRequested();
     /// <summary>The queue the host records structural changes into between ticks, as a system records into its own; the next tick applies it before any phase runs. Only the thread that ticks records into it, and never during a tick.</summary>
     /// <returns>The queue, owned by the runtime.</returns>
-    nint Commands();
+    IEcsCommands Commands();
 }

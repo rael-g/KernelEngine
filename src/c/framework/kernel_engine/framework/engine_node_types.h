@@ -36,33 +36,33 @@ static const ke_collider2d_component ke_collider2d_node_initial = { .half_extent
 static const ke_sound_component ke_sound_node_initial = { .volume = 1.0f, .pitch = 1.0f };
 
 /// The components of the ambient light node type and how they are born.
-static const ke_node_with ke_ambient_light_node_with[] = { { "ambient_light", &ke_ambient_light_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_ambient_light_node_with[] = { { "ambient_light", &ke_ambient_light_node_initial, sizeof ke_ambient_light_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the body node type and how they are born.
-static const ke_node_with ke_body2d_node_with[] = { { "body2d", &ke_body2d_node_initial }, { "transform2d", &ke_transform2d_node_initial } };
+static const ke_node_with ke_body2d_node_with[] = { { "body2d", &ke_body2d_node_initial, sizeof ke_body2d_node_initial }, { "transform2d", &ke_transform2d_node_initial, sizeof ke_transform2d_node_initial } };
 /// The components of the camera node type and how they are born.
-static const ke_node_with ke_camera_node_with[] = { { "camera", &ke_camera_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_camera_node_with[] = { { "camera", &ke_camera_node_initial, sizeof ke_camera_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the collider node type and how they are born.
-static const ke_node_with ke_collider2d_node_with[] = { { "collider2d", &ke_collider2d_node_initial }, { "transform2d", &ke_transform2d_node_initial } };
+static const ke_node_with ke_collider2d_node_with[] = { { "collider2d", &ke_collider2d_node_initial, sizeof ke_collider2d_node_initial }, { "transform2d", &ke_transform2d_node_initial, sizeof ke_transform2d_node_initial } };
 /// The components of the directional light node type and how they are born.
-static const ke_node_with ke_directional_light_node_with[] = { { "directional_light", &ke_directional_light_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_directional_light_node_with[] = { { "directional_light", &ke_directional_light_node_initial, sizeof ke_directional_light_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the label node type and how they are born.
-static const ke_node_with ke_label_node_with[] = { { "label", &ke_label_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_label_node_with[] = { { "label", &ke_label_node_initial, sizeof ke_label_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the mesh node type and how they are born.
-static const ke_node_with ke_mesh_node_with[] = { { "mesh", &ke_mesh_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_mesh_node_with[] = { { "mesh", &ke_mesh_node_initial, sizeof ke_mesh_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the point light node type and how they are born.
-static const ke_node_with ke_point_light_node_with[] = { { "point_light", &ke_point_light_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_point_light_node_with[] = { { "point_light", &ke_point_light_node_initial, sizeof ke_point_light_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the skybox node type and how they are born.
-static const ke_node_with ke_skybox_node_with[] = { { "skybox", NULL }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_skybox_node_with[] = { { "skybox", NULL, 0 }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the sound node type and how they are born.
-static const ke_node_with ke_sound_node_with[] = { { "sound", &ke_sound_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_sound_node_with[] = { { "sound", &ke_sound_node_initial, sizeof ke_sound_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the spot light node type and how they are born.
-static const ke_node_with ke_spot_light_node_with[] = { { "spot_light", &ke_spot_light_node_initial }, { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_spot_light_node_with[] = { { "spot_light", &ke_spot_light_node_initial, sizeof ke_spot_light_node_initial }, { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 /// The components of the sprite node type and how they are born.
-static const ke_node_with ke_sprite2d_node_with[] = { { "sprite2d", &ke_sprite2d_node_initial }, { "transform2d", &ke_transform2d_node_initial } };
+static const ke_node_with ke_sprite2d_node_with[] = { { "sprite2d", &ke_sprite2d_node_initial, sizeof ke_sprite2d_node_initial }, { "transform2d", &ke_transform2d_node_initial, sizeof ke_transform2d_node_initial } };
 /// The components of the 2D node type and how they are born.
-static const ke_node_with ke_transform2d_node_with[] = { { "transform2d", &ke_transform2d_node_initial } };
+static const ke_node_with ke_transform2d_node_with[] = { { "transform2d", &ke_transform2d_node_initial, sizeof ke_transform2d_node_initial } };
 /// The components of the 3D node type and how they are born.
-static const ke_node_with ke_transform_node_with[] = { { "transform", &ke_transform_node_initial } };
+static const ke_node_with ke_transform_node_with[] = { { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 
 /// The node types the engine's components make, for a host to register through `register_type`.
 static const ke_node_type_desc ke_engine_node_types[] = {

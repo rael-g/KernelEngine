@@ -91,7 +91,7 @@ static const ke_component_params pong_scoreboard_params = KE_COMPONENT(pong_scor
 static const ke_component_params pong_goal_scored_params = KE_COMPONENT_UNTABLED(pong_goal_scored, "pong.goal_scored");
 static const ke_component_params pong_ball_launched_params = KE_COMPONENT_UNTABLED(pong_ball_launched, "pong.ball_launched");
 
-static const ke_node_with pong_body_with[] = { { KE_COMPONENT_NAME_BODY2D, &ke_body2d_node_initial }, { KE_COMPONENT_NAME_TRANSFORM2D, &ke_transform2d_node_initial } };
+static const ke_node_with pong_body_with[] = { { KE_COMPONENT_NAME_BODY2D, &ke_body2d_node_initial, sizeof ke_body2d_node_initial }, { KE_COMPONENT_NAME_TRANSFORM2D, &ke_transform2d_node_initial, sizeof ke_transform2d_node_initial } };
 
 static ke_label_component *child_label(ke_node_ctx *ctx, pong_game *game, const char *name)
 {
@@ -121,7 +121,7 @@ static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *path, float
     sound.volume = volume;
     sound.playing = true;
     sound.release = KE_SOUND_RELEASE_WHEN_DONE;
-    const ke_node_component components[] = { { game->sound, &sound } };
+    const ke_node_component components[] = { { game->sound, &sound, sizeof sound } };
     ke_entity node = KE_ENTITY_INVALID;
     return ctx->spawn(ctx, game->sound_type, "Sound", ctx->self, components, 1, &node);
 }
@@ -213,11 +213,16 @@ static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
     return KE_OK;
 }
 
-static ke_result scoreboard_on_goal(ke_node_ctx *ctx, void *user_data)
+static ke_result scoreboard_on(ke_node_ctx *ctx, void *user_data)
 {
     pong_game *game = user_data;
     KE_FOR_EACH_NODE(ctx, pong_scoreboard, board)
     {
+        if (ctx->event_type == game->ball_launched)
+        {
+            label_text(ctx, game, "ScoreHint", "");
+            continue;
+        }
         const pong_goal_scored *goal = ctx->event;
         if (goal->left_scored) board->left++;
         else board->right++;
@@ -228,14 +233,6 @@ static ke_result scoreboard_on_goal(ke_node_ctx *ctx, void *user_data)
         label_text(ctx, game, "ScoreRight", digits);
         label_text(ctx, game, "ScoreHint", PONG_LAUNCH_HINT);
     }
-    return KE_OK;
-}
-
-static ke_result scoreboard_on_launch(ke_node_ctx *ctx, void *user_data)
-{
-    pong_game *game = user_data;
-    while (ctx->next(ctx))
-        label_text(ctx, game, "ScoreHint", "");
     return KE_OK;
 }
 
@@ -254,7 +251,7 @@ ke_result pong_open_slot(pong_game *game, ke_ecs_commands *commands, const char 
 {
     ke_scene_slot_component slot = { 0 };
     snprintf(slot.path, sizeof slot.path, "%s", path);
-    const ke_node_component components[] = { { game->slot, &slot } };
+    const ke_node_component components[] = { { game->slot, &slot, sizeof slot } };
     ke_entity node = KE_ENTITY_INVALID;
     return game->types->spawn(game->types, commands, game->slot_type, "Scene", KE_ENTITY_INVALID, components, 1, &node);
 }
@@ -278,14 +275,11 @@ ke_result pong_register(pong_game *game)
     game->launch = (ke_action_ref){ .name = "Launch" };
     game->quit = (ke_action_ref){ .name = "Quit" };
 
-    const ke_node_handler board_handlers[] = {
-        { .event = game->goal_scored, .on = scoreboard_on_goal },
-        { .event = game->ball_launched, .on = scoreboard_on_launch },
-    };
+    const ke_component_id board_events[] = { game->goal_scored, game->ball_launched };
     const ke_node_type_desc descs[] = {
-        { .name = "pong.paddle", .fields = &pong_paddle_params, .initial = &pong_paddle_initial, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
-        { .name = "pong.ball", .fields = &pong_ball_params, .initial = &pong_ball_initial, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
-        { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .on = board_handlers, .on_count = 2, .user_data = game },
+        { .name = "pong.paddle", .fields = &pong_paddle_params, .initial = &pong_paddle_initial, .initial_size = sizeof pong_paddle_initial, .with = pong_body_with, .with_count = 2, .fixed_update = paddle_fixed_update, .user_data = game },
+        { .name = "pong.ball", .fields = &pong_ball_params, .initial = &pong_ball_initial, .initial_size = sizeof pong_ball_initial, .with = pong_body_with, .with_count = 2, .update = ball_update, .fixed_update = ball_fixed_update, .user_data = game },
+        { .name = "pong.scoreboard", .fields = &pong_scoreboard_params, .events = board_events, .event_count = 2, .on = scoreboard_on, .user_data = game },
         { .name = "pong.menu_controller", .update = menu_update, .user_data = game },
     };
     for (size_t i = 0; i < sizeof descs / sizeof descs[0]; ++i)

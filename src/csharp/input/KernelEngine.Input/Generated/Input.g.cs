@@ -60,6 +60,16 @@ public unsafe partial class Input : IDisposable, INativeInput, IInput
         _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
     }
 
+    /// <summary>Wraps an owner <c>ke_input_handle</c> and runs input's startup lifecycle hook.</summary>
+    public Input(ke_input_handle handle)
+    {
+        if (handle.@ref == null) throw new ArgumentNullException(nameof(handle));
+        _native = handle.@ref;
+        _owned = handle.@ref;
+        _destroy = handle.destroy;
+        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+    }
+
     /// <summary>Wraps a <c>ke_input*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
     public static Input Borrow(ke_input* native) => new(native, borrowed: true);
 

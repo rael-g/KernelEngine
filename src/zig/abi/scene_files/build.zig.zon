@@ -1,0 +1,12 @@
+.{
+    .name = .abi_scene_files,
+    .version = "0.1.0",
+    .fingerprint = 0xece85064b4c3e252,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_framework = .{ .path = "../framework" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

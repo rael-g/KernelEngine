@@ -30,16 +30,20 @@ pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callcon
 pub const ke_node_component = extern struct {
     /// One of the components the type carries.
     component: ke_component_id = std.mem.zeroes(ke_component_id),
-    /// Its registered size of bytes, copied by the spawn.
+    /// The component's bytes, copied by the spawn.
     data: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+    /// The component's registered size.
+    size: usize = std.mem.zeroes(usize),
 };
 
 /// A component every node of a type carries beside its fields, and how it is born.
 pub const ke_node_with = extern struct {
     /// The registered component's name.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Its registered size of bytes each node starts with; NULL starts it zeroed.
+    /// The bytes each node starts with; none starts it zeroed.
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+    /// The component's registered size, or 0 to start it zeroed.
+    initial_size: usize = std.mem.zeroes(usize),
 };
 
 /// An input action named by a node's fields and resolved the first time a behaviour reads it. A
@@ -53,12 +57,6 @@ pub const ke_action_ref = extern struct {
     resolved: bool = std.mem.zeroes(bool),
 };
 
-/// One event a node type handles, and the behaviour that handles it.
-pub const ke_node_handler = extern struct {
-    event: ke_component_id = std.mem.zeroes(ke_component_id),
-    on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
-};
-
 /// A node type: its name, its own fields, the components its nodes also carry, and its
 /// behaviours.
 pub const ke_node_type_desc = extern struct {
@@ -67,8 +65,10 @@ pub const ke_node_type_desc = extern struct {
     /// The type's own fields, registered as a component; NULL for a type made only of the components
     /// it names in `with`.
     fields: ?*const abi_ecs.c.ke_component_params = std.mem.zeroes(?*const abi_ecs.c.ke_component_params),
-    /// `fields->size` bytes copied into the fields of each node spawned; NULL starts them zeroed.
+    /// The bytes copied into the fields of each node spawned; none starts them zeroed.
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+    /// `fields->size`, or 0 to start them zeroed.
+    initial_size: usize = std.mem.zeroes(usize),
     /// Registered components every node of the type carries beside its fields, each with the value
     /// it is born with.
     with: ?[*]const ke_node_with = std.mem.zeroes(?[*]const ke_node_with),
@@ -79,9 +79,12 @@ pub const ke_node_type_desc = extern struct {
     update: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
     /// Runs every fixed step, in FixedUpdate.
     fixed_update: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
-    /// Runs in PostUpdate for each node and each event of the handler's type raised this tick.
-    on: ?[*]const ke_node_handler = std.mem.zeroes(?[*]const ke_node_handler),
-    on_count: u32 = std.mem.zeroes(u32),
+    /// The event types `on` handles.
+    events: ?[*]const ke_component_id = std.mem.zeroes(?[*]const ke_component_id),
+    event_count: u32 = std.mem.zeroes(u32),
+    /// Runs in PostUpdate for each node and each event raised this tick of a type in `events`; the
+    /// ctx's `event_type` says which.
+    on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
     /// Forwarded to every behaviour.
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
 };
@@ -117,6 +120,8 @@ pub const ke_node_ctx = extern struct {
     fields: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// The event an on handler is delivering; NULL in every other behaviour.
     event: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+    /// The type of `event`; KE_COMPONENT_INVALID in every other behaviour.
+    event_type: ke_component_id = std.mem.zeroes(ke_component_id),
     /// Seconds since the previous tick, or the fixed timestep in fixed_update.
     dt: f32 = std.mem.zeroes(f32),
     /// The queue structural changes are recorded into.

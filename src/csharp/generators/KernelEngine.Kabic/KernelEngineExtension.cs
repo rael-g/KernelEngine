@@ -26,6 +26,7 @@ public sealed class KernelEngineExtension : IKabicExtension
     {
         var configured = ConfigsExtension.Bindings(context.ManifestPath);
         var factories = FactoriesExtension.Read(context);
+        var jobs = global::Kabic.Bindings.BindingsPlanner.Plan(context.Root, context.ManifestPath);
         var producers = factories.SelectMany(f => f.Outputs.Select(o => (o.ManagedType, Resolve: $"sp.GetService<{f.ManagedNamespace}.{f.ClassName}>()?.{o.Property} ?? default")))
             .GroupBy(p => p.ManagedType).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single().Resolve);
         foreach (var f in factories)
@@ -36,8 +37,9 @@ public sealed class KernelEngineExtension : IKabicExtension
                 continue;
             }
             var setter = context.Convention.StripPrefix(library) + "_set_log_callback";
+            var logJob = jobs.FirstOrDefault(j => j.Traverse.Any(t => Path.GetFileName(t) == context.Convention.StripPrefix(library) + "_log.h")) ?? f.Job;
             var dir = Path.GetRelativePath(context.Root, f.ProjectDir).Replace('\\', '/');
-            context.Emit($"{dir}/Generated/{f.ClassName}.Logging.g.cs", Logging(f, setter));
+            context.Emit($"{dir}/Generated/{f.ClassName}.Logging.g.cs", Logging(f, $"{logJob.Namespace}.{logJob.MethodsClass}.{setter}"));
             context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f, context.Convention, configured.Contains(f.Job.Name), producers));
         }
     }
@@ -57,7 +59,7 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(FactoriesExtension.ChainsThroughThis(f) ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
         o.Append($"    private static {FactoriesExtension.CreatedType(f)} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
         o.Append("        ArgumentNullException.ThrowIfNull(loggerFactory);\n");
-        o.Append($"        {f.Job.Namespace}.{f.Job.MethodsClass}.{setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
+        o.Append($"        {setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
         o.Append($"        return Create({FactoriesExtension.Names(f)});\n    }}\n}}\n");
         return o.ToString();
     }

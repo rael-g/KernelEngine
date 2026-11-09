@@ -1085,6 +1085,79 @@ ke_label_component size=8620 align=4
   glyph_count 424
   glyphs 428
 
+[node_types]
+ke_node_component size=24 align=8
+  component 0
+  data 8
+  size 16
+ke_node_with size=24 align=8
+  name 0
+  initial 8
+  initial_size 16
+ke_action_ref size=40 align=4
+  name 0
+  id 32
+  resolved 36
+ke_node_type_desc size=104 align=8
+  name 0
+  fields 8
+  initial 16
+  initial_size 24
+  with 32
+  with_count 40
+  ready 48
+  update 56
+  fixed_update 64
+  events 72
+  event_count 80
+  on 88
+  user_data 96
+ke_node_ctx size=160 align=8
+  handle 0
+  self 8
+  fields 16
+  event 24
+  event_type 32
+  dt 36
+  commands 40
+  next 48
+  get 56
+  component 64
+  parent 72
+  child 80
+  first_child 88
+  next_sibling 96
+  ancestor 104
+  axis 112
+  pressed 120
+  spawn 128
+  destroy 136
+  raise 144
+  exit 152
+ke_node_types size=64 align=8
+  handle 0
+  register_type 8
+  register_event 16
+  spawn 24
+  find_type 32
+  find_component 40
+  initial 48
+  carries 56
+ke_node_types_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[scene_files]
+ke_scene_slot_component size=512 align=1
+  path 0
+  loaded 256
+ke_scene_files size=16 align=8
+  handle 0
+  instantiate 8
+ke_scene_files_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [input_actions]
 ke_input_actions size=144 align=8
   handle 0

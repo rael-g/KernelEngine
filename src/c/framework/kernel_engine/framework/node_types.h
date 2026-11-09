@@ -13,18 +13,20 @@ extern "C"
 {
 #endif
 
-    /// A component a spawned node starts with in place of its type's initial value.
+    /// [borrowed] A component a spawned node starts with in place of its type's initial value.
     typedef struct ke_node_component
     {
         ke_component_id component; ///< One of the components the type carries.
-        const void     *data;      ///< [borrowed] Its registered size of bytes, copied by the spawn.
+        const void     *data;      ///< [array_of:size] The component's bytes, copied by the spawn.
+        size_t          size;      ///< The component's registered size.
     } ke_node_component;
 
-    /// A component every node of a type carries beside its fields, and how it is born.
+    /// [borrowed] A component every node of a type carries beside its fields, and how it is born.
     typedef struct ke_node_with
     {
-        const char *name;    ///< [utf8] The registered component's name.
-        const void *initial; ///< [borrowed, default:none] Its registered size of bytes each node starts with; NULL starts it zeroed.
+        const char *name;         ///< [utf8] The registered component's name.
+        const void *initial;      ///< [array_of:initial_size] The bytes each node starts with; none starts it zeroed.
+        size_t      initial_size; ///< The component's registered size, or 0 to start it zeroed.
     } ke_node_with;
 
     typedef struct ke_node_ctx ke_node_ctx;
@@ -61,12 +63,15 @@ extern "C"
         /// The node next moved to; KE_ENTITY_INVALID before the first call of next.
         ke_entity self;
 
-        /// The node's own fields, the struct its type was registered with; NULL for a type
+        /// [typed] The node's own fields, the struct its type was registered with; NULL for a type
         /// without fields.
         void *fields;
 
-        /// The event an on handler is delivering; NULL in every other behaviour.
+        /// [typed] The event an on handler is delivering; NULL in every other behaviour.
         const void *event;
+
+        /// The type of `event`; KE_COMPONENT_INVALID in every other behaviour.
+        ke_component_id event_type;
 
         /// Seconds since the previous tick, or the fixed timestep in fixed_update.
         float dt;
@@ -79,12 +84,12 @@ extern "C"
         bool (*next)(ke_node_ctx *self);
 
         /// One of the node's components: its fields or one its type names in `with`.
-        /// @return The component's memory for the current node, NULL for a component the type
+        /// @return [typed] The component's memory for the current node, NULL for a component the type
         ///         does not carry.
         void *(*get)(ke_node_ctx *self, ke_component_id cid);
 
         /// Any node's component, the current node's or another's.
-        /// @return The component's memory on @p node, NULL for a node that does not carry it.
+        /// @return [typed] The component's memory on @p node, NULL for a node that does not carry it.
         void *(*component)(ke_node_ctx *self, ke_entity node, ke_component_id cid);
 
         /// The node's parent, KE_ENTITY_INVALID for a node at the root.
@@ -104,12 +109,12 @@ extern "C"
         ke_entity (*ancestor)(ke_node_ctx *self, ke_entity node, ke_component_id component);
 
         /// The value of an axis action, 0 without input actions or for a name no map holds.
-        /// @param action Resolved by name on its first read, and kept resolved.
+        /// @param action [inout] Resolved by name on its first read, and kept resolved.
         float (*axis)(ke_node_ctx *self, ke_action_ref *action);
 
         /// Whether a button action was pressed this tick, false without input actions or for a
         /// name no map holds.
-        /// @param action Resolved by name on its first read, and kept resolved.
+        /// @param action [inout] Resolved by name on its first read, and kept resolved.
         bool (*pressed)(ke_node_ctx *self, ke_action_ref *action);
 
         /// Records a node of @p type named @p name under @p parent, its fields and the
@@ -120,7 +125,8 @@ extern "C"
         ///                   with in place of its type's initial values.
         /// @param out_node [out] Usable as a reference at once; the node exists once the commands
         ///                 are applied.
-        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry;
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry or
+        ///         one whose size is not its registered size;
         ///         KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
         ke_result (*spawn)(ke_node_ctx *self, ke_component_id type, const char *name, ke_entity parent,
                            const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
@@ -131,7 +137,7 @@ extern "C"
 
         /// Records @p data as an event of type @p event, delivered to the on handlers of the
         /// PostUpdate of this tick that run after it is applied, and gone at the next PreUpdate.
-        /// @param data [array_of:size] Copied.
+        /// @param data [bytes_of:size] Copied.
         /// @return KE_OK; KE_RESULT_NOT_FOUND for an event never registered,
         ///         KE_RESULT_INVALID_ARGUMENT for a size that is not the event's, or the queue's code.
         ke_result (*raise)(ke_node_ctx *self, ke_component_id event, const void *data, size_t size);
@@ -140,14 +146,7 @@ extern "C"
         void (*exit)(ke_node_ctx *self);
     };
 
-    /// One event a node type handles, and the behaviour that handles it.
-    typedef struct ke_node_handler
-    {
-        ke_component_id      event;
-        ke_node_behaviour_fn on;
-    } ke_node_handler;
-
-    /// A node type: its name, its own fields, the components its nodes also carry, and its
+    /// [bag] A node type: its name, its own fields, the components its nodes also carry, and its
     /// behaviours.
     typedef struct ke_node_type_desc
     {
@@ -158,29 +157,35 @@ extern "C"
         /// type made only of the components it names in `with`.
         const ke_component_params *fields;
 
-        /// [borrowed, default:none] `fields->size` bytes copied into the fields of each node
-        /// spawned; NULL starts them zeroed.
+        /// [array_of:initial_size, default:empty] The bytes copied into the fields of each node
+        /// spawned; none starts them zeroed.
         const void *initial;
+
+        /// `fields->size`, or 0 to start them zeroed.
+        size_t initial_size;
 
         /// [array_of:with_count, default:empty] Registered components every node of the type
         /// carries beside its fields, each with the value it is born with.
         const ke_node_with *with;
         uint32_t            with_count;
 
-        /// [closure:user_data, default:none] Runs once per node, in the PreUpdate after the
+        /// [closure:user_data, retained:return, default:none] Runs once per node, in the PreUpdate after the
         /// node is created, before its first update.
         ke_node_behaviour_fn ready;
 
-        /// [closure:user_data, default:none] Runs every tick, in Update.
+        /// [closure:user_data, retained:return, default:none] Runs every tick, in Update.
         ke_node_behaviour_fn update;
 
-        /// [closure:user_data, default:none] Runs every fixed step, in FixedUpdate.
+        /// [closure:user_data, retained:return, default:none] Runs every fixed step, in FixedUpdate.
         ke_node_behaviour_fn fixed_update;
 
-        /// [array_of:on_count, default:empty] Runs in PostUpdate for each node and each event
-        /// of the handler's type raised this tick.
-        const ke_node_handler *on;
-        uint32_t               on_count;
+        /// [array_of:event_count, default:empty] The event types `on` handles.
+        const ke_component_id *events;
+        uint32_t               event_count;
+
+        /// [closure:user_data, retained:return, default:none] Runs in PostUpdate for each node and
+        /// each event raised this tick of a type in `events`; the ctx's `event_type` says which.
+        ke_node_behaviour_fn on;
 
         /// [context] Forwarded to every behaviour.
         void *user_data;
@@ -198,8 +203,9 @@ extern "C"
         ///             names it points at must outlive the node types.
         /// @param out_type [out] Receives the id of the type's tag.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless desc, fields of zero
-        ///         size, `initial` without fields or a behaviour-less handler; KE_RESULT_NOT_FOUND for a `with` name or a handler's
-        ///         event never registered; the ecs's or the runtime's code when it refuses.
+        ///         size, `initial` without fields, an initial whose size is not its component's, or
+        ///         events without `on`; KE_RESULT_NOT_FOUND for a `with` name or an event never
+        ///         registered; the ecs's or the runtime's code when it refuses.
         ke_result (*register_type)(struct ke_node_types *self, const ke_node_type_desc *desc, ke_component_id *out_type);
 
         /// Registers an event type.
@@ -218,8 +224,8 @@ extern "C"
         ///                   with in place of its type's initial values.
         /// @param out_node [out] Usable as a reference at once; the node exists once the commands
         ///                 are applied.
-        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands or a component the type
-        ///         does not carry; KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null commands, a component the type
+        ///         does not carry or one whose size is not its registered size; KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
         ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name,
                            ke_entity parent, const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
 
