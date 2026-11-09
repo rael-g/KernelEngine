@@ -1090,6 +1090,23 @@
       "output": "Generated/Ecs/"
     },
     {
+      "name": "FrameworkNodes",
+      "project": "src/csharp/framework/KernelEngine.Framework.Nodes",
+      "namespace": "KernelEngine.Framework.Nodes.Native",
+      "headers": [
+        "src/c/framework/kernel_engine/framework/node_types.h",
+        "src/c/framework/kernel_engine/framework/scene_files.h",
+        "src/c/framework/kernel_engine/framework/engine_node_types.h",
+        "src/zig/framework/include/kernel_engine/framework/node_types_create.h",
+        "src/zig/framework/include/kernel_engine/framework/scene_files_create.h"
+      ],
+      "library": "ke_framework",
+      "additional": [
+        "-DKE_FRAMEWORK_STATIC"
+      ],
+      "output": "Generated/"
+    },
+    {
       "name": "Framework",
       "project": "src/csharp/framework/KernelEngine.Framework",
       "namespace": "KernelEngine.Framework.Native",

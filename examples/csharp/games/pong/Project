@@ -4,7 +4,7 @@ default_scene = "Menu"
 [runtime.window]
 width = 960
 height = 540
-title = "KernelEngine — Pong (2D)"
+title = "KernelEngine — Pong (C#)"
 fullscreen = false
 
 [runtime.renderer]
