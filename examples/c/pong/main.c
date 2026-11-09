@@ -45,35 +45,11 @@
 
 enum { PATH_CAPACITY = 1024 };
 
-static const char *const font_candidates[] = {
-    "/usr/share/fonts/TTF/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans.ttf",
-    "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-    "/usr/share/fonts/liberation/LiberationSans-Regular.ttf",
-    "/usr/share/fonts/noto/NotoSans-Regular.ttf",
-    "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf",
-    "C:/Windows/Fonts/arial.ttf",
-    "/System/Library/Fonts/Supplemental/Arial.ttf",
-};
-
 static void check(const char *what, ke_result result)
 {
     if (result == KE_OK) return;
     fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
     exit(1);
-}
-
-static const char *find_font(void)
-{
-    for (size_t i = 0; i < sizeof font_candidates / sizeof font_candidates[0]; ++i)
-    {
-        FILE *f = fopen(font_candidates[i], "rb");
-        if (!f) continue;
-        fclose(f);
-        return font_candidates[i];
-    }
-    return NULL;
 }
 
 static double now_seconds(void)
@@ -149,7 +125,7 @@ static void renderer_destroy(renderer *r)
     r->view_space.destroy(r->view_space.ref);
 }
 
-int main(int argc, char **argv)
+int main(void)
 {
     char project_dir[PATH_CAPACITY], shader_dir[PATH_CAPACITY], project_file[PATH_CAPACITY];
     if (!ke_sdk_beside_executable(project_dir, sizeof project_dir, "pong") || !ke_sdk_beside_executable(shader_dir, sizeof shader_dir, "shaders"))
@@ -159,13 +135,10 @@ int main(int argc, char **argv)
     }
     snprintf(project_file, sizeof project_file, "%s/Project", project_dir);
 
+    char font[PATH_CAPACITY];
+    snprintf(font, sizeof font, "%s/assets/fonts/LiberationSans-Regular.ttf", project_dir);
+
     pong_game game = { 0 };
-    const char *font = argc > 1 ? argv[1] : find_font();
-    if (!font)
-    {
-        fprintf(stderr, "no TrueType font found; pass one as the first argument\n");
-        return 1;
-    }
 
     ke_task_pool_handle pool = { 0 };
     check("task pool", ke_task_pool_enki_create(&(ke_task_pool_enki_params){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool));

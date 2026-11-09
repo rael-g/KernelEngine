@@ -648,6 +648,7 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&b.addInstallFile(.{ .cwd_relative = b.pathJoin(&.{ pong_dir, "Project" }) }, "bin/pong/Project").step);
     b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ pong_dir, "scenes" }) }, .install_dir = .bin, .install_subdir = "pong/scenes" }).step);
     b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = b.pathJoin(&.{ root, "examples/assets/sounds" }) }, .install_dir = .bin, .install_subdir = "pong/assets/sounds" }).step);
+    b.getInstallStep().dependOn(&b.addInstallFile(b.dependency("liberation_fonts", .{}).path("LiberationSans-Regular.ttf"), "bin/pong/assets/fonts/LiberationSans-Regular.ttf").step);
 
     const all_examples = [_]*std.Build.Step.InstallArtifact{
         demo15, demo16, pong,
