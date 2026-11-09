@@ -653,6 +653,81 @@ pub fn build(b: *std.Build) void {
         demo15, demo16, pong,
     };
     for (all_examples) |e| b.getInstallStep().dependOn(&e.step);
+    installSdk(&ctx, src_c, b.pathJoin(&.{ root, "src/sdk/c" }), b.pathJoin(&.{ src_zig, "common/include" }));
+}
+
+/// Makes the install prefix a C SDK: every contract, factory and SDK header under `include/`, and
+/// beside the libraries a CMake package (`lib/cmake/KernelEngine`) and pkg-config files
+/// (`lib/pkgconfig`) naming each of them.
+fn installSdk(ctx: *Ctx, src_c: []const u8, sdk_include: []const u8, common_include: []const u8) void {
+    const b = ctx.b;
+    var include_dirs: std.ArrayList([]const u8) = .empty;
+    var threaded: std.Io.Threaded = .init(b.allocator, .{});
+    defer threaded.deinit();
+    const io = threaded.io();
+    var domains = std.Io.Dir.openDirAbsolute(io, src_c, .{ .iterate = true }) catch @panic("src/c cannot be read");
+    defer domains.close(io);
+    var it = domains.iterate();
+    while (it.next(io) catch null) |entry| {
+        if (entry.kind == .directory) include_dirs.append(b.allocator, b.pathJoin(&.{ src_c, entry.name })) catch @panic("OOM");
+    }
+    include_dirs.appendSlice(b.allocator, ctx.plugin_includes.items) catch @panic("OOM");
+    include_dirs.appendSlice(b.allocator, &.{ sdk_include, common_include }) catch @panic("OOM");
+    for (include_dirs.items) |dir| {
+        std.Io.Dir.accessAbsolute(io, dir, .{}) catch continue;
+        b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = .{ .cwd_relative = dir }, .install_dir = .header, .install_subdir = "", .include_extensions = &.{".h"} }).step);
+    }
+
+    var cmake: std.Io.Writer.Allocating = .init(b.allocator);
+    const w = &cmake.writer;
+    w.writeAll(
+        \\get_filename_component(_ke_prefix "${CMAKE_CURRENT_LIST_DIR}/../../.." ABSOLUTE)
+        \\if(NOT TARGET KernelEngine::headers)
+        \\  add_library(KernelEngine::headers INTERFACE IMPORTED)
+        \\  set_target_properties(KernelEngine::headers PROPERTIES INTERFACE_INCLUDE_DIRECTORIES "${_ke_prefix}/include")
+        \\endif()
+        \\
+    ) catch @panic("OOM");
+    var pkgconfig = b.addWriteFiles();
+    _ = pkgconfig.add("kernel_engine.pc",
+        \\prefix=${pcfiledir}/../..
+        \\includedir=${prefix}/include
+        \\
+        \\Name: kernel_engine
+        \\Description: The headers of the KernelEngine C SDK
+        \\Version: 0.1.0
+        \\Cflags: -I${includedir}
+        \\
+    );
+    for (ctx.libraries.items) |lib| {
+        w.print(
+            \\if(NOT TARGET KernelEngine::{0s})
+            \\  add_library(KernelEngine::{0s} SHARED IMPORTED)
+            \\  if(WIN32)
+            \\    set_target_properties(KernelEngine::{0s} PROPERTIES IMPORTED_LOCATION "${{_ke_prefix}}/bin/{0s}.dll" IMPORTED_IMPLIB "${{_ke_prefix}}/lib/{0s}.lib")
+            \\  else()
+            \\    set_target_properties(KernelEngine::{0s} PROPERTIES IMPORTED_LOCATION "${{_ke_prefix}}/lib/${{CMAKE_SHARED_LIBRARY_PREFIX}}{0s}${{CMAKE_SHARED_LIBRARY_SUFFIX}}")
+            \\  endif()
+            \\  set_target_properties(KernelEngine::{0s} PROPERTIES INTERFACE_LINK_LIBRARIES KernelEngine::headers)
+            \\endif()
+            \\
+        , .{lib}) catch @panic("OOM");
+        _ = pkgconfig.add(b.fmt("kernel_engine-{s}.pc", .{lib}), b.fmt(
+            \\prefix=${{pcfiledir}}/../..
+            \\libdir=${{prefix}}/lib
+            \\
+            \\Name: kernel_engine-{0s}
+            \\Description: The {0s} library of the KernelEngine C SDK
+            \\Version: 0.1.0
+            \\Requires: kernel_engine
+            \\Libs: -L${{libdir}} -l{0s} -Wl,-rpath,${{libdir}}
+            \\
+        , .{lib}));
+    }
+    w.writeAll("unset(_ke_prefix)\n") catch @panic("OOM");
+    const config = b.addWriteFiles().add("KernelEngineConfig.cmake", cmake.written());
+    b.getInstallStep().dependOn(&b.addInstallFileWithDir(config, .lib, "cmake/KernelEngine/KernelEngineConfig.cmake").step);
+    b.getInstallStep().dependOn(&b.addInstallDirectory(.{ .source_dir = pkgconfig.getDirectory(), .install_dir = .lib, .install_subdir = "pkgconfig" }).step);
 }
 
 const Tests = enum { has_tests, no_tests };
@@ -668,6 +743,8 @@ const Ctx = struct {
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
+    libraries: std.ArrayList([]const u8) = .empty,
+    plugin_includes: std.ArrayList([]const u8) = .empty,
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -813,6 +890,8 @@ const Ctx = struct {
         orderTranslations(artifact, ctx.vcpkg_step, deps);
         const install = b.addInstallArtifact(artifact, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } });
         ctx.libraries_step.dependOn(&install.step);
+        ctx.libraries.append(b.allocator, artifact.name) catch @panic("OOM");
+        ctx.plugin_includes.append(b.allocator, dependency.builder.pathFromRoot("include")) catch @panic("OOM");
 
         switch (tests) {
             .no_tests => {},
