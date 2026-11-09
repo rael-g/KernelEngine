@@ -5,6 +5,7 @@
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -37,7 +38,7 @@ extern "C"
     } ke_render_deferred_lighting_handle;
 
     /// What the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
-    /// [bag] over the frame's color, sampling the frame's depth. The names are copied.
+    /// [bag] over the frame's color, sampling the frame's depth.
     typedef struct ke_render_deferred_lighting_params
     {
         ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
@@ -46,16 +47,16 @@ extern "C"
         bool               ibl_enabled;
         ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
         ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
-        /// [utf8] The gbuffer group it lights.
-        const char *gbuffer;
-        /// [utf8] Optional shadow group; without one the shadow is the neutral one.
-        const char *shadow;
-        /// [utf8] Optional cluster group; without one no clustered light is bound.
-        const char *clusters;
+        /// The gbuffer it lights.
+        ke_render_gbuffer_resources gbuffer;
+        /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
+        ke_render_shadow_resources shadow;
+        /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
+        ke_render_cluster_resources clusters;
     } ke_render_deferred_lighting_params;
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device or
-    /// gbuffer fails as an invalid argument.
+    /// Registers the pass's render-phase system. A missing runtime, service or device, or a
+    /// gbuffer with an invalid id, fails as an invalid argument.
     /// @param out_lighting [out] Receives the handle; left zeroed on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_result ke_render_deferred_lighting_create(
         const ke_render_deferred_lighting_params *params, ke_render_deferred_lighting_handle *out_lighting);

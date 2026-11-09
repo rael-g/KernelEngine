@@ -29,7 +29,7 @@ the one that may be called from any wave thread.
 
 **Nothing is pinned.** No contract names a worker for a task or a system; an order between two
 systems is a component they both access. State that is not a component is named by a component no
-entity carries, such as the tag `KE_RENDER_FRAME_COLOR`.
+entity carries, such as the tag the render service answers from `frame_color`.
 
 **The window is not on the pool.** The host calls `IWindow.PollEvents` on the thread that created
 the window, before each `Tick`.

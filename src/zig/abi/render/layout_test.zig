@@ -29,6 +29,9 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_pass_io, translated("ke_render_pass_io"));
     try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
     try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
+    try expectSameLayout(abi.c.ke_render_gbuffer_resources, translated("ke_render_gbuffer_resources"));
+    try expectSameLayout(abi.c.ke_render_shadow_resources, translated("ke_render_shadow_resources"));
+    try expectSameLayout(abi.c.ke_render_cluster_resources, translated("ke_render_cluster_resources"));
     try expectSameLayout(abi.c.ke_render_service, translated("ke_render_service"));
     try expectSameLayout(abi.c.ke_render_service_handle, translated("ke_render_service_handle"));
     try expectSameLayout(abi.c.ke_render_camera, translated("ke_render_camera"));
@@ -84,12 +87,10 @@ test "every enum value is the header's value" {
 
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_COLOR, abi.c.KE_RENDER_FRAME_COLOR);
-    try std.testing.expectEqualStrings(c.KE_RENDER_FRAME_DEPTH, abi.c.KE_RENDER_FRAME_DEPTH);
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.c.KE_RENDER_CHAIN_NONE));
 }
 
-extern const layout_values: [127]c_ulonglong;
+extern const layout_values: [144]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -144,13 +145,30 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_scene_component_ids, "sprite2d"),
         @offsetOf(abi.c.ke_render_scene_component_ids, "label"),
         @offsetOf(abi.c.ke_render_scene_component_ids, "world_transform"),
+        @sizeOf(abi.c.ke_render_gbuffer_resources),
+        @offsetOf(abi.c.ke_render_gbuffer_resources, "albedo"),
+        @offsetOf(abi.c.ke_render_gbuffer_resources, "normal"),
+        @offsetOf(abi.c.ke_render_gbuffer_resources, "emissive"),
+        @sizeOf(abi.c.ke_render_shadow_resources),
+        @offsetOf(abi.c.ke_render_shadow_resources, "map"),
+        @offsetOf(abi.c.ke_render_shadow_resources, "light"),
+        @sizeOf(abi.c.ke_render_cluster_resources),
+        @offsetOf(abi.c.ke_render_cluster_resources, "tag"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "point_lights"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "spot_lights"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "point_indices"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "point_counts"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "spot_indices"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "spot_counts"),
+        @offsetOf(abi.c.ke_render_cluster_resources, "grid"),
         @sizeOf(abi.c.ke_render_service),
         @offsetOf(abi.c.ke_render_service, "handle"),
         @offsetOf(abi.c.ke_render_service, "declare"),
         @offsetOf(abi.c.ke_render_service, "import_texture"),
         @offsetOf(abi.c.ke_render_service, "import_tag"),
         @offsetOf(abi.c.ke_render_service, "import_buffer"),
-        @offsetOf(abi.c.ke_render_service, "cid"),
+        @offsetOf(abi.c.ke_render_service, "frame_color"),
+        @offsetOf(abi.c.ke_render_service, "frame_depth"),
         @offsetOf(abi.c.ke_render_service, "begin_pass"),
         @offsetOf(abi.c.ke_render_service, "end_pass"),
         @offsetOf(abi.c.ke_render_service, "begin_frame"),

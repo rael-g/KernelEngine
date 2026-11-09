@@ -80,7 +80,7 @@ pub const ke_render_cluster_handle = extern struct {
 pub const ke_render_cluster_config_defaults: ke_render_cluster_config = .{ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 };
 
 /// Creates a light-cluster pass and registers its render-phase system.
-pub extern fn ke_render_cluster_create(runtime: ?*abi_runtime.c.ke_runtime, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, view_space: ?*abi_view.c.ke_view_space, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, frame: ?*abi_render.c.ke_render_frame, output: ?[*:0]const u8, config: ?*const ke_render_cluster_config, out_cluster: ?*ke_render_cluster_handle) abi_result.c.ke_result;
+pub extern fn ke_render_cluster_create(runtime: ?*abi_runtime.c.ke_runtime, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, view_space: ?*abi_view.c.ke_view_space, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, frame: ?*abi_render.c.ke_render_frame, config: ?*const ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*ke_render_cluster_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_cluster logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

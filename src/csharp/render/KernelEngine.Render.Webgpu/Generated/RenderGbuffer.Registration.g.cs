@@ -11,11 +11,11 @@ using Microsoft.Extensions.DependencyInjection;
 public static class RenderGbufferRegistration
 {
     /// <summary>Registers one <see cref="RenderGbuffer"/>, created when the modules load with its providers from the container.</summary>
-    public static IServiceCollection AddRenderGbuffer(this IServiceCollection services, string? output = default)
+    public static IServiceCollection AddRenderGbuffer(this IServiceCollection services)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
-            ? new RenderGbuffer(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output)
-            : new RenderGbuffer(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output));
+            ? new RenderGbuffer(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>())
+            : new RenderGbuffer(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>()));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderGbuffer>());
         return services;
     }

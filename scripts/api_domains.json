@@ -447,7 +447,8 @@
         "src/c/render/kernel_engine/render/service/render_service.h",
         "src/c/render/kernel_engine/render/camera.h",
         "src/c/render/kernel_engine/render/frame.h",
-        "src/c/render/kernel_engine/render/scene_resolve.h"
+        "src/c/render/kernel_engine/render/scene_resolve.h",
+        "src/c/render/kernel_engine/render/resource_groups.h"
       ],
       "auxHeaders": [
         "src/c/render/kernel_engine/render/gpu/gpu_device.h",
@@ -896,7 +897,7 @@
     { "name": "framework", "headers": ["src/c/framework/kernel_engine/framework/scene_hierarchy.h", "src/c/framework/kernel_engine/framework/node_types.h", "src/c/framework/kernel_engine/framework/scene_files.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "framework_components", "headers": [ "src/c/framework/kernel_engine/framework/components.h" ], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "physics_contract", "headers": ["src/c/physics/kernel_engine/physics/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
-    { "name": "render_contract", "headers": ["src/c/render/kernel_engine/render/component_fields.h", "src/c/render/kernel_engine/render/resource_groups.h", "src/c/render/kernel_engine/render/service/pass_context.h", "src/c/render/kernel_engine/render/ui/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
+    { "name": "render_contract", "headers": ["src/c/render/kernel_engine/render/component_fields.h", "src/c/render/kernel_engine/render/service/pass_context.h", "src/c/render/kernel_engine/render/ui/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "resource_cache", "headers": ["src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "spatial_contract", "headers": ["src/c/spatial/kernel_engine/spatial/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/runtime", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include"] },
     { "name": "result", "headers": [ "src/c/result/kernel_engine/result/result.h" ], "includeDirs": [ "src/c/result", "src/zig/common/include" ] },
@@ -1366,7 +1367,8 @@
         "src/c/render/kernel_engine/render/gpu/gpu_render_target.h",
         "src/c/render/kernel_engine/render/camera.h",
         "src/c/render/kernel_engine/render/frame.h",
-        "src/c/render/kernel_engine/render/scene_resolve.h"
+        "src/c/render/kernel_engine/render/scene_resolve.h",
+        "src/c/render/kernel_engine/render/resource_groups.h"
       ],
       "library": "ke_render_service",
       "output": "Generated/Render/"

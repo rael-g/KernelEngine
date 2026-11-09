@@ -9,7 +9,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_shadow_params, view_space),
     offsetof(ke_render_shadow_params, scene),
     offsetof(ke_render_shadow_params, frame),
-    offsetof(ke_render_shadow_params, output),
     offsetof(ke_render_shadow_params, resolution),
     offsetof(ke_render_shadow_params, light_distance),
     offsetof(ke_render_shadow_params, extent),

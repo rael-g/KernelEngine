@@ -228,7 +228,8 @@ const Rig = struct {
 
     fn init(self: *Rig) !void {
         try self.core.init();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         try self.rt.init();
         _ = self.rt.when(.register_system).writesFresh(2);
         try self.ecs.init();

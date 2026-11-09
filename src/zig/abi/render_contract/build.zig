@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) void {
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/component_fields.h>
-        \\#include <kernel_engine/render/resource_groups.h>
         \\#include <kernel_engine/render/service/pass_context.h>
         \\#include <kernel_engine/render/ui/component_fields.h>
     );

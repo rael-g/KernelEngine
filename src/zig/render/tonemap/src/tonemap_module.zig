@@ -99,7 +99,7 @@ fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_to
 
     tm.io.name = "render.tonemap";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP, abi_render.c.KE_RENDER_CHAIN_REPLACE, &tm.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
     const format = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_TONEMAP);
 
     var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
@@ -126,7 +126,7 @@ fn setup(tm: *TonemapModule, p: *const abi_render_tonemap_factory.c.ke_render_to
     if (core.*.get_or_create_pipeline.?(core, &tm.pipeline_params) == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return error.General;
 
     tm.access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE },
         .{ .cid = p.frame.?.frame_cid.?(p.frame), .access = abi_runtime.c.KE_ACCESS_READ },
     };
 }
@@ -205,7 +205,8 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.join_chain).writesFresh(3);
         _ = self.core.when(.chain_format).does(chainFormat);

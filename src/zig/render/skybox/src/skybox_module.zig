@@ -111,7 +111,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     core.*.upload.?(core, sm.frame_uniform, 0, &frame, @sizeOf(SkyFrame));
 
     const env_view = core.*.texture_view.?(core, env);
-    const depth_view = pc.?.read.?(pc, abi_render.c.KE_RENDER_FRAME_DEPTH);
+    const depth_view = pc.?.read.?(pc, core.*.frame_depth.?(core));
 
     const bindings = [3]abi_render_gpu.c.ke_render_shader_binding{
         .{ .name = "sky", .buffer = sm.frame_uniform, .buffer_offset = 0, .buffer_size = @sizeOf(SkyFrame), .texture_view = 0, .sampler = 0 },
@@ -157,7 +157,7 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skyb
 
     sm.io.name = "render.skybox";
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_SKY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &sm.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
 
     sm.binder = core.*.resource_binder.?(core).?;
     try R.check(sm.binder.create_shader_layout.?(sm.binder, &shader_layout, &sm.layout));
@@ -198,8 +198,8 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_skybox_factory.c.ke_render_skyb
     }, &sm.frame_uniform));
 
     sm.access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE },
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.c.KE_ACCESS_READ },
+        .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .cid = core.*.frame_depth.?(core), .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = camera_cid, .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = world_transform_cid, .access = abi_runtime.c.KE_ACCESS_READ },
         .{ .cid = skybox_cid, .access = abi_runtime.c.KE_ACCESS_READ },
@@ -312,7 +312,8 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.join_chain).writesFresh(3);
         _ = self.core.when(.chain_format).does(chainFormat);

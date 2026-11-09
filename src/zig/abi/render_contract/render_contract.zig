@@ -22,15 +22,15 @@ pub const RenderPassCtx = struct {
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_pass_ctx {
         return .{
             .read = &struct {
-                fn call(self: ?*c.ke_render_pass_ctx, a0: ?[*:0]const u8) callconv(.c) c.ke_gpu_texture_view {
+                fn call(self: ?*c.ke_render_pass_ctx, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture_view {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
-                    return T.read(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
+                    return T.read(state, a0);
                 }
             }.call,
             .write = &struct {
-                fn call(self: ?*c.ke_render_pass_ctx, a0: ?[*:0]const u8) callconv(.c) c.ke_gpu_texture_view {
+                fn call(self: ?*c.ke_render_pass_ctx, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture_view {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
-                    return T.write(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
+                    return T.write(state, a0);
                 }
             }.call,
             .begin_render = &struct {
@@ -72,12 +72,14 @@ pub const RenderPassCtx = struct {
         };
     }
 
-    pub fn read(self: RenderPassCtx, name: [:0]const u8) c.ke_gpu_texture_view {
-        return self.ptr.read.?(self.ptr, name.ptr);
+    /// The view of a resource the pass reads; KE_GPU_INVALID_HANDLE for an unknown id.
+    pub fn read(self: RenderPassCtx, resource: c.ke_component_id) c.ke_gpu_texture_view {
+        return self.ptr.read.?(self.ptr, resource);
     }
 
-    pub fn write(self: RenderPassCtx, name: [:0]const u8) c.ke_gpu_texture_view {
-        return self.ptr.write.?(self.ptr, name.ptr);
+    /// The view of a resource the pass writes; KE_GPU_INVALID_HANDLE for an unknown id.
+    pub fn write(self: RenderPassCtx, resource: c.ke_component_id) c.ke_gpu_texture_view {
+        return self.ptr.write.?(self.ptr, resource);
     }
 
     pub fn beginRender(self: RenderPassCtx) ?*abi_render_gpu.c.ke_gpu_render_pass {

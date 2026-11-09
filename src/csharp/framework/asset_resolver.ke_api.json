@@ -1183,8 +1183,10 @@
         {
           "name": "name",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The label the resource is debugged under; the service makes it unique."
         },
         {
           "name": "type",
@@ -1350,11 +1352,11 @@
         },
         {
           "name": "reads",
-          "type": "const char *const *",
+          "type": "const ke_component_id *",
           "tags": [
             "array_of:reads_count"
           ],
-          "doc": "The tags the pass reads."
+          "doc": "The resources the pass reads."
         },
         {
           "name": "reads_count",
@@ -1364,11 +1366,11 @@
         },
         {
           "name": "writes",
-          "type": "const char *const *",
+          "type": "const ke_component_id *",
           "tags": [
             "array_of:writes_count"
           ],
-          "doc": "The tags the pass writes."
+          "doc": "The resources the pass writes."
         },
         {
           "name": "writes_count",
@@ -2136,7 +2138,7 @@
           "name": "declare",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Declares a transient resource the service allocates and recycles.",
+          "doc": "Declares a transient resource the service allocates and recycles; every call declares a new one.",
           "return_doc": null,
           "params": [
             {
@@ -2151,7 +2153,7 @@
               "tags": [
                 "out"
               ],
-              "doc": "Receives the tag-component cid to place in a pass\u0027s access_list."
+              "doc": "Receives the resource\u0027s id, the tag-component cid to place in a pass\u0027s access list."
             }
           ],
           "receiver": "struct ke_render_service *"
@@ -2160,7 +2162,7 @@
           "name": "import_texture",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Imports an externally-owned texture under \u0060name\u0060.",
+          "doc": "Imports an externally-owned texture, labeled \u0060name\u0060.",
           "return_doc": null,
           "params": [
             {
@@ -2190,7 +2192,7 @@
           "name": "import_tag",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Mints a tag cid under \u0060name\u0060 with no GPU payload.",
+          "doc": "Mints a resource with no GPU payload, labeled \u0060name\u0060, that passes order on.",
           "return_doc": null,
           "params": [
             {
@@ -2214,7 +2216,7 @@
           "name": "import_buffer",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Publishes an externally-owned GPU buffer under \u0060name\u0060 for another pass to bind by name.",
+          "doc": "Publishes an externally-owned GPU buffer, labeled \u0060name\u0060, for another pass to bind by its id.",
           "return_doc": null,
           "params": [
             {
@@ -2247,19 +2249,21 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "cid",
+          "name": "frame_color",
           "returns": "ke_component_id",
           "tags": [],
-          "doc": null,
-          "return_doc": "The tag cid minted for \u0060name\u0060, or KE_COMPONENT_INVALID.",
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            }
-          ],
+          "doc": "The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "frame_depth",
+          "returns": "ke_component_id",
+          "tags": [],
+          "doc": "The frame\u0027s depth texture, cleared when the frame begins.",
+          "return_doc": null,
+          "params": [],
           "receiver": "struct ke_render_service *"
         },
         {
@@ -2298,7 +2302,7 @@
           "name": "begin_frame",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Acquires the service\u0027s render target as the backbuffer (a built-in resource named \u0022backbuffer\u0022), clears the per-pass command slot table, and clears the frame\u0027s color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target\u0027s code when acquiring failed.",
+          "doc": "Acquires the service\u0027s render target as the backbuffer, clears the per-pass command slot table, and clears the frame\u0027s color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target\u0027s code when acquiring failed.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_service *"
@@ -2714,12 +2718,12 @@
           "name": "resource_view",
           "returns": "ke_gpu_texture_view",
           "tags": [],
-          "doc": "The GPU view of a declared transient resource, by name.",
+          "doc": "The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.",
           "return_doc": null,
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "resource",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
@@ -2734,8 +2738,8 @@
           "return_doc": null,
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "resource",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
@@ -2746,12 +2750,12 @@
           "name": "resource_buffer",
           "returns": "ke_gpu_buffer",
           "tags": [],
-          "doc": "The GPU buffer published under \u0060name\u0060 via import_buffer.",
+          "doc": "The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.",
           "return_doc": null,
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "resource",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
@@ -2762,12 +2766,12 @@
           "name": "resource_buffer_size",
           "returns": "uint64_t",
           "tags": [],
-          "doc": "The size (bytes) of the buffer published under \u0060name\u0060.",
+          "doc": "The size (bytes) of the buffer published via import_buffer; 0 for another id.",
           "return_doc": null,
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "resource",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
@@ -3157,12 +3161,12 @@
           "name": "resource_format",
           "returns": "ke_gpu_texture_format",
           "tags": [],
-          "doc": "Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.",
+          "doc": "Texel format of a texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.",
           "return_doc": null,
           "params": [
             {
-              "name": "name",
-              "type": "const char *",
+              "name": "resource",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }

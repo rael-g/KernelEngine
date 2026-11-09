@@ -60,7 +60,7 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// What the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
-/// [bag] over the frame's color, sampling the frame's depth. The names are copied.
+/// [bag] over the frame's color, sampling the frame's depth.
 pub const ke_render_deferred_lighting_params = extern struct {
     /// Registers the pass's system; borrowed, must outlive it.
     runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
@@ -73,12 +73,12 @@ pub const ke_render_deferred_lighting_params = extern struct {
     scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
     /// The pass runs inside its frame; borrowed.
     frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-    /// The gbuffer group it lights.
-    gbuffer: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Optional shadow group; without one the shadow is the neutral one.
-    shadow: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Optional cluster group; without one no clustered light is bound.
-    clusters: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The gbuffer it lights.
+    gbuffer: abi_render.c.ke_render_gbuffer_resources = std.mem.zeroes(abi_render.c.ke_render_gbuffer_resources),
+    /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
+    shadow: abi_render.c.ke_render_shadow_resources = std.mem.zeroes(abi_render.c.ke_render_shadow_resources),
+    /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
+    clusters: abi_render.c.ke_render_cluster_resources = std.mem.zeroes(abi_render.c.ke_render_cluster_resources),
 };
 
 pub const ke_render_deferred_lighting_handle = extern struct {
@@ -86,8 +86,8 @@ pub const ke_render_deferred_lighting_handle = extern struct {
     destroy: ?*const fn (?*ke_render_deferred_lighting) callconv(.c) void = null,
 };
 
-/// Registers the pass's render-phase system. A missing runtime, service, device or gbuffer fails
-/// as an invalid argument.
+/// Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer
+/// with an invalid id, fails as an invalid argument.
 pub extern fn ke_render_deferred_lighting_create(params: ?*const ke_render_deferred_lighting_params, out_lighting: ?*ke_render_deferred_lighting_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_deferred_lighting logs to callback, with ctx; a NULL callback

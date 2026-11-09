@@ -61,8 +61,7 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// What the directional shadow pass draws and the shape of its map. A scene larger than `extent`
-/// loses shadows outside it, and a caster farther than `light_distance` stops casting. The names
-/// are copied.
+/// loses shadows outside it, and a caster farther than `light_distance` stops casting.
 pub const ke_render_shadow_params = extern struct {
     /// Registers the pass's system; borrowed, must outlive it.
     runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
@@ -76,9 +75,6 @@ pub const ke_render_shadow_params = extern struct {
     scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
     /// The pass runs inside its frame; borrowed.
     frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-    /// The shadow group it writes: the map under the group's own name, and the light and depth under
-    /// the suffixes of kernel_engine/render/resource_groups.h.
-    output: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// Edge of the square shadow map, in texels.
     resolution: u32 = 1024,
     /// How far back along the light the shadow camera sits.
@@ -102,6 +98,6 @@ pub const ke_render_shadow_params_defaults: ke_render_shadow_params = .{ .resolu
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_shadow_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Registers the pass's render-phase system. A missing runtime, service, device, view space or
-/// output fails as an invalid argument.
-pub extern fn ke_render_shadow_create(params: ?*const ke_render_shadow_params, out_shadow: ?*ke_render_shadow_handle) abi_result.c.ke_result;
+/// Registers the pass's render-phase system. A missing runtime, service, device or view space
+/// fails as an invalid argument.
+pub extern fn ke_render_shadow_create(params: ?*const ke_render_shadow_params, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*ke_render_shadow_handle) abi_result.c.ke_result;

@@ -69,11 +69,12 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         _owner = null;
     }
 
-    /// <summary>Declares a transient resource the service allocates and recycles.</summary>
+    /// <summary>Declares a transient resource the service allocates and recycles; every call declares a new one.</summary>
+    /// <param name="name">The label the resource is debugged under; the service makes it unique.</param>
     /// <param name="width">Read when size_mode is ABSOLUTE.</param>
     /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
     /// <param name="clearValue">Per-resource clear color.</param>
-    /// <returns>Receives the tag-component cid to place in a pass's access_list.</returns>
+    /// <returns>Receives the resource's id, the tag-component cid to place in a pass's access list.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue)
     {
@@ -99,7 +100,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         }
     }
 
-    /// <summary>Imports an externally-owned texture under `name`.</summary>
+    /// <summary>Imports an externally-owned texture, labeled `name`.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId ImportTexture(string name, ulong tex)
@@ -116,7 +117,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         }
     }
 
-    /// <summary>Mints a tag cid under `name` with no GPU payload.</summary>
+    /// <summary>Mints a resource with no GPU payload, labeled `name`, that passes order on.</summary>
     /// <returns>Receives the cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId ImportTag(string name)
@@ -133,7 +134,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         }
     }
 
-    /// <summary>Publishes an externally-owned GPU buffer under `name` for another pass to bind by name.</summary>
+    /// <summary>Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.</summary>
     /// <returns>Receives its tag-component cid.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ComponentId ImportBuffer(string name, ulong buffer, ulong size)
@@ -150,17 +151,16 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         }
     }
 
-    /// <returns>The tag cid minted for `name`, or KE_COMPONENT_INVALID.</returns>
-    public ComponentId Cid(string name)
+    /// <summary>The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads.</summary>
+    public ComponentId FrameColor()
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->cid(Handle, (sbyte*)namePtr);
-        }
+        return Handle->frame_color(Handle);
+    }
+
+    /// <summary>The frame's depth texture, cleared when the frame begins.</summary>
+    public ComponentId FrameDepth()
+    {
+        return Handle->frame_depth(Handle);
     }
 
     /// <summary>Opens a pass's recording context, from inside a render system's body.</summary>
@@ -175,7 +175,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         Handle->end_pass(Handle, (ke_render_pass_ctx*)ctx.Address);
     }
 
-    /// <summary>Acquires the service's render target as the backbuffer (a built-in resource named "backbuffer"), clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
+    /// <summary>Acquires the service's render target as the backbuffer, clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BeginFrame()
     {
@@ -327,56 +327,28 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         return Handle->texture_view(Handle, h);
     }
 
-    /// <summary>The GPU view of a declared transient resource, by name.</summary>
-    public ulong ResourceView(string name)
+    /// <summary>The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.</summary>
+    public ulong ResourceView(ComponentId resource)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->resource_view(Handle, (sbyte*)namePtr);
-        }
+        return Handle->resource_view(Handle, resource);
     }
 
     /// <summary>The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.</summary>
-    public ulong ResourceTexture(string name)
+    public ulong ResourceTexture(ComponentId resource)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->resource_texture(Handle, (sbyte*)namePtr);
-        }
+        return Handle->resource_texture(Handle, resource);
     }
 
-    /// <summary>The GPU buffer published under `name` via import_buffer.</summary>
-    public ulong ResourceBuffer(string name)
+    /// <summary>The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.</summary>
+    public ulong ResourceBuffer(ComponentId resource)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->resource_buffer(Handle, (sbyte*)namePtr);
-        }
+        return Handle->resource_buffer(Handle, resource);
     }
 
-    /// <summary>The size (bytes) of the buffer published under `name`.</summary>
-    public ulong ResourceBufferSize(string name)
+    /// <summary>The size (bytes) of the buffer published via import_buffer; 0 for another id.</summary>
+    public ulong ResourceBufferSize(ComponentId resource)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return Handle->resource_buffer_size(Handle, (sbyte*)namePtr);
-        }
+        return Handle->resource_buffer_size(Handle, resource);
     }
 
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
@@ -555,17 +527,10 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         return (GpuTextureFormat)Handle->backbuffer_format(Handle);
     }
 
-    /// <summary>Texel format of the named texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.</summary>
-    public GpuTextureFormat ResourceFormat(string name)
+    /// <summary>Texel format of a texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.</summary>
+    public GpuTextureFormat ResourceFormat(ComponentId resource)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            return (GpuTextureFormat)Handle->resource_format(Handle, (sbyte*)namePtr);
-        }
+        return (GpuTextureFormat)Handle->resource_format(Handle, resource);
     }
 
     /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>

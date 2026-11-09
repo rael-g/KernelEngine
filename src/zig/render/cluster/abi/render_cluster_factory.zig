@@ -24,10 +24,8 @@ pub const RenderCluster = struct {
     }
 
     /// Creates a light-cluster pass and registers its render-phase system.
-    pub fn create(runtime: ?*abi_runtime.c.ke_runtime, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, view_space: ?*abi_view.c.ke_view_space, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, frame: ?*abi_render.c.ke_render_frame, output: [:0]const u8, config: ?*const c.ke_render_cluster_config) Error!RenderCluster {
-        var written: c.ke_render_cluster_handle = undefined;
-        try checkResult(c.ke_render_cluster_create(runtime, service, device, view_space, camera, scene, frame, output.ptr, config, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
+    pub fn create(runtime: ?*abi_runtime.c.ke_runtime, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, view_space: ?*abi_view.c.ke_view_space, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, frame: ?*abi_render.c.ke_render_frame, config: ?*const c.ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*c.ke_render_cluster_handle) Error!void {
+        try checkResult(c.ke_render_cluster_create(runtime, service, device, view_space, camera, scene, frame, config, out_resources, out_cluster));
     }
 
 };

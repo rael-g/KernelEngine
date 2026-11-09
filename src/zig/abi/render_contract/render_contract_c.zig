@@ -8,6 +8,8 @@ const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 const abi_ui_components = @import("ui_components");
 
+pub const ke_component_id = u32;
+pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
 pub const ke_gpu_buffer = u64;
@@ -30,30 +32,6 @@ pub const KE_COMPONENT_NAME_AMBIENT_LIGHT = "ambient_light";
 pub const KE_COMPONENT_NAME_SKYBOX = "skybox";
 pub const KE_COMPONENT_NAME_MESH = "mesh";
 pub const KE_COMPONENT_NAME_SPRITE2D = "sprite2d";
-/// The gbuffer's base color.
-pub const KE_RENDER_GBUFFER_ALBEDO = ".albedo";
-/// The gbuffer's world normal.
-pub const KE_RENDER_GBUFFER_NORMAL = ".normal";
-/// The gbuffer's emitted light.
-pub const KE_RENDER_GBUFFER_EMISSIVE = ".emissive";
-/// The buffer holding the shadow's light view-projection. The shadow map is the group itself.
-pub const KE_RENDER_SHADOW_LIGHT = ".light";
-/// The depth attachment the shadow map is drawn with.
-pub const KE_RENDER_SHADOW_DEPTH = ".depth";
-/// The clustered point lights. The group itself is the tag the cluster pass writes.
-pub const KE_RENDER_CLUSTER_POINT_LIGHTS = ".point_lights";
-/// The clustered spot lights.
-pub const KE_RENDER_CLUSTER_SPOT_LIGHTS = ".spot_lights";
-/// The point light indices of each cluster.
-pub const KE_RENDER_CLUSTER_POINT_INDICES = ".point_indices";
-/// The point light count of each cluster.
-pub const KE_RENDER_CLUSTER_POINT_COUNTS = ".point_counts";
-/// The spot light indices of each cluster.
-pub const KE_RENDER_CLUSTER_SPOT_INDICES = ".spot_indices";
-/// The spot light count of each cluster.
-pub const KE_RENDER_CLUSTER_SPOT_COUNTS = ".spot_counts";
-/// The cluster grid parameters.
-pub const KE_RENDER_CLUSTER_GRID = ".grid";
 pub const KE_COMPONENT_NAME_UI_QUAD = "ui_quad";
 pub const KE_COMPONENT_NAME_LABEL = "label";
 
@@ -65,8 +43,10 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 
 pub const ke_render_pass_ctx = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    read: ?*const fn (?*ke_render_pass_ctx, ?[*:0]const u8) callconv(.c) ke_gpu_texture_view = null,
-    write: ?*const fn (?*ke_render_pass_ctx, ?[*:0]const u8) callconv(.c) ke_gpu_texture_view = null,
+    /// The view of a resource the pass reads; KE_GPU_INVALID_HANDLE for an unknown id.
+    read: ?*const fn (?*ke_render_pass_ctx, ke_component_id) callconv(.c) ke_gpu_texture_view = null,
+    /// The view of a resource the pass writes; KE_GPU_INVALID_HANDLE for an unknown id.
+    write: ?*const fn (?*ke_render_pass_ctx, ke_component_id) callconv(.c) ke_gpu_texture_view = null,
     begin_render: ?*const fn (?*ke_render_pass_ctx) callconv(.c) ?*abi_render_gpu.c.ke_gpu_render_pass = null,
     begin_compute: ?*const fn (?*ke_render_pass_ctx) callconv(.c) ?*abi_render_gpu.c.ke_gpu_compute_pass = null,
     encoder: ?*const fn (?*ke_render_pass_ctx) callconv(.c) ?*abi_render_gpu.c.ke_gpu_command_encoder = null,

@@ -76,14 +76,13 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddDefaultRenderSceneResolve()
             .AddDefaultRenderFrame();
         if (!_defaultPasses) return;
-        if (_enableShadows) services.AddRenderShadow("shadow");
-        var shadow = _enableShadows ? "shadow" : null;
+        if (_enableShadows) services.AddRenderShadow();
         services
-            .AddRenderCluster("clusters")
-            .AddRenderGbuffer("gbuffer")
-            .AddRenderDeferredLighting(_enableIbl, "gbuffer", shadow, "clusters")
+            .AddRenderCluster()
+            .AddRenderGbuffer()
+            .AddRenderDeferredLighting(_enableIbl)
             .AddRenderSkybox()
-            .AddRenderForward(_enableIbl, shadow, "clusters")
+            .AddRenderForward(_enableIbl)
             .AddRenderTonemap()
             .AddDefaultRenderUi()
             .AddRenderLabelResolve();

@@ -11,11 +11,11 @@ using Microsoft.Extensions.DependencyInjection;
 public static class RenderShadowRegistration
 {
     /// <summary>Registers one <see cref="RenderShadow"/>, created when the modules load with its providers from the container.</summary>
-    public static IServiceCollection AddRenderShadow(this IServiceCollection services, string? output = default, uint resolution = 1024, float lightDistance = 25.0f, float extent = 20.0f, float nearPlane = 0.1f, float farPlane = 50.0f)
+    public static IServiceCollection AddRenderShadow(this IServiceCollection services, uint resolution = 1024, float lightDistance = 25.0f, float extent = 20.0f, float nearPlane = 0.1f, float farPlane = 50.0f)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
-            ? new RenderShadow(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, resolution, lightDistance, extent, nearPlane, farPlane)
-            : new RenderShadow(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), output, resolution, lightDistance, extent, nearPlane, farPlane));
+            ? new RenderShadow(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), resolution, lightDistance, extent, nearPlane, farPlane)
+            : new RenderShadow(sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), resolution, lightDistance, extent, nearPlane, farPlane));
         services.AddSingleton<KernelEngine.Runtime.IRuntimeModule>(new KernelEngine.Runtime.ResolveOnLoadModule<RenderShadow>());
         return services;
     }

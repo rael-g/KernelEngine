@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
+#include <kernel_engine/render/resource_groups.h>
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -67,17 +68,18 @@ extern "C"
      * @param camera Borrowed.
      * @param scene Names the components the pass reads; borrowed.
      * @param frame The pass runs inside its frame; borrowed.
-     * @param output [utf8] The cluster group it writes, copied: a tag under the group's own name,
-     *        and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.
      * @param config [borrowed,optional] The pass's values; NULL selects the default of each.
+     * @param out_resources [out] Receives the ids of its tag, light lists and grid; every id
+     *        KE_COMPONENT_INVALID on failure.
      * @param out_cluster [out] Receives the handle; left zeroed on failure.
-     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when a dependency or @p output is
-     *         NULL, or a field of @p config is 0.
+     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when a dependency is NULL, or a
+     *         field of @p config is 0.
      */
     KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
         ke_runtime *runtime, ke_render_service *service, ke_gpu_device *device, ke_view_space *view_space,
-        ke_render_camera *camera, ke_render_scene_resolve *scene, ke_render_frame *frame, const char *output,
-        const ke_render_cluster_config *config, ke_render_cluster_handle *out_cluster);
+        ke_render_camera *camera, ke_render_scene_resolve *scene, ke_render_frame *frame,
+        const ke_render_cluster_config *config, ke_render_cluster_resources *out_resources,
+        ke_render_cluster_handle *out_cluster);
 
 #ifdef __cplusplus
 }

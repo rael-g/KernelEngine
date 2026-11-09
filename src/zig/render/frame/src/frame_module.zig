@@ -91,7 +91,7 @@ fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render
     const rd = abi_runtime.c.KE_ACCESS_READ;
     st.begin_access = .{.{ .cid = st.frame_cid, .access = abi_runtime.c.KE_ACCESS_WRITE }};
     st.end_access = .{
-        .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = rd },
+        .{ .cid = core.*.frame_color.?(core), .access = rd },
         .{ .cid = st.frame_cid, .access = rd },
     };
     st.query_terms = .{
@@ -160,7 +160,8 @@ const Rig = struct {
 
     fn init(self: *Rig) !void {
         try self.core.init();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         try self.rt.init();
         _ = self.rt.when(.register_system).writesFresh(2);
         try self.ecs.init();

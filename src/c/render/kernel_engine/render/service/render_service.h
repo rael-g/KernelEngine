@@ -35,6 +35,7 @@ typedef enum ke_render_size_mode
 /// [bag]
 typedef struct ke_render_resource_params
 {
+    /// [utf8] The label the resource is debugged under; the service makes it unique.
     const char             *name;
     ke_render_resource_type type;
     ke_gpu_texture_format   format;
@@ -78,12 +79,6 @@ typedef struct ke_render_lighting
     /// Ambient color in rgb; a is 0.
     float ambient[4];
 } ke_render_lighting;
-
-/// The tag a pass that joined the chain writes in its access list, and that the system ending the
-/// frame reads.
-#define KE_RENDER_FRAME_COLOR "frame.color"
-/// The frame's depth texture, cleared when the frame begins; a pass samples it by this name.
-#define KE_RENDER_FRAME_DEPTH "frame.depth"
 
 /// Where a pass that works on the frame's color runs. The stages run in this order, and the passes
 /// of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the
@@ -135,10 +130,10 @@ typedef struct ke_render_pass_io
     /// Optional name the pass's render or compute pass is labeled with; copied when the pass
     /// begins.
     const char        *name;
-    const char *const *reads;  ///< [array_of:reads_count] The tags the pass reads.
-    uint32_t           reads_count;
-    const char *const *writes; ///< [array_of:writes_count] The tags the pass writes.
-    uint32_t           writes_count;
+    const ke_component_id *reads;  ///< [array_of:reads_count] The resources the pass reads.
+    uint32_t               reads_count;
+    const ke_component_id *writes; ///< [array_of:writes_count] The resources the pass writes.
+    uint32_t               writes_count;
     /// The pass's link, or KE_RENDER_CHAIN_NONE for a pass outside the chain.
     ke_render_chain_link chain;
     /// How the frame's depth is attached; ignored when a write is already a depth resource.
@@ -149,25 +144,29 @@ struct ke_render_service
 {
     void *handle;
 
-    /// Declares a transient resource the service allocates and recycles.
-    /// @param out_cid [out] Receives the tag-component cid to place in a pass's access_list.
+    /// Declares a transient resource the service allocates and recycles; every call declares a
+    /// new one.
+    /// @param out_cid [out] Receives the resource's id, the tag-component cid to place in a pass's
+    ///                access list.
     ke_result (*declare)(struct ke_render_service *self,
                          const ke_render_resource_params *params, ke_component_id *out_cid);
-    /// Imports an externally-owned texture under `name`.
+    /// Imports an externally-owned texture, labeled `name`.
     /// @param out_cid [out] Receives its tag-component cid.
     ke_result (*import_texture)(struct ke_render_service *self, const char *name,
                                 ke_gpu_texture tex, ke_component_id *out_cid);
-    /// Mints a tag cid under `name` with no GPU payload.
+    /// Mints a resource with no GPU payload, labeled `name`, that passes order on.
     /// @param out_cid [out] Receives the cid.
     ke_result (*import_tag)(struct ke_render_service *self, const char *name,
                             ke_component_id *out_cid);
-    /// Publishes an externally-owned GPU buffer under `name` for another pass to
-    /// bind by name.
+    /// Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.
     /// @param out_cid [out] Receives its tag-component cid.
     ke_result (*import_buffer)(struct ke_render_service *self, const char *name,
                                ke_gpu_buffer buffer, uint64_t size, ke_component_id *out_cid);
-    /// @return The tag cid minted for `name`, or KE_COMPONENT_INVALID.
-    ke_component_id (*cid)(struct ke_render_service *self, const char *name);
+    /// The tag a pass that joined the chain writes in its access list, and that the system ending
+    /// the frame reads.
+    ke_component_id (*frame_color)(struct ke_render_service *self);
+    /// The frame's depth texture, cleared when the frame begins.
+    ke_component_id (*frame_depth)(struct ke_render_service *self);
 
     /// Opens a pass's recording context, from inside a render system's body.
     struct ke_render_pass_ctx *(*begin_pass)(struct ke_render_service *self,
@@ -175,8 +174,7 @@ struct ke_render_service
     /// Closes a recording context opened by begin_pass.
     void (*end_pass)(struct ke_render_service *self, struct ke_render_pass_ctx *ctx);
 
-    /// Acquires the service's render target as the backbuffer (a built-in resource named
-    /// "backbuffer"), clears the per-pass command slot table, and clears the frame's color and
+    /// Acquires the service's render target as the backbuffer, clears the per-pass command slot table, and clears the frame's color and
     /// depth. When the target has nothing to draw into this frame it succeeds without beginning
     /// one, and begin_pass then opens no pass; it fails with the target's code when acquiring
     /// failed.
@@ -258,15 +256,15 @@ struct ke_render_service
     /// The GPU view for a texture/cubemap handle.
     ke_gpu_texture_view (*texture_view)(struct ke_render_service *self, ke_texture_handle h);
 
-    /// The GPU view of a declared transient resource, by name.
-    ke_gpu_texture_view (*resource_view)(struct ke_render_service *self, const char *name);
+    /// The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.
+    ke_gpu_texture_view (*resource_view)(struct ke_render_service *self, ke_component_id resource);
     /// The raw GPU texture behind a declared resource, for the copy operations
     /// that take a texture rather than a view.
-    ke_gpu_texture (*resource_texture)(struct ke_render_service *self, const char *name);
-    /// The GPU buffer published under `name` via import_buffer.
-    ke_gpu_buffer (*resource_buffer)(struct ke_render_service *self, const char *name);
-    /// The size (bytes) of the buffer published under `name`.
-    uint64_t (*resource_buffer_size)(struct ke_render_service *self, const char *name);
+    ke_gpu_texture (*resource_texture)(struct ke_render_service *self, ke_component_id resource);
+    /// The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.
+    ke_gpu_buffer (*resource_buffer)(struct ke_render_service *self, ke_component_id resource);
+    /// The size (bytes) of the buffer published via import_buffer; 0 for another id.
+    uint64_t (*resource_buffer_size)(struct ke_render_service *self, ke_component_id resource);
 
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per
     /// frame at begin_frame, so a caller earlier in the tick reads the previous
@@ -350,9 +348,9 @@ struct ke_render_service
     /// Texel format of the backbuffer, the format a pipeline drawing into it declares.
     ke_gpu_texture_format (*backbuffer_format)(struct ke_render_service *self);
 
-    /// Texel format of the named texture resource, the format a pipeline drawing into it
-    /// declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown name or a resource without one.
-    ke_gpu_texture_format (*resource_format)(struct ke_render_service *self, const char *name);
+    /// Texel format of a texture resource, the format a pipeline drawing into it declares;
+    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.
+    ke_gpu_texture_format (*resource_format)(struct ke_render_service *self, ke_component_id resource);
 
     /// Counts the times the targets declared relative to the backbuffer were recreated, which
     /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from

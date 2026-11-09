@@ -2,6 +2,7 @@ using System.Numerics;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
+using global::KernelEngine.Render;
 
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
@@ -28,9 +29,9 @@ public unsafe partial struct RenderForwardParams
     [NativeTypeName("ke_render_frame *")]
     public KernelEngine.Render.Native.ke_render_frame* Frame;
 
-    [NativeTypeName("const char *")]
-    public sbyte* Shadow;
+    [NativeTypeName("ke_render_shadow_resources")]
+    public global::KernelEngine.Render.RenderShadowResources Shadow;
 
-    [NativeTypeName("const char *")]
-    public sbyte* Clusters;
+    [NativeTypeName("ke_render_cluster_resources")]
+    public global::KernelEngine.Render.RenderClusterResources Clusters;
 }

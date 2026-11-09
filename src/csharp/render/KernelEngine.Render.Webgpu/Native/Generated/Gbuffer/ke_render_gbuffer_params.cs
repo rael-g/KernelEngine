@@ -2,6 +2,7 @@ using System.Numerics;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
+using global::KernelEngine.Render;
 
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
@@ -25,7 +26,4 @@ public unsafe partial struct ke_render_gbuffer_params
 
     [NativeTypeName("ke_render_frame *")]
     public KernelEngine.Render.Native.ke_render_frame* frame;
-
-    [NativeTypeName("const char *")]
-    public sbyte* output;
 }

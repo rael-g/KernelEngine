@@ -8,7 +8,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_gbuffer_params, device),
     offsetof(ke_render_gbuffer_params, scene),
     offsetof(ke_render_gbuffer_params, frame),
-    offsetof(ke_render_gbuffer_params, output),
     sizeof(ke_render_gbuffer_handle),
     offsetof(ke_render_gbuffer_handle, ref),
     offsetof(ke_render_gbuffer_handle, destroy),

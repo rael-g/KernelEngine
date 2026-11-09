@@ -15,14 +15,14 @@ public sealed unsafe partial class RenderDeferredLighting
     /// <param name="iblEnabled"></param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="gbuffer">The gbuffer group it lights.</param>
-    /// <param name="shadow">Optional shadow group; without one the shadow is the neutral one.</param>
-    /// <param name="clusters">Optional cluster group; without one no clustered light is bound.</param>
-    public RenderDeferredLighting(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? gbuffer = default, string? shadow = default, string? clusters = default) : this(CreateLogged(loggerFactory, runtime, service, device, iblEnabled, scene, frame, gbuffer, shadow, clusters))
+    /// <param name="gbuffer">The gbuffer it lights.</param>
+    /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
+    /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
+    public RenderDeferredLighting(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer = default, KernelEngine.Render.RenderShadowResources shadow = default, KernelEngine.Render.RenderClusterResources clusters = default) : this(CreateLogged(loggerFactory, runtime, service, device, iblEnabled, scene, frame, gbuffer, shadow, clusters))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? gbuffer, string? shadow, string? clusters)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
     {
         ArgumentNullException.ThrowIfNull(loggerFactory);
         KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));

@@ -22,12 +22,10 @@ pub const RenderGbuffer = struct {
         if (self.owner) |owner| owner.destroy.?(owner.ref);
     }
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device or output fails
-    /// as an invalid argument.
-    pub fn create(params: ?*const c.ke_render_gbuffer_params) Error!RenderGbuffer {
-        var written: c.ke_render_gbuffer_handle = undefined;
-        try checkResult(c.ke_render_gbuffer_create(params, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
+    /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
+    /// invalid argument.
+    pub fn create(params: ?*const c.ke_render_gbuffer_params, out_resources: ?*abi_render.c.ke_render_gbuffer_resources, out_gbuffer: ?*c.ke_render_gbuffer_handle) Error!void {
+        try checkResult(c.ke_render_gbuffer_create(params, out_resources, out_gbuffer));
     }
 
 };

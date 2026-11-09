@@ -72,17 +72,16 @@ pub fn prepare(st: *rc.CoreState, core: [*c]abi_render.c.ke_render_service, colo
     const formats = [2]abi_render_gpu.c.ke_gpu_texture_format{ color_format, st.target.format.?(st.target) };
     for (color_names, formats, 0..) |pair, format, f| {
         for (pair, 0..) |name, i| {
-            try declareTarget(core, name, format);
+            _ = try declareTarget(core, name, format);
             st.chain.colors[f][i] = st.resources.items.len - 1;
         }
     }
-    try declareTarget(core, abi_render.c.KE_RENDER_FRAME_DEPTH, depth_format);
+    st.frame_depth = try declareTarget(core, "frame.depth", depth_format);
     st.chain.depth = st.resources.items.len - 1;
-    var color: abi_asset_resolver.c.ke_component_id = undefined;
-    try R.check(resource_table.importTag(core, abi_render.c.KE_RENDER_FRAME_COLOR, &color));
+    try R.check(resource_table.importTag(core, "frame.color", &st.frame_color));
 }
 
-fn declareTarget(core: [*c]abi_render.c.ke_render_service, name: [*:0]const u8, format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!void {
+fn declareTarget(core: [*c]abi_render.c.ke_render_service, name: [*:0]const u8, format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = undefined;
     try R.check(resource_table.declare(core, &abi_render.c.ke_render_resource_params{
         .name = name,
@@ -95,6 +94,7 @@ fn declareTarget(core: [*c]abi_render.c.ke_render_service, name: [*:0]const u8, 
         .scale_y = 1.0,
         .clear_value = .{ .x = 0, .y = 0, .z = 0, .w = 0 },
     }, &cid));
+    return cid;
 }
 
 /// The service's `join_chain` slot. The new link goes after every link of a stage up to its own.

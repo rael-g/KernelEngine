@@ -23,12 +23,10 @@ pub const RenderShadow = struct {
         if (self.owner) |owner| owner.destroy.?(owner.ref);
     }
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device, view space or
-    /// output fails as an invalid argument.
-    pub fn create(params: ?*const c.ke_render_shadow_params) Error!RenderShadow {
-        var written: c.ke_render_shadow_handle = undefined;
-        try checkResult(c.ke_render_shadow_create(params, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
+    /// Registers the pass's render-phase system. A missing runtime, service, device or view space
+    /// fails as an invalid argument.
+    pub fn create(params: ?*const c.ke_render_shadow_params, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*c.ke_render_shadow_handle) Error!void {
+        try checkResult(c.ke_render_shadow_create(params, out_resources, out_shadow));
     }
 
 };

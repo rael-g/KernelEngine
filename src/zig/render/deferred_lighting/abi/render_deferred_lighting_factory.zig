@@ -22,8 +22,8 @@ pub const RenderDeferredLighting = struct {
         if (self.owner) |owner| owner.destroy.?(owner.ref);
     }
 
-    /// Registers the pass's render-phase system. A missing runtime, service, device or gbuffer fails
-    /// as an invalid argument.
+    /// Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer
+    /// with an invalid id, fails as an invalid argument.
     pub fn create(params: ?*const c.ke_render_deferred_lighting_params) Error!RenderDeferredLighting {
         var written: c.ke_render_deferred_lighting_handle = undefined;
         try checkResult(c.ke_render_deferred_lighting_create(params, &written));

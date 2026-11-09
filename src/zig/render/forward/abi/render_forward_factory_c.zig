@@ -61,7 +61,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// What the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
 /// samples the frame's color and draws over a copy of it, tested against the frame's depth.
-/// [bag] The group names are copied.
+/// [bag]
 pub const ke_render_forward_params = extern struct {
     /// Registers the pass's system; borrowed, must outlive it.
     runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
@@ -74,10 +74,10 @@ pub const ke_render_forward_params = extern struct {
     scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
     /// The pass runs inside its frame; borrowed.
     frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-    /// Optional shadow group; without one the shadow is the neutral one.
-    shadow: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Optional cluster group; without one no clustered light is bound.
-    clusters: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
+    shadow: abi_render.c.ke_render_shadow_resources = std.mem.zeroes(abi_render.c.ke_render_shadow_resources),
+    /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
+    clusters: abi_render.c.ke_render_cluster_resources = std.mem.zeroes(abi_render.c.ke_render_cluster_resources),
 };
 
 pub const ke_render_forward_handle = extern struct {

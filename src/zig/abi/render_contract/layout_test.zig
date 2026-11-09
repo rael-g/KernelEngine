@@ -24,6 +24,8 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_render_pass_ctx, translated("ke_render_pass_ctx"));
+    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
+    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
     if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
@@ -51,18 +53,6 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SKYBOX, abi.c.KE_COMPONENT_NAME_SKYBOX);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_MESH, abi.c.KE_COMPONENT_NAME_MESH);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPRITE2D, abi.c.KE_COMPONENT_NAME_SPRITE2D);
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_ALBEDO, abi.c.KE_RENDER_GBUFFER_ALBEDO);
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_NORMAL, abi.c.KE_RENDER_GBUFFER_NORMAL);
-    try std.testing.expectEqualStrings(c.KE_RENDER_GBUFFER_EMISSIVE, abi.c.KE_RENDER_GBUFFER_EMISSIVE);
-    try std.testing.expectEqualStrings(c.KE_RENDER_SHADOW_LIGHT, abi.c.KE_RENDER_SHADOW_LIGHT);
-    try std.testing.expectEqualStrings(c.KE_RENDER_SHADOW_DEPTH, abi.c.KE_RENDER_SHADOW_DEPTH);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_LIGHTS, abi.c.KE_RENDER_CLUSTER_POINT_LIGHTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_LIGHTS, abi.c.KE_RENDER_CLUSTER_SPOT_LIGHTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_INDICES, abi.c.KE_RENDER_CLUSTER_POINT_INDICES);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_POINT_COUNTS, abi.c.KE_RENDER_CLUSTER_POINT_COUNTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_INDICES, abi.c.KE_RENDER_CLUSTER_SPOT_INDICES);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_SPOT_COUNTS, abi.c.KE_RENDER_CLUSTER_SPOT_COUNTS);
-    try std.testing.expectEqualStrings(c.KE_RENDER_CLUSTER_GRID, abi.c.KE_RENDER_CLUSTER_GRID);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_UI_QUAD, abi.c.KE_COMPONENT_NAME_UI_QUAD);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.c.KE_COMPONENT_NAME_LABEL);
 }

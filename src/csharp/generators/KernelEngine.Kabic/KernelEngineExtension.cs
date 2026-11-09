@@ -25,7 +25,10 @@ public sealed class KernelEngineExtension : IKabicExtension
     public void Run(ExtensionContext context)
     {
         var configured = ConfigsExtension.Bindings(context.ManifestPath);
-        foreach (var f in FactoriesExtension.Read(context))
+        var factories = FactoriesExtension.Read(context);
+        var producers = factories.SelectMany(f => f.Outputs.Select(o => (o.ManagedType, Resolve: $"sp.GetService<{f.ManagedNamespace}.{f.ClassName}>()?.{o.Property} ?? default")))
+            .GroupBy(p => p.ManagedType).Where(g => g.Count() == 1).ToDictionary(g => g.Key, g => g.Single().Resolve);
+        foreach (var f in factories)
         {
             if (f.Job.Library is not { } library)
             {
@@ -35,7 +38,7 @@ public sealed class KernelEngineExtension : IKabicExtension
             var setter = context.Convention.StripPrefix(library) + "_set_log_callback";
             var dir = Path.GetRelativePath(context.Root, f.ProjectDir).Replace('\\', '/');
             context.Emit($"{dir}/Generated/{f.ClassName}.Logging.g.cs", Logging(f, setter));
-            context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f, context.Convention, configured.Contains(f.Job.Name)));
+            context.Emit($"{dir}/Generated/{f.ClassName}.Registration.g.cs", Registration(f, context.Convention, configured.Contains(f.Job.Name), producers));
         }
     }
 
@@ -51,17 +54,17 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append("    /// <param name=\"loggerFactory\">Creates the logger of each scope the library logs under.</param>\n");
         foreach (var a in f.Arguments)
             o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
-        o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(f.Contract is null ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
-        o.Append($"    private static {(f.Contract is null ? f.Job.Namespace : f.Contract.Spec.NativeNamespace)}.{f.HandleType} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
+        o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(FactoriesExtension.ChainsThroughThis(f) ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
+        o.Append($"    private static {FactoriesExtension.CreatedType(f)} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
         o.Append("        ArgumentNullException.ThrowIfNull(loggerFactory);\n");
         o.Append($"        {f.Job.Namespace}.{f.Job.MethodsClass}.{setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
         o.Append($"        return Create({FactoriesExtension.Names(f)});\n    }}\n}}\n");
         return o.ToString();
     }
 
-    private static string Registration(Factory f, Convention convention, bool configured)
+    private static string Registration(Factory f, Convention convention, bool configured, IReadOnlyDictionary<string, string> producers)
     {
-        if (f.Contract is null) return PassRegistration(f, configured);
+        if (f.Contract is null) return PassRegistration(f, configured, producers);
         var contractName = f.ContractClass![(f.ContractClass!.LastIndexOf('.') + 1)..];
         var vtable = CType.Of(f.Contract.Model.Structs.First(s => s.Name == f.HandleType).Fields[0].Type).Name;
         var contractInterface = $"{f.Contract.Spec.Namespace}.{Idioms.NativeInterface(vtable, convention)}";
@@ -70,9 +73,10 @@ public sealed class KernelEngineExtension : IKabicExtension
             : null;
         var resolved = f.Arguments.Select(a => a.IsRequiredProvider ? $"sp.GetRequiredService<{a.ManagedType}>()"
             : a.IsOptionalProvider ? $"sp.GetService<{a.ManagedType.TrimEnd('?')}>()"
+            : producers.TryGetValue(a.ManagedType, out var produced) ? produced
             : configured && a.Field is not null ? $"config.{ConfigsExtension.Pascal(a.Name)}"
             : a.Name).ToList();
-        var values = Values(f, configured);
+        var values = Values(f, configured, producers);
         var args = string.Join(", ", resolved);
         var config = configured ? $"{f.ClassName}Config" : null;
         var o = new StringBuilder(Header(f));
@@ -104,14 +108,15 @@ public sealed class KernelEngineExtension : IKabicExtension
         return o.ToString();
     }
 
-    private static string Values(Factory f, bool configured) =>
-        string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative") && !(configured && a.Field is not null))
+    private static string Values(Factory f, bool configured, IReadOnlyDictionary<string, string> producers) =>
+        string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative") && !producers.ContainsKey(a.ManagedType) && !(configured && a.Field is not null))
             .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = {a.Default ?? "default"}"));
 
-    private static string PassRegistration(Factory f, bool configured)
+    private static string PassRegistration(Factory f, bool configured, IReadOnlyDictionary<string, string> producers)
     {
         var args = string.Join(", ", f.Arguments.Select(a => a.IsRequiredProvider ? $"sp.GetRequiredService<{a.ManagedType}>()"
             : a.IsOptionalProvider ? $"sp.GetService<{a.ManagedType.TrimEnd('?')}>()"
+            : producers.TryGetValue(a.ManagedType, out var produced) ? produced
             : configured && a.Field is not null ? $"config.{ConfigsExtension.Pascal(a.Name)}"
             : a.Name));
         var config = $"{f.ClassName}Config";
@@ -120,7 +125,7 @@ public sealed class KernelEngineExtension : IKabicExtension
         o.Append($"/// <summary>Registers <see cref=\"{f.ClassName}\"/> with a service collection.</summary>\n");
         o.Append($"public static class {f.ClassName}Registration\n{{\n");
         o.Append($"    /// <summary>Registers one <see cref=\"{f.ClassName}\"/>, created when the modules load with its providers from the container{(configured ? $" and the <see cref=\"{config}\"/> it holds, or the defaults when it holds none" : "")}.</summary>\n");
-        o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services{Values(f, configured)})\n    {{\n");
+        o.Append($"    public static IServiceCollection Add{f.ClassName}(this IServiceCollection services{Values(f, configured, producers)})\n    {{\n");
         if (configured)
         {
             o.Append("        services.AddSingleton(sp =>\n        {\n");

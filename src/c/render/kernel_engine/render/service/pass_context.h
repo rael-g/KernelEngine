@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_CORE_PASS_CONTEXT_H_
 #define KERNEL_ENGINE_RENDER_CORE_PASS_CONTEXT_H_
 
+#include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_commands.h>
 
@@ -15,8 +16,10 @@ struct ke_render_pass_ctx
 {
     void *handle;
 
-    ke_gpu_texture_view (*read)(struct ke_render_pass_ctx *self, const char *name);
-    ke_gpu_texture_view (*write)(struct ke_render_pass_ctx *self, const char *name);
+    /// The view of a resource the pass reads; KE_GPU_INVALID_HANDLE for an unknown id.
+    ke_gpu_texture_view (*read)(struct ke_render_pass_ctx *self, ke_component_id resource);
+    /// The view of a resource the pass writes; KE_GPU_INVALID_HANDLE for an unknown id.
+    ke_gpu_texture_view (*write)(struct ke_render_pass_ctx *self, ke_component_id resource);
 
     struct ke_gpu_render_pass  *(*begin_render)(struct ke_render_pass_ctx *self);
     struct ke_gpu_compute_pass *(*begin_compute)(struct ke_render_pass_ctx *self);

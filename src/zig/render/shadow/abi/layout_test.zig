@@ -55,7 +55,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [17]c_ulonglong;
+extern const layout_values: [16]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -67,7 +67,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_shadow_params, "view_space"),
         @offsetOf(abi.c.ke_render_shadow_params, "scene"),
         @offsetOf(abi.c.ke_render_shadow_params, "frame"),
-        @offsetOf(abi.c.ke_render_shadow_params, "output"),
         @offsetOf(abi.c.ke_render_shadow_params, "resolution"),
         @offsetOf(abi.c.ke_render_shadow_params, "light_distance"),
         @offsetOf(abi.c.ke_render_shadow_params, "extent"),

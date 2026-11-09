@@ -13,14 +13,14 @@ public unsafe partial struct RenderPassIo
     [NativeTypeName("const char *")]
     public sbyte* Name;
 
-    [NativeTypeName("const char *const *")]
-    public sbyte** Reads;
+    [NativeTypeName("const ke_component_id *")]
+    public global::KernelEngine.Ecs.ComponentId* Reads;
 
     [NativeTypeName("uint32_t")]
     public uint ReadsCount;
 
-    [NativeTypeName("const char *const *")]
-    public sbyte** Writes;
+    [NativeTypeName("const ke_component_id *")]
+    public global::KernelEngine.Ecs.ComponentId* Writes;
 
     [NativeTypeName("uint32_t")]
     public uint WritesCount;

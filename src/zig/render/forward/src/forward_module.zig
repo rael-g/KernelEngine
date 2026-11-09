@@ -96,8 +96,8 @@ const ForwardModule = struct {
     camera_cid: abi_asset_resolver.c.ke_component_id = undefined,
     skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
 
-    shadow: ?[:0]u8 = null,
-    clusters: ?[:0]u8 = null,
+    shadow: abi_render.c.ke_render_shadow_resources = undefined,
+    clusters: abi_render.c.ke_render_cluster_resources = undefined,
 
     pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]abi_render_gpu.c.ke_gpu_vertex_attribute = undefined,
@@ -159,7 +159,7 @@ fn rebuildFrameSet(fwd: *ForwardModule) void {
 
     var bindings: [1 + Features.count]abi_render_gpu.c.ke_render_shader_binding = undefined;
     bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = fwd.opaque_view, .sampler = 0 };
-    Features.fill(core, ibl_view, nameOf(fwd.shadow), nameOf(fwd.clusters), bindings[1..]);
+    Features.fill(core, ibl_view, fwd.shadow, fwd.clusters, bindings[1..]);
 
     binder.destroy_set.?(binder, fwd.frame_set);
     fwd.resource_generation = core.*.resource_generation.?(core);
@@ -277,12 +277,12 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.c.ke_render_f
     fwd.skybox_cid = skybox_cid;
     fwd.env_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
 
-    if (p.shadow != null) fwd.shadow = try gpa.dupeZ(u8, std.mem.span(p.shadow.?));
-    if (p.clusters != null) fwd.clusters = try gpa.dupeZ(u8, std.mem.span(p.clusters.?));
+    fwd.shadow = p.shadow;
+    fwd.clusters = p.clusters;
     fwd.io.name = "render.forward_transparent";
     fwd.io.depth = abi_render.c.KE_RENDER_DEPTH_TEST;
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TRANSPARENT, abi_render.c.KE_RENDER_CHAIN_SAMPLE_OVER, &fwd.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR)));
+    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
 
     try R.check(fwd.groups.init(core.*.resource_binder.?(core).?, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME));
 
@@ -340,9 +340,9 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.c.ke_render_f
     rebuildFrameSet(fwd);
 
     var ac: u32 = 0;
-    fwd.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_COLOR), .access = abi_runtime.c.KE_ACCESS_WRITE };
+    fwd.access[ac] = .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE };
     ac += 1;
-    fwd.access[ac] = .{ .cid = core.*.cid.?(core, abi_render.c.KE_RENDER_FRAME_DEPTH), .access = abi_runtime.c.KE_ACCESS_READ };
+    fwd.access[ac] = .{ .cid = core.*.frame_depth.?(core), .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
     fwd.access[ac] = .{ .cid = mesh_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
@@ -354,9 +354,9 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.c.ke_render_f
     ac += 1;
     fwd.access[ac] = .{ .cid = frame_cid, .access = abi_runtime.c.KE_ACCESS_READ };
     ac += 1;
-    for ([_]?[:0]u8{ fwd.clusters, fwd.shadow }) |group| {
-        const g = group orelse continue;
-        fwd.access[ac] = .{ .cid = core.*.cid.?(core, g.ptr), .access = abi_runtime.c.KE_ACCESS_READ };
+    for ([_]abi_asset_resolver.c.ke_component_id{ fwd.clusters.tag, fwd.shadow.map }) |read| {
+        if (read == abi_ecs.c.KE_COMPONENT_INVALID) continue;
+        fwd.access[ac] = .{ .cid = read, .access = abi_runtime.c.KE_ACCESS_READ };
         ac += 1;
     }
     fwd.access_count = ac;
@@ -371,7 +371,6 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_forward_factory.c.ke_render_f
 /// does not release the pipeline, which `setup` obtained from the render service.
 fn destroyModule(fwd: *ForwardModule) void {
     if (fwd.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) fwd.core.*.leave_chain.?(fwd.core, fwd.io.chain);
-    for ([_]?[:0]u8{ fwd.shadow, fwd.clusters }) |name| if (name) |n| gpa.free(n);
     if (fwd.frame_set != abi_render_gpu.c.KE_RENDER_BINDING_INVALID) fwd.groups.binder.destroy_set.?(fwd.groups.binder, fwd.frame_set);
     if (fwd.objects) |*objects| objects.release();
     fwd.draws.deinit(gpa);
@@ -430,12 +429,11 @@ export fn ke_render_forward_create(params_in: ?*const abi_render_forward_factory
     return R.ok;
 }
 
-fn nameOf(name: ?[:0]u8) ?[*:0]const u8 {
-    return if (name) |n| n.ptr else null;
-}
-
 
 const testing = std.testing;
+
+const test_shadow: abi_render.c.ke_render_shadow_resources = .{ .map = 24, .light = 25 };
+const test_clusters = std.mem.zeroInit(abi_render.c.ke_render_cluster_resources, .{ .tag = 26 });
 
 const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
 
@@ -697,7 +695,8 @@ const Rig = struct {
         _ = self.core.when(.material_binding).returnsFresh();
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.cid).returnsFresh();
+        _ = self.core.when(.frame_color).returnsFresh();
+        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.resource_view).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
@@ -733,7 +732,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -744,7 +743,7 @@ test "destroying the forward pass unregisters every system it registered" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h));
+    try R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -757,7 +756,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -768,7 +767,7 @@ test "a missing frame is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h)));
 }
 
 test "a missing scene is refused" {
@@ -776,7 +775,7 @@ test "a missing scene is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h)));
 }
 
 test "a forward pass the runtime refuses to register releases what it had created" {
@@ -785,7 +784,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = "shadow", .clusters = "clusters" }, &h) != R.ok);
+    try testing.expect(ke_render_forward_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

@@ -12,14 +12,14 @@ const log = std.log.scoped(.render_service);
 
 /// Every adder registers the name as a component with the service's ecs and appends one entry
 /// to the table in call order, writing its cid, and fails as out of memory when the table cannot
-/// grow or with the ecs's code when the name cannot be registered. Declares a texture resource:
+/// grow or with the ecs's code when the name cannot be registered. A name already in the table is
+/// registered with a numeric suffix, so every call makes a resource of its own. Declares a texture resource:
 /// registers the name, creates a texture and its view on the device,
 /// and appends a transient entry that records the format and the clear value. A depth format gets
 /// a depth attachment, any other a color attachment. A size relative to the backbuffer is scaled
 /// from the size the service last read from the target. Entries made here are the only
 /// transient ones: `destroyCore` destroys the texture and view of transient entries and of no
-/// other entry. A name declared before with the same description writes the same cid; with
-/// another it fails as already existing. A texture or view the device refuses fails with the
+/// other entry. A texture or view the device refuses fails with the
 /// device's code.
 pub fn declare(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_render.c.ke_render_resource_params, out_cid: [*c]abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const out = out_cid orelse return R.code(error.InvalidArgument);
@@ -30,12 +30,6 @@ pub fn declare(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_r
 }
 
 fn declareResource(st: *rc.CoreState, params: abi_render.c.ke_render_resource_params) R.Error!abi_asset_resolver.c.ke_component_id {
-    if (st.find(params.name)) |r| {
-        const relative = params.size_mode == abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER;
-        if (r.is_transient and r.format == params.format and r.relative == relative) return r.cid;
-        log.warn("declare: a resource named {s} exists with another description", .{std.mem.span(params.name.?)});
-        return error.AlreadyExists;
-    }
     var w = params.width;
     var h = params.height;
     if (params.size_mode == abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER) {
@@ -62,9 +56,10 @@ fn declareResource(st: *rc.CoreState, params: abi_render.c.ke_render_resource_pa
 /// room for it; the caller appends it or frees the name.
 fn register(st: *rc.CoreState, name: [*c]const u8) R.Error!rc.Resource {
     try st.resources.ensureUnusedCapacity(rc.gpa, 1);
+    const owned = try uniqueName(st, std.mem.span(name));
+    errdefer rc.gpa.free(owned);
     var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(st.ecs.component_register.?(st.ecs, &abi_ecs.c.ke_component_params{ .name = name, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
-    const owned = try rc.gpa.dupeZ(u8, std.mem.span(name));
+    try R.check(st.ecs.component_register.?(st.ecs, &abi_ecs.c.ke_component_params{ .name = owned.ptr, .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     return .{
         .name = owned.ptr,
         .cid = cid,
@@ -75,6 +70,16 @@ fn register(st: *rc.CoreState, name: [*c]const u8) R.Error!rc.Resource {
         .is_transient = false,
         .clear_value = .{ 0, 0, 0, 0 },
     };
+}
+
+fn uniqueName(st: *rc.CoreState, name: []const u8) R.Error![:0]u8 {
+    if (st.find(name.ptr) == null) return rc.gpa.dupeZ(u8, name);
+    var n: u32 = 2;
+    while (true) : (n += 1) {
+        const candidate = try std.fmt.allocPrintSentinel(rc.gpa, "{s}#{d}", .{ name, n }, 0);
+        if (st.find(candidate.ptr) == null) return candidate;
+        rc.gpa.free(candidate);
+    }
 }
 
 const Target = struct { texture: abi_asset_resolver.c.ke_gpu_texture, view: abi_asset_resolver.c.ke_gpu_texture_view };
@@ -164,17 +169,12 @@ pub fn importTexture(self: [*c]abi_render.c.ke_render_service, name: [*c]const u
     return R.ok;
 }
 
-/// Appends an entry that names a resource with no handle, so passes can order on it. A name
-/// already in the table writes its cid.
+/// Appends an entry for a resource with no handle, so passes can order on it.
 pub fn importTag(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8, out_cid: [*c]abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
     const out = out_cid orelse return R.code(error.InvalidArgument);
     out.* = abi_ecs.c.KE_COMPONENT_INVALID;
     if (self == null or name == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
-    if (st.find(name)) |r| {
-        out.* = r.cid;
-        return R.ok;
-    }
     const r = register(st, name) catch |err| return R.code(err);
     st.resources.appendAssumeCapacity(r);
     out.* = r.cid;
@@ -195,35 +195,38 @@ pub fn importBuffer(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8
     return R.ok;
 }
 
-/// Returns the component id of the named entry; the invalid id for an unknown name.
-pub fn cidOf(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) abi_asset_resolver.c.ke_component_id {
-    const st = rc.coreOf(self);
-    if (st.find(name)) |r| return r.cid;
-    return abi_ecs.c.KE_COMPONENT_INVALID;
+/// Slot `frame_color`. The tag the service imported for the frame's color when it was created.
+pub fn frameColor(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_asset_resolver.c.ke_component_id {
+    return rc.coreOf(self).frame_color;
 }
 
-/// Returns the view of the named entry; the invalid handle for an unknown name.
-pub fn resourceView(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) abi_asset_resolver.c.ke_gpu_texture_view {
-    const r = rc.coreOf(self).find(name) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+/// Slot `frame_depth`. The target the service declared for the frame's depth when it was created.
+pub fn frameDepth(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_asset_resolver.c.ke_component_id {
+    return rc.coreOf(self).frame_depth;
+}
+
+/// Returns the view of the entry; the invalid handle for an unknown id.
+pub fn resourceView(self: [*c]abi_render.c.ke_render_service, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_asset_resolver.c.ke_gpu_texture_view {
+    const r = rc.coreOf(self).findId(resource) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     return r.view;
 }
 
-/// Returns the texture of the named entry; the invalid handle for an unknown name.
-pub fn resourceTexture(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) abi_asset_resolver.c.ke_gpu_texture {
-    const r = rc.coreOf(self).find(name) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+/// Returns the texture of the entry; the invalid handle for an unknown id.
+pub fn resourceTexture(self: [*c]abi_render.c.ke_render_service, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_asset_resolver.c.ke_gpu_texture {
+    const r = rc.coreOf(self).findId(resource) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     return r.texture;
 }
 
-/// Returns the buffer of the named entry; the invalid handle for an unknown name.
-pub fn resourceBuffer(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) abi_asset_resolver.c.ke_gpu_buffer {
-    const r = rc.coreOf(self).find(name) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+/// Returns the buffer of the entry; the invalid handle for an unknown id.
+pub fn resourceBuffer(self: [*c]abi_render.c.ke_render_service, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_asset_resolver.c.ke_gpu_buffer {
+    const r = rc.coreOf(self).findId(resource) orelse return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     return r.buffer;
 }
 
-/// Returns the size recorded by `importBuffer`; zero for an unknown name and for an entry that is
+/// Returns the size recorded by `importBuffer`; zero for an unknown id and for an entry that is
 /// not a buffer.
-pub fn resourceBufferSize(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) u64 {
-    const r = rc.coreOf(self).find(name) orelse return 0;
+pub fn resourceBufferSize(self: [*c]abi_render.c.ke_render_service, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) u64 {
+    const r = rc.coreOf(self).findId(resource) orelse return 0;
     return r.buffer_size;
 }
 
@@ -236,10 +239,10 @@ pub fn backbufferSize(self: [*c]abi_render.c.ke_render_service, out_w: [*c]u32, 
 
 /// Asks the render target for its format on every call, not the format recorded for the
 /// backbuffer entry when the service was created.
-/// Returns the format of the named entry; the invalid format for an unknown name.
-pub fn resourceFormat(self: [*c]abi_render.c.ke_render_service, name: [*c]const u8) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
+/// Returns the format of the entry; the invalid format for an unknown id.
+pub fn resourceFormat(self: [*c]abi_render.c.ke_render_service, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
     const st = rc.coreOf(self);
-    if (st.find(name)) |r| return r.format;
+    if (st.findId(resource)) |r| return r.format;
     return abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID;
 }
 

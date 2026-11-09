@@ -15,9 +15,9 @@ public sealed unsafe partial class RenderForward : IDisposable
     /// <param name="iblEnabled"></param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="shadow">Optional shadow group; without one the shadow is the neutral one.</param>
-    /// <param name="clusters">Optional cluster group; without one no clustered light is bound.</param>
-    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? shadow = default, string? clusters = default) : this(Create(runtime, service, device, iblEnabled, scene, frame, shadow, clusters))
+    /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
+    /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
+    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderShadowResources shadow = default, KernelEngine.Render.RenderClusterResources clusters = default) : this(Create(runtime, service, device, iblEnabled, scene, frame, shadow, clusters))
     {
         Hold(runtime.Owner);
         Hold(service.Owner);
@@ -50,30 +50,24 @@ public sealed unsafe partial class RenderForward : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? shadow, string? clusters)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, bool iblEnabled, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        var shadowBytes = shadow is null ? null : System.Text.Encoding.UTF8.GetBytes(shadow + "\0");
-        var clustersBytes = clusters is null ? null : System.Text.Encoding.UTF8.GetBytes(clusters + "\0");
-        fixed (byte* shadowPtr = shadowBytes)
-        fixed (byte* clustersPtr = clustersBytes)
-        {
-            KernelEngine.Render.Webgpu.Native.RenderForwardParams config = default;
-            config.Runtime = runtime.Native;
-            config.Service = service.Native;
-            config.Device = device.Native;
-            config.IblEnabled = iblEnabled;
-            config.Scene = scene.Native;
-            config.Frame = frame.Native;
-            config.Shadow = (sbyte*)shadowPtr;
-            config.Clusters = (sbyte*)clustersPtr;
-            KernelEngine.Render.Webgpu.Native.ke_render_forward_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&config, &handle), "ke_render_forward_create");
-            return handle;
-        }
+        KernelEngine.Render.Webgpu.Native.RenderForwardParams config = default;
+        config.Runtime = runtime.Native;
+        config.Service = service.Native;
+        config.Device = device.Native;
+        config.IblEnabled = iblEnabled;
+        config.Scene = scene.Native;
+        config.Frame = frame.Native;
+        config.Shadow = shadow;
+        config.Clusters = clusters;
+        KernelEngine.Render.Webgpu.Native.ke_render_forward_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&config, &handle), "ke_render_forward_create");
+        return handle;
     }
 }

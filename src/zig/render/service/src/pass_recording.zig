@@ -64,11 +64,11 @@ pub fn endPass(self: [*c]abi_render.c.ke_render_service, ctx: [*c]abi_render_con
     gpa.destroy(@as(*abi_render_contract.c.ke_render_pass_ctx, @ptrCast(ctx)));
 }
 
-/// Returns the view of the named resource, or the invalid view for an unknown name. Also serves
-/// the write slot of the context, so a write resolves its name the same way as a read.
-fn ctxRead(self: [*c]abi_render_contract.c.ke_render_pass_ctx, name: [*c]const u8) callconv(.c) abi_asset_resolver.c.ke_gpu_texture_view {
+/// Returns the view of a resource, or the invalid view for an unknown id. Also serves the write
+/// slot of the context, so a write resolves its id the same way as a read.
+fn ctxRead(self: [*c]abi_render_contract.c.ke_render_pass_ctx, resource: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_asset_resolver.c.ke_gpu_texture_view {
     const ps = rc.passOf(self);
-    if (ps.core.find(name)) |r| return r.view;
+    if (ps.core.findId(resource)) |r| return r.view;
     return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
 }
 
@@ -101,7 +101,7 @@ fn ctxBeginRender(self: [*c]abi_render_contract.c.ke_render_pass_ctx) callconv(.
 
     var i: u32 = 0;
     while (i < ps.io.writes_count) : (i += 1) {
-        const r = ps.core.find(ps.io.writes.?[i]) orelse continue;
+        const r = ps.core.findId(ps.io.writes.?[i]) orelse continue;
         if (rc.isDepthFormat(r.format)) {
             depth = .{
                 .view = r.view,

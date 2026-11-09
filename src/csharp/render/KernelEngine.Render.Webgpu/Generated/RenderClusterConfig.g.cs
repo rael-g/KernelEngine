@@ -47,9 +47,8 @@ public sealed unsafe partial class RenderCluster
     /// <param name="camera">Borrowed.</param>
     /// <param name="scene">Names the components the pass reads; borrowed.</param>
     /// <param name="frame">The pass runs inside its frame; borrowed.</param>
-    /// <param name="output">The cluster group it writes, copied: a tag under the group's own name, and the light lists and grid under the suffixes of kernel_engine/render/resource_groups.h.</param>
     /// <param name="config">The values it is created with.</param>
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, string? output, RenderClusterConfig config) : this(runtime, service, device, viewSpace, camera, scene, frame, output, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster)
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, RenderClusterConfig config) : this(runtime, service, device, viewSpace, camera, scene, frame, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster)
     {
     }
 }
