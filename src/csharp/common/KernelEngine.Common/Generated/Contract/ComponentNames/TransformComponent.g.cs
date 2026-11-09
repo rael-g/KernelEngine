@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Common;
 
-public partial struct TransformComponent
+public partial struct TransformComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "transform";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }

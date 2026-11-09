@@ -3,8 +3,11 @@
 
 namespace KernelEngine.Render;
 
-public partial struct AmbientLightComponent
+public partial struct AmbientLightComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "ambient_light";
+
+    /// <inheritdoc/>
+    static string global::KernelEngine.Interop.IComponentName.RegisteredName => Name;
 }
