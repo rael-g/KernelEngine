@@ -81,11 +81,15 @@ public abstract class Node
     /// <summary>The child of the current node named <paramref name="name"/>; the default entity when it has none.</summary>
     protected Entity Child(string name) => Ctx.Child(Self, name);
 
-    /// <summary>Whether the action named by <paramref name="action"/> was pressed this tick.</summary>
-    protected bool Pressed(ref ActionRef action) => Ctx.Pressed(ref action);
+    /// <summary>
+    /// Whether the action named by <paramref name="action"/> was pressed this tick. The action is resolved
+    /// into <paramref name="action"/> on its first read when it is a variable (a field or a node property);
+    /// a copy is resolved again on every read.
+    /// </summary>
+    protected bool Pressed(in ActionRef action) => Ctx.Pressed(ref System.Runtime.CompilerServices.Unsafe.AsRef(in action));
 
-    /// <summary>The value of the axis action named by <paramref name="action"/>.</summary>
-    protected float Axis(ref ActionRef action) => Ctx.Axis(ref action);
+    /// <summary>The value of the axis action named by <paramref name="action"/>, resolved as <see cref="Pressed"/> resolves it.</summary>
+    protected float Axis(in ActionRef action) => Ctx.Axis(ref System.Runtime.CompilerServices.Unsafe.AsRef(in action));
 
     /// <summary>Raises <paramref name="value"/> as an event of its type.</summary>
     protected void Raise<T>(T value) where T : unmanaged => Ctx.Raise(World.EventId<T>(), value);

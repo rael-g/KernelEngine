@@ -8,7 +8,7 @@ partial class MenuController(Game game) : Node
 {
     void Update()
     {
-        if (Pressed(ref game.Launch)) ChangeScene("res://scenes/Main.scene.toml");
-        else if (Pressed(ref game.Quit)) Exit();
+        if (Pressed(game.Launch)) ChangeScene("res://scenes/Main.scene.toml");
+        else if (Pressed(game.Quit)) Exit();
     }
 }
