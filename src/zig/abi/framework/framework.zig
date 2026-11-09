@@ -132,7 +132,7 @@ pub const NodeCtx = struct {
     }
 
     /// Records a node of type named name under parent, its fields and the components its type names
-    /// in `with` holding their declared defaults.
+    /// in `with` holding their initial values.
     pub fn spawn(self: NodeCtx, @"type": c.ke_component_id, name: [:0]const u8, parent_: c.ke_entity, components: []const c.ke_node_component) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.spawn.?(self.ptr, @"type", name.ptr, parent_, components.ptr, @intCast(components.len), &written));
@@ -208,6 +208,12 @@ pub const NodeTypes = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .initial = &struct {
+                fn call(self: ?*c.ke_node_types, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) ?*const anyopaque {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*const anyopaque)));
+                    return T.initial(state, a0, a1);
+                }
+            }.call,
             .carries = &struct {
                 fn call(self: ?*c.ke_node_types, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
@@ -232,7 +238,7 @@ pub const NodeTypes = struct {
     }
 
     /// Records a node of type named name under parent into commands, its fields and the components
-    /// its type names in `with` holding their declared defaults. The one way a node is created: a
+    /// its type names in `with` holding their initial values. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
     pub fn spawn(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": c.ke_component_id, name: [:0]const u8, parent: c.ke_entity, components: []const c.ke_node_component) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
@@ -253,6 +259,11 @@ pub const NodeTypes = struct {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.find_component.?(self.ptr, name.ptr, &written));
         return written;
+    }
+
+    /// The bytes a node of type is born with in component.
+    pub fn initial(self: NodeTypes, @"type": c.ke_component_id, component: c.ke_component_id) ?*const anyopaque {
+        return self.ptr.initial.?(self.ptr, @"type", component);
     }
 
     /// Whether a node of type carries component: its fields or one its type names in `with`.
@@ -301,6 +312,7 @@ pub const SceneHierarchy = struct {
 };
 
 pub const NodeComponent = c.ke_node_component;
+pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;

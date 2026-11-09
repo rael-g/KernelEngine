@@ -30,6 +30,14 @@ pub const ke_node_component = extern struct {
     data: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
 };
 
+/// A component every node of a type carries beside its fields, and how it is born.
+pub const ke_node_with = extern struct {
+    /// The registered component's name.
+    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// Its registered size of bytes each node starts with; NULL starts it zeroed.
+    initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
+};
+
 /// An input action named by a node's fields and resolved the first time a behaviour reads it. A
 /// scene writes its name; zeroed memory is a reference not yet resolved.
 pub const ke_action_ref = extern struct {
@@ -55,11 +63,11 @@ pub const ke_node_type_desc = extern struct {
     /// The type's own fields, registered as a component; NULL for a type made only of the components
     /// it names in `with`.
     fields: ?*const abi_ecs.c.ke_component_params = std.mem.zeroes(?*const abi_ecs.c.ke_component_params),
-    /// `fields->size` bytes copied into the fields of each node spawned; NULL starts them at the
-    /// defaults of the field table, or zeroed without one.
+    /// `fields->size` bytes copied into the fields of each node spawned; NULL starts them zeroed.
     initial: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
-    /// Names of registered components every node of the type carries beside its fields.
-    with: ?[*]const ?[*:0]const u8 = std.mem.zeroes(?[*]const ?[*:0]const u8),
+    /// Registered components every node of the type carries beside its fields, each with the value
+    /// it is born with.
+    with: ?[*]const ke_node_with = std.mem.zeroes(?[*]const ke_node_with),
     with_count: u32 = std.mem.zeroes(u32),
     /// Runs once per node, in the PreUpdate after the node is created, before its first update.
     ready: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
@@ -114,7 +122,7 @@ pub const ke_node_ctx = extern struct {
     /// map holds.
     pressed: ?*const fn (?*ke_node_ctx, ?*ke_action_ref) callconv(.c) bool = null,
     /// Records a node of type named name under parent, its fields and the components its type names
-    /// in `with` holding their declared defaults.
+    /// in `with` holding their initial values.
     spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Records the destruction of node and its descendants.
     destroy: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) abi_result.c.ke_result = null,
@@ -135,7 +143,7 @@ pub const ke_node_types = extern struct {
     /// Registers an event type.
     register_event: ?*const fn (?*ke_node_types, ?*const abi_ecs.c.ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Records a node of type named name under parent into commands, its fields and the components
-    /// its type names in `with` holding their declared defaults. The one way a node is created: a
+    /// its type names in `with` holding their initial values. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
     spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the type registered under name.
@@ -143,6 +151,8 @@ pub const ke_node_types = extern struct {
     /// The id of the component registered under name, an engine component named by its
     /// `KE_COMPONENT_NAME_*` constant or one the game registered.
     find_component: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// The bytes a node of type is born with in component.
+    initial: ?*const fn (?*ke_node_types, ke_component_id, ke_component_id) callconv(.c) ?*const anyopaque = null,
     /// Whether a node of type carries component: its fields or one its type names in `with`.
     carries: ?*const fn (?*ke_node_types, ke_component_id, ke_component_id) callconv(.c) bool = null,
 };

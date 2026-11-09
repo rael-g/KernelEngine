@@ -14,7 +14,6 @@ const abi_scene_tree = @import("abi_scene_tree");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 const heap = @import("heap");
-const component_fields_apply = @import("component_fields_apply.zig");
 
 const Entity = abi_ecs.c.ke_entity;
 const Cid = abi_ecs.c.ke_component_id;
@@ -436,10 +435,9 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     try R.check(s.runtime.register_system.?(s.runtime, &params, &b.system));
 }
 
-fn prototypeOf(s: *State, size: usize, fields: ?[*]const abi_ecs.c.ke_component_field, field_count: u32) R.Error![]align(16) u8 {
+fn prototypeOf(size: usize, initial: ?*const anyopaque) R.Error![]align(16) u8 {
     const p = heap.gpa.alignedAlloc(u8, prototype_alignment, size) catch return error.OutOfMemory;
-    @memset(p, 0);
-    if (fields) |f| component_fields_apply.seedDefaults(s.ecs, p.ptr, f, field_count);
+    if (initial) |bytes| @memcpy(p, @as([*]const u8, @ptrCast(bytes))[0..size]) else @memset(p, 0);
     return p;
 }
 
@@ -473,7 +471,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     for (t.prototypes) |*p| p.* = &.{};
 
     for (0..desc.with_count) |i| {
-        const with_name = desc.with.?[i] orelse return error.InvalidArgument;
+        const with_name = desc.with.?[i].name orelse return error.InvalidArgument;
         var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
         if (!s.ecs.component_lookup.?(s.ecs, with_name, &meta)) {
             log.warn("node types: type {s} carries {s}, which is not registered", .{ name, with_name });
@@ -481,7 +479,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
         }
         t.columns[own + i] = meta.cid;
         t.sizes[own + i] = meta.size;
-        t.prototypes[own + i] = try prototypeOf(s, meta.size, meta.fields, meta.field_count);
+        t.prototypes[own + i] = try prototypeOf(meta.size, desc.with.?[i].initial);
     }
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(tag_name);
@@ -490,8 +488,7 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     if (desc.fields) |f| {
         try R.check(s.ecs.component_register.?(s.ecs, f, &t.columns[0]));
         t.sizes[0] = f.size;
-        t.prototypes[0] = try prototypeOf(s, f.size, f.fields, f.field_count);
-        if (desc.initial) |bytes| @memcpy(t.prototypes[0], @as([*]const u8, @ptrCast(bytes))[0..f.size]);
+        t.prototypes[0] = try prototypeOf(f.size, desc.initial);
     }
 
     const type_name = std.mem.span(name);
@@ -590,6 +587,16 @@ fn vtFindComponent(self: ?*abi_framework.c.ke_node_types, name_in: ?[*:0]const u
     return R.ok;
 }
 
+/// Slot `initial`. The prototype the type copies into each node it spawns.
+fn vtInitial(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, carried: Cid) callconv(.c) ?*const anyopaque {
+    const s = stateOf(self) orelse return null;
+    const t = findType(s, type_cid) orelse return null;
+    for (t.columns, t.prototypes) |c, proto| {
+        if (c == carried) return proto.ptr;
+    }
+    return null;
+}
+
 /// Slot `carries`.
 fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, cid: Cid) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
@@ -627,7 +634,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -746,14 +753,14 @@ const Fixture = struct {
     }
 };
 
-const with_transform = [_][*:0]const u8{"transform2d"};
+const with_transform = [_]abi_framework.c.ke_node_with{.{ .name = "transform2d", .initial = null }};
 const paddle_fields: abi_ecs.c.ke_component_params = .{ .name = "pong.paddle", .size = @sizeOf(Paddle), .alignment = @alignOf(Paddle) };
 
 fn paddleDesc() abi_framework.c.ke_node_type_desc {
     var d = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     d.name = "paddle";
     d.fields = &paddle_fields;
-    d.with = @ptrCast(&with_transform);
+    d.with = &with_transform;
     d.with_count = 1;
     return d;
 }
@@ -1159,9 +1166,9 @@ test "a node type carrying an unregistered component is refused and registers no
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    const missing = [_][*:0]const u8{"missing"};
+    const missing = [_]abi_framework.c.ke_node_with{.{ .name = "missing", .initial = null }};
     var d = paddleDesc();
-    d.with = @ptrCast(&missing);
+    d.with = &missing;
     d.update = countVisits;
     var cid: Cid = 0;
     try testing.expectEqual(abi_result.c.KE_RESULT_NOT_FOUND, f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
@@ -1234,6 +1241,21 @@ test "a component given to the spawn replaces its type's initial value, and one 
     try testing.expectEqual(given, attached_paddle);
     const foreign = [_]abi_framework.c.ke_node_component{.{ .component = 999, .data = &given }};
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &foreign, 1, &node));
+}
+
+test "initial answers the bytes a type's nodes are born with in a component it carries, and null otherwise" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    const born: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.initial = &born;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    const fields_cid = findType(stateOf(f.types.ref).?, cid).?.columns[0];
+    const bytes: *const Paddle = @ptrCast(@alignCast(f.types.ref.?.initial.?(f.types.ref, cid, fields_cid).?));
+    try testing.expectEqual(born, bytes.*);
+    try testing.expect(f.types.ref.?.initial.?(f.types.ref, cid, 999) == null);
 }
 
 test "initial bytes without fields are refused" {

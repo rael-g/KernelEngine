@@ -12,6 +12,8 @@ typedef struct pong_game
     ke_node_types    *types;
     ke_scene_files   *scenes;
     ke_component_id node;
+    ke_component_id sound_type;
+    ke_component_id sound;
     ke_component_id label;
     ke_component_id body;
     ke_component_id transform2d;

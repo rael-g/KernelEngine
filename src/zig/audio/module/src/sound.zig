@@ -84,6 +84,11 @@ fn reconcile(m: *Module, ctx: *abi_runtime.c.ke_system_ctx, entity: abi_ecs.c.ke
         if (finished and p.playing) end(ctx, entity, p);
     }
     if (!p.playing or t.voice != abi_audio.c.KE_AUDIO_VOICE_INVALID) return;
+    if (!(p.pitch > 0)) {
+        log.warn("the sound of entity {d} has pitch {d}, which plays nothing; it is ended", .{ entity, p.pitch });
+        end(ctx, entity, p);
+        return;
+    }
 
     var voice: abi_audio.c.ke_audio_voice = abi_audio.c.KE_AUDIO_VOICE_INVALID;
     R.check(m.audio.voice_start.?(m.audio, t.clip, p.volume, p.pitch, p.loop, &voice)) catch |err| {
@@ -348,6 +353,19 @@ test "a playing sound starts one voice at its pitch and keeps it while the voice
     try testing.expectEqual(@as(f32, 1.5), FakeAudio.last_pitch);
     try testing.expect(SoundView.sounds[0].playing);
     try testing.expect(SoundView.sounds[0].voice != abi_audio.c.KE_AUDIO_VOICE_INVALID);
+}
+
+test "a sound whose pitch is not positive starts no voice and ends" {
+    var h: Harness = undefined;
+    try h.init(null);
+    defer h.deinit();
+    SoundView.author("hit.wav");
+    SoundView.sounds[0].playing = true;
+    SoundView.sounds[0].pitch = 0;
+    try h.tick();
+    try h.tick();
+    try testing.expectEqual(@as(usize, 0), FakeAudio.started);
+    try testing.expect(!SoundView.sounds[0].playing);
 }
 
 test "clearing playing stops the voice, and setting it again starts a new one" {

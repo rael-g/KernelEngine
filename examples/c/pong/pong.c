@@ -1,5 +1,7 @@
 #include "pong.h"
 
+#include <kernel_engine/audio/component_fields.h>
+#include <kernel_engine/framework/engine_node_types.h>
 #include <kernel_engine/physics/component_fields.h>
 #include <kernel_engine/physics/components.h>
 #include <kernel_engine/render/ui/component_fields.h>
@@ -40,8 +42,10 @@ static const ke_component_field pong_paddle_fields[] = {
 
 typedef struct pong_ball
 {
-    char    hit_sound[128];
-    char    score_sound[128];
+    char    hit_sound[KE_SOUND_MAX_PATH];
+    float   hit_volume;
+    char    score_sound[KE_SOUND_MAX_PATH];
+    float   score_volume;
     float   initial_speed;
     ke_vec2 last_velocity;
     bool    awaiting_launch;
@@ -49,11 +53,13 @@ typedef struct pong_ball
     int32_t launches;
 } pong_ball;
 
-static const pong_ball pong_ball_initial = { .initial_speed = 6.0f, .awaiting_launch = true };
+static const pong_ball pong_ball_initial = { .hit_volume = 1.0f, .score_volume = 1.0f, .initial_speed = 6.0f, .awaiting_launch = true };
 
 static const ke_component_field pong_ball_fields[] = {
     KE_FIELD(pong_ball, hit_sound),
+    KE_FIELD(pong_ball, hit_volume),
     KE_FIELD(pong_ball, score_sound),
+    KE_FIELD(pong_ball, score_volume),
     KE_FIELD(pong_ball, initial_speed),
     KE_FIELD(pong_ball, awaiting_launch),
 };
@@ -85,7 +91,7 @@ static const ke_component_params pong_scoreboard_params = { .name = "pong.scoreb
 static const ke_component_params pong_goal_scored_params = { .name = "pong.goal_scored", .size = sizeof(pong_goal_scored), .alignment = _Alignof(pong_goal_scored) };
 static const ke_component_params pong_ball_launched_params = { .name = "pong.ball_launched", .size = sizeof(pong_ball_launched), .alignment = _Alignof(pong_ball_launched) };
 
-static const char *const pong_body_with[] = { "body2d", "transform2d" };
+static const ke_node_with pong_body_with[] = { { KE_COMPONENT_NAME_BODY2D, &ke_body2d_node_initial }, { KE_COMPONENT_NAME_TRANSFORM2D, &ke_transform2d_node_initial } };
 
 static ke_label_component *child_label(ke_node_ctx *ctx, pong_game *game, const char *name)
 {
@@ -106,9 +112,16 @@ static ke_result change_scene(ke_node_ctx *ctx, pong_game *game, const char *pat
     return pong_load_scene(game, ctx->commands, path);
 }
 
-static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *sound)
+static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *path, float volume)
 {
-    return game->scenes->instantiate(game->scenes, sound, ctx->self, ctx->commands, NULL);
+    ke_sound_component sound = ke_sound_node_initial;
+    snprintf(sound.path, sizeof sound.path, "%s", path);
+    sound.volume = volume;
+    sound.playing = true;
+    sound.release = KE_SOUND_RELEASE_WHEN_DONE;
+    const ke_node_component components[] = { { game->sound, &sound } };
+    ke_entity node = KE_ENTITY_INVALID;
+    return ctx->spawn(ctx, game->sound_type, "Sound", ctx->self, components, 1, &node);
 }
 
 static ke_result paddle_fixed_update(ke_node_ctx *ctx, void *user_data)
@@ -163,7 +176,7 @@ static ke_result score(ke_node_ctx *ctx, pong_game *game, pong_ball *ball, ke_bo
     body->velocity = (ke_vec2){ 0.0f, 0.0f };
     ball->last_velocity = (ke_vec2){ 0.0f, 0.0f };
     ball->awaiting_launch = true;
-    return play(ctx, game, ball->score_sound);
+    return play(ctx, game, ball->score_sound, ball->score_volume);
 }
 
 static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
@@ -184,7 +197,7 @@ static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
         ball->last_velocity = body->velocity;
         if (bounced)
         {
-            ke_result played = play(ctx, game, ball->hit_sound);
+            ke_result played = play(ctx, game, ball->hit_sound, ball->hit_volume);
             if (played != KE_OK) return played;
         }
 
@@ -250,6 +263,8 @@ ke_result pong_register(pong_game *game)
     if (made != KE_OK) return made;
 
     made = types->find_type(types, "node", &game->node);
+    if (made == KE_OK) made = types->find_type(types, "sound", &game->sound_type);
+    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_SOUND, &game->sound);
     if (made != KE_OK) return made;
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_LABEL, &game->label);
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_BODY2D, &game->body);

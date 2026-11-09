@@ -24,6 +24,7 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_node_component, translated("ke_node_component"));
+    try expectSameLayout(abi.c.ke_node_with, translated("ke_node_with"));
     try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
     try expectSameLayout(abi.c.ke_node_handler, translated("ke_node_handler"));
     try expectSameLayout(abi.c.ke_node_type_desc, translated("ke_node_type_desc"));
@@ -45,7 +46,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_ACTION_NAME_MAX), @as(i128, abi.c.KE_ACTION_NAME_MAX));
 }
 
-extern const layout_values: [61]c_ulonglong;
+extern const layout_values: [65]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -53,6 +54,9 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_node_component),
         @offsetOf(abi.c.ke_node_component, "component"),
         @offsetOf(abi.c.ke_node_component, "data"),
+        @sizeOf(abi.c.ke_node_with),
+        @offsetOf(abi.c.ke_node_with, "name"),
+        @offsetOf(abi.c.ke_node_with, "initial"),
         @sizeOf(abi.c.ke_action_ref),
         @offsetOf(abi.c.ke_action_ref, "name"),
         @offsetOf(abi.c.ke_action_ref, "id"),
@@ -100,6 +104,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_types, "spawn"),
         @offsetOf(abi.c.ke_node_types, "find_type"),
         @offsetOf(abi.c.ke_node_types, "find_component"),
+        @offsetOf(abi.c.ke_node_types, "initial"),
         @offsetOf(abi.c.ke_node_types, "carries"),
         @sizeOf(abi.c.ke_node_types_handle),
         @offsetOf(abi.c.ke_node_types_handle, "ref"),

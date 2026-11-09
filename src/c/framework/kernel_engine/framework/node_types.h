@@ -20,6 +20,13 @@ extern "C"
         const void     *data;      ///< [borrowed] Its registered size of bytes, copied by the spawn.
     } ke_node_component;
 
+    /// A component every node of a type carries beside its fields, and how it is born.
+    typedef struct ke_node_with
+    {
+        const char *name;    ///< [utf8] The registered component's name.
+        const void *initial; ///< [borrowed, default:none] Its registered size of bytes each node starts with; NULL starts it zeroed.
+    } ke_node_with;
+
     typedef struct ke_node_ctx ke_node_ctx;
 
 #define KE_ACTION_NAME_MAX 32
@@ -97,7 +104,7 @@ extern "C"
         bool (*pressed)(ke_node_ctx *self, ke_action_ref *action);
 
         /// Records a node of @p type named @p name under @p parent, its fields and the
-        /// components its type names in `with` holding their declared defaults.
+        /// components its type names in `with` holding their initial values.
         /// @param name   [utf8]
         /// @param parent KE_ENTITY_INVALID places it at the root.
         /// @param components [array_of:component_count, default:empty] Components the node starts
@@ -143,13 +150,13 @@ extern "C"
         const ke_component_params *fields;
 
         /// [borrowed, default:none] `fields->size` bytes copied into the fields of each node
-        /// spawned; NULL starts them at the defaults of the field table, or zeroed without one.
+        /// spawned; NULL starts them zeroed.
         const void *initial;
 
-        /// [array_of:with_count, utf8, default:empty] Names of registered components every
-        /// node of the type carries beside its fields.
-        const char *const *with;
-        uint32_t           with_count;
+        /// [array_of:with_count, default:empty] Registered components every node of the type
+        /// carries beside its fields, each with the value it is born with.
+        const ke_node_with *with;
+        uint32_t            with_count;
 
         /// [closure:user_data, default:none] Runs once per node, in the PreUpdate after the
         /// node is created, before its first update.
@@ -193,7 +200,7 @@ extern "C"
         ke_result (*register_event)(struct ke_node_types *self, const ke_component_params *event, ke_component_id *out_event);
 
         /// Records a node of @p type named @p name under @p parent into @p commands, its fields
-        /// and the components its type names in `with` holding their declared defaults. The one
+        /// and the components its type names in `with` holding their initial values. The one
         /// way a node is created: a behaviour's ctx->spawn is this call with its own commands.
         /// @param commands The queue the node is recorded into.
         /// @param name     [utf8]
@@ -221,6 +228,11 @@ extern "C"
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p name or @p out_component;
         ///         KE_RESULT_NOT_FOUND for a name no component was registered under.
         ke_result (*find_component)(struct ke_node_types *self, const char *name, ke_component_id *out_component);
+
+        /// The bytes a node of @p type is born with in @p component.
+        /// @return [borrowed] The component's registered size of bytes, valid while the node types
+        ///         live; NULL when the type was never registered or does not carry the component.
+        const void *(*initial)(struct ke_node_types *self, ke_component_id type, ke_component_id component);
 
         /// Whether a node of @p type carries @p component: its fields or one its type names in
         /// `with`.

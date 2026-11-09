@@ -126,11 +126,10 @@ fn resolveBlock(s: *State, tag: Cid, type_name: []const u8, block: []const u8) ?
     return if (s.types.carries.?(s.types, tag, meta.cid)) meta else null;
 }
 
-fn pendingFor(s: *State, pending: *std.ArrayList(Pending), meta: abi_ecs.c.ke_component_meta) R.Error!*Pending {
+fn pendingFor(s: *State, pending: *std.ArrayList(Pending), tag: Cid, meta: abi_ecs.c.ke_component_meta) R.Error!*Pending {
     for (pending.items) |*p| if (p.cid == meta.cid) return p;
     const bytes = heap.gpa.alignedAlloc(u8, component_alignment, meta.size) catch return error.OutOfMemory;
-    @memset(bytes, 0);
-    if (meta.fields) |f| fields_apply.seedDefaults(s.ecs, bytes.ptr, f, meta.field_count);
+    if (s.types.initial.?(s.types, tag, meta.cid)) |born| @memcpy(bytes, @as([*]const u8, @ptrCast(born))[0..meta.size]) else @memset(bytes, 0);
     pending.append(heap.gpa, .{ .cid = meta.cid, .bytes = bytes }) catch {
         heap.gpa.free(bytes);
         return error.OutOfMemory;
@@ -154,7 +153,7 @@ fn writeBlocks(load: *Load, tbl: *c.toml_table_t, tag: Cid, type_name: []const u
             return structural("scene files: a node of type '{s}' carries no component '{s}'", .{ type_name, key });
         const meta_fields = meta.fields orelse
             return structural("scene files: component '{s}' has no field table", .{key});
-        const p = try pendingFor(s, pending, meta);
+        const p = try pendingFor(s, pending, tag, meta);
         const entries = values.buildEntries(&load.arena, block) orelse continue;
         if (fields_apply.apply(s.ecs, p.bytes.ptr, entries.ptr, @intCast(entries.len), meta_fields, meta.field_count)) |refusing| {
             return structural("scene files: field '{s}' of '{s}' cannot hold the value written for it", .{ refusing.name.?, key });
@@ -308,7 +307,7 @@ const Paddle = extern struct { speed: f32, half: f32 };
 const Pose = extern struct { x: f32, y: f32 };
 
 const paddle_fields = [_]abi_ecs.c.ke_component_field{
-    .{ .name = "speed", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(Paddle, "speed"), .size = 4, .default_value = .{ .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = 7 } } },
+    .{ .name = "speed", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(Paddle, "speed"), .size = 4 },
     .{ .name = "half", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(Paddle, "half"), .size = 4 },
 };
 const pose_fields = [_]abi_ecs.c.ke_component_field{
@@ -345,6 +344,12 @@ fn writeFloat(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_field_write)) abi
 
 fn carriesKnown(args: zsub.For(abi_framework.c.ke_node_types).Args(.carries)) bool {
     return args[1] == 2 and (args[2] == 3 or args[2] == 4);
+}
+
+const paddle_born: Paddle = .{ .speed = 7, .half = 0 };
+
+fn bornPaddle(args: zsub.For(abi_framework.c.ke_node_types).Args(.initial)) ?*const anyopaque {
+    return if (args[1] == 2 and args[2] == 3) &paddle_born else null;
 }
 
 const Spawned = struct { tag: Cid, name: [32]u8, parent: Entity };
@@ -397,6 +402,7 @@ const Fixture = struct {
         _ = f.ecs.when(.component_lookup).does(lookupKnown);
         _ = f.ecs.when(.component_field_write).does(writeFloat);
         _ = f.types.when(.carries).does(carriesKnown);
+        _ = f.types.when(.initial).does(bornPaddle);
         _ = f.types.when(.spawn).does(spawnNode);
         _ = f.assets.when(.resolve_path).does(resolveRes);
         _ = f.commands.when(.attach).does(recordAttach);
@@ -461,7 +467,7 @@ test "every entry without a parent of its own goes under the parent, not only th
     for (spawned[0..3]) |node| try testing.expectEqual(@as(Entity, 9), node.parent);
 }
 
-test "a block named in the type's namespace writes over the component's defaults, attached once" {
+test "a block named in the type's namespace writes over the value the type's nodes are born with, attached once" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
