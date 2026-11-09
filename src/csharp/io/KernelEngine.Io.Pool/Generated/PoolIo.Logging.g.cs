@@ -8,17 +8,16 @@ namespace KernelEngine.Io.Pool;
 public sealed unsafe partial class PoolIo
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="taskPool">The pool each request runs on; borrowed for the lifetime of the ke_io.</param>
     /// <param name="fileSystem">The file system each request reads through; borrowed for the lifetime of the ke_io.</param>
-    public PoolIo(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(CreateLogged(loggerFactory, taskPool, fileSystem))
+    public PoolIo(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(CreateLogged(loggerFactory, taskPool, fileSystem))
     {
     }
 
-    private static KernelEngine.Io.Native.ke_io_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem)
+    private static KernelEngine.Io.Native.ke_io_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool taskPool, KernelEngine.FileSystem.INativeFileSystem fileSystem)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Io.Pool.Native.NativeMethods.io_pool_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Io.Pool.Native.NativeMethods.io_pool_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(taskPool, fileSystem);
     }
 }

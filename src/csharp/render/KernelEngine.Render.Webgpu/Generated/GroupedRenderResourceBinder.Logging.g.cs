@@ -8,18 +8,17 @@ namespace KernelEngine.Render.Webgpu;
 public sealed unsafe partial class GroupedRenderResourceBinder
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="device">Borrowed; must outlive the binder.</param>
     /// <param name="shaderDir">Directory the build wrote each compiled shader's reflection into; copied.</param>
     /// <param name="io">Borrowed; must outlive the binder. The reflection is read through it.</param>
-    public GroupedRenderResourceBinder(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, device, shaderDir, io))
+    public GroupedRenderResourceBinder(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, device, shaderDir, io))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_resource_binder_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Render.Native.ke_render_resource_binder_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_binder_grouped_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_binder_grouped_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(device, shaderDir, io);
     }
 }

@@ -8,16 +8,15 @@ namespace KernelEngine.Text.StbTrueType;
 public sealed unsafe partial class StbFontLoader
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
-    public StbFontLoader(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, io))
+    public StbFontLoader(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, io))
     {
     }
 
-    private static KernelEngine.Text.Native.ke_font_loader_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Text.Native.ke_font_loader_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Text.StbTrueType.Native.NativeMethods.text_stb_truetype_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Text.StbTrueType.Native.NativeMethods.text_stb_truetype_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(io);
     }
 }

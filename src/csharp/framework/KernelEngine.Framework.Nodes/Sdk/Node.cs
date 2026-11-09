@@ -15,6 +15,11 @@ public abstract class Node
     /// <summary>The world the type is registered in; set by <see cref="NodeWorld.Register"/>.</summary>
     public NodeWorld World { get; internal set; } = null!;
 
+    Microsoft.Extensions.Logging.ILogger? _log;
+
+    /// <summary>The logger of the type, under the type's name.</summary>
+    protected Microsoft.Extensions.Logging.ILogger Log => _log ??= World.Logging.CreateLogger(GetType().FullName ?? GetType().Name);
+
     /// <summary>Whether a behaviour is running, so the properties read a node rather than the birth value.</summary>
     protected bool Bound => _ctx is not null;
 

@@ -8,19 +8,18 @@ namespace KernelEngine.Framework;
 public sealed unsafe partial class DefaultAssetResolver
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="imageLoader">NULL refuses every texture.</param>
     /// <param name="fontLoader">NULL refuses every font.</param>
     /// <param name="projectRoot"></param>
     /// <param name="io">What every file the resolver opens is read through; must outlive the resolver.</param>
-    public DefaultAssetResolver(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, imageLoader, fontLoader, projectRoot, io))
+    public DefaultAssetResolver(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, imageLoader, fontLoader, projectRoot, io))
     {
     }
 
-    private static KernelEngine.Asset.Native.ke_asset_resolver_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Asset.Native.ke_asset_resolver_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(imageLoader, fontLoader, projectRoot, io);
     }
 }

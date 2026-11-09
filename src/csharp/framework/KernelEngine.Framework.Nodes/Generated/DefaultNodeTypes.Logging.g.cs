@@ -8,19 +8,18 @@ namespace KernelEngine.Framework.Nodes;
 public sealed unsafe partial class DefaultNodeTypes
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="runtime"></param>
     /// <param name="ecs"></param>
     /// <param name="sceneTree"></param>
     /// <param name="inputActions">Without it, axis answers 0 and pressed false.</param>
-    public DefaultNodeTypes(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions = default) : base(CreateLogged(loggerFactory, runtime, ecs, sceneTree, inputActions))
+    public DefaultNodeTypes(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions = default) : base(CreateLogged(loggerFactory, runtime, ecs, sceneTree, inputActions))
     {
     }
 
-    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions)
+    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, ecs, sceneTree, inputActions);
     }
 }

@@ -53,13 +53,12 @@ public sealed class KernelEngineExtension : IKabicExtension
         var o = new StringBuilder(Header(f));
         o.Append($"public sealed unsafe partial class {f.ClassName}\n{{\n");
         o.Append("    /// <summary>The same construction, with the library logging to <paramref name=\"loggerFactory\"/>.</summary>\n");
-        o.Append("    /// <param name=\"loggerFactory\">Creates the logger of each scope the library logs under.</param>\n");
+        o.Append("    /// <param name=\"loggerFactory\">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>\n");
         foreach (var a in f.Arguments)
             o.Append($"    /// <param name=\"{a.Name}\">{Xml(a.Doc)}</param>\n");
-        o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(FactoriesExtension.ChainsThroughThis(f) ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
-        o.Append($"    private static {FactoriesExtension.CreatedType(f)} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
-        o.Append("        ArgumentNullException.ThrowIfNull(loggerFactory);\n");
-        o.Append($"        {setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
+        o.Append($"    public {f.ClassName}(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory{(parameters.Length > 0 ? ", " + parameters : "")}) : {(FactoriesExtension.ChainsThroughThis(f) ? "this" : "base")}(CreateLogged(loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Names(f) : "")}))\n    {{\n    }}\n\n");
+        o.Append($"    private static {FactoriesExtension.CreatedType(f)} CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory{(f.Arguments.Count > 0 ? ", " + FactoriesExtension.Parameters(f, withDefaults: false) : "")})\n    {{\n");
+        o.Append($"        if (loggerFactory is not null) {setter}(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));\n");
         o.Append($"        return Create({FactoriesExtension.Names(f)});\n    }}\n}}\n");
         return o.ToString();
     }

@@ -76,6 +76,9 @@ public sealed class EngineParts
     /// <summary>The frame the passes run in.</summary>
     public required DefaultRenderFrame Frame { get; init; }
 
+    /// <summary>Where the parts log, or null when native lines go to stderr.</summary>
+    public Microsoft.Extensions.Logging.ILoggerFactory? Logging { get; init; }
+
     /// <summary>The font a label falls back to.</summary>
     public required string DefaultFont { get; init; }
 }
@@ -89,12 +92,12 @@ public sealed class Engine : IDisposable
 {
     readonly List<IDisposable> _owned;
 
-    internal Engine(EngineParts parts, List<IDisposable> owned, DefaultNodeTypes types)
+    internal Engine(EngineParts parts, List<IDisposable> owned, DefaultNodeTypes types, Microsoft.Extensions.Logging.ILoggerFactory? logging)
     {
         Parts = parts;
         _owned = owned;
         Types = types;
-        Nodes = new NodeWorld(types);
+        Nodes = new NodeWorld(types, logging);
     }
 
     /// <summary>Makes an engine of every default part, configured by the project file in <paramref name="projectDir"/>.</summary>

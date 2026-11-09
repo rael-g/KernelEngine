@@ -54,6 +54,5 @@ without the resolver. Models are loaded by `ke_asset_loader` and uploaded by man
 - The vertex layout the resolver converts to for `upload_mesh`: eleven floats (position, normal,
   uv, tangent).
 - The invalid handle of `ke_resource_cache` is `KE_RESOURCE_HANDLE_NONE`, not zero.
-- `AddAssetResolver` takes `INativeImageLoader` and `INativeFontLoader` from the container, so
-  `AddStbImageLoader` and `AddStbFontLoader` have to be registered for textures and fonts to
-  resolve.
+- `AddDefaultAssetResolver` takes `INativeImageLoader` and `INativeFontLoader` from the container,
+  each optional, so a loader has to be registered for textures or fonts to resolve.

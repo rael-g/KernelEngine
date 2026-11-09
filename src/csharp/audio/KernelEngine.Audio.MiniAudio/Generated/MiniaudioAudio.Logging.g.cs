@@ -8,16 +8,15 @@ namespace KernelEngine.Audio.MiniAudio;
 public sealed unsafe partial class MiniaudioAudio
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="io">The io it reads through; borrowed for the lifetime of the backend.</param>
-    public MiniaudioAudio(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, io))
+    public MiniaudioAudio(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, io))
     {
     }
 
-    private static KernelEngine.Audio.Native.ke_audio_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Audio.Native.ke_audio_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Audio.MiniAudio.Native.NativeMethods.audio_miniaudio_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(io);
     }
 }
