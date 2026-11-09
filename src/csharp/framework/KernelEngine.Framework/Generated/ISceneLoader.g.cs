@@ -27,7 +27,7 @@ public interface ISceneLoader : IDisposable
     /// <param name="path">Path to the scene file; a `res://` path is the project root joined with the rest, as for an included scene, and any other is read as load reads it.</param>
     /// <param name="parent">The node the scene is attached under; KE_ENTITY_INVALID attaches it at the root.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Instantiate(string path, Entity parent, INativeEcsCommands commands);
+    void Instantiate(string path, Entity parent, IEcsCommands commands);
     /// <summary>Registers the factory consulted for every entity that declares a type. Replaces any factory registered before it.</summary>
     /// <param name="factory">Consulted once per typed entity.</param>
     /// <exception cref="Exception">The native call failed.</exception>

@@ -366,7 +366,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
     /// <param name="components">Components the node starts with in place of its type's initial values.</param>
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public Entity Spawn(INativeEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default)
+    public Entity Spawn(IEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -388,7 +388,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                 fixed (ke_node_component* componentsPtr = componentsNative)
                 {
                     Entity resultOut = default;
-                    KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->spawn(Handle, commands.Native, type, (sbyte*)namePtr, parent, componentsPtr, (uint)components.Length, &resultOut)), "spawn");
+                    KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->spawn(Handle, ((INativeEcsCommands)commands).Native, type, (sbyte*)namePtr, parent, componentsPtr, (uint)components.Length, &resultOut)), "spawn");
                     return resultOut;
                 }
             }

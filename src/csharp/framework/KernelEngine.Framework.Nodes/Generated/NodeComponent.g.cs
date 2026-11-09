@@ -18,4 +18,8 @@ public partial struct NodeComponent
     public ReadOnlyMemory<byte> Data;
     /// <summary>One of the components the type carries.</summary>
     public ComponentId Component;
+
+    /// <summary>The entry whose data is the bytes of <paramref name="data"/>.</summary>
+    public static NodeComponent Of<T>(ComponentId component, T data) where T : unmanaged =>
+        new() { Component = component, Data = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new[] { data }.AsSpan()).ToArray() };
 }

@@ -196,11 +196,11 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
 
     /// <summary>Records bind into `commands`; the binding takes effect when `commands` is applied. A bind that fails at that point is dropped.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void BindDeferred(Entity entity, uint type, object instance, INativeEcsCommands commands)
+    public void BindDeferred(Entity entity, uint type, object instance, IEcsCommands commands)
     {
         var instanceHandle = System.Runtime.InteropServices.GCHandle.Alloc(instance);
         KernelEngine.Result.Native.Result rc;
-        if ((rc = Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle), commands.Native)) != KernelEngine.Result.Native.Result.Ok)
+        if ((rc = Handle->bind_deferred(Handle, entity, type, (void*)System.Runtime.InteropServices.GCHandle.ToIntPtr(instanceHandle), ((INativeEcsCommands)commands).Native)) != KernelEngine.Result.Native.Result.Ok)
         {
             instanceHandle.Free();
             throw KernelEngine.NativeResults.FromCode(rc, "bind_deferred");
@@ -210,9 +210,9 @@ public unsafe partial class ScriptHost : IDisposable, INativeScriptHost, IScript
 
     /// <summary>Records unbind into `commands`; the binding is dropped when `commands` is applied.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void UnbindDeferred(Entity entity, INativeEcsCommands commands)
+    public void UnbindDeferred(Entity entity, IEcsCommands commands)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->unbind_deferred(Handle, entity, commands.Native), "unbind_deferred");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->unbind_deferred(Handle, entity, ((INativeEcsCommands)commands).Native), "unbind_deferred");
     }
 
     /// <summary>The instance bound to `entity`. False when none is, which is a normal answer, not a failure.</summary>

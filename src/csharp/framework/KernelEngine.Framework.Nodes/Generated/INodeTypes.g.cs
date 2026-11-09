@@ -46,7 +46,7 @@ public interface INodeTypes : IDisposable
     /// <param name="components">Components the node starts with in place of its type's initial values.</param>
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    Entity Spawn(INativeEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
+    Entity Spawn(IEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
     /// <summary>The id of the type registered under name.</summary>
     /// <param name="name">The name its desc gave, `node` for the base type.</param>
     /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>

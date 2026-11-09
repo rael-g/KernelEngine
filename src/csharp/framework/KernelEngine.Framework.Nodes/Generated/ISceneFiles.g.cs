@@ -18,5 +18,5 @@ public interface ISceneFiles : IDisposable
     /// <param name="parent">KE_ENTITY_INVALID places them at the root.</param>
     /// <returns>Receives the first node; KE_ENTITY_INVALID for a file that declares none.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    Entity Instantiate(string path, Entity parent, INativeEcsCommands commands);
+    Entity Instantiate(string path, Entity parent, IEcsCommands commands);
 }

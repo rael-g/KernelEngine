@@ -74,7 +74,7 @@ public unsafe partial class SceneFiles : IDisposable, INativeSceneFiles, ISceneF
     /// <param name="parent">KE_ENTITY_INVALID places them at the root.</param>
     /// <returns>Receives the first node; KE_ENTITY_INVALID for a file that declares none.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public Entity Instantiate(string path, Entity parent, INativeEcsCommands commands)
+    public Entity Instantiate(string path, Entity parent, IEcsCommands commands)
     {
         var pathText = path ?? "";
         var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
@@ -83,7 +83,7 @@ public unsafe partial class SceneFiles : IDisposable, INativeSceneFiles, ISceneF
         fixed (byte* pathPtr = pathBytes)
         {
             Entity resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->instantiate(Handle, (sbyte*)pathPtr, parent, commands.Native, &resultOut), "instantiate");
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->instantiate(Handle, (sbyte*)pathPtr, parent, ((INativeEcsCommands)commands).Native, &resultOut), "instantiate");
             return resultOut;
         }
     }

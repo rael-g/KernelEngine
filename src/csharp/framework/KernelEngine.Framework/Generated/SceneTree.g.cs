@@ -97,7 +97,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
     /// <summary>Records the creation of a node into `commands`, with the same placement as create_node. The id is usable as a reference at once; the node exists when `commands` is applied. For a caller that may not touch the world, such as a system body. Fails as an invalid argument for a null tree, commands or out_node, and with the queue's code when it refuses the recording.</summary>
     /// <returns>Receives the reserved id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public Entity CreateNodeDeferred(string name, Entity parent, INativeEcsCommands commands)
+    public Entity CreateNodeDeferred(string name, Entity parent, IEcsCommands commands)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -106,7 +106,7 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
         fixed (byte* namePtr = nameBytes)
         {
             Entity resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, commands.Native, &resultOut), "create_node_deferred");
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_node_deferred(Handle, (sbyte*)namePtr, parent, ((INativeEcsCommands)commands).Native, &resultOut), "create_node_deferred");
             return resultOut;
         }
     }
@@ -120,9 +120,9 @@ public unsafe partial class SceneTree : IDisposable, INativeSceneTree, ISceneTre
 
     /// <summary>Records the destruction of a node and its descendants into `commands`, as destroy_node would do it when `commands` is applied. Fails as destroy_node does, as an invalid argument for a null commands, and with the queue's code when it refuses the recording.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void DestroyNodeDeferred(Entity entity, INativeEcsCommands commands)
+    public void DestroyNodeDeferred(Entity entity, IEcsCommands commands)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, commands.Native), "destroy_node_deferred");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->destroy_node_deferred(Handle, entity, ((INativeEcsCommands)commands).Native), "destroy_node_deferred");
     }
 
     /// <summary>Destroys every child of the root and leaves the root. Keeps going past a subtree the ecs refuses and returns the first failure.</summary>

@@ -166,11 +166,11 @@ sealed class Game
     }
 
     /// <summary>Records into <paramref name="commands"/> a scene slot at the root holding the scene file <paramref name="path"/>.</summary>
-    public void OpenSlot(INativeEcsCommands commands, string path)
+    public void OpenSlot(IEcsCommands commands, string path)
     {
         var slot = new SceneSlotComponent();
         slot.PathText = path;
-        _types.Spawn(commands, _slotType, "Scene", default, [new() { Component = _slot, Data = Bytes.Of(slot) }]);
+        _types.Spawn(commands, _slotType, "Scene", default, [NodeComponent.Of(_slot, slot)]);
     }
 
     void LabelText(INodeCtx ctx, string name, string text)
@@ -192,7 +192,7 @@ sealed class Game
         var sound = new SoundComponent { Volume = volume, Pitch = 1.0f, Playing = true, Release = SoundRelease.WhenDone };
         var end = path.IndexOf((byte)0);
         sound.PathText = System.Text.Encoding.UTF8.GetString(end < 0 ? path : path[..end]);
-        ctx.Spawn(_soundType, "Sound", ctx.Self, [new() { Component = _sound, Data = Bytes.Of(sound) }]);
+        ctx.Spawn(_soundType, "Sound", ctx.Self, [NodeComponent.Of(_sound, sound)]);
     }
 
     void PaddleFixedUpdate(INodeCtx ctx)

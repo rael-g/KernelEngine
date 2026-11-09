@@ -14,4 +14,8 @@ public partial struct NodeWith
     public string? Name;
     /// <summary>The bytes each node starts with; none starts it zeroed.</summary>
     public ReadOnlyMemory<byte> Initial;
+
+    /// <summary>The entry whose initial is the bytes of <paramref name="initial"/>.</summary>
+    public static NodeWith Of<T>(string? name, T initial) where T : unmanaged =>
+        new() { Name = name, Initial = System.Runtime.InteropServices.MemoryMarshal.AsBytes(new[] { initial }.AsSpan()).ToArray() };
 }

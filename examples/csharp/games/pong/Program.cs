@@ -89,7 +89,7 @@ using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
 types.RegisterEngineNodeTypes();
 var game = new Game(types);
 
-game.OpenSlot((INativeEcsCommands)runtime.Commands(), $"res://scenes/{config.GetString("project", "default_scene", "Menu")}.scene.toml");
+game.OpenSlot(runtime.Commands(), $"res://scenes/{config.GetString("project", "default_scene", "Menu")}.scene.toml");
 
 var clock = Stopwatch.StartNew();
 var previous = clock.Elapsed.TotalSeconds;
