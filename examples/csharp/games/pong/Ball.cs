@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations;
 using System.Numerics;
 
 using KernelEngine.Audio;
@@ -15,13 +16,13 @@ partial class Ball(Game game) : Body2D
     const float ServeSpread = 0.6f;
 
     /// <summary>The sound of a bounce.</summary>
-    [Export] public partial SoundPath HitSound { get; set; }
+    [Export, MaxLength(256)] public partial string HitSound { get; set; }
 
     /// <summary>The bounce's volume.</summary>
     [Export] public partial float HitVolume { get; set; }
 
     /// <summary>The sound of a goal.</summary>
-    [Export] public partial SoundPath ScoreSound { get; set; }
+    [Export, MaxLength(256)] public partial string ScoreSound { get; set; }
 
     /// <summary>The goal's volume.</summary>
     [Export] public partial float ScoreVolume { get; set; }
@@ -38,8 +39,7 @@ partial class Ball(Game game) : Body2D
 
     partial int Launches { get; set; }
 
-    /// <summary>A ball as it is born.</summary>
-    public Ball() : this(null!)
+    void Born()
     {
         HitVolume = 1.0f;
         ScoreVolume = 1.0f;
@@ -84,16 +84,10 @@ partial class Ball(Game game) : Body2D
         LastVelocity = Body2d.Velocity;
     }
 
-    static string TextOf(ReadOnlySpan<byte> bytes)
-    {
-        var end = bytes.IndexOf((byte)0);
-        return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
-    }
-
-    void Play(SoundPath path, float volume)
+    void Play(string path, float volume)
     {
         var sound = EngineNodeTypes.SoundNodeInitial;
-        sound.PathText = TextOf(path);
+        sound.PathText = path;
         sound.Volume = volume;
         sound.Playing = true;
         sound.Release = SoundRelease.WhenDone;

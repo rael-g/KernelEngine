@@ -21,8 +21,7 @@ partial class Paddle : Body2D
     /// <summary>Half the paddle's height, which keeps it inside the walls.</summary>
     [Export] public partial float HalfHeight { get; set; }
 
-    /// <summary>A paddle as it is born.</summary>
-    public Paddle()
+    void Born()
     {
         Speed = 7.0f;
         HalfHeight = 0.9f;

@@ -27,6 +27,10 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         "Field {0} of node type {1} is shared by every node of the type; make it a partial property, or readonly when it is a dependency",
         "KernelEngine.Nodes", DiagnosticSeverity.Error, true);
 
+    static readonly DiagnosticDescriptor NoLength = new("KENG004", "A text property states its length",
+        "Text property {0} of node type {1} needs [MaxLength(n)]: a node holds its text in n bytes",
+        "KernelEngine.Nodes", DiagnosticSeverity.Error, true);
+
     static readonly DiagnosticDescriptor NoTable = new("KENG003", "An exported property has a field table type",
         "Property {0} of node type {1} is a {2}, which a scene cannot write; export a number, a bool, a vector, an ActionRef or an inline array of bytes",
         "KernelEngine.Nodes", DiagnosticSeverity.Error, true);
@@ -55,9 +59,22 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
 
         var properties = type.GetMembers().OfType<IPropertySymbol>().Where(p => p.IsPartialDefinition && !p.IsStatic).ToList();
         var fields = new List<(IPropertySymbol Property, string? Variant, string Size)>();
+        var texts = new Dictionary<IPropertySymbol, int>(SymbolEqualityComparer.Default);
         foreach (var p in properties)
         {
             var exported = p.GetAttributes().Any(a => a.AttributeClass?.ToDisplayString() == "KernelEngine.Framework.Nodes.ExportAttribute");
+            if (p.Type.SpecialType == SpecialType.System_String)
+            {
+                var max = p.GetAttributes().FirstOrDefault(a => a.AttributeClass?.ToDisplayString() == "System.ComponentModel.DataAnnotations.MaxLengthAttribute");
+                if (max is null || max.ConstructorArguments.Length != 1 || max.ConstructorArguments[0].Value is not int length)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(NoLength, p.Locations.FirstOrDefault(), p.Name, type.Name));
+                    return;
+                }
+                texts[p] = length;
+                fields.Add((p, exported ? "String" : null, length.ToString()));
+                continue;
+            }
             var table = exported ? Table(p.Type) : null;
             if (exported && table is null)
             {
@@ -81,8 +98,27 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         o.Append("    /// <summary>The fields every node of the type holds, as its node type registers them.</summary>\n");
         o.Append("    [global::System.Runtime.InteropServices.StructLayout(global::System.Runtime.InteropServices.LayoutKind.Sequential)]\n");
         o.Append("    public struct NodeFields\n    {\n");
-        foreach (var f in fields) o.Append($"        public {f.Property.Type.ToDisplayString()} {f.Property.Name};\n");
+        foreach (var f in fields)
+            o.Append(texts.TryGetValue(f.Property, out var bytes)
+                ? $"        public Text{bytes} {f.Property.Name};\n"
+                : $"        public {f.Property.Type.ToDisplayString()} {f.Property.Name};\n");
         o.Append("    }\n\n");
+        foreach (var length in texts.Values.Distinct())
+        {
+            o.Append($"    /// <summary>{length} bytes of UTF-8 text, NUL-terminated.</summary>\n");
+            o.Append($"    [global::System.Runtime.CompilerServices.InlineArray({length})]\n");
+            o.Append($"    public struct Text{length}\n    {{\n        byte _first;\n    }}\n\n");
+        }
+        if (texts.Count > 0)
+        {
+            o.Append("    static string ReadText(global::System.ReadOnlySpan<byte> bytes)\n    {\n");
+            o.Append("        var end = global::System.MemoryExtensions.IndexOf(bytes, (byte)0);\n");
+            o.Append("        return global::System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes.Slice(0, end));\n    }\n\n");
+            o.Append("    static void WriteText(global::System.Span<byte> bytes, string? text)\n    {\n");
+            o.Append("        bytes.Clear();\n");
+            o.Append("        var encoded = global::System.Text.Encoding.UTF8.GetBytes(text ?? \"\");\n");
+            o.Append("        global::System.MemoryExtensions.AsSpan(encoded, 0, global::System.Math.Min(encoded.Length, bytes.Length - 1)).CopyTo(bytes);\n    }\n\n");
+        }
         o.Append("    NodeFields _born;\n\n");
         o.Append("    ref NodeFields Fields => ref Bound ? ref Ctx.Fields<NodeFields>() : ref _born;\n\n");
         o.Append("    struct NodeProbe\n    {\n        public byte Head;\n        public NodeFields Value;\n    }\n\n");
@@ -94,11 +130,15 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         {
             var declared = f.Property.DeclaringSyntaxReferences.Select(r => r.GetSyntax()).OfType<PropertyDeclarationSyntax>().First();
             var access = string.Join(" ", declared.Modifiers.Select(m => m.ValueText).Where(m => m != "partial"));
-            o.Append($"    {access}{(access.Length > 0 ? " " : "")}partial {f.Property.Type.ToDisplayString()} {f.Property.Name} {{ get => Fields.{f.Property.Name}; set => Fields.{f.Property.Name} = value; }}\n\n");
+            var body = texts.ContainsKey(f.Property)
+                ? $"get => ReadText(Fields.{f.Property.Name}); set => WriteText(Fields.{f.Property.Name}, value);"
+                : $"get => Fields.{f.Property.Name}; set => Fields.{f.Property.Name} = value;";
+            o.Append($"    {access}{(access.Length > 0 ? " " : "")}partial {f.Property.Type.ToDisplayString()} {f.Property.Name} {{ {body} }}\n\n");
         }
 
         o.Append("    /// <inheritdoc/>\n");
         o.Append("    protected override global::KernelEngine.Ecs.ComponentId RegisterInto(global::KernelEngine.Framework.Nodes.NodeWorld world)\n    {\n");
+        if (Has("Born")) o.Append("        Born();\n");
         if (fields.Any(f => f.Variant is not null)) o.Append("        var probe = new NodeFields();\n");
         o.Append("        global::KernelEngine.Ecs.ComponentField[] table =\n        [\n");
         foreach (var f in fields.Where(f => f.Variant is not null))

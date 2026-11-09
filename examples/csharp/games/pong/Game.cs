@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
 
@@ -32,11 +30,4 @@ struct GoalScored
 struct BallLaunched
 {
     public bool Launched;
-}
-
-/// <summary>The path of a sound file, as a scene writes it.</summary>
-[InlineArray(256)]
-struct SoundPath
-{
-    byte _first;
 }

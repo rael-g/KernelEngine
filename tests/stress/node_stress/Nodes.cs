@@ -25,8 +25,7 @@ partial class Mover : Node
     /// <summary>How fast the value advances.</summary>
     [Export] public partial float Rate { get; set; }
 
-    /// <summary>A mover as it is born.</summary>
-    public Mover() => Rate = 1.0f;
+    void Born() => Rate = 1.0f;
 
     void Update()
     {
@@ -44,8 +43,7 @@ partial class Raiser : Node
     /// <summary>The value the update advances.</summary>
     public partial float Value { get; set; }
 
-    /// <summary>A raiser as it is born.</summary>
-    public Raiser() => Value = 0.0f;
+    void Born() => Value = 0.0f;
 
     void Update()
     {
