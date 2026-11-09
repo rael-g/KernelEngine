@@ -52,9 +52,20 @@ public interface INodeCtx : IDisposable
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity Spawn(ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
+    /// <summary>Records a node of the type named type, its components born from the type's initial values with each of values written over them by name; the way any language spawns any node type, an engine one or a game's, without its ids or its structs.</summary>
+    /// <param name="type">The name the type was registered under.</param>
+    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
+    /// <param name="values">Written in order.</param>
+    /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    Entity SpawnNamed(string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default);
     /// <summary>Records the destruction of node and its descendants.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Destroy(Entity node);
+    /// <summary>Points the scene slot nearest above the current node at the scene file path; the slot replaces its children on its next update.</summary>
+    /// <param name="path">As a scene slot's path.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void ChangeScene(string path);
     /// <summary>Records data as an event of type event, delivered to the on handlers of the PostUpdate of this tick that run after it is applied, and gone at the next PreUpdate.</summary>
     /// <param name="data">Copied.</param>
     /// <exception cref="Exception">The native call failed.</exception>

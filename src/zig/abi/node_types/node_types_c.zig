@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_ecs_variant = @import("ecs_variant");
 const abi_result = @import("result");
 
 pub const ke_component_id = u32;
@@ -28,6 +29,16 @@ pub const ke_node_component = extern struct {
     data: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
     /// The component's registered size.
     size: usize = std.mem.zeroes(usize),
+};
+
+/// A value a node spawned by names starts with in one field, named as a scene file names it.
+pub const ke_node_field_value = extern struct {
+    /// The registered name of a component the type carries, its fields' by the type's name.
+    component: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The field's name in the component's field table.
+    field: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// Converted to the field's type as a scene file's value is; a string names an enum value.
+    value: abi_ecs_variant.c.ke_variant = std.mem.zeroes(abi_ecs_variant.c.ke_variant),
 };
 
 /// A component every node of a type carries beside its fields, and how it is born.
@@ -130,8 +141,15 @@ pub const ke_node_ctx = extern struct {
     /// Records a node of type named name under parent, its fields and the components its type names
     /// in `with` holding their initial values.
     spawn: ?*const fn (?*ke_node_ctx, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Records a node of the type named type, its components born from the type's initial values
+    /// with each of values written over them by name; the way any language spawns any node type, an
+    /// engine one or a game's, without its ids or its structs.
+    spawn_named: ?*const fn (?*ke_node_ctx, ?[*:0]const u8, ?[*:0]const u8, ke_entity, ?[*]const ke_node_field_value, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Records the destruction of node and its descendants.
     destroy: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Points the scene slot nearest above the current node at the scene file path; the slot
+    /// replaces its children on its next update.
+    change_scene: ?*const fn (?*ke_node_ctx, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Records data as an event of type event, delivered to the on handlers of the PostUpdate of
     /// this tick that run after it is applied, and gone at the next PreUpdate.
     raise: ?*const fn (?*ke_node_ctx, ke_component_id, ?*const anyopaque, usize) callconv(.c) abi_result.c.ke_result = null,
@@ -152,6 +170,9 @@ pub const ke_node_types = extern struct {
     /// its type names in `with` holding their initial values. The one way a node is created: a
     /// behaviour's ctx->spawn is this call with its own commands.
     spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?[*]const ke_node_component, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Records into commands a node of the type named type with values written over its initial
+    /// values, as a behaviour's ctx->spawn_named does.
+    spawn_named: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ?[*:0]const u8, ?[*:0]const u8, ke_entity, ?[*]const ke_node_field_value, u32, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the type registered under name.
     find_type: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the component registered under name, an engine component named by its

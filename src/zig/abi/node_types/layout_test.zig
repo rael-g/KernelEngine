@@ -24,6 +24,7 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_node_component, translated("ke_node_component"));
+    try expectSameLayout(abi.c.ke_node_field_value, translated("ke_node_field_value"));
     try expectSameLayout(abi.c.ke_node_with, translated("ke_node_with"));
     try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
     try expectSameLayout(abi.c.ke_node_type_desc, translated("ke_node_type_desc"));
@@ -42,7 +43,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_ACTION_NAME_MAX), @as(i128, abi.c.KE_ACTION_NAME_MAX));
 }
 
-extern const layout_values: [64]c_ulonglong;
+extern const layout_values: [71]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -51,6 +52,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_component, "component"),
         @offsetOf(abi.c.ke_node_component, "data"),
         @offsetOf(abi.c.ke_node_component, "size"),
+        @sizeOf(abi.c.ke_node_field_value),
+        @offsetOf(abi.c.ke_node_field_value, "component"),
+        @offsetOf(abi.c.ke_node_field_value, "field"),
+        @offsetOf(abi.c.ke_node_field_value, "value"),
         @sizeOf(abi.c.ke_node_with),
         @offsetOf(abi.c.ke_node_with, "name"),
         @offsetOf(abi.c.ke_node_with, "initial"),
@@ -95,7 +100,9 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_ctx, "axis"),
         @offsetOf(abi.c.ke_node_ctx, "pressed"),
         @offsetOf(abi.c.ke_node_ctx, "spawn"),
+        @offsetOf(abi.c.ke_node_ctx, "spawn_named"),
         @offsetOf(abi.c.ke_node_ctx, "destroy"),
+        @offsetOf(abi.c.ke_node_ctx, "change_scene"),
         @offsetOf(abi.c.ke_node_ctx, "raise"),
         @offsetOf(abi.c.ke_node_ctx, "exit"),
         @sizeOf(abi.c.ke_node_types),
@@ -103,6 +110,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_types, "register_type"),
         @offsetOf(abi.c.ke_node_types, "register_event"),
         @offsetOf(abi.c.ke_node_types, "spawn"),
+        @offsetOf(abi.c.ke_node_types, "spawn_named"),
         @offsetOf(abi.c.ke_node_types, "find_type"),
         @offsetOf(abi.c.ke_node_types, "find_component"),
         @offsetOf(abi.c.ke_node_types, "initial"),

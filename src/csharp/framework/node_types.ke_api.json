@@ -718,6 +718,37 @@
       ]
     },
     {
+      "name": "ke_node_field_value",
+      "doc": "A value a node spawned by names starts with in one field, named as a scene file names it.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "component",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The registered name of a component the type carries, its fields\u0027 by the type\u0027s name."
+        },
+        {
+          "name": "field",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The field\u0027s name in the component\u0027s field table."
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "Converted to the field\u0027s type as a scene file\u0027s value is; a string names an enum value."
+        }
+      ]
+    },
+    {
       "name": "ke_node_with",
       "doc": "A component every node of a type carries beside its fields, and how it is born.",
       "tags": [
@@ -1720,6 +1751,61 @@
           "receiver": "ke_node_ctx *"
         },
         {
+          "name": "spawn_named",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records a node of the type named type, its components born from the type\u0027s initial values with each of values written over them by name; the way any language spawns any node type, an engine one or a game\u0027s, without its ids or its structs.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a type never registered; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry, a field the component\u0027s table does not name, or a value the field cannot hold; the queue\u0027s code.",
+          "params": [
+            {
+              "name": "type",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The name the type was registered under."
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": "KE_ENTITY_INVALID places it at the root."
+            },
+            {
+              "name": "values",
+              "type": "const ke_node_field_value *",
+              "tags": [
+                "array_of:value_count",
+                "default:empty"
+              ],
+              "doc": "Written in order."
+            },
+            {
+              "name": "value_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_node",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Usable as a reference at once; the node exists once the commands are applied."
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
           "name": "destroy",
           "returns": "ke_result",
           "tags": [],
@@ -1731,6 +1817,24 @@
               "type": "ke_entity",
               "tags": [],
               "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "change_scene",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Points the scene slot nearest above the current node at the scene file path; the slot replaces its children on its next update.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no scene slot holds the node; KE_RESULT_INVALID_ARGUMENT for a null path or one longer than a slot holds.",
+          "params": [
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "As a scene slot\u0027s path."
             }
           ],
           "receiver": "ke_node_ctx *"
@@ -1896,6 +2000,67 @@
                 "out"
               ],
               "doc": "Usable as a reference at once; the node exists once the commands are applied."
+            }
+          ],
+          "receiver": "struct ke_node_types *"
+        },
+        {
+          "name": "spawn_named",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records into commands a node of the type named type with values written over its initial values, as a behaviour\u0027s ctx-\u003Espawn_named does.",
+          "return_doc": "As ctx-\u003Espawn_named; KE_RESULT_INVALID_ARGUMENT for null commands.",
+          "params": [
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [],
+              "doc": "The queue the node is recorded into."
+            },
+            {
+              "name": "type",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "parent",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": "KE_ENTITY_INVALID places it at the root."
+            },
+            {
+              "name": "values",
+              "type": "const ke_node_field_value *",
+              "tags": [
+                "array_of:value_count",
+                "default:empty"
+              ],
+              "doc": "Written in order."
+            },
+            {
+              "name": "value_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_node",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Usable as a reference at once."
             }
           ],
           "receiver": "struct ke_node_types *"

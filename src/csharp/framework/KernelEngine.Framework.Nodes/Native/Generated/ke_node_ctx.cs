@@ -68,8 +68,14 @@ public unsafe partial struct ke_node_ctx
     [NativeTypeName("ke_result (*)(ke_node_ctx *, ke_component_id, const char *, ke_entity, const ke_node_component *, uint32_t, ke_entity *)")]
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.ComponentId, sbyte*, global::KernelEngine.Ecs.Entity, ke_node_component*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn;
 
+    [NativeTypeName("ke_result (*)(ke_node_ctx *, const char *, const char *, ke_entity, const ke_node_field_value *, uint32_t, ke_entity *)")]
+    public delegate* unmanaged[Cdecl]<ke_node_ctx*, sbyte*, sbyte*, global::KernelEngine.Ecs.Entity, ke_node_field_value*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn_named;
+
     [NativeTypeName("ke_result (*)(ke_node_ctx *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.Entity, KernelEngine.Result.Native.Result> destroy;
+
+    [NativeTypeName("ke_result (*)(ke_node_ctx *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_node_ctx*, sbyte*, KernelEngine.Result.Native.Result> change_scene;
 
     [NativeTypeName("ke_result (*)(ke_node_ctx *, ke_component_id, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, global::KernelEngine.Ecs.ComponentId, void*, nuint, KernelEngine.Result.Native.Result> raise;

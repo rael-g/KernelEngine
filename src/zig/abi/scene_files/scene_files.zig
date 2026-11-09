@@ -31,6 +31,14 @@ pub const SceneFiles = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .open = &struct {
+                fn call(self: ?*c.ke_scene_files, a0: ?*abi_ecs.c.ke_ecs_commands, a1: ?[*:0]const u8, a2: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.open(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a2 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
         };
     }
 
@@ -40,6 +48,14 @@ pub const SceneFiles = struct {
     pub fn instantiate(self: SceneFiles, path: [:0]const u8, parent: c.ke_entity, commands: ?*abi_ecs.c.ke_ecs_commands) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.instantiate.?(self.ptr, path.ptr, parent, commands, &written));
+        return written;
+    }
+
+    /// Records into commands a scene slot at the root holding the scene file path: how a program
+    /// opens its first scene. A node changes it later with ctx->change_scene.
+    pub fn open(self: SceneFiles, commands: ?*abi_ecs.c.ke_ecs_commands, path: [:0]const u8) Error!c.ke_entity {
+        var written: c.ke_entity = undefined;
+        try checkResult(self.ptr.open.?(self.ptr, commands, path.ptr, &written));
         return written;
     }
 

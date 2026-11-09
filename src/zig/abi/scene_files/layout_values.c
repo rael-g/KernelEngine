@@ -7,6 +7,7 @@ const unsigned long long layout_values[] = {
     sizeof(ke_scene_files),
     offsetof(ke_scene_files, handle),
     offsetof(ke_scene_files, instantiate),
+    offsetof(ke_scene_files, open),
     sizeof(ke_scene_files_handle),
     offsetof(ke_scene_files_handle, ref),
     offsetof(ke_scene_files_handle, destroy),

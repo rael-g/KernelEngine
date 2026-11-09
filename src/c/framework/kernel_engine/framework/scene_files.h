@@ -47,6 +47,14 @@ extern "C"
         ///         registered; KE_RESULT_IO for a file that does not parse, or the queue's code.
         ///         On a failure @p commands may hold part of the scene.
         ke_result (*instantiate)(struct ke_scene_files *self, const char *path, ke_entity parent, ke_ecs_commands *commands, ke_entity *out_root);
+
+        /// Records into @p commands a scene slot at the root holding the scene file @p path: how a
+        /// program opens its first scene. A node changes it later with ctx->change_scene.
+        /// @param path [utf8] As a scene slot's path.
+        /// @param out_slot [out,optional] Receives the slot node.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p path or @p commands, or a path
+        ///         longer than a slot holds; the queue's code.
+        ke_result (*open)(struct ke_scene_files *self, ke_ecs_commands *commands, const char *path, ke_entity *out_slot);
     } ke_scene_files;
 
     /// [owner]

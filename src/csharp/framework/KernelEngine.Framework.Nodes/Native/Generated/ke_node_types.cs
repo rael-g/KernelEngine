@@ -28,6 +28,9 @@ public unsafe partial struct ke_node_types
     [NativeTypeName("ke_result (*)(struct ke_node_types *, ke_ecs_commands *, ke_component_id, const char *, ke_entity, const ke_node_component *, uint32_t, ke_entity *)")]
     public delegate* unmanaged[Cdecl]<ke_node_types*, KernelEngine.Ecs.Native.ke_ecs_commands*, global::KernelEngine.Ecs.ComponentId, sbyte*, global::KernelEngine.Ecs.Entity, ke_node_component*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn;
 
+    [NativeTypeName("ke_result (*)(struct ke_node_types *, ke_ecs_commands *, const char *, const char *, ke_entity, const ke_node_field_value *, uint32_t, ke_entity *)")]
+    public delegate* unmanaged[Cdecl]<ke_node_types*, KernelEngine.Ecs.Native.ke_ecs_commands*, sbyte*, sbyte*, global::KernelEngine.Ecs.Entity, ke_node_field_value*, uint, global::KernelEngine.Ecs.Entity*, KernelEngine.Result.Native.Result> spawn_named;
+
     [NativeTypeName("ke_result (*)(struct ke_node_types *, const char *, ke_component_id *)")]
     public delegate* unmanaged[Cdecl]<ke_node_types*, sbyte*, global::KernelEngine.Ecs.ComponentId*, KernelEngine.Result.Native.Result> find_type;
 

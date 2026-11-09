@@ -19,4 +19,9 @@ public interface ISceneFiles : IDisposable
     /// <returns>Receives the first node; KE_ENTITY_INVALID for a file that declares none.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity Instantiate(string path, Entity parent, IEcsCommands commands);
+    /// <summary>Records into commands a scene slot at the root holding the scene file path: how a program opens its first scene. A node changes it later with ctx-&gt;change_scene.</summary>
+    /// <param name="path">As a scene slot's path.</param>
+    /// <returns>Receives the slot node.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    Entity Open(IEcsCommands commands, string path);
 }
