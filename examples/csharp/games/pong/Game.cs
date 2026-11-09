@@ -7,17 +7,10 @@ namespace Pong;
 sealed class Game
 {
     /// <summary>Serves the ball, and starts a match from the menu.</summary>
-    public ActionRef Launch;
+    public ActionRef Launch = NodeWorld.Action("Launch");
 
     /// <summary>Leaves a match for the menu, and the menu for the desktop.</summary>
-    public ActionRef Quit;
-
-    /// <summary>The actions named as the project's input maps name them.</summary>
-    public Game()
-    {
-        Launch.Name = "Launch";
-        Quit.Name = "Quit";
-    }
+    public ActionRef Quit = NodeWorld.Action("Quit");
 }
 
 /// <summary>A ball reached a goal line.</summary>
