@@ -399,6 +399,55 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         }
     }
 
+    /// <summary>Records into commands a node of the type named type with values written over its initial values, as a behaviour's ctx-&gt;spawn_named does.</summary>
+    /// <param name="commands">The queue the node is recorded into.</param>
+    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
+    /// <param name="values">Written in order.</param>
+    /// <returns>Usable as a reference at once.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public Entity SpawnNamed(IEcsCommands commands, string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default)
+    {
+        var typeText = type ?? "";
+        var typeSize = System.Text.Encoding.UTF8.GetMaxByteCount(typeText.Length) + 1;
+        Span<byte> typeBytes = typeSize <= 512 ? stackalloc byte[512] : new byte[typeSize];
+        typeBytes[System.Text.Encoding.UTF8.GetBytes(typeText, typeBytes)] = 0;
+        fixed (byte* typePtr = typeBytes)
+        {
+            var nameText = name ?? "";
+            var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+            Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+            nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+            fixed (byte* namePtr = nameBytes)
+            {
+                var valuesPins = new System.Buffers.MemoryHandle[values.Length];
+                var valuesTexts = new List<nint>();
+                var valuesNative = new ke_node_field_value[values.Length];
+                try
+                {
+                    for (var valuesAt = 0; valuesAt < values.Length; valuesAt++)
+                    {
+                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Component));
+                        valuesNative[valuesAt].component = (sbyte*)valuesTexts[^1];
+                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Field));
+                        valuesNative[valuesAt].field = (sbyte*)valuesTexts[^1];
+                        valuesNative[valuesAt].value = values[valuesAt].Value;
+                    }
+                    fixed (ke_node_field_value* valuesPtr = valuesNative)
+                    {
+                        Entity resultOut = default;
+                        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->spawn_named(Handle, ((INativeEcsCommands)commands).Native, (sbyte*)typePtr, (sbyte*)namePtr, parent, valuesPtr, (uint)values.Length, &resultOut)), "spawn_named");
+                        return resultOut;
+                    }
+                }
+                finally
+                {
+                    for (var valuesAt = 0; valuesAt < valuesPins.Length; valuesAt++) valuesPins[valuesAt].Dispose();
+                    foreach (var valuesText in valuesTexts) Marshal.FreeCoTaskMem(valuesText);
+                }
+            }
+        }
+    }
+
     /// <summary>The id of the type registered under name.</summary>
     /// <param name="name">The name its desc gave, `node` for the base type.</param>
     /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>

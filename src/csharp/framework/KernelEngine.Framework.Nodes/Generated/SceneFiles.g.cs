@@ -88,6 +88,24 @@ public unsafe partial class SceneFiles : IDisposable, INativeSceneFiles, ISceneF
         }
     }
 
+    /// <summary>Records into commands a scene slot at the root holding the scene file path: how a program opens its first scene. A node changes it later with ctx-&gt;change_scene.</summary>
+    /// <param name="path">As a scene slot's path.</param>
+    /// <returns>Receives the slot node.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public Entity Open(IEcsCommands commands, string path)
+    {
+        var pathText = path ?? "";
+        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
+        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
+        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
+        fixed (byte* pathPtr = pathBytes)
+        {
+            Entity resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, ((INativeEcsCommands)commands).Native, (sbyte*)pathPtr, &resultOut), "open");
+            return resultOut;
+        }
+    }
+
     /// <summary>Releases the native scenefiles.</summary>
     public void Dispose()
     {

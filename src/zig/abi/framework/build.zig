@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("framework.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
+    abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",

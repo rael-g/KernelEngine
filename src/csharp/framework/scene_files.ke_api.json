@@ -1276,6 +1276,39 @@
             }
           ],
           "receiver": "struct ke_scene_files *"
+        },
+        {
+          "name": "open",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records into commands a scene slot at the root holding the scene file path: how a program opens its first scene. A node changes it later with ctx-\u003Echange_scene.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or commands, or a path longer than a slot holds; the queue\u0027s code.",
+          "params": [
+            {
+              "name": "commands",
+              "type": "ke_ecs_commands *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "path",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "As a scene slot\u0027s path."
+            },
+            {
+              "name": "out_slot",
+              "type": "ke_entity *",
+              "tags": [
+                "out",
+                "optional"
+              ],
+              "doc": "Receives the slot node."
+            }
+          ],
+          "receiver": "struct ke_scene_files *"
         }
       ]
     },

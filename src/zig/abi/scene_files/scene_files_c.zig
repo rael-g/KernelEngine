@@ -43,6 +43,9 @@ pub const ke_scene_files = extern struct {
     /// of its own under parent, each spawned as a node of its type with the values its blocks write.
     /// The nodes exist once commands is applied.
     instantiate: ?*const fn (?*ke_scene_files, ?[*:0]const u8, ke_entity, ?*abi_ecs.c.ke_ecs_commands, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
+    /// Records into commands a scene slot at the root holding the scene file path: how a program
+    /// opens its first scene. A node changes it later with ctx->change_scene.
+    open: ?*const fn (?*ke_scene_files, ?*abi_ecs.c.ke_ecs_commands, ?[*:0]const u8, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
 };
 
 pub const ke_scene_files_handle = extern struct {

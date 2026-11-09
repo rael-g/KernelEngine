@@ -257,6 +257,26 @@ fn loadFile(load: *Load, path: [*:0]const u8, outer: Outer) R.Error!Entity {
     return first;
 }
 
+/// Slot `open`. Spawns a scene slot at the root by names, its path written through its field table.
+fn open(self: ?*abi_framework.c.ke_scene_files, commands_in: ?*abi_ecs.c.ke_ecs_commands, path_in: ?[*:0]const u8, out_slot: ?*Entity) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    const commands = commands_in orelse return R.code(error.InvalidArgument);
+    const path = path_in orelse return R.code(error.InvalidArgument);
+    if (std.mem.len(path) >= abi_framework.c.KE_SCENE_SLOT_MAX_PATH) {
+        log.warn("scene files: scene path {s} is longer than a slot holds", .{path});
+        return R.code(error.InvalidArgument);
+    }
+    const written = [_]abi_framework.c.ke_node_field_value{.{
+        .component = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT,
+        .field = "path",
+        .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = path } },
+    }};
+    var slot: Entity = invalid;
+    const rc = s.types.spawn_named.?(s.types, commands, abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT, "Scene", invalid, &written, written.len, &slot);
+    if (out_slot) |out| out.* = slot;
+    return rc;
+}
+
 /// Slot `instantiate`.
 fn instantiate(self: ?*abi_framework.c.ke_scene_files, path_in: ?[*:0]const u8, parent: Entity, commands_in: ?*abi_ecs.c.ke_ecs_commands, out_root: ?*Entity) callconv(.c) abi_result.c.ke_result {
     if (out_root) |r| r.* = invalid;
@@ -325,7 +345,7 @@ export fn ke_scene_files_create(
     const assets = assets_in orelse return R.code(error.InvalidArgument);
     const io = io_in orelse return R.code(error.InvalidArgument);
     const s = heap.gpa.create(State) catch return R.code(error.OutOfMemory);
-    s.* = .{ .api = .{ .instantiate = &instantiate }, .ecs = ecs, .types = types, .assets = assets, .io = io };
+    s.* = .{ .api = .{ .instantiate = &instantiate, .open = &open }, .ecs = ecs, .types = types, .assets = assets, .io = io };
     s.api.handle = s;
     var slot_desc = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     slot_desc.name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT;
@@ -673,6 +693,33 @@ test "a missing file is not found and an entry without a name is refused" {
     defer f.deinit();
     try testing.expectEqual(R.code(error.NotFound), f.instantiate("/scenes/missing.scene.toml", invalid));
     try expectRefused(error.InvalidArgument, "[[entity]]\ntype = \"pong.paddle\"\n");
+}
+
+var opened_type: [32]u8 = .{0} ** 32;
+var opened_path: [64]u8 = .{0} ** 64;
+
+fn recordOpen(args: zsub.For(abi_framework.c.ke_node_types).Args(.spawn_named)) abi_result.c.ke_result {
+    const type_name = std.mem.span(args[2].?);
+    @memcpy(opened_type[0..type_name.len], type_name);
+    const value = args[5].?[0];
+    const path = std.mem.span(value.value.unnamed_0.s.?);
+    @memcpy(opened_path[0..path.len], path);
+    args[7].?.* = 5;
+    return if (args[4] == invalid and args[6] == 1 and std.mem.eql(u8, std.mem.span(value.field.?), "path")) R.ok else R.code(error.InvalidArgument);
+}
+
+test "open spawns a scene slot at the root by names, holding the path, and refuses one longer than a slot holds" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.types.when(.spawn_named).does(recordOpen);
+    var slot: Entity = invalid;
+    try R.check(f.files.ref.?.open.?(f.files.ref, f.commands.api(), "res://scenes/Menu.scene.toml", &slot));
+    try testing.expectEqual(@as(Entity, 5), slot);
+    try testing.expectEqualStrings(abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT, std.mem.sliceTo(&opened_type, 0));
+    try testing.expectEqualStrings("res://scenes/Menu.scene.toml", std.mem.sliceTo(&opened_path, 0));
+    const long = "x" ** abi_framework.c.KE_SCENE_SLOT_MAX_PATH;
+    try testing.expectEqual(R.code(error.InvalidArgument), f.files.ref.?.open.?(f.files.ref, f.commands.api(), long, &slot));
 }
 
 test "the scene files leak nothing" {

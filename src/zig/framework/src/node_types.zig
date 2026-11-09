@@ -8,18 +8,22 @@ const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
 const abi_framework_components = @import("abi_framework_components");
 const abi_input_actions = @import("abi_input_actions");
+const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
 const abi_scene_tree = @import("abi_scene_tree");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
 const heap = @import("heap");
+const fields_apply = @import("component_fields_apply.zig");
 
 const Entity = abi_ecs.c.ke_entity;
 const Cid = abi_ecs.c.ke_component_id;
 const invalid = abi_ecs.c.KE_ENTITY_INVALID;
 const status_name = "node_status";
 const base_type_name = "node";
+const scene_slot_name = "scene_slot";
+const scene_slot_path_field = "path";
 const prototype_alignment: std.mem.Alignment = .@"16";
 
 const NodeStatus = extern struct { readied: u8 };
@@ -298,6 +302,102 @@ fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, nam
     return R.ok;
 }
 
+fn lookupMeta(s: *State, name: [*:0]const u8) ?abi_ecs.c.ke_component_meta {
+    var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    return if (s.ecs.component_lookup.?(s.ecs, name, &meta)) meta else null;
+}
+
+fn writeNamed(s: *State, memory: *anyopaque, meta: abi_ecs.c.ke_component_meta, field: [*:0]const u8, value: abi_ecs_variant.c.ke_variant) bool {
+    const table = meta.fields orelse return false;
+    var entry = [1]abi_ecs_variant.c.ke_variant_table_entry{.{ .key = field, .value = value, .consumed = false }};
+    if (fields_apply.apply(s.ecs, memory, &entry, 1, @ptrCast(table), meta.field_count) != null) return false;
+    return entry[0].consumed;
+}
+
+fn spawnNamedNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values_in: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out: *Entity) abi_result.c.ke_result {
+    var type_cid: Cid = abi_ecs.c.KE_COMPONENT_INVALID;
+    const found = vtFindType(&s.api, type_name, &type_cid);
+    if (found != R.ok) return found;
+    const t = findType(s, type_cid) orelse return R.code(error.NotFound);
+    const values: []const abi_framework.c.ke_node_field_value = if (count == 0) &.{} else (values_in orelse return R.code(error.InvalidArgument))[0..count];
+
+    const bytes = heap.gpa.alloc(?[]align(16) u8, t.columns.len) catch return R.code(error.OutOfMemory);
+    @memset(bytes, null);
+    defer {
+        for (bytes) |b| if (b) |owned| heap.gpa.free(owned);
+        heap.gpa.free(bytes);
+    }
+    for (values) |v| {
+        const component_name = v.component orelse return R.code(error.InvalidArgument);
+        const field_name = v.field orelse return R.code(error.InvalidArgument);
+        const meta = lookupMeta(s, component_name) orelse {
+            log.warn("node types: spawning {s} with a value for {s}, a component never registered", .{ type_name.?, component_name });
+            return R.code(error.InvalidArgument);
+        };
+        const at = std.mem.indexOfScalar(Cid, t.columns, meta.cid) orelse {
+            log.warn("node types: spawning {s} with a value for {s}, which the type does not carry", .{ type_name.?, component_name });
+            return R.code(error.InvalidArgument);
+        };
+        if (bytes[at] == null) {
+            const copy = heap.gpa.alignedAlloc(u8, prototype_alignment, t.sizes[at]) catch return R.code(error.OutOfMemory);
+            @memcpy(copy, t.prototypes[at][0..t.sizes[at]]);
+            bytes[at] = copy;
+        }
+        if (!writeNamed(s, bytes[at].?.ptr, meta, field_name, v.value)) {
+            log.warn("node types: spawning {s}, field {s} of {s} is not one its table names or cannot hold the value", .{ type_name.?, field_name, component_name });
+            return R.code(error.InvalidArgument);
+        }
+    }
+
+    var given: std.ArrayList(abi_framework.c.ke_node_component) = .empty;
+    defer given.deinit(heap.gpa);
+    for (bytes, t.columns, t.sizes) |b, c, size| {
+        const owned = b orelse continue;
+        given.append(heap.gpa, .{ .component = c, .data = owned.ptr, .size = size }) catch return R.code(error.OutOfMemory);
+    }
+    return spawnNode(s, commands, type_cid, name, under, given.items.ptr, @intCast(given.items.len), out);
+}
+
+/// Slot `spawn_named` of the ctx: the node types' spawn_named with the behaviour's commands.
+fn spawnNamed(ctx: ?*abi_framework.c.ke_node_ctx, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
+    const out = out_node orelse return R.code(error.InvalidArgument);
+    const commands = w.api.commands orelse return R.code(error.InvalidArgument);
+    return spawnNamedNode(w.behaviour.owner.state, commands, type_name, name, under, values, count, out);
+}
+
+/// Slot `change_scene`. Finds the nearest ancestor holding a scene slot and writes the path
+/// through the slot's field table.
+fn changeScene(ctx: ?*abi_framework.c.ke_node_ctx, path_in: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
+    const path = path_in orelse return R.code(error.InvalidArgument);
+    const s = w.behaviour.owner.state;
+    const meta = lookupMeta(s, scene_slot_name) orelse {
+        log.warn("node types: changing scene with no scene slot registered", .{});
+        return R.code(error.NotFound);
+    };
+    const holder = ancestor(ctx, w.api.self, meta.cid);
+    if (holder == invalid) {
+        log.warn("node types: changing scene from a node no scene slot holds", .{});
+        return R.code(error.NotFound);
+    }
+    const slot = s.ecs.component_get.?(s.ecs, holder, meta.cid) orelse return R.code(error.NotFound);
+    if (std.mem.len(path) >= slotPathCapacity(meta)) {
+        log.warn("node types: scene path {s} is longer than a slot holds", .{path});
+        return R.code(error.InvalidArgument);
+    }
+    const value: abi_ecs_variant.c.ke_variant = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = path } };
+    return if (writeNamed(s, slot, meta, scene_slot_path_field, value)) R.ok else R.code(error.InvalidArgument);
+}
+
+fn slotPathCapacity(meta: abi_ecs.c.ke_component_meta) usize {
+    const table: [*]const abi_ecs.c.ke_component_field = @ptrCast(meta.fields orelse return 0);
+    for (table[0..meta.field_count]) |f| {
+        if (std.mem.eql(u8, std.mem.span(f.name.?), scene_slot_path_field)) return f.size;
+    }
+    return 0;
+}
+
 /// Slot `spawn` of the ctx: the node types' spawn with the behaviour's commands.
 fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8, under: Entity, components: ?[*]const abi_framework.c.ke_node_component, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
     const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
@@ -365,6 +465,8 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
             .axis = &axis,
             .pressed = &pressed,
             .spawn = &spawn,
+            .spawn_named = &spawnNamed,
+            .change_scene = &changeScene,
             .destroy = &destroy,
             .raise = &raise,
             .exit = &exit,
@@ -592,6 +694,15 @@ fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ec
     return spawnNode(s, commands, type_cid, name, under, components, count, out);
 }
 
+/// Slot `spawn_named`. Copies the prototype of each component a value names, writes the values
+/// through the components' field tables, and spawns with those copies.
+fn vtSpawnNamed(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ecs_commands, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    const commands = commands_in orelse return R.code(error.InvalidArgument);
+    const out = out_node orelse return R.code(error.InvalidArgument);
+    return spawnNamedNode(s, commands, type_name, name, under, values, count, out);
+}
+
 /// Slot `find_type`. Looks up the tag the type was registered under in the ecs.
 fn vtFindType(self: ?*abi_framework.c.ke_node_types, name_in: ?[*:0]const u8, out_type: ?*Cid) callconv(.c) abi_result.c.ke_result {
     const out = out_type orelse return R.code(error.InvalidArgument);
@@ -671,7 +782,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .spawn_named = &vtSpawnNamed, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -1323,6 +1434,129 @@ test "a component given to the spawn replaces its type's initial value, and one 
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &foreign, 1, &node));
     const short = [_]abi_framework.c.ke_node_component{.{ .component = paddle_column, .data = &given, .size = @sizeOf(Paddle) - 1 }};
     try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn.?(f.types.ref, commands.api(), cid, "Paddle", invalid, &short, 1, &node));
+}
+
+const paddle_table = [_]abi_ecs.c.ke_component_field{
+    .{ .name = "speed", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(Paddle, "speed"), .size = 4 },
+    .{ .name = "visits", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = @offsetOf(Paddle, "visits"), .size = 4 },
+};
+const slot_cid: Cid = 60;
+const Slot = extern struct { path: [16]u8 };
+const slot_table = [_]abi_ecs.c.ke_component_field{.{ .name = "path", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = 0, .size = 16 }};
+var slot_at_40: Slot = .{ .path = .{0} ** 16 };
+
+fn lookupWithTables(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_lookup)) bool {
+    const name = std.mem.span(args[1].?);
+    if (std.mem.eql(u8, name, scene_slot_name)) {
+        args[2].?.* = .{ .cid = slot_cid, .size = @sizeOf(Slot), .fields = &slot_table, .field_count = slot_table.len };
+        return true;
+    }
+    if (!lookupComponent(args)) return false;
+    if (std.mem.eql(u8, name, "paddle")) {
+        args[2].?.fields = &paddle_table;
+        args[2].?.field_count = paddle_table.len;
+    }
+    return true;
+}
+
+fn writeByTable(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_field_write)) abi_result.c.ke_result {
+    const at: [*]u8 = @as([*]u8, @ptrCast(args[1].?)) + args[2].?.offset;
+    const v = args[3].?;
+    switch (args[2].?.type) {
+        abi_ecs_variant.c.KE_VARIANT_FLOAT => {
+            if (v.type != abi_ecs_variant.c.KE_VARIANT_FLOAT) return R.code(error.InvalidArgument);
+            @as(*align(1) f32, @ptrCast(at)).* = @floatCast(v.unnamed_0.f);
+        },
+        abi_ecs_variant.c.KE_VARIANT_STRING => {
+            if (v.type != abi_ecs_variant.c.KE_VARIANT_STRING) return R.code(error.InvalidArgument);
+            const text = std.mem.span(v.unnamed_0.s.?);
+            @memset(at[0..args[2].?.size], 0);
+            @memcpy(at[0..text.len], text);
+        },
+        else => return R.code(error.InvalidArgument),
+    }
+    return R.ok;
+}
+
+fn slotAt40(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_get)) ?*anyopaque {
+    return if (args[1] == 40 and args[2] == slot_cid) &slot_at_40 else null;
+}
+
+var change_result: abi_result.c.ke_result = R.ok;
+
+fn changeToMenu(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    if (ctx.?.next.?(ctx)) change_result = ctx.?.change_scene.?(ctx, "res://menu");
+    return R.ok;
+}
+
+fn floatValue(component_name: [*:0]const u8, field: [*:0]const u8, x: f64) abi_framework.c.ke_node_field_value {
+    return .{ .component = component_name, .field = field, .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = x } } };
+}
+
+test "spawn_named writes each value by field name over the type's initial bytes" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.ecs.when(.component_lookup).does(lookupWithTables);
+    _ = f.ecs.when(.component_field_write).does(writeByTable);
+    const initial: Paddle = .{ .speed = 7, .visits = 2 };
+    var d = paddleDesc();
+    d.initial = &initial;
+    d.initial_size = @sizeOf(Paddle);
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    _ = commands.when(.attach).does(capturePaddle);
+    const values = [_]abi_framework.c.ke_node_field_value{floatValue("paddle", "speed", 3)};
+    var node: Entity = invalid;
+    try R.check(f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &values, values.len, &node));
+    try testing.expectEqual(Paddle{ .speed = 3, .visits = 2 }, attached_paddle);
+    try testing.expectEqual(Paddle{ .speed = 7, .visits = 2 }, @as(*const Paddle, @ptrCast(@alignCast(f.types.ref.?.initial.?(f.types.ref, cid, paddle_column).?))).*);
+}
+
+test "spawn_named refuses a type never registered, a component the type does not carry, a field its table does not name and a value the field cannot hold" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.ecs.when(.component_lookup).does(lookupWithTables);
+    _ = f.ecs.when(.component_field_write).does(writeByTable);
+    var d = paddleDesc();
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    var node: Entity = invalid;
+    try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "ghost", "Ghost", invalid, null, 0, &node));
+    const foreign = [_]abi_framework.c.ke_node_field_value{floatValue(scene_slot_name, "path", 1)};
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &foreign, 1, &node));
+    const unnamed = [_]abi_framework.c.ke_node_field_value{floatValue("paddle", "nope", 1)};
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &unnamed, 1, &node));
+    const wrong = [_]abi_framework.c.ke_node_field_value{.{ .component = "paddle", .field = "speed", .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "fast" } } }};
+    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &wrong, 1, &node));
+}
+
+test "change_scene writes the path into the nearest ancestor's scene slot, and refuses one too long" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.ecs.when(.component_lookup).does(lookupWithTables);
+    _ = f.ecs.when(.component_field_write).does(writeByTable);
+    _ = f.ecs.when(.component_get).does(slotAt40);
+    _ = f.tree.when(.parent).does(parentOf);
+    slot_at_40 = .{ .path = .{0} ** 16 };
+    var d = paddleDesc();
+    d.update = changeToMenu;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var rows: Rows = .{};
+    rows.build();
+    try runSystem(registered[0], &rows);
+    try R.check(change_result);
+    try testing.expectEqualStrings("res://menu", std.mem.sliceTo(&slot_at_40.path, 0));
 }
 
 test "an initial whose size is not its component's is refused" {

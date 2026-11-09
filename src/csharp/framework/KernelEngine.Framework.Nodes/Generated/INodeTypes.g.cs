@@ -47,6 +47,13 @@ public interface INodeTypes : IDisposable
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity Spawn(IEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
+    /// <summary>Records into commands a node of the type named type with values written over its initial values, as a behaviour's ctx-&gt;spawn_named does.</summary>
+    /// <param name="commands">The queue the node is recorded into.</param>
+    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
+    /// <param name="values">Written in order.</param>
+    /// <returns>Usable as a reference at once.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    Entity SpawnNamed(IEcsCommands commands, string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default);
     /// <summary>The id of the type registered under name.</summary>
     /// <param name="name">The name its desc gave, `node` for the base type.</param>
     /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>
