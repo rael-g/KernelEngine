@@ -85,11 +85,11 @@ typedef struct pong_ball_launched
     bool launched;
 } pong_ball_launched;
 
-static const ke_component_params pong_paddle_params = { .name = "pong.paddle", .size = sizeof(pong_paddle), .alignment = _Alignof(pong_paddle), KE_COMPONENT_FIELDS(pong_paddle_fields) };
-static const ke_component_params pong_ball_params = { .name = "pong.ball", .size = sizeof(pong_ball), .alignment = _Alignof(pong_ball), KE_COMPONENT_FIELDS(pong_ball_fields) };
-static const ke_component_params pong_scoreboard_params = { .name = "pong.scoreboard", .size = sizeof(pong_scoreboard), .alignment = _Alignof(pong_scoreboard), KE_COMPONENT_FIELDS(pong_scoreboard_fields) };
-static const ke_component_params pong_goal_scored_params = { .name = "pong.goal_scored", .size = sizeof(pong_goal_scored), .alignment = _Alignof(pong_goal_scored) };
-static const ke_component_params pong_ball_launched_params = { .name = "pong.ball_launched", .size = sizeof(pong_ball_launched), .alignment = _Alignof(pong_ball_launched) };
+static const ke_component_params pong_paddle_params = KE_COMPONENT(pong_paddle, "pong.paddle", pong_paddle_fields);
+static const ke_component_params pong_ball_params = KE_COMPONENT(pong_ball, "pong.ball", pong_ball_fields);
+static const ke_component_params pong_scoreboard_params = KE_COMPONENT(pong_scoreboard, "pong.scoreboard", pong_scoreboard_fields);
+static const ke_component_params pong_goal_scored_params = KE_COMPONENT_UNTABLED(pong_goal_scored, "pong.goal_scored");
+static const ke_component_params pong_ball_launched_params = KE_COMPONENT_UNTABLED(pong_ball_launched, "pong.ball_launched");
 
 static const ke_node_with pong_body_with[] = { { KE_COMPONENT_NAME_BODY2D, &ke_body2d_node_initial }, { KE_COMPONENT_NAME_TRANSFORM2D, &ke_transform2d_node_initial } };
 
