@@ -130,10 +130,13 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         {
             var declared = f.Property.DeclaringSyntaxReferences.Select(r => r.GetSyntax()).OfType<PropertyDeclarationSyntax>().First();
             var access = string.Join(" ", declared.Modifiers.Select(m => m.ValueText).Where(m => m != "partial"));
-            var body = texts.ContainsKey(f.Property)
+            var body = f.Property.ReturnsByRef
+                ? $"get => ref Fields.{f.Property.Name};"
+                : texts.ContainsKey(f.Property)
                 ? $"get => ReadText(Fields.{f.Property.Name}); set => WriteText(Fields.{f.Property.Name}, value);"
                 : $"get => Fields.{f.Property.Name}; set => Fields.{f.Property.Name} = value;";
-            o.Append($"    {access}{(access.Length > 0 ? " " : "")}partial {f.Property.Type.ToDisplayString()} {f.Property.Name} {{ {body} }}\n\n");
+            var spelled = (f.Property.ReturnsByRef ? "ref " : "") + f.Property.Type.ToDisplayString();
+            o.Append($"    {access}{(access.Length > 0 ? " " : "")}partial {spelled} {f.Property.Name} {{ {body} }}\n\n");
         }
 
         o.Append("    /// <inheritdoc/>\n");
