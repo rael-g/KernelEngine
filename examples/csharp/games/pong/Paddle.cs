@@ -13,7 +13,7 @@ partial class Paddle : Body2D
     const float WallHalfThickness = 0.25f;
 
     /// <summary>The axis action moving the paddle.</summary>
-    [Export] public partial ActionRef MoveAction { get; set; }
+    [Export] public partial ref ActionRef MoveAction { get; }
 
     /// <summary>Speed in metres per second.</summary>
     [Export] public partial float Speed { get; set; }
@@ -29,9 +29,7 @@ partial class Paddle : Body2D
 
     void FixedUpdate()
     {
-        var action = MoveAction;
-        var vy = Axis(ref action) * Speed;
-        MoveAction = action;
+        var vy = Axis(ref MoveAction) * Speed;
         var maxY = FieldHalfHeight - WallHalfThickness - HalfHeight;
         if (vy > 0 && Transform2d.Position.Y >= maxY) vy = 0;
         if (vy < 0 && Transform2d.Position.Y <= -maxY) vy = 0;
