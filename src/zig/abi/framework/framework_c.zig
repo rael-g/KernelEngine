@@ -132,6 +132,9 @@ pub const ke_node_types = extern struct {
     spawn: ?*const fn (?*ke_node_types, ?*abi_ecs.c.ke_ecs_commands, ke_component_id, ?[*:0]const u8, ke_entity, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// The id of the type registered under name.
     find_type: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// The id of the component registered under name, an engine component named by its
+    /// `KE_COMPONENT_NAME_*` constant or one the game registered.
+    find_component: ?*const fn (?*ke_node_types, ?[*:0]const u8, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Whether a node of type carries component: its fields or one its type names in `with`.
     carries: ?*const fn (?*ke_node_types, ke_component_id, ke_component_id) callconv(.c) bool = null,
 };

@@ -1,8 +1,11 @@
 #include "pong.h"
 
+#include <kernel_engine/physics/component_fields.h>
 #include <kernel_engine/physics/components.h>
+#include <kernel_engine/render/ui/component_fields.h>
 #include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/sdk/field.h>
+#include <kernel_engine/spatial/component_fields.h>
 #include <kernel_engine/spatial/transform.h>
 
 #include <math.h>
@@ -232,18 +235,6 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
     return KE_OK;
 }
 
-static bool lookup(ke_ecs *ecs, const char *name, ke_component_id *out)
-{
-    ke_component_meta meta;
-    if (!ecs->component_lookup(ecs, name, &meta))
-    {
-        fprintf(stderr, "pong: component '%s' is not registered\n", name);
-        return false;
-    }
-    *out = meta.cid;
-    return true;
-}
-
 ke_result pong_load_scene(pong_game *game, ke_ecs_commands *commands, const char *path)
 {
     ke_result spawned = game->types->spawn(game->types, commands, game->node, "Scene", KE_ENTITY_INVALID, &game->scene);
@@ -260,9 +251,10 @@ ke_result pong_register(pong_game *game)
 
     made = types->find_type(types, "node", &game->node);
     if (made != KE_OK) return made;
-    if (!lookup(game->ecs, "label", &game->label) ||
-        !lookup(game->ecs, "body2d", &game->body) || !lookup(game->ecs, "transform2d", &game->transform2d))
-        return KE_RESULT_NOT_FOUND;
+    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_LABEL, &game->label);
+    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_BODY2D, &game->body);
+    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_TRANSFORM2D, &game->transform2d);
+    if (made != KE_OK) return made;
     game->launch = (ke_action_ref){ .name = "Launch" };
     game->quit = (ke_action_ref){ .name = "Quit" };
 

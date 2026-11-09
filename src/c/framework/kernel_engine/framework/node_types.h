@@ -200,6 +200,14 @@ extern "C"
         ///         KE_RESULT_NOT_FOUND for a name no type was registered under.
         ke_result (*find_type)(struct ke_node_types *self, const char *name, ke_component_id *out_type);
 
+        /// The id of the component registered under @p name, an engine component named by its
+        /// `KE_COMPONENT_NAME_*` constant or one the game registered.
+        /// @param name [utf8]
+        /// @param out_component [out] Receives the id; KE_COMPONENT_INVALID when none has the name.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p name or @p out_component;
+        ///         KE_RESULT_NOT_FOUND for a name no component was registered under.
+        ke_result (*find_component)(struct ke_node_types *self, const char *name, ke_component_id *out_component);
+
         /// Whether a node of @p type carries @p component: its fields or one its type names in
         /// `with`.
         /// @return false for a type never registered.

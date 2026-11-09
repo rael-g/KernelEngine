@@ -200,6 +200,14 @@ pub const NodeTypes = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .find_component = &struct {
+                fn call(self: ?*c.ke_node_types, a0: ?[*:0]const u8, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.findComponent(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .carries = &struct {
                 fn call(self: ?*c.ke_node_types, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
@@ -236,6 +244,14 @@ pub const NodeTypes = struct {
     pub fn findType(self: NodeTypes, name: [:0]const u8) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.find_type.?(self.ptr, name.ptr, &written));
+        return written;
+    }
+
+    /// The id of the component registered under name, an engine component named by its
+    /// `KE_COMPONENT_NAME_*` constant or one the game registered.
+    pub fn findComponent(self: NodeTypes, name: [:0]const u8) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.find_component.?(self.ptr, name.ptr, &written));
         return written;
     }
 

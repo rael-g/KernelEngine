@@ -272,7 +272,6 @@ int main(int argc, char **argv)
         check(ke_engine_node_types[i].name, types.ref->register_type(types.ref, &ke_engine_node_types[i], &type));
     }
 
-    game.ecs = ecs.ref;
     game.types = types.ref;
     game.scenes = scenes.ref;
     check("pong types", pong_register(&game));

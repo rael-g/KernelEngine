@@ -9,7 +9,6 @@
 /** What Pong's node types are given: the engine parts they call and the ids they look up once. */
 typedef struct pong_game
 {
-    ke_ecs           *ecs;
     ke_node_types    *types;
     ke_scene_files   *scenes;
     ke_component_id node;

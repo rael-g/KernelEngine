@@ -564,6 +564,21 @@ fn vtFindType(self: ?*abi_framework.c.ke_node_types, name_in: ?[*:0]const u8, ou
     return R.ok;
 }
 
+/// Slot `find_component`. Asks the ecs for the component registered under the name.
+fn vtFindComponent(self: ?*abi_framework.c.ke_node_types, name_in: ?[*:0]const u8, out_component: ?*Cid) callconv(.c) abi_result.c.ke_result {
+    const out = out_component orelse return R.code(error.InvalidArgument);
+    out.* = abi_ecs.c.KE_COMPONENT_INVALID;
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    const name = name_in orelse return R.code(error.InvalidArgument);
+    var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    if (!s.ecs.component_lookup.?(s.ecs, name, &meta)) {
+        log.warn("node types: no component is registered as {s}", .{name});
+        return R.code(error.NotFound);
+    }
+    out.* = meta.cid;
+    return R.ok;
+}
+
 /// Slot `carries`.
 fn vtCarries(self: ?*abi_framework.c.ke_node_types, type_cid: Cid, cid: Cid) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
@@ -601,7 +616,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -1100,6 +1115,17 @@ test "find_type answers the id of a type by its registered name, the base type a
     try R.check(f.types.ref.?.find_type.?(f.types.ref, "node", &found));
     try testing.expect(found != 0 and found != cid);
     try testing.expectError(error.NotFound, R.check(f.types.ref.?.find_type.?(f.types.ref, "transform2d", &found)));
+    try testing.expectEqual(@as(Cid, 0), found);
+}
+
+test "find_component answers the id of a registered component and refuses an unknown name" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var found: Cid = 0;
+    try R.check(f.types.ref.?.find_component.?(f.types.ref, "transform2d", &found));
+    try testing.expectEqual(transform2d_cid, found);
+    try testing.expectError(error.NotFound, R.check(f.types.ref.?.find_component.?(f.types.ref, "absent", &found)));
     try testing.expectEqual(@as(Cid, 0), found);
 }
 
