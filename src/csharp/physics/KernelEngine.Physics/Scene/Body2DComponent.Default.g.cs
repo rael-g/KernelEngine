@@ -11,12 +11,12 @@ using KernelEngine.Render;
 namespace KernelEngine.Physics;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_body2d_component</c>.</summary>
-public static class Body2dComponentDefaults
+public static class Body2DComponentDefaults
 {
-    extension(Body2dComponent)
+    extension(Body2DComponent)
     {
         /// <summary>The value every <c>[default:]</c> field of <c>ke_body2d_component</c> declares.</summary>
-        public static Body2dComponent Default => new()
+        public static Body2DComponent Default => new()
         {
             GravityScale = 1f,
         };

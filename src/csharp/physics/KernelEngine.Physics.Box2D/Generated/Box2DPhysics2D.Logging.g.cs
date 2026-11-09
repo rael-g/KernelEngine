@@ -5,13 +5,13 @@
 
 namespace KernelEngine.Physics.Box2D;
 
-public sealed unsafe partial class Box2dPhysics2D
+public sealed unsafe partial class Box2DPhysics2D
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
     /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2dPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, float gravityX, float gravityY) : base(CreateLogged(loggerFactory, gravityX, gravityY))
+    public Box2DPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, float gravityX, float gravityY) : base(CreateLogged(loggerFactory, gravityX, gravityY))
     {
     }
 

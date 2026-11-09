@@ -195,13 +195,13 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     }
 
 
-    public float GetAxis1d(int actionId)
+    public float GetAxis1D(int actionId)
     {
         return Handle->get_axis1d(Handle, actionId);
     }
 
 
-    public (float OutX, float OutY) GetAxis2d(int actionId)
+    public (float OutX, float OutY) GetAxis2D(int actionId)
     {
         float outX;
         float outY;
@@ -210,7 +210,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     }
 
 
-    public (float OutX, float OutY, float OutZ) GetAxis3d(int actionId)
+    public (float OutX, float OutY, float OutZ) GetAxis3D(int actionId)
     {
         float outX;
         float outY;

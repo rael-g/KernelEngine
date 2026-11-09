@@ -3,7 +3,7 @@
 
 namespace KernelEngine.Render;
 
-public partial struct Sprite2dComponent : global::KernelEngine.Interop.IComponentName
+public partial struct Sprite2DComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "sprite2d";

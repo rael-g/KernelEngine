@@ -2,7 +2,7 @@ using System.Numerics;
 
 namespace KernelEngine.Physics;
 
-public partial struct Body2dComponent
+public partial struct Body2DComponent
 {
     public BodyType2D Type;
     public System.Numerics.Vector2 Velocity;

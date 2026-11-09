@@ -14,8 +14,8 @@ namespace KernelEngine.Framework.Nodes;
 public abstract partial class Sprite2D : Node2D
 {
     /// <summary>The <c>sprite2d</c> of the node a behaviour is visiting.</summary>
-    protected ref Sprite2dComponent Sprite2d => ref Component<Sprite2dComponent>("sprite2d");
+    protected ref Sprite2DComponent Sprite => ref Component<Sprite2DComponent>("sprite2d");
 
     /// <inheritdoc/>
-    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("sprite2d", EngineNodeTypes.Sprite2dNodeInitial)];
+    protected internal override IEnumerable<NodeWith> With => [.. base.With, NodeWith.Of("sprite2d", EngineNodeTypes.Sprite2DNodeInitial)];
 }

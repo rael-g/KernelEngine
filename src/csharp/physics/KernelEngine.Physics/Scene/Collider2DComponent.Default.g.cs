@@ -11,12 +11,12 @@ using KernelEngine.Render;
 namespace KernelEngine.Physics;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_collider2d_component</c>.</summary>
-public static class Collider2dComponentDefaults
+public static class Collider2DComponentDefaults
 {
-    extension(Collider2dComponent)
+    extension(Collider2DComponent)
     {
         /// <summary>The value every <c>[default:]</c> field of <c>ke_collider2d_component</c> declares.</summary>
-        public static Collider2dComponent Default => new()
+        public static Collider2DComponent Default => new()
         {
             HalfExtents = new System.Numerics.Vector2(0.5f, 0.5f),
             Radius = 0.5f,

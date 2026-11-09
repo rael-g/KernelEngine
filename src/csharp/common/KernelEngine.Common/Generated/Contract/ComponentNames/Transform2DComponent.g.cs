@@ -3,7 +3,7 @@
 
 namespace KernelEngine.Common;
 
-public partial struct Transform2dComponent : global::KernelEngine.Interop.IComponentName
+public partial struct Transform2DComponent : global::KernelEngine.Interop.IComponentName
 {
     /// <summary>The name the component is registered under.</summary>
     public const string Name = "transform2d";

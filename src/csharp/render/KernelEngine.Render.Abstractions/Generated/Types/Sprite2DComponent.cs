@@ -5,7 +5,7 @@ using global::KernelEngine.Ecs;
 
 namespace KernelEngine.Render;
 
-public partial struct Sprite2dComponent
+public partial struct Sprite2DComponent
 {
     public _TextureBytes_e__FixedBuffer TextureBytes;
     public System.Numerics.Vector4 Region;
