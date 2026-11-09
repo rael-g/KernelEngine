@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>KernelEngine</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
+    <ProjectReference Include="..\..\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool.Enki\KernelEngine.TaskPool.Enki.csproj" />
+    <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
+    <ProjectReference Include="..\..\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
+    <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
+    <ProjectReference Include="..\..\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
+    <ProjectReference Include="..\..\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
+    <ProjectReference Include="..\..\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
+    <ProjectReference Include="..\..\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="../../../../build/native/bin/pong/assets/fonts/*" Link="assets/fonts/%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="../../../../build/native/bin/shaders/**" Link="shaders/%(RecursiveDir)%(Filename)%(Extension)">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+</Project>

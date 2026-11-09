@@ -112,28 +112,25 @@ kabic's generic output is the default. A need it does not meet is answered in th
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
-Thin wrappers expose the native vtables as managed types. Game code talks to these, and composes them by dependency injection from its own `Program.cs`:
+Thin wrappers expose the native vtables as managed types, each factory a class. Game code starts from the SDK (`src/csharp/sdk/KernelEngine.Sdk`), which composes the default parts from the project file and lets any of them be replaced, and writes its node types as partial classes the node generator completes:
 
 ```csharp
-var services = new ServiceCollection()
-    .AddLogging(logging => logging.AddConsole())
-    .AddFlecsEcsRegistry()
-    .AddEnkiTaskPool()
-    .AddStdFileSystem()
-    .AddPoolIo()
-    .Add<IRuntime, Runtime>()
-    .Add<IRuntimeModule>(new GlfwWindowModule(800, 600, "Title"));
-
-using var sp = services.BuildServiceProvider();
-var window  = sp.GetRequiredService<IWindow>();
-var runtime = sp.GetRequiredService<IRuntime>();
-runtime.LoadModules(sp);
-
-while (!window.ShouldClose()) runtime.Tick(dt);
-runtime.UnloadModules();
+using var engine = Engine.Create(AppContext.BaseDirectory);
+engine.Nodes.RegisterEvent<GoalScored>();
+engine.Nodes.Register(new Paddle());
+engine.Run();
 ```
 
-Game code becomes a runtime module too, registering its own components and systems via `IRuntimeModule.OnLoad`. A complete host is [`examples/csharp/games/pong/Program.cs`](examples/csharp/games/pong/Program.cs) — copy that, not this snippet.
+```csharp
+[NodeType("pong.paddle")]
+partial class Paddle : Body2D
+{
+    [Export] public partial float Speed { get; set; }
+    void FixedUpdate() => Body2d.Velocity = new Vector2(0, Speed);
+}
+```
+
+A complete game is [`examples/csharp/games/pong/`](examples/csharp/games/pong/Program.cs) — copy that, not these snippets.
 
 A service locator is forbidden: injection happens in the orchestration area, never by asking a container for a dependency from inside engine code.
 
