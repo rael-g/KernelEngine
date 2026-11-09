@@ -32,6 +32,7 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
+#include <kernel_engine/sdk/paths.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
 #include <kernel_engine/view/space/view_space_rh_create.h>
@@ -61,15 +62,6 @@ static void check(const char *what, ke_result result)
     if (result == KE_OK) return;
     fprintf(stderr, "%s failed with result code 0x%08x\n", what, (unsigned)result);
     exit(1);
-}
-
-static void beside(char *out, const char *exe, const char *name)
-{
-    const char *slash = strrchr(exe, '/');
-    const char *backslash = strrchr(exe, '\\');
-    if (backslash && (!slash || backslash > slash)) slash = backslash;
-    int dir = slash ? (int)(slash - exe) : 1;
-    snprintf(out, PATH_CAPACITY, "%.*s/%s", dir, slash ? exe : ".", name);
 }
 
 static const char *find_font(void)
@@ -160,8 +152,11 @@ static void renderer_destroy(renderer *r)
 int main(int argc, char **argv)
 {
     char project_dir[PATH_CAPACITY], shader_dir[PATH_CAPACITY], project_file[PATH_CAPACITY];
-    beside(project_dir, argv[0], "pong");
-    beside(shader_dir, argv[0], "shaders");
+    if (!ke_sdk_beside_executable(project_dir, sizeof project_dir, "pong") || !ke_sdk_beside_executable(shader_dir, sizeof shader_dir, "shaders"))
+    {
+        fprintf(stderr, "the directory of the executable is unknown\n");
+        return 1;
+    }
     snprintf(project_file, sizeof project_file, "%s/Project", project_dir);
 
     pong_game game = { 0 };
