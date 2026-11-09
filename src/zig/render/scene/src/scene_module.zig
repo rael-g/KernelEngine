@@ -5,7 +5,6 @@ const abi_render_contract = @import("abi_render_contract");
 const abi_spatial_contract = @import("abi_spatial_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
-const abi_scene_loader = @import("abi_scene_loader");
 const abi_ui_components = @import("abi_ui_components");
 const std = @import("std");
 const log = std.log.scoped(.render_scene);

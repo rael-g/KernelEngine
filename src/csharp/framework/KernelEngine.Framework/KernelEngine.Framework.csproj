@@ -18,7 +18,6 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
-    <ProjectReference Include="..\KernelEngine.Framework.Abstractions\KernelEngine.Framework.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
     <ProjectReference Include="..\..\asset\KernelEngine.Asset\KernelEngine.Asset.csproj" />
@@ -31,8 +30,6 @@
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
-    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

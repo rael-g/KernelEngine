@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using KernelEngine.Audio;
 using KernelEngine.Audio.Native;
 using KernelEngine.Framework.Nodes;
 
@@ -83,10 +84,16 @@ partial class Ball(Game game) : Body2D
         LastVelocity = Body2d.Velocity;
     }
 
+    static string TextOf(ReadOnlySpan<byte> bytes)
+    {
+        var end = bytes.IndexOf((byte)0);
+        return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
+    }
+
     void Play(SoundPath path, float volume)
     {
         var sound = EngineNodeTypes.SoundNodeInitial;
-        Text.Play(ref sound, Text.Of(path));
+        sound.PathText = TextOf(path);
         sound.Volume = volume;
         sound.Playing = true;
         sound.Release = SoundRelease.WhenDone;

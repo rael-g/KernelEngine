@@ -911,19 +911,6 @@ ke_transform2d_component size=24 align=4
 ke_world_transform_component size=64 align=4
   matrix 0
 
-[component_registry]
-ke_component_registry size=56 align=8
-  handle 0
-  register_component_fields 8
-  get_component_fields 16
-  register_component_apply 24
-  get_component_apply 32
-  register_component_alias 40
-  resolve_component 48
-ke_component_registry_handle size=16 align=8
-  ref 0
-  destroy 8
-
 [scene_tree]
 ke_scene_tree size=112 align=8
   handle 0
@@ -941,61 +928,6 @@ ke_scene_tree size=112 align=8
   children_first 96
   hierarchy_generation 104
 ke_scene_tree_handle size=16 align=8
-  ref 0
-  destroy 8
-
-[scene_loader]
-ke_scene_loader size=32 align=8
-  handle 0
-  load 8
-  instantiate 16
-  register_script_factory 24
-ke_scene_loader_handle size=16 align=8
-  ref 0
-  destroy 8
-
-[signal_bus]
-ke_signal_delivery size=40 align=8
-  source 0
-  target 8
-  signal_id 16
-  handler_id 20
-  payload 24
-  payload_size 32
-ke_signal_bus size=72 align=8
-  handle 0
-  signal_id 8
-  signal_lookup 16
-  connect 24
-  disconnect 32
-  forget_entity 40
-  emit 48
-  deliveries 56
-  clear_frame 64
-ke_signal_bus_handle size=16 align=8
-  ref 0
-  destroy 8
-
-[script_host]
-ke_script_host size=136 align=8
-  handle 0
-  register_type 8
-  type_lookup 16
-  register_type_alias 24
-  type_resolve 32
-  type_components 40
-  type_reach 48
-  type_tag 56
-  type_tag_group 64
-  bind 72
-  unbind 80
-  bind_deferred 88
-  unbind_deferred 96
-  instance_of 104
-  instance_count 112
-  instances 120
-  resolve 128
-ke_script_host_handle size=16 align=8
   ref 0
   destroy 8
 

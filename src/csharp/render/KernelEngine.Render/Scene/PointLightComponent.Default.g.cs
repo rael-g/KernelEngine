@@ -5,10 +5,9 @@
 
 using KernelEngine.Ecs;
 using KernelEngine.Input;
-using KernelEngine.Render;
 using KernelEngine.Render.Native;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Render;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_point_light_component</c>.</summary>
 public static class PointLightComponentDefaults

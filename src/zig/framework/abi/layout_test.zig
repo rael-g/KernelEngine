@@ -24,9 +24,6 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_input_actions_config, translated("ke_input_actions_config"));
-    try expectSameLayout(abi.c.ke_script_host_params, translated("ke_script_host_params"));
-    try expectSameLayout(abi.c.ke_signal_bus_params, translated("ke_signal_bus_params"));
-    if (@hasDecl(c, "ke_component_apply_fn")) try expectSameLayout(abi.c.ke_component_apply_fn, c.ke_component_apply_fn);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_configuration_change_func")) try expectSameLayout(abi.c.ke_configuration_change_func, c.ke_configuration_change_func);
     if (@hasDecl(c, "ke_configuration_child_func")) try expectSameLayout(abi.c.ke_configuration_child_func, c.ke_configuration_child_func);
@@ -58,27 +55,17 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_render_material_binding")) try expectSameLayout(abi.c.ke_render_material_binding, c.ke_render_material_binding);
     if (@hasDecl(c, "ke_render_resource_set")) try expectSameLayout(abi.c.ke_render_resource_set, c.ke_render_resource_set);
     if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
-    if (@hasDecl(c, "ke_script_factory_func")) try expectSameLayout(abi.c.ke_script_factory_func, c.ke_script_factory_func);
-    if (@hasDecl(c, "ke_script_type_id")) try expectSameLayout(abi.c.ke_script_type_id, c.ke_script_type_id);
     if (@hasDecl(c, "ke_system_execute_fn")) try expectSameLayout(abi.c.ke_system_execute_fn, c.ke_system_execute_fn);
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [11]c_ulonglong;
+extern const layout_values: [3]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_input_actions_config),
         @offsetOf(abi.c.ke_input_actions_config, "section"),
-        @sizeOf(abi.c.ke_script_host_params),
-        @offsetOf(abi.c.ke_script_host_params, "max_types"),
-        @sizeOf(abi.c.ke_signal_bus_params),
-        @offsetOf(abi.c.ke_signal_bus_params, "max_signals"),
-        @offsetOf(abi.c.ke_signal_bus_params, "max_connections"),
-        @offsetOf(abi.c.ke_signal_bus_params, "max_events"),
-        @offsetOf(abi.c.ke_signal_bus_params, "max_deliveries"),
-        @offsetOf(abi.c.ke_signal_bus_params, "payload_capacity"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

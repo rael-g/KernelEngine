@@ -45,8 +45,6 @@
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" /> <!-- World, for register_component_apply -->
     <ProjectReference Include="..\..\asset\KernelEngine.Asset\KernelEngine.Asset.csproj" /> <!-- ModelExtensions -->
     <ProjectReference Include="..\..\text\KernelEngine.Text\KernelEngine.Text.csproj" />
-    <ProjectReference Include="..\..\generators\KernelEngine.SourceGenerators\KernelEngine.SourceGenerators.csproj"
-                      OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 
   <ItemGroup>

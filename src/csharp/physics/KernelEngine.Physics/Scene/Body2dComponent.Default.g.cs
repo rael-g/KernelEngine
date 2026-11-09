@@ -5,11 +5,10 @@
 
 using KernelEngine.Ecs;
 using KernelEngine.Input;
-using KernelEngine.Physics;
 using KernelEngine.Physics.Native;
 using KernelEngine.Render;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Physics;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_body2d_component</c>.</summary>
 public static class Body2dComponentDefaults
