@@ -39,7 +39,7 @@ partial class Ball(Game game) : Body2D
 
     partial int Launches { get; set; }
 
-    void Born()
+    void Initial()
     {
         HitVolume = 1.0f;
         ScoreVolume = 1.0f;

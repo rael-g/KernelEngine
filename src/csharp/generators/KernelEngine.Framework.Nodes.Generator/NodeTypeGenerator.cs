@@ -141,7 +141,7 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
 
         o.Append("    /// <inheritdoc/>\n");
         o.Append("    protected override global::KernelEngine.Ecs.ComponentId RegisterInto(global::KernelEngine.Framework.Nodes.NodeWorld world)\n    {\n");
-        if (Has("Born")) o.Append("        Born();\n");
+        if (Has("Initial")) o.Append("        Initial();\n");
         if (fields.Any(f => f.Variant is not null)) o.Append("        var probe = new NodeFields();\n");
         o.Append("        global::KernelEngine.Ecs.ComponentField[] table =\n        [\n");
         foreach (var f in fields.Where(f => f.Variant is not null))
