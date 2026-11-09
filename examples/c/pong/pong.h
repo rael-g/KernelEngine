@@ -3,6 +3,7 @@
 
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>
+#include <kernel_engine/sdk/node.h>
 
 #include <stdbool.h>
 
@@ -11,10 +12,7 @@ typedef struct pong_game
 {
     ke_node_types    *types;
     ke_scene_files   *scenes;
-    ke_component_id slot_type;
-    ke_component_id slot;
-    ke_component_id sound_type;
-    ke_component_id sound;
+    ke_sdk_nodes     nodes;
     ke_component_id label;
     ke_component_id body;
     ke_component_id transform2d;
@@ -30,12 +28,5 @@ typedef struct pong_game
  * @return KE_OK, or the code of the registration or lookup that failed.
  */
 ke_result pong_register(pong_game *game);
-
-/**
- * Records into @p commands a scene slot at the root holding the scene file @p path.
- * @param path [utf8]
- * @return KE_OK, or the code of the spawn that failed.
- */
-ke_result pong_open_slot(pong_game *game, ke_ecs_commands *commands, const char *path);
 
 #endif
