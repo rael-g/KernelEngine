@@ -5,6 +5,7 @@ const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_context = @import("render_context");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -61,20 +62,11 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// What the label resolve needs to give a label the font it names.
-pub const ke_render_label_resolve_params = extern struct {
-    /// Registers the system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Uploads the glyph atlas; borrowed, must outlive it.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Registers the font; borrowed, must outlive it.
-    ui: ?*abi_render_ui.c.ke_render_ui = std.mem.zeroes(?*abi_render_ui.c.ke_render_ui),
-    /// Reads the font a label names; optional, borrowed. Without it every label is reported.
-    resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
-    /// Names the label component; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
+/// What the label resolve needs to give a label the font it names. [bag] The values the label
+/// resolve is created with.
+pub const ke_render_label_resolve_config = extern struct {
     /// The font a label that names none draws with; copied. NULL leaves such a label without text.
-    default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    default_font: ?[*:0]const u8 = "0",
 };
 
 /// What the scene resolve needs to register the components and upload what they name.
@@ -94,10 +86,12 @@ pub const ke_render_label_resolve_handle = extern struct {
     destroy: ?*const fn (?*ke_render_label_resolve) callconv(.c) void = null,
 };
 
+pub const ke_render_label_resolve_config_defaults: ke_render_label_resolve_config = .{  };
+
 /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
 /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
 /// handle's ref is NULL on failure.
-pub extern fn ke_render_label_resolve_create(params: ?*const ke_render_label_resolve_params, out_resolve: ?*ke_render_label_resolve_handle) abi_result.c.ke_result;
+pub extern fn ke_render_label_resolve_create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const ke_render_label_resolve_config, out_resolve: ?*ke_render_label_resolve_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

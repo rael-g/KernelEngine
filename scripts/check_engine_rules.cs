@@ -110,7 +110,7 @@ var rules = new List<Rule>
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 38,
+    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 30,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("a config declares its [defaults] constant", 0,
         factoryHeaders.Keys.SelectMany(h => ConfigGaps(h, string.Join('\n', sources[h])))),

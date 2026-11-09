@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_CLUSTER_CLUSTER_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/context.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
 #include <kernel_engine/render/resource_groups.h>
@@ -61,24 +62,16 @@ extern "C"
 
     /**
      * @brief Creates a light-cluster pass and registers its render-phase system.
-     * @param runtime Registers the pass's system; borrowed, must outlive it.
-     * @param service Receives the published buffers; borrowed.
-     * @param device Borrowed.
-     * @param view_space Builds the cluster frusta; borrowed.
-     * @param camera Borrowed.
-     * @param scene Names the components the pass reads; borrowed.
-     * @param frame The pass runs inside its frame; borrowed.
+     * @param context [borrowed] The parts the pass is built on; read during the call.
      * @param config [borrowed,optional] The pass's values; NULL selects the default of each.
      * @param out_resources [out] Receives the ids of its tag, light lists and grid; every id
      *        KE_COMPONENT_INVALID on failure.
      * @param out_cluster [out] Receives the handle; left zeroed on failure.
-     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when a dependency is NULL, or a
+     * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when the context or a part of it is NULL, or a
      *         field of @p config is 0.
      */
     KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
-        ke_runtime *runtime, ke_render_service *service, ke_gpu_device *device, ke_view_space *view_space,
-        ke_render_camera *camera, ke_render_scene_resolve *scene, ke_render_frame *frame,
-        const ke_render_cluster_config *config, ke_render_cluster_resources *out_resources,
+        const ke_render_context *context, const ke_render_cluster_config *config, ke_render_cluster_resources *out_resources,
         ke_render_cluster_handle *out_cluster);
 
 #ifdef __cplusplus

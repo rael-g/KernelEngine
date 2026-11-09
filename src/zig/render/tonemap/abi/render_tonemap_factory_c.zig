@@ -2,8 +2,7 @@
 
 const std = @import("std");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -59,19 +58,6 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// What the tonemap pass needs. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and
-/// [bag] replaces the frame's color with its tonemapped copy.
-pub const ke_render_tonemap_params = extern struct {
-    /// Registers the pass's system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Holds the frame's color; borrowed, must outlive it.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// The pass runs inside its frame; borrowed.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// The pass runs inside its frame; borrowed.
-    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-};
-
 pub const ke_render_tonemap_handle = extern struct {
     ref: ?*ke_render_tonemap = std.mem.zeroes(?*ke_render_tonemap),
     destroy: ?*const fn (?*ke_render_tonemap) callconv(.c) void = null,
@@ -82,5 +68,6 @@ pub const ke_render_tonemap_handle = extern struct {
 pub extern fn ke_render_tonemap_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
-/// invalid argument.
-pub extern fn ke_render_tonemap_create(params: ?*const ke_render_tonemap_params, out_tonemap: ?*ke_render_tonemap_handle) abi_result.c.ke_result;
+/// invalid argument. It joins the service's chain at KE_RENDER_STAGE_TONEMAP and replaces the
+/// frame's color with its tonemapped copy.
+pub extern fn ke_render_tonemap_create(context: ?*const abi_render_context.c.ke_render_context, out_tonemap: ?*ke_render_tonemap_handle) abi_result.c.ke_result;

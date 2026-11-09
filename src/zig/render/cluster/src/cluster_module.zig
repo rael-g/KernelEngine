@@ -15,6 +15,7 @@ const cluster_buffers = feature_bindings.cluster_buffers;
 const c = @import("c");
 const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_cluster_factory = @import("abi_render_cluster_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -417,7 +418,7 @@ const Dependencies = struct {
     frame: *abi_render.c.ke_render_frame,
 };
 
-/// Builds a cluster pass on the render service and device given, with `config` applied as given or
+/// Builds a cluster pass on the render service and device of the context given, with `config` applied as given or
 /// with the defaults of every field when it is null, and registers its system with the runtime
 /// given, and writes the ids it publishes to `out_resources`. A missing dependency or out
 /// pointer, or a zero field of `config`, fails as an invalid
@@ -425,13 +426,7 @@ const Dependencies = struct {
 /// when `setup` fails or the runtime refuses the registration, and the objects created so far are
 /// released then.
 export fn ke_render_cluster_create(
-    runtime: ?*abi_runtime.c.ke_runtime,
-    service: ?*abi_render.c.ke_render_service,
-    device: ?*abi_render_gpu.c.ke_gpu_device,
-    view_space: ?*abi_view.c.ke_view_space,
-    camera: ?*abi_render.c.ke_render_camera,
-    scene: ?*abi_render.c.ke_render_scene_resolve,
-    frame: ?*abi_render.c.ke_render_frame,
+    context_in: ?*const abi_render_context.c.ke_render_context,
     config: ?*const Config,
     out_resources: ?*abi_render.c.ke_render_cluster_resources,
     out_cluster: ?*abi_render_cluster_factory.c.ke_render_cluster_handle,
@@ -440,14 +435,15 @@ export fn ke_render_cluster_create(
     out.* = .{ .ref = null, .destroy = null };
     const resources = out_resources orelse return R.code(error.InvalidArgument);
     resources.* = std.mem.zeroes(abi_render.c.ke_render_cluster_resources);
-    const rt = runtime orelse return R.code(error.InvalidArgument);
+    const context = context_in orelse return R.code(error.InvalidArgument);
+    const rt = context.runtime orelse return R.code(error.InvalidArgument);
     const p: Dependencies = .{
-        .service = service orelse return R.code(error.InvalidArgument),
-        .device = device orelse return R.code(error.InvalidArgument),
-        .view_space = view_space orelse return R.code(error.InvalidArgument),
-        .camera = camera orelse return R.code(error.InvalidArgument),
-        .scene = scene orelse return R.code(error.InvalidArgument),
-        .frame = frame orelse return R.code(error.InvalidArgument),
+        .service = context.service orelse return R.code(error.InvalidArgument),
+        .device = context.device orelse return R.code(error.InvalidArgument),
+        .view_space = context.view_space orelse return R.code(error.InvalidArgument),
+        .camera = context.camera orelse return R.code(error.InvalidArgument),
+        .scene = context.scene orelse return R.code(error.InvalidArgument),
+        .frame = context.frame orelse return R.code(error.InvalidArgument),
     };
 
     const cm = gpa.create(ClusterModule) catch |err| return R.code(err);
@@ -556,7 +552,7 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, null, &res, &h));
+    try R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), null, &res, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -570,7 +566,7 @@ test "destroying the cluster pass unregisters every system it registered" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, null, &res, &h));
+    try R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), null, &res, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -586,7 +582,7 @@ test "a cluster pass whose shader fails to load releases what it had created" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try testing.expect(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, null, &res, &h) != R.ok);
+    try testing.expect(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), null, &res, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -601,7 +597,7 @@ test "a zero field of the config is refused" {
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     const config: Config = .{ .grid_z = 0 };
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, &config, &res, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), &config, &res, &h)));
     try testing.expect(h.ref == null);
     try rig.rt.received(.register_system).never();
 }
@@ -615,7 +611,7 @@ test "a given config sizes the light lists by its grid" {
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
     const config: Config = .{ .grid_x = 2, .grid_y = 3, .grid_z = 4, .max_lights_per_cluster = 5 };
-    try R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, &config, &res, &h));
+    try R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), &config, &res, &h));
     const cm: *ClusterModule = @ptrCast(@alignCast(h.ref.?));
     try testing.expectEqual(@as(u32, 24), cm.num_clusters);
     try testing.expectEqual(@as(u32, 5), cm.max_lights_per_cluster);
@@ -630,7 +626,7 @@ test "a null config takes the default grid" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, null, &res, &h));
+    try R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), null, &res, &h));
     const cm: *ClusterModule = @ptrCast(@alignCast(h.ref.?));
     try testing.expectEqual(@as(u32, 16 * 9 * 24), cm.num_clusters);
     try testing.expectEqual(@as(u32, 64), cm.max_lights_per_cluster);
@@ -645,7 +641,7 @@ test "a missing frame is refused" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, null, null, &res, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = null }), null, &res, &h)));
 }
 
 test "a missing scene is refused" {
@@ -656,7 +652,7 @@ test "a missing scene is refused" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, null, &test_frame, null, &res, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = null, .frame = &test_frame }), null, &res, &h)));
 }
 
 test "a cluster pass the runtime refuses to register releases what it had created" {
@@ -668,7 +664,7 @@ test "a cluster pass the runtime refuses to register releases what it had create
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_cluster_resources = undefined;
     var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
-    try testing.expect(ke_render_cluster_create(rig.rt.api(), rig.core.api(), rig.dev.api(), &view_space, &camera, &test_scene, &test_frame, null, &res, &h) != R.ok);
+    try testing.expect(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), null, &res, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -59,25 +59,16 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// What the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
-/// samples the frame's color and draws over a copy of it, tested against the frame's depth.
-/// [bag]
-pub const ke_render_forward_params = extern struct {
-    /// Registers the pass's system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Holds the frame's color and the groups; borrowed.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Borrowed.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    ibl_enabled: bool = std.mem.zeroes(bool),
-    /// Names the components the pass reads; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
-    /// The pass runs inside its frame; borrowed.
-    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
+/// The values the transparent forward pass needs. It joins the chain at
+/// KE_RENDER_STAGE_TRANSPARENT, samples the frame's color and draws over a copy of it, tested
+/// against the frame's depth.
+pub const ke_render_forward_config = extern struct {
+    /// Whether the pass samples the sky for image-based light.
+    ibl_enabled: bool = true,
     /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
-    shadow: abi_render.c.ke_render_shadow_resources = std.mem.zeroes(abi_render.c.ke_render_shadow_resources),
+    shadow: abi_render.c.ke_render_shadow_resources = @bitCast([_]std.meta.fields(abi_render.c.ke_render_shadow_resources)[0].type{ 0, 0 }),
     /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
-    clusters: abi_render.c.ke_render_cluster_resources = std.mem.zeroes(abi_render.c.ke_render_cluster_resources),
+    clusters: abi_render.c.ke_render_cluster_resources = @bitCast([_]std.meta.fields(abi_render.c.ke_render_cluster_resources)[0].type{ 0, 0, 0, 0, 0, 0, 0, 0 }),
 };
 
 pub const ke_render_forward_handle = extern struct {
@@ -85,9 +76,11 @@ pub const ke_render_forward_handle = extern struct {
     destroy: ?*const fn (?*ke_render_forward) callconv(.c) void = null,
 };
 
+pub const ke_render_forward_config_defaults: ke_render_forward_config = .{ .ibl_enabled = true, .shadow = .{ .map = 0, .light = 0 }, .clusters = .{ .tag = 0, .point_lights = 0, .spot_lights = 0, .point_indices = 0, .point_counts = 0, .spot_indices = 0, .spot_counts = 0, .grid = 0 } };
+
 /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
 /// invalid argument.
-pub extern fn ke_render_forward_create(params: ?*const ke_render_forward_params, out_forward: ?*ke_render_forward_handle) abi_result.c.ke_result;
+pub extern fn ke_render_forward_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_forward_config, out_forward: ?*ke_render_forward_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_forward logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

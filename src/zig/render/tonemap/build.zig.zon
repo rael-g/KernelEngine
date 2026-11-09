@@ -4,6 +4,7 @@
     .fingerprint = 0x6d34b09043939674,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_render_context = .{ .path = "../../abi/render_context" },
         .abi_framework = .{ .path = "../../abi/framework" },
         .abi_render_gpu = .{ .path = "../../abi/render_gpu" },
         .abi_asset_resolver = .{ .path = "../../abi/asset_resolver" },

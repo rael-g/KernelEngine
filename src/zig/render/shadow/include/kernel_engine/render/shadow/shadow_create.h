@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/context.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -34,18 +35,12 @@ extern "C"
     typedef struct ke_render_shadow ke_render_shadow;
 
     /** [bag]
-     * What the directional shadow pass draws and the shape of its map. A scene larger than
+     * The shape of the directional shadow pass's map. A scene larger than
      * `extent` loses shadows outside it, and a caster farther than `light_distance` stops
      * casting.
      */
-    typedef struct ke_render_shadow_params
+    typedef struct ke_render_shadow_config
     {
-        ke_runtime        *runtime;    ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service;    ///< Holds the resources it writes; borrowed.
-        ke_gpu_device     *device;     ///< Borrowed.
-        ke_view_space     *view_space; ///< Builds the light's view and projection; borrowed.
-        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
-        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
         /// Edge of the square shadow map, in texels.
         uint32_t resolution;
         /// How far back along the light the shadow camera sits.
@@ -56,10 +51,10 @@ extern "C"
         float    near_plane;
         /// Far plane of the shadow camera.
         float    far_plane;
-    } ke_render_shadow_params;
+    } ke_render_shadow_config;
 
-    /** [defaults] The shadow map's shape when the caller keeps it; the dependencies are the caller's to set. */
-    static const ke_render_shadow_params ke_render_shadow_params_defaults = {
+    /** [defaults] The shadow map's shape a caller gets when it sets nothing. */
+    static const ke_render_shadow_config ke_render_shadow_config_defaults = {
         .resolution = 1024,
         .light_distance = 25.0f,
         .extent = 20.0f,
@@ -76,11 +71,13 @@ extern "C"
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or view space
     /// fails as an invalid argument.
+    /// @param context [borrowed] The parts the pass is built on; read during the call.
+    /// @param config [borrowed,optional] The map's shape; NULL selects the defaults.
     /// @param out_resources [out] Receives the ids of the map and the light it writes; every id
     ///                      KE_COMPONENT_INVALID on failure.
     /// @param out_shadow [out] Receives the handle; left zeroed on failure.
     KE_RENDER_SHADOW_API ke_result ke_render_shadow_create(
-        const ke_render_shadow_params *params, ke_render_shadow_resources *out_resources, ke_render_shadow_handle *out_shadow);
+        const ke_render_context *context, const ke_render_shadow_config *config, ke_render_shadow_resources *out_resources, ke_render_shadow_handle *out_shadow);
 
 #ifdef __cplusplus
 }

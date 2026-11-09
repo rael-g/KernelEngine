@@ -26,13 +26,13 @@ public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Rend
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(service);
-        KernelEngine.Render.Webgpu.Native.ke_render_scene_resolve_params config = default;
-        config.runtime = runtime.Native;
-        config.ecs = ecs.Native;
-        config.service = service.Native;
-        config.resolver = (resolver is null ? null : resolver.Native);
+        KernelEngine.Render.Webgpu.Native.ke_render_scene_resolve_params @params = default;
+        @params.runtime = runtime.Native;
+        @params.ecs = ecs.Native;
+        @params.service = service.Native;
+        @params.resolver = (resolver is null ? null : resolver.Native);
         KernelEngine.Render.Native.ke_render_scene_resolve_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&config, &handle), "ke_render_scene_resolve_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(&@params, &handle), "ke_render_scene_resolve_create");
         return handle;
     }
 }

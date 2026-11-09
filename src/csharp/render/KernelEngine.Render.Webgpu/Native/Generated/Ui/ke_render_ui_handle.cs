@@ -5,10 +5,7 @@ using global::KernelEngine.Logger;
 using global::KernelEngine.Render;
 using global::KernelEngine.Text;
 
-using KernelEngine.Ecs.Native;
-using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 

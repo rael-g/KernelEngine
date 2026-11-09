@@ -5,6 +5,7 @@ const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
+const abi_render_context = @import("render_context");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
@@ -27,9 +28,9 @@ pub const RenderLabelResolve = struct {
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
     /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
     /// handle's ref is NULL on failure.
-    pub fn create(params: ?*const c.ke_render_label_resolve_params) Error!RenderLabelResolve {
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const c.ke_render_label_resolve_config) Error!RenderLabelResolve {
         var written: c.ke_render_label_resolve_handle = undefined;
-        try checkResult(c.ke_render_label_resolve_create(params, &written));
+        try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -51,6 +52,6 @@ pub fn renderSceneResolveCreate(params: ?*const c.ke_render_scene_resolve_params
     return written;
 }
 
-pub const RenderLabelResolveParams = c.ke_render_label_resolve_params;
+pub const RenderLabelResolveConfig = c.ke_render_label_resolve_config;
 pub const RenderSceneResolveParams = c.ke_render_scene_resolve_params;
 pub const RenderLabelResolveHandle = c.ke_render_label_resolve_handle;

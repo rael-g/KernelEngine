@@ -5,23 +5,29 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
+/// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It writes the frame's depth and albedo, normal and emissive targets each the size of the backbuffer.</summary>
 public sealed unsafe partial class RenderGbuffer : IDisposable
 {
-    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Holds the resources it writes; borrowed.</param>
-    /// <param name="device">Names the components the pass reads; borrowed.</param>
-    /// <param name="scene">Names the components the pass reads; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
+    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It writes the frame's depth and albedo, normal and emissive targets each the size of the backbuffer.</summary>
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
     /// <summary>Receives the ids of the targets it writes; every id KE_COMPONENT_INVALID on failure.</summary>
     public KernelEngine.Render.RenderGbufferResources Resources { get; }
 
-    public RenderGbuffer(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(Create(runtime, service, device, scene, frame))
+    public RenderGbuffer(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame))
     {
         Hold(runtime.Owner);
+        Hold(ecs.Owner);
         Hold(service.Owner);
         Hold(device.Owner);
+        Hold(viewSpace.Owner);
+        Hold(camera.Owner);
         Hold(scene.Owner);
         Hold(frame.Owner);
     }
@@ -53,22 +59,28 @@ public sealed unsafe partial class RenderGbuffer : IDisposable
         _held.Clear();
     }
 
-    private static (KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle Handle, KernelEngine.Render.RenderGbufferResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
+    private static (KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle Handle, KernelEngine.Render.RenderGbufferResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
     {
         ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(device);
+        ArgumentNullException.ThrowIfNull(viewSpace);
+        ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_params config = default;
-        config.runtime = runtime.Native;
-        config.service = service.Native;
-        config.device = device.Native;
-        config.scene = scene.Native;
-        config.frame = frame.Native;
+        KernelEngine.Render.Webgpu.Native.RenderContext context = default;
+        context.Runtime = runtime.Native;
+        context.Ecs = ecs.Native;
+        context.Service = service.Native;
+        context.Device = device.Native;
+        context.ViewSpace = viewSpace.Native;
+        context.Camera = camera.Native;
+        context.Scene = scene.Native;
+        context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_gbuffer_handle handle;
         KernelEngine.Render.RenderGbufferResources resources = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&config, &resources, &handle), "ke_render_gbuffer_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_gbuffer_create(&context, &resources, &handle), "ke_render_gbuffer_create");
         return (handle, resources);
     }
 }

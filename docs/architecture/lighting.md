@@ -8,11 +8,11 @@ consume it. How a part works inside is on the generated page of its file. Plugin
 
 | part | plugin | receives | hands on |
 |---|---|---|---|
-| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_params` | the target "shadow_map" and the buffer "shadow_lvp" |
-| cluster | cluster | point and spot lights, the camera, `ke_view_space` | the bind group "cluster_lights" and the tag "light_clusters" |
-| skybox | skybox | the `ke_skybox_component`, "depth" | the background, drawn into "hdr" |
-| deferred lighting | deferred_lighting | the gbuffer targets, "depth", the three hand-offs above, the directional and ambient lights | "hdr" |
-| forward | forward | blended meshes, "hdr", the three hand-offs above, the lights | "hdr_opaque" for its own sampling, and "hdr" |
+| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_config` | the map and the light buffer, as `ke_render_shadow_resources` |
+| cluster | cluster | point and spot lights, the camera, `ke_view_space` | its tag and its light buffers, as `ke_render_cluster_resources` |
+| skybox | skybox | the `ke_skybox_component`, the frame's depth | the background, drawn into the frame's color |
+| deferred lighting | deferred_lighting | `ke_render_gbuffer_resources`, the frame's depth, the hand-offs above, the directional and ambient lights | the frame's color |
+| forward | forward | blended meshes, the frame's color, the hand-offs above, the lights | the frame's color |
 
 Deferred lighting shades every opaque and alpha-masked surface, forward every blended one. They
 share no code at the pass level; they share a vocabulary of shader functions.
@@ -26,19 +26,19 @@ the same order. Forward alone also calls `refraction_contribution`
 (`refraction_feature.slang`), because only it has a copy of the frame behind the surface.
 
 **A feature that is off is a neutral resource, not another shader.** The shadow function reads a
-white texture when no "shadow_map" exists, the environment is a black cube when image-based light
+white texture when the shadow map's id is invalid, the environment is a black cube when image-based light
 is disabled or no skybox exists, and a cluster with no lights has a zero count. A host without
-shadows creates no shadow pass and gives the shading passes no shadow group; `ibl_enabled` of
-`ke_render_deferred_lighting_params` and `ke_render_forward_params` turns image-based light off.
+shadows creates no shadow pass and gives the shading passes invalid shadow ids; `ibl_enabled` of
+`ke_render_deferred_lighting_config` and `ke_render_forward_config` turns image-based light off.
 
 **The directional light and the ambient light are the first of their kind.** Both shading passes
 and the shadow pass read only the first directional light; the first ambient light replaces the
 ambient field of the directional one. Point and spot lights reach a surface only through the
 clusters and cast no shadow.
 
-**Clusters are ordered before shading by their access lists.** The cluster pass writes the tag
-"light_clusters" and imports the bind group "cluster_lights"; the shading passes read the tag
-and bind the group, so the runtime runs them in that order.
+**Clusters are ordered before shading by their access lists.** The cluster pass writes the tag of
+`ke_render_cluster_resources` and publishes its light buffers; the shading passes read the tag and
+bind the buffers, so the runtime runs them in that order.
 
 **The view space is the only thing that knows which way the camera faces.** The cluster pass and
 the shadow pass take `ke_view_space`; the cluster pass hands its `depth_from_view_z` on to the
@@ -48,13 +48,11 @@ shading shaders in the grid uniform.
 
 These are string literals and numbers in the plugins. No header declares them.
 
-- The names "shadow_map", "shadow_depth", "shadow_lvp", "light_clusters", "cluster_lights",
-  "hdr", "hdr_opaque" and "depth".
 - The bind group sets of the shading passes. Set 0 is the per-frame uniform at binding 0, the
   shadow buffer, map and sampler at 4 to 6 and the environment cube and sampler at 7 and 8;
-  forward alone also has the "hdr_opaque" copy and sampler at 1 and 2. Set 1 is the gbuffer
+  forward alone also has the copy of the frame's color and its sampler at 1 and 2. Set 1 is the gbuffer
   (deferred) or the material (forward). Set 2 is empty (deferred) or the object (forward). Set 3
-  is "cluster_lights", bindings 0 to 6. A pipeline takes four layouts, so there is no fifth set.
+  is the cluster light buffers, bindings 0 to 6. A pipeline takes four layouts, so there is no fifth set.
 - The layout of the per-frame uniform of each shading pass, between its Zig struct and the
   `frame` block of its shader.
 - The cluster grid uniform and the cull parameters, between `ClusterGridUniform` and

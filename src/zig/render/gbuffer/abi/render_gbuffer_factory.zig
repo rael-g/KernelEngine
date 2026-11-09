@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -23,9 +23,10 @@ pub const RenderGbuffer = struct {
     }
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
-    /// invalid argument.
-    pub fn create(params: ?*const c.ke_render_gbuffer_params, out_resources: ?*abi_render.c.ke_render_gbuffer_resources, out_gbuffer: ?*c.ke_render_gbuffer_handle) Error!void {
-        try checkResult(c.ke_render_gbuffer_create(params, out_resources, out_gbuffer));
+    /// invalid argument. It writes the frame's depth and albedo, normal and emissive targets each
+    /// the size of the backbuffer.
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, out_resources: ?*abi_render.c.ke_render_gbuffer_resources, out_gbuffer: ?*c.ke_render_gbuffer_handle) Error!void {
+        try checkResult(c.ke_render_gbuffer_create(context, out_resources, out_gbuffer));
     }
 
 };
@@ -36,5 +37,4 @@ pub fn renderGbufferSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
     return c.ke_render_gbuffer_set_log_callback(callback, ctx);
 }
 
-pub const RenderGbufferParams = c.ke_render_gbuffer_params;
 pub const RenderGbufferHandle = c.ke_render_gbuffer_handle;

@@ -40,15 +40,16 @@ public sealed record RenderClusterConfig : KernelEngine.Configuration.IConfigSec
 public sealed unsafe partial class RenderCluster
 {
     /// <summary>Creates a light-cluster pass and registers its render-phase system.</summary>
-    /// <param name="runtime">Registers the pass's system; borrowed, must outlive it.</param>
-    /// <param name="service">Receives the published buffers; borrowed.</param>
-    /// <param name="device">Borrowed.</param>
-    /// <param name="viewSpace">Builds the cluster frusta; borrowed.</param>
-    /// <param name="camera">Borrowed.</param>
-    /// <param name="scene">Names the components the pass reads; borrowed.</param>
-    /// <param name="frame">The pass runs inside its frame; borrowed.</param>
+    /// <param name="runtime">Registers the passes' systems.</param>
+    /// <param name="ecs">Registers the components the passes own.</param>
+    /// <param name="service">Holds the resources the passes read and write.</param>
+    /// <param name="device">Creates the passes' GPU objects.</param>
+    /// <param name="viewSpace">Builds views and projections.</param>
+    /// <param name="camera">Answers the camera's matrices.</param>
+    /// <param name="scene">Names the components the passes read.</param>
+    /// <param name="frame">The passes run inside its frame.</param>
     /// <param name="config">The values it is created with.</param>
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, RenderClusterConfig config) : this(runtime, service, device, viewSpace, camera, scene, frame, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster)
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, RenderClusterConfig config) : this(runtime, ecs, service, device, viewSpace, camera, scene, frame, config.GridX, config.GridY, config.GridZ, config.MaxLightsPerCluster)
     {
     }
 }

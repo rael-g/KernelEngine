@@ -167,25 +167,22 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
         .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
         .scene = r->scene.ref }, &r->frame));
 
-    ke_render_shadow_resources shadow_map;
+    const ke_render_context context = {
+        .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
+        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
+    };
+    ke_render_shadow_resources shadow;
     ke_render_cluster_resources clusters;
     ke_render_gbuffer_resources gbuffer;
-    ke_render_shadow_params shadow = ke_render_shadow_params_defaults;
-    shadow.scene = r->scene.ref;
-    shadow.frame = r->frame.ref;
-    shadow.runtime = rt;
-    shadow.service = core;
-    shadow.device = gpu;
-    shadow.view_space = r->view_space.ref;
-    check("shadow pass", ke_render_shadow_create(&shadow, &shadow_map, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref, NULL, &clusters, &r->cluster));
-    check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu }, &gbuffer, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
-        .gbuffer = gbuffer, .shadow = shadow_map, .clusters = clusters }, &r->deferred));
-    check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){
-        .runtime = rt, .service = core, .device = gpu, .frame = r->frame.ref }, &r->tonemap));
+    check("shadow pass", ke_render_shadow_create(&context, NULL, &shadow, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, NULL, &clusters, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
+    ke_render_deferred_lighting_config deferred = ke_render_deferred_lighting_config_defaults;
+    deferred.gbuffer = gbuffer;
+    deferred.shadow = shadow;
+    deferred.clusters = clusters;
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
+    check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
 }
 
 static void renderer_destroy(renderer *r)

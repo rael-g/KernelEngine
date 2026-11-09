@@ -3,10 +3,9 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_view = @import("view");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_shadow_factory_c.zig");
@@ -25,8 +24,8 @@ pub const RenderShadow = struct {
 
     /// Registers the pass's render-phase system. A missing runtime, service, device or view space
     /// fails as an invalid argument.
-    pub fn create(params: ?*const c.ke_render_shadow_params, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*c.ke_render_shadow_handle) Error!void {
-        try checkResult(c.ke_render_shadow_create(params, out_resources, out_shadow));
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_shadow_config, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*c.ke_render_shadow_handle) Error!void {
+        try checkResult(c.ke_render_shadow_create(context, config, out_resources, out_shadow));
     }
 
 };
@@ -37,5 +36,5 @@ pub fn renderShadowSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque)
     return c.ke_render_shadow_set_log_callback(callback, ctx);
 }
 
-pub const RenderShadowParams = c.ke_render_shadow_params;
+pub const RenderShadowConfig = c.ke_render_shadow_config;
 pub const RenderShadowHandle = c.ke_render_shadow_handle;

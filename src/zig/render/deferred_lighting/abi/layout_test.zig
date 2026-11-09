@@ -23,7 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_render_deferred_lighting_params, translated("ke_render_deferred_lighting_params"));
+    try expectSameLayout(abi.c.ke_render_deferred_lighting_config, translated("ke_render_deferred_lighting_config"));
     try expectSameLayout(abi.c.ke_render_deferred_lighting_handle, translated("ke_render_deferred_lighting_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
@@ -55,21 +55,16 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [14]c_ulonglong;
+extern const layout_values: [9]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_render_deferred_lighting_params),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "runtime"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "service"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "device"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "ibl_enabled"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "scene"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "frame"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "gbuffer"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "shadow"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_params, "clusters"),
+        @sizeOf(abi.c.ke_render_deferred_lighting_config),
+        @offsetOf(abi.c.ke_render_deferred_lighting_config, "ibl_enabled"),
+        @offsetOf(abi.c.ke_render_deferred_lighting_config, "gbuffer"),
+        @offsetOf(abi.c.ke_render_deferred_lighting_config, "shadow"),
+        @offsetOf(abi.c.ke_render_deferred_lighting_config, "clusters"),
         @sizeOf(abi.c.ke_render_deferred_lighting_handle),
         @offsetOf(abi.c.ke_render_deferred_lighting_handle, "ref"),
         @offsetOf(abi.c.ke_render_deferred_lighting_handle, "destroy"),

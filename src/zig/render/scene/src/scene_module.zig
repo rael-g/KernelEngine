@@ -13,6 +13,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 pub const abi_ecs = @import("abi_ecs");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
@@ -170,18 +171,19 @@ fn destroyLabel(self: ?*abi_render_scene_factory.c.ke_render_label_resolve) call
 /// The factory declared in label_resolve_create.h. A missing runtime, service or ui fails as an
 /// invalid argument, a failed allocation as out of memory, and the runtime refusing the system
 /// with the runtime's code.
-export fn ke_render_label_resolve_create(params_in: ?*const abi_render_scene_factory.c.ke_render_label_resolve_params, out_resolve: [*c]abi_render_scene_factory.c.ke_render_label_resolve_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config_in: ?*const abi_render_scene_factory.c.ke_render_label_resolve_config, out_resolve: [*c]abi_render_scene_factory.c.ke_render_label_resolve_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_resolve orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
+    const p = context_in orelse return R.code(error.InvalidArgument);
+    const config = config_in orelse &abi_render_scene_factory.c.ke_render_label_resolve_config_defaults;
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     const core = p.service orelse return R.code(error.InvalidArgument);
-    const ui = p.ui orelse return R.code(error.InvalidArgument);
+    const ui = ui_in orelse return R.code(error.InvalidArgument);
     if (p.scene == null) return R.code(error.InvalidArgument);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
-    st.state = .{ .core = core, .ui = ui, .resolver = p.resolver };
-    if (p.default_font) |d| st.state.default_font = gpa.dupeZ(u8, std.mem.span(d)) catch |err| {
+    st.state = .{ .core = core, .ui = ui, .resolver = resolver };
+    if (config.default_font) |d| st.state.default_font = gpa.dupeZ(u8, std.mem.span(d)) catch |err| {
         gpa.destroy(st);
         return R.code(err);
     };
@@ -301,14 +303,16 @@ test "the label resolve registers its system, and fails when the runtime refuses
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene, .default_font = "res://default.ttf" };
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = &ui;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = "res://default.ttf" };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &h));
+    try R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h));
     try rig.rt.received(.register_system).times(1);
     h.destroy.?(h.ref);
 
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    try testing.expect(ke_render_label_resolve_create(&p, &h) != R.ok);
+    try testing.expect(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h) != R.ok);
     try testing.expect(h.ref == null);
 }
 
@@ -317,9 +321,11 @@ test "destroying the label resolve unregisters its system" {
     try rig.init();
     defer rig.deinit();
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = &ui, .resolver = null, .scene = &test_scene};
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = &ui;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = null };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &h));
+    try R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -330,9 +336,11 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const p = abi_render_scene_factory.c.ke_render_label_resolve_params{ .runtime = rig.rt.api(), .service = rig.core.api(), .ui = null, .resolver = null, .scene = &test_scene};
+    const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .scene = &test_scene });
+    const ui_ref: ?*abi_render_ui.c.ke_render_ui = null;
+    const config: abi_render_scene_factory.c.ke_render_label_resolve_config = .{ .default_font = null };
     var h: abi_render_scene_factory.c.ke_render_label_resolve_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, ui_ref, null, &config, &h)));
     try testing.expect(h.ref == null);
 }
 

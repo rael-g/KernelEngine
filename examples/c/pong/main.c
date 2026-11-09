@@ -150,29 +150,30 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
     check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
     check("frame", ke_render_frame_create(&(ke_render_frame_params){ .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref, .scene = r->scene.ref }, &r->frame));
-    ke_render_shadow_resources shadow_map;
+    const ke_render_context context = {
+        .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
+        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
+    };
+    ke_render_shadow_resources shadow;
     ke_render_cluster_resources clusters;
     ke_render_gbuffer_resources gbuffer;
-    ke_render_shadow_params shadow = ke_render_shadow_params_defaults;
-    shadow.scene = r->scene.ref;
-    shadow.frame = r->frame.ref;
-    shadow.runtime = rt;
-    shadow.service = core;
-    shadow.device = gpu;
-    shadow.view_space = r->view_space.ref;
-    check("shadow pass", ke_render_shadow_create(&shadow, &shadow_map, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(rt, core, gpu, r->view_space.ref, r->camera.ref, r->scene.ref, r->frame.ref, NULL, &clusters, &r->cluster));
-    check("gbuffer pass", ke_render_gbuffer_create(&(ke_render_gbuffer_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu }, &gbuffer, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&(ke_render_deferred_lighting_params){
-        .scene = r->scene.ref, .frame = r->frame.ref, .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true,
-        .gbuffer = gbuffer, .shadow = shadow_map, .clusters = clusters }, &r->deferred));
-    check("forward pass", ke_render_forward_create(&(ke_render_forward_params){
-        .runtime = rt, .service = core, .device = gpu, .ibl_enabled = true, .scene = r->scene.ref, .frame = r->frame.ref, .shadow = shadow_map, .clusters = clusters }, &r->forward));
-    check("tonemap pass", ke_render_tonemap_create(&(ke_render_tonemap_params){ .runtime = rt, .service = core, .device = gpu, .frame = r->frame.ref }, &r->tonemap));
-    check("ui pass", ke_render_ui_create(&(ke_render_ui_params){ .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .frame = r->frame.ref }, &r->ui));
-    check("label resolve", ke_render_label_resolve_create(&(ke_render_label_resolve_params){
-        .runtime = rt, .service = core, .ui = r->ui.ref, .resolver = assets, .scene = r->scene.ref, .default_font = font }, &r->labels));
+    check("shadow pass", ke_render_shadow_create(&context, NULL, &shadow, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, NULL, &clusters, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
+    ke_render_deferred_lighting_config deferred = ke_render_deferred_lighting_config_defaults;
+    deferred.gbuffer = gbuffer;
+    deferred.shadow = shadow;
+    deferred.clusters = clusters;
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
+    ke_render_forward_config forward = ke_render_forward_config_defaults;
+    forward.shadow = shadow;
+    forward.clusters = clusters;
+    check("forward pass", ke_render_forward_create(&context, &forward, &r->forward));
+    check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
+    check("ui pass", ke_render_ui_create(&context, &r->ui));
+    ke_render_label_resolve_config labels = ke_render_label_resolve_config_defaults;
+    labels.default_font = font;
+    check("label resolve", ke_render_label_resolve_create(&context, r->ui.ref, assets, &labels, &r->labels));
 }
 
 static void renderer_destroy(renderer *r)

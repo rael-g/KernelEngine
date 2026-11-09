@@ -2,6 +2,7 @@
 #define KERNEL_ENGINE_RENDER_FORWARD_FORWARD_CREATE_H_
 
 #include <kernel_engine/result/result.h>
+#include <kernel_engine/render/context.h>
 #include <stdbool.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/render/frame.h>
@@ -37,28 +38,33 @@ extern "C"
         void (*destroy)(ke_render_forward *self);
     } ke_render_forward_handle;
 
-    /// What the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
+    /// [bag] The values the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
     /// samples the frame's color and draws over a copy of it, tested against the frame's depth.
-    /// [bag]
-    typedef struct ke_render_forward_params
+    /// 
+    typedef struct ke_render_forward_config
     {
-        ke_runtime        *runtime; ///< Registers the pass's system; borrowed, must outlive it.
-        ke_render_service *service; ///< Holds the frame's color and the groups; borrowed.
-        ke_gpu_device     *device;  ///< Borrowed.
-        bool               ibl_enabled;
-        ke_render_scene_resolve *scene; ///< Names the components the pass reads; borrowed.
-        ke_render_frame   *frame;  ///< The pass runs inside its frame; borrowed.
+        /// Whether the pass samples the sky for image-based light.
+        bool ibl_enabled;
         /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
         ke_render_shadow_resources shadow;
         /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
         ke_render_cluster_resources clusters;
-    } ke_render_forward_params;
+    } ke_render_forward_config;
+
+    /** [defaults] The values a caller gets when it sets nothing. */
+    static const ke_render_forward_config ke_render_forward_config_defaults = {
+        .ibl_enabled = true,
+        .shadow = { KE_COMPONENT_INVALID, KE_COMPONENT_INVALID },
+        .clusters = { KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID },
+    };
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails
     /// as an invalid argument.
+    /// @param context [borrowed] The parts the pass is built on; read during the call.
+    /// @param config [borrowed,optional] The pass\'s values; NULL selects the defaults.
     /// @param out_forward [out] Receives the handle; left zeroed on failure.
     KE_RENDER_FORWARD_API ke_result ke_render_forward_create(
-        const ke_render_forward_params *params, ke_render_forward_handle *out_forward);
+        const ke_render_context *context, const ke_render_forward_config *config, ke_render_forward_handle *out_forward);
 
 #ifdef __cplusplus
 }

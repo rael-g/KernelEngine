@@ -14,6 +14,7 @@ const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
+const abi_render_context = @import("abi_render_context");
 const abi_render_shadow_factory = @import("abi_render_shadow_factory");
 const abi_result = @import("abi_result");
 const abi_runtime = @import("abi_runtime");
@@ -25,7 +26,7 @@ const log = std.log.scoped(.render_shadow);
 const heap = @import("heap");
 const gpa = heap.gpa;
 
-/// The shape of the shadow map, copied from the params' fields of the same names.
+/// The shape of the shadow map, copied from the config's fields of the same names.
 const Shape = struct {
     resolution: u32,
     light_distance: f32,
@@ -35,7 +36,7 @@ const Shape = struct {
 };
 
 /// A map without texels, an empty area or a near plane not before the far one is refused.
-fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_params) R.Error!Shape {
+fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_config) R.Error!Shape {
     if (p.resolution == 0 or !(p.extent > 0.0) or !(p.near_plane < p.far_plane)) {
         log.warn("shadow pass: resolution {d}, extent {d}, near {d} and far {d} describe no shadow map", .{ p.resolution, p.extent, p.near_plane, p.far_plane });
         return error.InvalidArgument;
@@ -193,7 +194,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// fills the access list and the queries. A step that fails fails with the code of the render
 /// service or the device, and leaves the handles created before it stored in the module, for
 /// `destroyModule` to release; a pipeline that cannot be created fails as not initialized.
-fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.c.ke_render_shadow_params) R.Error!void {
+fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_shadow_factory.c.ke_render_shadow_config) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const mesh_cid = p.scene.?.component_ids.?(p.scene).?.mesh;
@@ -204,7 +205,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_shadow_factory.c.ke_render_shad
     sh.device = dev;
     sh.ndc = p.device.?.get_ndc_convention.?(p.device);
     sh.view_space = p.view_space.?;
-    sh.params = try shapeOf(p);
+    sh.params = try shapeOf(config);
     sh.mesh_cid = mesh_cid;
     sh.world_transform_cid = world_transform_cid;
     sh.light_cid = light_cid;
@@ -325,18 +326,18 @@ fn destroyHandle(self: ?*abi_render_shadow_factory.c.ke_render_shadow) callconv(
 /// service, device, view space or out pointer fails as an invalid argument and a
 /// module that cannot be allocated as out of memory; a failing `setup` or a runtime refusing the
 /// system fails with its code and leaves the handle zeroed, and every such path frees the module.
-export fn ke_render_shadow_create(params_in: ?*const abi_render_shadow_factory.c.ke_render_shadow_params, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: [*c]abi_render_shadow_factory.c.ke_render_shadow_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_shadow_create(context_in: ?*const abi_render_context.c.ke_render_context, config: ?*const abi_render_shadow_factory.c.ke_render_shadow_config, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: [*c]abi_render_shadow_factory.c.ke_render_shadow_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_shadow orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const resources = out_resources orelse return R.code(error.InvalidArgument);
     resources.* = .{ .map = 0, .light = 0 };
-    const p = params_in orelse return R.code(error.InvalidArgument);
+    const p = context_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.view_space == null) return R.code(error.InvalidArgument);
 
     const sh = gpa.create(ShadowModule) catch |err| return R.code(err);
     sh.* = .{};
-    setup(sh, p) catch |err| {
+    setup(sh, p, config orelse &abi_render_shadow_factory.c.ke_render_shadow_config_defaults) catch |err| {
         destroyModule(sh);
         gpa.destroy(sh);
         return R.code(err);
@@ -432,7 +433,7 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try R.check(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h));
+    try R.check(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -445,7 +446,7 @@ test "destroying the shadow pass unregisters every system it registered" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try R.check(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h));
+    try R.check(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -460,7 +461,7 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h) != R.ok);
+    try testing.expect(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -473,7 +474,7 @@ test "a missing frame is refused" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h)));
 }
 
 test "a missing scene is refused" {
@@ -483,7 +484,7 @@ test "a missing scene is refused" {
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&.{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h)));
 }
 
 test "a shadow pass the runtime refuses to register releases what it had created" {
@@ -494,7 +495,7 @@ test "a shadow pass the runtime refuses to register releases what it had created
     var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
     var res: abi_render.c.ke_render_shadow_resources = undefined;
     var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&.{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }, &res, &h) != R.ok);
+    try testing.expect(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), null, &res, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

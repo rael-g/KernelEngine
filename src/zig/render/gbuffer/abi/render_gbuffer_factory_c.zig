@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -59,29 +59,15 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// What the gbuffer pass draws with. It writes the frame's depth and albedo, normal and emissive
-/// targets each the size of the backbuffer.
-pub const ke_render_gbuffer_params = extern struct {
-    /// Registers the pass's system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Holds the resources it writes; borrowed.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Names the components the pass reads; borrowed.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// Names the components the pass reads; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
-    /// The pass runs inside its frame; borrowed.
-    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-};
-
 pub const ke_render_gbuffer_handle = extern struct {
     ref: ?*ke_render_gbuffer = std.mem.zeroes(?*ke_render_gbuffer),
     destroy: ?*const fn (?*ke_render_gbuffer) callconv(.c) void = null,
 };
 
 /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
-/// invalid argument.
-pub extern fn ke_render_gbuffer_create(params: ?*const ke_render_gbuffer_params, out_resources: ?*abi_render.c.ke_render_gbuffer_resources, out_gbuffer: ?*ke_render_gbuffer_handle) abi_result.c.ke_result;
+/// invalid argument. It writes the frame's depth and albedo, normal and emissive targets each
+/// the size of the backbuffer.
+pub extern fn ke_render_gbuffer_create(context: ?*const abi_render_context.c.ke_render_context, out_resources: ?*abi_render.c.ke_render_gbuffer_resources, out_gbuffer: ?*ke_render_gbuffer_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_gbuffer logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

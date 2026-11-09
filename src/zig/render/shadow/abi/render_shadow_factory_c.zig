@@ -3,10 +3,9 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_view = @import("view");
 
 pub const ke_render_shadow = opaque {};
 
@@ -60,21 +59,9 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// What the directional shadow pass draws and the shape of its map. A scene larger than `extent`
-/// loses shadows outside it, and a caster farther than `light_distance` stops casting.
-pub const ke_render_shadow_params = extern struct {
-    /// Registers the pass's system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Holds the resources it writes; borrowed.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Borrowed.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// Builds the light's view and projection; borrowed.
-    view_space: ?*abi_view.c.ke_view_space = std.mem.zeroes(?*abi_view.c.ke_view_space),
-    /// Names the components the pass reads; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
-    /// The pass runs inside its frame; borrowed.
-    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
+/// The shape of the directional shadow pass's map. A scene larger than `extent` loses shadows
+/// outside it, and a caster farther than `light_distance` stops casting.
+pub const ke_render_shadow_config = extern struct {
     /// Edge of the square shadow map, in texels.
     resolution: u32 = 1024,
     /// How far back along the light the shadow camera sits.
@@ -92,7 +79,7 @@ pub const ke_render_shadow_handle = extern struct {
     destroy: ?*const fn (?*ke_render_shadow) callconv(.c) void = null,
 };
 
-pub const ke_render_shadow_params_defaults: ke_render_shadow_params = .{ .resolution = 1024, .light_distance = 25.0, .extent = 20.0, .near_plane = 0.1, .far_plane = 50.0 };
+pub const ke_render_shadow_config_defaults: ke_render_shadow_config = .{ .resolution = 1024, .light_distance = 25.0, .extent = 20.0, .near_plane = 0.1, .far_plane = 50.0 };
 
 /// Sends every line ke_render_shadow logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
@@ -100,4 +87,4 @@ pub extern fn ke_render_shadow_set_log_callback(callback: ke_log_callback, ctx: 
 
 /// Registers the pass's render-phase system. A missing runtime, service, device or view space
 /// fails as an invalid argument.
-pub extern fn ke_render_shadow_create(params: ?*const ke_render_shadow_params, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*ke_render_shadow_handle) abi_result.c.ke_result;
+pub extern fn ke_render_shadow_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_shadow_config, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*ke_render_shadow_handle) abi_result.c.ke_result;

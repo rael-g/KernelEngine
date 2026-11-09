@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -24,9 +24,9 @@ pub const RenderForward = struct {
 
     /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
     /// invalid argument.
-    pub fn create(params: ?*const c.ke_render_forward_params) Error!RenderForward {
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_forward_config) Error!RenderForward {
         var written: c.ke_render_forward_handle = undefined;
-        try checkResult(c.ke_render_forward_create(params, &written));
+        try checkResult(c.ke_render_forward_create(context, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -38,5 +38,5 @@ pub fn renderForwardSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
     return c.ke_render_forward_set_log_callback(callback, ctx);
 }
 
-pub const RenderForwardParams = c.ke_render_forward_params;
+pub const RenderForwardConfig = c.ke_render_forward_config;
 pub const RenderForwardHandle = c.ke_render_forward_handle;

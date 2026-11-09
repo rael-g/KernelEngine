@@ -29,6 +29,7 @@
         .abi_physics_contract = .{ .path = "physics_contract" },
         .abi_render = .{ .path = "render" },
         .abi_render_components = .{ .path = "render_components" },
+        .abi_render_context = .{ .path = "render_context" },
         .abi_render_contract = .{ .path = "render_contract" },
         .abi_render_gpu = .{ .path = "render_gpu" },
         .abi_render_handles = .{ .path = "render_handles" },

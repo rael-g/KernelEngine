@@ -2,8 +2,7 @@
 
 const std = @import("std");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -59,23 +58,6 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// What the skybox pass needs. It joins the chain at KE_RENDER_STAGE_SKY and draws over the
-/// [bag] frame's color where the frame's depth is at the far plane.
-pub const ke_render_skybox_params = extern struct {
-    /// Registers the pass's system; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Holds the frame's color and depth; borrowed.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Borrowed.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
-    /// Names the components the pass reads; borrowed.
-    camera: ?*abi_render.c.ke_render_camera = std.mem.zeroes(?*abi_render.c.ke_render_camera),
-    /// Names the components the pass reads; borrowed.
-    scene: ?*abi_render.c.ke_render_scene_resolve = std.mem.zeroes(?*abi_render.c.ke_render_scene_resolve),
-    /// The pass runs inside its frame; borrowed.
-    frame: ?*abi_render.c.ke_render_frame = std.mem.zeroes(?*abi_render.c.ke_render_frame),
-};
-
 pub const ke_render_skybox_handle = extern struct {
     ref: ?*ke_render_skybox = std.mem.zeroes(?*ke_render_skybox),
     destroy: ?*const fn (?*ke_render_skybox) callconv(.c) void = null,
@@ -86,5 +68,6 @@ pub const ke_render_skybox_handle = extern struct {
 pub extern fn ke_render_skybox_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Registers the pass's render-phase system. A missing runtime, service, device or camera fails
-/// as an invalid argument.
-pub extern fn ke_render_skybox_create(params: ?*const ke_render_skybox_params, out_skybox: ?*ke_render_skybox_handle) abi_result.c.ke_result;
+/// as an invalid argument. It joins the chain at KE_RENDER_STAGE_SKY and draws over the frame's
+/// color where the frame's depth is at the far plane.
+pub extern fn ke_render_skybox_create(context: ?*const abi_render_context.c.ke_render_context, out_skybox: ?*ke_render_skybox_handle) abi_result.c.ke_result;

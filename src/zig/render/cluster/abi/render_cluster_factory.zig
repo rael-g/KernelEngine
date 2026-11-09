@@ -3,10 +3,9 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_view = @import("view");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_cluster_factory_c.zig");
@@ -24,8 +23,8 @@ pub const RenderCluster = struct {
     }
 
     /// Creates a light-cluster pass and registers its render-phase system.
-    pub fn create(runtime: ?*abi_runtime.c.ke_runtime, service: ?*abi_render.c.ke_render_service, device: ?*abi_render_gpu.c.ke_gpu_device, view_space: ?*abi_view.c.ke_view_space, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, frame: ?*abi_render.c.ke_render_frame, config: ?*const c.ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*c.ke_render_cluster_handle) Error!void {
-        try checkResult(c.ke_render_cluster_create(runtime, service, device, view_space, camera, scene, frame, config, out_resources, out_cluster));
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*c.ke_render_cluster_handle) Error!void {
+        try checkResult(c.ke_render_cluster_create(context, config, out_resources, out_cluster));
     }
 
 };

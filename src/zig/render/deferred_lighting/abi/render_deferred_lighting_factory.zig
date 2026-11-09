@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_logger = @import("logger");
 const abi_render = @import("render");
-const abi_render_gpu = @import("render_gpu");
+const abi_render_context = @import("render_context");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 
@@ -24,9 +24,9 @@ pub const RenderDeferredLighting = struct {
 
     /// Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer
     /// with an invalid id, fails as an invalid argument.
-    pub fn create(params: ?*const c.ke_render_deferred_lighting_params) Error!RenderDeferredLighting {
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_deferred_lighting_config) Error!RenderDeferredLighting {
         var written: c.ke_render_deferred_lighting_handle = undefined;
-        try checkResult(c.ke_render_deferred_lighting_create(params, &written));
+        try checkResult(c.ke_render_deferred_lighting_create(context, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -39,5 +39,5 @@ pub fn renderDeferredLightingSetLogCallback(callback: c.ke_log_callback, ctx: ?*
     return c.ke_render_deferred_lighting_set_log_callback(callback, ctx);
 }
 
-pub const RenderDeferredLightingParams = c.ke_render_deferred_lighting_params;
+pub const RenderDeferredLightingConfig = c.ke_render_deferred_lighting_config;
 pub const RenderDeferredLightingHandle = c.ke_render_deferred_lighting_handle;

@@ -7,6 +7,7 @@
         .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_render = .{ .path = "../../../abi/render" },
+        .abi_render_context = .{ .path = "../../../abi/render_context" },
         .abi_render_gpu = .{ .path = "../../../abi/render_gpu" },
         .abi_render_handles = .{ .path = "../../../abi/render_handles" },
         .abi_render_ui = .{ .path = "../../../abi/render_ui" },

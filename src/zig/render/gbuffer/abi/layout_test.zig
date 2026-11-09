@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_render_gbuffer_params, translated("ke_render_gbuffer_params"));
     try expectSameLayout(abi.c.ke_render_gbuffer_handle, translated("ke_render_gbuffer_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
@@ -55,17 +54,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [10]c_ulonglong;
+extern const layout_values: [4]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_render_gbuffer_params),
-        @offsetOf(abi.c.ke_render_gbuffer_params, "runtime"),
-        @offsetOf(abi.c.ke_render_gbuffer_params, "service"),
-        @offsetOf(abi.c.ke_render_gbuffer_params, "device"),
-        @offsetOf(abi.c.ke_render_gbuffer_params, "scene"),
-        @offsetOf(abi.c.ke_render_gbuffer_params, "frame"),
         @sizeOf(abi.c.ke_render_gbuffer_handle),
         @offsetOf(abi.c.ke_render_gbuffer_handle, "ref"),
         @offsetOf(abi.c.ke_render_gbuffer_handle, "destroy"),

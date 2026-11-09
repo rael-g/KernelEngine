@@ -1,0 +1,15 @@
+.{
+    .name = .abi_render_context,
+    .version = "0.1.0",
+    .fingerprint = 0xd56f09c78fc6a5c7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_render = .{ .path = "../render" },
+        .abi_render_gpu = .{ .path = "../render_gpu" },
+        .abi_result = .{ .path = "../result" },
+        .abi_runtime = .{ .path = "../runtime" },
+        .abi_view = .{ .path = "../view" },
+    },
+    .paths = .{"."},
+}
