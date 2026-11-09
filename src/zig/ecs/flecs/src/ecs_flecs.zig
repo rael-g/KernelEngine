@@ -89,13 +89,57 @@ const QueryCacheEntry = struct {
     query: ?*c.ecs_query_t,
 };
 
-/// One remembered field table. `fields` borrows the caller's table without copying it, so that
-/// table must outlive the state.
+/// One remembered field table, copied at registration with every name and string it reaches, so
+/// the caller's table only has to live for the call; freed with the state.
 const LayoutEntry = struct {
     cid: abi_asset_resolver.c.ke_component_id,
     fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 };
+
+fn dupText(text: ?[*:0]const u8) error{OutOfMemory}!?[*:0]const u8 {
+    const t = text orelse return null;
+    return (try heap.gpa.dupeZ(u8, std.mem.span(t))).ptr;
+}
+
+fn freeText(text: ?[*:0]const u8) void {
+    if (text) |t| heap.gpa.free(std.mem.span(t)[0 .. std.mem.len(t) + 1]);
+}
+
+fn freeFields(fields: []abi_ecs.c.ke_component_field) void {
+    for (fields) |f| {
+        freeText(f.name);
+        if (f.default_value.type == abi_ecs_variant.c.KE_VARIANT_STRING) freeText(f.default_value.unnamed_0.s);
+        if (f.enum_names) |names| {
+            const list: [*]const ?[*:0]const u8 = @ptrCast(names);
+            for (list[0..f.enum_count]) |n| freeText(n);
+            heap.gpa.free(list[0..f.enum_count]);
+        }
+    }
+    heap.gpa.free(fields);
+}
+
+fn copyFields(source: []const abi_ecs.c.ke_component_field) error{OutOfMemory}![]abi_ecs.c.ke_component_field {
+    const fields = try heap.gpa.alloc(abi_ecs.c.ke_component_field, source.len);
+    for (fields, source) |*f, from| f.* = .{ .name = null, .type = from.type, .offset = from.offset, .size = from.size, .default_value = from.default_value, .enum_names = null, .enum_count = 0 };
+    errdefer freeFields(fields);
+    for (fields, source) |*f, from| {
+        if (from.default_value.type == abi_ecs_variant.c.KE_VARIANT_STRING) {
+            f.default_value.unnamed_0.s = null;
+            f.default_value.unnamed_0.s = try dupText(from.default_value.unnamed_0.s);
+        }
+        f.name = try dupText(from.name);
+        if (from.enum_names) |names| {
+            const copied = try heap.gpa.alloc(?[*:0]const u8, from.enum_count);
+            @memset(copied, null);
+            f.enum_names = @ptrCast(copied.ptr);
+            f.enum_count = from.enum_count;
+            const list: [*]const ?[*:0]const u8 = @ptrCast(names);
+            for (copied, list[0..from.enum_count]) |*n, name| n.* = try dupText(name);
+        }
+    }
+    return fields;
+}
 
 /// A query registered by `queryRegister`. It owns `elem_sizes`, one size per term, and `destroy`
 /// frees it.
@@ -217,17 +261,21 @@ fn layoutOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?[]const abi_e
     return null;
 }
 
-/// Records a borrowed field table for `cid`, growing `layouts` when full. Returns false, leaving
-/// the registry as it was, when the array cannot grow.
+/// Records a copy of the field table for `cid`, growing `layouts` when full. Returns false, leaving
+/// the registry as it was, when memory runs out.
 fn rememberLayout(
     s: *State,
     cid: abi_asset_resolver.c.ke_component_id,
     fields: [*]const abi_ecs.c.ke_component_field,
     field_count: u32,
 ) bool {
+    const copied = copyFields(fields[0..field_count]) catch return false;
     if (s.layout_count == s.layout_capacity) {
         const new_cap: usize = if (s.layout_capacity != 0) s.layout_capacity * 2 else 8;
-        const new_buf = heap.gpa.alloc(LayoutEntry, new_cap) catch return false;
+        const new_buf = heap.gpa.alloc(LayoutEntry, new_cap) catch {
+            freeFields(copied);
+            return false;
+        };
         if (s.layouts) |old| {
             @memcpy(new_buf[0..s.layout_count], old[0..s.layout_count]);
             heap.gpa.free(old[0..s.layout_capacity]);
@@ -235,7 +283,7 @@ fn rememberLayout(
         s.layouts = new_buf.ptr;
         s.layout_capacity = new_cap;
     }
-    s.layouts.?[s.layout_count] = .{ .cid = cid, .fields = fields, .field_count = field_count };
+    s.layouts.?[s.layout_count] = .{ .cid = cid, .fields = copied.ptr, .field_count = field_count };
     s.layout_count += 1;
     return true;
 }
@@ -696,7 +744,10 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
-    if (s.layouts) |ls| heap.gpa.free(ls[0..s.layout_capacity]);
+    if (s.layouts) |ls| {
+        for (ls[0..s.layout_count]) |l| freeFields(@constCast(l.fields[0..l.field_count]));
+        heap.gpa.free(ls[0..s.layout_capacity]);
+    }
     if (s.materialized) |m| heap.gpa.free(m);
     if (s.world) |w| _ = c.ecs_fini(w);
 
@@ -1000,6 +1051,28 @@ test "the table of the first registrant to carry one describes the component aft
     try testing.expectEqual(tableless, meta.cid);
     try testing.expectEqual(@as(u32, swapped_a.len), meta.field_count);
     try testing.expect(meta.fields != null);
+}
+
+test "a field table is copied, names and enum names with it, so the caller's may go after the call" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var name_buf = "speed".*;
+    var choice_buf = "fast".*;
+    var choices = [_]?[*:0]const u8{&choice_buf};
+    var fields = [_]abi_ecs.c.ke_component_field{.{ .name = &name_buf, .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = 0, .size = 4, .enum_names = @ptrCast(&choices), .enum_count = 1 }};
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "copied_table", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
+    @memset(&name_buf, 'x');
+    @memset(&choice_buf, 'x');
+    fields[0].offset = 99;
+
+    var meta: abi_ecs.c.ke_component_meta = undefined;
+    try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "copied_table", &meta));
+    try testing.expectEqualStrings("speed", std.mem.span(meta.fields.?[0].name.?));
+    try testing.expectEqual(@as(u32, 0), meta.fields.?[0].offset);
+    const names: [*]const ?[*:0]const u8 = @ptrCast(meta.fields.?[0].enum_names);
+    try testing.expectEqualStrings("fast", std.mem.span(names[0].?));
 }
 
 test "componentRegister refuses a table describing bytes the component does not have" {
