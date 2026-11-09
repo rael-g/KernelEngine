@@ -7,6 +7,7 @@
 #include <kernel_engine/render/ui/component_fields.h>
 #include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/sdk/field.h>
+#include <kernel_engine/sdk/node.h>
 #include <kernel_engine/spatial/component_fields.h>
 #include <kernel_engine/spatial/transform.h>
 
@@ -102,27 +103,6 @@ static void label_text(ke_node_ctx *ctx, pong_game *game, const char *name, cons
     if (label) snprintf(label->text, sizeof label->text, "%s", text);
 }
 
-static ke_result change_scene(ke_node_ctx *ctx, pong_game *game, const char *path)
-{
-    ke_entity holder = ctx->ancestor(ctx, ctx->self, game->slot);
-    ke_scene_slot_component *slot = holder == KE_ENTITY_INVALID ? NULL : ctx->component(ctx, holder, game->slot);
-    if (!slot) return KE_RESULT_NOT_FOUND;
-    snprintf(slot->path, sizeof slot->path, "%s", path);
-    return KE_OK;
-}
-
-static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *path, float volume)
-{
-    ke_sound_component sound = ke_sound_node_initial;
-    snprintf(sound.path, sizeof sound.path, "%s", path);
-    sound.volume = volume;
-    sound.playing = true;
-    sound.release = KE_SOUND_RELEASE_WHEN_DONE;
-    const ke_node_component components[] = { { game->sound, &sound, sizeof sound } };
-    ke_entity node = KE_ENTITY_INVALID;
-    return ctx->spawn(ctx, game->sound_type, "Sound", ctx->self, components, 1, &node);
-}
-
 static ke_result paddle_fixed_update(ke_node_ctx *ctx, void *user_data)
 {
     pong_game *game = user_data;
@@ -144,7 +124,7 @@ static ke_result ball_update(ke_node_ctx *ctx, void *user_data)
     pong_game *game = user_data;
     KE_FOR_EACH_NODE(ctx, pong_ball, ball)
     {
-        if (ctx->pressed(ctx, &game->quit)) return change_scene(ctx, game, PONG_MENU_SCENE);
+        if (ctx->pressed(ctx, &game->quit)) return ke_sdk_change_scene(ctx, &game->nodes, PONG_MENU_SCENE);
         if (ctx->pressed(ctx, &game->launch) && ball->awaiting_launch) ball->launch_requested = true;
     }
     return KE_OK;
@@ -175,7 +155,7 @@ static ke_result score(ke_node_ctx *ctx, pong_game *game, pong_ball *ball, ke_bo
     body->velocity = (ke_vec2){ 0.0f, 0.0f };
     ball->last_velocity = (ke_vec2){ 0.0f, 0.0f };
     ball->awaiting_launch = true;
-    return play(ctx, game, ball->score_sound, ball->score_volume);
+    return ke_sdk_play_sound(ctx, &game->nodes, ball->score_sound, ball->score_volume);
 }
 
 static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
@@ -196,7 +176,7 @@ static ke_result ball_fixed_update(ke_node_ctx *ctx, void *user_data)
         ball->last_velocity = body->velocity;
         if (bounced)
         {
-            ke_result played = play(ctx, game, ball->hit_sound, ball->hit_volume);
+            ke_result played = ke_sdk_play_sound(ctx, &game->nodes, ball->hit_sound, ball->hit_volume);
             if (played != KE_OK) return played;
         }
 
@@ -238,19 +218,10 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
     pong_game *game = user_data;
     while (ctx->next(ctx))
     {
-        if (ctx->pressed(ctx, &game->launch)) return change_scene(ctx, game, PONG_MAIN_SCENE);
+        if (ctx->pressed(ctx, &game->launch)) return ke_sdk_change_scene(ctx, &game->nodes, PONG_MAIN_SCENE);
         if (ctx->pressed(ctx, &game->quit)) ctx->exit(ctx);
     }
     return KE_OK;
-}
-
-ke_result pong_open_slot(pong_game *game, ke_ecs_commands *commands, const char *path)
-{
-    ke_scene_slot_component slot = { 0 };
-    snprintf(slot.path, sizeof slot.path, "%s", path);
-    const ke_node_component components[] = { { game->slot, &slot, sizeof slot } };
-    ke_entity node = KE_ENTITY_INVALID;
-    return game->types->spawn(game->types, commands, game->slot_type, "Scene", KE_ENTITY_INVALID, components, 1, &node);
 }
 
 ke_result pong_register(pong_game *game)
@@ -260,11 +231,7 @@ ke_result pong_register(pong_game *game)
     if (made == KE_OK) made = types->register_event(types, &pong_ball_launched_params, &game->ball_launched);
     if (made != KE_OK) return made;
 
-    made = types->find_type(types, KE_COMPONENT_NAME_SCENE_SLOT, &game->slot_type);
-    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_SCENE_SLOT, &game->slot);
-    if (made == KE_OK) made = types->find_type(types, "sound", &game->sound_type);
-    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_SOUND, &game->sound);
-    if (made != KE_OK) return made;
+    made = ke_sdk_nodes_find(types, &game->nodes);
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_LABEL, &game->label);
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_BODY2D, &game->body);
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_TRANSFORM2D, &game->transform2d);
