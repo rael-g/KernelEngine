@@ -15,7 +15,6 @@
         .abi_signal_bus = .{ .path = "../abi/signal_bus" },
         .abi_script_host = .{ .path = "../abi/script_host" },
         .abi_scene_tree = .{ .path = "../abi/scene_tree" },
-        .abi_scene_loader = .{ .path = "../abi/scene_loader" },
         .abi_render_material = .{ .path = "../abi/render_material" },
         .abi_render_handles = .{ .path = "../abi/render_handles" },
         .abi_render_components = .{ .path = "../abi/render_components" },

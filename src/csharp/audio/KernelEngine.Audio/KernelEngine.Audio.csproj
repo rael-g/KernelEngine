@@ -15,8 +15,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- Declared before the import: the copy items are built from @(NativeDep) at the
-         point NativeDependencies.targets is evaluated. -->
+
     <NativeDep Include="ke_audio_module" />
   </ItemGroup>
 

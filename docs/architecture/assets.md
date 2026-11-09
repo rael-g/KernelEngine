@@ -17,7 +17,7 @@ hands on. How a part works inside is on the generated page of its file. Contract
 | render service | `ke_render_service` | service | decoded data, a key | handles of meshes, textures and materials |
 
 **The resolver turns an authored path into data or into a handle.** The `resolve_*` slots decode
-and return data the caller frees and touch no GPU. The `resolve_*_into` slots take the render
+and return data the caller frees and touch no GPU. The `resolve_texture_into`, `resolve_mesh_into` and `resolve_material_into` slots take the render
 service, ask it for the key first, and upload only on a miss. The key is the path as authored,
 so the same file under two spellings is two resources. The prefix "res://" stands for the project
 root given to `ke_asset_resolver_create`; "res://primitives/" names the meshes the resolver bakes
@@ -54,5 +54,5 @@ without the resolver. Models are loaded by `ke_asset_loader` and uploaded by man
 - The vertex layout the resolver converts to for `upload_mesh`: eleven floats (position, normal,
   uv, tangent).
 - The invalid handle of `ke_resource_cache` is `KE_RESOURCE_HANDLE_NONE`, not zero.
-- `AddDefaultAssetResolver` takes `INativeImageLoader` and `INativeFontLoader` from the container,
-  each optional, so a loader has to be registered for textures or fonts to resolve.
+- The resolver takes an image loader and a font loader, each optional, so a loader has to be
+  given for textures or fonts to resolve; the SDK gives the font loader only.

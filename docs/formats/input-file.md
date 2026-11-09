@@ -1,99 +1,42 @@
-# Input file
+# Input section
 
-An input file is TOML, conventionally named `actions.input` (`examples/csharp/games/pong/actions.input`),
-parsed with tomlc99 by `ke_input_actions.load` (`vtLoad`, `src/zig/framework/src/input_actions.zig:321`).
-It binds named actions to keys and mouse buttons. How the bindings are evaluated each tick is in
-`architecture/input.md`.
-
-What the loader **fails** on: a missing or unopenable file (`KE_ERROR_NOT_FOUND`), a file tomlc99
-cannot parse (`KE_ERROR_IO`), an allocation failure, and, as `KE_ERROR_INVALID_ARGUMENT` naming the
-action, the binding and the value, an unknown action type, a binding of an unknown kind, a binding
-missing a key it needs, and a key or mouse button name not in its table (`vtLoad`,
-`parseBindingTable`). A load that fails leaves no actions.
-
-What it **ignores without a word**: everything listed under "What is skipped" below.
+Input actions are written in the `input` section of the Project file (`project-file.md`).
+`ke_input_actions_create`, given a configuration and the section, walks `input.map` and adds each
+map, action and binding through the same slots a program calls. How the bindings are evaluated
+each tick is in `architecture/input.md`.
 
 ## Shape
 
 ```toml
-[action.PaddleLeftMove]
-type = "Axis1D"
-bindings = [
-    { kind = "key_pair", negative = "S", positive = "W" },
-]
+[input.map.Pong]
+priority = 0
 
-[action.Launch]
-type = "Button"
-bindings = [
-    { kind = "key", key = "Space" },
-]
+[input.map.Pong.action.PaddleLeftMove]
+type = "Axis1D"
+bindings = [{ kind = "key_pair", negative = "S", positive = "W" }]
+
+[input.map.Pong.action.Launch]
+bindings = [{ kind = "key", key = "Space" }]
 ```
 
-Each table directly under `[action]` is one action, and its name is the table's name
-(`input_actions.zig:350-355`). A file with no `[action]` table loads successfully and defines nothing
-(`:359`). Anything else at the top level is read by nothing. Action names are stored in 64 bytes;
-a longer name is truncated at 63 characters (`:9`, `231-235`).
+| table | keys |
+|---|---|
+| `input.map.<map>` | `priority` (an integer, 0 when absent; higher maps are evaluated first), `enabled` (true when absent) |
+| `input.map.<map>.action.<action>` | `type`: `Button` (when absent), `Axis1D`, `Axis2D` or `Axis3D`; `bindings`: an array of tables |
+| a binding | `kind`, and the keys that kind needs |
 
-Actions are numbered from 0 in the order tomlc99 enumerates them, which `get_action_id` reports by
-name (`:363-396`, `402-406`; test `actions are numbered in the order the file declares them`,
-`:781`). Managed code never sees the number: `InputActionMap<TEnum>.LoadFromFile` asks for each enum
-value's name with `value.ToString()` and keeps the ids it finds
-(`src/csharp/framework/KernelEngine.Framework/Input/InputActionMap.cs:27-39`).
+| `kind` | keys |
+|---|---|
+| `key` | `key` |
+| `key_pair` | `negative`, `positive` |
+| `key_quad` | `up`, `down`, `left`, `right` |
+| `mouse` | `button` |
 
-`load` discards every action already in the instance before it opens the file, including ones added
-by `add_action`, so a load that fails leaves the instance empty.
+A key is written by its name in the key table of `input_actions.zig` (`Space`, `W`, `Up`,
+`Escape`), a mouse button by its name (`Left`).
 
-## `type`
+## What fails
 
-`"Button"`, `"Axis1D"`, `"Axis2D"` or `"Axis3D"`. An absent `type` is a Button; any other string
-fails the load (`parseActionType`).
-
-## `bindings`
-
-An array of inline tables, each with a `kind`. A binding table that cannot be read fails the load.
-
-| `kind` | other keys | what it contributes |
-|---|---|---|
-| `"key"` | `key` | `x = 1` while the key is down |
-| `"key_pair"` | `negative`, `positive` | `x = +1` for `positive`, `-1` for `negative`, `0` if both or neither |
-| `"key_quad"` | `up`, `down`, `left`, `right` | `x = right - left`, `y = up - down` |
-| `"mouse"` | `button` | `x = 1` while the button is down |
-
-(`parseBindingTable`, `:278-328`; contribution, `sampleBinding`, `:255-271`.)
-
-Key names are the exact, case-sensitive strings of `key_table`: `A`..`Z`, `Number0`..`Number9`,
-`Keypad0`..`Keypad9`, `F1`..`F25`, `Space`, `Enter`, `Escape`, `Tab`, `Backspace`, `Up`, `Down`,
-`Left`, `Right`, `ShiftLeft`, `ControlLeft`, and the rest of the table (`:22-84`). Mouse button names
-are `Left`, `Right` and `Middle` (`:86-90`); buttons 4 to 8 of `ke_mouse_button` have no name.
-
-## What is skipped
-
-- An entry under `[action]` that is not a table is skipped (`:364`).
-- An action with no `bindings` array loads and is never active.
-
-## What an action evaluates to
-
-Per action, per `evaluate`, over its bindings (`input_actions.zig:544-569`):
-
-- A binding is *active* when its contribution is non-zero. The action is active when any binding is.
-- A **Button** that is active reads `x = 1`.
-- Any other type reads, per component, the contribution with the largest absolute value across its
-  bindings. A `key_pair` contributes `x` only; a `key_quad` contributes `x` and `y`; `z` is never
-  contributed by any binding kind.
-- `is_action_down` is the active flag. `was_action_pressed` is active now and not at the previous
-  `evaluate`; `was_action_released` is the reverse (`:618-633`). `get_axis1d` reads `x`
-  (`:635-638`).
-- With a callback, `evaluate` also emits STARTED when the action turns active, CANCELED when it
-  turns inactive, and, for non-Button actions that stay active, PERFORMED when any component changed
-  (`:580-605`).
-
-An action id outside the loaded range reads inactive and zero, and `evaluate` with a null snapshot
-fails with `KE_ERROR_INVALID_ARGUMENT` (`:541-544`, `:610-616`).
-
-## Where the file is found
-
-The maps are read from the configuration `ke_input_actions_create` is given, under the section its
-config names; the C# SDK's engine gives it the project file and the section "input".
-An enum member with no `[action.<Name>]` table is not an error; its queries read false and zero
-(`InputActionMap.cs:33-37`, `50-59`). The Project file's `[input] actions` key is read only by the
-`ke` command-line tool (`formats/project-file.md`).
+Creating the input actions fails, with the reason logged naming the section, on an unknown action
+type, a binding without `kind` or of an unknown kind, a binding missing a key its kind needs, and a
+key or mouse button name not in its table.

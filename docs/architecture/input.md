@@ -18,8 +18,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
 `on_mouse_button`, `on_mouse_move` or `on_mouse_scroll`. With no input every event is dropped.
-The managed `AddGlfwWindow` passes `INativeInput` when the window singleton is first
-resolved, so it is seen only if `INativeInput` is registered by then.
+The SDK makes the input before the window and passes it to the window's constructor.
 
 **An edge belongs to a frame.** `pressed` and `released` are set by the sink call that causes them
 and cleared by the next `update` of `ke_input`; the queries and `get_snapshot` only read. Held

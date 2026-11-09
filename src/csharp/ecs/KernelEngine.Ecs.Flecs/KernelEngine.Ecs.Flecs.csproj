@@ -4,9 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <!-- flecs-backed storage plugin. Wraps the ke_ecs vtable contract via the
-         ke_ecs_flecs_create factory. Scheduler is a separate concern (see
-         KernelEngine.Runtime). -->
+
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <RootNamespace>KernelEngine.Ecs.Flecs</RootNamespace>
   </PropertyGroup>
