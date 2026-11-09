@@ -91,6 +91,6 @@ partial class Ball(Game game) : Body2D
         sound.Volume = volume;
         sound.Playing = true;
         sound.Release = SoundRelease.WhenDone;
-        Spawn("sound", "Sound", NodeComponent.Of(World.Component("sound"), sound));
+        Spawn("sound", "Sound", sound);
     }
 }
