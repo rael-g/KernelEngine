@@ -8,20 +8,19 @@ namespace KernelEngine.Runtime;
 public sealed unsafe partial class DefaultRuntime
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs"></param>
     /// <param name="taskPool"></param>
     /// <param name="fixedDt">Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.</param>
     /// <param name="fixedDtMaxAccum">Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than zero.</param>
     /// <param name="maxSystemsPerPhase">Most systems one phase may hold; registering past it fails.</param>
-    public DefaultRuntime(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, float fixedDt, float fixedDtMaxAccum, uint maxSystemsPerPhase) : base(CreateLogged(loggerFactory, ecs, taskPool, fixedDt, fixedDtMaxAccum, maxSystemsPerPhase))
+    public DefaultRuntime(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, float fixedDt, float fixedDtMaxAccum, uint maxSystemsPerPhase) : base(CreateLogged(loggerFactory, ecs, taskPool, fixedDt, fixedDtMaxAccum, maxSystemsPerPhase))
     {
     }
 
-    private static KernelEngine.Runtime.Native.ke_runtime_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, float fixedDt, float fixedDtMaxAccum, uint maxSystemsPerPhase)
+    private static KernelEngine.Runtime.Native.ke_runtime_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, float fixedDt, float fixedDtMaxAccum, uint maxSystemsPerPhase)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Runtime.Native.NativeMethods.runtime_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Runtime.Native.NativeMethods.runtime_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(ecs, taskPool, fixedDt, fixedDtMaxAccum, maxSystemsPerPhase);
     }
 }

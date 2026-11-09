@@ -8,7 +8,7 @@ namespace KernelEngine.Render.Webgpu;
 public sealed unsafe partial class DefaultRenderUi
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
     /// <param name="service">Holds the resources the passes read and write.</param>
@@ -17,14 +17,13 @@ public sealed unsafe partial class DefaultRenderUi
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    public DefaultRenderUi(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame))
+    public DefaultRenderUi(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : base(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_ui_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_ui_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame);
     }
 }

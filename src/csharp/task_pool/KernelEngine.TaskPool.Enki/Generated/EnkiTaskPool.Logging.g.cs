@@ -8,16 +8,15 @@ namespace KernelEngine.TaskPool.Enki;
 public sealed unsafe partial class EnkiTaskPool
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="workerCount">Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD.</param>
-    public EnkiTaskPool(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint workerCount) : base(CreateLogged(loggerFactory, workerCount))
+    public EnkiTaskPool(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, uint workerCount) : base(CreateLogged(loggerFactory, workerCount))
     {
     }
 
-    private static KernelEngine.TaskPool.Native.ke_task_pool_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint workerCount)
+    private static KernelEngine.TaskPool.Native.ke_task_pool_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, uint workerCount)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.TaskPool.Enki.Native.NativeMethods.task_pool_enki_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.TaskPool.Enki.Native.NativeMethods.task_pool_enki_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(workerCount);
     }
 }

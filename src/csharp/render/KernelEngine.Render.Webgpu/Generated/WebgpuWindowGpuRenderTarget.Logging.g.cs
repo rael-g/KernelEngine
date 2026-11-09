@@ -8,18 +8,17 @@ namespace KernelEngine.Render.Webgpu;
 public sealed unsafe partial class WebgpuWindowGpuRenderTarget
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">The window presented into; must outlive the target.</param>
     /// <param name="presentMode">How presented frames reach the screen.</param>
-    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode) : base(CreateLogged(loggerFactory, device, window, presentMode))
+    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode) : base(CreateLogged(loggerFactory, device, window, presentMode))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode)
+    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Render.Webgpu.Native.GpuPresentMode presentMode)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(device, window, presentMode);
     }
 }

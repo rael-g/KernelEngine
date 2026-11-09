@@ -8,19 +8,18 @@ namespace KernelEngine.Framework.Nodes;
 public sealed unsafe partial class DefaultSceneFiles
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs"></param>
     /// <param name="nodeTypes"></param>
     /// <param name="assets"></param>
     /// <param name="io"></param>
-    public DefaultSceneFiles(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, ecs, nodeTypes, assets, io))
+    public DefaultSceneFiles(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io) : base(CreateLogged(loggerFactory, ecs, nodeTypes, assets, io))
     {
     }
 
-    private static KernelEngine.Framework.Nodes.Native.ke_scene_files_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Framework.Nodes.Native.ke_scene_files_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.Nodes.INativeNodeTypes nodeTypes, KernelEngine.Framework.INativeAssetResolver assets, KernelEngine.Io.INativeIo io)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(ecs, nodeTypes, assets, io);
     }
 }

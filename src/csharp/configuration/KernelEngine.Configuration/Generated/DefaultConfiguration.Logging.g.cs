@@ -8,15 +8,14 @@ namespace KernelEngine.Configuration;
 public sealed unsafe partial class DefaultConfiguration
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    public DefaultConfiguration(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) : base(CreateLogged(loggerFactory))
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
+    public DefaultConfiguration(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory) : base(CreateLogged(loggerFactory))
     {
     }
 
-    private static KernelEngine.Configuration.Native.ke_configuration_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+    private static KernelEngine.Configuration.Native.ke_configuration_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Configuration.Native.NativeMethods.configuration_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Configuration.Native.NativeMethods.configuration_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create();
     }
 }

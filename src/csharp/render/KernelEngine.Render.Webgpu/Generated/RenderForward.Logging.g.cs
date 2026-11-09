@@ -8,7 +8,7 @@ namespace KernelEngine.Render.Webgpu;
 public sealed unsafe partial class RenderForward
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
     /// <param name="service">Holds the resources the passes read and write.</param>
@@ -20,14 +20,13 @@ public sealed unsafe partial class RenderForward
     /// <param name="iblEnabled">Whether the pass samples the sky for image-based light.</param>
     /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
     /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
-    public RenderForward(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters))
+    public RenderForward(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters))
     {
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters);
     }
 }

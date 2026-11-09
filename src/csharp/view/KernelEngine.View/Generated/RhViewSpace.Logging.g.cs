@@ -8,15 +8,14 @@ namespace KernelEngine.View;
 public sealed unsafe partial class RhViewSpace
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    public RhViewSpace(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory) : base(CreateLogged(loggerFactory))
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
+    public RhViewSpace(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory) : base(CreateLogged(loggerFactory))
     {
     }
 
-    private static KernelEngine.View.Native.ke_view_space_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
+    private static KernelEngine.View.Native.ke_view_space_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.View.Native.NativeMethods.view_space_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.View.Native.NativeMethods.view_space_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create();
     }
 }

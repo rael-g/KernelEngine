@@ -8,17 +8,16 @@ namespace KernelEngine.Render.Webgpu;
 public sealed unsafe partial class DefaultRenderCamera
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="viewSpace">Must outlive the camera.</param>
     /// <param name="device">Read once, for its clip convention.</param>
-    public DefaultRenderCamera(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(CreateLogged(loggerFactory, viewSpace, device))
+    public DefaultRenderCamera(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device) : base(CreateLogged(loggerFactory, viewSpace, device))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_camera_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device)
+    private static KernelEngine.Render.Native.ke_render_camera_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.Gpu.INativeGpuDevice device)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_camera_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(viewSpace, device);
     }
 }

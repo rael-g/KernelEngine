@@ -8,20 +8,19 @@ namespace KernelEngine.Window.Glfw;
 public sealed unsafe partial class GlfwWindow
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
-    /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
+    /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="input">Input sink target.</param>
     /// <param name="title">Window title.</param>
     /// <param name="width">Client width in pixels.</param>
     /// <param name="height">Client height in pixels.</param>
     /// <param name="fullscreen">Whether the window covers the primary monitor.</param>
-    public GlfwWindow(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen) : base(CreateLogged(loggerFactory, input, title, width, height, fullscreen))
+    public GlfwWindow(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen) : base(CreateLogged(loggerFactory, input, title, width, height, fullscreen))
     {
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen)
+    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen)
     {
-        ArgumentNullException.ThrowIfNull(loggerFactory);
-        KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
+        if (loggerFactory is not null) KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
         return Create(input, title, width, height, fullscreen);
     }
 }

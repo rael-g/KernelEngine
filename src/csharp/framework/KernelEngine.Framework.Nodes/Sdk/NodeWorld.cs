@@ -8,10 +8,13 @@ namespace KernelEngine.Framework.Nodes;
 /// The node types of one world as C# names them: the ids of the components and event types a node
 /// reaches by name or by type, looked up once and kept.
 /// </summary>
-public sealed class NodeWorld(INodeTypes types)
+public sealed class NodeWorld(INodeTypes types, Microsoft.Extensions.Logging.ILoggerFactory? logging = null)
 {
     readonly Dictionary<string, ComponentId> _components = [];
     readonly Dictionary<Type, ComponentId> _events = [];
+
+    /// <summary>Where the nodes log; nothing is kept without a factory.</summary>
+    public Microsoft.Extensions.Logging.ILoggerFactory Logging { get; } = logging ?? Microsoft.Extensions.Logging.Abstractions.NullLoggerFactory.Instance;
 
     /// <summary>The node types this world registers into.</summary>
     public INodeTypes Types { get; } = types;
