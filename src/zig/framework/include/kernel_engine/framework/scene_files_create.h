@@ -30,10 +30,13 @@ extern "C"
 
     /// Creates scene files that spawn through `node_types`, look components up and write their
     /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
-    /// `io`; each must outlive the scene files.
+    /// `io`; each must outlive the scene files. It registers through `node_types` the node type
+    /// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
+    /// when its path changes; the scene files must outlive every tick that runs it.
     /// @param out_files [out] Receives the scene files; left zeroed on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p node_types, @p assets,
-    ///         @p io or @p out_files, or KE_RESULT_OUT_OF_MEMORY.
+    ///         @p io or @p out_files, KE_RESULT_OUT_OF_MEMORY, or the node types' code when they
+    ///         refuse the scene slot type.
     KE_FRAMEWORK_API ke_result ke_scene_files_create(
         ke_ecs                *ecs,
         ke_node_types         *node_types,

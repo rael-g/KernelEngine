@@ -107,9 +107,11 @@ static void label_text(ke_node_ctx *ctx, pong_game *game, const char *name, cons
 
 static ke_result change_scene(ke_node_ctx *ctx, pong_game *game, const char *path)
 {
-    ke_result destroyed = ctx->destroy(ctx, game->scene);
-    if (destroyed != KE_OK) return destroyed;
-    return pong_load_scene(game, ctx->commands, path);
+    ke_entity holder = ctx->ancestor(ctx, ctx->self, game->slot);
+    ke_scene_slot_component *slot = holder == KE_ENTITY_INVALID ? NULL : ctx->component(ctx, holder, game->slot);
+    if (!slot) return KE_RESULT_NOT_FOUND;
+    snprintf(slot->path, sizeof slot->path, "%s", path);
+    return KE_OK;
 }
 
 static ke_result play(ke_node_ctx *ctx, pong_game *game, const char *path, float volume)
@@ -248,11 +250,13 @@ static ke_result menu_update(ke_node_ctx *ctx, void *user_data)
     return KE_OK;
 }
 
-ke_result pong_load_scene(pong_game *game, ke_ecs_commands *commands, const char *path)
+ke_result pong_open_slot(pong_game *game, ke_ecs_commands *commands, const char *path)
 {
-    ke_result spawned = game->types->spawn(game->types, commands, game->node, "Scene", KE_ENTITY_INVALID, NULL, 0, &game->scene);
-    if (spawned != KE_OK) return spawned;
-    return game->scenes->instantiate(game->scenes, path, game->scene, commands, NULL);
+    ke_scene_slot_component slot = { 0 };
+    snprintf(slot.path, sizeof slot.path, "%s", path);
+    const ke_node_component components[] = { { game->slot, &slot } };
+    ke_entity node = KE_ENTITY_INVALID;
+    return game->types->spawn(game->types, commands, game->slot_type, "Scene", KE_ENTITY_INVALID, components, 1, &node);
 }
 
 ke_result pong_register(pong_game *game)
@@ -262,7 +266,8 @@ ke_result pong_register(pong_game *game)
     if (made == KE_OK) made = types->register_event(types, &pong_ball_launched_params, &game->ball_launched);
     if (made != KE_OK) return made;
 
-    made = types->find_type(types, "node", &game->node);
+    made = types->find_type(types, KE_COMPONENT_NAME_SCENE_SLOT, &game->slot_type);
+    if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_SCENE_SLOT, &game->slot);
     if (made == KE_OK) made = types->find_type(types, "sound", &game->sound_type);
     if (made == KE_OK) made = types->find_component(types, KE_COMPONENT_NAME_SOUND, &game->sound);
     if (made != KE_OK) return made;

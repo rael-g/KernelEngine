@@ -28,6 +28,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
     try expectSameLayout(abi.c.ke_node_handler, translated("ke_node_handler"));
     try expectSameLayout(abi.c.ke_node_type_desc, translated("ke_node_type_desc"));
+    try expectSameLayout(abi.c.ke_scene_slot_component, translated("ke_scene_slot_component"));
     try expectSameLayout(abi.c.ke_scene_hierarchy_handle, translated("ke_scene_hierarchy_handle"));
     try expectSameLayout(abi.c.ke_node_ctx, translated("ke_node_ctx"));
     try expectSameLayout(abi.c.ke_node_types, translated("ke_node_types"));
@@ -44,9 +45,11 @@ test "every record is laid out as the header lays it out" {
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_ACTION_NAME_MAX), @as(i128, abi.c.KE_ACTION_NAME_MAX));
+    try std.testing.expectEqual(@as(i128, c.KE_SCENE_SLOT_MAX_PATH), @as(i128, abi.c.KE_SCENE_SLOT_MAX_PATH));
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SCENE_SLOT, abi.c.KE_COMPONENT_NAME_SCENE_SLOT);
 }
 
-extern const layout_values: [65]c_ulonglong;
+extern const layout_values: [71]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -76,6 +79,9 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_type_desc, "on"),
         @offsetOf(abi.c.ke_node_type_desc, "on_count"),
         @offsetOf(abi.c.ke_node_type_desc, "user_data"),
+        @sizeOf(abi.c.ke_scene_slot_component),
+        @offsetOf(abi.c.ke_scene_slot_component, "path"),
+        @offsetOf(abi.c.ke_scene_slot_component, "loaded"),
         @sizeOf(abi.c.ke_scene_hierarchy_handle),
         @offsetOf(abi.c.ke_scene_hierarchy_handle, "ref"),
         @offsetOf(abi.c.ke_scene_hierarchy_handle, "destroy"),
@@ -91,6 +97,9 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_ctx, "component"),
         @offsetOf(abi.c.ke_node_ctx, "parent"),
         @offsetOf(abi.c.ke_node_ctx, "child"),
+        @offsetOf(abi.c.ke_node_ctx, "first_child"),
+        @offsetOf(abi.c.ke_node_ctx, "next_sibling"),
+        @offsetOf(abi.c.ke_node_ctx, "ancestor"),
         @offsetOf(abi.c.ke_node_ctx, "axis"),
         @offsetOf(abi.c.ke_node_ctx, "pressed"),
         @offsetOf(abi.c.ke_node_ctx, "spawn"),

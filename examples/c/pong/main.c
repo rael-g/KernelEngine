@@ -102,7 +102,7 @@ static ke_result load_first_scene(ke_system_ctx *ctx, void *user_data, float dt)
 {
     (void)dt;
     first_scene *first = user_data;
-    return pong_load_scene(first->game, ctx->commands, first->path);
+    return pong_open_slot(first->game, ctx->commands, first->path);
 }
 
 typedef struct renderer

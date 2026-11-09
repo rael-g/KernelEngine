@@ -211,6 +211,31 @@ fn child(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity, name: ?[*:0]const u8)
     return invalid;
 }
 
+/// Slot `first_child`. Asks the scene tree.
+fn firstChild(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) Entity {
+    const w = walkOf(ctx) orelse return invalid;
+    const s = w.behaviour.owner.state;
+    return s.tree.first_child.?(s.tree, node);
+}
+
+/// Slot `next_sibling`. Asks the scene tree.
+fn nextSibling(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) Entity {
+    const w = walkOf(ctx) orelse return invalid;
+    const s = w.behaviour.owner.state;
+    return s.tree.next_sibling.?(s.tree, node);
+}
+
+/// Slot `ancestor`. Walks the parents in the scene tree and asks the ecs for the component.
+fn ancestor(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity, held: Cid) callconv(.c) Entity {
+    const w = walkOf(ctx) orelse return invalid;
+    const s = w.behaviour.owner.state;
+    var at = s.tree.parent.?(s.tree, node);
+    while (at != invalid) : (at = s.tree.parent.?(s.tree, at)) {
+        if (s.ecs.component_get.?(s.ecs, at, held) != null) return at;
+    }
+    return invalid;
+}
+
 /// Slot `axis`. Asks the input actions, 0 without them.
 fn axis(ctx: ?*abi_framework.c.ke_node_ctx, action: ?*abi_framework.c.ke_action_ref) callconv(.c) f32 {
     const w = walkOf(ctx) orelse return 0;
@@ -330,6 +355,9 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
             .component = &component,
             .parent = &parent,
             .child = &child,
+            .first_child = &firstChild,
+            .next_sibling = &nextSibling,
+            .ancestor = &ancestor,
             .axis = &axis,
             .pressed = &pressed,
             .spawn = &spawn,
@@ -1039,6 +1067,43 @@ fn spawnPaddle(ctx: ?*abi_framework.c.ke_node_ctx, user: ?*anyopaque) callconv(.
     const cid: *const Cid = @ptrCast(@alignCast(user.?));
     var node: Entity = invalid;
     return ctx.?.spawn.?(ctx, cid.*, "Paddle", invalid, null, 0, &node);
+}
+
+var found_ancestor: Entity = 0;
+const held_cid: Cid = 77;
+var held_bytes: u32 = 1;
+
+fn parentOf(args: zsub.For(abi_scene_tree.c.ke_scene_tree).Args(.parent)) Entity {
+    return switch (args[1]) {
+        7 => 31,
+        31 => 40,
+        else => invalid,
+    };
+}
+
+fn holdsAt40(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_get)) ?*anyopaque {
+    return if (args[1] == 40 and args[2] == held_cid) &held_bytes else null;
+}
+
+fn findHolder(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    if (ctx.?.next.?(ctx)) found_ancestor = ctx.?.ancestor.?(ctx, ctx.?.self, held_cid);
+    return R.ok;
+}
+
+test "ancestor answers the nearest ancestor holding a component, past one that does not" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var cid: Cid = 0;
+    var d = paddleDesc();
+    d.update = findHolder;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    _ = f.tree.when(.parent).does(parentOf);
+    _ = f.ecs.when(.component_get).does(holdsAt40);
+    var rows: Rows = .{};
+    rows.build();
+    try runSystem(registered[0], &rows);
+    try testing.expectEqual(@as(Entity, 40), found_ancestor);
 }
 
 test "spawn records a node through the scene tree with each component of its type and its status" {

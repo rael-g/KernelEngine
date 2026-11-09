@@ -94,6 +94,15 @@ extern "C"
         /// @param name [utf8]
         ke_entity (*child)(ke_node_ctx *self, ke_entity node, const char *name);
 
+        /// The first child of @p node, KE_ENTITY_INVALID when it has none.
+        ke_entity (*first_child)(ke_node_ctx *self, ke_entity node);
+
+        /// The child after @p node under the same parent, KE_ENTITY_INVALID after the last.
+        ke_entity (*next_sibling)(ke_node_ctx *self, ke_entity node);
+
+        /// The nearest ancestor of @p node holding @p component, KE_ENTITY_INVALID when none does.
+        ke_entity (*ancestor)(ke_node_ctx *self, ke_entity node, ke_component_id component);
+
         /// The value of an axis action, 0 without input actions or for a name no map holds.
         /// @param action Resolved by name on its first read, and kept resolved.
         float (*axis)(ke_node_ctx *self, ke_action_ref *action);

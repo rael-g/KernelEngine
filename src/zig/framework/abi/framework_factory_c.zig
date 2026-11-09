@@ -188,5 +188,7 @@ pub extern fn ke_node_types_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*a
 
 /// Creates scene files that spawn through `node_types`, look components up and write their
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
-/// `io`; each must outlive the scene files.
+/// `io`; each must outlive the scene files. It registers through `node_types` the node type
+/// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
+/// when its path changes; the scene files must outlive every tick that runs it.
 pub extern fn ke_scene_files_create(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, out_files: ?*abi_framework.c.ke_scene_files_handle) abi_result.c.ke_result;

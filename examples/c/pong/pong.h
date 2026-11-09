@@ -11,7 +11,8 @@ typedef struct pong_game
 {
     ke_node_types    *types;
     ke_scene_files   *scenes;
-    ke_component_id node;
+    ke_component_id slot_type;
+    ke_component_id slot;
     ke_component_id sound_type;
     ke_component_id sound;
     ke_component_id label;
@@ -21,9 +22,6 @@ typedef struct pong_game
     ke_component_id ball_launched;
     ke_action_ref   launch;
     ke_action_ref   quit;
-
-    /** The node the current scene is instantiated under. */
-    ke_entity scene;
 } pong_game;
 
 /**
@@ -34,10 +32,10 @@ typedef struct pong_game
 ke_result pong_register(pong_game *game);
 
 /**
- * Records into @p commands a node named Scene at the root and the scene file @p path under it.
+ * Records into @p commands a scene slot at the root holding the scene file @p path.
  * @param path [utf8]
- * @return KE_OK, or the code of the spawn or the instantiation that failed.
+ * @return KE_OK, or the code of the spawn that failed.
  */
-ke_result pong_load_scene(pong_game *game, ke_ecs_commands *commands, const char *path);
+ke_result pong_open_slot(pong_game *game, ke_ecs_commands *commands, const char *path);
 
 #endif

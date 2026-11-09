@@ -277,8 +277,48 @@ fn vtDestroy(self: ?*abi_framework.c.ke_scene_files) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Factory. A null ecs, node types, asset resolver, io or out handle fails as an invalid
-/// argument and a failed allocation as out of memory; each leaves the handle zeroed.
+const Slot = abi_framework.c.ke_scene_slot_component;
+
+const slot_fields = [_]abi_ecs.c.ke_component_field{
+    .{ .name = "path", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = @offsetOf(Slot, "path"), .size = @sizeOf(@FieldType(Slot, "path")) },
+};
+
+const slot_params: abi_ecs.c.ke_component_params = .{
+    .name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT,
+    .size = @sizeOf(Slot),
+    .alignment = @alignOf(Slot),
+    .fields = &slot_fields,
+    .field_count = slot_fields.len,
+};
+
+/// The update behaviour of the `scene_slot` node type: a slot whose path differs from the one it
+/// last instantiated has its children destroyed and the file at its path instantiated under it. A
+/// file that cannot be instantiated is reported and not retried until the path changes again.
+fn slotUpdate(ctx: ?*abi_framework.c.ke_node_ctx, user_data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
+    const node = ctx orelse return R.code(error.InvalidArgument);
+    while (node.next.?(node)) {
+        const slot: *Slot = @ptrCast(@alignCast(node.fields orelse continue));
+        const path = std.mem.sliceTo(&slot.path, 0);
+        if (std.mem.eql(u8, path, std.mem.sliceTo(&slot.loaded, 0))) continue;
+        var child = node.first_child.?(node, node.self);
+        while (child != invalid) {
+            const after = node.next_sibling.?(node, child);
+            const destroyed = node.destroy.?(node, child);
+            if (destroyed != R.ok) return destroyed;
+            child = after;
+        }
+        slot.loaded = slot.path;
+        if (path.len == 0) continue;
+        const loaded = instantiate(&s.api, @ptrCast(&slot.path), node.self, node.commands, null);
+        if (loaded != R.ok) log.warn("scene slot: instantiating {s} failed", .{path});
+    }
+    return R.ok;
+}
+
+/// Factory. It registers the `scene_slot` node type through the node types. A null ecs, node
+/// types, asset resolver, io or out handle fails as an invalid argument, a failed allocation as out
+/// of memory, and a refused registration with the node types' code; each leaves the handle zeroed.
 export fn ke_scene_files_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
     types_in: ?*abi_framework.c.ke_node_types,
@@ -295,6 +335,17 @@ export fn ke_scene_files_create(
     const s = heap.gpa.create(State) catch return R.code(error.OutOfMemory);
     s.* = .{ .api = .{ .instantiate = &instantiate }, .ecs = ecs, .types = types, .assets = assets, .io = io };
     s.api.handle = s;
+    var slot_desc = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
+    slot_desc.name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT;
+    slot_desc.fields = &slot_params;
+    slot_desc.update = slotUpdate;
+    slot_desc.user_data = s;
+    var tag: Cid = abi_ecs.c.KE_COMPONENT_INVALID;
+    const registered = types.register_type.?(types, &slot_desc, &tag);
+    if (registered != R.ok) {
+        heap.gpa.destroy(s);
+        return registered;
+    }
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
 }
@@ -385,6 +436,51 @@ fn resolveRes(args: zsub.For(abi_asset_resolver.c.ke_asset_resolver).Args(.resol
     return R.ok;
 }
 
+var slot_type: abi_framework.c.ke_node_type_desc = undefined;
+
+fn keepSlotType(args: zsub.For(abi_framework.c.ke_node_types).Args(.register_type)) abi_result.c.ke_result {
+    slot_type = args[1].?.*;
+    args[2].?.* = 60;
+    return R.ok;
+}
+
+const FakeSlotCtx = struct {
+    var slot: Slot = std.mem.zeroes(Slot);
+    var visited = false;
+    var destroyed: [4]Entity = undefined;
+    var destroyed_count: usize = 0;
+
+    fn next(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) bool {
+        if (visited) return false;
+        visited = true;
+        ctx.?.self = 10;
+        ctx.?.fields = &slot;
+        return true;
+    }
+    fn firstChild(_: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) Entity {
+        return if (node == 10) 50 else invalid;
+    }
+    fn nextSibling(_: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) Entity {
+        return if (node == 50) 51 else invalid;
+    }
+    fn destroy(_: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) abi_result.c.ke_result {
+        destroyed[destroyed_count] = node;
+        destroyed_count += 1;
+        return R.ok;
+    }
+    fn run(commands: *abi_ecs.c.ke_ecs_commands) !void {
+        visited = false;
+        destroyed_count = 0;
+        var ctx = std.mem.zeroes(abi_framework.c.ke_node_ctx);
+        ctx.next = next;
+        ctx.first_child = firstChild;
+        ctx.next_sibling = nextSibling;
+        ctx.destroy = destroy;
+        ctx.commands = commands;
+        try R.check(slot_type.update.?(&ctx, slot_type.user_data));
+    }
+};
+
 const Fixture = struct {
     ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined,
     types: zsub.For(abi_framework.c.ke_node_types) = undefined,
@@ -404,6 +500,7 @@ const Fixture = struct {
         _ = f.types.when(.carries).does(carriesKnown);
         _ = f.types.when(.initial).does(bornPaddle);
         _ = f.types.when(.spawn).does(spawnNode);
+        _ = f.types.when(.register_type).does(keepSlotType);
         _ = f.assets.when(.resolve_path).does(resolveRes);
         _ = f.commands.when(.attach).does(recordAttach);
         try R.check(ke_scene_files_create(f.ecs.api(), f.types.api(), f.assets.api(), served_files.io(), &f.files));
@@ -465,6 +562,38 @@ test "every entry without a parent of its own goes under the parent, not only th
     try R.check(f.instantiate("/scenes/flat.scene.toml", 9));
     try testing.expectEqual(@as(usize, 3), spawned_count);
     for (spawned[0..3]) |node| try testing.expectEqual(@as(Entity, 9), node.parent);
+}
+
+test "a slot whose path changed has its children destroyed and the scene instantiated under it, and an unchanged one is left alone" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    try served_files.put("/scenes/menu.scene.toml",
+        \\[[entity]]
+        \\name = "Menu"
+        \\type = "pong.paddle"
+    );
+    defer served_files.remove("/scenes/menu.scene.toml");
+    FakeSlotCtx.slot = std.mem.zeroes(Slot);
+    @memcpy(FakeSlotCtx.slot.path[0.."/scenes/menu.scene.toml".len], "/scenes/menu.scene.toml");
+    try FakeSlotCtx.run(f.commands.api());
+    try testing.expectEqual(@as(usize, 2), FakeSlotCtx.destroyed_count);
+    try testing.expectEqual(@as(usize, 1), spawned_count);
+    try testing.expectEqual(@as(Entity, 10), spawned[0].parent);
+    try FakeSlotCtx.run(f.commands.api());
+    try testing.expectEqual(@as(usize, 0), FakeSlotCtx.destroyed_count);
+    try testing.expectEqual(@as(usize, 1), spawned_count);
+}
+
+test "an emptied slot only destroys its children" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    FakeSlotCtx.slot = std.mem.zeroes(Slot);
+    FakeSlotCtx.slot.loaded[0] = 'x';
+    try FakeSlotCtx.run(f.commands.api());
+    try testing.expectEqual(@as(usize, 2), FakeSlotCtx.destroyed_count);
+    try testing.expectEqual(@as(usize, 0), spawned_count);
 }
 
 test "a block named in the type's namespace writes over the value the type's nodes are born with, attached once" {

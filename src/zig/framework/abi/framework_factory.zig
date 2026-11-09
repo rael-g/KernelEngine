@@ -128,7 +128,9 @@ pub fn nodeTypesCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_
 
 /// Creates scene files that spawn through `node_types`, look components up and write their
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through
-/// `io`; each must outlive the scene files.
+/// `io`; each must outlive the scene files. It registers through `node_types` the node type
+/// `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children
+/// when its path changes; the scene files must outlive every tick that runs it.
 pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.ke_node_types, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_framework.c.ke_scene_files_handle {
     var written: abi_framework.c.ke_scene_files_handle = undefined;
     try checkResult(c.ke_scene_files_create(ecs, node_types, assets, io, &written));

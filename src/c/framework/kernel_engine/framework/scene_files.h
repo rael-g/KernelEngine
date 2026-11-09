@@ -10,6 +10,24 @@ extern "C"
 {
 #endif
 
+    /// The longest path a scene slot holds, its terminator included.
+#define KE_SCENE_SLOT_MAX_PATH 256
+
+    /// The name the scene slot's component and node type are registered under.
+#define KE_COMPONENT_NAME_SCENE_SLOT "scene_slot"
+
+    /// A node whose children are the scene file it names. Writing @ref path replaces them: on the
+    /// next update the slot's children are destroyed and the file at @ref path is instantiated
+    /// under the slot; an empty path only destroys them. What lies outside a slot outlives the
+    /// change, and several slots hold several scenes at once.
+    typedef struct ke_scene_slot_component
+    {
+        /// [utf8] The scene file the slot holds, as `instantiate` reads a path.
+        char path[KE_SCENE_SLOT_MAX_PATH];
+        /// [internal] The path the slot last instantiated. Callers do not write it.
+        char loaded[KE_SCENE_SLOT_MAX_PATH];
+    } ke_scene_slot_component;
+
     /// Scene files: a text that spawns nodes of registered types and writes their components, as
     /// a program calling the node types and the ecs would.
     typedef struct ke_scene_files

@@ -11,6 +11,10 @@ pub const ke_entity = u64;
 pub const ke_query_id = u64;
 
 pub const KE_ACTION_NAME_MAX = 32;
+/// The longest path a scene slot holds, its terminator included.
+pub const KE_SCENE_SLOT_MAX_PATH = 256;
+/// The name the scene slot's component and node type are registered under.
+pub const KE_COMPONENT_NAME_SCENE_SLOT = "scene_slot";
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
@@ -82,6 +86,17 @@ pub const ke_node_type_desc = extern struct {
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
 };
 
+/// A node whose children are the scene file it names. Writing path replaces them: on the next
+/// update the slot's children are destroyed and the file at path is instantiated under the slot;
+/// an empty path only destroys them. What lies outside a slot outlives the change, and several
+/// slots hold several scenes at once.
+pub const ke_scene_slot_component = extern struct {
+    /// The scene file the slot holds, as `instantiate` reads a path.
+    path: [256]u8 = std.mem.zeroes([256]u8),
+    /// The path the slot last instantiated. Callers do not write it.
+    loaded: [256]u8 = std.mem.zeroes([256]u8),
+};
+
 /// Owner wrapper: destroy releases the ordering buffers. The system is registered for the
 /// runtime's lifetime, so destroy the hierarchy only once [owner] the runtime it was created
 /// against is done ticking.
@@ -116,6 +131,12 @@ pub const ke_node_ctx = extern struct {
     parent: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
     /// The child of node named name, KE_ENTITY_INVALID when it has none.
     child: ?*const fn (?*ke_node_ctx, ke_entity, ?[*:0]const u8) callconv(.c) ke_entity = null,
+    /// The first child of node, KE_ENTITY_INVALID when it has none.
+    first_child: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
+    /// The child after node under the same parent, KE_ENTITY_INVALID after the last.
+    next_sibling: ?*const fn (?*ke_node_ctx, ke_entity) callconv(.c) ke_entity = null,
+    /// The nearest ancestor of node holding component, KE_ENTITY_INVALID when none does.
+    ancestor: ?*const fn (?*ke_node_ctx, ke_entity, ke_component_id) callconv(.c) ke_entity = null,
     /// The value of an axis action, 0 without input actions or for a name no map holds.
     axis: ?*const fn (?*ke_node_ctx, ?*ke_action_ref) callconv(.c) f32 = null,
     /// Whether a button action was pressed this tick, false without input actions or for a name no

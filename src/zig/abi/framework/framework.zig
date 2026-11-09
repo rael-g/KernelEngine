@@ -52,6 +52,24 @@ pub const NodeCtx = struct {
                     return T.child(state, a0, std.mem.span(a1 orelse return std.mem.zeroes(c.ke_entity)));
                 }
             }.call,
+            .first_child = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) c.ke_entity {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
+                    return T.firstChild(state, a0);
+                }
+            }.call,
+            .next_sibling = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) c.ke_entity {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
+                    return T.nextSibling(state, a0);
+                }
+            }.call,
+            .ancestor = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity, a1: c.ke_component_id) callconv(.c) c.ke_entity {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_entity)));
+                    return T.ancestor(state, a0, a1);
+                }
+            }.call,
             .axis = &struct {
                 fn call(self: ?*c.ke_node_ctx, a0: ?*c.ke_action_ref) callconv(.c) f32 {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(f32)));
@@ -118,6 +136,21 @@ pub const NodeCtx = struct {
     /// The child of node named name, KE_ENTITY_INVALID when it has none.
     pub fn child(self: NodeCtx, node: c.ke_entity, name: [:0]const u8) c.ke_entity {
         return self.ptr.child.?(self.ptr, node, name.ptr);
+    }
+
+    /// The first child of node, KE_ENTITY_INVALID when it has none.
+    pub fn firstChild(self: NodeCtx, node: c.ke_entity) c.ke_entity {
+        return self.ptr.first_child.?(self.ptr, node);
+    }
+
+    /// The child after node under the same parent, KE_ENTITY_INVALID after the last.
+    pub fn nextSibling(self: NodeCtx, node: c.ke_entity) c.ke_entity {
+        return self.ptr.next_sibling.?(self.ptr, node);
+    }
+
+    /// The nearest ancestor of node holding component, KE_ENTITY_INVALID when none does.
+    pub fn ancestor(self: NodeCtx, node: c.ke_entity, component_: c.ke_component_id) c.ke_entity {
+        return self.ptr.ancestor.?(self.ptr, node, component_);
     }
 
     /// The value of an axis action, 0 without input actions or for a name no map holds.
@@ -316,5 +349,6 @@ pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeHandler = c.ke_node_handler;
 pub const NodeTypeDesc = c.ke_node_type_desc;
+pub const SceneSlotComponent = c.ke_scene_slot_component;
 pub const NodeTypesHandle = c.ke_node_types_handle;
 pub const SceneFilesHandle = c.ke_scene_files_handle;
