@@ -87,9 +87,18 @@ using var types = new DefaultNodeTypes(runtime, ecs, tree, actions);
 using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
 
 types.RegisterEngineNodeTypes();
-var game = new Game(types);
+var world = new NodeWorld(types);
+world.RegisterEvent<GoalScored>();
+world.RegisterEvent<BallLaunched>();
+var game = new Game();
+world.Register(new Paddle());
+world.Register(new Ball(game));
+world.Register(new Scoreboard());
+world.Register(new MenuController(game));
 
-game.OpenSlot(runtime.Commands(), $"res://scenes/{config.GetString("project", "default_scene", "Menu")}.scene.toml");
+var slot = new KernelEngine.Framework.Nodes.Native.SceneSlotComponent();
+slot.PathText = $"res://scenes/{config.GetString("project", "default_scene", "Menu")}.scene.toml";
+types.Spawn(runtime.Commands(), world.Type("scene_slot"), "Scene", default, [NodeComponent.Of(world.Component("scene_slot"), slot)]);
 
 var clock = Stopwatch.StartNew();
 var previous = clock.Elapsed.TotalSeconds;
