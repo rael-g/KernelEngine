@@ -15,34 +15,34 @@ public static class SceneSlotComponentText
     extension(ref SceneSlotComponent self)
     {
         /// <summary><c>path</c> as text.</summary>
-        public string PathText
+        public string Path
         {
             get
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Path.e0, 256));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.PathBytes.e0, 256));
                 var end = bytes.IndexOf((byte)0);
                 return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
             }
             set
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Path.e0, 256));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.PathBytes.e0, 256));
                 bytes.Clear();
                 var text = System.Text.Encoding.UTF8.GetBytes(value ?? "");
                 text.AsSpan(0, Math.Min(text.Length, bytes.Length - 1)).CopyTo(bytes);
             }
         }
         /// <summary><c>loaded</c> as text.</summary>
-        public string LoadedText
+        public string Loaded
         {
             get
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Loaded.e0, 256));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.LoadedBytes.e0, 256));
                 var end = bytes.IndexOf((byte)0);
                 return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
             }
             set
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Loaded.e0, 256));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.LoadedBytes.e0, 256));
                 bytes.Clear();
                 var text = System.Text.Encoding.UTF8.GetBytes(value ?? "");
                 text.AsSpan(0, Math.Min(text.Length, bytes.Length - 1)).CopyTo(bytes);

@@ -19,10 +19,10 @@ namespace KernelEngine.Framework.Native;
 public partial struct NameComponent
 {
     [NativeTypeName("char[64]")]
-    public _Name_e__FixedBuffer Name;
+    public _NameBytes_e__FixedBuffer NameBytes;
 
     [InlineArray(64)]
-    public partial struct _Name_e__FixedBuffer
+    public partial struct _NameBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

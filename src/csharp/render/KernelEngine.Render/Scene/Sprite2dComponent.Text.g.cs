@@ -15,17 +15,17 @@ public static class Sprite2dComponentText
     extension(ref Sprite2dComponent self)
     {
         /// <summary><c>texture</c> as text.</summary>
-        public string TextureText
+        public string Texture
         {
             get
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Texture.e0, 128));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.TextureBytes.e0, 128));
                 var end = bytes.IndexOf((byte)0);
                 return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
             }
             set
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Texture.e0, 128));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.TextureBytes.e0, 128));
                 bytes.Clear();
                 var text = System.Text.Encoding.UTF8.GetBytes(value ?? "");
                 text.AsSpan(0, Math.Min(text.Length, bytes.Length - 1)).CopyTo(bytes);

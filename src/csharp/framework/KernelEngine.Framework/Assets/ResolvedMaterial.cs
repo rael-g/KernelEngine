@@ -40,8 +40,8 @@ public sealed record ResolvedMaterial
             BaseColor = [spec.BaseColor[0], spec.BaseColor[1], spec.BaseColor[2], spec.BaseColor[3]],
             Metallic = spec.Metallic,
             Roughness = spec.Roughness,
-            AlbedoPath = new string((sbyte*)&spec.AlbedoPath),
-            NormalPath = new string((sbyte*)&spec.NormalPath),
+            AlbedoPath = new string((sbyte*)&spec.AlbedoPathBytes),
+            NormalPath = new string((sbyte*)&spec.NormalPathBytes),
         };
     }
 }

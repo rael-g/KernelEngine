@@ -15,17 +15,17 @@ public static class ActionRefText
     extension(ref ActionRef self)
     {
         /// <summary><c>name</c> as text.</summary>
-        public string NameText
+        public string Name
         {
             get
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Name.e0, 32));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.NameBytes.e0, 32));
                 var end = bytes.IndexOf((byte)0);
                 return System.Text.Encoding.UTF8.GetString(end < 0 ? bytes : bytes[..end]);
             }
             set
             {
-                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.Name.e0, 32));
+                var bytes = System.Runtime.InteropServices.MemoryMarshal.AsBytes(System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref self.NameBytes.e0, 32));
                 bytes.Clear();
                 var text = System.Text.Encoding.UTF8.GetBytes(value ?? "");
                 text.AsSpan(0, Math.Min(text.Length, bytes.Length - 1)).CopyTo(bytes);

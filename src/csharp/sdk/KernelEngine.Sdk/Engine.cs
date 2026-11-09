@@ -123,7 +123,7 @@ public sealed class Engine : IDisposable
     {
         var scene = firstScene ?? Parts.Configuration.GetString("project", "default_scene", "Main");
         var slot = new SceneSlotComponent();
-        slot.PathText = $"res://scenes/{scene}.scene.toml";
+        slot.Path = $"res://scenes/{scene}.scene.toml";
         Types.Spawn(Parts.Runtime.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
 
         var clock = Stopwatch.StartNew();
