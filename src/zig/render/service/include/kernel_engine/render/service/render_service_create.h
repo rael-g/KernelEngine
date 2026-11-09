@@ -40,12 +40,6 @@ typedef struct ke_render_service_config
     ke_vec4               clear_color;
 } ke_render_service_config;
 
-/** [defaults] The frame a caller gets when it sets nothing but the shader directory. */
-static const ke_render_service_config ke_render_service_config_defaults = {
-    .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
-    .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
-    .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f },
-};
 
 /**
  * @brief Creates a render service whose frames draw into @p target.

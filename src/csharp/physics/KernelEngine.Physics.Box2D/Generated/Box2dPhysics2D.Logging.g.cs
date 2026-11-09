@@ -11,7 +11,7 @@ public sealed unsafe partial class Box2dPhysics2D
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
     /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
     /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2dPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, float gravityX = 0.0f, float gravityY = -9.81f) : base(CreateLogged(loggerFactory, gravityX, gravityY))
+    public Box2dPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, float gravityX, float gravityY) : base(CreateLogged(loggerFactory, gravityX, gravityY))
     {
     }
 

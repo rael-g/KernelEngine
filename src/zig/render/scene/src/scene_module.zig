@@ -8,6 +8,7 @@ const abi_render_components = @import("abi_render_components");
 const abi_scene_loader = @import("abi_scene_loader");
 const abi_ui_components = @import("abi_ui_components");
 const std = @import("std");
+const log = std.log.scoped(.render_scene);
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_scene").logFn };
 
@@ -175,7 +176,10 @@ export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.
     const out = out_resolve orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const config = config_in orelse &abi_render_scene_factory.c.ke_render_label_resolve_config_defaults;
+    const config = config_in orelse {
+        log.warn("label resolve: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     const core = p.service orelse return R.code(error.InvalidArgument);
     const ui = ui_in orelse return R.code(error.InvalidArgument);

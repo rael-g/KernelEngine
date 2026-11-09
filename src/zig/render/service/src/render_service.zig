@@ -776,7 +776,7 @@ const Target = struct {
 
 fn serviceOf(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, ecs: ?*abi_ecs.c.ke_ecs, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [*c]const u8) abi_render.c.ke_render_service_handle {
     var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
-    _ = ke_render_service_create(device, target, ecs, io, binder, &.{ .shader_dir = shader_dir }, &h);
+    _ = ke_render_service_create(device, target, ecs, io, binder, &.{ .shader_dir = shader_dir, .color_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = .{ .x = 0.1, .y = 0.15, .z = 0.3, .w = 1 } }, &h);
     return h;
 }
 

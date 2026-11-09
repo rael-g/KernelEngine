@@ -52,18 +52,11 @@ extern "C"
         uint32_t max_lights_per_cluster;
     } ke_render_cluster_config;
 
-    /** [defaults] The grid a caller gets when it sets nothing. */
-    static const ke_render_cluster_config ke_render_cluster_config_defaults = {
-        .grid_x = 16,
-        .grid_y = 9,
-        .grid_z = 24,
-        .max_lights_per_cluster = 64,
-    };
 
     /**
      * @brief Creates a light-cluster pass and registers its render-phase system.
      * @param context [borrowed] The parts the pass is built on; read during the call.
-     * @param config [borrowed,optional] The pass's values; NULL selects the default of each.
+     * @param config [borrowed] The pass's values; Required; every field is read as given.
      * @param out_resources [out] Receives the ids of its tag, light lists and grid; every id
      *        KE_COMPONENT_INVALID on failure.
      * @param out_cluster [out] Receives the handle; left zeroed on failure.

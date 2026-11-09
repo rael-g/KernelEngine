@@ -136,12 +136,12 @@ pub const ke_runtime_system_params = extern struct {
 
 pub const ke_runtime_params = extern struct {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
-    fixed_dt: f32 = 0.016666668,
+    fixed_dt: f32 = std.mem.zeroes(f32),
     /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than
     /// zero.
-    fixed_dt_max_accum: f32 = 0.25,
+    fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
     /// Most systems one phase may hold; registering past it fails.
-    max_systems_per_phase: u32 = 256,
+    max_systems_per_phase: u32 = std.mem.zeroes(u32),
 };
 
 /// Owns the simulation world, dispatches systems across the worker pool and drives the frame
@@ -216,8 +216,6 @@ pub const ke_system_ctx = extern struct {
     /// system that did not declare per_entity always gets index 0 of count 1.
     slice: ?*const fn (?*ke_system_ctx, ?*u32, ?*u32) callconv(.c) void = null,
 };
-
-pub const ke_runtime_params_defaults: ke_runtime_params = .{ .fixed_dt = 0.016666668, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
 
 /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
 pub extern fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: ?*const ke_runtime_params, out_runtime: ?*ke_runtime_handle) abi_result.c.ke_result;

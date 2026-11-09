@@ -288,7 +288,11 @@ export fn ke_physics_2d_box2d_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
-    out.* = create(config orelse &abi_factory.c.ke_physics_2d_box2d_config_defaults) catch |err| {
+    const given = config orelse {
+        log.warn("creating the physics world failed: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
+    out.* = create(given) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
         return R.code(err);
     };
@@ -338,13 +342,9 @@ fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle 
     return h;
 }
 
-test "a null config creates a world with the default gravity" {
+test "a null config is refused" {
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    try R.check(ke_physics_2d_box2d_create(null, &h));
-    defer h.destroy.?(h.ref);
-    const gravity = b2.b2World_GetGravity(stateOf(h.ref.?).world);
-    try testing.expectEqual(@as(f32, 0), gravity.x);
-    try testing.expectEqual(@as(f32, -9.81), gravity.y);
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(null, &h));
 }
 
 fn newBody(h: abi_physics.c.ke_physics_2d_handle, body_type: abi_physics.c.ke_body_type_2d, x: f32, y: f32) !abi_physics.c.ke_body_2d {

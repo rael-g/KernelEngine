@@ -1229,7 +1229,8 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     if (ecs == null or task_pool == null) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
     }
-    const p: *const abi_runtime_factory.c.ke_runtime_params = if (params != null) params else &abi_runtime_factory.c.ke_runtime_params_defaults;
+    if (params == null) return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs its params"));
+    const p: *const abi_runtime_factory.c.ke_runtime_params = params;
     if (!(p.fixed_dt > 0.0) or !(p.fixed_dt_max_accum > 0.0) or p.max_systems_per_phase == 0) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs a positive fixed step, catch-up budget and system count"));
     }
@@ -1284,6 +1285,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     return R.ok;
 }
 
+const test_params: abi_runtime_factory.c.ke_runtime_params = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
 const testing = std.testing;
 
 fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_runtime.c.ke_system_id {
@@ -1314,6 +1316,9 @@ fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_
     return h;
 }
 
+const test_world_id_base: u32 = 1048576;
+const test_workers: u32 = std.math.maxInt(u32);
+
 extern fn ke_ecs_flecs_create(params: ?*const anyopaque, out_ecs: *abi_ecs.c.ke_ecs_handle) callconv(.c) abi_result.c.ke_result;
 extern fn ke_task_pool_enki_create(params: ?*const anyopaque, out_task_pool: *abi_task_pool.c.ke_task_pool_handle) callconv(.c) abi_result.c.ke_result;
 
@@ -1336,12 +1341,12 @@ const Fixture = struct {
 
     fn init() !Fixture {
         var sh: abi_task_pool.c.ke_task_pool_handle = undefined;
-        try R.check(ke_task_pool_enki_create(null, &sh));
+        try R.check(ke_task_pool_enki_create(&test_workers, &sh));
 
         var eh: abi_ecs.c.ke_ecs_handle = undefined;
-        try R.check(ke_ecs_flecs_create(null, &eh));
+        try R.check(ke_ecs_flecs_create(&test_world_id_base, &eh));
 
-        var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+        var rp = test_params;
         const rh = createdRuntime(eh.ref, sh.ref, &rp);
         try testing.expect(rh.ref != null);
 
@@ -1679,7 +1684,7 @@ const BareRuntime = struct {
     runtime_h: abi_runtime.c.ke_runtime_handle = undefined,
 
     fn init(self: *BareRuntime) !void {
-        var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+        var rp = test_params;
         self.runtime_h = createdRuntime(&self.ecs, &self.task_pool, &rp);
         try testing.expect(self.runtime_h.ref != null);
     }
@@ -2186,13 +2191,13 @@ test "a zero fixed step, catch-up budget or system count is refused, not replace
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    var rp = test_params;
     rp.fixed_dt = 0;
     try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
-    rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    rp = test_params;
     rp.fixed_dt_max_accum = 0;
     try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
-    rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    rp = test_params;
     rp.max_systems_per_phase = 0;
     try testing.expect(createdRuntime(f.ecs_h.ref, f.task_pool_h.ref, &rp).ref == null);
 }
@@ -2201,7 +2206,7 @@ test "creating a runtime without an ecs is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    var rp = test_params;
     const rh = createdRuntime(null, f.task_pool_h.ref, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -2210,7 +2215,7 @@ test "creating a runtime without a task pool is refused" {
     var f = try Fixture.init();
     defer f.deinit();
 
-    var rp = abi_runtime_factory.c.ke_runtime_params_defaults;
+    var rp = test_params;
     const rh = createdRuntime(f.ecs_h.ref, null, &rp);
     try testing.expect(rh.ref == null);
 }
@@ -3011,7 +3016,7 @@ test "the defer queue drains between ticks" {
 
 test "a zero size component registers as a usable tag" {
     var h: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(null, &h));
+    try R.check(ke_ecs_flecs_create(&test_world_id_base, &h));
     defer h.destroy.?(h.ref);
 
     const ecs: *abi_ecs.c.ke_ecs = @ptrCast(h.ref);

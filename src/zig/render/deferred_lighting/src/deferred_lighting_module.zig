@@ -266,7 +266,10 @@ export fn ke_render_deferred_lighting_create(context_in: ?*const abi_render_cont
     const out = out_lighting orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const config = config_in orelse &abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config_defaults;
+    const config = config_in orelse {
+        log.warn("deferred lighting: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
     if (config.gbuffer.albedo == abi_ecs.c.KE_COMPONENT_INVALID or config.gbuffer.normal == abi_ecs.c.KE_COMPONENT_INVALID or config.gbuffer.emissive == abi_ecs.c.KE_COMPONENT_INVALID) {

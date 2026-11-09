@@ -101,7 +101,7 @@ pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*an
 /// The values the action maps are created with.
 pub const ke_input_actions_config = extern struct {
     /// The configuration section the maps are read from.
-    section: ?[*:0]const u8 = "input",
+    section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 /// Sizing for one script host. The defaults are conveniences, not ceilings. [bag] Instances need
@@ -124,8 +124,6 @@ pub const ke_signal_bus_params = extern struct {
     /// Total payload bytes per frame; 0 uses the default.
     payload_capacity: u32 = std.mem.zeroes(u32),
 };
-
-pub const ke_input_actions_config_defaults: ke_input_actions_config = .{ .section = "input" };
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either

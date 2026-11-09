@@ -9,8 +9,8 @@ public sealed unsafe partial class EnkiTaskPool
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="workerCount">Worker threads besides the calling thread. 0 takes one per hardware thread besides the calling one.</param>
-    public EnkiTaskPool(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint workerCount = default) : base(CreateLogged(loggerFactory, workerCount))
+    /// <param name="workerCount">Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD.</param>
+    public EnkiTaskPool(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, uint workerCount) : base(CreateLogged(loggerFactory, workerCount))
     {
     }
 

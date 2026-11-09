@@ -31,16 +31,12 @@ typedef struct ke_ecs_flecs_config
     uint32_t world_id_base;
 } ke_ecs_flecs_config;
 
-/** [defaults] The world a caller gets when it sets nothing. */
-static const ke_ecs_flecs_config ke_ecs_flecs_config_defaults = {
-    .world_id_base = 1048576,
-};
 
 /// Creates a ke_ecs vtable backed by an internally-owned world.
 /// Also installs process-wide log and abort handlers: a check flecs fails makes the
 /// slot that called it return KE_RESULT_INVALID_ARGUMENT, and an internal failure of
 /// flecs logs flecs's message and the stack before flecs ends the process.
-/// @param config [borrowed,optional] NULL takes every default.
+/// @param config [borrowed] Required; every field is read as given.
 /// @param out_ecs [out] Receives the ECS; left zeroed on failure.
 /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_ecs or a world_id_base that leaves
 ///         no reserve pool; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_NOT_INITIALIZED when flecs cannot

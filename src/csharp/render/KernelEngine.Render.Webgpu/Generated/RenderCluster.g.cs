@@ -24,7 +24,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <summary>Receives the ids of its tag, light lists and grid; every id KE_COMPONENT_INVALID on failure.</summary>
     public KernelEngine.Render.RenderClusterResources Resources { get; }
 
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX = 16, uint gridY = 9, uint gridZ = 24, uint maxLightsPerCluster = 64) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);

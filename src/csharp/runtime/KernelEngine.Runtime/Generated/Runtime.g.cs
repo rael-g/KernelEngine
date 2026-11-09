@@ -75,7 +75,7 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     }
 
     /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
-    /// <param name="@params">NULL takes every default.</param>
+    /// <param name="@params">Required; every field is read as given.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_params* @params)
     {

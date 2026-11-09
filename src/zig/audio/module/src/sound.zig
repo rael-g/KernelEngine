@@ -172,7 +172,11 @@ export fn ke_sound_module_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    out.* = create(runtime orelse return R.code(error.InvalidArgument), ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), if (config) |c| c.root else null) catch |err| {
+    const given = config orelse {
+        log.warn("creating the sound module failed: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
+    out.* = create(runtime orelse return R.code(error.InvalidArgument), ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), given.root) catch |err| {
         log.warn("creating the sound module failed: {t}", .{err});
         return R.code(err);
     };

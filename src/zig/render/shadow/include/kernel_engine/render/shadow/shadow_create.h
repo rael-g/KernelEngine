@@ -53,14 +53,6 @@ extern "C"
         float    far_plane;
     } ke_render_shadow_config;
 
-    /** [defaults] The shadow map's shape a caller gets when it sets nothing. */
-    static const ke_render_shadow_config ke_render_shadow_config_defaults = {
-        .resolution = 1024,
-        .light_distance = 25.0f,
-        .extent = 20.0f,
-        .near_plane = 0.1f,
-        .far_plane = 50.0f,
-    };
 
     /// [owner]
     typedef struct ke_render_shadow_handle
@@ -72,7 +64,7 @@ extern "C"
     /// Registers the pass's render-phase system. A missing runtime, service, device or view space
     /// fails as an invalid argument.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param config [borrowed,optional] The map's shape; NULL selects the defaults.
+    /// @param config [borrowed] The map's shape; Required; every field is read as given.
     /// @param out_resources [out] Receives the ids of the map and the light it writes; every id
     ///                      KE_COMPONENT_INVALID on failure.
     /// @param out_shadow [out] Receives the handle; left zeroed on failure.

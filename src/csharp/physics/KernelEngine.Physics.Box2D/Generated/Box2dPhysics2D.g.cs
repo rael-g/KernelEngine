@@ -11,7 +11,7 @@ public sealed unsafe partial class Box2dPhysics2D : KernelEngine.Physics.Physics
     /// <summary>Creates a 2D physics world.</summary>
     /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
     /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2dPhysics2D(float gravityX = 0.0f, float gravityY = -9.81f) : base(Create(gravityX, gravityY))
+    public Box2dPhysics2D(float gravityX, float gravityY) : base(Create(gravityX, gravityY))
     {
     }
 

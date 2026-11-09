@@ -395,7 +395,10 @@ export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_r
     const out = out_forward orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const config = config_in orelse &abi_render_forward_factory.c.ke_render_forward_config_defaults;
+    const config = config_in orelse {
+        log.warn("transparent-forward: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null)
         return R.code(error.InvalidArgument);

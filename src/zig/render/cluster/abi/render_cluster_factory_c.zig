@@ -62,21 +62,19 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// The values a light-cluster pass is created with, each applied as given.
 pub const ke_render_cluster_config = extern struct {
     /// Clusters across the screen.
-    grid_x: u32 = 16,
+    grid_x: u32 = std.mem.zeroes(u32),
     /// Clusters down the screen.
-    grid_y: u32 = 9,
+    grid_y: u32 = std.mem.zeroes(u32),
     /// Depth slices.
-    grid_z: u32 = 24,
+    grid_z: u32 = std.mem.zeroes(u32),
     /// Lights one cluster can list.
-    max_lights_per_cluster: u32 = 64,
+    max_lights_per_cluster: u32 = std.mem.zeroes(u32),
 };
 
 pub const ke_render_cluster_handle = extern struct {
     ref: ?*ke_render_cluster = std.mem.zeroes(?*ke_render_cluster),
     destroy: ?*const fn (?*ke_render_cluster) callconv(.c) void = null,
 };
-
-pub const ke_render_cluster_config_defaults: ke_render_cluster_config = .{ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 };
 
 /// Creates a light-cluster pass and registers its render-phase system.
 pub extern fn ke_render_cluster_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*ke_render_cluster_handle) abi_result.c.ke_result;

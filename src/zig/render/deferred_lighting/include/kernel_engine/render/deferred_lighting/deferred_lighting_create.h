@@ -52,18 +52,11 @@ extern "C"
         ke_render_cluster_resources clusters;
     } ke_render_deferred_lighting_config;
 
-    /** [defaults] The values a caller gets when it sets nothing. */
-    static const ke_render_deferred_lighting_config ke_render_deferred_lighting_config_defaults = {
-        .ibl_enabled = true,
-        .gbuffer = { KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID },
-        .shadow = { KE_COMPONENT_INVALID, KE_COMPONENT_INVALID },
-        .clusters = { KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID, KE_COMPONENT_INVALID },
-    };
 
     /// Registers the pass's render-phase system. A missing runtime, service or device, or a
     /// gbuffer with an invalid id, fails as an invalid argument.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param config [borrowed,optional] The pass\'s values; NULL selects the defaults.
+    /// @param config [borrowed] The pass\'s values; Required; every field is read as given.
     /// @param out_lighting [out] Receives the handle; left zeroed on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_result ke_render_deferred_lighting_create(
         const ke_render_context *context, const ke_render_deferred_lighting_config *config, ke_render_deferred_lighting_handle *out_lighting);

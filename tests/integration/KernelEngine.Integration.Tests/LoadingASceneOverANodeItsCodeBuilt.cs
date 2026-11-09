@@ -33,9 +33,9 @@ public class LoadingASceneOverANodeItsCodeBuilt
     public void ANodeTypeGivenOnlyToAddNodeTypeTakesTheKeysItsSectionHoldsAndKeepsTheRestOfItsConstructor()
     {
         using var services = new ServiceCollection()
-            .AddFlecsEcsRegistry()
-            .AddEnkiTaskPool()
-            .AddStdFileSystem()
+            .AddFlecsEcsRegistry(worldIdBase: 1048576)
+            .AddEnkiTaskPool(workerCount: uint.MaxValue)
+            .AddStdFileSystem(root: ".")
             .AddPoolIo()
             .AddAssetResolver()
             .AddNodeType<Probe>()

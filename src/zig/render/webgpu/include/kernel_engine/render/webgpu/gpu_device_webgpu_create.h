@@ -36,17 +36,12 @@ typedef struct ke_gpu_device_webgpu_config
     bool debug_labels;
 } ke_gpu_device_webgpu_config;
 
-/** [defaults] The device a caller gets when it sets nothing. */
-static const ke_gpu_device_webgpu_config ke_gpu_device_webgpu_config_defaults = {
-    .enable_validation = true,
-    .debug_labels = false,
-};
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
  * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
  *        workers; NULL compiles synchronously, invoking the callback before returning.
- * @param config [borrowed,optional] The device's values; NULL selects the default of each.
+ * @param config [borrowed] The device's values; Required; every field is read as given.
  * @param out_device [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or a failure code; call @c handle.destroy(handle.ref) to release the handle
  *         when done.

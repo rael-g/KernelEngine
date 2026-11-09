@@ -164,11 +164,13 @@ fn create(params_in: ?*const abi_file_system_std_factory.c.ke_file_system_std_pa
         .owns_root = false,
     };
 
-    if (params_in) |p| if (p.root) |root| {
+    const params = params_in orelse return error.InvalidArgument;
+    const root = params.root orelse return error.InvalidArgument;
+    if (!std.mem.eql(u8, std.mem.span(root), ".")) {
         s.root = std.Io.Dir.cwd().openDir(s.io(), std.mem.span(root), .{}) catch |err|
             return if (err == error.FileNotFound or err == error.NotDir) error.NotFound else error.Io;
         s.owns_root = true;
-    };
+    }
 
     s.api.handle = s;
     s.api.open = open;
@@ -323,7 +325,7 @@ test "an absolute path is read regardless of the root" {
     abs[real] = 0;
 
     var cwd_handle: abi_file_system.c.ke_file_system_handle = undefined;
-    try R.check(ke_file_system_std_create(null, &cwd_handle));
+    try R.check(ke_file_system_std_create(&.{ .root = "." }, &cwd_handle));
     defer cwd_handle.destroy.?(cwd_handle.ref);
 
     var st: abi_file_system.c.ke_file_stat = undefined;

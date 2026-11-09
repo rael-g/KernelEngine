@@ -22,7 +22,7 @@ public sealed unsafe partial class RenderShadow
     /// <param name="extent">Width and height of the shadowed area, in world units.</param>
     /// <param name="nearPlane">Near plane of the shadow camera.</param>
     /// <param name="farPlane">Far plane of the shadow camera.</param>
-    public RenderShadow(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution = 1024, float lightDistance = 25.0f, float extent = 20.0f, float nearPlane = 0.1f, float farPlane = 50.0f) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
+    public RenderShadow(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
     {
     }
 

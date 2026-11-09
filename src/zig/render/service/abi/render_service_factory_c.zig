@@ -48,14 +48,12 @@ pub const ke_render_service_config = extern struct {
     /// Directory the shaders are loaded from; copied. Required.
     shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.
-    color_format: abi_render_gpu.c.ke_gpu_texture_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+    color_format: abi_render_gpu.c.ke_gpu_texture_format = std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format),
     /// Format of the frame's depth.
-    depth_format: abi_render_gpu.c.ke_gpu_texture_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
+    depth_format: abi_render_gpu.c.ke_gpu_texture_format = std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format),
     /// Color the frame is cleared to.
-    clear_color: abi_math.c.ke_vec4 = @bitCast([_]std.meta.fields(abi_math.c.ke_vec4)[0].type{ 0.10, 0.15, 0.30, 1.0 }),
+    clear_color: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
 };
-
-pub const ke_render_service_config_defaults: ke_render_service_config = .{ .color_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = .{ .x = 0.10, .y = 0.15, .z = 0.30, .w = 1.0 } };
 
 /// Creates a render service whose frames draw into target.
 pub extern fn ke_render_service_create(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, ecs: ?*abi_ecs.c.ke_ecs, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, config: ?*const ke_render_service_config, out_service: ?*abi_render.c.ke_render_service_handle) abi_result.c.ke_result;

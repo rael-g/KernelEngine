@@ -20,7 +20,7 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
     /// <param name="resolver">Reads the font a label names; borrowed. Without it every label is reported.</param>
     /// <param name="defaultFont">The font a label that names none draws with; copied. NULL leaves such a label without text.</param>
-    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver = default, string? defaultFont = "0") : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, defaultFont))
+    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver = default, string? defaultFont = default) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, defaultFont))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);

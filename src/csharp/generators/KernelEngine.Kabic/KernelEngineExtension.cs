@@ -108,9 +108,12 @@ public sealed class KernelEngineExtension : IKabicExtension
         return o.ToString();
     }
 
-    private static string Values(Factory f, bool configured, IReadOnlyDictionary<string, string> producers) =>
-        string.Concat(f.Arguments.Where(a => !a.ManagedType.Contains(".INative") && !producers.ContainsKey(a.ManagedType) && !(configured && a.Field is not null))
-            .Select(a => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name} = {a.Default ?? "default"}"));
+    private static string Values(Factory f, bool configured, IReadOnlyDictionary<string, string> producers)
+    {
+        var values = f.Arguments.Where(a => !a.ManagedType.Contains(".INative") && !producers.ContainsKey(a.ManagedType) && !(configured && a.Field is not null)).ToList();
+        var lastRequired = values.FindLastIndex(a => a.IsRequired);
+        return string.Concat(values.Select((a, i) => $", {(a.IsString ? "string?" : a.ManagedType)} {a.Name}{(i > lastRequired ? $" = {a.Default ?? "default"}" : "")}"));
+    }
 
     private static string PassRegistration(Factory f, bool configured, IReadOnlyDictionary<string, string> producers)
     {

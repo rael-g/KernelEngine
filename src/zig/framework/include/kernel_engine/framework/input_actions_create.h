@@ -34,10 +34,6 @@ extern "C"
         const char *section;
     } ke_input_actions_config;
 
-    /** [defaults] The maps a caller gets when it sets nothing: read from "input". */
-    static const ke_input_actions_config ke_input_actions_config_defaults = {
-        .section = "input",
-    };
 
     /// Creates the action maps, adding through the map's own slots every map the configuration
     /// describes under the section: `<section>.map.<Map>` holds `priority` (default 0) and
@@ -52,7 +48,7 @@ extern "C"
     /// @param runtime [borrowed,optional] NULL registers no system; the caller then evaluates.
     /// @param input [borrowed,optional] The input the system reads; required with @p runtime.
     /// @param configuration [borrowed,optional] Read during the call only; NULL creates no map.
-    /// @param config [borrowed,optional] NULL takes every default.
+    /// @param config [borrowed] Required; every field is read as given.
     /// @param out_actions [out] Receives the maps; left zeroed on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p out_actions or a runtime without an input, and for an unknown
     ///         action type, binding kind, key or button name, or a binding missing a key, logging

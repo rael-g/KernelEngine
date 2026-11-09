@@ -6,6 +6,9 @@ const abi_result = @import("result");
 const abi_task_pool = @import("task_pool");
 
 
+/// The worker_count that takes one worker per hardware thread besides the calling one.
+pub const KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD = 4294967295;
+
 /// Body of a scheduled task, run on a worker thread.
 pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
@@ -21,8 +24,8 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Construction parameters for ke_task_pool_enki_create.
 pub const ke_task_pool_enki_params = extern struct {
-    /// Worker threads besides the calling thread. 0 takes one per hardware thread besides the
-    /// calling one.
+    /// Worker threads besides the calling thread, 0 for none, or
+    /// KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD.
     worker_count: u32 = std.mem.zeroes(u32),
 };
 

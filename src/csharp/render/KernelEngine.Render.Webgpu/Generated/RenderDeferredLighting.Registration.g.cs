@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 public static class RenderDeferredLightingRegistration
 {
     /// <summary>Registers one <see cref="RenderDeferredLighting"/>, created when the modules load with its providers from the container.</summary>
-    public static IServiceCollection AddRenderDeferredLighting(this IServiceCollection services, bool iblEnabled = true)
+    public static IServiceCollection AddRenderDeferredLighting(this IServiceCollection services, bool iblEnabled)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
             ? new RenderDeferredLighting(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), iblEnabled, sp.GetService<KernelEngine.Render.Webgpu.RenderGbuffer>()?.Resources ?? default, sp.GetService<KernelEngine.Render.Webgpu.RenderShadow>()?.Resources ?? default, sp.GetService<KernelEngine.Render.Webgpu.RenderCluster>()?.Resources ?? default)

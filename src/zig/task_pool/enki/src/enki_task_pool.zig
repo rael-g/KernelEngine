@@ -202,13 +202,13 @@ export fn ke_task_pool_enki_create(params_in: ?*const abi_task_pool_enki_factory
 }
 
 fn create(params_in: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params) R.Error!abi_task_pool.c.ke_task_pool_handle {
+    const params = params_in orelse return error.InvalidArgument;
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{ .api = std.mem.zeroes(abi_task_pool.c.ke_task_pool), .ets = null };
 
     s.ets = c.enkiNewTaskScheduler() orelse return error.General;
-    const worker_count: u32 = if (params_in) |p| p.*.worker_count else 0;
-    if (worker_count == 0) c.enkiInitTaskScheduler(s.ets) else c.enkiInitTaskSchedulerNumThreads(s.ets, worker_count + 1);
+    if (params.worker_count == abi_task_pool_enki_factory.c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD) c.enkiInitTaskScheduler(s.ets) else c.enkiInitTaskSchedulerNumThreads(s.ets, params.worker_count + 1);
 
     s.api.handle = s;
     s.api.dispatch = dispatch;
@@ -267,6 +267,8 @@ fn recordCompletionFailure(task_in: ?*abi_task_pool.c.ke_task, user_data: ?*anyo
     seen.* = result;
 }
 
+const every_core: abi_task_pool_enki_factory.c.ke_task_pool_enki_params = .{ .worker_count = abi_task_pool_enki_factory.c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD };
+
 fn created(params: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params) !abi_task_pool.c.ke_task_pool_handle {
     var h: abi_task_pool.c.ke_task_pool_handle = undefined;
     try R.check(ke_task_pool_enki_create(params, &h));
@@ -274,7 +276,7 @@ fn created(params: ?*const abi_task_pool_enki_factory.c.ke_task_pool_enki_params
 }
 
 test "a task that fails hands its code to the thread that waits on it" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.c.ke_task = null;
@@ -284,7 +286,7 @@ test "a task that fails hands its code to the thread that waits on it" {
 }
 
 test "a task that succeeds hands OK to the thread that waits on it" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var ran = Flag.init(false);
@@ -295,7 +297,7 @@ test "a task that succeeds hands OK to the thread that waits on it" {
 }
 
 test "a completion callback is handed the code the body returned" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var seen: abi_result.c.ke_result = R.ok;
@@ -307,7 +309,7 @@ test "a completion callback is handed the code the body returned" {
 }
 
 test "a dispatched task runs and reports completion" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var ran = Flag.init(false);
@@ -319,7 +321,7 @@ test "a dispatched task runs and reports completion" {
 }
 
 test "a completion callback fires after the task body" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var ran = Flag.init(false);
@@ -334,7 +336,7 @@ test "a completion callback fires after the task body" {
 }
 
 test "a task flips to completed while it is still waited on" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var can_finish = Flag.init(false);
@@ -347,7 +349,7 @@ test "a task flips to completed while it is still waited on" {
 }
 
 test "user data reaches the task body unchanged" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var value: i32 = 0;
@@ -359,7 +361,7 @@ test "user data reaches the task body unchanged" {
 }
 
 test "ten dispatched tasks all execute" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var counter = Counter.init(0);
@@ -382,7 +384,7 @@ fn waitFromOutside(pool: *abi_task_pool.c.ke_task_pool, task: ?*abi_task_pool.c.
 }
 
 test "a thread outside the pool cannot dispatch" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.c.ke_task = undefined;
@@ -394,7 +396,7 @@ test "a thread outside the pool cannot dispatch" {
 }
 
 test "a thread outside the pool cannot wait, and the task stays waitable from the pool's threads" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.c.ke_task = null;
@@ -409,7 +411,7 @@ test "a thread outside the pool cannot wait, and the task stays waitable from th
 }
 
 test "dispatch refuses a null task pool, task function or out-parameter as an invalid argument" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.c.ke_task = null;
@@ -420,7 +422,7 @@ test "dispatch refuses a null task pool, task function or out-parameter as an in
 }
 
 test "dispatch on complete refuses a null task pool or task function as an invalid argument" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     var task: ?*abi_task_pool.c.ke_task = null;
@@ -430,7 +432,7 @@ test "dispatch on complete refuses a null task pool or task function as an inval
 }
 
 test "wait refuses a null task pool and a null task as an invalid argument" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.wait.?(null, null)));
@@ -438,14 +440,14 @@ test "wait refuses a null task pool and a null task as an invalid argument" {
 }
 
 test "a null task counts as completed" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     try testing.expect(h.ref.?.is_completed.?(h.ref, null));
 }
 
 test "the worker count excludes the calling thread" {
-    const h = try created(null);
+    const h = try created(&every_core);
     defer h.destroy.?(h.ref);
 
     try testing.expect(h.ref.?.get_num_workers.?(h.ref) >= 1);
@@ -465,14 +467,14 @@ test "a null handle to fill is refused as an invalid argument" {
 }
 
 test "destroying a null task pool is safe" {
-    const h = try created(null);
+    const h = try created(&every_core);
 
     h.destroy.?(h.ref);
     h.destroy.?(null);
 }
 
 test "creating and destroying a task pool leaves no block allocated" {
-    const h = try created(null);
+    const h = try created(&every_core);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

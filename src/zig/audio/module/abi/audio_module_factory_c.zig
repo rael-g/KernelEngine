@@ -41,15 +41,13 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// The values the sound module is created with.
 pub const ke_sound_module_config = extern struct {
     /// Directory a clip's path is joined to; copied. NULL uses the path as written.
-    root: ?[*:0]const u8 = "0",
+    root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 pub const ke_sound_module_handle = extern struct {
     ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
     destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
-
-pub const ke_sound_module_config_defaults: ke_sound_module_config = .{  };
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

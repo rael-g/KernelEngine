@@ -140,22 +140,16 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     ke_render_shadow_resources shadow;
     ke_render_cluster_resources clusters;
     ke_render_gbuffer_resources gbuffer;
-    check("shadow pass", ke_render_shadow_create(&context, NULL, &shadow, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&context, NULL, &clusters, &r->cluster));
+    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
-    ke_render_deferred_lighting_config deferred = ke_render_deferred_lighting_config_defaults;
-    deferred.gbuffer = gbuffer;
-    deferred.shadow = shadow;
-    deferred.clusters = clusters;
+    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true, .gbuffer = gbuffer, .shadow = shadow, .clusters = clusters };
     check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
-    ke_render_forward_config forward = ke_render_forward_config_defaults;
-    forward.shadow = shadow;
-    forward.clusters = clusters;
+    const ke_render_forward_config forward = { .ibl_enabled = true, .shadow = shadow, .clusters = clusters };
     check("forward pass", ke_render_forward_create(&context, &forward, &r->forward));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
     check("ui pass", ke_render_ui_create(&context, &r->ui));
-    ke_render_label_resolve_config labels = ke_render_label_resolve_config_defaults;
-    labels.default_font = font;
+    const ke_render_label_resolve_config labels = { .default_font = font };
     check("label resolve", ke_render_label_resolve_create(&context, r->ui.ref, assets, &labels, &r->labels));
 }
 
@@ -193,9 +187,9 @@ int main(int argc, char **argv)
     }
 
     ke_task_pool_handle pool = { 0 };
-    check("task pool", ke_task_pool_enki_create(NULL, &pool));
+    check("task pool", ke_task_pool_enki_create(&(ke_task_pool_enki_params){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool));
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(NULL, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_std_params){ .root = "." }, &files));
     ke_io_handle io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &io));
 
@@ -208,24 +202,25 @@ int main(int argc, char **argv)
 
     ke_input_handle input = { 0 };
     check("input", ke_input_create(&input));
-    ke_window_glfw_config window_config = ke_window_glfw_config_defaults;
-    window_config.title = cfg->get_string(cfg, "runtime.window", "title", window_config.title);
-    window_config.width = (int32_t)cfg->get_int(cfg, "runtime.window", "width", window_config.width);
-    window_config.height = (int32_t)cfg->get_int(cfg, "runtime.window", "height", window_config.height);
-    window_config.fullscreen = cfg->get_bool(cfg, "runtime.window", "fullscreen", window_config.fullscreen);
+    const ke_window_glfw_config window_config = {
+        .title = cfg->get_string(cfg, "runtime.window", "title", "Pong"),
+        .width = (int32_t)cfg->get_int(cfg, "runtime.window", "width", 1280),
+        .height = (int32_t)cfg->get_int(cfg, "runtime.window", "height", 720),
+        .fullscreen = cfg->get_bool(cfg, "runtime.window", "fullscreen", false),
+    };
     ke_window_handle window = { 0 };
     check("window", ke_window_glfw_create(input.ref, &window_config, &window));
 
     ke_ecs_handle ecs = { 0 };
-    check("ecs", ke_ecs_flecs_create(NULL, &ecs));
+    check("ecs", ke_ecs_flecs_create(&(ke_ecs_flecs_config){ .world_id_base = 1048576 }, &ecs));
     ke_runtime_handle rt = { 0 };
-    check("runtime", ke_runtime_create(ecs.ref, pool.ref, NULL, &rt));
+    check("runtime", ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_params){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt));
 
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ 0 }, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ .enable_validation = false, .debug_labels = false }, &gpu));
     ke_gpu_render_target_handle target = { 0 };
-    ke_gpu_render_target_webgpu_window_config target_config = ke_gpu_render_target_webgpu_window_config_defaults;
-    if (strcmp(cfg->get_string(cfg, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0) target_config.present_mode = KE_GPU_PRESENT_MODE_MAILBOX;
+    const bool mailbox = strcmp(cfg->get_string(cfg, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
+    const ke_gpu_render_target_webgpu_window_config target_config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
     check("window target", ke_gpu_render_target_webgpu_window_create(gpu.ref, window.ref, &target_config, &target));
 
     ke_font_loader_handle fonts = { 0 };
@@ -236,19 +231,25 @@ int main(int argc, char **argv)
     ke_scene_tree_handle tree = { 0 };
     check("scene tree", ke_scene_tree_create(ecs.ref, rt.ref, &tree));
 
-    ke_render_service_config service_config = ke_render_service_config_defaults;
-    service_config.shader_dir = shader_dir;
-    service_config.clear_color.x = (float)cfg->get_double(cfg, "render", "clear_color.0", service_config.clear_color.x);
-    service_config.clear_color.y = (float)cfg->get_double(cfg, "render", "clear_color.1", service_config.clear_color.y);
-    service_config.clear_color.z = (float)cfg->get_double(cfg, "render", "clear_color.2", service_config.clear_color.z);
-    service_config.clear_color.w = (float)cfg->get_double(cfg, "render", "clear_color.3", service_config.clear_color.w);
+    const ke_render_service_config service_config = {
+        .shader_dir = shader_dir,
+        .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+        .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
+        .clear_color = {
+            (float)cfg->get_double(cfg, "render", "clear_color.0", 0.0),
+            (float)cfg->get_double(cfg, "render", "clear_color.1", 0.0),
+            (float)cfg->get_double(cfg, "render", "clear_color.2", 0.0),
+            (float)cfg->get_double(cfg, "render", "clear_color.3", 1.0),
+        },
+    };
     renderer render;
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config, font);
 
     ke_physics_2d_handle physics = { 0 };
-    ke_physics_2d_box2d_config physics_config = ke_physics_2d_box2d_config_defaults;
-    physics_config.gravity_x = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_x", physics_config.gravity_x);
-    physics_config.gravity_y = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_y", physics_config.gravity_y);
+    const ke_physics_2d_box2d_config physics_config = {
+        .gravity_x = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_x", 0.0),
+        .gravity_y = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_y", 0.0),
+    };
     check("physics", ke_physics_2d_box2d_create(&physics_config, &physics));
     ke_physics_body2d_module_handle bodies = { 0 };
     check("body2d module", ke_physics_body2d_module_create(&(ke_physics_body2d_module_params){
@@ -260,7 +261,7 @@ int main(int argc, char **argv)
     check("sound module", ke_sound_module_create(rt.ref, ecs.ref, audio.ref, &(ke_sound_module_config){ .root = project_dir }, &sounds));
 
     ke_input_actions_handle actions = { 0 };
-    check("input actions", ke_input_actions_create(rt.ref, input.ref, cfg, NULL, &actions));
+    check("input actions", ke_input_actions_create(rt.ref, input.ref, cfg, &(ke_input_actions_config){ .section = "input" }, &actions));
     ke_node_types_handle types = { 0 };
     check("node types", ke_node_types_create(rt.ref, ecs.ref, tree.ref, actions.ref, &types));
     ke_scene_files_handle scenes = { 0 };

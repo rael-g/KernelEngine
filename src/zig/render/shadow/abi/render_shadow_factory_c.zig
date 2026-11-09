@@ -63,23 +63,21 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// outside it, and a caster farther than `light_distance` stops casting.
 pub const ke_render_shadow_config = extern struct {
     /// Edge of the square shadow map, in texels.
-    resolution: u32 = 1024,
+    resolution: u32 = std.mem.zeroes(u32),
     /// How far back along the light the shadow camera sits.
-    light_distance: f32 = 25.0,
+    light_distance: f32 = std.mem.zeroes(f32),
     /// Width and height of the shadowed area, in world units.
-    extent: f32 = 20.0,
+    extent: f32 = std.mem.zeroes(f32),
     /// Near plane of the shadow camera.
-    near_plane: f32 = 0.1,
+    near_plane: f32 = std.mem.zeroes(f32),
     /// Far plane of the shadow camera.
-    far_plane: f32 = 50.0,
+    far_plane: f32 = std.mem.zeroes(f32),
 };
 
 pub const ke_render_shadow_handle = extern struct {
     ref: ?*ke_render_shadow = std.mem.zeroes(?*ke_render_shadow),
     destroy: ?*const fn (?*ke_render_shadow) callconv(.c) void = null,
 };
-
-pub const ke_render_shadow_config_defaults: ke_render_shadow_config = .{ .resolution = 1024, .light_distance = 25.0, .extent = 20.0, .near_plane = 0.1, .far_plane = 50.0 };
 
 /// Sends every line ke_render_shadow logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

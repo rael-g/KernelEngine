@@ -76,7 +76,9 @@ public sealed unsafe class WebgpuRenderModule : IRuntimeModule, IRenderResources
             .AddDefaultRenderSceneResolve()
             .AddDefaultRenderFrame();
         if (!_defaultPasses) return;
-        if (_enableShadows) services.AddRenderShadow();
+        if (_enableShadows) services.AddRenderShadow(resolution: 1024, lightDistance: 25.0f, extent: 20.0f, nearPlane: 0.1f, farPlane: 50.0f);
+        Microsoft.Extensions.DependencyInjection.Extensions.ServiceCollectionDescriptorExtensions.TryAddSingleton<Microsoft.Extensions.Options.IOptions<RenderClusterConfig>>(
+            services, new RenderClusterConfig { GridX = 16, GridY = 9, GridZ = 24, MaxLightsPerCluster = 64 });
         services
             .AddRenderCluster()
             .AddRenderGbuffer()

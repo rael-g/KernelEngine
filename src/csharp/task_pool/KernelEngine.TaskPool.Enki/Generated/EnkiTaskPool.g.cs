@@ -9,8 +9,8 @@ namespace KernelEngine.TaskPool.Enki;
 public sealed unsafe partial class EnkiTaskPool : KernelEngine.TaskPool.TaskPool
 {
     /// <summary>Creates a task pool.</summary>
-    /// <param name="workerCount">Worker threads besides the calling thread. 0 takes one per hardware thread besides the calling one.</param>
-    public EnkiTaskPool(uint workerCount = default) : base(Create(workerCount))
+    /// <param name="workerCount">Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD.</param>
+    public EnkiTaskPool(uint workerCount) : base(Create(workerCount))
     {
     }
 

@@ -9,16 +9,16 @@ namespace KernelEngine.Render.Webgpu;
 public sealed record RenderClusterConfig : KernelEngine.Configuration.IConfigSection<RenderClusterConfig>
 {
     /// <summary>Clusters across the screen.</summary>
-    public uint GridX { get; init; } = 16;
+    public uint GridX { get; init; } = 0;
 
     /// <summary>Clusters down the screen.</summary>
-    public uint GridY { get; init; } = 9;
+    public uint GridY { get; init; } = 0;
 
     /// <summary>Depth slices.</summary>
-    public uint GridZ { get; init; } = 24;
+    public uint GridZ { get; init; } = 0;
 
     /// <summary>Lights one cluster can list.</summary>
-    public uint MaxLightsPerCluster { get; init; } = 64;
+    public uint MaxLightsPerCluster { get; init; } = 0;
 
     /// <inheritdoc/>
     public static RenderClusterConfig Read(KernelEngine.Configuration.IConfiguration configuration, string section)

@@ -9,7 +9,7 @@ public sealed unsafe partial class StdFileSystem
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under.</param>
-    /// <param name="root">The directory relative paths are resolved against; null takes the working directory of the process.</param>
+    /// <param name="root">The directory relative paths are resolved against; "." for the working directory of the process.</param>
     public StdFileSystem(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, string? root = default) : base(CreateLogged(loggerFactory, root))
     {
     }

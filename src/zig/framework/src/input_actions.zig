@@ -731,7 +731,11 @@ export fn ke_input_actions_create(
     s.api.get_axis3d = vtGetAxis3d;
 
     if (configuration) |cfg| {
-        const given = config orelse &abi_framework_factory.c.ke_input_actions_config_defaults;
+        const given = config orelse {
+            log.warn("input actions: a configuration is given without the config naming its section", .{});
+            vtDestroy(&s.api);
+            return R.code(error.InvalidArgument);
+        };
         const section_name: [*:0]const u8 = @ptrCast(given.section orelse {
             log.warn("input actions: the config names no section", .{});
             vtDestroy(&s.api);
@@ -849,7 +853,7 @@ const Actions = struct {
     fn from(entries: []const FakeConfig.Entry) !Actions {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try R.check(ke_input_actions_create(null, null, &cfg, null, &h));
+        try R.check(ke_input_actions_create(null, null, &cfg, &.{ .section = "input" }, &h));
         return .{ .handle = h };
     }
 
@@ -1020,7 +1024,7 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     for (cases) |entries| {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(null, null, &cfg, null, &h)));
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(null, null, &cfg, &.{ .section = "input" }, &h)));
         try testing.expect(h.ref == null);
     }
 }

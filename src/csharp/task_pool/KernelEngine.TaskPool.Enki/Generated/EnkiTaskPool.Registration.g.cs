@@ -15,7 +15,7 @@ public static class EnkiTaskPoolRegistration
     /// container and the given values, as itself, as <see cref="KernelEngine.TaskPool.INativeTaskPool"/> and as <see cref="KernelEngine.TaskPool.ITaskPool"/>. The library logs to the
     /// registered <c>Microsoft.Extensions.Logging.ILoggerFactory</c>, or to stderr when there is none.
     /// </summary>
-    public static IServiceCollection AddEnkiTaskPool(this IServiceCollection services, uint workerCount = default)
+    public static IServiceCollection AddEnkiTaskPool(this IServiceCollection services, uint workerCount)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
             ? new EnkiTaskPool(loggerFactory, workerCount)

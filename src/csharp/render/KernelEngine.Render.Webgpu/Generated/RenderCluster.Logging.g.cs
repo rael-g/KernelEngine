@@ -21,7 +21,7 @@ public sealed unsafe partial class RenderCluster
     /// <param name="gridY">Clusters down the screen.</param>
     /// <param name="gridZ">Depth slices.</param>
     /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
-    public RenderCluster(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX = 16, uint gridY = 9, uint gridZ = 24, uint maxLightsPerCluster = 64) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
+    public RenderCluster(Microsoft.Extensions.Logging.ILoggerFactory loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
     {
     }
 

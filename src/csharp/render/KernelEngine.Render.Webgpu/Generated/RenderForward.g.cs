@@ -20,7 +20,7 @@ public sealed unsafe partial class RenderForward : IDisposable
     /// <param name="iblEnabled">Whether the pass samples the sky for image-based light.</param>
     /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
     /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
-    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled = true, KernelEngine.Render.RenderShadowResources shadow = default, KernelEngine.Render.RenderClusterResources clusters = default) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters))
+    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);

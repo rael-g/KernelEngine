@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 public static class RenderLabelResolveRegistration
 {
     /// <summary>Registers one <see cref="RenderLabelResolve"/>, created when the modules load with its providers from the container.</summary>
-    public static IServiceCollection AddRenderLabelResolve(this IServiceCollection services, string? defaultFont = "0")
+    public static IServiceCollection AddRenderLabelResolve(this IServiceCollection services, string? defaultFont = default)
     {
         services.AddSingleton(sp => sp.GetService<Microsoft.Extensions.Logging.ILoggerFactory>() is { } loggerFactory
             ? new RenderLabelResolve(loggerFactory, sp.GetRequiredService<KernelEngine.Runtime.INativeRuntime>(), sp.GetRequiredService<KernelEngine.Ecs.INativeEcs>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderService>(), sp.GetRequiredService<KernelEngine.Render.Gpu.INativeGpuDevice>(), sp.GetRequiredService<KernelEngine.View.INativeViewSpace>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderCamera>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderSceneResolve>(), sp.GetRequiredService<KernelEngine.Render.INativeRenderFrame>(), sp.GetRequiredService<KernelEngine.Render.Webgpu.INativeRenderUi>(), sp.GetService<KernelEngine.Framework.INativeAssetResolver>(), defaultFont)

@@ -27,15 +27,10 @@ typedef struct ke_physics_2d_box2d_config {
     float gravity_y; /**< Vertical gravity, in metres per second squared. */
 } ke_physics_2d_box2d_config;
 
-/** [defaults] The world a caller gets when it sets nothing. */
-static const ke_physics_2d_box2d_config ke_physics_2d_box2d_config_defaults = {
-    .gravity_x = 0.0f,
-    .gravity_y = -9.81f,
-};
 
 /**
  * @brief Creates a 2D physics world.
- * @param config [borrowed,optional] The world's values; NULL selects the default of each.
+ * @param config [borrowed] The world's values; Required; every field is read as given.
  * @param out_world [out] Receives the world; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_world or a gravity that is not finite;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.

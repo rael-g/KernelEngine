@@ -9,13 +9,13 @@ namespace KernelEngine.Window.Glfw;
 public sealed record GlfwWindowConfig : KernelEngine.Configuration.IConfigSection<GlfwWindowConfig>
 {
     /// <summary>Window title.</summary>
-    public string? Title { get; init; } = "KernelEngine";
+    public string? Title { get; init; } = null;
 
     /// <summary>Client width in pixels.</summary>
-    public int Width { get; init; } = 1280;
+    public int Width { get; init; } = 0;
 
     /// <summary>Client height in pixels.</summary>
-    public int Height { get; init; } = 720;
+    public int Height { get; init; } = 0;
 
     /// <summary>Whether the window covers the primary monitor.</summary>
     public bool Fullscreen { get; init; } = false;

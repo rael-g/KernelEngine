@@ -31,16 +31,10 @@ typedef struct ke_runtime_params {
     uint32_t max_systems_per_phase;
 } ke_runtime_params;
 
-/** [defaults] The runtime a caller gets when it passes NULL: a fixed step of 1/60 s. */
-static const ke_runtime_params ke_runtime_params_defaults = {
-    .fixed_dt = 0.016666668f,
-    .fixed_dt_max_accum = 0.25f,
-    .max_systems_per_phase = 256,
-};
 
 /**
  * Creates a runtime over @p ecs and @p task_pool, both borrowed for its lifetime.
- * @param params [borrowed,optional] NULL takes every default.
+ * @param params [borrowed] Required; every field is read as given.
  * @param out_runtime [out] Receives the runtime; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p task_pool or @p out_runtime;
  *         KE_RESULT_OUT_OF_MEMORY.

@@ -32,18 +32,11 @@ typedef struct ke_window_glfw_config {
     bool        fullscreen; /**< Whether the window covers the primary monitor. */
 } ke_window_glfw_config;
 
-/** [defaults] The values a window takes when its caller sets none. */
-static const ke_window_glfw_config ke_window_glfw_config_defaults = {
-    .title = "KernelEngine",
-    .width = 1280,
-    .height = 720,
-    .fullscreen = false,
-};
 
 /**
  * Creates a window and starts it.
  * @param input [borrowed,optional] Input sink target.
- * @param config [borrowed,optional] The window's values; NULL selects the default of each.
+ * @param config [borrowed] The window's values; Required; every field is read as given.
  * @param out_window [out] Receives the window; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_window;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the OS refuses the window.

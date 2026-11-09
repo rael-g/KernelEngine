@@ -31,10 +31,6 @@ typedef struct ke_sound_module_config
     const char *root;
 } ke_sound_module_config;
 
-/** [defaults] The module a caller gets when it sets nothing: paths used as written. */
-static const ke_sound_module_config ke_sound_module_config_defaults = {
-    .root = NULL,
-};
 
 typedef struct ke_sound_module ke_sound_module;
 
@@ -51,7 +47,7 @@ typedef struct ke_sound_module_handle
  * @param runtime [borrowed] Registers the system; must outlive the module.
  * @param ecs [borrowed] Resolves the component id.
  * @param audio [borrowed] Loads the clips and plays their voices; must outlive the module.
- * @param config [borrowed,optional] NULL takes every default.
+ * @param config [borrowed] Required; every field is read as given.
  * @param out_module [out] Receives the module; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p runtime, @p ecs, @p audio or
  *         @p out_module; KE_RESULT_OUT_OF_MEMORY; the code of the ECS or the runtime when it

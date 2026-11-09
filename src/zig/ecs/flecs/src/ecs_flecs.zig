@@ -106,7 +106,7 @@ const RegisteredQuery = struct {
     term_count: usize,
 };
 
-const default_world_id_base: u32 = abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults.world_id_base;
+const test_config: abi_ecs_flecs_factory.c.ke_ecs_flecs_config = .{ .world_id_base = 1048576 };
 
 /// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
 /// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
@@ -719,7 +719,14 @@ export fn ke_ecs_flecs_create(
 }
 
 fn create(config: ?*const abi_ecs_flecs_factory.c.ke_ecs_flecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
-    const world_id_base = (config orelse &abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults).*.world_id_base;
+    const world_id_base = (config orelse {
+        log.warn("creating the ECS needs its config", .{});
+        return error.InvalidArgument;
+    }).*.world_id_base;
+    if (world_id_base == 0) {
+        log.warn("creating the ECS needs a world id base above 0, the capacity of entity_reserve", .{});
+        return error.InvalidArgument;
+    }
 
     installFlecsOsApi();
 
@@ -785,7 +792,7 @@ test {
 
 fn made() !abi_ecs.c.ke_ecs_handle {
     var h: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(null, &h));
+    try R.check(ke_ecs_flecs_create(&test_config, &h));
     return h;
 }
 
@@ -1048,17 +1055,17 @@ test "a reserved id can never be one the world's own allocator will issue" {
 
     const reserved = try reserve(handle);
     try testing.expect(reserved != 0);
-    try testing.expect(reserved < default_world_id_base);
+    try testing.expect(reserved < test_config.world_id_base);
 
     var i: usize = 0;
     while (i < 64) : (i += 1) {
         const created = try spawn(handle);
-        try testing.expect(created >= default_world_id_base);
+        try testing.expect(created >= test_config.world_id_base);
     }
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var config = abi_ecs_flecs_factory.c.ke_ecs_flecs_config_defaults;
+    var config = test_config;
     var probe: abi_ecs.c.ke_ecs_handle = undefined;
     try R.check(ke_ecs_flecs_create(&config, &probe));
     const low = stateOf(probe.ref.?).reserve_low;

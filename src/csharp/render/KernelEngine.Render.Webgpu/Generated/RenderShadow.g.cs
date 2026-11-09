@@ -25,7 +25,7 @@ public sealed unsafe partial class RenderShadow : IDisposable
     /// <summary>Receives the ids of the map and the light it writes; every id KE_COMPONENT_INVALID on failure.</summary>
     public KernelEngine.Render.RenderShadowResources Resources { get; }
 
-    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution = 1024, float lightDistance = 25.0f, float extent = 20.0f, float nearPlane = 0.1f, float farPlane = 50.0f) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
+    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);

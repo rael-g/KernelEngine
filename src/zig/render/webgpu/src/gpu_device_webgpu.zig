@@ -363,7 +363,10 @@ pub export fn ke_gpu_device_webgpu_create(
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const given = config orelse &abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config_defaults;
+    const given = config orelse {
+        log.warn("gpu device: no config", .{});
+        return R.code(error.InvalidArgument);
+    };
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (given.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
     if (given.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
@@ -1736,6 +1739,8 @@ fn queryExtension(_: [*c]abi_render_gpu.c.ke_gpu_device, _: [*c]const u8) callco
     return null;
 }
 
+const test_device_config: abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config = .{ .enable_validation = true, .debug_labels = false };
+
 test "a sampler's filters and address modes reach wgpu as the modes they name" {
     try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Linear), toWgpuFilter(abi_render_gpu.c.KE_GPU_FILTER_LINEAR));
     try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Nearest), toWgpuFilter(abi_render_gpu.c.KE_GPU_FILTER_NEAREST));
@@ -1746,7 +1751,7 @@ test "a sampler's filters and address modes reach wgpu as the modes they name" {
 
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, null, &handle) == R.ok) handle.destroy.?(handle.ref);
+    if (ke_gpu_device_webgpu_create(null, &test_device_config, &handle) == R.ok) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
 }
 
@@ -1763,7 +1768,7 @@ fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_
 
 test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, null, &handle) != R.ok) return error.SkipZigTest;
+    if (ke_gpu_device_webgpu_create(null, &test_device_config, &handle) != R.ok) return error.SkipZigTest;
     defer handle.destroy.?(handle.ref);
     const dev = handle.ref;
 

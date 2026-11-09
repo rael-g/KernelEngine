@@ -48,10 +48,6 @@ extern "C"
         const char *default_font;
     } ke_render_label_resolve_config;
 
-    /** [defaults] The values a caller gets when it sets nothing. */
-    static const ke_render_label_resolve_config ke_render_label_resolve_config_defaults = {
-        .default_font = NULL,
-    };
 
     /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
     /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
@@ -60,7 +56,7 @@ extern "C"
     /// @param ui Registers the font; borrowed, must outlive it.
     /// @param resolver [optional] Reads the font a label names; borrowed. Without it every label is
     ///                 reported.
-    /// @param config [borrowed,optional] Its values; NULL selects the defaults.
+    /// @param config [borrowed] Its values; Required; every field is read as given.
     /// @param out_resolve [out] Receives the handle; left zeroed on failure.
     KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
         const ke_render_context *context, ke_render_ui *ui, ke_asset_resolver *resolver,

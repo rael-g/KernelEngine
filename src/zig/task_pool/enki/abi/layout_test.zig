@@ -29,6 +29,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD), @as(i128, abi.c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD));
+}
+
 extern const layout_values: [3]c_ulonglong;
 
 test "every size and offset is the one C computes" {

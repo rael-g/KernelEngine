@@ -16,8 +16,8 @@ public class LoadingAModelThroughThePoolIo
     public void AGltfAndTheBufferItNamesAreReadIntoMeshesAndMaterials()
     {
         using var services = new ServiceCollection()
-            .AddEnkiTaskPool()
-            .AddStdFileSystem()
+            .AddEnkiTaskPool(workerCount: uint.MaxValue)
+            .AddStdFileSystem(root: ".")
             .AddPoolIo()
             .AddAssimpAssetLoader()
             .BuildServiceProvider();

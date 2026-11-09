@@ -14,7 +14,7 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
     /// <param name="width">Client width in pixels.</param>
     /// <param name="height">Client height in pixels.</param>
     /// <param name="fullscreen">Whether the window covers the primary monitor.</param>
-    public GlfwWindow(KernelEngine.Input.INativeInput? input = default, string? title = "KernelEngine", int width = 1280, int height = 720, bool fullscreen = false) : base(Create(input, title, width, height, fullscreen))
+    public GlfwWindow(KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen) : base(Create(input, title, width, height, fullscreen))
     {
         Hold(input?.Owner);
     }

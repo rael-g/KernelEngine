@@ -66,7 +66,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// resolve is created with.
 pub const ke_render_label_resolve_config = extern struct {
     /// The font a label that names none draws with; copied. NULL leaves such a label without text.
-    default_font: ?[*:0]const u8 = "0",
+    default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 /// What the scene resolve needs to register the components and upload what they name.
@@ -85,8 +85,6 @@ pub const ke_render_label_resolve_handle = extern struct {
     ref: ?*ke_render_label_resolve = std.mem.zeroes(?*ke_render_label_resolve),
     destroy: ?*const fn (?*ke_render_label_resolve) callconv(.c) void = null,
 };
-
-pub const ke_render_label_resolve_config_defaults: ke_render_label_resolve_config = .{  };
 
 /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
 /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
