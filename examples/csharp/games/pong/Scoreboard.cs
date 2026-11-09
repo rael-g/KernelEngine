@@ -31,6 +31,6 @@ partial class Scoreboard : Node
     void Show(string child, string text)
     {
         var node = Child(child);
-        if (node != default) Text.Show(ref Component<LabelComponent>(node, "label"), text);
+        if (node != default) Component<LabelComponent>(node, "label").TextText = text;
     }
 }

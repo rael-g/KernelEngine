@@ -2,10 +2,8 @@
 
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
-const abi_component_registry = @import("component_registry");
 const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
 const abi_input = @import("input");
@@ -14,10 +12,7 @@ const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_scene_loader = @import("scene_loader");
 const abi_scene_tree = @import("scene_tree");
-const abi_script_host = @import("script_host");
-const abi_signal_bus = @import("signal_bus");
 const abi_text = @import("text");
 
 /// The ABI as the headers declare it.
@@ -69,17 +64,6 @@ pub fn sceneHierarchyCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.
     return written;
 }
 
-/// Allocates a scene loader. The loader resolves the components a block names through `registry`
-/// and `ecs`, fills them as the registry describes, and spawns the entities in `scene_tree`. A
-/// "res://" scene reference is resolved by `assets`. String lifetime: a value a block authors
-/// into a char field is copied into the component, but the parsed entries themselves come from
-/// an arena freed at loader.destroy(). Nothing the loader wrote outlives it by reference.
-pub fn sceneLoaderCreate(ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, signal_bus: ?*abi_signal_bus.c.ke_signal_bus, registry: ?*abi_component_registry.c.ke_component_registry, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io) Error!abi_scene_loader.c.ke_scene_loader_handle {
-    var written: abi_scene_loader.c.ke_scene_loader_handle = undefined;
-    try checkResult(c.ke_scene_loader_create(ecs, scene_tree, signal_bus, registry, assets, io, &written));
-    return written;
-}
-
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
 /// them, the existing cids are reused). `runtime` may be NULL, in which case no systems are
@@ -89,29 +73,6 @@ pub fn sceneLoaderCreate(ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c
 pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) Error!abi_scene_tree.c.ke_scene_tree_handle {
     var written: abi_scene_tree.c.ke_scene_tree_handle = undefined;
     try checkResult(c.ke_scene_tree_create(ecs, runtime, &written));
-    return written;
-}
-
-/// Allocates a script host that reads the scene graph out of ecs. params may be NULL to take
-/// every default.
-pub fn scriptHostCreate(ecs: ?*abi_ecs.c.ke_ecs, params: ?*const c.ke_script_host_params) Error!abi_script_host.c.ke_script_host_handle {
-    var written: abi_script_host.c.ke_script_host_handle = undefined;
-    try checkResult(c.ke_script_host_create(ecs, params, &written));
-    return written;
-}
-
-/// Allocates a signal bus. params may be NULL to take every default.
-pub fn signalBusCreate(params: ?*const c.ke_signal_bus_params) Error!abi_signal_bus.c.ke_signal_bus_handle {
-    var written: abi_signal_bus.c.ke_signal_bus_handle = undefined;
-    try checkResult(c.ke_signal_bus_create(params, &written));
-    return written;
-}
-
-/// Creates a component registry over ecs, registering the transform, 2D transform and world
-/// transform components on it with their field tables.
-pub fn componentRegistryCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_component_registry.c.ke_component_registry_handle {
-    var written: abi_component_registry.c.ke_component_registry_handle = undefined;
-    try checkResult(c.ke_component_registry_create(ecs, &written));
     return written;
 }
 
@@ -138,5 +99,3 @@ pub fn sceneFilesCreate(ecs: ?*abi_ecs.c.ke_ecs, node_types: ?*abi_framework.c.k
 }
 
 pub const InputActionsConfig = c.ke_input_actions_config;
-pub const ScriptHostParams = c.ke_script_host_params;
-pub const SignalBusParams = c.ke_signal_bus_params;

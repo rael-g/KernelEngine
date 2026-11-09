@@ -2,10 +2,8 @@
 
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
-const abi_component_registry = @import("component_registry");
 const abi_configuration = @import("configuration");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
 const abi_input = @import("input");
@@ -14,10 +12,7 @@ const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
-const abi_scene_loader = @import("scene_loader");
 const abi_scene_tree = @import("scene_tree");
-const abi_script_host = @import("script_host");
-const abi_signal_bus = @import("signal_bus");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
@@ -42,7 +37,6 @@ pub const ke_render_chain_link = u32;
 pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
-pub const ke_script_type_id = u32;
 pub const ke_system_id = u64;
 
 /// Receives a pipeline compiled asynchronously.
@@ -85,14 +79,6 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Builds and binds the script an entity's declared type names.
-pub const ke_script_factory_func = ?*const fn (?*anyopaque, ke_entity, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result;
-
-/// Fills a component from a scene block's keys. Entries are mutable so the callback can mark
-/// what it took: a key it accepted must have `consumed` set, or the loader will report it as one
-/// nothing in the engine wanted.
-pub const ke_component_apply_fn = ?*const fn (?*anyopaque, ?*anyopaque, ?[*]abi_ecs_variant.c.ke_variant_table_entry, u32) callconv(.c) abi_result.c.ke_result;
-
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
 /// event, with event pointing at the event.
@@ -102,27 +88,6 @@ pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*an
 pub const ke_input_actions_config = extern struct {
     /// The configuration section the maps are read from.
     section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
-/// Sizing for one script host. The defaults are conveniences, not ceilings. [bag] Instances need
-/// no sizing.
-pub const ke_script_host_params = extern struct {
-    /// Distinct script types; 0 uses the default.
-    max_types: u32 = std.mem.zeroes(u32),
-};
-
-/// Sizing for one signal bus. Each field's default is a convenience, not a [bag] ceiling.
-pub const ke_signal_bus_params = extern struct {
-    /// Distinct signal names; 0 uses the default.
-    max_signals: u32 = std.mem.zeroes(u32),
-    /// Live connections; 0 uses the default.
-    max_connections: u32 = std.mem.zeroes(u32),
-    /// Emissions per frame; 0 uses the default.
-    max_events: u32 = std.mem.zeroes(u32),
-    /// Joined deliveries per frame; 0 uses the default.
-    max_deliveries: u32 = std.mem.zeroes(u32),
-    /// Total payload bytes per frame; 0 uses the default.
-    payload_capacity: u32 = std.mem.zeroes(u32),
 };
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
@@ -153,13 +118,6 @@ pub extern fn ke_input_actions_create(runtime: ?*abi_runtime.c.ke_runtime, input
 /// hierarchy, whose destroy unregisters what it registered.
 pub extern fn ke_scene_hierarchy_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle) abi_result.c.ke_result;
 
-/// Allocates a scene loader. The loader resolves the components a block names through `registry`
-/// and `ecs`, fills them as the registry describes, and spawns the entities in `scene_tree`. A
-/// "res://" scene reference is resolved by `assets`. String lifetime: a value a block authors
-/// into a char field is copied into the component, but the parsed entries themselves come from
-/// an arena freed at loader.destroy(). Nothing the loader wrote outlives it by reference.
-pub extern fn ke_scene_loader_create(ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, signal_bus: ?*abi_signal_bus.c.ke_signal_bus, registry: ?*abi_component_registry.c.ke_component_registry, assets: ?*abi_asset_resolver.c.ke_asset_resolver, io: ?*abi_io.c.ke_io, out_loader: ?*abi_scene_loader.c.ke_scene_loader_handle) abi_result.c.ke_result;
-
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
 /// them, the existing cids are reused). `runtime` may be NULL, in which case no systems are
@@ -167,17 +125,6 @@ pub extern fn ke_scene_loader_create(ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_
 /// registers the hierarchy maintenance that keeps world matrices current, and that runtime must
 /// outlive the tree, whose destroy unregisters it.
 pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
-
-/// Allocates a script host that reads the scene graph out of ecs. params may be NULL to take
-/// every default.
-pub extern fn ke_script_host_create(ecs: ?*abi_ecs.c.ke_ecs, params: ?*const ke_script_host_params, out_host: ?*abi_script_host.c.ke_script_host_handle) abi_result.c.ke_result;
-
-/// Allocates a signal bus. params may be NULL to take every default.
-pub extern fn ke_signal_bus_create(params: ?*const ke_signal_bus_params, out_bus: ?*abi_signal_bus.c.ke_signal_bus_handle) abi_result.c.ke_result;
-
-/// Creates a component registry over ecs, registering the transform, 2D transform and world
-/// transform components on it with their field tables.
-pub extern fn ke_component_registry_create(ecs: ?*abi_ecs.c.ke_ecs, out_registry: ?*abi_component_registry.c.ke_component_registry_handle) abi_result.c.ke_result;
 
 /// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
 /// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component

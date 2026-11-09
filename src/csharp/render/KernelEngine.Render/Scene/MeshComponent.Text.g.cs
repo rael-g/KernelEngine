@@ -5,10 +5,9 @@
 
 using KernelEngine.Ecs;
 using KernelEngine.Input;
-using KernelEngine.Render;
 using KernelEngine.Render.Native;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Render;
 
 /// <summary>The text of <c>ke_mesh_component</c>'s fixed character arrays.</summary>
 public static class MeshComponentText

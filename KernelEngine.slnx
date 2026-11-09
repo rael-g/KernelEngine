@@ -14,7 +14,6 @@
     <Project Path="src/csharp/audio/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj" />
     <Project Path="src/csharp/cli/KernelEngine.Cli/KernelEngine.Cli.csproj" />
     <Project Path="src/csharp/configuration/KernelEngine.Configuration/KernelEngine.Configuration.csproj" />
-    <Project Path="src/csharp/framework/KernelEngine.Framework.Abstractions/KernelEngine.Framework.Abstractions.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework/KernelEngine.Framework.csproj" />
     <Project Path="src/csharp/framework/KernelEngine.Framework.Nodes/KernelEngine.Framework.Nodes.csproj" />
     <Project Path="src/csharp/generators/KernelEngine.Framework.Nodes.Generator/KernelEngine.Framework.Nodes.Generator.csproj" />
@@ -42,7 +41,6 @@
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />
     <Project Path="src/csharp/common/KernelEngine.Common/KernelEngine.Common.csproj" />
     <Project Path="src/csharp/ecs/KernelEngine.Ecs.Abstractions/KernelEngine.Ecs.Abstractions.csproj" />
-    <Project Path="src/csharp/generators/KernelEngine.SourceGenerators/KernelEngine.SourceGenerators.csproj" />
     <Project Path="src/csharp/input/KernelEngine.Input.Abstractions/KernelEngine.Input.Abstractions.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger.Abstractions/KernelEngine.Logger.Abstractions.csproj" />
     <Project Path="src/csharp/logger/KernelEngine.Logger.Interop/KernelEngine.Logger.Interop.csproj" />

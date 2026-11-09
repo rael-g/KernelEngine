@@ -3,13 +3,12 @@
 
 #nullable enable
 
-using KernelEngine.Audio;
 using KernelEngine.Audio.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Input;
 using KernelEngine.Render;
 
-namespace KernelEngine.Framework;
+namespace KernelEngine.Audio;
 
 /// <summary>The <c>[default:]</c> values of <c>ke_sound_component</c>.</summary>
 public static class SoundComponentDefaults
