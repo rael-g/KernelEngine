@@ -8,7 +8,7 @@ namespace KernelEngine.Audio.Native;
 public partial struct SoundComponent
 {
     [NativeTypeName("char[256]")]
-    public _Path_e__FixedBuffer Path;
+    public _PathBytes_e__FixedBuffer PathBytes;
 
     public float Volume;
 
@@ -28,7 +28,7 @@ public partial struct SoundComponent
     public uint Voice;
 
     [InlineArray(256)]
-    public partial struct _Path_e__FixedBuffer
+    public partial struct _PathBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

@@ -9,7 +9,7 @@ public partial struct MeshComponent
 {
     public MeshHandle Mesh;
     public MaterialHandle Material;
-    public _Primitive_e__FixedBuffer Primitive;
+    public _PrimitiveBytes_e__FixedBuffer PrimitiveBytes;
     public System.Numerics.Vector4 BaseColor;
 
     public float Roughness;
@@ -23,7 +23,7 @@ public partial struct MeshComponent
     public uint Layers;
 
     [InlineArray(32)]
-    public partial struct _Primitive_e__FixedBuffer
+    public partial struct _PrimitiveBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

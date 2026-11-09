@@ -102,7 +102,7 @@ public abstract class Node
         var slot = World.Component("scene_slot");
         var holder = Ctx.Ancestor(Self, slot);
         if (holder == default) throw new InvalidOperationException("no scene slot holds this node");
-        Ctx.Component<SceneSlotComponent>(holder, slot).PathText = path;
+        Ctx.Component<SceneSlotComponent>(holder, slot).Path = path;
     }
 
     /// <summary>Asks the runtime for the program to end.</summary>

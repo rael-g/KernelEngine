@@ -12,8 +12,8 @@ public partial struct MaterialSpec
     public float Metallic;
 
     public float Roughness;
-    public _AlbedoPath_e__FixedBuffer AlbedoPath;
-    public _NormalPath_e__FixedBuffer NormalPath;
+    public _AlbedoPathBytes_e__FixedBuffer AlbedoPathBytes;
+    public _NormalPathBytes_e__FixedBuffer NormalPathBytes;
     public AlphaMode AlphaMode;
 
     public float AlphaCutoff;
@@ -29,13 +29,13 @@ public partial struct MaterialSpec
     }
 
     [InlineArray(256)]
-    public partial struct _AlbedoPath_e__FixedBuffer
+    public partial struct _AlbedoPathBytes_e__FixedBuffer
     {
         public sbyte e0;
     }
 
     [InlineArray(256)]
-    public partial struct _NormalPath_e__FixedBuffer
+    public partial struct _NormalPathBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

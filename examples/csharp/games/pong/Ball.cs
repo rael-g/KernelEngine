@@ -87,7 +87,7 @@ partial class Ball(Game game) : Body2D
     void Play(string path, float volume)
     {
         var sound = EngineNodeTypes.SoundNodeInitial;
-        sound.PathText = path;
+        sound.Path = path;
         sound.Volume = volume;
         sound.Playing = true;
         sound.Release = SoundRelease.WhenDone;

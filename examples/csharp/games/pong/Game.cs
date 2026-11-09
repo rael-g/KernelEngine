@@ -15,8 +15,8 @@ sealed class Game
     /// <summary>The actions named as the project's input maps name them.</summary>
     public Game()
     {
-        Launch.NameText = "Launch";
-        Quit.NameText = "Quit";
+        Launch.Name = "Launch";
+        Quit.Name = "Quit";
     }
 }
 

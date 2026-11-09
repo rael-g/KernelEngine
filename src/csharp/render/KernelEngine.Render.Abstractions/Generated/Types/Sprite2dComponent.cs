@@ -7,7 +7,7 @@ namespace KernelEngine.Render;
 
 public partial struct Sprite2dComponent
 {
-    public _Texture_e__FixedBuffer Texture;
+    public _TextureBytes_e__FixedBuffer TextureBytes;
     public System.Numerics.Vector4 Region;
     public System.Numerics.Vector2 Size;
     public System.Numerics.Vector2 Pivot;
@@ -21,7 +21,7 @@ public partial struct Sprite2dComponent
     public byte Attached;
 
     [InlineArray(128)]
-    public partial struct _Texture_e__FixedBuffer
+    public partial struct _TextureBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

@@ -19,7 +19,7 @@ namespace KernelEngine.Framework.Nodes.Native;
 public partial struct ActionRef
 {
     [NativeTypeName("char[32]")]
-    public _Name_e__FixedBuffer Name;
+    public _NameBytes_e__FixedBuffer NameBytes;
 
     [NativeTypeName("int32_t")]
     public int Id;
@@ -27,7 +27,7 @@ public partial struct ActionRef
     public bool Resolved;
 
     [InlineArray(32)]
-    public partial struct _Name_e__FixedBuffer
+    public partial struct _NameBytes_e__FixedBuffer
     {
         public sbyte e0;
     }

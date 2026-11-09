@@ -19,19 +19,19 @@ namespace KernelEngine.Framework.Nodes.Native;
 public partial struct SceneSlotComponent
 {
     [NativeTypeName("char[256]")]
-    public _Path_e__FixedBuffer Path;
+    public _PathBytes_e__FixedBuffer PathBytes;
 
     [NativeTypeName("char[256]")]
-    public _Loaded_e__FixedBuffer Loaded;
+    public _LoadedBytes_e__FixedBuffer LoadedBytes;
 
     [InlineArray(256)]
-    public partial struct _Path_e__FixedBuffer
+    public partial struct _PathBytes_e__FixedBuffer
     {
         public sbyte e0;
     }
 
     [InlineArray(256)]
-    public partial struct _Loaded_e__FixedBuffer
+    public partial struct _LoadedBytes_e__FixedBuffer
     {
         public sbyte e0;
     }
