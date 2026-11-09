@@ -8,6 +8,7 @@ const abi_ecs = @import("ecs");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_framework = @import("framework");
 const abi_image_loader = @import("image_loader");
+const abi_input = @import("input");
 const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
@@ -142,8 +143,10 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W".
-pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+/// key_quad, each a key name such as "Space" or "W". Given a runtime, it registers the PreUpdate
+/// system "input.actions", which advances input's frame and evaluates the maps against its
+/// snapshot before any behaviour reads an action; destroying the maps unregisters it.
+pub extern fn ke_input_actions_create(runtime: ?*abi_runtime.c.ke_runtime, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the

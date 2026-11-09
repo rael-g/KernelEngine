@@ -9,6 +9,8 @@ const std = @import("std");
 
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
+const abi_runtime = @import("abi_runtime");
+const zsub = @import("zsub");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
@@ -198,6 +200,9 @@ const State = struct {
     actions: ?[*]Action = null,
     action_count: u32 = 0,
     action_capacity: u32 = 0,
+    runtime: ?*abi_runtime.c.ke_runtime = null,
+    input: ?*abi_input.c.ke_input = null,
+    system: abi_runtime.c.ke_system_id = 0,
 };
 
 fn stateOf(self: *abi_input_actions.c.ke_input_actions) *State {
@@ -555,6 +560,7 @@ fn vtGetAxis3d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, out_x: 
 fn vtDestroy(self_in: ?*abi_input_actions.c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
+    if (s.runtime) |rt| _ = rt.unregister_system.?(rt, s.system);
     if (s.actions) |actions| {
         for (actions[0..s.action_count]) |*a| {
             if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
@@ -678,13 +684,30 @@ fn readBinding(w: *Walk, index: [:0]const u8) void {
 
 /// Factory. Builds an empty set of maps, then adds those the configuration describes through the
 /// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
+/// The PreUpdate system the factory registers when it is given a runtime: it advances the input's
+/// frame and evaluates the maps against its snapshot, before any behaviour reads an action.
+fn pump(_: ?*abi_runtime.c.ke_system_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
+    const input = s.input orelse return R.code(error.InvalidArgument);
+    input.update.?(input);
+    var snapshot: abi_input.c.ke_input_snapshot = undefined;
+    input.get_snapshot.?(input, &snapshot);
+    return vtEvaluate(&s.api, &snapshot);
+}
+
 export fn ke_input_actions_create(
+    runtime: ?*abi_runtime.c.ke_runtime,
+    input: ?*abi_input.c.ke_input,
     configuration: ?*abi_configuration.c.ke_configuration,
     config: ?*const abi_framework_factory.c.ke_input_actions_config,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
+    if (runtime != null and input == null) {
+        log.warn("input actions: a runtime is given without the input to read", .{});
+        return R.code(error.InvalidArgument);
+    }
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions) };
@@ -726,6 +749,22 @@ export fn ke_input_actions_create(
             vtDestroy(&s.api);
             return R.code(err);
         }
+    }
+
+    if (runtime) |rt| {
+        var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
+        params.name = "input.actions";
+        params.phase = abi_runtime.c.KE_PHASE_PRE_UPDATE;
+        params.exclusive = true;
+        params.user_data = s;
+        params.execute = pump;
+        const registered = rt.register_system.?(rt, &params, &s.system);
+        if (registered != R.ok) {
+            vtDestroy(&s.api);
+            return registered;
+        }
+        s.runtime = rt;
+        s.input = input;
     }
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
@@ -803,14 +842,14 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(null, null, &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(null, null, null, null, &h));
         return .{ .handle = h };
     }
 
     fn from(entries: []const FakeConfig.Entry) !Actions {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try R.check(ke_input_actions_create(&cfg, null, &h));
+        try R.check(ke_input_actions_create(null, null, &cfg, null, &h));
         return .{ .handle = h };
     }
 
@@ -981,9 +1020,43 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     for (cases) |entries| {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, null, &h)));
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(null, null, &cfg, null, &h)));
         try testing.expect(h.ref == null);
     }
+}
+
+var pumped: abi_runtime.c.ke_runtime_system_params = undefined;
+
+fn keepSystem(args: zsub.For(abi_runtime.c.ke_runtime).Args(.register_system)) abi_result.c.ke_result {
+    pumped = args[1].?.*;
+    args[2].?.* = 7;
+    return R.ok;
+}
+
+test "given a runtime, the maps register a PreUpdate system that advances the input and evaluates them, and unregister it when destroyed" {
+    var rt: zsub.For(abi_runtime.c.ke_runtime) = undefined;
+    try rt.init();
+    defer rt.deinit();
+    var input: zsub.For(abi_input.c.ke_input) = undefined;
+    try input.init();
+    defer input.deinit();
+    _ = rt.when(.register_system).does(keepSystem);
+    var h: abi_input_actions.c.ke_input_actions_handle = undefined;
+    try R.check(ke_input_actions_create(rt.api(), input.api(), null, null, &h));
+    try testing.expectEqual(abi_runtime.c.KE_PHASE_PRE_UPDATE, pumped.phase);
+    try R.check(pumped.execute.?(null, pumped.user_data, 0));
+    try input.received(.update).times(1);
+    try input.received(.get_snapshot).times(1);
+    h.destroy.?(h.ref);
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 7))).times(1);
+}
+
+test "a runtime without the input to read is refused" {
+    var rt: zsub.For(abi_runtime.c.ke_runtime) = undefined;
+    try rt.init();
+    defer rt.deinit();
+    var h: abi_input_actions.c.ke_input_actions_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), null, null, null, &h));
 }
 
 test "creating and destroying the action maps leaves no block allocated" {

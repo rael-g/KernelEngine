@@ -8,6 +8,7 @@ using global::KernelEngine.Logger;
 using KernelEngine.Asset.Native;
 using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
 using KernelEngine.Runtime.Native;
@@ -31,7 +32,7 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* configuration, [NativeTypeName("const ke_input_actions_config *")] InputActionsConfig* config, ke_input_actions_handle* out_actions);
+    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, [NativeTypeName("ke_input *")] KernelEngine.Input.Native.ke_input* input, [NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* configuration, [NativeTypeName("const ke_input_actions_config *")] InputActionsConfig* config, ke_input_actions_handle* out_actions);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_signal_bus_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

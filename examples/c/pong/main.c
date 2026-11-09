@@ -92,23 +92,6 @@ static double now_seconds(void)
     return (double)t.tv_sec + (double)t.tv_nsec / 1e9;
 }
 
-typedef struct frame_input
-{
-    ke_input         *input;
-    ke_input_actions *actions;
-} frame_input;
-
-static ke_result read_input(ke_system_ctx *ctx, void *user_data, float dt)
-{
-    (void)ctx;
-    (void)dt;
-    frame_input *in = user_data;
-    in->input->update(in->input);
-    ke_input_snapshot snapshot;
-    in->input->get_snapshot(in->input, &snapshot);
-    return in->actions->evaluate(in->actions, &snapshot);
-}
-
 typedef struct first_scene
 {
     pong_game *game;
@@ -277,7 +260,7 @@ int main(int argc, char **argv)
     check("sound module", ke_sound_module_create(rt.ref, ecs.ref, audio.ref, &(ke_sound_module_config){ .root = project_dir }, &sounds));
 
     ke_input_actions_handle actions = { 0 };
-    check("input actions", ke_input_actions_create(cfg, NULL, &actions));
+    check("input actions", ke_input_actions_create(rt.ref, input.ref, cfg, NULL, &actions));
     ke_node_types_handle types = { 0 };
     check("node types", ke_node_types_create(rt.ref, ecs.ref, tree.ref, actions.ref, &types));
     ke_scene_files_handle scenes = { 0 };
@@ -294,10 +277,6 @@ int main(int argc, char **argv)
     game.scenes = scenes.ref;
     check("pong types", pong_register(&game));
 
-    frame_input in = { .input = input.ref, .actions = actions.ref };
-    ke_system_id input_system = 0;
-    check("input system", rt.ref->register_system(rt.ref, &(ke_runtime_system_params){
-        .name = "pong.input", .phase = KE_PHASE_PRE_UPDATE, .user_data = &in, .execute = read_input, .exclusive = true }, &input_system));
     first_scene first = { .game = &game };
     snprintf(first.path, sizeof first.path, "res://scenes/%s.scene.toml", cfg->get_string(cfg, "project", "default_scene", "Menu"));
     ke_system_id first_system = 0;

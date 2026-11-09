@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("image_loader", b.dependency("abi_image_loader", .{}).module("abi"));
+    abi.addImport("input", b.dependency("abi_input", .{}).module("abi"));
     abi.addImport("input_actions", b.dependency("abi_input_actions", .{}).module("abi"));
     abi.addImport("io", b.dependency("abi_io", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
