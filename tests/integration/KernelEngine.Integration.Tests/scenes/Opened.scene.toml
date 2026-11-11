@@ -1,0 +1,13 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Root"
+type = "probe"
+[entity.probe]
+tag = 1
+
+[[entity]]
+name = "Nested"
+parent = "Root"
+scene = "res://scenes/Nested.scene.toml"

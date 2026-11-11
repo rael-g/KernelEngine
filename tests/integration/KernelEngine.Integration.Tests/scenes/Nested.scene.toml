@@ -2,7 +2,6 @@
 version = 2
 
 [[entity]]
-name = "Root"
 type = "probe"
 [entity.probe]
-given = 3
+tag = 2
