@@ -4,7 +4,6 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/commands.h>
-#include <kernel_engine/ecs/variant.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -21,14 +20,6 @@ extern "C"
         const void     *data;      ///< [array_of:size] The component's bytes, copied by the spawn.
         size_t          size;      ///< The component's registered size.
     } ke_node_component;
-
-    /// [borrowed] A value a node spawned by names starts with in one field, named as a scene file names it.
-    typedef struct ke_node_field_value
-    {
-        const char *component; ///< [utf8] The registered name of a component the type carries, its fields' by the type's name.
-        const char *field;     ///< [utf8] The field's name in the component's field table.
-        ke_variant  value;     ///< Converted to the field's type as a scene file's value is; a string names an enum value.
-    } ke_node_field_value;
 
     /// [borrowed] A component every node of a type carries beside its fields, and how it is born.
     typedef struct ke_node_with
@@ -140,23 +131,10 @@ extern "C"
         ke_result (*spawn)(ke_node_ctx *self, ke_component_id type, const char *name, ke_entity parent,
                            const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
 
-        /// Records a node of the type named @p type, its components born from the type's initial
-        /// values with each of @p values written over them by name; the way any language spawns
-        /// any node type, an engine one or a game's, without its ids or its structs.
-        /// @param type   [utf8] The name the type was registered under.
-        /// @param name   [utf8]
-        /// @param parent KE_ENTITY_INVALID places it at the root.
-        /// @param values [array_of:value_count, default:empty] Written in order.
-        /// @param out_node [out] Usable as a reference at once; the node exists once the commands
-        ///                 are applied.
-        /// @return KE_OK; KE_RESULT_NOT_FOUND for a type never registered;
-        ///         KE_RESULT_INVALID_ARGUMENT for a component the type does not carry, a field the
-        ///         component's table does not name, or a value the field cannot hold; the queue's code.
-        ke_result (*spawn_named)(ke_node_ctx *self, const char *type, const char *name, ke_entity parent,
-                                 const ke_node_field_value *values, uint32_t value_count, ke_entity *out_node);
-
-        /// Records the destruction of @p node and its descendants.
-        /// @return KE_OK, or the queue's code.
+        /// Marks @p node and its descendants as leaving the tree: no behaviour but `exit_tree`
+        /// visits them again, and they are removed once each has run its exit_tree.
+        /// @return KE_OK, or the queue's code for a node not spawned as a node of a type, which is
+        ///         removed when the commands are applied.
         ke_result (*destroy)(ke_node_ctx *self, ke_entity node);
 
         /// Points the scene slot nearest above the current node at the scene file @p path; the
@@ -175,6 +153,30 @@ extern "C"
 
         /// Asks the runtime for the program to end; the host stops once it reads the request.
         void (*exit)(ke_node_ctx *self);
+
+        /// Whether the button action named @p name was pressed this tick, false without input
+        /// actions or for a name no map holds; the name is looked up once and its id kept.
+        /// @param name [utf8]
+        bool (*pressed_named)(ke_node_ctx *self, const char *name);
+
+        /// The value of the axis action named @p name, 0 without input actions or for a name no
+        /// map holds; the name is looked up once and its id kept.
+        /// @param name [utf8]
+        float (*axis_named)(ke_node_ctx *self, const char *name);
+
+        /// The id of the node type registered under @p name, as the node types' find_type answers it.
+        /// @param name [utf8]
+        /// @param out_type [out] Receives the id; KE_COMPONENT_INVALID when none has the name.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p name; KE_RESULT_NOT_FOUND for a
+        ///         name no type was registered under.
+        ke_result (*find_type)(ke_node_ctx *self, const char *name, ke_component_id *out_type);
+
+        /// The id of the component registered under @p name, as the node types' find_component answers it.
+        /// @param name [utf8]
+        /// @param out_component [out] Receives the id; KE_COMPONENT_INVALID when none has the name.
+        /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p name; KE_RESULT_NOT_FOUND for a
+        ///         name no component was registered under.
+        ke_result (*find_component)(ke_node_ctx *self, const char *name, ke_component_id *out_component);
     };
 
     /// [bag] A node type: its name, its own fields, the components its nodes also carry, and its
@@ -216,6 +218,11 @@ extern "C"
 
         /// [closure:user_data, retained:return, default:none] Runs every fixed step, in FixedUpdate.
         ke_node_behaviour_fn fixed_update;
+
+        /// [closure:user_data, retained:return, default:none] Runs once per node destroyed, in the
+        /// PreUpdate after its destruction was recorded; the node and its descendants are removed
+        /// in the PostUpdate after every one of them has run its exit.
+        ke_node_behaviour_fn exit_tree;
 
         /// [array_of:event_count, default:empty] The event types `on` handles.
         const ke_component_id *events;
@@ -265,18 +272,6 @@ extern "C"
         ///         does not carry or one whose size is not its registered size; KE_RESULT_NOT_FOUND for a type never registered, or the queue's code.
         ke_result (*spawn)(struct ke_node_types *self, ke_ecs_commands *commands, ke_component_id type, const char *name,
                            ke_entity parent, const ke_node_component *components, uint32_t component_count, ke_entity *out_node);
-
-        /// Records into @p commands a node of the type named @p type with @p values written over
-        /// its initial values, as a behaviour's ctx->spawn_named does.
-        /// @param commands The queue the node is recorded into.
-        /// @param type   [utf8]
-        /// @param name   [utf8]
-        /// @param parent KE_ENTITY_INVALID places it at the root.
-        /// @param values [array_of:value_count, default:empty] Written in order.
-        /// @param out_node [out] Usable as a reference at once.
-        /// @return As ctx->spawn_named; KE_RESULT_INVALID_ARGUMENT for null commands.
-        ke_result (*spawn_named)(struct ke_node_types *self, ke_ecs_commands *commands, const char *type, const char *name,
-                                 ke_entity parent, const ke_node_field_value *values, uint32_t value_count, ke_entity *out_node);
 
         /// The id of the type registered under @p name.
         /// @param name [utf8] The name its desc gave, `node` for the base type.

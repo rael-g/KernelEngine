@@ -96,11 +96,12 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
     /// <param name="update">Runs every tick, in Update.</param>
     /// <param name="fixedUpdate">Runs every fixed step, in FixedUpdate.</param>
+    /// <param name="exitTree">Runs once per node destroyed, in the PreUpdate after its destruction was recorded; the node and its descendants are removed in the PostUpdate after every one of them has run its exit.</param>
     /// <param name="events">The event types `on` handles.</param>
     /// <param name="on">Runs in PostUpdate for each node and each event raised this tick of a type in `events`; the ctx's `event_type` says which.</param>
     /// <returns>Receives the id of the type's tag.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null)
+    public ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, NodeBehaviour? exitTree = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -152,9 +153,9 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                             {
                                 fixed (ComponentId* eventsPtr = events)
                                 {
-                                    var userDataHandle = ready is null && update is null && fixedUpdate is null && on is null
+                                    var userDataHandle = ready is null && update is null && fixedUpdate is null && exitTree is null && on is null
                                         ? default
-                                        : GCHandle.Alloc(new RegisterTypeClosures { Ready = ready, Update = update, FixedUpdate = fixedUpdate, On = on });
+                                        : GCHandle.Alloc(new RegisterTypeClosures { Ready = ready, Update = update, FixedUpdate = fixedUpdate, ExitTree = exitTree, On = on });
                                     ke_node_type_desc desc = default;
                                     desc.name = (sbyte*)namePtr;
                                     desc.fields_size = fieldsSize;
@@ -168,6 +169,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                                     desc.ready = ready is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeReadyTrampoline;
                                     desc.update = update is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeUpdateTrampoline;
                                     desc.fixed_update = fixedUpdate is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeFixedUpdateTrampoline;
+                                    desc.exit_tree = exitTree is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeExitTreeTrampoline;
                                     desc.events = eventsPtr;
                                     desc.event_count = (uint)events.Length;
                                     desc.on = on is null ? null : (delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result>)&RegisterTypeOnTrampoline;
@@ -222,6 +224,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         public NodeBehaviour? Ready;
         public NodeBehaviour? Update;
         public NodeBehaviour? FixedUpdate;
+        public NodeBehaviour? ExitTree;
         public NodeBehaviour? On;
     }
 
@@ -269,6 +272,25 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
         try
         {
             if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterTypeClosures state && state.FixedUpdate is { } handler)
+            {
+                handler(NodeCtx.Borrow(arg0));
+                return KernelEngine.Result.Native.Result.Ok;
+            }
+            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_node_behaviour_fn: no handler is registered"));
+        }
+        catch (Exception ex)
+        {
+            s_raisedCallbackFailures.Enqueue(ex);
+            return KernelEngine.NativeResults.ToCode(ex);
+        }
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
+    private static KernelEngine.Result.Native.Result RegisterTypeExitTreeTrampoline(ke_node_ctx* arg0, void* ctx)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr((nint)ctx).Target is RegisterTypeClosures state && state.ExitTree is { } handler)
             {
                 handler(NodeCtx.Borrow(arg0));
                 return KernelEngine.Result.Native.Result.Ok;
@@ -395,55 +417,6 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
             finally
             {
                 for (var componentsAt = 0; componentsAt < componentsPins.Length; componentsAt++) componentsPins[componentsAt].Dispose();
-            }
-        }
-    }
-
-    /// <summary>Records into commands a node of the type named type with values written over its initial values, as a behaviour's ctx-&gt;spawn_named does.</summary>
-    /// <param name="commands">The queue the node is recorded into.</param>
-    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
-    /// <param name="values">Written in order.</param>
-    /// <returns>Usable as a reference at once.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public Entity SpawnNamed(IEcsCommands commands, string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default)
-    {
-        var typeText = type ?? "";
-        var typeSize = System.Text.Encoding.UTF8.GetMaxByteCount(typeText.Length) + 1;
-        Span<byte> typeBytes = typeSize <= 512 ? stackalloc byte[512] : new byte[typeSize];
-        typeBytes[System.Text.Encoding.UTF8.GetBytes(typeText, typeBytes)] = 0;
-        fixed (byte* typePtr = typeBytes)
-        {
-            var nameText = name ?? "";
-            var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-            Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-            nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-            fixed (byte* namePtr = nameBytes)
-            {
-                var valuesPins = new System.Buffers.MemoryHandle[values.Length];
-                var valuesTexts = new List<nint>();
-                var valuesNative = new ke_node_field_value[values.Length];
-                try
-                {
-                    for (var valuesAt = 0; valuesAt < values.Length; valuesAt++)
-                    {
-                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Component));
-                        valuesNative[valuesAt].component = (sbyte*)valuesTexts[^1];
-                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Field));
-                        valuesNative[valuesAt].field = (sbyte*)valuesTexts[^1];
-                        valuesNative[valuesAt].value = values[valuesAt].Value;
-                    }
-                    fixed (ke_node_field_value* valuesPtr = valuesNative)
-                    {
-                        Entity resultOut = default;
-                        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->spawn_named(Handle, ((INativeEcsCommands)commands).Native, (sbyte*)typePtr, (sbyte*)namePtr, parent, valuesPtr, (uint)values.Length, &resultOut)), "spawn_named");
-                        return resultOut;
-                    }
-                }
-                finally
-                {
-                    for (var valuesAt = 0; valuesAt < valuesPins.Length; valuesAt++) valuesPins[valuesAt].Dispose();
-                    foreach (var valuesText in valuesTexts) Marshal.FreeCoTaskMem(valuesText);
-                }
             }
         }
     }

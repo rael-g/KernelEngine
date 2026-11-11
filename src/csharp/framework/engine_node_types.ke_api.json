@@ -954,38 +954,6 @@
       "external": true
     },
     {
-      "name": "ke_node_field_value",
-      "doc": "A value a node spawned by names starts with in one field, named as a scene file names it.",
-      "tags": [
-        "borrowed"
-      ],
-      "fields": [
-        {
-          "name": "component",
-          "type": "const char *",
-          "tags": [
-            "utf8"
-          ],
-          "doc": "The registered name of a component the type carries, its fields\u0027 by the type\u0027s name."
-        },
-        {
-          "name": "field",
-          "type": "const char *",
-          "tags": [
-            "utf8"
-          ],
-          "doc": "The field\u0027s name in the component\u0027s field table."
-        },
-        {
-          "name": "value",
-          "type": "ke_variant",
-          "tags": [],
-          "doc": "Converted to the field\u0027s type as a scene file\u0027s value is; a string names an enum value."
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_node_with",
       "doc": "A component every node of a type carries beside its fields, and how it is born.",
       "tags": [
@@ -1150,6 +1118,16 @@
             "default:none"
           ],
           "doc": "Runs every fixed step, in FixedUpdate."
+        },
+        {
+          "name": "exit_tree",
+          "type": "ke_node_behaviour_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return",
+            "default:none"
+          ],
+          "doc": "Runs once per node destroyed, in the PreUpdate after its destruction was recorded; the node and its descendants are removed in the PostUpdate after every one of them has run its exit."
         },
         {
           "name": "events",
@@ -3114,66 +3092,11 @@
           "receiver": "ke_node_ctx *"
         },
         {
-          "name": "spawn_named",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Records a node of the type named type, its components born from the type\u0027s initial values with each of values written over them by name; the way any language spawns any node type, an engine one or a game\u0027s, without its ids or its structs.",
-          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for a type never registered; KE_RESULT_INVALID_ARGUMENT for a component the type does not carry, a field the component\u0027s table does not name, or a value the field cannot hold; the queue\u0027s code.",
-          "params": [
-            {
-              "name": "type",
-              "type": "const char *",
-              "tags": [
-                "utf8"
-              ],
-              "doc": "The name the type was registered under."
-            },
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [
-                "utf8"
-              ],
-              "doc": null
-            },
-            {
-              "name": "parent",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": "KE_ENTITY_INVALID places it at the root."
-            },
-            {
-              "name": "values",
-              "type": "const ke_node_field_value *",
-              "tags": [
-                "array_of:value_count",
-                "default:empty"
-              ],
-              "doc": "Written in order."
-            },
-            {
-              "name": "value_count",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_node",
-              "type": "ke_entity *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Usable as a reference at once; the node exists once the commands are applied."
-            }
-          ],
-          "receiver": "ke_node_ctx *"
-        },
-        {
           "name": "destroy",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Records the destruction of node and its descendants.",
-          "return_doc": "KE_OK, or the queue\u0027s code.",
+          "doc": "Marks node and its descendants as leaving the tree: no behaviour but \u0060exit_tree\u0060 visits them again, and they are removed once each has run its exit_tree.",
+          "return_doc": "KE_OK, or the queue\u0027s code for a node not spawned as a node of a type, which is removed when the commands are applied.",
           "params": [
             {
               "name": "node",
@@ -3239,6 +3162,94 @@
           "doc": "Asks the runtime for the program to end; the host stops once it reads the request.",
           "return_doc": null,
           "params": [],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "pressed_named",
+          "returns": "bool",
+          "tags": [],
+          "doc": "Whether the button action named name was pressed this tick, false without input actions or for a name no map holds; the name is looked up once and its id kept.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "axis_named",
+          "returns": "float",
+          "tags": [],
+          "doc": "The value of the axis action named name, 0 without input actions or for a name no map holds; the name is looked up once and its id kept.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "find_type",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The id of the node type registered under name, as the node types\u0027 find_type answers it.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null name; KE_RESULT_NOT_FOUND for a name no type was registered under.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_type",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_COMPONENT_INVALID when none has the name."
+            }
+          ],
+          "receiver": "ke_node_ctx *"
+        },
+        {
+          "name": "find_component",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The id of the component registered under name, as the node types\u0027 find_component answers it.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null name; KE_RESULT_NOT_FOUND for a name no component was registered under.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_component",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_COMPONENT_INVALID when none has the name."
+            }
+          ],
           "receiver": "ke_node_ctx *"
         }
       ],
@@ -3364,67 +3375,6 @@
                 "out"
               ],
               "doc": "Usable as a reference at once; the node exists once the commands are applied."
-            }
-          ],
-          "receiver": "struct ke_node_types *"
-        },
-        {
-          "name": "spawn_named",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Records into commands a node of the type named type with values written over its initial values, as a behaviour\u0027s ctx-\u003Espawn_named does.",
-          "return_doc": "As ctx-\u003Espawn_named; KE_RESULT_INVALID_ARGUMENT for null commands.",
-          "params": [
-            {
-              "name": "commands",
-              "type": "ke_ecs_commands *",
-              "tags": [],
-              "doc": "The queue the node is recorded into."
-            },
-            {
-              "name": "type",
-              "type": "const char *",
-              "tags": [
-                "utf8"
-              ],
-              "doc": null
-            },
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [
-                "utf8"
-              ],
-              "doc": null
-            },
-            {
-              "name": "parent",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": "KE_ENTITY_INVALID places it at the root."
-            },
-            {
-              "name": "values",
-              "type": "const ke_node_field_value *",
-              "tags": [
-                "array_of:value_count",
-                "default:empty"
-              ],
-              "doc": "Written in order."
-            },
-            {
-              "name": "value_count",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_node",
-              "type": "ke_entity *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Usable as a reference at once."
             }
           ],
           "receiver": "struct ke_node_types *"
@@ -5398,6 +5348,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -5440,6 +5394,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -5538,6 +5496,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -5580,6 +5542,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -5678,6 +5644,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -5720,6 +5690,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -5818,6 +5792,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -5860,6 +5838,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -5958,6 +5940,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -6000,6 +5986,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -6098,6 +6088,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -6140,6 +6134,10 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -6238,6 +6236,10 @@
               {
                 "kind": "Number",
                 "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               }
             ]
           },
@@ -6280,6 +6282,10 @@
               {
                 "kind": "Number",
                 "text": "1"
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",

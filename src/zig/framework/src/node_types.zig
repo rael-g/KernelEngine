@@ -26,9 +26,9 @@ const scene_slot_name = "scene_slot";
 const scene_slot_path_field = "path";
 const prototype_alignment: std.mem.Alignment = .@"16";
 
-const NodeStatus = extern struct { readied: u8 };
+const NodeStatus = extern struct { readied: u8, exiting: u8 = 0, exited: u8 = 0, has_exit: u8 = 0 };
 
-const Kind = enum { ready, update, fixed_update, on };
+const Kind = enum { ready, update, fixed_update, on, exit };
 
 /// One registered behaviour: the system it runs as, and the query that system reads through. The
 /// runtime keeps its address as the system's user data and reads `terms` while registering it.
@@ -51,6 +51,7 @@ const Type = struct {
     state: *State,
     tag: Cid,
     has_fields: bool,
+    has_exit: bool = false,
     columns: []Cid,
     sizes: []usize,
     prototypes: [][]align(16) u8,
@@ -81,6 +82,10 @@ const State = struct {
     name_cid: Cid,
     types: std.ArrayList(*Type) = .empty,
     events: std.ArrayList(*Event) = .empty,
+    action_ids: std.StringHashMapUnmanaged(i32) = .empty,
+    reap: abi_runtime.c.ke_system_id = 0,
+    reap_terms: [1]abi_runtime.c.ke_component_access = undefined,
+    reap_queries: [1]abi_runtime.c.ke_query_decl = undefined,
 };
 
 fn stateOf(self: ?*abi_framework.c.ke_node_types) ?*State {
@@ -147,9 +152,10 @@ fn eventAt(w: *Walk) ?*const anyopaque {
     return base + w.ev_row * w.behaviour.event.?.size;
 }
 
-/// Slot `next`. Moves to the next node of the type; a ready behaviour skips the nodes already
-/// readied and marks each one it moves to; an on handler moves through every node for one event,
-/// then to the next event.
+/// Slot `next`. Moves to the next node of the type, past the nodes leaving the tree; a ready
+/// behaviour skips the nodes already readied and marks each one it moves to, an exit behaviour
+/// moves only to the nodes leaving and marks each; an on handler moves through every node for one
+/// event, then to the next event.
 fn next(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) bool {
     const w = walkOf(ctx) orelse return false;
     while (true) {
@@ -168,10 +174,17 @@ fn next(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) bool {
             w.api.fields = null;
             return false;
         }
-        if (w.behaviour.kind == .ready) {
-            const status: *NodeStatus = @ptrCast(column(w, w.behaviour.owner.columns.len + 1, @sizeOf(NodeStatus)) orelse continue);
-            if (status.readied != 0) continue;
-            status.readied = 1;
+        const status: *NodeStatus = @ptrCast(column(w, w.behaviour.owner.columns.len + 1, @sizeOf(NodeStatus)) orelse continue);
+        switch (w.behaviour.kind) {
+            .exit => {
+                if (status.exiting == 0 or status.exited != 0) continue;
+                status.exited = 1;
+            },
+            .ready => {
+                if (status.exiting != 0 or status.readied != 0) continue;
+                status.readied = 1;
+            },
+            else => if (status.exiting != 0) continue,
         }
         w.api.self = w.segs[w.seg].entities.?[w.row];
         const t = w.behaviour.owner;
@@ -295,7 +308,7 @@ fn spawnNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_cid: Cid, nam
         rc = commands.attach.?(commands, node, c, data, proto.len);
         if (rc != R.ok) return rc;
     }
-    const status: NodeStatus = .{ .readied = 0 };
+    const status: NodeStatus = .{ .readied = 0, .has_exit = @intFromBool(t.has_exit) };
     rc = commands.attach.?(commands, node, s.status_cid, &status, @sizeOf(NodeStatus));
     if (rc != R.ok) return rc;
     out.* = node;
@@ -312,58 +325,6 @@ fn writeNamed(s: *State, memory: *anyopaque, meta: abi_ecs.c.ke_component_meta, 
     var entry = [1]abi_ecs_variant.c.ke_variant_table_entry{.{ .key = field, .value = value, .consumed = false }};
     if (fields_apply.apply(s.ecs, memory, &entry, 1, @ptrCast(table), meta.field_count) != null) return false;
     return entry[0].consumed;
-}
-
-fn spawnNamedNode(s: *State, commands: *abi_ecs.c.ke_ecs_commands, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values_in: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out: *Entity) abi_result.c.ke_result {
-    var type_cid: Cid = abi_ecs.c.KE_COMPONENT_INVALID;
-    const found = vtFindType(&s.api, type_name, &type_cid);
-    if (found != R.ok) return found;
-    const t = findType(s, type_cid) orelse return R.code(error.NotFound);
-    const values: []const abi_framework.c.ke_node_field_value = if (count == 0) &.{} else (values_in orelse return R.code(error.InvalidArgument))[0..count];
-
-    const bytes = heap.gpa.alloc(?[]align(16) u8, t.columns.len) catch return R.code(error.OutOfMemory);
-    @memset(bytes, null);
-    defer {
-        for (bytes) |b| if (b) |owned| heap.gpa.free(owned);
-        heap.gpa.free(bytes);
-    }
-    for (values) |v| {
-        const component_name = v.component orelse return R.code(error.InvalidArgument);
-        const field_name = v.field orelse return R.code(error.InvalidArgument);
-        const meta = lookupMeta(s, component_name) orelse {
-            log.warn("node types: spawning {s} with a value for {s}, a component never registered", .{ type_name.?, component_name });
-            return R.code(error.InvalidArgument);
-        };
-        const at = std.mem.indexOfScalar(Cid, t.columns, meta.cid) orelse {
-            log.warn("node types: spawning {s} with a value for {s}, which the type does not carry", .{ type_name.?, component_name });
-            return R.code(error.InvalidArgument);
-        };
-        if (bytes[at] == null) {
-            const copy = heap.gpa.alignedAlloc(u8, prototype_alignment, t.sizes[at]) catch return R.code(error.OutOfMemory);
-            @memcpy(copy, t.prototypes[at][0..t.sizes[at]]);
-            bytes[at] = copy;
-        }
-        if (!writeNamed(s, bytes[at].?.ptr, meta, field_name, v.value)) {
-            log.warn("node types: spawning {s}, field {s} of {s} is not one its table names or cannot hold the value", .{ type_name.?, field_name, component_name });
-            return R.code(error.InvalidArgument);
-        }
-    }
-
-    var given: std.ArrayList(abi_framework.c.ke_node_component) = .empty;
-    defer given.deinit(heap.gpa);
-    for (bytes, t.columns, t.sizes) |b, c, size| {
-        const owned = b orelse continue;
-        given.append(heap.gpa, .{ .component = c, .data = owned.ptr, .size = size }) catch return R.code(error.OutOfMemory);
-    }
-    return spawnNode(s, commands, type_cid, name, under, given.items.ptr, @intCast(given.items.len), out);
-}
-
-/// Slot `spawn_named` of the ctx: the node types' spawn_named with the behaviour's commands.
-fn spawnNamed(ctx: ?*abi_framework.c.ke_node_ctx, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
-    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
-    const out = out_node orelse return R.code(error.InvalidArgument);
-    const commands = w.api.commands orelse return R.code(error.InvalidArgument);
-    return spawnNamedNode(w.behaviour.owner.state, commands, type_name, name, under, values, count, out);
 }
 
 /// Slot `change_scene`. Finds the nearest ancestor holding a scene slot and writes the path
@@ -410,7 +371,85 @@ fn spawn(ctx: ?*abi_framework.c.ke_node_ctx, type_cid: Cid, name: ?[*:0]const u8
 fn destroy(ctx: ?*abi_framework.c.ke_node_ctx, node: Entity) callconv(.c) abi_result.c.ke_result {
     const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
     const s = w.behaviour.owner.state;
-    return s.tree.destroy_node_deferred.?(s.tree, node, w.api.commands);
+    if (statusOf(s, node) == null) return s.tree.destroy_node_deferred.?(s.tree, node, w.api.commands);
+    markLeaving(s, node);
+    return R.ok;
+}
+
+fn statusOf(s: *State, node: Entity) ?*NodeStatus {
+    return @ptrCast(@alignCast(s.ecs.component_get.?(s.ecs, node, s.status_cid) orelse return null));
+}
+
+fn markLeaving(s: *State, node: Entity) void {
+    if (statusOf(s, node)) |status| status.exiting = 1;
+    var at = s.tree.first_child.?(s.tree, node);
+    while (at != invalid) : (at = s.tree.next_sibling.?(s.tree, at)) markLeaving(s, at);
+}
+
+fn leavingDone(s: *State, node: Entity) bool {
+    if (statusOf(s, node)) |status| {
+        if (status.exiting == 0 or (status.has_exit != 0 and status.exited == 0)) return false;
+    }
+    var at = s.tree.first_child.?(s.tree, node);
+    while (at != invalid) : (at = s.tree.next_sibling.?(s.tree, at)) if (!leavingDone(s, at)) return false;
+    return true;
+}
+
+/// The PostUpdate system that removes the nodes left: it records the destruction of each node
+/// leaving the tree whose parent is not leaving, once every node of its subtree has run its exit.
+fn reapLeaving(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
+    for (viewOf(sys, 0)) |seg| {
+        const statuses: [*]const NodeStatus = @ptrCast(@alignCast(seg.columns.?[0] orelse continue));
+        for (seg.entities.?[0..seg.count], statuses[0..seg.count]) |node, status| {
+            if (status.exiting == 0) continue;
+            const up = s.tree.parent.?(s.tree, node);
+            if (up != invalid) if (statusOf(s, up)) |above| if (above.exiting != 0) continue;
+            if (!leavingDone(s, node)) continue;
+            const rc = s.tree.destroy_node_deferred.?(s.tree, node, sys.?.commands);
+            if (rc != R.ok) return rc;
+        }
+    }
+    return R.ok;
+}
+
+/// Slot `find_type` of the ctx: the node types' find_type.
+fn ctxFindType(ctx: ?*abi_framework.c.ke_node_ctx, name: ?[*:0]const u8, out_type: ?*Cid) callconv(.c) abi_result.c.ke_result {
+    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
+    return vtFindType(&w.behaviour.owner.state.api, name, out_type);
+}
+
+/// Slot `find_component` of the ctx: the node types' find_component.
+fn ctxFindComponent(ctx: ?*abi_framework.c.ke_node_ctx, name: ?[*:0]const u8, out_component: ?*Cid) callconv(.c) abi_result.c.ke_result {
+    const w = walkOf(ctx) orelse return R.code(error.InvalidArgument);
+    return vtFindComponent(&w.behaviour.owner.state.api, name, out_component);
+}
+
+fn actionNamed(s: *State, name: ?[*:0]const u8) ?i32 {
+    const actions = s.actions orelse return null;
+    const key = std.mem.span(name orelse return null);
+    if (s.action_ids.get(key)) |id| return if (id < 0) null else id;
+    const id = actions.get_action_id.?(actions, name);
+    if (id < 0) log.warn("node types: no input action is named {s}", .{key});
+    const owned = heap.gpa.dupe(u8, key) catch return if (id < 0) null else id;
+    s.action_ids.put(heap.gpa, owned, id) catch heap.gpa.free(owned);
+    return if (id < 0) null else id;
+}
+
+/// Slot `pressed_named`. Looks the action up by name once and keeps the id.
+fn pressedNamed(ctx: ?*abi_framework.c.ke_node_ctx, name: ?[*:0]const u8) callconv(.c) bool {
+    const w = walkOf(ctx) orelse return false;
+    const s = w.behaviour.owner.state;
+    const id = actionNamed(s, name) orelse return false;
+    return s.actions.?.was_action_pressed.?(s.actions.?, id);
+}
+
+/// Slot `axis_named`. Looks the action up by name once and keeps the id.
+fn axisNamed(ctx: ?*abi_framework.c.ke_node_ctx, name: ?[*:0]const u8) callconv(.c) f32 {
+    const w = walkOf(ctx) orelse return 0;
+    const s = w.behaviour.owner.state;
+    const id = actionNamed(s, name) orelse return 0;
+    return s.actions.?.get_axis1d.?(s.actions.?, id);
 }
 
 /// Slot `exit`. Forwards the request to the runtime.
@@ -465,11 +504,14 @@ fn behaviourSystem(sys: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f3
             .axis = &axis,
             .pressed = &pressed,
             .spawn = &spawn,
-            .spawn_named = &spawnNamed,
             .change_scene = &changeScene,
             .destroy = &destroy,
             .raise = &raise,
             .exit = &exit,
+            .find_type = &ctxFindType,
+            .find_component = &ctxFindComponent,
+            .pressed_named = &pressedNamed,
+            .axis_named = &axisNamed,
         },
         .behaviour = b,
         .segs = &.{},
@@ -505,6 +547,7 @@ fn phaseOf(kind: Kind) abi_runtime.c.ke_phase {
         .update => abi_runtime.c.KE_PHASE_UPDATE,
         .fixed_update => abi_runtime.c.KE_PHASE_FIXED_UPDATE,
         .on => abi_runtime.c.KE_PHASE_POST_UPDATE,
+        .exit => abi_runtime.c.KE_PHASE_PRE_UPDATE,
     };
 }
 
@@ -533,15 +576,16 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
         .update => "update",
         .fixed_update => "fixed_update",
         .on => "on",
+        .exit => "exit_tree",
     };
     const name = std.fmt.allocPrintSentinel(heap.gpa, "{s}.{s}{s}{s}", .{ type_name, suffix, if (event) |_| "." else "", if (event) |e| e.name else "" }, 0) catch return error.OutOfMemory;
     errdefer heap.gpa.free(name);
-    const extra: usize = if (kind == .ready) 2 else 1;
+    const extra: usize = 2;
     const terms = heap.gpa.alloc(abi_runtime.c.ke_component_access, t.columns.len + extra) catch return error.OutOfMemory;
     errdefer heap.gpa.free(terms);
     terms[0] = .{ .cid = t.tag, .access = abi_runtime.c.KE_ACCESS_READ };
     for (t.columns, 1..) |c, i| terms[i] = .{ .cid = c, .access = abi_runtime.c.KE_ACCESS_WRITE };
-    if (kind == .ready) terms[t.columns.len + 1] = .{ .cid = s.status_cid, .access = abi_runtime.c.KE_ACCESS_WRITE };
+    terms[t.columns.len + 1] = .{ .cid = s.status_cid, .access = if (kind == .ready or kind == .exit) abi_runtime.c.KE_ACCESS_WRITE else abi_runtime.c.KE_ACCESS_READ };
 
     const b = heap.gpa.create(Behaviour) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(b);
@@ -634,6 +678,8 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     if (desc.ready != null) try addBehaviour(s, t, .ready, desc.ready, null, type_name);
     if (desc.update != null) try addBehaviour(s, t, .update, desc.update, null, type_name);
     if (desc.fixed_update != null) try addBehaviour(s, t, .fixed_update, desc.fixed_update, null, type_name);
+    if (desc.exit_tree != null) try addBehaviour(s, t, .exit, desc.exit_tree, null, type_name);
+    t.has_exit = desc.exit_tree != null;
     for (events) |event| try addBehaviour(s, t, .on, desc.on, findEvent(s, event), type_name);
 
     s.types.append(heap.gpa, t) catch return error.OutOfMemory;
@@ -692,15 +738,6 @@ fn vtSpawn(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ec
     const commands = commands_in orelse return R.code(error.InvalidArgument);
     const out = out_node orelse return R.code(error.InvalidArgument);
     return spawnNode(s, commands, type_cid, name, under, components, count, out);
-}
-
-/// Slot `spawn_named`. Copies the prototype of each component a value names, writes the values
-/// through the components' field tables, and spawns with those copies.
-fn vtSpawnNamed(self: ?*abi_framework.c.ke_node_types, commands_in: ?*abi_ecs.c.ke_ecs_commands, type_name: ?[*:0]const u8, name: ?[*:0]const u8, under: Entity, values: ?[*]const abi_framework.c.ke_node_field_value, count: u32, out_node: ?*Entity) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
-    const commands = commands_in orelse return R.code(error.InvalidArgument);
-    const out = out_node orelse return R.code(error.InvalidArgument);
-    return spawnNamedNode(s, commands, type_name, name, under, values, count, out);
 }
 
 /// Slot `find_type`. Looks up the tag the type was registered under in the ecs.
@@ -762,6 +799,10 @@ fn vtDestroy(self_in: ?*abi_framework.c.ke_node_types) callconv(.c) void {
         heap.gpa.destroy(e);
     }
     s.events.deinit(heap.gpa);
+    if (s.reap != 0) _ = s.runtime.unregister_system.?(s.runtime, s.reap);
+    var keys = s.action_ids.keyIterator();
+    while (keys.next()) |k| heap.gpa.free(k.*);
+    s.action_ids.deinit(heap.gpa);
     heap.gpa.destroy(s);
 }
 
@@ -782,7 +823,7 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
-        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .spawn_named = &vtSpawnNamed, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
+        .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
         .runtime = runtime,
         .ecs = ecs,
         .tree = tree,
@@ -792,6 +833,17 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, tree: *abi
     };
     s.api.handle = s;
     errdefer vtDestroy(&s.api);
+    s.reap_terms = .{.{ .cid = status_cid, .access = abi_runtime.c.KE_ACCESS_WRITE }};
+    s.reap_queries = .{.{ .terms = &s.reap_terms, .term_count = 1 }};
+    var reap = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
+    reap.name = "nodes.reap";
+    reap.phase = abi_runtime.c.KE_PHASE_POST_UPDATE;
+    reap.user_data = s;
+    reap.execute = reapLeaving;
+    reap.queries = &s.reap_queries;
+    reap.query_count = 1;
+    reap.exclusive = true;
+    try R.check(runtime.register_system.?(runtime, &reap, &s.reap));
     var base = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     base.name = base_type_name;
     _ = try registerType(s, &base);
@@ -827,6 +879,7 @@ const name_cid: Cid = 40;
 
 var registered: [8]abi_runtime.c.ke_runtime_system_params = undefined;
 var registered_count: usize = 0;
+var reap_params: abi_runtime.c.ke_runtime_system_params = undefined;
 
 fn recordSystem(args: zsub.For(abi_runtime.c.ke_runtime).Args(.register_system)) abi_result.c.ke_result {
     registered[registered_count] = args[1].?.*;
@@ -891,6 +944,8 @@ const Fixture = struct {
         _ = f.ecs.when(.component_register).does(registerComponent);
         _ = f.rt.when(.register_system).does(recordSystem);
         try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), null, &f.types));
+        reap_params = registered[0];
+        registered_count = 0;
     }
 
     fn deinit(f: *Fixture) void {
@@ -1061,6 +1116,96 @@ test "an action reference is resolved by name on its first read, action 0 among 
     try testing.expect(launch_ref.resolved);
     try testing.expectEqual(@as(i32, 0), launch_ref.id);
     try actions.received(.get_action_id).times(1);
+}
+
+var named_presses: u32 = 0;
+
+fn readLaunchByName(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    while (ctx.?.next.?(ctx)) {
+        if (ctx.?.pressed_named.?(ctx, "Launch")) named_presses += 1;
+    }
+    return R.ok;
+}
+
+test "an action read by name is looked up once and kept" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var actions: zsub.For(abi_input_actions.c.ke_input_actions) = undefined;
+    try actions.init();
+    defer actions.deinit();
+    _ = actions.when(.get_action_id).does(actionIdOf);
+    _ = actions.when(.was_action_pressed).returns(true);
+    var with_actions: abi_framework.c.ke_node_types_handle = undefined;
+    registered_count = 0;
+    try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &with_actions));
+    defer with_actions.destroy.?(with_actions.ref);
+    var d = paddleDesc();
+    d.update = readLaunchByName;
+    var cid: Cid = 0;
+    try R.check(with_actions.ref.?.register_type.?(with_actions.ref, &d, &cid));
+    named_presses = 0;
+    var rows: Rows = .{};
+    rows.build();
+    try runSystem(registered[registered_count - 1], &rows);
+    try runSystem(registered[registered_count - 1], &rows);
+    try testing.expectEqual(@as(u32, 6), named_presses);
+    try actions.received(.get_action_id).times(1);
+}
+
+test "a node leaving the tree is skipped by update and visited once by exit" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var d = paddleDesc();
+    d.update = countVisits;
+    d.exit_tree = countVisits;
+    var cid: Cid = 0;
+    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
+    var rows: Rows = .{};
+    rows.build();
+    rows.status[1].exiting = 1;
+    try runSystem(registered[0], &rows);
+    try testing.expectEqual(@as(u32, 1), rows.paddles[0].visits);
+    try testing.expectEqual(@as(u32, 0), rows.paddles[1].visits);
+    try testing.expectEqual(abi_runtime.c.KE_PHASE_PRE_UPDATE, registered[1].phase);
+    try runSystem(registered[1], &rows);
+    try runSystem(registered[1], &rows);
+    try testing.expectEqual(@as(u32, 1), rows.paddles[1].visits);
+    try testing.expectEqual(@as(u8, 1), rows.status[1].exited);
+}
+
+var leaving_status = [_]NodeStatus{.{ .readied = 1, .exiting = 1, .has_exit = 1 }};
+var leaving_entities = [_]Entity{12};
+var leaving_columns: [1]?*anyopaque = undefined;
+var leaving_segs: [1]abi_ecs.c.ke_ecs_segment = undefined;
+
+fn leavingView(_: ?*abi_runtime.c.ke_system_ctx, _: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    leaving_columns = .{&leaving_status};
+    leaving_segs = .{.{ .entities = &leaving_entities, .count = 1, .columns = &leaving_columns, .column_count = 1 }};
+    out_count.?.* = 1;
+    return &leaving_segs;
+}
+
+fn leavingStatusOf(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_get)) ?*anyopaque {
+    return if (args[1] == 12) &leaving_status[0] else null;
+}
+
+test "the reap removes a node leaving the tree only once its exit ran" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.ecs.when(.component_get).does(leavingStatusOf);
+    _ = f.tree.when(.parent).returns(invalid);
+    _ = f.tree.when(.first_child).returns(invalid);
+    _ = f.tree.when(.destroy_node_deferred).returns(R.ok);
+    var sys: abi_runtime.c.ke_system_ctx = .{ .view = &leavingView };
+    leaving_status[0].exited = 0;
+    try R.check(reap_params.execute.?(&sys, reap_params.user_data, 0));
+    try f.tree.received(.destroy_node_deferred).times(0);
+    leaving_status[0].exited = 1;
+    try R.check(reap_params.execute.?(&sys, reap_params.user_data, 0));
+    try f.tree.received(.destroy_node_deferred).times(1);
 }
 
 fn askExit(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
@@ -1287,7 +1432,7 @@ test "a node type without fields carries its tag and its with components, and fi
     d.user_data = &seen;
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-    try testing.expectEqual(@as(u32, 2), registered[0].queries.?[0].term_count);
+    try testing.expectEqual(@as(u32, 3), registered[0].queries.?[0].term_count);
     var rows: Rows = .{};
     rows.build();
     rows.columns = .{ null, &rows.transforms, null, null };
@@ -1376,7 +1521,7 @@ test "destroying the node types unregisters every system they registered" {
     var cid: Cid = 0;
     try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
     f.types.destroy.?(f.types.ref);
-    try f.rt.received(.unregister_system).times(3);
+    try f.rt.received(.unregister_system).times(4);
     f.tree.deinit();
     f.rt.deinit();
     f.ecs.deinit();
@@ -1487,56 +1632,6 @@ var change_result: abi_result.c.ke_result = R.ok;
 fn changeToMenu(ctx: ?*abi_framework.c.ke_node_ctx, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     if (ctx.?.next.?(ctx)) change_result = ctx.?.change_scene.?(ctx, "res://menu");
     return R.ok;
-}
-
-fn floatValue(component_name: [*:0]const u8, field: [*:0]const u8, x: f64) abi_framework.c.ke_node_field_value {
-    return .{ .component = component_name, .field = field, .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .unnamed_0 = .{ .f = x } } };
-}
-
-test "spawn_named writes each value by field name over the type's initial bytes" {
-    var f: Fixture = .{};
-    try f.init();
-    defer f.deinit();
-    _ = f.ecs.when(.component_lookup).does(lookupWithTables);
-    _ = f.ecs.when(.component_field_write).does(writeByTable);
-    const initial: Paddle = .{ .speed = 7, .visits = 2 };
-    var d = paddleDesc();
-    d.initial = &initial;
-    d.initial_size = @sizeOf(Paddle);
-    var cid: Cid = 0;
-    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-    paddle_column = findType(stateOf(f.types.ref).?, cid).?.columns[0];
-    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
-    try commands.init();
-    defer commands.deinit();
-    _ = commands.when(.attach).does(capturePaddle);
-    const values = [_]abi_framework.c.ke_node_field_value{floatValue("paddle", "speed", 3)};
-    var node: Entity = invalid;
-    try R.check(f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &values, values.len, &node));
-    try testing.expectEqual(Paddle{ .speed = 3, .visits = 2 }, attached_paddle);
-    try testing.expectEqual(Paddle{ .speed = 7, .visits = 2 }, @as(*const Paddle, @ptrCast(@alignCast(f.types.ref.?.initial.?(f.types.ref, cid, paddle_column).?))).*);
-}
-
-test "spawn_named refuses a type never registered, a component the type does not carry, a field its table does not name and a value the field cannot hold" {
-    var f: Fixture = .{};
-    try f.init();
-    defer f.deinit();
-    _ = f.ecs.when(.component_lookup).does(lookupWithTables);
-    _ = f.ecs.when(.component_field_write).does(writeByTable);
-    var d = paddleDesc();
-    var cid: Cid = 0;
-    try R.check(f.types.ref.?.register_type.?(f.types.ref, &d, &cid));
-    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
-    try commands.init();
-    defer commands.deinit();
-    var node: Entity = invalid;
-    try testing.expectEqual(R.code(error.NotFound), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "ghost", "Ghost", invalid, null, 0, &node));
-    const foreign = [_]abi_framework.c.ke_node_field_value{floatValue(scene_slot_name, "path", 1)};
-    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &foreign, 1, &node));
-    const unnamed = [_]abi_framework.c.ke_node_field_value{floatValue("paddle", "nope", 1)};
-    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &unnamed, 1, &node));
-    const wrong = [_]abi_framework.c.ke_node_field_value{.{ .component = "paddle", .field = "speed", .value = .{ .type = abi_ecs_variant.c.KE_VARIANT_STRING, .unnamed_0 = .{ .s = "fast" } } }};
-    try testing.expectEqual(R.code(error.InvalidArgument), f.types.ref.?.spawn_named.?(f.types.ref, commands.api(), "paddle", "Paddle", invalid, &wrong, 1, &node));
 }
 
 test "change_scene writes the path into the nearest ancestor's scene slot, and refuses one too long" {

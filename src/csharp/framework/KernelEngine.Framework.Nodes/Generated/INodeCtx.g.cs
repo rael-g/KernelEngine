@@ -52,14 +52,7 @@ public interface INodeCtx : IDisposable
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity Spawn(ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
-    /// <summary>Records a node of the type named type, its components born from the type's initial values with each of values written over them by name; the way any language spawns any node type, an engine one or a game's, without its ids or its structs.</summary>
-    /// <param name="type">The name the type was registered under.</param>
-    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
-    /// <param name="values">Written in order.</param>
-    /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    Entity SpawnNamed(string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default);
-    /// <summary>Records the destruction of node and its descendants.</summary>
+    /// <summary>Marks node and its descendants as leaving the tree: no behaviour but `exit_tree` visits them again, and they are removed once each has run its exit_tree.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Destroy(Entity node);
     /// <summary>Points the scene slot nearest above the current node at the scene file path; the slot replaces its children on its next update.</summary>
@@ -72,4 +65,16 @@ public interface INodeCtx : IDisposable
     void Raise<TData>(ComponentId @event, in TData data) where TData : unmanaged;
     /// <summary>Asks the runtime for the program to end; the host stops once it reads the request.</summary>
     void Exit();
+    /// <summary>Whether the button action named name was pressed this tick, false without input actions or for a name no map holds; the name is looked up once and its id kept.</summary>
+    bool PressedNamed(string name);
+    /// <summary>The value of the axis action named name, 0 without input actions or for a name no map holds; the name is looked up once and its id kept.</summary>
+    float AxisNamed(string name);
+    /// <summary>The id of the node type registered under name, as the node types' find_type answers it.</summary>
+    /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ComponentId FindType(string name);
+    /// <summary>The id of the component registered under name, as the node types' find_component answers it.</summary>
+    /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ComponentId FindComponent(string name);
 }

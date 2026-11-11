@@ -200,56 +200,7 @@ public unsafe partial class NodeCtx : IDisposable, INativeNodeCtx, INodeCtx
         }
     }
 
-    /// <summary>Records a node of the type named type, its components born from the type's initial values with each of values written over them by name; the way any language spawns any node type, an engine one or a game's, without its ids or its structs.</summary>
-    /// <param name="type">The name the type was registered under.</param>
-    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
-    /// <param name="values">Written in order.</param>
-    /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public Entity SpawnNamed(string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default)
-    {
-        var typeText = type ?? "";
-        var typeSize = System.Text.Encoding.UTF8.GetMaxByteCount(typeText.Length) + 1;
-        Span<byte> typeBytes = typeSize <= 512 ? stackalloc byte[512] : new byte[typeSize];
-        typeBytes[System.Text.Encoding.UTF8.GetBytes(typeText, typeBytes)] = 0;
-        fixed (byte* typePtr = typeBytes)
-        {
-            var nameText = name ?? "";
-            var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-            Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-            nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-            fixed (byte* namePtr = nameBytes)
-            {
-                var valuesPins = new System.Buffers.MemoryHandle[values.Length];
-                var valuesTexts = new List<nint>();
-                var valuesNative = new ke_node_field_value[values.Length];
-                try
-                {
-                    for (var valuesAt = 0; valuesAt < values.Length; valuesAt++)
-                    {
-                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Component));
-                        valuesNative[valuesAt].component = (sbyte*)valuesTexts[^1];
-                        valuesTexts.Add(Marshal.StringToCoTaskMemUTF8(values[valuesAt].Field));
-                        valuesNative[valuesAt].field = (sbyte*)valuesTexts[^1];
-                        valuesNative[valuesAt].value = values[valuesAt].Value;
-                    }
-                    fixed (ke_node_field_value* valuesPtr = valuesNative)
-                    {
-                        Entity resultOut = default;
-                        KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn_named(Handle, (sbyte*)typePtr, (sbyte*)namePtr, parent, valuesPtr, (uint)values.Length, &resultOut), "spawn_named");
-                        return resultOut;
-                    }
-                }
-                finally
-                {
-                    for (var valuesAt = 0; valuesAt < valuesPins.Length; valuesAt++) valuesPins[valuesAt].Dispose();
-                    foreach (var valuesText in valuesTexts) Marshal.FreeCoTaskMem(valuesText);
-                }
-            }
-        }
-    }
-
-    /// <summary>Records the destruction of node and its descendants.</summary>
+    /// <summary>Marks node and its descendants as leaving the tree: no behaviour but `exit_tree` visits them again, and they are removed once each has run its exit_tree.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Destroy(Entity node)
     {
@@ -286,6 +237,66 @@ public unsafe partial class NodeCtx : IDisposable, INativeNodeCtx, INodeCtx
     public void Exit()
     {
         Handle->exit(Handle);
+    }
+
+    /// <summary>Whether the button action named name was pressed this tick, false without input actions or for a name no map holds; the name is looked up once and its id kept.</summary>
+    public bool PressedNamed(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->pressed_named(Handle, (sbyte*)namePtr);
+        }
+    }
+
+    /// <summary>The value of the axis action named name, 0 without input actions or for a name no map holds; the name is looked up once and its id kept.</summary>
+    public float AxisNamed(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            return Handle->axis_named(Handle, (sbyte*)namePtr);
+        }
+    }
+
+    /// <summary>The id of the node type registered under name, as the node types' find_type answers it.</summary>
+    /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ComponentId FindType(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->find_type(Handle, (sbyte*)namePtr, &resultOut), "find_type");
+            return resultOut;
+        }
+    }
+
+    /// <summary>The id of the component registered under name, as the node types' find_component answers it.</summary>
+    /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ComponentId FindComponent(string name)
+    {
+        var nameText = name ?? "";
+        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
+        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
+        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
+        fixed (byte* namePtr = nameBytes)
+        {
+            ComponentId resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->find_component(Handle, (sbyte*)namePtr, &resultOut), "find_component");
+            return resultOut;
+        }
     }
 
     /// <summary>Releases the native nodectx.</summary>
