@@ -19,7 +19,7 @@ public sealed unsafe partial class StdFileSystem : KernelEngine.FileSystem.FileS
         var rootBytes = root is null ? null : System.Text.Encoding.UTF8.GetBytes(root + "\0");
         fixed (byte* rootPtr = rootBytes)
         {
-            KernelEngine.FileSystem.Std.Native.ke_file_system_std_params config = default;
+            KernelEngine.FileSystem.Std.Native.ke_file_system_std_config config = default;
             config.root = (sbyte*)rootPtr;
             KernelEngine.FileSystem.Native.ke_file_system_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_create(&config, &handle), "ke_file_system_std_create");

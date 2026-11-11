@@ -66,11 +66,10 @@ fn destroyHandle(self: ?*abi_render.c.ke_render_frame) callconv(.c) void {
 /// invalid argument and a failed allocation as out of memory. The runtime refusing either system
 /// fails with the runtime's code, after removing the begin system when it was the end system that
 /// was refused. Each failure leaves the handle zeroed.
-export fn ke_render_frame_create(params_in: ?*const abi_render_frame_factory.c.ke_render_frame_params, out_frame: ?*abi_render.c.ke_render_frame_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_frame_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, out_frame: ?*abi_render.c.ke_render_frame_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_frame orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return refused();
-    out.* = create(p.runtime orelse return refused(), p.ecs orelse return refused(), p.service orelse return refused(), p.camera orelse return refused(), blk: { if (p.scene == null) return refused(); break :blk p; }) catch |err| return R.code(err);
+    out.* = create(runtime orelse return refused(), ecs orelse return refused(), service orelse return refused(), camera orelse return refused(), scene orelse return refused()) catch |err| return R.code(err);
     return R.ok;
 }
 
@@ -79,7 +78,7 @@ fn refused() abi_result.c.ke_result {
     return R.code(error.InvalidArgument);
 }
 
-fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render.c.ke_render_service, camera: *abi_render.c.ke_render_camera, p: *const abi_render_frame_factory.c.ke_render_frame_params) R.Error!abi_render.c.ke_render_frame_handle {
+fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render.c.ke_render_service, camera: *abi_render.c.ke_render_camera, scene: *abi_render.c.ke_render_scene_resolve) R.Error!abi_render.c.ke_render_frame_handle {
     const st = try gpa.create(FrameModule);
     errdefer gpa.destroy(st);
     st.api = .{ .handle = st, .frame_cid = frameCid };
@@ -87,7 +86,7 @@ fn create(rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render
     try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
     st.producer = .{ .core = core, .camera = camera };
 
-    const ids = p.scene.?.component_ids.?(p.scene);
+    const ids = scene.component_ids.?(scene);
     const rd = abi_runtime.c.KE_ACCESS_READ;
     st.begin_access = .{.{ .cid = st.frame_cid, .access = abi_runtime.c.KE_ACCESS_WRITE }};
     st.end_access = .{
@@ -138,9 +137,21 @@ const testing = std.testing;
 
 const zsub = @import("zsub");
 
-fn testFrame(params: *const abi_render_frame_factory.c.ke_render_frame_params) abi_render.c.ke_render_frame_handle {
+const Deps = struct {
+    runtime: ?*abi_runtime.c.ke_runtime,
+    ecs: ?*abi_ecs.c.ke_ecs,
+    service: ?*abi_render.c.ke_render_service,
+    camera: ?*abi_render.c.ke_render_camera,
+    scene: ?*abi_render.c.ke_render_scene_resolve,
+};
+
+fn createdFrom(deps: *const Deps, out: *abi_render.c.ke_render_frame_handle) abi_result.c.ke_result {
+    return ke_render_frame_create(deps.runtime, deps.ecs, deps.service, deps.camera, deps.scene, out);
+}
+
+fn testFrame(params: *const Deps) abi_render.c.ke_render_frame_handle {
     var h: abi_render.c.ke_render_frame_handle = .{ .ref = null, .destroy = null };
-    _ = ke_render_frame_create(params, &h);
+    _ = createdFrom(params, &h);
     return h;
 }
 
@@ -175,7 +186,7 @@ const Rig = struct {
         self.core.deinit();
     }
 
-    fn params(self: *Rig) abi_render_frame_factory.c.ke_render_frame_params {
+    fn params(self: *Rig) Deps {
         return .{ .runtime = self.rt.api(), .ecs = self.ecs.api(), .service = self.core.api(), .camera = &self.camera, .scene = &test_scene };
     }
 };
@@ -232,7 +243,7 @@ test "a frame missing its camera is refused as an invalid argument" {
     var p = rig.params();
     p.camera = null;
     var h: abi_render.c.ke_render_frame_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(&p, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), createdFrom(&p, &h));
     try testing.expect(h.ref == null);
 }
 

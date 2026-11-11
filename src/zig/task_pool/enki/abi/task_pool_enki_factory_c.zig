@@ -22,15 +22,15 @@ pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Construction parameters for ke_task_pool_enki_create.
-pub const ke_task_pool_enki_params = extern struct {
+/// The values a task pool is created with, each applied as given.
+pub const ke_task_pool_enki_config = extern struct {
     /// Worker threads besides the calling thread, 0 for none, or
     /// KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD.
     worker_count: u32 = std.mem.zeroes(u32),
 };
 
 /// Creates a task pool.
-pub extern fn ke_task_pool_enki_create(params: ?*const ke_task_pool_enki_params, out_task_pool: ?*abi_task_pool.c.ke_task_pool_handle) abi_result.c.ke_result;
+pub extern fn ke_task_pool_enki_create(config: ?*const ke_task_pool_enki_config, out_task_pool: ?*abi_task_pool.c.ke_task_pool_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_task_pool_enki logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

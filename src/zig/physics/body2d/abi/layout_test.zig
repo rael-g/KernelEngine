@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_physics_body2d_module_params, translated("ke_physics_body2d_module_params"));
     try expectSameLayout(abi.c.ke_physics_body2d_module_handle, translated("ke_physics_body2d_module_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
@@ -37,16 +36,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [9]c_ulonglong;
+extern const layout_values: [4]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_physics_body2d_module_params),
-        @offsetOf(abi.c.ke_physics_body2d_module_params, "runtime"),
-        @offsetOf(abi.c.ke_physics_body2d_module_params, "ecs"),
-        @offsetOf(abi.c.ke_physics_body2d_module_params, "physics"),
-        @offsetOf(abi.c.ke_physics_body2d_module_params, "scene_tree"),
         @sizeOf(abi.c.ke_physics_body2d_module_handle),
         @offsetOf(abi.c.ke_physics_body2d_module_handle, "ref"),
         @offsetOf(abi.c.ke_physics_body2d_module_handle, "destroy"),

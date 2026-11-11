@@ -270,9 +270,8 @@ fn create(io: *abi_io.c.ke_io) R.Error!abi_audio.c.ke_audio_handle {
     state.engine_ready = true;
     errdefer ma.ma_engine_uninit(&state.engine);
 
-    var cache_params = abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = &destroySoundResource, .destroy_ctx = state };
     var cache_h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(&cache_params, &cache_h));
+    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(&destroySoundResource, state, &cache_h));
     state.cache = cache_h.ref.?;
     state.cache_destroy = cache_h.destroy.?;
     errdefer state.cache_destroy(state.cache);

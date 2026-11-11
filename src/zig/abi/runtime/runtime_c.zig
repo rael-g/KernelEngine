@@ -134,7 +134,8 @@ pub const ke_runtime_system_params = extern struct {
     exclusive: bool = false,
 };
 
-pub const ke_runtime_params = extern struct {
+/// The values a runtime is created with, each applied as given.
+pub const ke_runtime_config = extern struct {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     fixed_dt: f32 = std.mem.zeroes(f32),
     /// Largest catch-up budget a tick may accumulate, in seconds; excess is discarded; greater than
@@ -222,4 +223,4 @@ pub const ke_system_ctx = extern struct {
 };
 
 /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
-pub extern fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: ?*const ke_runtime_params, out_runtime: ?*ke_runtime_handle) abi_result.c.ke_result;
+pub extern fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const ke_runtime_config, out_runtime: ?*ke_runtime_handle) abi_result.c.ke_result;

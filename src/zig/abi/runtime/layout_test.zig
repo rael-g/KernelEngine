@@ -27,7 +27,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_query_decl, translated("ke_query_decl"));
     try expectSameLayout(abi.c.ke_runtime_module_params, translated("ke_runtime_module_params"));
     try expectSameLayout(abi.c.ke_runtime_system_params, translated("ke_runtime_system_params"));
-    try expectSameLayout(abi.c.ke_runtime_params, translated("ke_runtime_params"));
+    try expectSameLayout(abi.c.ke_runtime_config, translated("ke_runtime_config"));
     try expectSameLayout(abi.c.ke_runtime, translated("ke_runtime"));
     try expectSameLayout(abi.c.ke_runtime_handle, translated("ke_runtime_handle"));
     try expectSameLayout(abi.c.ke_system_ctx, translated("ke_system_ctx"));
@@ -90,10 +90,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_runtime_system_params, "before"),
         @offsetOf(abi.c.ke_runtime_system_params, "before_count"),
         @offsetOf(abi.c.ke_runtime_system_params, "exclusive"),
-        @sizeOf(abi.c.ke_runtime_params),
-        @offsetOf(abi.c.ke_runtime_params, "fixed_dt"),
-        @offsetOf(abi.c.ke_runtime_params, "fixed_dt_max_accum"),
-        @offsetOf(abi.c.ke_runtime_params, "max_systems_per_phase"),
+        @sizeOf(abi.c.ke_runtime_config),
+        @offsetOf(abi.c.ke_runtime_config, "fixed_dt"),
+        @offsetOf(abi.c.ke_runtime_config, "fixed_dt_max_accum"),
+        @offsetOf(abi.c.ke_runtime_config, "max_systems_per_phase"),
         @sizeOf(abi.c.ke_runtime),
         @offsetOf(abi.c.ke_runtime, "handle"),
         @offsetOf(abi.c.ke_runtime, "register_module"),

@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_gpu_render_target_texture_params, translated("ke_gpu_render_target_texture_params"));
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
     if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
@@ -42,16 +41,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
 }
 
-extern const layout_values: [6]c_ulonglong;
+extern const layout_values: [1]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_gpu_render_target_texture_params),
-        @offsetOf(abi.c.ke_gpu_render_target_texture_params, "texture"),
-        @offsetOf(abi.c.ke_gpu_render_target_texture_params, "width"),
-        @offsetOf(abi.c.ke_gpu_render_target_texture_params, "height"),
-        @offsetOf(abi.c.ke_gpu_render_target_texture_params, "format"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

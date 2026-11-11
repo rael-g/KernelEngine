@@ -74,18 +74,6 @@ pub const ke_render_label_resolve_config = extern struct {
     default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
-/// What the scene resolve needs to register the components and upload what they name.
-pub const ke_render_scene_resolve_params = extern struct {
-    /// Registers the resolve systems; borrowed, must outlive it.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Registers the components; borrowed.
-    ecs: ?*abi_ecs.c.ke_ecs = std.mem.zeroes(?*abi_ecs.c.ke_ecs),
-    /// Uploads the meshes, materials and textures; borrowed, must outlive it.
-    service: ?*abi_render.c.ke_render_service = std.mem.zeroes(?*abi_render.c.ke_render_service),
-    /// Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.
-    resolver: ?*abi_asset_resolver.c.ke_asset_resolver = std.mem.zeroes(?*abi_asset_resolver.c.ke_asset_resolver),
-};
-
 pub const ke_render_label_resolve_handle = extern struct {
     ref: ?*ke_render_label_resolve = std.mem.zeroes(?*ke_render_label_resolve),
     destroy: ?*const fn (?*ke_render_label_resolve) callconv(.c) void = null,
@@ -104,4 +92,4 @@ pub extern fn ke_render_scene_set_log_callback(callback: ke_log_callback, ctx: ?
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
 /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
 /// failure, and the component types registered before it stay registered.
-pub extern fn ke_render_scene_resolve_create(params: ?*const ke_render_scene_resolve_params, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;
+pub extern fn ke_render_scene_resolve_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, out_resolve: ?*abi_render.c.ke_render_scene_resolve_handle) abi_result.c.ke_result;

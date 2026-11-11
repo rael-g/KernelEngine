@@ -33,7 +33,7 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Which of a render target's frames RenderDoc captures.
-pub const ke_gpu_render_target_renderdoc_params = extern struct {
+pub const ke_gpu_render_target_renderdoc_config = extern struct {
     /// The first frame captured, counting from zero the frames the target presented.
     first_frame: u32 = std.mem.zeroes(u32),
     /// How many consecutive frames are captured, each into its own capture file.
@@ -43,7 +43,7 @@ pub const ke_gpu_render_target_renderdoc_params = extern struct {
 /// Creates a render target that draws into another one and has RenderDoc capture the chosen
 /// frames, each from its acquire to its present. RenderDoc must already be loaded into the
 /// process. Where the capture files go is set when the process is launched.
-pub extern fn ke_gpu_render_target_renderdoc_create(inner: ?*abi_render_gpu.c.ke_gpu_render_target, params: ?*const ke_gpu_render_target_renderdoc_params, out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result;
+pub extern fn ke_gpu_render_target_renderdoc_create(inner: ?*abi_render_gpu.c.ke_gpu_render_target, config: ?*const ke_gpu_render_target_renderdoc_config, out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_gpu_render_target_renderdoc logs to callback, with ctx; a NULL callback
 /// sends them back to stderr, where they go until this is called. Called once, before the

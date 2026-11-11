@@ -94,16 +94,15 @@ fn registerIds(e: *abi_ecs.c.ke_ecs, ids: *abi_render.c.ke_render_scene_componen
 /// invalid argument, a failed allocation as out of memory and a component the ecs refuses with the
 /// ecs's code. The runtime refusing either system fails with its code, removes the sprite system
 /// when it was the mesh system that was refused, and leaves the handle zeroed.
-export fn ke_render_scene_resolve_create(params_in: ?*const abi_render_scene_factory.c.ke_render_scene_resolve_params, out_resolve: [*c]abi_render.c.ke_render_scene_resolve_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_scene_resolve_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, out_resolve: [*c]abi_render.c.ke_render_scene_resolve_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_resolve orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    const e: *abi_ecs.c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
-    const core = p.service orelse return R.code(error.InvalidArgument);
+    const rt: *abi_runtime.c.ke_runtime = runtime orelse return R.code(error.InvalidArgument);
+    const e: *abi_ecs.c.ke_ecs = ecs orelse return R.code(error.InvalidArgument);
+    const core = service orelse return R.code(error.InvalidArgument);
 
     const st = gpa.create(SceneResolve) catch |err| return R.code(err);
-    registerScene(st, p, rt, e, core) catch |err| {
+    registerScene(st, resolver, rt, e, core) catch |err| {
         gpa.destroy(st);
         return R.code(err);
     };
@@ -111,11 +110,11 @@ export fn ke_render_scene_resolve_create(params_in: ?*const abi_render_scene_fac
     return R.ok;
 }
 
-fn registerScene(st: *SceneResolve, p: *const abi_render_scene_factory.c.ke_render_scene_resolve_params, rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render.c.ke_render_service) R.Error!void {
+fn registerScene(st: *SceneResolve, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs, core: *abi_render.c.ke_render_service) R.Error!void {
     st.api = .{ .handle = st, .component_ids = componentIds };
     try registerIds(e, &st.ids);
 
-    st.sprite = .{ .core = core, .mesh_cid = st.ids.mesh, .resolver = p.resolver };
+    st.sprite = .{ .core = core, .mesh_cid = st.ids.mesh, .resolver = resolver };
     st.sprite_terms = .{ .{ .cid = st.ids.sprite2d, .access = abi_runtime.c.KE_ACCESS_WRITE }, .{ .cid = st.ids.mesh, .access = abi_runtime.c.KE_ACCESS_WRITE }, .{ .cid = st.ids.sprite2d, .access = abi_runtime.c.KE_ACCESS_WRITE } };
     st.sprite_queries = .{ .{ .terms = st.sprite_terms[0..].ptr, .term_count = 2 }, .{ .terms = st.sprite_terms[2..].ptr, .term_count = 1 } };
     var sprite = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
@@ -226,6 +225,17 @@ var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .compo
 
 const zsub = @import("zsub");
 
+const SceneDeps = struct {
+    runtime: ?*abi_runtime.c.ke_runtime,
+    ecs: ?*abi_ecs.c.ke_ecs,
+    service: ?*abi_render.c.ke_render_service,
+    resolver: ?*abi_asset_resolver.c.ke_asset_resolver = null,
+};
+
+fn createdScene(deps: *const SceneDeps, out: *abi_render.c.ke_render_scene_resolve_handle) abi_result.c.ke_result {
+    return ke_render_scene_resolve_create(deps.runtime, deps.ecs, deps.service, deps.resolver, out);
+}
+
 const Rig = struct {
     core: zsub.For(abi_render.c.ke_render_service),
     rt: zsub.For(abi_runtime.c.ke_runtime),
@@ -247,8 +257,8 @@ const Rig = struct {
         self.core.deinit();
     }
 
-    fn sceneParams(self: *Rig) abi_render_scene_factory.c.ke_render_scene_resolve_params {
-        return .{ .runtime = self.rt.api(), .ecs = self.ecs.api(), .service = self.core.api(), .resolver = null };
+    fn sceneParams(self: *Rig) SceneDeps {
+        return .{ .runtime = self.rt.api(), .ecs = self.ecs.api(), .service = self.core.api() };
     }
 };
 
@@ -257,7 +267,7 @@ test "the scene resolve registers both its systems and hands out an id for every
     try rig.init();
     defer rig.deinit();
     var h: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
+    try R.check(createdScene(&rig.sceneParams(), &h));
     try rig.rt.received(.register_system).times(2);
     try rig.rt.received(.unregister_system).never();
     const ids = h.ref.?.component_ids.?(h.ref);
@@ -272,7 +282,7 @@ test "destroying the scene resolve unregisters both its systems" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try R.check(ke_render_scene_resolve_create(&rig.sceneParams(), &h));
+    try R.check(createdScene(&rig.sceneParams(), &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -285,7 +295,7 @@ test "a scene resolve whose mesh system the runtime refuses removes its sprite s
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
     var h: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try testing.expect(ke_render_scene_resolve_create(&rig.sceneParams(), &h) != R.ok);
+    try testing.expect(createdScene(&rig.sceneParams(), &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.rt.received(.unregister_system).times(1);
 }
@@ -297,7 +307,7 @@ test "a scene resolve missing its service is refused as an invalid argument" {
     var p = rig.sceneParams();
     p.service = null;
     var h: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_scene_resolve_create(&p, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(createdScene(&p, &h)));
     try testing.expect(h.ref == null);
 }
 

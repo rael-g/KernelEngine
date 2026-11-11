@@ -13,15 +13,15 @@ const abi_result = @import("result");
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Construction parameters for ke_file_system_std_create.
-pub const ke_file_system_std_params = extern struct {
+/// The values a file system is created with, each applied as given.
+pub const ke_file_system_std_config = extern struct {
     /// The directory relative paths are resolved against; "." for the working directory of the
     /// process.
     root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
 /// Creates a ke_file_system over the operating system's files, through Zig's standard library.
-pub extern fn ke_file_system_std_create(params: ?*const ke_file_system_std_params, out_file_system: ?*abi_file_system.c.ke_file_system_handle) abi_result.c.ke_result;
+pub extern fn ke_file_system_std_create(config: ?*const ke_file_system_std_config, out_file_system: ?*abi_file_system.c.ke_file_system_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_file_system_std logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

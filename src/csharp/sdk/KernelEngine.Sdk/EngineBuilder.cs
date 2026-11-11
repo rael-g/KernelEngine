@@ -96,7 +96,7 @@ public sealed class EngineBuilder
         var tree = Own(new DefaultSceneTree(log, ecs, runtime));
 
         var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
-        var binder = Own(new GroupedRenderResourceBinder(log, gpu, shaderDir, io));
+        var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, shaderDir));
         var service = Own(new DefaultRenderService(log, gpu, target, ecs, io, binder, shaderDir, GpuTextureFormat.Rgba16Float, GpuTextureFormat.D32Float, Engine.ClearColor(config)));
         var viewSpace = Own(new RhViewSpace(log));
         var camera = Own(new DefaultRenderCamera(log, viewSpace, gpu));

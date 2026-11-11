@@ -19,14 +19,15 @@ extern "C"
 
 /**
  * Creates a resource cache.
- * @param params [borrowed] The destroy callback and its context.
+ * @param destroy_fn  Invoked when a refcount reaches zero, and on destroy for each still-live entry; may be NULL.
+ * @param destroy_ctx Forwarded to @p destroy_fn unchanged.
  * @param out_cache [out] Receives the cache; left zeroed on failure.
- * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for null @p params or @p out_cache, or
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p out_cache, or
  *         KE_RESULT_OUT_OF_MEMORY.
  */
 KE_RESOURCE_CACHE_DEFAULT_API ke_result ke_resource_cache_create(
-    const ke_resource_cache_params *params,
-    ke_resource_cache_handle       *out_cache);
+    ke_resource_destroy_func destroy_fn, void *destroy_ctx,
+    ke_resource_cache_handle *out_cache);
 
 #ifdef __cplusplus
 }

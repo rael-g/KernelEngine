@@ -16,7 +16,7 @@ public sealed unsafe partial class EnkiTaskPool : KernelEngine.TaskPool.TaskPool
 
     private static KernelEngine.TaskPool.Native.ke_task_pool_handle Create(uint workerCount)
     {
-        KernelEngine.TaskPool.Enki.Native.ke_task_pool_enki_params config = default;
+        KernelEngine.TaskPool.Enki.Native.ke_task_pool_enki_config config = default;
         config.worker_count = workerCount;
         KernelEngine.TaskPool.Native.ke_task_pool_handle handle;
         KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.TaskPool.Enki.Native.NativeMethods.task_pool_enki_create(&config, &handle), "ke_task_pool_enki_create");

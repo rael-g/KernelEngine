@@ -13,9 +13,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a ke_file_system over the operating system's files, through Zig's standard library.
-pub fn fileSystemStdCreate(params: ?*const c.ke_file_system_std_params) Error!abi_file_system.c.ke_file_system_handle {
+pub fn fileSystemStdCreate(config: ?*const c.ke_file_system_std_config) Error!abi_file_system.c.ke_file_system_handle {
     var written: abi_file_system.c.ke_file_system_handle = undefined;
-    try checkResult(c.ke_file_system_std_create(params, &written));
+    try checkResult(c.ke_file_system_std_create(config, &written));
     return written;
 }
 
@@ -25,4 +25,4 @@ pub fn fileSystemStdSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
     return c.ke_file_system_std_set_log_callback(callback, ctx);
 }
 
-pub const FileSystemStdParams = c.ke_file_system_std_params;
+pub const FileSystemStdConfig = c.ke_file_system_std_config;

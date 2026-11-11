@@ -10,7 +10,7 @@ using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Runtime.Native;
 
-public partial struct ke_runtime_params
+public partial struct ke_runtime_config
 {
     public float fixed_dt;
 

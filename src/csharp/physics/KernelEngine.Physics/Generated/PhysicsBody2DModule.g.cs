@@ -51,13 +51,8 @@ public sealed unsafe partial class PhysicsBody2DModule : IDisposable
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(physics);
         ArgumentNullException.ThrowIfNull(sceneTree);
-        KernelEngine.Physics.Native.ke_physics_body2d_module_params @params = default;
-        @params.runtime = runtime.Native;
-        @params.ecs = ecs.Native;
-        @params.physics = physics.Native;
-        @params.scene_tree = sceneTree.Native;
         KernelEngine.Physics.Native.ke_physics_body2d_module_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(&@params, &handle), "ke_physics_body2d_module_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(runtime.Native, ecs.Native, physics.Native, sceneTree.Native, &handle), "ke_physics_body2d_module_create");
         return handle;
     }
 }

@@ -8,7 +8,7 @@ works inside is on the generated page of its file. Contracts are under `src/c/ru
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| runtime | `ke_runtime` | runtime | `ke_ecs`, `ke_task_pool`, `ke_runtime_params` | the tick, and the registration of modules and systems |
+| runtime | `ke_runtime` | runtime | `ke_ecs`, `ke_task_pool`, `ke_runtime_config` | the tick, and the registration of modules and systems |
 | ecs | `ke_ecs` | flecs | queries, structural changes | entity ids, segments of columns |
 | task pool | `ke_task_pool` | enki | task functions | their completion, and the type of their failure |
 | module | none; `ke_runtime_module_params` | the host or a plugin | the runtime, in `on_load` | components and systems it registers |

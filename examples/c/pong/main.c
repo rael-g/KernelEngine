@@ -80,13 +80,13 @@ typedef struct renderer
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io,
                              ke_asset_resolver *assets, const ke_render_service_config *service_config, const char *font)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = service_config->shader_dir, .io = io }, &r->binder));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = service_config->shader_dir }, &r->binder));
     check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref, service_config, &r->service));
     ke_render_service *core = r->service.ref;
     check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
-    check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
-    check("frame", ke_render_frame_create(&(ke_render_frame_params){ .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref, .scene = r->scene.ref }, &r->frame));
+    check("scene resolve", ke_render_scene_resolve_create(rt, ecs, core, NULL, &r->scene));
+    check("frame", ke_render_frame_create(rt, ecs, core, r->camera.ref, r->scene.ref, &r->frame));
     const ke_render_context context = {
         .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
@@ -141,9 +141,9 @@ int main(void)
     pong_game game = { 0 };
 
     ke_task_pool_handle pool = { 0 };
-    check("task pool", ke_task_pool_enki_create(&(ke_task_pool_enki_params){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool));
+    check("task pool", ke_task_pool_enki_create(&(ke_task_pool_enki_config){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool));
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_std_params){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_std_config){ .root = "." }, &files));
     ke_io_handle io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &io));
 
@@ -168,7 +168,7 @@ int main(void)
     ke_ecs_handle ecs = { 0 };
     check("ecs", ke_ecs_flecs_create(&(ke_ecs_flecs_config){ .world_id_base = 1048576 }, &ecs));
     ke_runtime_handle rt = { 0 };
-    check("runtime", ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_params){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt));
+    check("runtime", ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt));
 
     ke_gpu_device_handle gpu = { 0 };
     check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ .enable_validation = false, .debug_labels = false }, &gpu));
@@ -206,8 +206,7 @@ int main(void)
     };
     check("physics", ke_physics_2d_box2d_create(&physics_config, &physics));
     ke_physics_body2d_module_handle bodies = { 0 };
-    check("body2d module", ke_physics_body2d_module_create(&(ke_physics_body2d_module_params){
-        .runtime = rt.ref, .ecs = ecs.ref, .physics = physics.ref, .scene_tree = tree.ref }, &bodies));
+    check("body2d module", ke_physics_body2d_module_create(rt.ref, ecs.ref, physics.ref, tree.ref, &bodies));
 
     ke_audio_handle audio = { 0 };
     check("audio", ke_audio_miniaudio_create(io.ref, &audio));

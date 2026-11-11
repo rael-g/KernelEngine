@@ -36,14 +36,10 @@ pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gp
 /// Receives the outcome of mapping a buffer for reading.
 pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu_buffer, ?*anyopaque) callconv(.c) void;
 
-/// What a grouped resource binder is built on.
-pub const ke_render_resource_binder_grouped_params = extern struct {
-    /// Borrowed; must outlive the binder.
-    device: ?*abi_render_gpu.c.ke_gpu_device = std.mem.zeroes(?*abi_render_gpu.c.ke_gpu_device),
+/// The values a grouped resource binder is created with, each applied as given.
+pub const ke_render_resource_binder_grouped_config = extern struct {
     /// Directory the build wrote each compiled shader's reflection into; copied.
     shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Borrowed; must outlive the binder. The reflection is read through it.
-    io: ?*abi_io.c.ke_io = std.mem.zeroes(?*abi_io.c.ke_io),
 };
 
 /// Sends every line ke_render_binder_grouped logs to callback, with ctx; a NULL callback sends
@@ -53,4 +49,4 @@ pub extern fn ke_render_binder_grouped_set_log_callback(callback: ke_log_callbac
 
 /// Creates a resource binder that gives every group of a shader one bind group and every
 /// material one bind group of its own.
-pub extern fn ke_render_resource_binder_grouped_create(params: ?*const ke_render_resource_binder_grouped_params, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) abi_result.c.ke_result;
+pub extern fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, config: ?*const ke_render_resource_binder_grouped_config, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) abi_result.c.ke_result;

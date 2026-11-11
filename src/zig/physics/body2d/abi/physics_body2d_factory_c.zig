@@ -42,25 +42,13 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Construction parameters for the 2D body reconciliation system.
-pub const ke_physics_body2d_module_params = extern struct {
-    /// Registers the system; borrowed, must outlive the module.
-    runtime: ?*abi_runtime.c.ke_runtime = std.mem.zeroes(?*abi_runtime.c.ke_runtime),
-    /// Resolves the component ids; borrowed.
-    ecs: ?*abi_ecs.c.ke_ecs = std.mem.zeroes(?*abi_ecs.c.ke_ecs),
-    /// The world to drive; borrowed.
-    physics: ?*abi_physics.c.ke_physics_2d = std.mem.zeroes(?*abi_physics.c.ke_physics_2d),
-    /// Tells when a collider's ancestors may have changed; borrowed, must outlive the module.
-    scene_tree: ?*abi_scene_tree.c.ke_scene_tree = std.mem.zeroes(?*abi_scene_tree.c.ke_scene_tree),
-};
-
 pub const ke_physics_body2d_module_handle = extern struct {
     ref: ?*ke_physics_body2d_module = std.mem.zeroes(?*ke_physics_body2d_module),
     destroy: ?*const fn (?*ke_physics_body2d_module) callconv(.c) void = null,
 };
 
 /// Registers the system that creates, steps, and syncs 2D bodies.
-pub extern fn ke_physics_body2d_module_create(params: ?*const ke_physics_body2d_module_params, out_module: ?*ke_physics_body2d_module_handle) abi_result.c.ke_result;
+pub extern fn ke_physics_body2d_module_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, out_module: ?*ke_physics_body2d_module_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_physics_body2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

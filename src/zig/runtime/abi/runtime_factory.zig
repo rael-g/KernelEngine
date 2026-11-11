@@ -15,9 +15,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
-pub fn runtimeCreate(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: ?*const c.ke_runtime_params) Error!abi_runtime.c.ke_runtime_handle {
+pub fn runtimeCreate(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_runtime_config) Error!abi_runtime.c.ke_runtime_handle {
     var written: abi_runtime.c.ke_runtime_handle = undefined;
-    try checkResult(c.ke_runtime_create(ecs, task_pool, params, &written));
+    try checkResult(c.ke_runtime_create(ecs, task_pool, config, &written));
     return written;
 }
 
@@ -27,4 +27,4 @@ pub fn runtimeSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void
     return c.ke_runtime_set_log_callback(callback, ctx);
 }
 
-pub const RuntimeParams = c.ke_runtime_params;
+pub const RuntimeConfig = c.ke_runtime_config;

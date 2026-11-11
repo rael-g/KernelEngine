@@ -24,7 +24,7 @@ public sealed unsafe partial class DefaultRuntime : KernelEngine.Runtime.Runtime
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(taskPool);
-        KernelEngine.Runtime.Native.ke_runtime_params config = default;
+        KernelEngine.Runtime.Native.ke_runtime_config config = default;
         config.fixed_dt = fixedDt;
         config.fixed_dt_max_accum = fixedDtMaxAccum;
         config.max_systems_per_phase = maxSystemsPerPhase;

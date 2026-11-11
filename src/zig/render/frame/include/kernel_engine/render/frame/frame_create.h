@@ -26,23 +26,19 @@ extern "C"
 {
 #endif
 
-    /// [bag] What the frame needs to begin and end on the service and to publish the frame globals.
-    typedef struct ke_render_frame_params
-    {
-        ke_runtime        *runtime; ///< Registers the frame's systems; borrowed, must outlive it.
-        ke_ecs            *ecs;     ///< Registers the frame tag; borrowed.
-        ke_render_service *service; ///< The frame begins and ends on it; borrowed, must outlive it.
-        ke_render_camera  *camera;  ///< Turns the camera entity into matrices; borrowed, must outlive it.
-        ke_render_scene_resolve *scene; ///< Names the components the frame reads; borrowed.
-    } ke_render_frame_params;
-
     /// Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which
     /// begins the frame and publishes the frame globals and the scene's light, and
     /// "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid argument;
     /// the handle's ref is NULL on failure.
+    /// @param runtime Registers the frame's systems; borrowed, must outlive it.
+    /// @param ecs     Registers the frame tag; borrowed.
+    /// @param service The frame begins and ends on it; borrowed, must outlive it.
+    /// @param camera  Turns the camera entity into matrices; borrowed, must outlive it.
+    /// @param scene   Names the components the frame reads; borrowed.
     /// @param out_frame [out] Receives the handle; left zeroed on failure.
-    KE_RENDER_FRAME_API ke_result ke_render_frame_create(const ke_render_frame_params *params,
-                                                                      ke_render_frame_handle *out_frame);
+    KE_RENDER_FRAME_API ke_result ke_render_frame_create(ke_runtime *runtime, ke_ecs *ecs, ke_render_service *service,
+                                                         ke_render_camera *camera, ke_render_scene_resolve *scene,
+                                                         ke_render_frame_handle *out_frame);
 
 #ifdef __cplusplus
 }

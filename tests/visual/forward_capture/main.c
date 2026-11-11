@@ -152,7 +152,7 @@ typedef struct renderer
 
 static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(&(ke_render_resource_binder_grouped_params){ .device = gpu, .shader_dir = "shaders", .io = io }, &r->binder));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = "shaders" }, &r->binder));
     check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref,
         &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->service));
     ke_render_service *core = r->service.ref;
@@ -161,11 +161,9 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     if (made_view != KE_OK) die_result("view space", made_view);
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
 
-    check("scene resolve", ke_render_scene_resolve_create(&(ke_render_scene_resolve_params){ .runtime = rt, .ecs = ecs, .service = core }, &r->scene));
+    check("scene resolve", ke_render_scene_resolve_create(rt, ecs, core, NULL, &r->scene));
 
-    check("frame", ke_render_frame_create(&(ke_render_frame_params){
-        .runtime = rt, .ecs = ecs, .service = core, .camera = r->camera.ref,
-        .scene = r->scene.ref }, &r->frame));
+    check("frame", ke_render_frame_create(rt, ecs, core, r->camera.ref, r->scene.ref, &r->frame));
 
     const ke_render_context context = {
         .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
@@ -214,15 +212,14 @@ int main(int argc, char **argv)
         .mip_level_count = 1, .sample_count = 1 }, &texture));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target", ke_gpu_render_target_texture_create(gpu.ref,
-        &(ke_gpu_render_target_texture_params){ .texture = texture, .width = WIDTH, .height = HEIGHT,
-                                                 .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM }, &target));
+    check("render target", ke_gpu_render_target_texture_create(gpu.ref, texture, WIDTH, HEIGHT,
+                                                                  KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, &target));
 
     ke_gpu_render_target_handle captured = { 0 };
     if (renderdoc)
     {
         check("renderdoc render target", ke_gpu_render_target_renderdoc_create(target.ref,
-            &(ke_gpu_render_target_renderdoc_params){ .first_frame = FRAMES - 1, .frame_count = 1 }, &captured));
+            &(ke_gpu_render_target_renderdoc_config){ .first_frame = FRAMES - 1, .frame_count = 1 }, &captured));
     }
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
@@ -231,16 +228,16 @@ int main(int argc, char **argv)
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
     ke_task_pool_handle pool = { 0 };
-    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_enki_params){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool);
+    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_enki_config){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool);
     if (made != KE_OK) die_result("task pool", made);
 
     ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_params){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt);
+    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt);
     if (made_runtime != KE_OK) die_result("runtime", made_runtime);
 
     renderer render;
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_std_params){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_std_config){ .root = "." }, &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);

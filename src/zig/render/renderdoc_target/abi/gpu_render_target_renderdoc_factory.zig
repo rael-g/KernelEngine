@@ -15,9 +15,9 @@ const resultOf = abi_result.resultOf;
 /// Creates a render target that draws into another one and has RenderDoc capture the chosen
 /// frames, each from its acquire to its present. RenderDoc must already be loaded into the
 /// process. Where the capture files go is set when the process is launched.
-pub fn gpuRenderTargetRenderdocCreate(inner: ?*abi_render_gpu.c.ke_gpu_render_target, params: ?*const c.ke_gpu_render_target_renderdoc_params) Error!abi_render_gpu.c.ke_gpu_render_target_handle {
+pub fn gpuRenderTargetRenderdocCreate(inner: ?*abi_render_gpu.c.ke_gpu_render_target, config: ?*const c.ke_gpu_render_target_renderdoc_config) Error!abi_render_gpu.c.ke_gpu_render_target_handle {
     var written: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
-    try checkResult(c.ke_gpu_render_target_renderdoc_create(inner, params, &written));
+    try checkResult(c.ke_gpu_render_target_renderdoc_create(inner, config, &written));
     return written;
 }
 
@@ -28,4 +28,4 @@ pub fn gpuRenderTargetRenderdocSetLogCallback(callback: c.ke_log_callback, ctx: 
     return c.ke_gpu_render_target_renderdoc_set_log_callback(callback, ctx);
 }
 
-pub const GpuRenderTargetRenderdocParams = c.ke_gpu_render_target_renderdoc_params;
+pub const GpuRenderTargetRenderdocConfig = c.ke_gpu_render_target_renderdoc_config;

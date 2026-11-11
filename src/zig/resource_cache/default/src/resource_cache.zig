@@ -315,26 +315,25 @@ fn vtDestroy(self: ?*abi_resource_cache.c.ke_resource_cache) callconv(.c) void {
 }
 
 /// Builds the `State`, its two tables and the vtable, and writes the handle whose destroy slot is
-/// `vtDestroy`. Fails with invalid argument for null parameters and with out of memory when the
+/// `vtDestroy`. Fails with invalid argument for a null out handle and with out of memory when the
 /// state or either table cannot be allocated, freeing what was allocated before it and leaving the
 /// handle zeroed.
-export fn ke_resource_cache_create(params: ?*const abi_resource_cache.c.ke_resource_cache_params, out_cache: ?*abi_resource_cache.c.ke_resource_cache_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_resource_cache_create(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, destroy_ctx: ?*anyopaque, out_cache: ?*abi_resource_cache.c.ke_resource_cache_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_cache orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const p = params orelse return R.code(error.InvalidArgument);
-    out.* = create(p) catch |err| {
+    out.* = create(destroy_fn, destroy_ctx) catch |err| {
         log.warn("creating the resource cache failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(params: *const abi_resource_cache.c.ke_resource_cache_params) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
+fn create(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, destroy_ctx: ?*anyopaque) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
     const s = gpa.create(State) catch return error.OutOfMemory;
     errdefer gpa.destroy(s);
     s.* = std.mem.zeroes(State);
-    s.destroy_fn = params.destroy_fn;
-    s.destroy_ctx = params.destroy_ctx;
+    s.destroy_fn = destroy_fn;
+    s.destroy_ctx = destroy_ctx;
 
     s.resources = Table.init(64) orelse return error.OutOfMemory;
     errdefer s.resources.deinit();
@@ -371,20 +370,14 @@ fn markerDestroy(handle: abi_resource_cache.c.ke_resource_handle, ctx: ?*anyopaq
 fn makeCountingCache() abi_resource_cache.c.ke_resource_cache_handle {
     test_destroy_calls = 0;
     test_last_destroyed = abi_resource_cache.c.KE_RESOURCE_HANDLE_NONE;
-    var params = std.mem.zeroes(abi_resource_cache.c.ke_resource_cache_params);
-    params.destroy_fn = &countingDestroy;
-    params.destroy_ctx = null;
     var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
+    R.check(ke_resource_cache_create(&countingDestroy, null, &h)) catch return .{ .ref = null, .destroy = null };
     return h;
 }
 
 fn makeMarkerCache(marker: *i32) abi_resource_cache.c.ke_resource_cache_handle {
-    var params = std.mem.zeroes(abi_resource_cache.c.ke_resource_cache_params);
-    params.destroy_fn = &markerDestroy;
-    params.destroy_ctx = marker;
     var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    R.check(ke_resource_cache_create(&params, &h)) catch return .{ .ref = null, .destroy = null };
+    R.check(ke_resource_cache_create(&markerDestroy, marker, &h)) catch return .{ .ref = null, .destroy = null };
     return h;
 }
 

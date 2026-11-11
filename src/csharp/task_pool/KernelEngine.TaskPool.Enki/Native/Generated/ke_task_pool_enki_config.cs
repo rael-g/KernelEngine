@@ -7,7 +7,7 @@ using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.TaskPool.Enki.Native;
 
-public partial struct ke_task_pool_enki_params
+public partial struct ke_task_pool_enki_config
 {
     [NativeTypeName("uint32_t")]
     public uint worker_count;

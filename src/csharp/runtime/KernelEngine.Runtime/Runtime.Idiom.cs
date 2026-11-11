@@ -33,16 +33,16 @@ public unsafe partial class Runtime : IRuntime
     {
     }
 
-    private static readonly Native.ke_runtime_params* SixtyPerSecond = SixtyPerSecondParams();
+    private static readonly Native.ke_runtime_config* SixtyPerSecond = SixtyPerSecondParams();
 
-    private static Native.ke_runtime_params* SixtyPerSecondParams()
+    private static Native.ke_runtime_config* SixtyPerSecondParams()
     {
-        var p = (Native.ke_runtime_params*)System.Runtime.InteropServices.NativeMemory.Alloc((nuint)sizeof(Native.ke_runtime_params));
-        *p = new Native.ke_runtime_params { fixed_dt = 1.0f / 60.0f, fixed_dt_max_accum = 0.25f, max_systems_per_phase = 256 };
+        var p = (Native.ke_runtime_config*)System.Runtime.InteropServices.NativeMemory.Alloc((nuint)sizeof(Native.ke_runtime_config));
+        *p = new Native.ke_runtime_config { fixed_dt = 1.0f / 60.0f, fixed_dt_max_accum = 0.25f, max_systems_per_phase = 256 };
         return p;
     }
 
-    private static Native.ke_runtime_params* Sixty() => SixtyPerSecond;
+    private static Native.ke_runtime_config* Sixty() => SixtyPerSecond;
 
     private static INativeEcs RoutingLog(INativeEcs ecs, Microsoft.Extensions.Logging.ILoggerFactory loggerFactory)
     {

@@ -433,18 +433,21 @@ fn destroyBinder(self: [*c]abi_render_gpu.c.ke_render_resource_binder) callconv(
 
 /// The factory: copies the shader directory, keeps the borrowed io, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(params: [*c]const abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_params, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, config: ?*const abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_config, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    if (params == null or params.*.device == null or params.*.shader_dir == null or params.*.io == null) return R.code(error.InvalidArgument);
-    const st = newBinder(params.*) catch |err| return R.code(err);
+    const dev = device orelse return R.code(error.InvalidArgument);
+    const reader = io orelse return R.code(error.InvalidArgument);
+    const cfg = config orelse return R.code(error.InvalidArgument);
+    if (cfg.shader_dir == null) return R.code(error.InvalidArgument);
+    const st = newBinder(dev, reader, cfg.shader_dir) catch |err| return R.code(err);
     out.* = .{ .ref = &st.api, .destroy = destroyBinder };
     return R.ok;
 }
 
-fn newBinder(params: abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_params) R.Error!*State {
+fn newBinder(device: *abi_render_gpu.c.ke_gpu_device, io: *abi_io.c.ke_io, shader_dir: [*c]const u8) R.Error!*State {
     const st = try gpa.create(State);
-    const dir = gpa.dupe(u8, std.mem.span(params.shader_dir.?)) catch |err| {
+    const dir = gpa.dupe(u8, std.mem.span(shader_dir)) catch |err| {
         gpa.destroy(st);
         return err;
     };
@@ -463,9 +466,9 @@ fn newBinder(params: abi_render_binder_grouped_factory.c.ke_render_resource_bind
             .destroy_material = destroyMaterial,
             .bind_material = bindMaterial,
         },
-        .device = params.device.?,
+        .device = device,
         .shader_dir = dir,
-        .io = params.io.?,
+        .io = io,
         .provided = .empty,
         .material_group = reflection.Group.init(gpa),
         .material_layout = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
@@ -582,9 +585,9 @@ const Rig = struct {
     }
 
     fn binder(self: *Rig) !abi_render_gpu.c.ke_render_resource_binder_handle {
-        const params = abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_params{ .device = self.dev.api(), .shader_dir = "shaders", .io = self.io.api() };
+        const config = abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_config{ .shader_dir = "shaders" };
         var h: abi_render_gpu.c.ke_render_resource_binder_handle = undefined;
-        try R.check(ke_render_resource_binder_grouped_create(&params, &h));
+        try R.check(ke_render_resource_binder_grouped_create(self.dev.api(), self.io.api(), &config, &h));
         return h;
     }
 

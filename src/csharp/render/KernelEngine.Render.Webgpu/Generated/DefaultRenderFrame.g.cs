@@ -30,14 +30,8 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Rend
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
-        KernelEngine.Render.Webgpu.Native.ke_render_frame_params @params = default;
-        @params.runtime = runtime.Native;
-        @params.ecs = ecs.Native;
-        @params.service = service.Native;
-        @params.camera = camera.Native;
-        @params.scene = scene.Native;
         KernelEngine.Render.Native.ke_render_frame_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(&@params, &handle), "ke_render_frame_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(runtime.Native, ecs.Native, service.Native, camera.Native, scene.Native, &handle), "ke_render_frame_create");
         return handle;
     }
 }

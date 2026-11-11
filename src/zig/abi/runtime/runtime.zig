@@ -224,9 +224,9 @@ pub const Runtime = struct {
     }
 
     /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
-    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: ?*const c.ke_runtime_params) Error!Runtime {
+    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_runtime_config) Error!Runtime {
         var written: c.ke_runtime_handle = undefined;
-        try checkResult(c.ke_runtime_create(ecs, task_pool, params, &written));
+        try checkResult(c.ke_runtime_create(ecs, task_pool, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -274,5 +274,5 @@ pub const ComponentAccess = c.ke_component_access;
 pub const QueryDecl = c.ke_query_decl;
 pub const RuntimeModuleParams = c.ke_runtime_module_params;
 pub const RuntimeSystemParams = c.ke_runtime_system_params;
-pub const RuntimeParams = c.ke_runtime_params;
+pub const RuntimeConfig = c.ke_runtime_config;
 pub const RuntimeHandle = c.ke_runtime_handle;

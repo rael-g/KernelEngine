@@ -486,7 +486,7 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
 
 fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: *CoreState) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
     var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(&abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
+    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(destroy_fn, st, &h));
     return h;
 }
 

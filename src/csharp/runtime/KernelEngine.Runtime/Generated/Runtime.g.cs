@@ -75,12 +75,12 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     }
 
     /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
-    /// <param name="@params">Required; every field is read as given.</param>
+    /// <param name="config">Required; every field is read as given.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_params* @params)
+    internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_config* config)
     {
         ke_runtime_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, taskPool, @params, &handle), "ke_runtime_create");
+        KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, taskPool, config, &handle), "ke_runtime_create");
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;

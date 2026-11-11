@@ -24,9 +24,9 @@ pub const PhysicsBody2dModule = struct {
     }
 
     /// Registers the system that creates, steps, and syncs 2D bodies.
-    pub fn create(params: ?*const c.ke_physics_body2d_module_params) Error!PhysicsBody2dModule {
+    pub fn create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree) Error!PhysicsBody2dModule {
         var written: c.ke_physics_body2d_module_handle = undefined;
-        try checkResult(c.ke_physics_body2d_module_create(params, &written));
+        try checkResult(c.ke_physics_body2d_module_create(runtime, ecs, physics, scene_tree, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -38,5 +38,4 @@ pub fn physicsBody2dSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
     return c.ke_physics_body2d_set_log_callback(callback, ctx);
 }
 
-pub const PhysicsBody2dModuleParams = c.ke_physics_body2d_module_params;
 pub const PhysicsBody2dModuleHandle = c.ke_physics_body2d_module_handle;

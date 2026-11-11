@@ -7,7 +7,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.FileSystem.Std.Native;
 
-public unsafe partial struct ke_file_system_std_params
+public unsafe partial struct ke_file_system_std_config
 {
     [NativeTypeName("const char *")]
     public sbyte* root;

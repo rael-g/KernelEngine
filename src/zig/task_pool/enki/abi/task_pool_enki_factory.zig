@@ -13,9 +13,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a task pool.
-pub fn taskPoolEnkiCreate(params: ?*const c.ke_task_pool_enki_params) Error!abi_task_pool.c.ke_task_pool_handle {
+pub fn taskPoolEnkiCreate(config: ?*const c.ke_task_pool_enki_config) Error!abi_task_pool.c.ke_task_pool_handle {
     var written: abi_task_pool.c.ke_task_pool_handle = undefined;
-    try checkResult(c.ke_task_pool_enki_create(params, &written));
+    try checkResult(c.ke_task_pool_enki_create(config, &written));
     return written;
 }
 
@@ -25,4 +25,4 @@ pub fn taskPoolEnkiSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque)
     return c.ke_task_pool_enki_set_log_callback(callback, ctx);
 }
 
-pub const TaskPoolEnkiParams = c.ke_task_pool_enki_params;
+pub const TaskPoolEnkiConfig = c.ke_task_pool_enki_config;

@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_resource_cache_params, translated("ke_resource_cache_params"));
     try expectSameLayout(abi.c.ke_resource_cache, translated("ke_resource_cache"));
     try expectSameLayout(abi.c.ke_resource_cache_handle, translated("ke_resource_cache_handle"));
     if (@hasDecl(c, "ke_resource_destroy_func")) try expectSameLayout(abi.c.ke_resource_destroy_func, c.ke_resource_destroy_func);
@@ -35,14 +34,11 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RESOURCE_HANDLE_NONE), @as(i128, abi.c.KE_RESOURCE_HANDLE_NONE));
 }
 
-extern const layout_values: [15]c_ulonglong;
+extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_resource_cache_params),
-        @offsetOf(abi.c.ke_resource_cache_params, "destroy_fn"),
-        @offsetOf(abi.c.ke_resource_cache_params, "destroy_ctx"),
         @sizeOf(abi.c.ke_resource_cache),
         @offsetOf(abi.c.ke_resource_cache, "handle"),
         @offsetOf(abi.c.ke_resource_cache, "register_resource"),

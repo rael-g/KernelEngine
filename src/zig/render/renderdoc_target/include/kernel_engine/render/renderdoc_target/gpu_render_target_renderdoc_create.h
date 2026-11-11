@@ -22,13 +22,13 @@ extern "C"
 #endif
 
 /// [bag] Which of a render target's frames RenderDoc captures.
-typedef struct ke_gpu_render_target_renderdoc_params
+typedef struct ke_gpu_render_target_renderdoc_config
 {
     /// The first frame captured, counting from zero the frames the target presented.
     uint32_t first_frame;
     /// How many consecutive frames are captured, each into its own capture file.
     uint32_t frame_count;
-} ke_gpu_render_target_renderdoc_params;
+} ke_gpu_render_target_renderdoc_config;
 
 /**
  * @brief Creates a render target that draws into another one and has RenderDoc capture the chosen
@@ -41,7 +41,7 @@ typedef struct ke_gpu_render_target_renderdoc_params
  */
 KE_GPU_RENDER_TARGET_RENDERDOC_API ke_result
 ke_gpu_render_target_renderdoc_create(ke_gpu_render_target *inner,
-                                      const ke_gpu_render_target_renderdoc_params *params,
+                                      const ke_gpu_render_target_renderdoc_config *config,
                                       ke_gpu_render_target_handle *out_target);
 
 #ifdef __cplusplus

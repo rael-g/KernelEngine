@@ -18,8 +18,8 @@ extern "C" {
 #  endif
 #endif
 
-/// [bag]
-typedef struct ke_runtime_params {
+/// [bag] The values a runtime is created with, each applied as given.
+typedef struct ke_runtime_config {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     float fixed_dt;
 
@@ -29,19 +29,19 @@ typedef struct ke_runtime_params {
 
     /// Most systems one phase may hold; registering past it fails.
     uint32_t max_systems_per_phase;
-} ke_runtime_params;
+} ke_runtime_config;
 
 
 /**
  * Creates a runtime over @p ecs and @p task_pool, both borrowed for its lifetime.
- * @param params [borrowed] Required; every field is read as given.
+ * @param config [borrowed] Required; every field is read as given.
  * @param out_runtime [out] Receives the runtime; left zeroed on failure.
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p task_pool or @p out_runtime;
  *         KE_RESULT_OUT_OF_MEMORY.
  */
 KE_RUNTIME_CREATE_API ke_result ke_runtime_create(ke_ecs                  *ecs,
                                                   ke_task_pool            *task_pool,
-                                                  const ke_runtime_params *params,
+                                                  const ke_runtime_config *config,
                                                   ke_runtime_handle       *out_runtime);
 
 #ifdef __cplusplus

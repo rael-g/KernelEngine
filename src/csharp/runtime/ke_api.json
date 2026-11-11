@@ -875,8 +875,8 @@
       ]
     },
     {
-      "name": "ke_runtime_params",
-      "doc": null,
+      "name": "ke_runtime_config",
+      "doc": "The values a runtime is created with, each applied as given.",
       "tags": [
         "bag"
       ],
@@ -1921,8 +1921,8 @@
           "doc": null
         },
         {
-          "name": "params",
-          "type": "const ke_runtime_params *",
+          "name": "config",
+          "type": "const ke_runtime_config *",
           "tags": [
             "borrowed"
           ],

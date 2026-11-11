@@ -46,12 +46,11 @@ pub fn renderSceneSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
 /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
 /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
 /// failure, and the component types registered before it stay registered.
-pub fn renderSceneResolveCreate(params: ?*const c.ke_render_scene_resolve_params) Error!abi_render.c.ke_render_scene_resolve_handle {
+pub fn renderSceneResolveCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver) Error!abi_render.c.ke_render_scene_resolve_handle {
     var written: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try checkResult(c.ke_render_scene_resolve_create(params, &written));
+    try checkResult(c.ke_render_scene_resolve_create(runtime, ecs, service, resolver, &written));
     return written;
 }
 
 pub const RenderLabelResolveConfig = c.ke_render_label_resolve_config;
-pub const RenderSceneResolveParams = c.ke_render_scene_resolve_params;
 pub const RenderLabelResolveHandle = c.ke_render_label_resolve_handle;
