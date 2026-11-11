@@ -1,5 +1,7 @@
-﻿using KernelEngine.Ecs.Flecs;
+﻿using KernelEngine.Ecs;
+using KernelEngine.Ecs.Flecs;
 using KernelEngine.Runtime;
+using KernelEngine.TaskPool;
 using KernelEngine.TaskPool.Enki;
 
 using Xunit;
@@ -8,8 +10,10 @@ namespace KernelEngine.Runtime.Tests;
 
 public class RuntimeTests : IDisposable
 {
-    private readonly EnkiTaskPool _taskPool = new(uint.MaxValue);
-    private readonly FlecsEcsRegistry _ecs = new(1048576);
+    private static readonly RuntimeConfig SixtyPerSecond = new() { FixedDt = 1f / 60f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 };
+
+    private readonly EnkiTaskPool _taskPool = new(new TaskPoolConfig { WorkerCount = uint.MaxValue });
+    private readonly FlecsEcsRegistry _ecs = new(new EcsConfig { ReservedIdCapacity = 1048576 });
 
     public void Dispose()
     {
@@ -20,16 +24,16 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Create_Tick_Destroy_NoSystems()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         runtime.Tick(1f / 60f);
     }
 
     [Fact]
     public void Dispose_OfItsDependenciesFirst_LeavesTheRuntimeUsableUntilItIsDisposed()
     {
-        var ecs = new FlecsEcsRegistry(1048576);
-        var taskPool = new EnkiTaskPool(uint.MaxValue);
-        IRuntime runtime = new Runtime(ecs, taskPool);
+        var ecs = new FlecsEcsRegistry(new EcsConfig { ReservedIdCapacity = 1048576 });
+        var taskPool = new EnkiTaskPool(new TaskPoolConfig { WorkerCount = uint.MaxValue });
+        IRuntime runtime = new DefaultRuntime(ecs, taskPool, SixtyPerSecond);
         var unloadCount = 0;
         runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
 
@@ -46,7 +50,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_InvokesOnLoad_Once()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var loadCount = 0;
         var id = runtime.RegisterModule("TestModule", _ => loadCount++);
         Assert.NotEqual(0u, id);
@@ -56,7 +60,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_InvokesOnUnload_WhenRuntimeIsDisposed()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskPool);
+        IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var unloadCount = 0;
         runtime.RegisterModule("UnloadModule", _ => { }, _ => unloadCount++);
         Assert.Equal(0, unloadCount);
@@ -69,7 +73,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterModule_UnloadsInReverseRegistrationOrder()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskPool);
+        IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var order = new List<string>();
         runtime.RegisterModule("First", _ => { }, _ => order.Add("First"));
         runtime.RegisterModule("Second", _ => { }, _ => order.Add("Second"));
@@ -82,7 +86,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisteredSystem_FiresOncePerTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var tickCount = 0;
         runtime.RegisterModule("TickModule", rt =>
         {
@@ -98,7 +102,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RegisterSystem_DirectlyFromCallerCode_Works()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var calls = 0;
         runtime.RegisterSystem("Bare", RuntimePhase.Update, (_, _) => calls++);
         runtime.Tick(0.016f);
@@ -109,7 +113,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_PropagatesAtTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         runtime.RegisterSystem("Boom", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("kaboom"));
 
@@ -122,7 +126,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void SystemException_StopsTheRestOfTheTick()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         var laterRan = false;
         runtime.RegisterSystem("Boom", RuntimePhase.PreUpdate,
             (_, _) => throw new InvalidOperationException("kaboom"));
@@ -136,7 +140,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void RenderSystemException_SurvivesTheTickThatDispatchedIt()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         using var released = new ManualResetEventSlim(false);
 
         runtime.RegisterSystem("BoomRender", RuntimePhase.Render, (_, _) =>
@@ -155,7 +159,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void EverySystemThatThrowsIsReported_NotJustTheLast()
     {
-        using IRuntime runtime = new Runtime(_ecs, _taskPool);
+        using IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         runtime.RegisterSystem("BoomA", RuntimePhase.Update,
             (_, _) => throw new InvalidOperationException("a"));
         runtime.RegisterSystem("BoomB", RuntimePhase.Update,
@@ -169,7 +173,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Dispose_IsIdempotent()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskPool);
+        IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         runtime.Dispose();
         runtime.Dispose();
     }
@@ -177,7 +181,7 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void OperationsAfterDispose_Throw()
     {
-        IRuntime runtime = new Runtime(_ecs, _taskPool);
+        IRuntime runtime = new DefaultRuntime(_ecs, _taskPool, SixtyPerSecond);
         runtime.Dispose();
         Assert.Throws<ObjectDisposedException>(() => runtime.Tick(0.016f));
     }
@@ -185,12 +189,12 @@ public class RuntimeTests : IDisposable
     [Fact]
     public void Constructor_NullEcs_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new Runtime(null!, _taskPool));
+        Assert.Throws<ArgumentNullException>(() => new DefaultRuntime(null!, _taskPool, SixtyPerSecond));
     }
 
     [Fact]
     public void Constructor_NullAllocator_Throws()
     {
-        Assert.Throws<ArgumentNullException>(() => new Runtime(_ecs, null!));
+        Assert.Throws<ArgumentNullException>(() => new DefaultRuntime(_ecs, null!, SixtyPerSecond));
     }
 }

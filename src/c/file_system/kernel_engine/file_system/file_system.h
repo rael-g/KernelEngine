@@ -96,7 +96,7 @@ extern "C"
         void (*destroy)(ke_file_system *self);
     } ke_file_system_handle;
 
-/// [bag] The values a file system is created with, whatever its implementation, each applied as given.
+/// [borrowed] The values a file system is created with, whatever its implementation, each applied as given.
 typedef struct ke_file_system_config
 {
     /// [utf8] The directory relative paths are resolved against; "." for the working directory of

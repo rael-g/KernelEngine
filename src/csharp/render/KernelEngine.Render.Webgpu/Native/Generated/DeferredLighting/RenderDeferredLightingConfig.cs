@@ -8,7 +8,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public partial struct ke_render_forward_config
+public partial struct RenderDeferredLightingConfig
 {
-    public bool ibl_enabled;
+    public bool IblEnabled;
 }

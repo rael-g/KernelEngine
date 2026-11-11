@@ -145,7 +145,7 @@ extern "C"
         void (*destroy)(ke_physics_2d *self);
     } ke_physics_2d_handle;
 
-/// [bag] The values a 2D physics world is created with, whatever its implementation, each applied as given.
+/// The values a 2D physics world is created with, whatever its implementation, each applied as given.
 typedef struct ke_physics_2d_config {
     float gravity_x; /**< Horizontal gravity, in metres per second squared. */
     float gravity_y; /**< Vertical gravity, in metres per second squared. */

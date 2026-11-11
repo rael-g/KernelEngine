@@ -28,16 +28,16 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var pool = new EnkiTaskPool(null, uint.MaxValue);
-        using var files = new StdFileSystem(null, ".");
+        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
         using var io = new PoolIo(null, pool, files);
         using var config = new DefaultConfiguration(null);
-        using var input = new Input.Input();
-        using var ecs = new FlecsEcsRegistry(null, 1048576);
-        using var runtime = new DefaultRuntime(null, ecs, pool, 1.0f / 60.0f, 0.25f, 256);
+        using var input = new Input.DefaultInput();
+        using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+        using var runtime = new DefaultRuntime(null, ecs, pool, new Runtime.RuntimeConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 });
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, runtime);
-        using var actions = new DefaultInputActions(null, runtime, input, config, "input");
+        using var actions = new DefaultInputActions(null, runtime, input, config, new Framework.InputActionsConfig { Section = "input" });
         using var types = new DefaultNodeTypes(null, runtime, ecs, tree, actions);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         var nodes = new NodeWorld(types);

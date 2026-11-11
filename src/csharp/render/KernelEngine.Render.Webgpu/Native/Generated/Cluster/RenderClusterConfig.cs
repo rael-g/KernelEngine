@@ -8,17 +8,17 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
-public partial struct ke_render_cluster_config
+public partial struct RenderClusterConfig
 {
     [NativeTypeName("uint32_t")]
-    public uint grid_x;
+    public uint GridX;
 
     [NativeTypeName("uint32_t")]
-    public uint grid_y;
+    public uint GridY;
 
     [NativeTypeName("uint32_t")]
-    public uint grid_z;
+    public uint GridZ;
 
     [NativeTypeName("uint32_t")]
-    public uint max_lights_per_cluster;
+    public uint MaxLightsPerCluster;
 }

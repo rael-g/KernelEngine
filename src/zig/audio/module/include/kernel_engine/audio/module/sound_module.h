@@ -24,7 +24,7 @@
 extern "C" {
 #endif
 
-/// The values the sound module is created with.
+/// [borrowed] The values the sound module is created with.
 typedef struct ke_sound_module_config
 {
     /// [borrowed,utf8] Directory a clip's path is joined to; copied. NULL uses the path as written.

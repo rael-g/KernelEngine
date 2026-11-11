@@ -160,7 +160,7 @@
       "name": "ke_window_config",
       "doc": "The values a window is created with, whatever its implementation, each applied as given.",
       "tags": [
-        "bag"
+        "borrowed"
       ],
       "fields": [
         {

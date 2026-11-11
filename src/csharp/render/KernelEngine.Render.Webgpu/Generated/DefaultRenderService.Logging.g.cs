@@ -14,17 +14,14 @@ public sealed unsafe partial class DefaultRenderService
     /// <param name="ecs">Borrowed, must outlive the service.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
-    /// <param name="shaderDir">Directory the shaders are loaded from; copied. Required.</param>
-    /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.</param>
-    /// <param name="depthFormat">Format of the frame's depth.</param>
-    /// <param name="clearColor">Color the frame is cleared to.</param>
-    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor) : base(CreateLogged(loggerFactory, device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor))
+    /// <param name="config">The service's values, applied as given.</param>
+    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(CreateLogged(loggerFactory, device, target, ecs, io, binder, config))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor)
+    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor);
+        return Create(device, target, ecs, io, binder, config);
     }
 }

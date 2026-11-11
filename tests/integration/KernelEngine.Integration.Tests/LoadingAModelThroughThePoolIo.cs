@@ -13,8 +13,8 @@ public class LoadingAModelThroughThePoolIo
     [Fact]
     public void AGltfAndTheBufferItNamesAreReadIntoMeshesAndMaterials()
     {
-        using var pool = new EnkiTaskPool(null, uint.MaxValue);
-        using var files = new StdFileSystem(null, ".");
+        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
         using var io = new PoolIo(null, pool, files);
         using var loader = new AssimpAssetLoader(null, io);
 

@@ -12,23 +12,23 @@ public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.
     /// <param name="runtime">NULL registers no system; the caller then evaluates.</param>
     /// <param name="input">The input the system reads; required with runtime.</param>
     /// <param name="configuration">Read during the call only; NULL creates no map.</param>
-    /// <param name="section">The configuration section the maps are read from.</param>
-    public DefaultInputActions(KernelEngine.Runtime.INativeRuntime? runtime = default, KernelEngine.Input.INativeInput? input = default, KernelEngine.Configuration.INativeConfiguration? configuration = default, string? section = default) : base(Create(runtime, input, configuration, section))
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultInputActions(KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(Create(runtime, input, configuration, config))
     {
         Hold(runtime?.Owner);
         Hold(input?.Owner);
         Hold(configuration?.Owner);
     }
 
-    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, string? section)
+    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
     {
-        var sectionBytes = section is null ? null : System.Text.Encoding.UTF8.GetBytes(section + "\0");
-        fixed (byte* sectionPtr = sectionBytes)
+        var sectionConfigBytes = config.Section is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Section + "\0");
+        fixed (byte* sectionConfigPtr = sectionConfigBytes)
         {
-            KernelEngine.Framework.Native.ke_input_actions_config config = default;
-            config.section = (sbyte*)sectionPtr;
+            KernelEngine.Framework.Native.ke_input_actions_config nativeConfig = default;
+            nativeConfig.section = (sbyte*)sectionConfigPtr;
             KernelEngine.Framework.Native.ke_input_actions_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((runtime is null ? null : runtime.Native), (input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &config, &handle), "ke_input_actions_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((runtime is null ? null : runtime.Native), (input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &nativeConfig, &handle), "ke_input_actions_create");
             return handle;
         }
     }

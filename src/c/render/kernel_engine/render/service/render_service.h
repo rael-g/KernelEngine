@@ -376,7 +376,7 @@ typedef struct ke_render_service_handle
     void (*destroy)(ke_render_service *self);
 } ke_render_service_handle;
 
-/// [bag] The values a render service is created with, whatever its implementation, each applied as given.
+/// [borrowed] The values a render service is created with, whatever its implementation, each applied as given.
 typedef struct ke_render_service_config
 {
     /// [utf8] Directory the shaders are loaded from; copied. Required.

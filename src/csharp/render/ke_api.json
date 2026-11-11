@@ -1881,7 +1881,7 @@
       "name": "ke_render_service_config",
       "doc": "The values a render service is created with, whatever its implementation, each applied as given.",
       "tags": [
-        "bag"
+        "borrowed"
       ],
       "fields": [
         {

@@ -9,14 +9,14 @@ public sealed unsafe partial class FlecsEcsRegistry
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="reservedIdCapacity">How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily.</param>
-    public FlecsEcsRegistry(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, uint reservedIdCapacity) : base(CreateLogged(loggerFactory, reservedIdCapacity))
+    /// <param name="config">Required; every field is read as given.</param>
+    public FlecsEcsRegistry(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Ecs.EcsConfig config) : base(CreateLogged(loggerFactory, config))
     {
     }
 
-    private static KernelEngine.Ecs.Native.ke_ecs_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, uint reservedIdCapacity)
+    private static KernelEngine.Ecs.Native.ke_ecs_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Ecs.EcsConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(reservedIdCapacity);
+        return Create(config);
     }
 }

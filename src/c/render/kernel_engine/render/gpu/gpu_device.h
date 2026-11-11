@@ -438,7 +438,7 @@ typedef struct ke_gpu_device_handle
     void (*destroy)(ke_gpu_device *self);
 } ke_gpu_device_handle;
 
-/// [bag] The values a GPU device is created with, whatever its implementation, each applied as given.
+/// The values a GPU device is created with, whatever its implementation, each applied as given.
 typedef struct ke_gpu_device_config
 {
     /// Asks the underlying graphics API to validate every call, which takes effect

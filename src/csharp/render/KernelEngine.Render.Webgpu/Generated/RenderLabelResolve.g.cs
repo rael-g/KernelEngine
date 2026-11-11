@@ -19,8 +19,8 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
     /// <param name="frame">The passes run inside its frame.</param>
     /// <param name="ui">Registers the font; borrowed, must outlive it.</param>
     /// <param name="resolver">Reads the font a label names; borrowed. Without it every label is reported.</param>
-    /// <param name="defaultFont">The font a label that names none draws with; copied. NULL leaves such a label without text.</param>
-    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver = default, string? defaultFont = default) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, defaultFont))
+    /// <param name="config">Its values; Required; every field is read as given.</param>
+    public RenderLabelResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, in KernelEngine.Render.Webgpu.RenderLabelResolveConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, ui, resolver, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -58,7 +58,7 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, string? defaultFont)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.Webgpu.INativeRenderUi ui, KernelEngine.Framework.INativeAssetResolver? resolver, in KernelEngine.Render.Webgpu.RenderLabelResolveConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
@@ -69,11 +69,11 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(ui);
-        var defaultFontBytes = defaultFont is null ? null : System.Text.Encoding.UTF8.GetBytes(defaultFont + "\0");
-        fixed (byte* defaultFontPtr = defaultFontBytes)
+        var defaultFontConfigBytes = config.DefaultFont is null ? null : System.Text.Encoding.UTF8.GetBytes(config.DefaultFont + "\0");
+        fixed (byte* defaultFontConfigPtr = defaultFontConfigBytes)
         {
-            KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_config config = default;
-            config.default_font = (sbyte*)defaultFontPtr;
+            KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_config nativeConfig = default;
+            nativeConfig.default_font = (sbyte*)defaultFontConfigPtr;
             KernelEngine.Render.Webgpu.Native.RenderContext context = default;
             context.Runtime = runtime.Native;
             context.Ecs = ecs.Native;
@@ -84,7 +84,7 @@ public sealed unsafe partial class RenderLabelResolve : IDisposable
             context.Scene = scene.Native;
             context.Frame = frame.Native;
             KernelEngine.Render.Webgpu.Native.ke_render_label_resolve_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&context, ui.Native, (resolver is null ? null : resolver.Native), &config, &handle), "ke_render_label_resolve_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_label_resolve_create(&context, ui.Native, (resolver is null ? null : resolver.Native), &nativeConfig, &handle), "ke_render_label_resolve_create");
             return handle;
         }
     }

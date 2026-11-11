@@ -17,15 +17,11 @@ public sealed unsafe partial class RenderShadow : IDisposable
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    /// <param name="resolution">Edge of the square shadow map, in texels.</param>
-    /// <param name="lightDistance">How far back along the light the shadow camera sits.</param>
-    /// <param name="extent">Width and height of the shadowed area, in world units.</param>
-    /// <param name="nearPlane">Near plane of the shadow camera.</param>
-    /// <param name="farPlane">Far plane of the shadow camera.</param>
+    /// <param name="config">The map's shape; Required; every field is read as given.</param>
     /// <summary>Receives the ids of the map and the light it writes; every id KE_COMPONENT_INVALID on failure.</summary>
     public KernelEngine.Render.RenderShadowResources Resources { get; }
 
-    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, resolution, lightDistance, extent, nearPlane, farPlane))
+    public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.RenderShadowConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -64,7 +60,7 @@ public sealed unsafe partial class RenderShadow : IDisposable
         _held.Clear();
     }
 
-    private static (KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle Handle, KernelEngine.Render.RenderShadowResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint resolution, float lightDistance, float extent, float nearPlane, float farPlane)
+    private static (KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle Handle, KernelEngine.Render.RenderShadowResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.RenderShadowConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
@@ -74,12 +70,12 @@ public sealed unsafe partial class RenderShadow : IDisposable
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.ke_render_shadow_config config = default;
-        config.resolution = resolution;
-        config.light_distance = lightDistance;
-        config.extent = extent;
-        config.near_plane = nearPlane;
-        config.far_plane = farPlane;
+        KernelEngine.Render.Webgpu.Native.ke_render_shadow_config nativeConfig = default;
+        nativeConfig.resolution = config.Resolution;
+        nativeConfig.light_distance = config.LightDistance;
+        nativeConfig.extent = config.Extent;
+        nativeConfig.near_plane = config.NearPlane;
+        nativeConfig.far_plane = config.FarPlane;
         KernelEngine.Render.Webgpu.Native.RenderContext context = default;
         context.Runtime = runtime.Native;
         context.Ecs = ecs.Native;
@@ -91,7 +87,7 @@ public sealed unsafe partial class RenderShadow : IDisposable
         context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_shadow_handle handle;
         KernelEngine.Render.RenderShadowResources resources = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_create(&context, &config, &resources, &handle), "ke_render_shadow_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_shadow_create(&context, &nativeConfig, &resources, &handle), "ke_render_shadow_create");
         return (handle, resources);
     }
 }

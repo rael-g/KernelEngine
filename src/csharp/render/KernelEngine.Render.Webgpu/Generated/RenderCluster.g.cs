@@ -17,14 +17,11 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    /// <param name="gridX">Clusters across the screen.</param>
-    /// <param name="gridY">Clusters down the screen.</param>
-    /// <param name="gridZ">Depth slices.</param>
-    /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
+    /// <param name="config">The pass's values; Required; every field is read as given.</param>
     /// <summary>Receives the ids of its tag, light lists and grid; every id KE_COMPONENT_INVALID on failure.</summary>
     public KernelEngine.Render.RenderClusterResources Resources { get; }
 
-    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
+    public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -63,7 +60,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
         _held.Clear();
     }
 
-    private static (KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Handle, KernelEngine.Render.RenderClusterResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
+    private static (KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Handle, KernelEngine.Render.RenderClusterResources Resources) Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
@@ -73,11 +70,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.ke_render_cluster_config config = default;
-        config.grid_x = gridX;
-        config.grid_y = gridY;
-        config.grid_z = gridZ;
-        config.max_lights_per_cluster = maxLightsPerCluster;
+        var nativeConfig = config;
         KernelEngine.Render.Webgpu.Native.RenderContext context = default;
         context.Runtime = runtime.Native;
         context.Ecs = ecs.Native;
@@ -89,7 +82,7 @@ public sealed unsafe partial class RenderCluster : IDisposable
         context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle handle;
         KernelEngine.Render.RenderClusterResources resources = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&context, &config, &resources, &handle), "ke_render_cluster_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&context, &nativeConfig, &resources, &handle), "ke_render_cluster_create");
         return (handle, resources);
     }
 }

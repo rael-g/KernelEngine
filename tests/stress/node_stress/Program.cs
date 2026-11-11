@@ -10,9 +10,9 @@ int instances = ArgValue("--instances", 2000);
 int ticks = ArgValue("--ticks", 300);
 uint workers = (uint)ArgValue("--workers", 0);
 
-using var pool = new EnkiTaskPool(workers);
-using var ecs = new FlecsEcsRegistry(1048576);
-using var runtime = new DefaultRuntime(ecs, pool, 1.0f / 60.0f, 0.25f, 256);
+using var pool = new EnkiTaskPool(new KernelEngine.TaskPool.TaskPoolConfig { WorkerCount = workers });
+using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+using var runtime = new DefaultRuntime(ecs, pool, new KernelEngine.Runtime.RuntimeConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 });
 using var tree = new DefaultSceneTree(ecs, runtime);
 using var types = new DefaultNodeTypes(runtime, ecs, tree);
 

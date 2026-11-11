@@ -247,7 +247,7 @@ typedef struct ke_runtime_handle {
     void (*destroy)(ke_runtime *self);
 } ke_runtime_handle;
 
-/// [bag] The values a runtime is created with, whatever its implementation, each applied as given.
+/// The values a runtime is created with, whatever its implementation, each applied as given.
 typedef struct ke_runtime_config {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     float fixed_dt;

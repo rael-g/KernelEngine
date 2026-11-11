@@ -51,7 +51,7 @@ typedef enum ke_gpu_present_mode
 } ke_gpu_present_mode;
 
 
-/// [bag] The values a render target presenting to a window is created with, whatever its implementation, each applied as given.
+/// The values a render target presenting to a window is created with, whatever its implementation, each applied as given.
 typedef struct ke_gpu_render_target_window_config
 {
     /// How presented frames reach the screen.

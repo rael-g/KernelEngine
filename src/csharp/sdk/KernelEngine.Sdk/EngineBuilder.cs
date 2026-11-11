@@ -70,34 +70,38 @@ public sealed class EngineBuilder
             return part;
         }
 
-        var pool = Own(new EnkiTaskPool(log, uint.MaxValue));
-        var files = Own(new StdFileSystem(log, "."));
+        var pool = Own(new EnkiTaskPool(log, new() { WorkerCount = uint.MaxValue }));
+        var files = Own(new StdFileSystem(log, new() { Root = "." }));
         var io = Own(new PoolIo(log, pool, files));
         var config = Own(new DefaultConfiguration(log));
         Own(new ConfigurationTomlConfigurationSource(log, io)).Load(config, Path.Combine(_projectDir, "Project"));
 
-        var input = Own(new Input.Input());
-        var window = Own(new GlfwWindow(log, input,
-            config.GetString("runtime.window", "title", "KernelEngine"),
-            (int)config.GetInt("runtime.window", "width", 1280),
-            (int)config.GetInt("runtime.window", "height", 720),
-            config.GetBool("runtime.window", "fullscreen", false)));
-        var ecs = Own(new FlecsEcsRegistry(log, 1048576));
-        var fixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0);
-        var maxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25);
-        var maxSystems = (uint)config.GetInt("runtime", "max_systems_per_phase", 256);
-        var runtime = Own(new DefaultRuntime(log, ecs, pool, fixedDt, maxAccum, maxSystems));
+        var input = Own(new Input.DefaultInput());
+        var window = Own(new GlfwWindow(log, input, new()
+        {
+            Title = config.GetString("runtime.window", "title", "KernelEngine"),
+            Width = (int)config.GetInt("runtime.window", "width", 1280),
+            Height = (int)config.GetInt("runtime.window", "height", 720),
+            Fullscreen = config.GetBool("runtime.window", "fullscreen", false),
+        }));
+        var ecs = Own(new FlecsEcsRegistry(log, new() { ReservedIdCapacity = 1048576 }));
+        var runtime = Own(new DefaultRuntime(log, ecs, pool, new()
+        {
+            FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
+            FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
+            MaxSystemsPerPhase = (uint)config.GetInt("runtime", "max_systems_per_phase", 256),
+        }));
 
-        var gpu = Own(new WebgpuGpuDevice(log, null, false, false));
+        var gpu = Own(new WebgpuGpuDevice(log, null, new() { EnableValidation = false, DebugLabels = false }));
         var mailbox = config.GetString("runtime.renderer", "present_mode", "fifo") == "mailbox";
-        var target = Own(new WebgpuWindowGpuRenderTarget(log, gpu, window, mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo));
+        var target = Own(new WebgpuWindowGpuRenderTarget(log, gpu, window, new() { PresentMode = mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo }));
         var fonts = Own(new StbFontLoader(log, io));
         var assets = Own(new DefaultAssetResolver(log, null, fonts, _projectDir, io));
         var tree = Own(new DefaultSceneTree(log, ecs, runtime));
 
         var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
-        var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, shaderDir));
-        var service = Own(new DefaultRenderService(log, gpu, target, ecs, io, binder, shaderDir, GpuTextureFormat.Rgba16Float, GpuTextureFormat.D32Float, Engine.ClearColor(config)));
+        var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, new() { ShaderDir = shaderDir }));
+        var service = Own(new DefaultRenderService(log, gpu, target, ecs, io, binder, new() { ShaderDir = shaderDir, ColorFormat = GpuTextureFormat.Rgba16Float, DepthFormat = GpuTextureFormat.D32Float, ClearColor = Engine.ClearColor(config) }));
         var viewSpace = Own(new RhViewSpace(log));
         var camera = Own(new DefaultRenderCamera(log, viewSpace, gpu));
         var scene = Own(new DefaultRenderSceneResolve(log, runtime, ecs, service));
@@ -128,7 +132,7 @@ public sealed class EngineBuilder
         owned.AddRange(_physics(parts));
         owned.AddRange(_audio(parts));
 
-        var actions = Own(new DefaultInputActions(log, runtime, input, config, "input"));
+        var actions = Own(new DefaultInputActions(log, runtime, input, config, new() { Section = "input" }));
         var types = Own(new DefaultNodeTypes(log, runtime, ecs, tree, actions));
         Own(new DefaultSceneFiles(log, ecs, types, assets, io));
         types.RegisterEngineNodeTypes();
@@ -139,27 +143,29 @@ public sealed class EngineBuilder
     public static IEnumerable<IDisposable> DefaultRenderPasses(EngineParts p)
     {
         var log = p.Logging;
-        var shadow = new RenderShadow(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, 1024, 25.0f, 20.0f, 0.1f, 50.0f);
-        var cluster = new RenderCluster(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, 16, 9, 24, 64);
+        var shadow = new RenderShadow(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, new() { Resolution = 1024, LightDistance = 25.0f, Extent = 20.0f, NearPlane = 0.1f, FarPlane = 50.0f });
+        var cluster = new RenderCluster(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, new() { GridX = 16, GridY = 9, GridZ = 24, MaxLightsPerCluster = 64 });
         var gbuffer = new RenderGbuffer(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame);
         var ui = new DefaultRenderUi(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame);
         return
         [
             shadow, cluster, gbuffer,
-            new RenderDeferredLighting(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, gbuffer.Resources, shadow.Resources, cluster.Resources, true),
-            new RenderForward(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, shadow.Resources, cluster.Resources, true),
+            new RenderDeferredLighting(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, gbuffer.Resources, shadow.Resources, cluster.Resources, new() { IblEnabled = true }),
+            new RenderForward(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, shadow.Resources, cluster.Resources, new() { IblEnabled = true }),
             new RenderTonemap(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame),
             ui,
-            new RenderLabelResolve(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, ui, p.Assets, p.DefaultFont),
+            new RenderLabelResolve(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, ui, p.Assets, new() { DefaultFont = p.DefaultFont }),
         ];
     }
 
     /// <summary>The default physics: a Box2D world with the gravity of <c>runtime.physics_2d</c>, and the module syncing bodies.</summary>
     public static IEnumerable<IDisposable> DefaultPhysics(EngineParts p)
     {
-        var gx = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0);
-        var gy = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0);
-        var world = new Box2DPhysics2D(p.Logging, gx, gy);
+        var world = new Box2DPhysics2D(p.Logging, new()
+        {
+            GravityX = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
+            GravityY = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0),
+        });
         return [world, new Physics.PhysicsBody2DModule(p.Logging, p.Runtime, p.Ecs, world, p.Tree)];
     }
 
@@ -167,6 +173,6 @@ public sealed class EngineBuilder
     public static IEnumerable<IDisposable> DefaultAudio(EngineParts p)
     {
         var audio = new MiniaudioAudio(p.Logging, p.Io);
-        return [audio, new Audio.SoundModule(p.Logging, p.Runtime, p.Ecs, audio, p.ProjectDir)];
+        return [audio, new Audio.SoundModule(p.Logging, p.Runtime, p.Ecs, audio, new() { Root = p.ProjectDir })];
     }
 }

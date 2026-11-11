@@ -12,8 +12,8 @@ public sealed unsafe partial class SoundModule : IDisposable
     /// <param name="runtime">Registers the system; must outlive the module.</param>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
-    /// <param name="root">Directory a clip's path is joined to; copied. NULL uses the path as written.</param>
-    public SoundModule(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root = default) : this(Create(runtime, ecs, audio, root))
+    /// <param name="config">Required; every field is read as given.</param>
+    public SoundModule(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config) : this(Create(runtime, ecs, audio, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -44,18 +44,18 @@ public sealed unsafe partial class SoundModule : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Audio.Native.ke_sound_module_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root)
+    private static KernelEngine.Audio.Native.ke_sound_module_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(audio);
-        var rootBytes = root is null ? null : System.Text.Encoding.UTF8.GetBytes(root + "\0");
-        fixed (byte* rootPtr = rootBytes)
+        var rootConfigBytes = config.Root is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Root + "\0");
+        fixed (byte* rootConfigPtr = rootConfigBytes)
         {
-            KernelEngine.Audio.Native.SoundModuleConfig config = default;
-            config.Root = (sbyte*)rootPtr;
+            KernelEngine.Audio.Native.ke_sound_module_config nativeConfig = default;
+            nativeConfig.root = (sbyte*)rootConfigPtr;
             KernelEngine.Audio.Native.ke_sound_module_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(runtime.Native, ecs.Native, audio.Native, &config, &handle), "ke_sound_module_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(runtime.Native, ecs.Native, audio.Native, &nativeConfig, &handle), "ke_sound_module_create");
             return handle;
         }
     }

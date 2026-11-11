@@ -9,8 +9,8 @@ using KernelEngine.Runtime.Native;
 
 namespace KernelEngine.Audio.Native;
 
-public unsafe partial struct SoundModuleConfig
+public unsafe partial struct ke_sound_module_config
 {
     [NativeTypeName("const char *")]
-    public sbyte* Root;
+    public sbyte* root;
 }

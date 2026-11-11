@@ -39,8 +39,7 @@ extern "C"
         void (*destroy)(ke_render_label_resolve *self);
     } ke_render_label_resolve_handle;
 
-    /// [bag] What the label resolve needs to give a label the font it names.
-    /// [bag] The values the label resolve is created with.
+    /// [borrowed] The values the label resolve is created with: the font a label that names none draws with.
     typedef struct ke_render_label_resolve_config
     {
         /// [optional,utf8] The font a label that names none draws with; copied. NULL leaves such a

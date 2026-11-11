@@ -67,8 +67,7 @@ pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// What the label resolve needs to give a label the font it names. [bag] The values the label
-/// resolve is created with.
+/// The values the label resolve is created with: the font a label that names none draws with.
 pub const ke_render_label_resolve_config = extern struct {
     /// The font a label that names none draws with; copied. NULL leaves such a label without text.
     default_font: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),

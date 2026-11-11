@@ -10,7 +10,7 @@ pub const KE_ACTION_TYPE_AXIS1D: ke_action_type = 1;
 pub const KE_ACTION_TYPE_AXIS2D: ke_action_type = 2;
 pub const KE_ACTION_TYPE_AXIS3D: ke_action_type = 3;
 
-/// The values the action maps is created with, whatever its implementation, each applied as
+/// The values the action maps are created with, whatever its implementation, each applied as
 /// given. The values the action maps are created with.
 pub const ke_input_actions_config = extern struct {
     /// The configuration section the maps are read from.

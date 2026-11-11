@@ -88,7 +88,7 @@ extern "C"
 /** The worker_count that takes one worker per hardware thread besides the calling one. */
 #define KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD UINT32_MAX
 
-/// [bag] The values a task pool is created with, whatever its implementation, each applied as given.
+/// The values a task pool is created with, whatever its implementation, each applied as given.
 typedef struct ke_task_pool_config
 {
     /// Worker threads besides the calling thread, 0 for none, or

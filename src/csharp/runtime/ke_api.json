@@ -671,9 +671,7 @@
     {
       "name": "ke_ecs_config",
       "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "reserved_id_capacity",
@@ -893,9 +891,7 @@
     {
       "name": "ke_runtime_config",
       "doc": "The values a runtime is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "fixed_dt",
@@ -920,9 +916,7 @@
     {
       "name": "ke_task_pool_config",
       "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "worker_count",

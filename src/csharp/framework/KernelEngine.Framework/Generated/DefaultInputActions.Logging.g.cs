@@ -12,14 +12,14 @@ public sealed unsafe partial class DefaultInputActions
     /// <param name="runtime">NULL registers no system; the caller then evaluates.</param>
     /// <param name="input">The input the system reads; required with runtime.</param>
     /// <param name="configuration">Read during the call only; NULL creates no map.</param>
-    /// <param name="section">The configuration section the maps are read from.</param>
-    public DefaultInputActions(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime? runtime = default, KernelEngine.Input.INativeInput? input = default, KernelEngine.Configuration.INativeConfiguration? configuration = default, string? section = default) : base(CreateLogged(loggerFactory, runtime, input, configuration, section))
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultInputActions(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(CreateLogged(loggerFactory, runtime, input, configuration, config))
     {
     }
 
-    private static KernelEngine.Framework.Native.ke_input_actions_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, string? section)
+    private static KernelEngine.Framework.Native.ke_input_actions_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime? runtime, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, input, configuration, section);
+        return Create(runtime, input, configuration, config);
     }
 }

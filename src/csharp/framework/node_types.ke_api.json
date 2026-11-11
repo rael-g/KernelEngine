@@ -691,9 +691,7 @@
     {
       "name": "ke_ecs_config",
       "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "reserved_id_capacity",

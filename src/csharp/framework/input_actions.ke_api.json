@@ -944,9 +944,9 @@
     },
     {
       "name": "ke_input_actions_config",
-      "doc": "The values the action maps is created with, whatever its implementation, each applied as given. The values the action maps are created with.",
+      "doc": "The values the action maps are created with, whatever its implementation, each applied as given. The values the action maps are created with.",
       "tags": [
-        "bag"
+        "borrowed"
       ],
       "fields": [
         {

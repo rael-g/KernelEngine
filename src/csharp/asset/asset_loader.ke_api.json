@@ -737,9 +737,7 @@
     {
       "name": "ke_task_pool_config",
       "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "worker_count",

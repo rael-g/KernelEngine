@@ -14,11 +14,8 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
     /// <param name="ecs">Borrowed, must outlive the service.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
-    /// <param name="shaderDir">Directory the shaders are loaded from; copied. Required.</param>
-    /// <param name="colorFormat">Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.</param>
-    /// <param name="depthFormat">Format of the frame's depth.</param>
-    /// <param name="clearColor">Color the frame is cleared to.</param>
-    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor) : base(Create(device, target, ecs, io, binder, shaderDir, colorFormat, depthFormat, clearColor))
+    /// <param name="config">The service's values, applied as given.</param>
+    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(Create(device, target, ecs, io, binder, config))
     {
         Hold(device.Owner);
         Hold(target.Owner);
@@ -27,23 +24,23 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
         Hold(binder.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir, KernelEngine.Render.GpuTextureFormat colorFormat, KernelEngine.Render.GpuTextureFormat depthFormat, System.Numerics.Vector4 clearColor)
+    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(io);
         ArgumentNullException.ThrowIfNull(binder);
-        var shaderDirBytes = shaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(shaderDir + "\0");
-        fixed (byte* shaderDirPtr = shaderDirBytes)
+        var shaderDirConfigBytes = config.ShaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(config.ShaderDir + "\0");
+        fixed (byte* shaderDirConfigPtr = shaderDirConfigBytes)
         {
-            KernelEngine.Render.Native.ke_render_service_config config = default;
-            config.shader_dir = (sbyte*)shaderDirPtr;
-            config.color_format = colorFormat;
-            config.depth_format = depthFormat;
-            config.clear_color = clearColor;
+            KernelEngine.Render.Native.ke_render_service_config nativeConfig = default;
+            nativeConfig.shader_dir = (sbyte*)shaderDirConfigPtr;
+            nativeConfig.color_format = config.ColorFormat;
+            nativeConfig.depth_format = config.DepthFormat;
+            nativeConfig.clear_color = config.ClearColor;
             KernelEngine.Render.Native.ke_render_service_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, ecs.Native, io.Native, binder.Native, &config, &handle), "ke_render_service_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, ecs.Native, io.Native, binder.Native, &nativeConfig, &handle), "ke_render_service_create");
             return handle;
         }
     }

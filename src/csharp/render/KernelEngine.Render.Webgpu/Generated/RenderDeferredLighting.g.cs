@@ -20,8 +20,8 @@ public sealed unsafe partial class RenderDeferredLighting : IDisposable
     /// <param name="gbuffer">The gbuffer it lights.</param>
     /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
     /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
-    /// <param name="iblEnabled">Whether the pass samples the sky for image-based light.</param>
-    public RenderDeferredLighting(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, bool iblEnabled) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gbuffer, shadow, clusters, iblEnabled))
+    /// <param name="config">The pass \ 's values; Required; every field is read as given.</param>
+    public RenderDeferredLighting(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, in KernelEngine.Render.Webgpu.Native.RenderDeferredLightingConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gbuffer, shadow, clusters, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -57,7 +57,7 @@ public sealed unsafe partial class RenderDeferredLighting : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, bool iblEnabled)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderGbufferResources gbuffer, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, in KernelEngine.Render.Webgpu.Native.RenderDeferredLightingConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
@@ -67,8 +67,7 @@ public sealed unsafe partial class RenderDeferredLighting : IDisposable
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_config config = default;
-        config.ibl_enabled = iblEnabled;
+        var nativeConfig = config;
         KernelEngine.Render.Webgpu.Native.RenderContext context = default;
         context.Runtime = runtime.Native;
         context.Ecs = ecs.Native;
@@ -79,7 +78,7 @@ public sealed unsafe partial class RenderDeferredLighting : IDisposable
         context.Scene = scene.Native;
         context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_deferred_lighting_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &config, &handle), "ke_render_deferred_lighting_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &nativeConfig, &handle), "ke_render_deferred_lighting_create");
         return handle;
     }
 }

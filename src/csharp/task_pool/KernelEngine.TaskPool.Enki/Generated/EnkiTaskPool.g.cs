@@ -9,17 +9,16 @@ namespace KernelEngine.TaskPool.Enki;
 public sealed unsafe partial class EnkiTaskPool : KernelEngine.TaskPool.TaskPool
 {
     /// <summary>Creates a task pool.</summary>
-    /// <param name="workerCount">Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD.</param>
-    public EnkiTaskPool(uint workerCount) : base(Create(workerCount))
+    /// <param name="config">Required; every field is read as given.</param>
+    public EnkiTaskPool(in KernelEngine.TaskPool.TaskPoolConfig config) : base(Create(config))
     {
     }
 
-    private static KernelEngine.TaskPool.Native.ke_task_pool_handle Create(uint workerCount)
+    private static KernelEngine.TaskPool.Native.ke_task_pool_handle Create(in KernelEngine.TaskPool.TaskPoolConfig config)
     {
-        KernelEngine.TaskPool.Native.ke_task_pool_config config = default;
-        config.worker_count = workerCount;
+        var nativeConfig = config;
         KernelEngine.TaskPool.Native.ke_task_pool_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.TaskPool.Enki.Native.NativeMethods.task_pool_enki_create(&config, &handle), "ke_task_pool_enki_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.TaskPool.Enki.Native.NativeMethods.task_pool_enki_create(&nativeConfig, &handle), "ke_task_pool_enki_create");
         return handle;
     }
 }

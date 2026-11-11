@@ -38,7 +38,7 @@ extern "C"
         void (*destroy)(ke_render_deferred_lighting *self);
     } ke_render_deferred_lighting_handle;
 
-    /// [bag] The values the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
+    /// The values the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
     /// over the frame's color, sampling the frame's depth.
     typedef struct ke_render_deferred_lighting_config
     {

@@ -20,7 +20,7 @@ extern "C"
 #  endif
 #endif
 
-/// [bag] The values a grouped resource binder is created with, each applied as given.
+/// [borrowed] The values a grouped resource binder is created with, each applied as given.
 typedef struct ke_render_resource_binder_grouped_config
 {
     /// [utf8] Directory the build wrote each compiled shader's reflection into; copied.

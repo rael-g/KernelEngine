@@ -38,7 +38,7 @@ extern "C"
         void (*destroy)(ke_render_forward *self);
     } ke_render_forward_handle;
 
-    /// [bag] The values the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
+    /// The values the transparent forward pass needs. It joins the chain at KE_RENDER_STAGE_TRANSPARENT,
     /// samples the frame's color and draws over a copy of it, tested against the frame's depth.
     /// 
     typedef struct ke_render_forward_config

@@ -1882,9 +1882,7 @@
     {
       "name": "ke_gpu_device_config",
       "doc": "The values a GPU device is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "enable_validation",
@@ -1916,9 +1914,7 @@
     {
       "name": "ke_gpu_render_target_window_config",
       "doc": "The values a render target presenting to a window is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "bag"
-      ],
+      "tags": [],
       "fields": [
         {
           "name": "present_mode",

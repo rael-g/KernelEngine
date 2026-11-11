@@ -41,7 +41,7 @@ extern "C"
         void (*destroy)(ke_window *self);
     } ke_window_handle;
 
-/// [bag] The values a window is created with, whatever its implementation, each applied as given.
+/// [borrowed] The values a window is created with, whatever its implementation, each applied as given.
 typedef struct ke_window_config {
     const char *title;  /**< [borrowed,utf8] Window title. */
     int32_t     width;      /**< Client width in pixels. */
