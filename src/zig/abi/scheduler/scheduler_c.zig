@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_task_pool = @import("task_pool");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -47,6 +48,12 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// per_entity. A failure is carried to the thread that called tick, which fails with it; the
 /// rest of the wave still runs, and no later wave or phase starts.
 pub const ke_scheduler_execute_fn = ?*const fn (?*ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Body of a scheduled task, run on a worker thread.
+pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// Run once the task body has returned, on the same worker thread.
+pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*anyopaque, abi_result.c.ke_result) callconv(.c) void;
 
 /// One id a system touches, and how. Two systems conflict when they name the same id and at
 /// least one writes it; conflicting systems never run in the same wave.
@@ -184,3 +191,6 @@ pub const ke_scheduler_ctx = extern struct {
     /// not per_entity always gets index 0 of count 1.
     slice: ?*const fn (?*ke_scheduler_ctx, ?*u32, ?*u32) callconv(.c) void = null,
 };
+
+/// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
+pub extern fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const ke_scheduler_config, out_scheduler: ?*ke_scheduler_handle) abi_result.c.ke_result;

@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_task_pool = @import("task_pool");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scheduler_c.zig");
@@ -215,6 +216,13 @@ pub const Scheduler = struct {
     /// applies it first. Only the thread that calls tick records into it.
     pub fn commands(self: Scheduler) ?*abi_ecs.c.ke_ecs_commands {
         return self.ptr.commands.?(self.ptr);
+    }
+
+    /// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
+    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_scheduler_config) Error!Scheduler {
+        var written: c.ke_scheduler_handle = undefined;
+        try checkResult(c.ke_scheduler_create(ecs, task_pool, config, &written));
+        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
 };

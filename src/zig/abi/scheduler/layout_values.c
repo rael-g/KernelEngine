@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/scheduler/scheduler_create.h>
 const unsigned long long layout_values[] = {
     sizeof(ke_id_access),
     offsetof(ke_id_access, id),
