@@ -2,13 +2,22 @@
 version = 2
 
 [[entity]]
+name = "Match"
+type = "pong.match"
+[entity.match]
+score_sound  = "assets/sounds/score.wav"
+score_volume = 0.6
+
+[[entity]]
 name = "Ambient"
+parent = "Match"
 type = "ambient_light"
 [entity.ambient_light]
 color = [1.0, 1.0, 1.0]
 
 [[entity]]
 name = "Camera"
+parent = "Match"
 type = "camera"
 [entity.transform]
 position = [0.0, 0.0, 10.0]
@@ -20,18 +29,21 @@ far_plane         = 100.0
 
 [[entity]]
 name  = "WallTop"
+parent = "Match"
 scene = "res://scenes/Wall.scene.toml"
 [entity.transform2d]
 position = [0.0, 4.5]
 
 [[entity]]
 name  = "WallBottom"
+parent = "Match"
 scene = "res://scenes/Wall.scene.toml"
 [entity.transform2d]
 position = [0.0, -4.5]
 
 [[entity]]
 name  = "PaddleLeft"
+parent = "Match"
 scene = "res://scenes/Paddle.scene.toml"
 [entity.transform2d]
 position = [-7.5, 0.0]
@@ -40,6 +52,7 @@ move_action = "PaddleLeftMove"
 
 [[entity]]
 name  = "PaddleRight"
+parent = "Match"
 scene = "res://scenes/Paddle.scene.toml"
 [entity.transform2d]
 position = [7.5, 0.0]
@@ -48,10 +61,12 @@ move_action = "PaddleRightMove"
 
 [[entity]]
 name  = "Ball"
+parent = "Match"
 scene = "res://scenes/Ball.scene.toml"
 
 [[entity]]
 name = "Scoreboard"
+parent = "Match"
 type = "pong.scoreboard"
 
 [[entity]]

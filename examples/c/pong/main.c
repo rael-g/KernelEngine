@@ -233,7 +233,7 @@ int main(void)
 
     char first_scene[PATH_CAPACITY];
     snprintf(first_scene, sizeof first_scene, "res://scenes/%s.scene.toml", cfg->get_string(cfg, "project", "default_scene", "Menu"));
-    check("first scene", ke_sdk_open_scene(game.types, &game.nodes, rt.ref->commands(rt.ref), first_scene));
+    check("first scene", game.scenes->open(game.scenes, rt.ref->commands(rt.ref), first_scene, NULL));
 
     double previous = now_seconds();
     while (!window.ref->should_close(window.ref) && !rt.ref->exit_requested(rt.ref))
