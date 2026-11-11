@@ -64,7 +64,8 @@ static const ke_node_with ke_transform2d_node_with[] = { { "transform2d", &ke_tr
 /// The components of the 3D node type and how they are born.
 static const ke_node_with ke_transform_node_with[] = { { "transform", &ke_transform_node_initial, sizeof ke_transform_node_initial } };
 
-/// The node types the engine's components make, for a host to register through `register_type`.
+/// The node types the engine's components make, and `node`, which carries none and only places its
+/// children in the tree, for a host to register through `register_type`.
 static const ke_node_type_desc ke_engine_node_types[] = {
     { .name = "ambient_light", .with = ke_ambient_light_node_with, .with_count = 2 },
     { .name = "body2d", .with = ke_body2d_node_with, .with_count = 2 },
@@ -73,6 +74,7 @@ static const ke_node_type_desc ke_engine_node_types[] = {
     { .name = "directional_light", .with = ke_directional_light_node_with, .with_count = 2 },
     { .name = "label", .with = ke_label_node_with, .with_count = 2 },
     { .name = "mesh", .with = ke_mesh_node_with, .with_count = 2 },
+    { .name = "node" },
     { .name = "point_light", .with = ke_point_light_node_with, .with_count = 2 },
     { .name = "skybox", .with = ke_skybox_node_with, .with_count = 2 },
     { .name = "sound", .with = ke_sound_node_with, .with_count = 2 },
@@ -83,6 +85,6 @@ static const ke_node_type_desc ke_engine_node_types[] = {
 };
 
 /// The number of entries in `ke_engine_node_types`.
-#define KE_ENGINE_NODE_TYPE_COUNT 14
+#define KE_ENGINE_NODE_TYPE_COUNT 15
 
 #endif

@@ -5309,7 +5309,7 @@
     },
     {
       "name": "ke_engine_node_types",
-      "type": "ke_node_type_desc[14]",
+      "type": "ke_node_type_desc[15]",
       "readonly": true,
       "value": {
         "kind": "List",
@@ -5798,6 +5798,80 @@
               {
                 "kind": "Number",
                 "text": "2"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              }
+            ]
+          },
+          {
+            "kind": "List",
+            "text": "",
+            "items": [
+              {
+                "kind": "String",
+                "text": "\u0022node\u0022"
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
+              },
+              {
+                "kind": "Number",
+                "text": ""
               },
               {
                 "kind": "Number",
@@ -6359,7 +6433,7 @@
     {
       "name": "KE_ENGINE_NODE_TYPE_COUNT",
       "type": "int",
-      "value": "14",
+      "value": "15",
       "doc": "The number of entries in \u0060ke_engine_node_types\u0060."
     }
   ]

@@ -1,0 +1,13 @@
+[scene]
+version = 2
+
+[[entity]]
+name = "Group"
+type = "node"
+
+[[entity]]
+name = "Member"
+parent = "Group"
+type = "probe"
+[entity.probe]
+tag = 3
