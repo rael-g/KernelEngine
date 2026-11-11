@@ -123,7 +123,7 @@ var rules = new List<Rule>
         Lines(zig.Concat(headers), l => !slashComment.IsMatch(l) && !l.TrimStart().StartsWith("//", StringComparison.Ordinal) && implName.IsMatch(l))),
     new("no comment in Zig besides a doc comment", 0,
         Lines(sources.Where(s => s.Key.EndsWith(".zig", StringComparison.Ordinal)), l => slashComment.IsMatch(l))),
-    new("no comment in C besides a doc comment", 10,
+    new("no comment in C besides a doc comment", 0,
         Lines(native, l => slashComment.IsMatch(l) || blockComment.IsMatch(l))),
     new("no comment in C# besides a doc comment", 0,
         Lines(managed, l => slashComment.IsMatch(l))),
