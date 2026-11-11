@@ -49,6 +49,14 @@ const State = struct {
     provided: std.ArrayList(reflection.Provided),
     material_group: reflection.Group,
     material_layout: abi_asset_resolver.c.ke_gpu_bind_group_layout,
+    zeros: std.ArrayList(Zeros),
+};
+
+/// A buffer of zeros the binder binds to a buffer parameter left without one, shared by every
+/// parameter it is large enough for.
+const Zeros = struct {
+    size: u64,
+    buffer: abi_asset_resolver.c.ke_gpu_buffer,
 };
 
 /// One group of a shader layout: the block it holds, null for the loose parameters, the bindings
@@ -113,6 +121,39 @@ fn releaseShaderLayout(dev: *abi_render_gpu.c.ke_gpu_device, sl: *ShaderLayout) 
     }
     sl.groups.deinit(gpa);
     gpa.destroy(sl);
+}
+
+fn zerosOf(st: *State, size: u64) R.Error!abi_asset_resolver.c.ke_gpu_buffer {
+    for (st.zeros.items) |z| {
+        if (z.size >= size) return z.buffer;
+    }
+    const bytes = try gpa.alloc(u8, size);
+    defer gpa.free(bytes);
+    @memset(bytes, 0);
+    var buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
+        .label = "binder.zeros",
+        .initial_data = bytes.ptr,
+        .size = size,
+        .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_STORAGE,
+        .mapped_at_creation = false,
+    }, &buffer));
+    errdefer st.device.destroy_buffer.?(st.device, buffer);
+    try st.zeros.append(gpa, .{ .size = size, .buffer = buffer });
+    return buffer;
+}
+
+fn bindZeros(st: *State, group: *const reflection.Group, entries: []abi_render_gpu.c.ke_gpu_bind_group_entry) R.Error!void {
+    for (group.bindings.items, entries) |b, *e| {
+        if (!reflection.isBuffer(b.type) or e.buffer != abi_render_gpu.c.KE_GPU_INVALID_HANDLE) continue;
+        if (b.size == 0) {
+            log.warn("create_set: the buffer parameter {s} has no buffer and no size to read zeros from", .{b.name});
+            return error.InvalidArgument;
+        }
+        e.buffer = try zerosOf(st, b.size);
+        e.buffer_offset = 0;
+        e.buffer_size = b.size;
+    }
 }
 
 /// The binder's `provide` slot: a binding under a name given before replaces the earlier one.
@@ -305,6 +346,7 @@ fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]con
     };
     const entries = try reflection.matchBindings(&g.group, given, st.provided.items);
     defer gpa.free(entries);
+    try bindZeros(st, &g.group, entries);
     const set = try gpa.create(Set);
     errdefer gpa.destroy(set);
     set.* = .{ .index = g.group.index orelse 0, .bind_group = abi_render_gpu.c.KE_GPU_INVALID_HANDLE };
@@ -418,13 +460,15 @@ fn bindMaterial(self: [*c]abi_render_gpu.c.ke_render_resource_binder, pass: [*c]
     pass.*.set_bind_group.?(pass, index, m.bind_group, null, 0);
 }
 
-/// The `destroy` of the handle the factory returns: the material layout, the provided names and
-/// the state. Layouts, sets and materials still alive are the caller's leak.
+/// The `destroy` of the handle the factory returns: the material layout, the buffers of zeros, the
+/// provided names and the state. Layouts, sets and materials still alive are the caller's leak.
 fn destroyBinder(self: [*c]abi_render_gpu.c.ke_render_resource_binder) callconv(.c) void {
     if (self == null) return;
     const st = stateOf(self);
     if (st.material_layout != abi_render_gpu.c.KE_GPU_INVALID_HANDLE) st.device.destroy_bind_group_layout.?(st.device, st.material_layout);
     st.material_group.deinit();
+    for (st.zeros.items) |z| st.device.destroy_buffer.?(st.device, z.buffer);
+    st.zeros.deinit(gpa);
     for (st.provided.items) |p| gpa.free(p.name);
     st.provided.deinit(gpa);
     gpa.free(st.shader_dir);
@@ -472,6 +516,7 @@ fn newBinder(device: *abi_render_gpu.c.ke_gpu_device, io: *abi_io.c.ke_io, shade
         .provided = .empty,
         .material_group = reflection.Group.init(gpa),
         .material_layout = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+        .zeros = .empty,
     };
     errdefer destroyBinder(&st.api);
     const material_json = @embedFile("material_params.json");
@@ -515,6 +560,14 @@ const lit_fs =
     \\  "elementType":{"kind":"struct","fields":[]},"containerVarLayout":{"binding":{"kind":"descriptorTableSlot","index":0}}}}]}
 ;
 
+const neutral_fs =
+    \\{"parameters":[
+    \\ {"name":"lights","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"resource","baseShape":"structuredBuffer",
+    \\  "resultType":{"kind":"struct","sizes":[{"kind":"uniform","value":32}]}}},
+    \\ {"name":"grid","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"constantBuffer",
+    \\  "elementType":{"kind":"struct","sizes":[{"kind":"uniform","value":64}]}}}]}
+;
+
 const gap_fs =
     \\{"parameters":[
     \\ {"name":"ke_frame","binding":{"kind":"descriptorTableSlot","index":0},"type":{"kind":"constantBuffer"}},
@@ -548,6 +601,7 @@ const reflections = [_]Reflection{
     .{ .name = "shaders/lit.vs.json", .data = lit_vs },
     .{ .name = "shaders/lit.fs.json", .data = lit_fs },
     .{ .name = "shaders/gap.fs.json", .data = gap_fs },
+    .{ .name = "shaders/neutral.fs.json", .data = neutral_fs },
 };
 
 fn readReflection(args: IoSub.Args(.read_file)) abi_result.c.ke_result {
@@ -659,6 +713,32 @@ test "a set binds what the pass names and what the binder was given for the rest
     var absent: abi_asset_resolver.c.ke_render_resource_set = undefined;
     try testing.expectError(error.NotFound, R.check(b.?.create_set.?(b, layout, "absent", null, null, 0, &absent)));
     try testing.expectEqual(@as(u64, abi_render_gpu.c.KE_RENDER_BINDING_INVALID), absent);
+}
+
+test "a buffer parameter left without a buffer reads zeros, from buffers shared by every set" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    const h = try rig.binder();
+    defer h.destroy.?(h.ref);
+    const b = h.ref;
+
+    var layout: abi_asset_resolver.c.ke_render_shader_layout = undefined;
+    try R.check(b.?.create_shader_layout.?(b, &.{ .shader = "neutral", .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, .hints = null, .hint_count = 0 }, &layout));
+    defer b.?.destroy_shader_layout.?(b, layout);
+    var empty = [_]abi_render_gpu.c.ke_render_shader_binding{ named("lights"), named("grid") };
+    for (&empty) |*e| e.buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+    var first: abi_asset_resolver.c.ke_render_resource_set = undefined;
+    try R.check(b.?.create_set.?(b, layout, null, null, &empty, empty.len, &first));
+    defer b.?.destroy_set.?(b, first);
+    var second: abi_asset_resolver.c.ke_render_resource_set = undefined;
+    try R.check(b.?.create_set.?(b, layout, null, null, &empty, empty.len, &second));
+    defer b.?.destroy_set.?(b, second);
+
+    const zeros = stateOf(b).zeros.items;
+    try testing.expectEqual(@as(usize, 2), zeros.len);
+    try testing.expectEqual(@as(u64, 32), zeros[0].size);
+    try testing.expectEqual(@as(u64, 64), zeros[1].size);
 }
 
 test "a material is bound at the material group of the shader drawing it, and not at all by a shader without one" {

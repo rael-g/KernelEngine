@@ -486,6 +486,8 @@ pub const ke_render_binding_hint = extern struct {
 pub const ke_render_shader_binding = extern struct {
     /// The parameter's name; the uniform data of a block is named after the block.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The buffer of a buffer parameter; KE_GPU_INVALID_HANDLE binds one that reads as zeros, at
+    /// least as large as the parameter declares.
     buffer: ke_gpu_buffer = std.mem.zeroes(ke_gpu_buffer),
     buffer_offset: u64 = std.mem.zeroes(u64),
     buffer_size: u64 = std.mem.zeroes(u64),

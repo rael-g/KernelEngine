@@ -27,8 +27,15 @@ const JField = struct {
     binding: ?JBinding = null,
 };
 
+const JSize = struct {
+    kind: []const u8,
+    value: u64 = 0,
+};
+
 const JType = struct {
     kind: []const u8,
+    sizes: []const JSize = &.{},
+    resultType: ?*const JType = null,
     baseShape: ?[]const u8 = null,
     access: ?[]const u8 = null,
     elementType: ?*const JType = null,
@@ -53,6 +60,8 @@ pub const Binding = struct {
     view_dimension: abi_render_gpu.c.ke_gpu_texture_dimension,
     stages: u32,
     has_dynamic_offset: bool = false,
+    /// The bytes a buffer bound to the parameter holds at least: its uniform data, or one element.
+    size: u64 = 0,
 };
 
 /// The space the compiler places every parameter declared outside a block in.
@@ -102,7 +111,7 @@ pub const Group = struct {
                 for ([_][]const JBinding{ container.bindings, &single }) |list| {
                     for (list) |cb| {
                         if (std.mem.eql(u8, cb.kind, "descriptorTableSlot")) {
-                            try self.add(.{ .name = name, .binding = cb.index, .type = abi_render_gpu.c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage });
+                            try self.add(.{ .name = name, .binding = cb.index, .type = abi_render_gpu.c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage, .size = uniformSize(element.*) });
                         }
                     }
                 }
@@ -148,7 +157,10 @@ pub const Group = struct {
 fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Binding {
     var b = Binding{ .name = name, .binding = index, .type = abi_render_gpu.c.KE_GPU_BINDING_TYPE_BUFFER, .view_dimension = 0, .stages = stage };
     const read_write = if (t.access) |acc| std.mem.eql(u8, acc, "readWrite") else false;
-    if (std.mem.eql(u8, t.kind, "constantBuffer")) return b;
+    if (std.mem.eql(u8, t.kind, "constantBuffer")) {
+        b.size = if (t.elementType) |e| uniformSize(e.*) else 0;
+        return b;
+    }
     if (std.mem.eql(u8, t.kind, "samplerState")) {
         b.type = abi_render_gpu.c.KE_GPU_BINDING_TYPE_SAMPLER;
         return b;
@@ -157,6 +169,7 @@ fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Bindi
     const shape = t.baseShape orelse return error.Malformed;
     if (std.mem.eql(u8, shape, "structuredBuffer") or std.mem.eql(u8, shape, "byteAddressBuffer")) {
         b.type = if (read_write) abi_render_gpu.c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER else abi_render_gpu.c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
+        b.size = if (t.resultType) |r| uniformSize(r.*) else @sizeOf(u32);
         return b;
     }
     if (std.mem.eql(u8, shape, "texture2D")) {
@@ -169,6 +182,18 @@ fn bindingOf(name: []const u8, index: u32, t: JType, stage: u32) ReadError!Bindi
         return b;
     }
     return error.Malformed;
+}
+
+fn uniformSize(t: JType) u64 {
+    for (t.sizes) |s| {
+        if (std.mem.eql(u8, s.kind, "uniform")) return s.value;
+    }
+    return 0;
+}
+
+/// Whether a parameter of `type` is bound to a buffer.
+pub fn isBuffer(@"type": abi_render_gpu.c.ke_gpu_binding_type) bool {
+    return @"type" == abi_render_gpu.c.KE_GPU_BINDING_TYPE_BUFFER or @"type" == abi_render_gpu.c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER or @"type" == abi_render_gpu.c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER;
 }
 
 /// A resource a binder was given for every parameter of `name` a set leaves out.
@@ -282,7 +307,7 @@ const forward_like_json =
     \\  "containerVarLayout":{"bindings":[{"kind":"descriptorTableSlot","index":0},{"kind":"subElementRegisterSpace","index":0}]}}},
     \\ {"name":"shadow_map","binding":{"kind":"descriptorTableSlot","index":1},"type":{"kind":"resource","baseShape":"texture2D"}},
     \\ {"name":"ibl_env","binding":{"kind":"descriptorTableSlot","index":3},"type":{"kind":"resource","baseShape":"textureCube"}},
-    \\ {"name":"lights","binding":{"kind":"descriptorTableSlot","index":4},"type":{"kind":"resource","baseShape":"structuredBuffer"}},
+    \\ {"name":"lights","binding":{"kind":"descriptorTableSlot","index":4},"type":{"kind":"resource","baseShape":"structuredBuffer","resultType":{"kind":"struct","sizes":[{"kind":"uniform","value":32}]}}},
     \\ {"name":"counts","binding":{"kind":"descriptorTableSlot","index":5},"type":{"kind":"resource","baseShape":"structuredBuffer","access":"readWrite"}}
     \\]}
 ;
@@ -297,6 +322,13 @@ test "the loose parameters of a shader are its group zero, numbered and typed as
     try std.testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_texture_dimension, abi_render_gpu.c.KE_GPU_TEXTURE_DIM_CUBE), group.find("ibl_env").?.view_dimension);
     try std.testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_binding_type, abi_render_gpu.c.KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER), group.find("lights").?.type);
     try std.testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_binding_type, abi_render_gpu.c.KE_GPU_BINDING_TYPE_STORAGE_BUFFER), group.find("counts").?.type);
+}
+
+test "a buffer parameter holds at least one element of what it declares" {
+    var group = Group.init(std.testing.allocator);
+    defer group.deinit();
+    _ = try group.collect(forward_like_json, null, abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT);
+    try std.testing.expectEqual(@as(u64, 32), group.find("lights").?.size);
 }
 
 test "a parameter block is its own group, its uniform data bound under the block's name" {

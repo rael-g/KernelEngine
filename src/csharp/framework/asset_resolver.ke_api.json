@@ -941,7 +941,7 @@
           "name": "buffer",
           "type": "ke_gpu_buffer",
           "tags": [],
-          "doc": null
+          "doc": "The buffer of a buffer parameter; KE_GPU_INVALID_HANDLE binds one that reads as zeros, at least as large as the parameter declares."
         },
         {
           "name": "buffer_offset",

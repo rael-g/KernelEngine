@@ -42,6 +42,8 @@ typedef struct ke_render_shader_binding
 {
     /// The parameter's name; the uniform data of a block is named after the block.
     const char         *name;
+    /// The buffer of a buffer parameter; KE_GPU_INVALID_HANDLE binds one that reads as zeros, at
+    /// least as large as the parameter declares.
     ke_gpu_buffer       buffer;
     uint64_t            buffer_offset;
     uint64_t            buffer_size;
