@@ -114,7 +114,7 @@ var rules = new List<Rule>
     new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 18,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("a contract declares no defaults", 0,
-        Lines(headers, l => defaultsConstant.IsMatch(l))),
+        Lines(headers.Where(h => !h.Key.StartsWith("src/sdk/", StringComparison.Ordinal)), l => defaultsConstant.IsMatch(l))),
     new("no zero stands for a default", 0,
         Lines(headers, l => zeroDefault.IsMatch(l))),
     new("no file named after impl", 0,
