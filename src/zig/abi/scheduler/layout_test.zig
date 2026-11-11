@@ -49,9 +49,14 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SCHEDULER_ACCESS_WRITE), @as(i64, abi.c.KE_SCHEDULER_ACCESS_WRITE));
     try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_PERSISTENT), @as(i64, abi.c.KE_LIFETIME_PERSISTENT));
     try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_PHASE), @as(i64, abi.c.KE_LIFETIME_PHASE));
+    try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_UNTIL_READ), @as(i64, abi.c.KE_LIFETIME_UNTIL_READ));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_EVERY_TICK), @as(i64, abi.c.KE_PHASE_EVERY_TICK));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_FIXED), @as(i64, abi.c.KE_PHASE_FIXED));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_STARTUP), @as(i64, abi.c.KE_PHASE_STARTUP));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_SHUTDOWN), @as(i64, abi.c.KE_PHASE_SHUTDOWN));
 }
 
-extern const layout_values: [53]c_ulonglong;
+extern const layout_values: [57]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -64,6 +69,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_query_desc, "term_count"),
         @sizeOf(abi.c.ke_phase_desc),
         @offsetOf(abi.c.ke_phase_desc, "name"),
+        @offsetOf(abi.c.ke_phase_desc, "cadence"),
         @sizeOf(abi.c.ke_set_desc),
         @offsetOf(abi.c.ke_set_desc, "name"),
         @offsetOf(abi.c.ke_set_desc, "phase"),
@@ -71,7 +77,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_set_desc, "after_count"),
         @sizeOf(abi.c.ke_system_desc),
         @offsetOf(abi.c.ke_system_desc, "name"),
-        @offsetOf(abi.c.ke_system_desc, "phase"),
         @offsetOf(abi.c.ke_system_desc, "user_data"),
         @offsetOf(abi.c.ke_system_desc, "execute"),
         @offsetOf(abi.c.ke_system_desc, "queries"),
@@ -87,7 +92,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_system_order, "wave"),
         @offsetOf(abi.c.ke_system_order, "culled"),
         @sizeOf(abi.c.ke_scheduler_config),
-        @offsetOf(abi.c.ke_scheduler_config, "reserved"),
+        @offsetOf(abi.c.ke_scheduler_config, "fixed_dt"),
+        @offsetOf(abi.c.ke_scheduler_config, "fixed_dt_max_accum"),
         @sizeOf(abi.c.ke_scheduler),
         @offsetOf(abi.c.ke_scheduler, "handle"),
         @offsetOf(abi.c.ke_scheduler, "register_phase"),
@@ -98,7 +104,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_scheduler, "declare_exclusive"),
         @offsetOf(abi.c.ke_scheduler, "build"),
         @offsetOf(abi.c.ke_scheduler, "describe_phase"),
-        @offsetOf(abi.c.ke_scheduler, "run"),
+        @offsetOf(abi.c.ke_scheduler, "tick"),
+        @offsetOf(abi.c.ke_scheduler, "shutdown"),
+        @offsetOf(abi.c.ke_scheduler, "request_exit"),
+        @offsetOf(abi.c.ke_scheduler, "exit_requested"),
         @offsetOf(abi.c.ke_scheduler, "commands"),
         @sizeOf(abi.c.ke_scheduler_handle),
         @offsetOf(abi.c.ke_scheduler_handle, "ref"),

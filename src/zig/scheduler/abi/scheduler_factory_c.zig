@@ -19,8 +19,8 @@ pub const ke_set_id = u32;
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called run, which fails with it; the rest
-/// of the wave still runs, and no later wave starts.
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
 pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// Body of a scheduled task, run on a worker thread.

@@ -20,6 +20,15 @@ pub const SchedulerAccess = enum(c.ke_scheduler_access) {
 pub const Lifetime = enum(c.ke_lifetime) {
     persistent = 0,
     phase = 1,
+    until_read = 2,
+    _,
+};
+
+pub const PhaseCadence = enum(c.ke_phase_cadence) {
+    every_tick = 0,
+    fixed = 1,
+    startup = 2,
+    shutdown = 3,
     _,
 };
 
@@ -93,11 +102,30 @@ pub const Scheduler = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
-            .run = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: c.ke_phase_id, a1: f32) callconv(.c) abi_result.c.ke_result {
+            .tick = &struct {
+                fn call(self: ?*c.ke_scheduler, a0: f32) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.run(state, a0, a1) catch |failure| return resultOf(failure);
+                    T.tick(state, a0) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
+                }
+            }.call,
+            .shutdown = &struct {
+                fn call(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.shutdown(state) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .request_exit = &struct {
+                fn call(self: ?*c.ke_scheduler) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.requestExit(state);
+                }
+            }.call,
+            .exit_requested = &struct {
+                fn call(self: ?*c.ke_scheduler) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.exitRequested(state);
                 }
             }.call,
             .commands = &struct {
@@ -123,14 +151,14 @@ pub const Scheduler = struct {
         return written;
     }
 
-    /// Registers a system. From a body, it takes effect with the next run of its phase.
+    /// Registers a system. From a body, it takes effect with the next tick.
     pub fn registerSystem(self: Scheduler, desc: ?*const c.ke_system_desc) Error!c.ke_scheduler_system_id {
         var written: c.ke_scheduler_system_id = undefined;
         try checkResult(self.ptr.register_system.?(self.ptr, desc, &written));
         return written;
     }
 
-    /// Removes a system. From a body, it takes effect with the next run of its phase.
+    /// Removes a system. From a body, it takes effect with the next tick.
     pub fn unregisterSystem(self: Scheduler, id: c.ke_scheduler_system_id) Error!void {
         try checkResult(self.ptr.unregister_system.?(self.ptr, id));
     }
@@ -146,7 +174,7 @@ pub const Scheduler = struct {
         try checkResult(self.ptr.declare_exclusive.?(self.ptr, group, member));
     }
 
-    /// Builds the order of every phase whose registrations changed since the last build; run builds
+    /// Builds the order of every phase whose registrations changed since the last build; tick builds
     /// the same way. Within a phase, the systems of a set run after those of the sets it follows, a
     /// writer of an id before its readers, and of two writers with no other order, the one
     /// registered first: an ambiguity.
@@ -159,14 +187,32 @@ pub const Scheduler = struct {
         try checkResult(self.ptr.describe_phase.?(self.ptr, phase, out_systems, capacity, out_count));
     }
 
-    /// Applies what was recorded into commands, then runs phase wave by wave and returns when every
-    /// body has finished.
-    pub fn run(self: Scheduler, phase: c.ke_phase_id, dt: f32) Error!void {
-        try checkResult(self.ptr.run.?(self.ptr, phase, dt));
+    /// Applies what was recorded into commands, then runs the phases in registration order: on the
+    /// first tick the startup phases first, then each every-tick phase, and each block of fixed
+    /// phases once per fixed step the accumulated time covers, the accumulation capped at
+    /// fixed_dt_max_accum.
+    pub fn tick(self: Scheduler, dt: f32) Error!void {
+        try checkResult(self.ptr.tick.?(self.ptr, dt));
     }
 
-    /// The queue the caller of run records structural changes into between runs; the next run
-    /// applies it first. Only the thread that calls run records into it.
+    /// Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and
+    /// are refused respectively. Destroying the scheduler calls it for a caller that did not.
+    pub fn shutdown(self: Scheduler) Error!void {
+        try checkResult(self.ptr.shutdown.?(self.ptr));
+    }
+
+    /// Records that the program should end; any body or the caller may ask, from any thread.
+    pub fn requestExit(self: Scheduler) void {
+        return self.ptr.request_exit.?(self.ptr);
+    }
+
+    /// Whether a request to end the program was recorded.
+    pub fn exitRequested(self: Scheduler) bool {
+        return self.ptr.exit_requested.?(self.ptr);
+    }
+
+    /// The queue the caller of tick records structural changes into between ticks; the next tick
+    /// applies it first. Only the thread that calls tick records into it.
     pub fn commands(self: Scheduler) ?*abi_ecs.c.ke_ecs_commands {
         return self.ptr.commands.?(self.ptr);
     }

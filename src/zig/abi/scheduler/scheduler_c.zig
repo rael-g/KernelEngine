@@ -22,6 +22,21 @@ pub const ke_lifetime = c_uint;
 pub const KE_LIFETIME_PERSISTENT: ke_lifetime = 0;
 /// The value lives from the run of the phase it is written in to the end of that run.
 pub const KE_LIFETIME_PHASE: ke_lifetime = 1;
+/// The value lives until every phase whose systems read it has run since it was written. Its
+/// writer runs while a system of any phase reads it.
+pub const KE_LIFETIME_UNTIL_READ: ke_lifetime = 2;
+
+/// When a phase runs within the ticks of a scheduler.
+pub const ke_phase_cadence = c_uint;
+/// Once per tick, with the tick's dt.
+pub const KE_PHASE_EVERY_TICK: ke_phase_cadence = 0;
+/// Once per fixed step, as many steps as the tick's time covers, with the fixed dt. Fixed phases
+/// registered one after another run together, in order, at each step.
+pub const KE_PHASE_FIXED: ke_phase_cadence = 1;
+/// Once, before every other phase of the first tick, with a dt of zero.
+pub const KE_PHASE_STARTUP: ke_phase_cadence = 2;
+/// Once, when the scheduler shuts down after a tick ran, with a dt of zero.
+pub const KE_PHASE_SHUTDOWN: ke_phase_cadence = 3;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
@@ -29,8 +44,8 @@ pub const KE_LIFETIME_PHASE: ke_lifetime = 1;
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called run, which fails with it; the rest
-/// of the wave still runs, and no later wave starts.
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
 pub const ke_scheduler_execute_fn = ?*const fn (?*ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// One id a system touches, and how. Two systems conflict when they name the same id and at
@@ -47,10 +62,13 @@ pub const ke_query_desc = extern struct {
     term_count: u32 = std.mem.zeroes(u32),
 };
 
-/// A phase: a group of systems run together by one call of run.
+/// A phase: a group of systems run together, wave by wave. A tick runs the phases in the order
+/// they were registered, each when its cadence says.
 pub const ke_phase_desc = extern struct {
     /// Identifies the phase in diagnostics.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// When the phase runs.
+    cadence: ke_phase_cadence = std.mem.zeroes(ke_phase_cadence),
 };
 
 /// An ordering set: a named anchor of one phase that systems join and that is ordered against
@@ -65,12 +83,10 @@ pub const ke_set_desc = extern struct {
     after_count: u32 = std.mem.zeroes(u32),
 };
 
-/// A system: a body, the phase it runs in, the sets it joins and what it touches.
+/// A system: a body, the sets it joins and what it touches. It runs in the phase of its sets.
 pub const ke_system_desc = extern struct {
     /// Identifies the system in diagnostics and in the failure its body raises.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The phase the body runs in.
-    phase: ke_phase_id = std.mem.zeroes(ke_phase_id),
     /// Forwarded unchanged to every call of the body.
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// The body.
@@ -81,7 +97,7 @@ pub const ke_system_desc = extern struct {
     /// Ids the system touches that no query term covers.
     access: ?[*]const ke_id_access = std.mem.zeroes(?[*]const ke_id_access),
     access_count: u32 = std.mem.zeroes(u32),
-    /// Sets of the system's phase it joins.
+    /// The sets the system joins, at least one, all of one phase.
     sets: ?[*]const ke_set_id = std.mem.zeroes(?[*]const ke_set_id),
     set_count: u32 = std.mem.zeroes(u32),
     /// The body's work on one entity is independent of every other; the scheduler may run it as
@@ -101,40 +117,53 @@ pub const ke_system_order = extern struct {
     culled: bool = std.mem.zeroes(bool),
 };
 
-/// What a scheduler is created with. It has no field yet.
+/// What a scheduler is created with, each field applied as given.
 pub const ke_scheduler_config = extern struct {
-    reserved: u8 = std.mem.zeroes(u8),
+    /// The dt of a fixed step, in seconds; greater than zero.
+    fixed_dt: f32 = std.mem.zeroes(f32),
+    /// The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped;
+    /// greater than zero.
+    fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
 };
 
-/// Orders systems by what they touch and the sets they join, and runs a phase across the task
-/// pool. It decides no frame: which phase runs, when and with what dt is its caller's.
+/// Orders systems by what they touch and the sets they join, and runs their phases tick by tick
+/// across the task pool.
 pub const ke_scheduler = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Registers a phase.
     register_phase: ?*const fn (?*ke_scheduler, ?*const ke_phase_desc, ?*ke_phase_id) callconv(.c) abi_result.c.ke_result = null,
     /// Registers an ordering set.
     register_set: ?*const fn (?*ke_scheduler, ?*const ke_set_desc, ?*ke_set_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Registers a system. From a body, it takes effect with the next run of its phase.
+    /// Registers a system. From a body, it takes effect with the next tick.
     register_system: ?*const fn (?*ke_scheduler, ?*const ke_system_desc, ?*ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Removes a system. From a body, it takes effect with the next run of its phase.
+    /// Removes a system. From a body, it takes effect with the next tick.
     unregister_system: ?*const fn (?*ke_scheduler, ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result = null,
     /// Declares the lifetime of id; an id never declared is persistent.
     declare_lifetime: ?*const fn (?*ke_scheduler, ke_component_id, ke_lifetime) callconv(.c) abi_result.c.ke_result = null,
     /// Declares member one of the members of the exclusive group group: no entity holds two members
     /// of one group, so queries requiring different members do not conflict.
     declare_exclusive: ?*const fn (?*ke_scheduler, ke_component_id, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Builds the order of every phase whose registrations changed since the last build; run builds
+    /// Builds the order of every phase whose registrations changed since the last build; tick builds
     /// the same way. Within a phase, the systems of a set run after those of the sets it follows, a
     /// writer of an id before its readers, and of two writers with no other order, the one
     /// registered first: an ambiguity.
     build: ?*const fn (?*ke_scheduler, bool) callconv(.c) abi_result.c.ke_result = null,
     /// The built order of phase, in registration order.
     describe_phase: ?*const fn (?*ke_scheduler, ke_phase_id, ?[*]ke_system_order, u32, ?*u32) callconv(.c) abi_result.c.ke_result = null,
-    /// Applies what was recorded into commands, then runs phase wave by wave and returns when every
-    /// body has finished.
-    run: ?*const fn (?*ke_scheduler, ke_phase_id, f32) callconv(.c) abi_result.c.ke_result = null,
-    /// The queue the caller of run records structural changes into between runs; the next run
-    /// applies it first. Only the thread that calls run records into it.
+    /// Applies what was recorded into commands, then runs the phases in registration order: on the
+    /// first tick the startup phases first, then each every-tick phase, and each block of fixed
+    /// phases once per fixed step the accumulated time covers, the accumulation capped at
+    /// fixed_dt_max_accum.
+    tick: ?*const fn (?*ke_scheduler, f32) callconv(.c) abi_result.c.ke_result = null,
+    /// Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and
+    /// are refused respectively. Destroying the scheduler calls it for a caller that did not.
+    shutdown: ?*const fn (?*ke_scheduler) callconv(.c) abi_result.c.ke_result = null,
+    /// Records that the program should end; any body or the caller may ask, from any thread.
+    request_exit: ?*const fn (?*ke_scheduler) callconv(.c) void = null,
+    /// Whether a request to end the program was recorded.
+    exit_requested: ?*const fn (?*ke_scheduler) callconv(.c) bool = null,
+    /// The queue the caller of tick records structural changes into between ticks; the next tick
+    /// applies it first. Only the thread that calls tick records into it.
     commands: ?*const fn (?*ke_scheduler) callconv(.c) ?*abi_ecs.c.ke_ecs_commands = null,
 };
 

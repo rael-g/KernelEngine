@@ -58,6 +58,7 @@ const System = struct {
 /// are the phase's systems in registration order, and `waves` and `culled` run beside them.
 const Phase = struct {
     name: [:0]u8,
+    cadence: c.ke_phase_cadence,
     built: bool = false,
     systems: []*System = &.{},
     waves: []u32 = &.{},
@@ -70,7 +71,7 @@ const Phase = struct {
         gpa.free(p.systems);
         gpa.free(p.waves);
         gpa.free(p.culled);
-        p.* = .{ .name = p.name };
+        p.* = .{ .name = p.name, .cadence = p.cadence };
     }
 };
 
@@ -95,9 +96,10 @@ const Package = struct {
 };
 
 /// The state behind the `ke_scheduler` handle, whose `api.handle` points back at it. Phases, sets,
-/// systems and declarations change only while no run is in flight: a system registered or removed
-/// from a body waits on the lock-free `pending` and `removals` lists until the next run applies
-/// them, in call order, and every other change is refused from a body.
+/// systems and declarations change only while no tick is in flight: a system registered or removed
+/// from a body waits on the lock-free `pending` and `removals` lists until the next tick applies
+/// them, in call order, and every other change is refused from a body. `accumulated` is the time
+/// fixed steps have not yet consumed.
 const State = struct {
     api: c.ke_scheduler,
     ecs: *abi_ecs.c.ke_ecs,
@@ -114,6 +116,12 @@ const State = struct {
     removals: std.atomic.Value(?*Removal) = .init(null),
     host_queue: body.Queue = .{},
     host: body.Context,
+    fixed_dt: f32,
+    fixed_dt_max_accum: f32,
+    accumulated: f32 = 0,
+    started: bool = false,
+    shut_down: bool = false,
+    exit: std.atomic.Value(bool) = .init(false),
 
     fn dirtyPhase(s: *State, phase: c.ke_phase_id) void {
         s.phases.items[phase].clear();
@@ -153,9 +161,13 @@ fn registerPhase(self: ?*c.ke_scheduler, desc: ?*const c.ke_phase_desc, out_id: 
 fn addPhase(s: *State, desc: *const c.ke_phase_desc) R.Error!c.ke_phase_id {
     try s.refuseInRun();
     const name = desc.name orelse return reject(error.InvalidArgument, "a phase needs a name");
+    switch (desc.cadence) {
+        c.KE_PHASE_EVERY_TICK, c.KE_PHASE_FIXED, c.KE_PHASE_STARTUP, c.KE_PHASE_SHUTDOWN => {},
+        else => return reject(error.InvalidArgument, "unknown phase cadence"),
+    }
     const copy = try gpa.dupeZ(u8, std.mem.span(name));
     errdefer gpa.free(copy);
-    try s.phases.append(gpa, .{ .name = copy });
+    try s.phases.append(gpa, .{ .name = copy, .cadence = desc.cadence });
     return @intCast(s.phases.items.len - 1);
 }
 
@@ -206,7 +218,6 @@ fn merge(list: *std.ArrayList(c.ke_id_access), a: std.mem.Allocator, want: c.ke_
 fn makeSystem(s: *State, desc: *const c.ke_system_desc) R.Error!*System {
     if (desc.execute == null) return reject(error.InvalidArgument, "a system needs a body");
     const name = desc.name orelse return reject(error.InvalidArgument, "a system needs a name");
-    if (desc.phase >= s.phases.items.len) return reject(error.InvalidArgument, "a system names an unknown phase");
     const queries: []const c.ke_query_desc = if (desc.query_count == 0) &.{} else (desc.queries orelse return reject(error.InvalidArgument, "a system counts queries it does not point at"))[0..desc.query_count];
     const explicit: []const c.ke_id_access = if (desc.access_count == 0) &.{} else (desc.access orelse return reject(error.InvalidArgument, "a system counts access it does not point at"))[0..desc.access_count];
     const sets: []const c.ke_set_id = if (desc.set_count == 0) &.{} else (desc.sets orelse return reject(error.InvalidArgument, "a system counts sets it does not point at"))[0..desc.set_count];
@@ -215,8 +226,10 @@ fn makeSystem(s: *State, desc: *const c.ke_system_desc) R.Error!*System {
         if (!validAccess(q.terms.?[0..q.term_count])) return reject(error.InvalidArgument, "a query term has no known access");
     }
     if (!validAccess(explicit)) return reject(error.InvalidArgument, "an access entry has no known access");
+    if (sets.len == 0) return reject(error.InvalidArgument, "a system joins no set");
     for (sets) |set| {
-        if (set >= s.sets.items.len or s.sets.items[set].phase != desc.phase) return reject(error.InvalidArgument, "a system joins a set of another phase or an unknown one");
+        if (set >= s.sets.items.len) return reject(error.InvalidArgument, "a system joins an unknown set");
+        if (s.sets.items[set].phase != s.sets.items[sets[0]].phase) return reject(error.InvalidArgument, "a system joins sets of two phases");
     }
 
     const system = try gpa.create(System);
@@ -241,7 +254,7 @@ fn makeSystem(s: *State, desc: *const c.ke_system_desc) R.Error!*System {
     system.* = .{
         .arena = system.arena,
         .id = 0,
-        .phase = desc.phase,
+        .phase = s.sets.items[sets[0]].phase,
         .name = try a.dupeZ(u8, std.mem.span(name)),
         .user_data = desc.user_data,
         .execute = desc.execute,
@@ -279,7 +292,7 @@ fn addSystem(s: *State, desc: *const c.ke_system_desc) R.Error!SystemId {
         system.destroy();
         return err;
     };
-    s.dirtyPhase(system.phase);
+    s.dirtyAll();
     return system.id;
 }
 
@@ -308,7 +321,7 @@ fn removeSystem(s: *State, id: SystemId) R.Error!void {
 fn removeNow(s: *State, id: SystemId) bool {
     for (s.systems.items, 0..) |system, i| {
         if (system.id != id) continue;
-        s.dirtyPhase(system.phase);
+        s.dirtyAll();
         _ = s.systems.orderedRemove(i);
         system.destroy();
         return true;
@@ -334,7 +347,7 @@ fn applyPending(s: *State) void {
             system.destroy();
             continue;
         };
-        s.dirtyPhase(system.phase);
+        s.dirtyAll();
     }
 
     var removals = s.removals.swap(null, .acq_rel);
@@ -360,7 +373,10 @@ fn declareLifetime(self: ?*c.ke_scheduler, id: Id, lifetime: c.ke_lifetime) call
 
 fn setLifetime(s: *State, id: Id, lifetime: c.ke_lifetime) R.Error!void {
     try s.refuseInRun();
-    if (lifetime != c.KE_LIFETIME_PERSISTENT and lifetime != c.KE_LIFETIME_PHASE) return reject(error.InvalidArgument, "unknown lifetime");
+    switch (lifetime) {
+        c.KE_LIFETIME_PERSISTENT, c.KE_LIFETIME_PHASE, c.KE_LIFETIME_UNTIL_READ => {},
+        else => return reject(error.InvalidArgument, "unknown lifetime"),
+    }
     s.dirtyAll();
     for (s.lifetimes.items) |*l| {
         if (l.id != id) continue;
@@ -444,7 +460,12 @@ fn buildPhase(s: *State, index: c.ke_phase_id) R.Error!void {
     var short_lived: std.ArrayList(Id) = .empty;
     defer short_lived.deinit(gpa);
     for (s.lifetimes.items) |l| {
-        if (l.lifetime == c.KE_LIFETIME_PHASE) try short_lived.append(gpa, l.id);
+        const within_phase = switch (l.lifetime) {
+            c.KE_LIFETIME_PHASE => true,
+            c.KE_LIFETIME_UNTIL_READ => !readElsewhere(s, l.id, index),
+            else => false,
+        };
+        if (within_phase) try short_lived.append(gpa, l.id);
     }
 
     const waves = try gpa.alloc(u32, nodes.len);
@@ -457,6 +478,7 @@ fn buildPhase(s: *State, index: c.ke_phase_id) R.Error!void {
 
     phase.* = .{
         .name = phase.name,
+        .cadence = phase.cadence,
         .built = true,
         .systems = try systems.toOwnedSlice(gpa),
         .waves = waves,
@@ -465,6 +487,16 @@ fn buildPhase(s: *State, index: c.ke_phase_id) R.Error!void {
         .failure = built.failure,
         .ambiguity = built.ambiguity,
     };
+}
+
+fn readElsewhere(s: *const State, id: Id, phase: c.ke_phase_id) bool {
+    for (s.systems.items) |system| {
+        if (system.phase == phase) continue;
+        for (system.access) |a| {
+            if (a.id == id and (a.access & c.KE_SCHEDULER_ACCESS_READ) != 0) return true;
+        }
+    }
+    return false;
 }
 
 /// The failure a phase's order holds, logged with the names involved.
@@ -564,22 +596,85 @@ fn keepFirst(failure: *?Failure, code: abi_result.c.ke_result, name: [:0]const u
     };
 }
 
-/// Slot `run`.
-fn run(self: ?*c.ke_scheduler, phase: c.ke_phase_id, dt: f32) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return failed("run", error.InvalidArgument);
-    runPhase(s, phase, dt) catch |err| return failed("run", err);
+/// Slot `tick`.
+fn tick(self: ?*c.ke_scheduler, dt: f32) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return failed("tick", error.InvalidArgument);
+    tickPhases(s, dt) catch |err| return failed("tick", err);
     return R.ok;
 }
 
-fn runPhase(s: *State, index: c.ke_phase_id, dt: f32) R.Error!void {
+fn tickPhases(s: *State, dt: f32) R.Error!void {
     try s.refuseInRun();
-    if (index >= s.phases.items.len) return reject(error.InvalidArgument, "run names an unknown phase");
+    if (s.shut_down) return reject(error.NotSupported, "the scheduler was shut down");
+    if (!(dt >= 0)) return reject(error.InvalidArgument, "a tick needs a dt of zero or more");
     applyPending(s);
     s.host_queue.flush(s.ecs) catch |err| {
         log.warn("applying the caller's commands failed", .{});
         return err;
     };
     try bindQueries(s);
+    if (!s.started) {
+        s.started = true;
+        for (s.phases.items, 0..) |p, i| {
+            if (p.cadence == c.KE_PHASE_STARTUP) try runPhase(s, @intCast(i), 0);
+        }
+    }
+    s.accumulated = @min(s.accumulated + dt, s.fixed_dt_max_accum);
+    var steps: u32 = 0;
+    while (s.accumulated >= s.fixed_dt) : (steps += 1) s.accumulated -= s.fixed_dt;
+    const phases = s.phases.items.len;
+    var i: usize = 0;
+    while (i < phases) {
+        switch (s.phases.items[i].cadence) {
+            c.KE_PHASE_EVERY_TICK => {
+                try runPhase(s, @intCast(i), dt);
+                i += 1;
+            },
+            c.KE_PHASE_FIXED => {
+                var end = i;
+                while (end < phases and s.phases.items[end].cadence == c.KE_PHASE_FIXED) end += 1;
+                for (0..steps) |_| {
+                    for (i..end) |f| try runPhase(s, @intCast(f), s.fixed_dt);
+                }
+                i = end;
+            },
+            else => i += 1,
+        }
+    }
+}
+
+/// Slot `shutdown`.
+fn shutdown(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return failed("shutdown", error.InvalidArgument);
+    shutdownPhases(s) catch |err| return failed("shutdown", err);
+    return R.ok;
+}
+
+fn shutdownPhases(s: *State) R.Error!void {
+    try s.refuseInRun();
+    if (s.shut_down) return;
+    s.shut_down = true;
+    if (!s.started) return;
+    applyPending(s);
+    try bindQueries(s);
+    for (s.phases.items, 0..) |p, i| {
+        if (p.cadence == c.KE_PHASE_SHUTDOWN) try runPhase(s, @intCast(i), 0);
+    }
+}
+
+/// Slot `request_exit`.
+fn requestExit(self: ?*c.ke_scheduler) callconv(.c) void {
+    const s = stateOf(self) orelse return;
+    s.exit.store(true, .release);
+}
+
+/// Slot `exit_requested`.
+fn exitRequested(self: ?*c.ke_scheduler) callconv(.c) bool {
+    const s = stateOf(self) orelse return false;
+    return s.exit.load(.acquire);
+}
+
+fn runPhase(s: *State, index: c.ke_phase_id, dt: f32) R.Error!void {
     try buildPhase(s, index);
     const phase = &s.phases.items[index];
     try orderFailure(phase, false);
@@ -647,6 +742,7 @@ fn commands(self: ?*c.ke_scheduler) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
 /// Slot `destroy` of the handle: frees every system, pending or registered, and every declaration.
 fn destroy(self: ?*c.ke_scheduler) callconv(.c) void {
     const s = stateOf(self) orelse return;
+    shutdownPhases(s) catch {};
     applyPending(s);
     for (s.systems.items) |system| system.destroy();
     s.systems.deinit(gpa);
@@ -672,6 +768,7 @@ export fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_poo
     const out = out_scheduler orelse return failed("ke_scheduler_create", error.InvalidArgument);
     out.* = .{};
     if (ecs == null or task_pool == null or config == null) return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs an ecs, a task pool and its config"));
+    if (!(config.?.fixed_dt > 0) or !(config.?.fixed_dt_max_accum > 0)) return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs a fixed_dt and a fixed_dt_max_accum greater than zero"));
     const s = gpa.create(State) catch |err| return failed("ke_scheduler_create", err);
     s.* = .{
         .api = .{
@@ -683,12 +780,17 @@ export fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_poo
             .declare_exclusive = &declareExclusive,
             .build = &build,
             .describe_phase = &describePhase,
-            .run = &run,
+            .tick = &tick,
+            .shutdown = &shutdown,
+            .request_exit = &requestExit,
+            .exit_requested = &exitRequested,
             .commands = &commands,
         },
         .ecs = ecs.?,
         .pool = task_pool.?,
         .host = .{ .ecs = ecs.?, .queue = undefined },
+        .fixed_dt = config.?.fixed_dt,
+        .fixed_dt_max_accum = config.?.fixed_dt_max_accum,
     };
     s.api.handle = s;
     s.host.queue = &s.host_queue;
@@ -704,12 +806,15 @@ fn inlineDispatch(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_ta
     return args[1].?(args[2]);
 }
 
+const test_config: c.ke_scheduler_config = .{ .fixed_dt = 0.25, .fixed_dt_max_accum = 1.0 };
+
 const Rig = struct {
     ecs: zsub.For(abi_ecs.c.ke_ecs),
     pool: zsub.For(abi_task_pool.c.ke_task_pool),
     handle: c.ke_scheduler_handle,
     sched: *c.ke_scheduler,
     phase: c.ke_phase_id,
+    set: [1]c.ke_set_id,
 
     fn init(self: *Rig, workers: u32) !void {
         try self.ecs.init();
@@ -719,9 +824,10 @@ const Rig = struct {
         try self.pool.init();
         _ = self.pool.when(.dispatch).does(&inlineDispatch);
         _ = self.pool.when(.get_num_workers).returns(workers);
-        try R.check(ke_scheduler_create(self.ecs.api(), self.pool.api(), &.{ .reserved = 0 }, &self.handle));
+        try R.check(ke_scheduler_create(self.ecs.api(), self.pool.api(), &test_config, &self.handle));
         self.sched = self.handle.ref.?;
-        self.phase = try self.addPhase("update");
+        self.phase = try self.addPhase("update", c.KE_PHASE_EVERY_TICK);
+        self.set = .{try self.addSet("update", &.{})};
     }
 
     fn deinit(self: *Rig) void {
@@ -730,26 +836,34 @@ const Rig = struct {
         self.ecs.deinit();
     }
 
-    fn addPhase(self: *Rig, name: [*:0]const u8) !c.ke_phase_id {
+    fn addPhase(self: *Rig, name: [*:0]const u8, cadence: c.ke_phase_cadence) !c.ke_phase_id {
         var id: c.ke_phase_id = undefined;
-        try R.check(self.sched.register_phase.?(self.sched, &.{ .name = name }, &id));
+        try R.check(self.sched.register_phase.?(self.sched, &.{ .name = name, .cadence = cadence }, &id));
+        return id;
+    }
+
+    fn addSetIn(self: *Rig, name: [*:0]const u8, phase: c.ke_phase_id, after: []const c.ke_set_id) !c.ke_set_id {
+        var id: c.ke_set_id = undefined;
+        try R.check(self.sched.register_set.?(self.sched, &.{ .name = name, .phase = phase, .after = after.ptr, .after_count = @intCast(after.len) }, &id));
         return id;
     }
 
     fn addSet(self: *Rig, name: [*:0]const u8, after: []const c.ke_set_id) !c.ke_set_id {
-        var id: c.ke_set_id = undefined;
-        try R.check(self.sched.register_set.?(self.sched, &.{ .name = name, .phase = self.phase, .after = after.ptr, .after_count = @intCast(after.len) }, &id));
-        return id;
+        return self.addSetIn(name, self.phase, after);
     }
 
-    fn add(self: *Rig, desc: c.ke_system_desc) !SystemId {
+    fn desc(self: *Rig, name: [*:0]const u8, probe: *Probe) c.ke_system_desc {
+        return .{ .name = name, .user_data = probe, .execute = &counting, .sets = &self.set, .set_count = 1 };
+    }
+
+    fn add(self: *Rig, d: c.ke_system_desc) !SystemId {
         var id: SystemId = undefined;
-        try R.check(self.sched.register_system.?(self.sched, &desc, &id));
+        try R.check(self.sched.register_system.?(self.sched, &d, &id));
         return id;
     }
 
     fn run(self: *Rig) !void {
-        try R.check(self.sched.run.?(self.sched, self.phase, 0.5));
+        try R.check(self.sched.tick.?(self.sched, 0));
     }
 
     fn describe(self: *Rig, out: []c.ke_system_order) !u32 {
@@ -784,10 +898,6 @@ fn refusing(_: ?*c.ke_scheduler_ctx, ud: ?*anyopaque, _: f32) callconv(.c) abi_r
     return R.code(error.Io);
 }
 
-fn systemDesc(name: [*:0]const u8, probe: *Probe, phase: c.ke_phase_id) c.ke_system_desc {
-    return .{ .name = name, .phase = phase, .user_data = probe, .execute = &counting };
-}
-
 fn idAccess(id: Id, mode: c.ke_scheduler_access) c.ke_id_access {
     return .{ .id = id, .access = mode };
 }
@@ -806,11 +916,14 @@ test "a system runs once per run of its phase and never in another" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
-    const other = try rig.addPhase("render");
+    const other = try rig.addPhase("shutdown", c.KE_PHASE_SHUTDOWN);
+    const other_set = [1]c.ke_set_id{try rig.addSetIn("shutdown", other, &.{})};
     var here = Probe{};
     var there = Probe{};
-    _ = try rig.add(systemDesc("here", &here, rig.phase));
-    _ = try rig.add(systemDesc("there", &there, other));
+    _ = try rig.add(rig.desc("here", &here));
+    var elsewhere = rig.desc("there", &there);
+    elsewhere.sets = &other_set;
+    _ = try rig.add(elsewhere);
     try rig.run();
     try rig.run();
     try testing.expectEqual(2, here.calls.load(.monotonic));
@@ -822,7 +935,7 @@ test "a system that does not promise per-entity work runs as one slice" {
     try rig.init(4);
     defer rig.deinit();
     var probe = Probe{};
-    _ = try rig.add(systemDesc("whole", &probe, rig.phase));
+    _ = try rig.add(rig.desc("whole", &probe));
     try rig.run();
     try testing.expectEqual(1, probe.calls.load(.monotonic));
     try testing.expectEqual(1, probe.seen_count);
@@ -833,7 +946,7 @@ test "a per-entity system runs every slice of its set exactly once, one per work
     try rig.init(4);
     defer rig.deinit();
     var probe = Probe{};
-    var desc = systemDesc("sliced", &probe, rig.phase);
+    var desc = rig.desc("sliced", &probe);
     desc.per_entity = true;
     _ = try rig.add(desc);
     try rig.run();
@@ -841,25 +954,30 @@ test "a per-entity system runs every slice of its set exactly once, one per work
     for (probe.slices[0..4]) |s| try testing.expectEqual(1, s.load(.monotonic));
 }
 
-test "a system with no body, no name, an unknown phase or a set of another phase is refused" {
+test "a system with no body, no name, no set, an unknown set or sets of two phases is refused" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
     var probe = Probe{};
     var id: SystemId = undefined;
-    var no_body = systemDesc("x", &probe, rig.phase);
+    var no_body = rig.desc("x", &probe);
     no_body.execute = null;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &no_body, &id));
-    var no_name = systemDesc("x", &probe, rig.phase);
+    var no_name = rig.desc("x", &probe);
     no_name.name = null;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &no_name, &id));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &systemDesc("x", &probe, 7), &id));
-    const other = try rig.addPhase("render");
-    const set = try rig.addSet("opaque", &.{});
-    var foreign = systemDesc("x", &probe, other);
-    foreign.sets = &.{set};
-    foreign.set_count = 1;
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &foreign, &id));
+    var no_set = rig.desc("x", &probe);
+    no_set.set_count = 0;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &no_set, &id));
+    var unknown = rig.desc("x", &probe);
+    unknown.sets = &.{7};
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &unknown, &id));
+    const other = try rig.addPhase("render", c.KE_PHASE_EVERY_TICK);
+    const foreign_set = try rig.addSetIn("render", other, &.{});
+    var two = rig.desc("x", &probe);
+    two.sets = &.{ rig.set[0], foreign_set };
+    two.set_count = 2;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &two, &id));
 }
 
 test "a query declaring no terms, or counting terms it does not point at, is refused" {
@@ -869,7 +987,7 @@ test "a query declaring no terms, or counting terms it does not point at, is ref
     var probe = Probe{};
     var id: SystemId = undefined;
     const empty = [_]c.ke_query_desc{.{ .terms = null, .term_count = 0 }};
-    var desc = systemDesc("x", &probe, rig.phase);
+    var desc = rig.desc("x", &probe);
     desc.queries = &empty;
     desc.query_count = 1;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &desc, &id));
@@ -884,7 +1002,7 @@ test "an access with no known mode is refused" {
     var probe = Probe{};
     var id: SystemId = undefined;
     const list = [_]c.ke_id_access{idAccess(1, 0)};
-    var desc = systemDesc("x", &probe, rig.phase);
+    var desc = rig.desc("x", &probe);
     desc.access = &list;
     desc.access_count = 1;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &desc, &id));
@@ -900,13 +1018,13 @@ test "a registered system keeps its own copy of the name and the access it was g
     var probe = Probe{};
     var name = "writer".*;
     var list = [_]c.ke_id_access{idAccess(1, write)};
-    var desc = systemDesc(&name, &probe, rig.phase);
+    var desc = rig.desc(&name, &probe);
     desc.access = &list;
     desc.access_count = 1;
     _ = try rig.add(desc);
     @memset(&name, 'x');
     list[0] = idAccess(9, read);
-    var reader = systemDesc("reader", &probe, rig.phase);
+    var reader = rig.desc("reader", &probe);
     const reads_one = [_]c.ke_id_access{idAccess(1, read)};
     reader.access = &reads_one;
     reader.access_count = 1;
@@ -925,13 +1043,13 @@ test "a writer of an id runs in a wave before a system that only reads it, and d
     const reads_one = [_]c.ke_id_access{idAccess(1, read)};
     const writes_one = [_]c.ke_id_access{idAccess(1, write)};
     const writes_two = [_]c.ke_id_access{idAccess(2, write)};
-    var reader = systemDesc("reader", &probe, rig.phase);
+    var reader = rig.desc("reader", &probe);
     reader.access = &reads_one;
     reader.access_count = 1;
-    var writer = systemDesc("writer", &probe, rig.phase);
+    var writer = rig.desc("writer", &probe);
     writer.access = &writes_one;
     writer.access_count = 1;
-    var other = systemDesc("other", &probe, rig.phase);
+    var other = rig.desc("other", &probe);
     other.access = &writes_two;
     other.access_count = 1;
     const r = try rig.add(reader);
@@ -950,7 +1068,7 @@ test "two writers with no other order run in registration order, and a build ref
     defer rig.deinit();
     var probe = Probe{};
     const writes_one = [_]c.ke_id_access{idAccess(1, write)};
-    var first = systemDesc("first", &probe, rig.phase);
+    var first = rig.desc("first", &probe);
     first.access = &writes_one;
     first.access_count = 1;
     var second = first;
@@ -973,7 +1091,7 @@ test "two writers in sets ordered against each other are not ambiguous and run i
     const early = try rig.addSet("early", &.{});
     const late = try rig.addSet("late", &.{early});
     const writes_one = [_]c.ke_id_access{idAccess(1, write)};
-    var later = systemDesc("later", &probe, rig.phase);
+    var later = rig.desc("later", &probe);
     later.access = &writes_one;
     later.access_count = 1;
     later.sets = &.{late};
@@ -998,10 +1116,10 @@ test "a set orders systems that touch nothing in common, through a set no system
     const first = try rig.addSet("first", &.{});
     const middle = try rig.addSet("middle", &.{first});
     const last = try rig.addSet("last", &.{middle});
-    var b = systemDesc("b", &probe, rig.phase);
+    var b = rig.desc("b", &probe);
     b.sets = &.{last};
     b.set_count = 1;
-    var a = systemDesc("a", &probe, rig.phase);
+    var a = rig.desc("a", &probe);
     a.sets = &.{first};
     a.set_count = 1;
     _ = try rig.add(b);
@@ -1017,8 +1135,8 @@ test "a set may only follow a set of its own phase that already exists" {
     try rig.init(1);
     defer rig.deinit();
     var id: c.ke_set_id = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "a", .phase = rig.phase, .after = &.{0}, .after_count = 1 }, &id));
-    const other = try rig.addPhase("render");
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "a", .phase = rig.phase, .after = &.{9}, .after_count = 1 }, &id));
+    const other = try rig.addPhase("render", c.KE_PHASE_EVERY_TICK);
     const foreign = try rig.addSet("foreign", &.{});
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "b", .phase = other, .after = &.{foreign}, .after_count = 1 }, &id));
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "c", .phase = 9 }, &id));
@@ -1029,8 +1147,8 @@ test "an exclusive system runs alone before every other system of its phase" {
     try rig.init(1);
     defer rig.deinit();
     var probe = Probe{};
-    _ = try rig.add(systemDesc("plain", &probe, rig.phase));
-    var alone = systemDesc("alone", &probe, rig.phase);
+    _ = try rig.add(rig.desc("plain", &probe));
+    var alone = rig.desc("alone", &probe);
     alone.exclusive = true;
     _ = try rig.add(alone);
     var out: [2]c.ke_system_order = undefined;
@@ -1051,10 +1169,10 @@ test "queries requiring different members of one exclusive group do not conflict
     const right_terms = [_]c.ke_id_access{ idAccess(1, write), idAccess(12, read) };
     const left_query = [_]c.ke_query_desc{.{ .terms = &left_terms, .term_count = 2 }};
     const right_query = [_]c.ke_query_desc{.{ .terms = &right_terms, .term_count = 2 }};
-    var left = systemDesc("left", &probe, rig.phase);
+    var left = rig.desc("left", &probe);
     left.queries = &left_query;
     left.query_count = 1;
-    var right = systemDesc("right", &probe, rig.phase);
+    var right = rig.desc("right", &probe);
     right.queries = &right_query;
     right.query_count = 1;
     _ = try rig.add(left);
@@ -1078,13 +1196,13 @@ test "a system writing only what lives within the phase and that nothing reads i
     const produce = [_]c.ke_id_access{idAccess(1, write)};
     const consume = [_]c.ke_id_access{ idAccess(1, read), idAccess(2, write) };
     const keep = [_]c.ke_id_access{idAccess(3, write)};
-    var producer = systemDesc("producer", &producer_probe, rig.phase);
+    var producer = rig.desc("producer", &producer_probe);
     producer.access = &produce;
     producer.access_count = 1;
-    var consumer = systemDesc("consumer", &consumer_probe, rig.phase);
+    var consumer = rig.desc("consumer", &consumer_probe);
     consumer.access = &consume;
     consumer.access_count = 2;
-    var kept = systemDesc("kept", &kept_probe, rig.phase);
+    var kept = rig.desc("kept", &kept_probe);
     kept.access = &keep;
     kept.access_count = 1;
     _ = try rig.add(producer);
@@ -1106,7 +1224,7 @@ test "declaring an id persistent again keeps its writers running" {
     try R.check(rig.sched.declare_lifetime.?(rig.sched, 1, c.KE_LIFETIME_PHASE));
     var probe = Probe{};
     const produce = [_]c.ke_id_access{idAccess(1, write)};
-    var producer = systemDesc("producer", &probe, rig.phase);
+    var producer = rig.desc("producer", &probe);
     producer.access = &produce;
     producer.access_count = 1;
     _ = try rig.add(producer);
@@ -1125,17 +1243,17 @@ test "a body that fails the run keeps the later waves from starting, while its o
     var after = Probe{};
     const writes_one = [_]c.ke_id_access{idAccess(1, write)};
     const reads_one = [_]c.ke_id_access{idAccess(1, read)};
-    var bad = systemDesc("bad", &failing, rig.phase);
+    var bad = rig.desc("bad", &failing);
     bad.execute = &refusing;
     bad.access = &writes_one;
     bad.access_count = 1;
-    var reader = systemDesc("reader", &after, rig.phase);
+    var reader = rig.desc("reader", &after);
     reader.access = &reads_one;
     reader.access_count = 1;
     _ = try rig.add(bad);
-    _ = try rig.add(systemDesc("beside", &beside, rig.phase));
+    _ = try rig.add(rig.desc("beside", &beside));
     _ = try rig.add(reader);
-    try testing.expectEqual(R.code(error.Io), rig.sched.run.?(rig.sched, rig.phase, 0));
+    try testing.expectEqual(R.code(error.Io), rig.sched.tick.?(rig.sched, 0));
     try testing.expectEqual(1, beside.calls.load(.monotonic));
     try testing.expectEqual(0, after.calls.load(.monotonic));
 }
@@ -1161,17 +1279,17 @@ fn registering(_: ?*c.ke_scheduler_ctx, ud: ?*anyopaque, _: f32) callconv(.c) ab
         _ = r.sched.unregister_system.?(r.sched, r.remove);
         r.remove = 0;
     }
-    r.nested = r.sched.run.?(r.sched, 0, 0);
+    r.nested = r.sched.tick.?(r.sched, 0);
     return R.ok;
 }
 
-test "a system registered from a body runs from the next run on, and a run from a body is refused" {
+test "a system registered from a body runs from the next tick on, and a tick from a body is refused" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
     var late = Probe{};
-    var reg = Registrar{ .sched = rig.sched, .late = systemDesc("late", &late, rig.phase) };
-    _ = try rig.add(.{ .name = "registrar", .phase = rig.phase, .user_data = &reg, .execute = &registering });
+    var reg = Registrar{ .sched = rig.sched, .late = rig.desc("late", &late) };
+    _ = try rig.add(.{ .name = "registrar", .user_data = &reg, .execute = &registering, .sets = &rig.set, .set_count = 1 });
     try rig.run();
     try testing.expectEqual(0, late.calls.load(.monotonic));
     try testing.expectEqual(R.code(error.NotSupported), reg.nested);
@@ -1184,8 +1302,8 @@ test "a system registered and unregistered by the same body never runs" {
     try rig.init(1);
     defer rig.deinit();
     var late = Probe{};
-    var reg = Registrar{ .sched = rig.sched, .late = systemDesc("late", &late, rig.phase), .remove_late = true };
-    _ = try rig.add(.{ .name = "registrar", .phase = rig.phase, .user_data = &reg, .execute = &registering });
+    var reg = Registrar{ .sched = rig.sched, .late = rig.desc("late", &late), .remove_late = true };
+    _ = try rig.add(.{ .name = "registrar", .user_data = &reg, .execute = &registering, .sets = &rig.set, .set_count = 1 });
     try rig.run();
     try rig.run();
     try testing.expectEqual(0, late.calls.load(.monotonic));
@@ -1196,9 +1314,9 @@ test "a system unregistered from a body stops running from the next run" {
     try rig.init(1);
     defer rig.deinit();
     var victim = Probe{};
-    const victim_id = try rig.add(systemDesc("victim", &victim, rig.phase));
-    var reg = Registrar{ .sched = rig.sched, .late = systemDesc("late", &victim, rig.phase), .late_id = 1, .remove = victim_id };
-    _ = try rig.add(.{ .name = "registrar", .phase = rig.phase, .user_data = &reg, .execute = &registering });
+    const victim_id = try rig.add(rig.desc("victim", &victim));
+    var reg = Registrar{ .sched = rig.sched, .late = rig.desc("late", &victim), .late_id = 1, .remove = victim_id };
+    _ = try rig.add(.{ .name = "registrar", .user_data = &reg, .execute = &registering, .sets = &rig.set, .set_count = 1 });
     try rig.run();
     try testing.expectEqual(1, victim.calls.load(.monotonic));
     try rig.run();
@@ -1211,8 +1329,8 @@ test "an unregistered system no longer runs, and an id never issued is not found
     defer rig.deinit();
     var gone = Probe{};
     var kept = Probe{};
-    const id = try rig.add(systemDesc("gone", &gone, rig.phase));
-    _ = try rig.add(systemDesc("kept", &kept, rig.phase));
+    const id = try rig.add(rig.desc("gone", &gone));
+    _ = try rig.add(rig.desc("kept", &kept));
     try R.check(rig.sched.unregister_system.?(rig.sched, id));
     try rig.run();
     try testing.expectEqual(0, gone.calls.load(.monotonic));
@@ -1236,7 +1354,7 @@ test "what a body records is applied after its wave, and what the caller records
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
-    _ = try rig.add(.{ .name = "spawner", .phase = rig.phase, .execute = &spawning });
+    _ = try rig.add(.{ .name = "spawner", .execute = &spawning, .sets = &rig.set, .set_count = 1 });
     const host = rig.sched.commands.?(rig.sched).?;
     try R.check(host.detach.?(host, 5, 1));
     try rig.run();
@@ -1268,7 +1386,7 @@ test "a query matching more segments than its buffer holds is resolved again int
     var probe = Probe{};
     const terms = [_]c.ke_id_access{idAccess(1, read)};
     const query = [_]c.ke_query_desc{.{ .terms = &terms, .term_count = 1 }};
-    var desc = systemDesc("viewer", &probe, rig.phase);
+    var desc = rig.desc("viewer", &probe);
     desc.queries = &query;
     desc.query_count = 1;
     _ = try rig.add(desc);
@@ -1278,19 +1396,19 @@ test "a query matching more segments than its buffer holds is resolved again int
     try rig.ecs.received(.query_register).times(1);
 }
 
-test "describing a phase reports the count, and refuses too small a capacity or an unknown phase" {
+test "describing a phase reports the count and refuses too small a capacity or an unknown phase, and a negative dt is refused" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
     var probe = Probe{};
-    _ = try rig.add(systemDesc("a", &probe, rig.phase));
-    _ = try rig.add(systemDesc("b", &probe, rig.phase));
+    _ = try rig.add(rig.desc("a", &probe));
+    _ = try rig.add(rig.desc("b", &probe));
     var out: [1]c.ke_system_order = undefined;
     var count: u32 = 0;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.describe_phase.?(rig.sched, rig.phase, &out, 1, &count));
     try testing.expectEqual(2, count);
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.describe_phase.?(rig.sched, 5, &out, 1, &count));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(rig.sched, 5, 0));
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.tick.?(rig.sched, -1));
 }
 
 test "creating a scheduler without an ecs, a task pool or a config is refused and leaves the handle zeroed" {
@@ -1301,9 +1419,9 @@ test "creating a scheduler without an ecs, a task pool or a config is refused an
     try pool.init();
     defer pool.deinit();
     var handle: c.ke_scheduler_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, pool.api(), &.{ .reserved = 0 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, pool.api(), &test_config, &handle));
     try testing.expectEqual(null, handle.ref);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), null, &.{ .reserved = 0 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), null, &test_config, &handle));
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), pool.api(), null, &handle));
 }
 
@@ -1313,8 +1431,172 @@ test "a slot given no scheduler refuses" {
     defer rig.deinit();
     var id: c.ke_phase_id = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_phase.?(null, &.{ .name = "x" }, &id));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(null, 0, 0));
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.tick.?(null, 0));
     try testing.expectEqual(null, rig.sched.commands.?(null));
+}
+
+const Log = struct {
+    entries: [32]u8 = undefined,
+    dts: [32]f32 = undefined,
+    count: usize = 0,
+};
+
+const Mark = struct {
+    log: *Log,
+    letter: u8,
+};
+
+fn marking(_: ?*c.ke_scheduler_ctx, ud: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
+    const mark: *Mark = @ptrCast(@alignCast(ud.?));
+    mark.log.entries[mark.log.count] = mark.letter;
+    mark.log.dts[mark.log.count] = dt;
+    mark.log.count += 1;
+    return R.ok;
+}
+
+const Cadences = struct {
+    rig: Rig = undefined,
+    log: Log = .{},
+    marks: [6]Mark = undefined,
+    sets: [6][1]c.ke_set_id = undefined,
+
+    fn init(self: *Cadences) !void {
+        try self.rig.init(1);
+        const phases = [_]struct { name: [*:0]const u8, cadence: c.ke_phase_cadence, letter: u8 }{
+            .{ .name = "pre", .cadence = c.KE_PHASE_EVERY_TICK, .letter = 'p' },
+            .{ .name = "fixed_a", .cadence = c.KE_PHASE_FIXED, .letter = 'a' },
+            .{ .name = "fixed_b", .cadence = c.KE_PHASE_FIXED, .letter = 'b' },
+            .{ .name = "start", .cadence = c.KE_PHASE_STARTUP, .letter = 's' },
+            .{ .name = "end", .cadence = c.KE_PHASE_SHUTDOWN, .letter = 'e' },
+            .{ .name = "post", .cadence = c.KE_PHASE_EVERY_TICK, .letter = 'u' },
+        };
+        for (phases, &self.marks, &self.sets) |ph, *mark, *set| {
+            const phase = try self.rig.addPhase(ph.name, ph.cadence);
+            set.* = .{try self.rig.addSetIn(ph.name, phase, &.{})};
+            mark.* = .{ .log = &self.log, .letter = ph.letter };
+            _ = try self.rig.add(.{ .name = ph.name, .user_data = mark, .execute = &marking, .sets = set, .set_count = 1 });
+        }
+    }
+
+    fn written(self: *const Cadences) []const u8 {
+        return self.log.entries[0..self.log.count];
+    }
+};
+
+test "the startup phases run once, before every other phase of the first tick, with a dt of zero" {
+    var t: Cadences = .{};
+    try t.init();
+    defer t.rig.deinit();
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0.1));
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0.1));
+    try testing.expectEqualStrings("spupu", t.written());
+    try testing.expectEqual(0, t.log.dts[0]);
+    try testing.expectEqual(0.1, t.log.dts[1]);
+}
+
+test "consecutive fixed phases run together, in order, once per fixed step, with the fixed dt" {
+    var t: Cadences = .{};
+    try t.init();
+    defer t.rig.deinit();
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0.5));
+    try testing.expectEqualStrings("spababu", t.written());
+    try testing.expectEqual(0.25, t.log.dts[2]);
+}
+
+test "the fixed phases accumulate at their own rate, and a tick shorter than the step takes none" {
+    var t: Cadences = .{};
+    try t.init();
+    defer t.rig.deinit();
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0.125));
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0.125));
+    try testing.expectEqualStrings("spupabu", t.written());
+}
+
+test "a huge tick is capped so the fixed phases cannot spiral" {
+    var t: Cadences = .{};
+    try t.init();
+    defer t.rig.deinit();
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 100));
+    try testing.expectEqualStrings("spababababu", t.written());
+}
+
+test "the shutdown phases run once when the scheduler shuts down after a tick, and a tick after it is refused" {
+    var t: Cadences = .{};
+    try t.init();
+    defer t.rig.deinit();
+    try R.check(t.rig.sched.tick.?(t.rig.sched, 0));
+    try R.check(t.rig.sched.shutdown.?(t.rig.sched));
+    try R.check(t.rig.sched.shutdown.?(t.rig.sched));
+    try testing.expectEqualStrings("spue", t.written());
+    try testing.expectEqual(R.code(error.NotSupported), t.rig.sched.tick.?(t.rig.sched, 0));
+}
+
+test "destroying a scheduler that ticked runs its shutdown phases, and one that never ticked runs none" {
+    var ticked: Cadences = .{};
+    try ticked.init();
+    try R.check(ticked.rig.sched.tick.?(ticked.rig.sched, 0));
+    ticked.rig.deinit();
+    try testing.expectEqualStrings("spue", ticked.written());
+    var idle: Cadences = .{};
+    try idle.init();
+    idle.rig.deinit();
+    try testing.expectEqualStrings("", idle.written());
+}
+
+test "an unknown phase cadence is refused" {
+    var rig: Rig = undefined;
+    try rig.init(1);
+    defer rig.deinit();
+    var id: c.ke_phase_id = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_phase.?(rig.sched, &.{ .name = "x", .cadence = 9 }, &id));
+}
+
+test "a request to exit is recorded and read back, and a fresh scheduler has none" {
+    var rig: Rig = undefined;
+    try rig.init(1);
+    defer rig.deinit();
+    try testing.expect(!rig.sched.exit_requested.?(rig.sched));
+    rig.sched.request_exit.?(rig.sched);
+    try testing.expect(rig.sched.exit_requested.?(rig.sched));
+}
+
+test "a writer of what lives until read is kept while a system of another phase reads it, and culled once none does" {
+    var rig: Rig = undefined;
+    try rig.init(1);
+    defer rig.deinit();
+    try R.check(rig.sched.declare_lifetime.?(rig.sched, 1, c.KE_LIFETIME_UNTIL_READ));
+    var probe = Probe{};
+    const produce = [_]c.ke_id_access{idAccess(1, write)};
+    var producer = rig.desc("producer", &probe);
+    producer.access = &produce;
+    producer.access_count = 1;
+    _ = try rig.add(producer);
+    const later = try rig.addPhase("later", c.KE_PHASE_EVERY_TICK);
+    const later_set = [1]c.ke_set_id{try rig.addSetIn("later", later, &.{})};
+    const consume = [_]c.ke_id_access{idAccess(1, read)};
+    var consumer = rig.desc("consumer", &probe);
+    consumer.access = &consume;
+    consumer.access_count = 1;
+    consumer.sets = &later_set;
+    const consumer_id = try rig.add(consumer);
+    var out: [1]c.ke_system_order = undefined;
+    _ = try rig.describe(&out);
+    try testing.expect(!out[0].culled);
+    try R.check(rig.sched.unregister_system.?(rig.sched, consumer_id));
+    _ = try rig.describe(&out);
+    try testing.expect(out[0].culled);
+}
+
+test "a fixed dt or a catch-up budget that is not greater than zero is refused" {
+    var ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined;
+    try ecs.init();
+    defer ecs.deinit();
+    var pool: zsub.For(abi_task_pool.c.ke_task_pool) = undefined;
+    try pool.init();
+    defer pool.deinit();
+    var handle: c.ke_scheduler_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), pool.api(), &.{ .fixed_dt = 0, .fixed_dt_max_accum = 1 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), pool.api(), &.{ .fixed_dt = 0.25, .fixed_dt_max_accum = 0 }, &handle));
 }
 
 test "nothing the scheduler allocated is left behind" {
