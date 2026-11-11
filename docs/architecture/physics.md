@@ -11,7 +11,7 @@ plugins under `src/zig/physics/`.
 | world | `ke_physics_2d` | box2d | gravity, body and fixture requests | body ids, body state after a step |
 | components | `ke_body2d_component`, `ke_collider2d_component` | none | scene fields, script writes | the description of a body and of a shape |
 | module | none; `ke_physics_body2d_module_create` | body2d | `ke_runtime`, `ke_ecs`, `ke_physics_2d` | two runtime systems, and both components registered with their field tables |
-| managed | `IPhysics2D`, `Body2DModule` | `KernelEngine.Physics` | the host's service collection | the world and the module in a host |
+| managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, made by the SDK's `EngineBuilder.DefaultPhysics` |
 
 **Game code edits components, never handles.** A body is an entity with a `ke_body2d_component`
 and a transform; a shape is its own entity, a descendant of the body's entity, with a

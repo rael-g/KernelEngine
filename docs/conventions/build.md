@@ -83,13 +83,14 @@ and nothing else tells it apart from a current one.
 
 ## What a plugin receives
 
-A plugin's `build.zig` takes its dependencies as options, never by reading its neighbours: one
-include directory per domain it consumes, plus library and source paths
-(`src/zig/window/glfw/build.zig:7-14`). Each option is required: the plugin's build panics without
-it, and its include paths are exactly the ones it was handed (`glfw/build.zig:23-25`). The root
-passes them as the arguments of `b.dependency`, together with its own `target` and `optimize`
-(`build.zig:1208`, and any `ctx.member` call). The same `build.zig` still runs alone from its
-directory, given the same options as `-D` flags.
+A plugin's `build.zig` is a description handed to `ke_build.plugin` (`src/zig/build/build.zig`): its
+root file, the ABI packages of the contracts it consumes, the `ke_common` modules it uses, the
+third-party headers it translates and its tests. The contracts reach it as the Zig packages kabic
+generates, declared in the plugin's own `build.zig.zon`, so a contract the plugin did not declare is
+not importable. Its options are only the paths of the third-party libraries it wraps
+(`glfw-include`, `glfw-lib`), each required. The root passes them as the arguments of
+`b.dependency`, with its own `target` and `optimize`, from its `ctx.member` call; the same
+`build.zig` still runs alone from its directory, given the same options as `-D` flags.
 
 A plugin that links another plugin's library takes it from `<--prefix>/lib`, so the root makes its
 compile step wait for the steps listed in the `deps` argument of `Ctx.member` (`build.zig:1211`):

@@ -29,7 +29,7 @@ library a plugin routes logs under that library's own name.
 
 **One channel.** The code that creates a library's objects hands the setter
 `NativeLogging.Callback` and `NativeLogging.ContextOf(loggerFactory)`, with the `ILoggerFactory`
-from the container, so a native line is logged under the category of its scope, at the
+the host gave the SDK (`EngineBuilder.WithLogging`), so a native line is logged under the category of its scope, at the
 `Microsoft.Extensions.Logging` level of the same name, beside every managed line.
 
 **The filter and the output are the host's.** The host composes them with the logging builder, as any

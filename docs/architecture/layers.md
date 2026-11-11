@@ -7,10 +7,12 @@ This is a map of the four layers and of the files that cross them. How the bound
 
 | layer | where | holds |
 |---|---|---|
-| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, parameter structs, enums; headers only |
+| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, `_config` and `_desc` structs, components, enums; headers only |
 | 2, plugins | `src/zig/<domain>/<plugin>/` | every implementation, one shared library each |
 | 3, bindings | `src/csharp/<domain>/*/Native/Generated/` | P/Invoke surface generated from layers 1 and 2 |
-| 4, managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, framework, game code |
+| 4, managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, the C# node SDK, game code |
+
+The C SDK (`src/sdk/c/`) is not a layer: it is plain C a C game includes, helpers over the contracts.
 
 A file's layer is decided by where it sits. The domains are `ls src/c`; the plugins are the
 `ctx.member("` calls of the root `build.zig`, and a plugin not declared there is not built.
@@ -19,18 +21,18 @@ A file's layer is decided by where it sits. The domains are `ls src/c`; the plug
 installed under `lib/`. Its public surface is a factory header under `include/`, defined by an
 `export fn`; everything behind it is reachable only through the vtable the factory returns.
 
-**The root build configures every plugin.** The root `build.zig` makes each plugin a dependency
-and hands it, as `-D` options, the include directory of each domain it consumes, so a domain a
-plugin did not ask for is not on its include path. All libraries are installed under the one
-`--prefix` given to the root build.
+**The root build configures every plugin.** The root `build.zig` makes each plugin a dependency;
+a plugin reaches the contracts it consumes through the ABI packages its own `build.zig.zon`
+declares, so a domain it did not ask for is not importable. All libraries are installed under the
+one `--prefix` given to the root build.
 
 **Layer 3 is generated from the headers.** ClangSharp produces the raw struct and function
 surface; kabic (the kabic repository) produces the idiomatic projection from the doc tags of the
 same headers, driven by `scripts/api_domains.json`. Neither output is edited by hand.
 
 **Layer 4 reaches native code through layer 3.** The managed projects copy the plugin libraries
-from `build/native/lib` (`NativeDependencies.targets`), and game code composes the wrappers by
-dependency injection from its own `Program.cs`.
+from `build/native/lib` (`NativeDependencies.targets`); game code starts from the SDK
+(`Engine.Create`), which makes every part by its constructor.
 
 ## Source the plugins share
 
@@ -50,7 +52,7 @@ plugin names in the `common` list of its build description and imports by that n
 
 ## What the parts agree on without a contract
 
-- The option names of the table above, between the root `build.zig` and each plugin's `build.zig`.
+- The third-party option names, between the root `build.zig` and each plugin's `build.zig`.
 - The `ke-lib-dir` option, the directory that holds a built library a plugin links.
 - The name of a plugin library, between its `build.zig` and the `bindings` entry of
   `scripts/api_domains.json` that names the library to load.

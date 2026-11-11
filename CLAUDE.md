@@ -108,7 +108,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
-Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Nine gates, five `kabic check` commands and four of the `scripts/check_*.cs`, keep both honest against the headers.
+Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, five `kabic check` commands and five `scripts/check_*.cs`, keep both honest against the headers.
 
 kabic's generic output is the default. A need it does not meet is answered in this order: accept the generic result if it is enough, even when it differs from code that already exists; otherwise ask whether the concept is generic and belongs in kabic's core; only a concept that is neither goes to an extension.
 

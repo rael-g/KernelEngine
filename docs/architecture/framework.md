@@ -15,7 +15,7 @@ only through its vtable.
 | scene hierarchy | `ke_scene_hierarchy` | `ke_scene_hierarchy_create` | `ke_runtime`, `ke_ecs` | world matrices, through one runtime system |
 | scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs`, `ke_runtime` | nodes as entities, and the hierarchy it owns |
 | node types | `ke_node_types` | `ke_node_types_create` | `ke_runtime`, `ke_ecs`, `ke_scene_tree`, an optional `ke_input_actions` | node types and event types, each behaviour a system of its phase |
-| scene files | `ke_scene_files` | `ke_scene_files_create` | `ke_ecs`, `ke_node_types`, `ke_asset_resolver`, `ke_io` | the nodes a scene file describes, and the `scene_slot` node type |
+| scene files | `ke_scene_files` | `ke_scene_files_create` | `ke_ecs`, `ke_node_types`, `ke_asset_resolver`, `ke_io` | the nodes a scene file describes, the `scene_slot` node type, and `open` for the first slot |
 | asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root, a `ke_io` | textures, meshes, materials, fonts; render service handles |
 
 The managed side projects each of them as a class built by its factory: `DefaultInputActions`,
@@ -28,6 +28,11 @@ SDK over `ke_node_types` is mapped in `node-types.md`.
 transform components. The scene tree creates the hierarchy piece itself when it is given a
 runtime, and owns it; the hierarchy is destroyed only after the runtime has finished ticking.
 
+**The tree is made of nodes.** A node is an entity of one node type, and the type says which
+components it carries: its own fields and the components it names in `with`. A node's children
+are nodes; a behaviour walks the tree in nodes (`child`, `parent`, `first_child`) and reaches a
+component of a node it holds (`component`, `find_component`).
+
 **A node is born from its type.** `spawn` records a node carrying its type's tag, its fields and
 the components its type names in `with`, each holding the type's initial value unless the spawn
 gives another. A scene file is a list of spawns: `ke_scene_files` reads it and spawns through the
@@ -38,7 +43,12 @@ included, so a table only has to live for the call that registers it.
 
 **A scene changes by a slot.** A `scene_slot` node holds a scene file path; when the path differs
 from the one it last instantiated, its children are destroyed and the file at the path is
-instantiated under it.
+instantiated under it. A program opens its first slot with `ke_scene_files.open`; a behaviour
+changes the slot above it with `ctx->change_scene`.
+
+**A node leaves through its exit.** `ctx->destroy` marks a node and its subtree as leaving; each
+type's `exit_tree` visits them in the next PreUpdate, and the "nodes.reap" system removes the
+subtree once all of it has run its exit.
 
 **The asset resolver holds the project root.** It is the one piece that interprets "res://"; the
 scene files resolve a scene reference through it.
@@ -49,4 +59,4 @@ scene files resolve a scene reference through it.
   "scene_slot".
 - A node type's tag is registered as "node.<name>", its fields as "<name>".
 - Mesh paths: "res://primitives/quad", "plane", "cube", "sphere".
-- System names: "input.actions" and "scene.propagate_transforms".
+- System names: "input.actions", "scene.propagate_transforms" and "nodes.reap".

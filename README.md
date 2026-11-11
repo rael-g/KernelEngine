@@ -9,7 +9,7 @@ call C can reach the ECS, the renderer or the framework the same way.
 
 | layer | where | holds |
 |---|---|---|
-| 1, C contracts | `src/c/<domain>/kernel_engine/<domain>/` | vtable shapes, parameter structs, enums; headers only |
+| 1, C contracts | `src/c/<domain>/kernel_engine/<domain>/` | vtable shapes, `_config` and `_desc` structs, enums; headers only |
 | 2, plugins | `src/zig/<domain>/<plugin>/` | every implementation, one shared library each |
 | 3, C# bindings | `src/csharp/<domain>/*/Native/Generated/` | P/Invoke surface generated from the headers |
 | 4, C# managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, framework, game code |

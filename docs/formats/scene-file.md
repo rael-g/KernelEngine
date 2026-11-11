@@ -2,7 +2,7 @@
 
 A scene file is TOML, named `<name>.scene.toml` by convention (`examples/csharp/games/pong/scenes/`).
 `ke_scene_files.instantiate` reads it and spawns its nodes through `ke_node_types`, as a program
-calling `spawn_named` would; `ke_scene_files.open` puts the first one in a scene slot, and a node
+calling `spawn` would; `ke_scene_files.open` puts the first one in a scene slot, and a node
 changes it with `ctx->change_scene`. The rules below are the ones `scene_files.zig` enforces.
 
 ## Shape
