@@ -14,7 +14,7 @@ const abi_factory = @import("abi_physics_2d_box2d_factory");
 const b2 = @import("box2d");
 const heap = @import("heap");
 
-const Config = abi_factory.c.ke_physics_2d_box2d_config;
+const Config = abi_physics.c.ke_physics_2d_config;
 
 /// Error reporter bound to this file's C error types; every failure in this file is reported
 /// through it.

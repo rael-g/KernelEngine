@@ -26,21 +26,6 @@ extern "C"
 {
 #endif
 
-/// [bag] The values a render service is created with, each applied as given.
-typedef struct ke_render_service_config
-{
-    /// [utf8] Directory the shaders are loaded from; copied. Required.
-    const char           *shader_dir;
-    /// Format of the frame's color up to
-    /// KE_RENDER_STAGE_HDR_POST.
-    ke_gpu_texture_format color_format;
-    /// Format of the frame's depth.
-    ke_gpu_texture_format depth_format;
-    /// Color the frame is cleared to.
-    ke_vec4               clear_color;
-} ke_render_service_config;
-
-
 /**
  * @brief Creates a render service whose frames draw into @p target.
  * @param device Borrowed, must outlive the service.

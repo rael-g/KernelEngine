@@ -17,7 +17,7 @@ public sealed unsafe partial class Box2DPhysics2D : KernelEngine.Physics.Physics
 
     private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(float gravityX, float gravityY)
     {
-        KernelEngine.Physics.Box2D.Native.ke_physics_2d_box2d_config config = default;
+        KernelEngine.Physics.Native.ke_physics_2d_config config = default;
         config.gravity_x = gravityX;
         config.gravity_y = gravityY;
         KernelEngine.Physics.Native.ke_physics_2d_handle handle;

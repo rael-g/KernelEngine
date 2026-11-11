@@ -40,6 +40,15 @@ pub const ke_body_state_2d = extern struct {
     angular_velocity: f32 = std.mem.zeroes(f32),
 };
 
+/// The values a 2D physics world is created with, whatever its implementation, each applied as
+/// given.
+pub const ke_physics_2d_config = extern struct {
+    /// Horizontal gravity, in metres per second squared.
+    gravity_x: f32 = std.mem.zeroes(f32),
+    /// Vertical gravity, in metres per second squared.
+    gravity_y: f32 = std.mem.zeroes(f32),
+};
+
 /// A 2D rigid-body physics world. One instance is one world; several worlds take several
 /// instances. Not thread-safe — call all methods on the same thread.
 pub const ke_physics_2d = extern struct {

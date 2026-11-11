@@ -200,7 +200,7 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
-    ke_gpu_device_webgpu_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
+    ke_gpu_device_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = { 0 };
     check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
@@ -224,11 +224,11 @@ int main(int argc, char **argv)
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_flecs_config){ .world_id_base = 1048576 }, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
     ke_task_pool_handle pool = { 0 };
-    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_enki_config){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool);
+    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &pool);
     if (made != KE_OK) die_result("task pool", made);
 
     ke_runtime_handle rt = { 0 };
@@ -237,7 +237,7 @@ int main(int argc, char **argv)
 
     renderer render;
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_std_config){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);

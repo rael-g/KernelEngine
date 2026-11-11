@@ -24,7 +24,7 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
         var titleBytes = title is null ? null : System.Text.Encoding.UTF8.GetBytes(title + "\0");
         fixed (byte* titlePtr = titleBytes)
         {
-            KernelEngine.Window.Glfw.Native.ke_window_glfw_config config = default;
+            KernelEngine.Window.Native.ke_window_config config = default;
             config.title = (sbyte*)titlePtr;
             config.width = width;
             config.height = height;

@@ -27,6 +27,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_render_frame_globals, translated("ke_render_frame_globals"));
     try expectSameLayout(abi.c.ke_render_lighting, translated("ke_render_lighting"));
     try expectSameLayout(abi.c.ke_render_pass_io, translated("ke_render_pass_io"));
+    try expectSameLayout(abi.c.ke_render_service_config, translated("ke_render_service_config"));
     try expectSameLayout(abi.c.ke_camera_frustum, translated("ke_camera_frustum"));
     try expectSameLayout(abi.c.ke_render_scene_component_ids, translated("ke_render_scene_component_ids"));
     try expectSameLayout(abi.c.ke_render_gbuffer_resources, translated("ke_render_gbuffer_resources"));
@@ -90,7 +91,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_CHAIN_NONE), @as(i128, abi.c.KE_RENDER_CHAIN_NONE));
 }
 
-extern const layout_values: [144]c_ulonglong;
+extern const layout_values: [149]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -129,6 +130,11 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_pass_io, "writes_count"),
         @offsetOf(abi.c.ke_render_pass_io, "chain"),
         @offsetOf(abi.c.ke_render_pass_io, "depth"),
+        @sizeOf(abi.c.ke_render_service_config),
+        @offsetOf(abi.c.ke_render_service_config, "shader_dir"),
+        @offsetOf(abi.c.ke_render_service_config, "color_format"),
+        @offsetOf(abi.c.ke_render_service_config, "depth_format"),
+        @offsetOf(abi.c.ke_render_service_config, "clear_color"),
         @sizeOf(abi.c.ke_camera_frustum),
         @offsetOf(abi.c.ke_camera_frustum, "tan_half_fov_y"),
         @offsetOf(abi.c.ke_camera_frustum, "aspect"),

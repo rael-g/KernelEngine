@@ -100,6 +100,14 @@ extern "C"
         void (*destroy)(ke_input_actions *self);
     } ke_input_actions_handle;
 
+/// [bag] The values the action maps is created with, whatever its implementation, each applied as given.
+    /// The values the action maps are created with.
+    typedef struct ke_input_actions_config
+    {
+        /// [borrowed,utf8] The configuration section the maps are read from.
+        const char *section;
+    } ke_input_actions_config;
+
 #ifdef __cplusplus
 }
 #endif

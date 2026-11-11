@@ -19,6 +19,13 @@ pub const ke_file_stat = extern struct {
     size: u64 = std.mem.zeroes(u64),
 };
 
+/// The values a file system is created with, whatever its implementation, each applied as given.
+pub const ke_file_system_config = extern struct {
+    /// The directory relative paths are resolved against; "." for the working directory of the
+    /// process.
+    root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+};
+
 /// Read-only access to the files of one platform. Paths are UTF-8 with '/' as the separator; a
 /// relative path is resolved against the root the implementation was created with. Every slot
 /// may be called from several threads at once, read_at on one open file included.

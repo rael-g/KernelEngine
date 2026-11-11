@@ -358,7 +358,7 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
 /// state without waiting for compiles still listed.
 pub export fn ke_gpu_device_webgpu_create(
     task_pool: ?*abi_task_pool.c.ke_task_pool,
-    config: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config,
+    config: ?*const abi_render_gpu.c.ke_gpu_device_config,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);
@@ -1739,7 +1739,7 @@ fn queryExtension(_: [*c]abi_render_gpu.c.ke_gpu_device, _: [*c]const u8) callco
     return null;
 }
 
-const test_device_config: abi_gpu_device_webgpu_factory.c.ke_gpu_device_webgpu_config = .{ .enable_validation = true, .debug_labels = false };
+const test_device_config: abi_render_gpu.c.ke_gpu_device_config = .{ .enable_validation = true, .debug_labels = false };
 
 test "a sampler's filters and address modes reach wgpu as the modes they name" {
     try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Linear), toWgpuFilter(abi_render_gpu.c.KE_GPU_FILTER_LINEAR));

@@ -669,6 +669,22 @@
       "external": true
     },
     {
+      "name": "ke_ecs_config",
+      "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "reserved_id_capacity",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_component_access",
       "doc": "One component a system touches, and how. Two systems conflict when they name the same component and at least one writes it; conflicting systems never run in the same wave. A system that declares nothing conflicts with nothing, and is therefore free to run concurrently with everything.",
       "tags": [
@@ -876,7 +892,7 @@
     },
     {
       "name": "ke_runtime_config",
-      "doc": "The values a runtime is created with, each applied as given.",
+      "doc": "The values a runtime is created with, whatever its implementation, each applied as given.",
       "tags": [
         "bag"
       ],
@@ -900,6 +916,22 @@
           "doc": "Most systems one phase may hold; registering past it fails."
         }
       ]
+    },
+    {
+      "name": "ke_task_pool_config",
+      "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "worker_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD."
+        }
+      ],
+      "external": true
     }
   ],
   "vtables": [

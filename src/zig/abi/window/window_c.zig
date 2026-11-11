@@ -3,6 +3,18 @@
 const std = @import("std");
 const abi_result = @import("result");
 
+/// The values a window is created with, whatever its implementation, each applied as given.
+pub const ke_window_config = extern struct {
+    /// Window title.
+    title: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// Client width in pixels.
+    width: i32 = std.mem.zeroes(i32),
+    /// Client height in pixels.
+    height: i32 = std.mem.zeroes(i32),
+    /// Whether the window covers the primary monitor.
+    fullscreen: bool = std.mem.zeroes(bool),
+};
+
 /// OS-level window abstraction.
 pub const ke_window = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),

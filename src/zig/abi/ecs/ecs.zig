@@ -295,4 +295,5 @@ pub const ComponentField = c.ke_component_field;
 pub const ComponentParams = c.ke_component_params;
 pub const ComponentMeta = c.ke_component_meta;
 pub const EcsSegment = c.ke_ecs_segment;
+pub const EcsConfig = c.ke_ecs_config;
 pub const EcsHandle = c.ke_ecs_handle;

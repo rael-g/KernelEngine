@@ -25,7 +25,7 @@ test {
     _ = @import("core.zig");
 }
 
-const Config = abi_window_glfw_factory.c.ke_window_glfw_config;
+const Config = abi_window.c.ke_window_config;
 
 /// Creates the window and starts it with `config` applied as given, or with the defaults of every
 /// field when it is null. Fails with invalid argument when the out-parameter is null, the title is

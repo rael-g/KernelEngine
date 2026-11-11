@@ -70,6 +70,14 @@ pub const ke_ecs_segment = extern struct {
     column_count: u32 = std.mem.zeroes(u32),
 };
 
+/// The values an ECS is created with, whatever its implementation, each applied as given.
+pub const ke_ecs_config = extern struct {
+    /// How many ids entity_reserve may hand out before the world issues any of its own;
+    /// entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems
+    /// spawn heavily.
+    reserved_id_capacity: u32 = std.mem.zeroes(u32),
+};
+
 /// Entity lifetime and component storage.
 pub const ke_ecs = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),

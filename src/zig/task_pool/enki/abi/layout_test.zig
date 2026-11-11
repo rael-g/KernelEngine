@@ -23,24 +23,16 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_task_pool_enki_config, translated("ke_task_pool_enki_config"));
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
     if (@hasDecl(c, "ke_task_func")) try expectSameLayout(abi.c.ke_task_func, c.ke_task_func);
     if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
-test "every constant is the header's value" {
-    @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i128, c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD), @as(i128, abi.c.KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD));
-}
-
-extern const layout_values: [3]c_ulonglong;
+extern const layout_values: [1]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_task_pool_enki_config),
-        @offsetOf(abi.c.ke_task_pool_enki_config, "worker_count"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

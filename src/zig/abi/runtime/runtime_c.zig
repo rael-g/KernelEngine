@@ -134,7 +134,7 @@ pub const ke_runtime_system_params = extern struct {
     exclusive: bool = false,
 };
 
-/// The values a runtime is created with, each applied as given.
+/// The values a runtime is created with, whatever its implementation, each applied as given.
 pub const ke_runtime_config = extern struct {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
     fixed_dt: f32 = std.mem.zeroes(f32),

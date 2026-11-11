@@ -689,6 +689,22 @@
       "external": true
     },
     {
+      "name": "ke_ecs_config",
+      "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "reserved_id_capacity",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_node_component",
       "doc": "A component a spawned node starts with in place of its type\u0027s initial value.",
       "tags": [

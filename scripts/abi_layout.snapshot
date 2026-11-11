@@ -46,6 +46,11 @@ ke_input_handle size=16 align=8
   destroy 8
 
 [window]
+ke_window_config size=24 align=8
+  title 0
+  width 8
+  height 12
+  fullscreen 16
 ke_window size=40 align=8
   handle 0
   should_close 8
@@ -59,6 +64,8 @@ ke_window_handle size=16 align=8
 [logger]
 
 [task_pool]
+ke_task_pool_config size=4 align=4
+  worker_count 0
 ke_task_pool size=48 align=8
   handle 0
   dispatch 8
@@ -74,6 +81,8 @@ ke_task_pool_handle size=16 align=8
 ke_file_stat size=16 align=8
   kind 0
   size 8
+ke_file_system_config size=8 align=8
+  root 0
 ke_file_system size=48 align=8
   handle 0
   open 8
@@ -277,8 +286,13 @@ ke_gpu_command_encoder_params size=8 align=8
   label 0
 ke_gpu_compute_pass_params size=8 align=8
   label 0
+ke_gpu_device_config size=2 align=1
+  enable_validation 0
+  debug_labels 1
 ke_gpu_command_buffer size=8 align=8
   handle 0
+ke_gpu_render_target_window_config size=4 align=4
+  present_mode 0
 ke_render_binding_hint size=16 align=8
   name 0
   flags 8
@@ -549,6 +563,8 @@ ke_ecs_segment size=32 align=8
   count 8
   columns 16
   column_count 24
+ke_ecs_config size=4 align=4
+  reserved_id_capacity 0
 ke_ecs size=112 align=8
   handle 0
   entity_create 8
@@ -601,6 +617,9 @@ ke_body_state_2d size=24 align=4
   velocity_x 12
   velocity_y 16
   angular_velocity 20
+ke_physics_2d_config size=8 align=4
+  gravity_x 0
+  gravity_y 4
 ke_physics_2d size=104 align=8
   handle 0
   set_gravity 8
@@ -714,6 +733,11 @@ ke_render_pass_io size=48 align=8
   writes_count 32
   chain 36
   depth 40
+ke_render_service_config size=32 align=8
+  shader_dir 0
+  color_format 8
+  depth_format 12
+  clear_color 16
 ke_camera_frustum size=16 align=4
   tan_half_fov_y 0
   aspect 4
@@ -1103,6 +1127,8 @@ ke_scene_files_handle size=16 align=8
 [engine_node_types]
 
 [input_actions]
+ke_input_actions_config size=8 align=8
+  section 0
 ke_input_actions size=144 align=8
   handle 0
   add_map 8

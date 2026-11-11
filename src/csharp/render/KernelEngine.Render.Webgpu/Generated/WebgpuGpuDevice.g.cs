@@ -19,7 +19,7 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
 
     private static KernelEngine.Render.Native.ke_gpu_device_handle Create(KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels)
     {
-        KernelEngine.Render.Webgpu.Native.ke_gpu_device_webgpu_config config = default;
+        KernelEngine.Render.Native.ke_gpu_device_config config = default;
         config.enable_validation = enableValidation;
         config.debug_labels = debugLabels;
         KernelEngine.Render.Native.ke_gpu_device_handle handle;

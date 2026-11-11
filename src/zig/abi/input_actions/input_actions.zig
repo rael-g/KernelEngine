@@ -223,4 +223,5 @@ pub const InputActions = struct {
 
 };
 
+pub const InputActionsConfig = c.ke_input_actions_config;
 pub const InputActionsHandle = c.ke_input_actions_handle;

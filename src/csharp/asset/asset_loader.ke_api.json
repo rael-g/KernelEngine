@@ -733,6 +733,22 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_task_pool_config",
+      "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "worker_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD."
+        }
+      ],
+      "external": true
     }
   ],
   "vtables": [

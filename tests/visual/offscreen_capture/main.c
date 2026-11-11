@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
-    ke_gpu_device_webgpu_config dp = { .enable_validation = 1 };
+    ke_gpu_device_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
     check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 

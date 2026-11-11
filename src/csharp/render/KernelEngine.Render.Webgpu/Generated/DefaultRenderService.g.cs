@@ -37,7 +37,7 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
         var shaderDirBytes = shaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(shaderDir + "\0");
         fixed (byte* shaderDirPtr = shaderDirBytes)
         {
-            KernelEngine.Render.Webgpu.Native.ke_render_service_config config = default;
+            KernelEngine.Render.Native.ke_render_service_config config = default;
             config.shader_dir = (sbyte*)shaderDirPtr;
             config.color_format = colorFormat;
             config.depth_format = depthFormat;

@@ -27,14 +27,6 @@ extern "C"
 #endif
 #endif
 
-    /// The values the action maps are created with.
-    typedef struct ke_input_actions_config
-    {
-        /// [borrowed,utf8] The configuration section the maps are read from.
-        const char *section;
-    } ke_input_actions_config;
-
-
     /// Creates the action maps, adding through the map's own slots every map the configuration
     /// describes under the section: `<section>.map.<Map>` holds `priority` (default 0) and
     /// `enabled` (default true); `<section>.map.<Map>.action.<Action>` holds `type` (Button,

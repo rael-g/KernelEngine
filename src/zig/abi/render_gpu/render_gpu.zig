@@ -183,6 +183,13 @@ pub const GpuShaderLanguage = enum(c.ke_gpu_shader_language) {
     _,
 };
 
+pub const GpuPresentMode = enum(c.ke_gpu_present_mode) {
+    fifo = 0,
+    mailbox = 1,
+    immediate = 2,
+    _,
+};
+
 pub const RenderBindingHintFlags = enum(c.ke_render_binding_hint_flags) {
     depth = 1,
     dynamic_offset = 2,
@@ -1237,7 +1244,9 @@ pub const GpuDepthStencilAttachment = c.ke_gpu_depth_stencil_attachment;
 pub const GpuRenderPassParams = c.ke_gpu_render_pass_params;
 pub const GpuCommandEncoderParams = c.ke_gpu_command_encoder_params;
 pub const GpuComputePassParams = c.ke_gpu_compute_pass_params;
+pub const GpuDeviceConfig = c.ke_gpu_device_config;
 pub const GpuCommandBuffer = c.ke_gpu_command_buffer;
+pub const GpuRenderTargetWindowConfig = c.ke_gpu_render_target_window_config;
 pub const RenderBindingHint = c.ke_render_binding_hint;
 pub const RenderShaderBinding = c.ke_render_shader_binding;
 pub const RenderShaderLayoutParams = c.ke_render_shader_layout_params;

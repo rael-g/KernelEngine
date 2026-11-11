@@ -46,7 +46,9 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_gpu_render_pass_params, translated("ke_gpu_render_pass_params"));
     try expectSameLayout(abi.c.ke_gpu_command_encoder_params, translated("ke_gpu_command_encoder_params"));
     try expectSameLayout(abi.c.ke_gpu_compute_pass_params, translated("ke_gpu_compute_pass_params"));
+    try expectSameLayout(abi.c.ke_gpu_device_config, translated("ke_gpu_device_config"));
     try expectSameLayout(abi.c.ke_gpu_command_buffer, translated("ke_gpu_command_buffer"));
+    try expectSameLayout(abi.c.ke_gpu_render_target_window_config, translated("ke_gpu_render_target_window_config"));
     try expectSameLayout(abi.c.ke_render_binding_hint, translated("ke_render_binding_hint"));
     try expectSameLayout(abi.c.ke_render_shader_binding, translated("ke_render_shader_binding"));
     try expectSameLayout(abi.c.ke_render_shader_layout_params, translated("ke_render_shader_layout_params"));
@@ -181,6 +183,9 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_SPIRV), @as(i64, abi.c.KE_GPU_SHADER_LANG_SPIRV));
     try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_MSL), @as(i64, abi.c.KE_GPU_SHADER_LANG_MSL));
     try std.testing.expectEqual(@as(i64, c.KE_GPU_SHADER_LANG_DXIL), @as(i64, abi.c.KE_GPU_SHADER_LANG_DXIL));
+    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRESENT_MODE_FIFO), @as(i64, abi.c.KE_GPU_PRESENT_MODE_FIFO));
+    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRESENT_MODE_MAILBOX), @as(i64, abi.c.KE_GPU_PRESENT_MODE_MAILBOX));
+    try std.testing.expectEqual(@as(i64, c.KE_GPU_PRESENT_MODE_IMMEDIATE), @as(i64, abi.c.KE_GPU_PRESENT_MODE_IMMEDIATE));
     try std.testing.expectEqual(@as(i64, c.KE_RENDER_BINDING_HINT_DEPTH), @as(i64, abi.c.KE_RENDER_BINDING_HINT_DEPTH));
     try std.testing.expectEqual(@as(i64, c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET), @as(i64, abi.c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET));
 }
@@ -212,7 +217,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_BINDING_INVALID), @as(i128, abi.c.KE_RENDER_BINDING_INVALID));
 }
 
-extern const layout_values: [299]c_ulonglong;
+extern const layout_values: [304]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -382,8 +387,13 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_command_encoder_params, "label"),
         @sizeOf(abi.c.ke_gpu_compute_pass_params),
         @offsetOf(abi.c.ke_gpu_compute_pass_params, "label"),
+        @sizeOf(abi.c.ke_gpu_device_config),
+        @offsetOf(abi.c.ke_gpu_device_config, "enable_validation"),
+        @offsetOf(abi.c.ke_gpu_device_config, "debug_labels"),
         @sizeOf(abi.c.ke_gpu_command_buffer),
         @offsetOf(abi.c.ke_gpu_command_buffer, "handle"),
+        @sizeOf(abi.c.ke_gpu_render_target_window_config),
+        @offsetOf(abi.c.ke_gpu_render_target_window_config, "present_mode"),
         @sizeOf(abi.c.ke_render_binding_hint),
         @offsetOf(abi.c.ke_render_binding_hint, "name"),
         @offsetOf(abi.c.ke_render_binding_hint, "flags"),

@@ -23,6 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_input_actions_config, translated("ke_input_actions_config"));
     try expectSameLayout(abi.c.ke_input_actions, translated("ke_input_actions"));
     try expectSameLayout(abi.c.ke_input_actions_handle, translated("ke_input_actions_handle"));
 }
@@ -35,11 +36,13 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS3D), @as(i64, abi.c.KE_ACTION_TYPE_AXIS3D));
 }
 
-extern const layout_values: [23]c_ulonglong;
+extern const layout_values: [25]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_input_actions_config),
+        @offsetOf(abi.c.ke_input_actions_config, "section"),
         @sizeOf(abi.c.ke_input_actions),
         @offsetOf(abi.c.ke_input_actions, "handle"),
         @offsetOf(abi.c.ke_input_actions, "add_map"),

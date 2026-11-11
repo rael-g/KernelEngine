@@ -754,6 +754,27 @@
       "external": true
     },
     {
+      "name": "ke_gpu_present_mode",
+      "doc": "How presented frames reach the screen.",
+      "values": [
+        {
+          "name": "KE_GPU_PRESENT_MODE_FIFO",
+          "value": 0,
+          "doc": "Each frame waits for the display\u0027s vertical blank; no tearing."
+        },
+        {
+          "name": "KE_GPU_PRESENT_MODE_MAILBOX",
+          "value": 1,
+          "doc": "The newest frame replaces the one waiting for the blank; no tearing, no waiting."
+        },
+        {
+          "name": "KE_GPU_PRESENT_MODE_IMMEDIATE",
+          "value": 2,
+          "doc": "Frames are shown at once and may tear."
+        }
+      ]
+    },
+    {
       "name": "ke_render_binding_hint_flags",
       "doc": "What a pass states about a shader binding that the shader\u0027s reflection does not carry.",
       "values": [
@@ -1859,6 +1880,27 @@
       ]
     },
     {
+      "name": "ke_gpu_device_config",
+      "doc": "The values a GPU device is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "enable_validation",
+          "type": "bool",
+          "tags": [],
+          "doc": "Asks the underlying graphics API to validate every call, which takes effect only where that API\u0027s validation layers are installed."
+        },
+        {
+          "name": "debug_labels",
+          "type": "bool",
+          "tags": [],
+          "doc": "The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them."
+        }
+      ]
+    },
+    {
       "name": "ke_gpu_command_buffer",
       "doc": "Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.",
       "tags": [],
@@ -1868,6 +1910,21 @@
           "type": "void *",
           "tags": [],
           "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_render_target_window_config",
+      "doc": "The values a render target presenting to a window is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "present_mode",
+          "type": "ke_gpu_present_mode",
+          "tags": [],
+          "doc": "How presented frames reach the screen."
         }
       ]
     },

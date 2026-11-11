@@ -1243,14 +1243,14 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 /// with `invalid_argument`. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
-export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_config, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime.c.ke_runtime_config, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_runtime orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or task_pool == null) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
     }
     if (params == null) return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs its params"));
-    const p: *const abi_runtime_factory.c.ke_runtime_config = params;
+    const p: *const abi_runtime.c.ke_runtime_config = params;
     if (!(p.fixed_dt > 0.0) or !(p.fixed_dt_max_accum > 0.0) or p.max_systems_per_phase == 0) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs a positive fixed step, catch-up budget and system count"));
     }
@@ -1316,7 +1316,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     return R.ok;
 }
 
-const test_params: abi_runtime_factory.c.ke_runtime_config = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
+const test_params: abi_runtime.c.ke_runtime_config = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
 const testing = std.testing;
 
 fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_runtime.c.ke_system_id {
@@ -1341,7 +1341,7 @@ fn spawned(commands: [*c]abi_ecs.c.ke_ecs_commands) abi_asset_resolver.c.ke_enti
     return entity;
 }
 
-fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_config) abi_runtime.c.ke_runtime_handle {
+fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime.c.ke_runtime_config) abi_runtime.c.ke_runtime_handle {
     var h: abi_runtime.c.ke_runtime_handle = .{ .ref = null, .destroy = null };
     _ = ke_runtime_create(ecs, task_pool, params, &h);
     return h;

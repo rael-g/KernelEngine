@@ -26,25 +26,6 @@ extern "C"
 {
 #endif
 
-/** How presented frames reach the screen. */
-typedef enum ke_gpu_present_mode
-{
-    /** Each frame waits for the display's vertical blank; no tearing. */
-    KE_GPU_PRESENT_MODE_FIFO = 0,
-    /** The newest frame replaces the one waiting for the blank; no tearing, no waiting. */
-    KE_GPU_PRESENT_MODE_MAILBOX = 1,
-    /** Frames are shown at once and may tear. */
-    KE_GPU_PRESENT_MODE_IMMEDIATE = 2,
-} ke_gpu_present_mode;
-
-/// [bag] The values a window render target is created with, each applied as given.
-typedef struct ke_gpu_render_target_webgpu_window_config
-{
-    /// How presented frames reach the screen.
-    ke_gpu_present_mode present_mode;
-} ke_gpu_render_target_webgpu_window_config;
-
-
 /**
  * @brief Creates a render target presenting into a window, sized to the window's client area.
  * @param device A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.
@@ -58,7 +39,7 @@ typedef struct ke_gpu_render_target_webgpu_window_config
  */
 KE_GPU_WEBGPU_API ke_result
 ke_gpu_render_target_webgpu_window_create(ke_gpu_device *device, struct ke_window *window,
-                                          const ke_gpu_render_target_webgpu_window_config *config,
+                                          const ke_gpu_render_target_window_config *config,
                                           ke_gpu_render_target_handle *out_target);
 
 #ifdef __cplusplus

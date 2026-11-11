@@ -6,11 +6,21 @@ const abi_result = @import("result");
 pub const ke_task = opaque {};
 
 
+/// The worker_count that takes one worker per hardware thread besides the calling one.
+pub const KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD = 4294967295;
+
 /// Body of a scheduled task, run on a worker thread.
 pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// Run once the task body has returned, on the same worker thread.
 pub const ke_task_on_complete_func = ?*const fn (?*ke_task, ?*anyopaque, abi_result.c.ke_result) callconv(.c) void;
+
+/// The values a task pool is created with, whatever its implementation, each applied as given.
+pub const ke_task_pool_config = extern struct {
+    /// Worker threads besides the calling thread, 0 for none, or
+    /// KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD.
+    worker_count: u32 = std.mem.zeroes(u32),
+};
 
 /// Dispatches work to a native thread pool.
 pub const ke_task_pool = extern struct {

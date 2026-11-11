@@ -25,8 +25,8 @@ public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.
         var sectionBytes = section is null ? null : System.Text.Encoding.UTF8.GetBytes(section + "\0");
         fixed (byte* sectionPtr = sectionBytes)
         {
-            KernelEngine.Framework.Native.InputActionsConfig config = default;
-            config.Section = (sbyte*)sectionPtr;
+            KernelEngine.Framework.Native.ke_input_actions_config config = default;
+            config.section = (sbyte*)sectionPtr;
             KernelEngine.Framework.Native.ke_input_actions_handle handle;
             KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((runtime is null ? null : runtime.Native), (input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &config, &handle), "ke_input_actions_create");
             return handle;

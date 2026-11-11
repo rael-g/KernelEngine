@@ -941,6 +941,24 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_input_actions_config",
+      "doc": "The values the action maps is created with, whatever its implementation, each applied as given. The values the action maps are created with.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "section",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The configuration section the maps are read from."
+        }
+      ]
     }
   ],
   "vtables": [

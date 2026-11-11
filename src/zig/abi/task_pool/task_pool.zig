@@ -98,4 +98,5 @@ pub const Task = struct {
 
 };
 
+pub const TaskPoolConfig = c.ke_task_pool_config;
 pub const TaskPoolHandle = c.ke_task_pool_handle;

@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <kernel_engine/task_pool/task_pool.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_task_pool_config),
+    offsetof(ke_task_pool_config, worker_count),
     sizeof(ke_task_pool),
     offsetof(ke_task_pool, handle),
     offsetof(ke_task_pool, dispatch),

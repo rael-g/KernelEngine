@@ -21,13 +21,6 @@
 extern "C" {
 #endif
 
-/// [bag] The values a world is created with, each applied as given.
-typedef struct ke_physics_2d_box2d_config {
-    float gravity_x; /**< Horizontal gravity, in metres per second squared. */
-    float gravity_y; /**< Vertical gravity, in metres per second squared. */
-} ke_physics_2d_box2d_config;
-
-
 /**
  * @brief Creates a 2D physics world.
  * @param config [borrowed] The world's values; Required; every field is read as given.
@@ -36,7 +29,7 @@ typedef struct ke_physics_2d_box2d_config {
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.
  */
 KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
-    const ke_physics_2d_box2d_config *config,
+    const ke_physics_2d_config *config,
     ke_physics_2d_handle             *out_world);
 
 #ifdef __cplusplus

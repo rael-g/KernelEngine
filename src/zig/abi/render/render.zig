@@ -812,6 +812,7 @@ pub const RenderResourceParams = c.ke_render_resource_params;
 pub const RenderFrameGlobals = c.ke_render_frame_globals;
 pub const RenderLighting = c.ke_render_lighting;
 pub const RenderPassIo = c.ke_render_pass_io;
+pub const RenderServiceConfig = c.ke_render_service_config;
 pub const CameraFrustum = c.ke_camera_frustum;
 pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
 pub const RenderGbufferResources = c.ke_render_gbuffer_resources;

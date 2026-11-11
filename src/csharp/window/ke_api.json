@@ -155,7 +155,44 @@
       "external": true
     }
   ],
-  "structs": [],
+  "structs": [
+    {
+      "name": "ke_window_config",
+      "doc": "The values a window is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "title",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "Window title."
+        },
+        {
+          "name": "width",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Client width in pixels."
+        },
+        {
+          "name": "height",
+          "type": "int32_t",
+          "tags": [],
+          "doc": "Client height in pixels."
+        },
+        {
+          "name": "fullscreen",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "Whether the window covers the primary monitor."
+        }
+      ]
+    }
+  ],
   "vtables": [
     {
       "name": "ke_window",

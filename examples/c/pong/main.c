@@ -141,9 +141,9 @@ int main(void)
     pong_game game = { 0 };
 
     ke_task_pool_handle pool = { 0 };
-    check("task pool", ke_task_pool_enki_create(&(ke_task_pool_enki_config){ .worker_count = KE_TASK_POOL_ENKI_WORKERS_PER_HARDWARE_THREAD }, &pool));
+    check("task pool", ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &pool));
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_std_config){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
     ke_io_handle io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &io));
 
@@ -156,7 +156,7 @@ int main(void)
 
     ke_input_handle input = { 0 };
     check("input", ke_input_create(&input));
-    const ke_window_glfw_config window_config = {
+    const ke_window_config window_config = {
         .title = cfg->get_string(cfg, "runtime.window", "title", "Pong"),
         .width = (int32_t)cfg->get_int(cfg, "runtime.window", "width", 1280),
         .height = (int32_t)cfg->get_int(cfg, "runtime.window", "height", 720),
@@ -166,15 +166,15 @@ int main(void)
     check("window", ke_window_glfw_create(input.ref, &window_config, &window));
 
     ke_ecs_handle ecs = { 0 };
-    check("ecs", ke_ecs_flecs_create(&(ke_ecs_flecs_config){ .world_id_base = 1048576 }, &ecs));
+    check("ecs", ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &ecs));
     ke_runtime_handle rt = { 0 };
     check("runtime", ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt));
 
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_webgpu_config){ .enable_validation = false, .debug_labels = false }, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &gpu));
     ke_gpu_render_target_handle target = { 0 };
     const bool mailbox = strcmp(cfg->get_string(cfg, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
-    const ke_gpu_render_target_webgpu_window_config target_config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
+    const ke_gpu_render_target_window_config target_config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
     check("window target", ke_gpu_render_target_webgpu_window_create(gpu.ref, window.ref, &target_config, &target));
 
     ke_font_loader_handle fonts = { 0 };
@@ -200,7 +200,7 @@ int main(void)
     renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, target.ref, io.ref, assets.ref, &service_config, font);
 
     ke_physics_2d_handle physics = { 0 };
-    const ke_physics_2d_box2d_config physics_config = {
+    const ke_physics_2d_config physics_config = {
         .gravity_x = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_x", 0.0),
         .gravity_y = (float)cfg->get_double(cfg, "runtime.physics_2d", "gravity_y", 0.0),
     };

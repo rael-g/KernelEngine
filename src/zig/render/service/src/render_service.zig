@@ -530,7 +530,7 @@ export fn ke_render_service_create(
     return R.ok;
 }
 
-const Config = abi_render_service_factory.c.ke_render_service_config;
+const Config = abi_render.c.ke_render_service_config;
 
 fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!void {
     const st = coreOf(core);

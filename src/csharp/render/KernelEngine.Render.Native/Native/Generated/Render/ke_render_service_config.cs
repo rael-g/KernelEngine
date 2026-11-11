@@ -1,16 +1,12 @@
 using System.Numerics;
 
 using global::KernelEngine.Ecs;
-using global::KernelEngine.Logger;
 using global::KernelEngine.Render;
 
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs.Native;
-using KernelEngine.Io.Native;
-using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
 
-namespace KernelEngine.Render.Webgpu.Native;
+namespace KernelEngine.Render.Native;
 
 public unsafe partial struct ke_render_service_config
 {

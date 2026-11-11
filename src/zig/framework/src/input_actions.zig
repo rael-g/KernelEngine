@@ -699,7 +699,7 @@ export fn ke_input_actions_create(
     runtime: ?*abi_runtime.c.ke_runtime,
     input: ?*abi_input.c.ke_input,
     configuration: ?*abi_configuration.c.ke_configuration,
-    config: ?*const abi_framework_factory.c.ke_input_actions_config,
+    config: ?*const abi_input_actions.c.ke_input_actions_config,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
