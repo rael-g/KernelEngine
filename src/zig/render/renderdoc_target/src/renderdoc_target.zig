@@ -130,16 +130,16 @@ fn loadedApi() ?*Api {
 }
 
 /// Holds the checks and the allocation behind `ke_gpu_render_target_renderdoc_create`, taking the
-/// table as a parameter rather than looking it up. A missing inner target or params fail as an
+/// table as a parameter rather than looking it up. A missing inner target fails as an
 /// invalid argument, a missing table as not found and a failed allocation as out of memory, with
 /// nothing left allocated.
 fn create(
     inner: ?*abi_render_gpu.c.ke_gpu_render_target,
-    params: ?*const abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config,
+    first_frame: u32,
+    frame_count: u32,
     api: ?*Api,
 ) R.Error!abi_render_gpu.c.ke_gpu_render_target_handle {
     const target = inner orelse return error.InvalidArgument;
-    const p = params orelse return error.InvalidArgument;
     const rdoc = api orelse {
         log.warn("RenderDoc is not loaded into this process", .{});
         return error.NotFound;
@@ -149,8 +149,8 @@ fn create(
         .vtable = .{ .handle = t, .acquire = acquire, .present = present, .size = size, .format = format },
         .inner = target,
         .api = rdoc,
-        .first_frame = p.first_frame,
-        .frame_count = p.frame_count,
+        .first_frame = first_frame,
+        .frame_count = frame_count,
         .frame = 0,
         .capturing = false,
     };
@@ -161,16 +161,19 @@ fn create(
 /// errors of `create`, among them not found when RenderDoc is not loaded, leaving the handle zeroed.
 export fn ke_gpu_render_target_renderdoc_create(
     inner: ?*abi_render_gpu.c.ke_gpu_render_target,
-    params: ?*const abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config,
+    first_frame: u32,
+    frame_count: u32,
     out_target: [*c]abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    out.* = create(inner, params, loadedApi()) catch |err| return R.code(err);
+    out.* = create(inner, first_frame, frame_count, loadedApi()) catch |err| return R.code(err);
     return R.ok;
 }
 
 const testing = std.testing;
+
+const Frames = struct { first: u32, count: u32 };
 
 const Fake = struct {
     var started: u32 = 0;
@@ -268,8 +271,8 @@ fn acquired(t: *abi_render_gpu.c.ke_gpu_render_target) !abi_asset_resolver.c.ke_
 test "only the chosen frames are captured, each from before its acquire until after its present" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config{ .first_frame = 1, .frame_count = 2 };
-    const h = try create(&inner.vtable, &p, api);
+    const p: Frames = .{ .first = 1, .count = 2 };
+    const h = try create(&inner.vtable, p.first, p.count, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -290,8 +293,8 @@ test "only the chosen frames are captured, each from before its acquire until af
 test "a chosen frame the inner target has nothing to draw into is discarded and captured on the next acquire" {
     var inner: Fake = undefined;
     const api = inner.init(1);
-    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config{ .first_frame = 0, .frame_count = 1 };
-    const h = try create(&inner.vtable, &p, api);
+    const p: Frames = .{ .first = 0, .count = 1 };
+    const h = try create(&inner.vtable, p.first, p.count, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -307,8 +310,8 @@ test "a chosen frame the inner target has nothing to draw into is discarded and 
 test "size and format are the inner target's" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config{ .first_frame = 0, .frame_count = 0 };
-    const h = try create(&inner.vtable, &p, api);
+    const p: Frames = .{ .first = 0, .count = 0 };
+    const h = try create(&inner.vtable, p.first, p.count, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -325,8 +328,8 @@ test "size and format are the inner target's" {
 test "a target destroyed with a capture open discards it" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config{ .first_frame = 0, .frame_count = 1 };
-    const h = try create(&inner.vtable, &p, api);
+    const p: Frames = .{ .first = 0, .count = 1 };
+    const h = try create(&inner.vtable, p.first, p.count, api);
     const t = h.ref orelse return error.TestUnexpectedResult;
 
     try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, 9), try acquired(t));
@@ -338,13 +341,12 @@ test "a target destroyed with a capture open discards it" {
 test "creation is refused without an inner target, without params, and when RenderDoc is not loaded" {
     var inner: Fake = undefined;
     const api = inner.init(0);
-    const p = abi_gpu_render_target_renderdoc_factory.c.ke_gpu_render_target_renderdoc_config{ .first_frame = 0, .frame_count = 1 };
+    const p: Frames = .{ .first = 0, .count = 1 };
 
-    try testing.expectError(error.InvalidArgument, create(null, &p, api));
-    try testing.expectError(error.InvalidArgument, create(&inner.vtable, null, api));
+    try testing.expectError(error.InvalidArgument, create(null, p.first, p.count, api));
 
     var h: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
-    try testing.expectError(error.NotFound, R.check(ke_gpu_render_target_renderdoc_create(&inner.vtable, &p, &h)));
+    try testing.expectError(error.NotFound, R.check(ke_gpu_render_target_renderdoc_create(&inner.vtable, p.first, p.count, &h)));
     try testing.expect(h.ref == null);
     try heap.expectNoLeaks();
 }

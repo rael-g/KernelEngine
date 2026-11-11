@@ -56,16 +56,13 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
 }
 
-extern const layout_values: [9]c_ulonglong;
+extern const layout_values: [6]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_render_deferred_lighting_config),
         @offsetOf(abi.c.ke_render_deferred_lighting_config, "ibl_enabled"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_config, "gbuffer"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_config, "shadow"),
-        @offsetOf(abi.c.ke_render_deferred_lighting_config, "clusters"),
         @sizeOf(abi.c.ke_render_deferred_lighting_handle),
         @offsetOf(abi.c.ke_render_deferred_lighting_handle, "ref"),
         @offsetOf(abi.c.ke_render_deferred_lighting_handle, "destroy"),

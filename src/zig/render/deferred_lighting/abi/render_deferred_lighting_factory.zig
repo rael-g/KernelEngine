@@ -23,11 +23,11 @@ pub const RenderDeferredLighting = struct {
         if (self.owner) |owner| owner.destroy.?(owner.ref);
     }
 
-    /// Registers the pass's render-phase system. A missing runtime, service or device, or a gbuffer
-    /// with an invalid id, fails as an invalid argument.
-    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_deferred_lighting_config) Error!RenderDeferredLighting {
+    /// Registers the pass's render-phase system. A missing runtime, service, device, gbuffer, shadow
+    /// or clusters, or a gbuffer with an invalid id, fails as an invalid argument.
+    pub fn create(context: ?*const abi_render_context.c.ke_render_context, gbuffer: ?*const abi_render.c.ke_render_gbuffer_resources, shadow: ?*const abi_render.c.ke_render_shadow_resources, clusters: ?*const abi_render.c.ke_render_cluster_resources, config: ?*const c.ke_render_deferred_lighting_config) Error!RenderDeferredLighting {
         var written: c.ke_render_deferred_lighting_handle = undefined;
-        try checkResult(c.ke_render_deferred_lighting_create(context, config, &written));
+        try checkResult(c.ke_render_deferred_lighting_create(context, gbuffer, shadow, clusters, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 

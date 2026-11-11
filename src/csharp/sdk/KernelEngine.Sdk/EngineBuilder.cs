@@ -146,8 +146,8 @@ public sealed class EngineBuilder
         return
         [
             shadow, cluster, gbuffer,
-            new RenderDeferredLighting(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, true, gbuffer.Resources, shadow.Resources, cluster.Resources),
-            new RenderForward(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, true, shadow.Resources, cluster.Resources),
+            new RenderDeferredLighting(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, gbuffer.Resources, shadow.Resources, cluster.Resources, true),
+            new RenderForward(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, shadow.Resources, cluster.Resources, true),
             new RenderTonemap(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame),
             ui,
             new RenderLabelResolve(log, p.Runtime, p.Ecs, p.Service, p.Gpu, p.ViewSpace, p.Camera, p.Scene, p.Frame, ui, p.Assets, p.DefaultFont),

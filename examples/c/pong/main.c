@@ -97,10 +97,10 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow));
     check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
-    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true, .gbuffer = gbuffer, .shadow = shadow, .clusters = clusters };
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
-    const ke_render_forward_config forward = { .ibl_enabled = true, .shadow = shadow, .clusters = clusters };
-    check("forward pass", ke_render_forward_create(&context, &forward, &r->forward));
+    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true };
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &deferred, &r->deferred));
+    const ke_render_forward_config forward = { .ibl_enabled = true };
+    check("forward pass", ke_render_forward_create(&context, &shadow, &clusters, &forward, &r->forward));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
     check("ui pass", ke_render_ui_create(&context, &r->ui));
     const ke_render_label_resolve_config labels = { .default_font = font };

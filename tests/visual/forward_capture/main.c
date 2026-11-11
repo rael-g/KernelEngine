@@ -175,8 +175,8 @@ static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_de
     check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow));
     check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
-    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true, .gbuffer = gbuffer, .shadow = shadow, .clusters = clusters };
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &deferred, &r->deferred));
+    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true };
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &deferred, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
 }
 
@@ -219,7 +219,7 @@ int main(int argc, char **argv)
     if (renderdoc)
     {
         check("renderdoc render target", ke_gpu_render_target_renderdoc_create(target.ref,
-            &(ke_gpu_render_target_renderdoc_config){ .first_frame = FRAMES - 1, .frame_count = 1 }, &captured));
+            FRAMES - 1, 1, &captured));
     }
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
