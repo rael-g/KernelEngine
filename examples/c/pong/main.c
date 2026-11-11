@@ -228,12 +228,11 @@ int main(void)
     }
 
     game.types = types.ref;
-    game.scenes = scenes.ref;
     check("pong types", pong_register(&game));
 
     char first_scene[PATH_CAPACITY];
     snprintf(first_scene, sizeof first_scene, "res://scenes/%s.scene.toml", cfg->get_string(cfg, "project", "default_scene", "Menu"));
-    check("first scene", game.scenes->open(game.scenes, rt.ref->commands(rt.ref), first_scene, NULL));
+    check("first scene", scenes.ref->open(scenes.ref, rt.ref->commands(rt.ref), first_scene, NULL));
 
     double previous = now_seconds();
     while (!window.ref->should_close(window.ref) && !rt.ref->exit_requested(rt.ref))

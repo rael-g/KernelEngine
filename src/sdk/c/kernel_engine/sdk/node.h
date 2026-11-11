@@ -8,8 +8,13 @@
 /**
  * @file
  * The node calls a C behaviour writes most: reach a node's component by its name, spawn a node of a
- * type with the component it is named after, and declare that a node type extends an engine node.
+ * type with the component it is named after, and declare a node type's events and the engine node it extends.
  */
+
+/**
+ * Declares, inside a `ke_node_type_desc`, the events whose ids are the array @p event_ids, which its `on` behaviour visits.
+ */
+#define KE_NODE_EVENTS(event_ids) .events = (event_ids), .event_count = (uint32_t)(sizeof(event_ids) / sizeof((event_ids)[0]))
 
 /**
  * Declares, inside a `ke_node_type_desc`, that the type extends the engine node whose `with` array is

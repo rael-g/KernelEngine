@@ -243,10 +243,10 @@ ke_result pong_register(pong_game *game)
     const ke_component_id ball_events[] = { game->serve_requested };
     const ke_component_id board_events[] = { game->score_changed, game->serve_requested };
     const ke_node_type_desc descs[] = {
-        { .name = "pong.match", KE_NODE_FIELDS(pong_match, pong_match_fields), .initial = &pong_match_initial, .initial_size = sizeof pong_match_initial, .update = match_update, .events = match_events, .event_count = 1, .on = match_on, .user_data = game },
+        { .name = "pong.match", KE_NODE_FIELDS(pong_match, pong_match_fields), .initial = &pong_match_initial, .initial_size = sizeof pong_match_initial, .update = match_update, KE_NODE_EVENTS(match_events), .on = match_on, .user_data = game },
         { .name = "pong.paddle", KE_NODE_FIELDS(pong_paddle, pong_paddle_fields), .initial = &pong_paddle_initial, .initial_size = sizeof pong_paddle_initial, KE_NODE_EXTENDS(ke_body2d_node_with), .fixed_update = paddle_fixed_update, .user_data = game },
-        { .name = "pong.ball", KE_NODE_FIELDS(pong_ball, pong_ball_fields), .initial = &pong_ball_initial, .initial_size = sizeof pong_ball_initial, KE_NODE_EXTENDS(ke_body2d_node_with), .fixed_update = ball_fixed_update, .events = ball_events, .event_count = 1, .on = ball_on, .user_data = game },
-        { .name = "pong.scoreboard", .events = board_events, .event_count = 2, .on = scoreboard_on, .user_data = game },
+        { .name = "pong.ball", KE_NODE_FIELDS(pong_ball, pong_ball_fields), .initial = &pong_ball_initial, .initial_size = sizeof pong_ball_initial, KE_NODE_EXTENDS(ke_body2d_node_with), .fixed_update = ball_fixed_update, KE_NODE_EVENTS(ball_events), .on = ball_on, .user_data = game },
+        { .name = "pong.scoreboard", KE_NODE_EVENTS(board_events), .on = scoreboard_on, .user_data = game },
         { .name = "pong.menu_controller", .update = menu_update, .user_data = game },
     };
     for (size_t i = 0; i < sizeof descs / sizeof descs[0]; ++i)
