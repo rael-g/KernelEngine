@@ -20,10 +20,14 @@ SDK `src/csharp/framework/KernelEngine.Framework.Nodes/` and its generator
 
 ## What ties the parts together
 
-**A behaviour is one call over the nodes of its type.** Each of `ready`, `update`, `fixed_update`
-and `on` runs as a system of its phase; the body walks the nodes with `next`, which points
+**A behaviour is one call over the nodes of its type.** Each of `ready`, `update`, `fixed_update`,
+`exit_tree` and `on` runs as a system of its phase; the body walks the nodes with `next`, which points
 `self` and `fields` at each one in turn. An `on` behaviour walks every pair of a node and an event
 of a type it lists, and `event_type` says which.
+
+**A node leaves the tree through its exit.** `destroy` marks the node and its subtree as leaving;
+no behaviour but `exit_tree` visits them again, `exit_tree` runs in the next PreUpdate, and the
+"nodes.reap" system removes the subtree in the PostUpdate once every node of it has run its exit.
 
 **A type's nodes are born with its initial bytes.** The fields and every `with` component start
 from the bytes the type was registered with, unless a spawn gives the component.
@@ -31,8 +35,8 @@ from the bytes the type was registered with, unless a spawn gives the component.
 **One C# instance stands for every node of its type.** `NodeWorld.Register` hands the instance to
 `RegisterInto`, which the generator writes; a behaviour binds the instance to the node `next`
 moves to, so a partial property reads and writes that node's fields. Outside a behaviour the
-properties are the bytes a node is born with, which is why what `Initial()` writes to them, once
-when the type is registered, becomes the type's initial value.
+properties are the bytes a node is born with, which is why what the constructor writes to them, once,
+becomes the type's initial value.
 
 **The generator writes calls, not memory.** What it emits uses only `RegisterType`, `INodeCtx` and
 the SDK's `Node`; no pointer reaches the game's code.

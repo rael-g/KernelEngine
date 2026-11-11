@@ -11,8 +11,8 @@ namespace KernelEngine.Framework.Nodes.Generator;
 /// <summary>
 /// Completes every partial class marked <c>[NodeType]</c>: its partial properties become the fields of
 /// its nodes, laid out in one struct the node type registers, the exported ones in its field table;
-/// what <c>Initial()</c> writes to them is the value a node is born with; <c>Ready</c>, <c>Update</c>,
-/// <c>FixedUpdate</c> and every <c>[On&lt;T&gt;]</c> method become its behaviours. The instance is a cursor over
+/// what the constructor writes to them is the value a node is born with; <c>Ready</c>, <c>Update</c>,
+/// <c>FixedUpdate</c>, <c>ExitTree</c> and every <c>[On&lt;T&gt;]</c> method become its behaviours. The instance is a cursor over
 /// the type's nodes, so <c>this</c> handed out, a lambda or local function reading the node, and an async
 /// instance method are errors. Every <c>*.scene.toml</c> under a <c>scenes</c> directory given as an additional
 /// file becomes a constant of <c>Scenes</c> holding its <c>res://</c> path. Everything it writes is a
@@ -202,7 +202,6 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
 
         o.Append("    /// <inheritdoc/>\n");
         o.Append("    protected override global::KernelEngine.Ecs.ComponentId RegisterInto(global::KernelEngine.Framework.Nodes.NodeWorld world)\n    {\n");
-        if (Has("Initial")) o.Append("        Initial();\n");
         if (fields.Any(f => f.Variant is not null)) o.Append("        var probe = new NodeFields();\n");
         o.Append("        global::KernelEngine.Ecs.ComponentField[] table =\n        [\n");
         foreach (var f in fields.Where(f => f.Variant is not null))
@@ -221,6 +220,7 @@ public sealed class NodeTypeGenerator : IIncrementalGenerator
         if (Has("Ready")) args.Add("ready: ctx => Visit(ctx, Ready)");
         if (Has("Update")) args.Add("update: ctx => Visit(ctx, Update)");
         if (Has("FixedUpdate")) args.Add("fixedUpdate: ctx => Visit(ctx, FixedUpdate)");
+        if (Has("ExitTree")) args.Add("exitTree: ctx => Visit(ctx, ExitTree)");
         if (handlers.Count > 0)
         {
             args.Add($"events: [{string.Join(", ", handlers.Select(h => $"world.EventId<{h.Event!.ToDisplayString()}>()"))}]");

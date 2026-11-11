@@ -1,5 +1,3 @@
-using KernelEngine.Audio;
-using KernelEngine.Audio.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Framework.Nodes.Native;
 
@@ -8,9 +6,9 @@ namespace KernelEngine.Framework.Nodes;
 /// <summary>
 /// A node type as C#: one instance stands for every node of the type, and while a behaviour runs it
 /// is bound to the node the behaviour is visiting, so its properties are that node's memory and its
-/// methods act on that node. Outside a behaviour its properties are the value a node is born with:
-/// a method <c>void Initial()</c> runs once per type, when the type is registered, and what it writes
-/// is the type's initial value; it never runs when a node is born.
+/// methods act on that node. Outside a behaviour its properties are the value a node is born with: the
+/// constructor runs once, when the instance is made for registration, and what it writes is the type's
+/// initial value; nothing runs when a node is born.
 /// </summary>
 public abstract class Node
 {
@@ -67,35 +65,12 @@ public abstract class Node
     protected ref T Get<T>(Entity node) where T : unmanaged, KernelEngine.Interop.IComponentName =>
         ref Ctx.Component<T>(node, World.Component(T.RegisteredName));
 
-    /// <summary>The component of type <typeparamref name="T"/> of the current node's child named <paramref name="name"/>.</summary>
-    /// <exception cref="InvalidOperationException">The node has no child of that name.</exception>
-    protected ref T Child<T>(string name) where T : unmanaged, KernelEngine.Interop.IComponentName
-    {
-        var child = Child(name);
-        if (child == default) throw new InvalidOperationException($"the node has no child named {name}");
-        return ref Get<T>(child);
-    }
-
     /// <summary>
     /// Records a node under the current node of the engine node type named after <typeparamref name="T"/>
     /// (a sound for <c>SoundComponent</c>), born holding <paramref name="component"/>.
     /// </summary>
     protected Entity Spawn<T>(string name, T component) where T : unmanaged, KernelEngine.Interop.IComponentName =>
         Ctx.Spawn(World.Type(T.RegisteredName), name, Self, [NodeComponent.Of(World.Component(T.RegisteredName), component)]);
-
-    /// <summary>
-    /// Plays the sound file at <paramref name="path"/> once at <paramref name="volume"/>, as a sound node
-    /// under the current node that is destroyed when the sound ends.
-    /// </summary>
-    protected Entity PlaySound(string path, float volume)
-    {
-        var sound = EngineNodeTypes.SoundNodeInitial;
-        sound.Path = path;
-        sound.Volume = volume;
-        sound.Playing = true;
-        sound.Release = SoundRelease.WhenDone;
-        return Spawn("Sound", sound);
-    }
 
     /// <summary>The child of the current node named <paramref name="name"/>; the default entity when it has none.</summary>
     protected Entity Child(string name) => Ctx.Child(Self, name);
@@ -107,8 +82,14 @@ public abstract class Node
     /// </summary>
     protected bool Pressed(in ActionRef action) => Ctx.Pressed(ref System.Runtime.CompilerServices.Unsafe.AsRef(in action));
 
-    /// <summary>The value of the axis action named by <paramref name="action"/>, resolved as <see cref="Pressed"/> resolves it.</summary>
+    /// <summary>The value of the axis action named by <paramref name="action"/>, resolved as <see cref="Pressed(in ActionRef)"/> resolves it.</summary>
     protected float Axis(in ActionRef action) => Ctx.Axis(ref System.Runtime.CompilerServices.Unsafe.AsRef(in action));
+
+    /// <summary>Whether the button action named <paramref name="action"/> was pressed this tick.</summary>
+    protected bool Pressed(string action) => Ctx.PressedNamed(action);
+
+    /// <summary>The value of the axis action named <paramref name="action"/>.</summary>
+    protected float Axis(string action) => Ctx.AxisNamed(action);
 
     /// <summary>Raises <paramref name="value"/> as an event of its type.</summary>
     protected void Raise<T>(T value) where T : unmanaged => Ctx.Raise(World.EventId<T>(), value);
@@ -121,14 +102,8 @@ public abstract class Node
     protected void Destroy(Entity node) => Ctx.Destroy(node);
 
     /// <summary>Points the nearest scene slot above the current node at the scene file <paramref name="path"/>.</summary>
-    /// <exception cref="InvalidOperationException">No scene slot holds the node.</exception>
-    protected void ChangeScene(string path)
-    {
-        var slot = World.Component("scene_slot");
-        var holder = Ctx.Ancestor(Self, slot);
-        if (holder == default) throw new InvalidOperationException("no scene slot holds this node");
-        Ctx.Component<SceneSlotComponent>(holder, slot).Path = path;
-    }
+    /// <exception cref="Exception">No scene slot holds the node.</exception>
+    protected void ChangeScene(string path) => Ctx.ChangeScene(path);
 
     /// <summary>Asks the runtime for the program to end.</summary>
     protected void Exit() => Ctx.Exit();

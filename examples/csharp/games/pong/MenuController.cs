@@ -4,11 +4,11 @@ namespace Pong;
 
 /// <summary>The menu: Launch starts a match, Quit ends the program.</summary>
 [NodeType("pong.menu_controller")]
-partial class MenuController(Game game) : Node
+partial class MenuController : Node
 {
     void Update()
     {
-        if (Pressed(game.Launch)) ChangeScene(Scenes.Main);
-        else if (Pressed(game.Quit)) Exit();
+        if (Pressed("Launch")) ChangeScene(Scenes.Main);
+        else if (Pressed("Quit")) Exit();
     }
 }

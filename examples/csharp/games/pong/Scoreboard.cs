@@ -3,30 +3,22 @@ using KernelEngine.Render;
 
 namespace Pong;
 
-/// <summary>The scoreboard: counts goals and shows the hint to serve between them.</summary>
+/// <summary>The scoreboard: shows the score, and the hint to serve between goals.</summary>
 [NodeType("pong.scoreboard")]
 partial class Scoreboard : Node
 {
     const string LaunchHint = "Press Space to launch";
 
-    /// <summary>Goals the left paddle scored.</summary>
-    [Export] public partial int Left { get; set; }
-
-    /// <summary>Goals the right paddle scored.</summary>
-    [Export] public partial int Right { get; set; }
-
-    [On<GoalScored>]
-    void OnGoal(GoalScored goal)
+    [On<ScoreChanged>]
+    void OnScore(ScoreChanged score)
     {
-        if (goal.LeftScored) Left++;
-        else Right++;
-        Show("ScoreLeft", Left.ToString());
-        Show("ScoreRight", Right.ToString());
+        Show("ScoreLeft", score.Left.ToString());
+        Show("ScoreRight", score.Right.ToString());
         Show("ScoreHint", LaunchHint);
     }
 
-    [On<BallLaunched>]
-    void OnLaunched(BallLaunched _) => Show("ScoreHint", "");
+    [On<ServeRequested>]
+    void OnServe(ServeRequested _) => Show("ScoreHint", "");
 
-    void Show(string child, string text) => Child<LabelComponent>(child).Text = text;
+    void Show(string child, string text) => Get<LabelComponent>(Child(child)).Text = text;
 }
