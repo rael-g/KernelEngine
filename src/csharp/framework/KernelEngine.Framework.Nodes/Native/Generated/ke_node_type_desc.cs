@@ -53,6 +53,9 @@ public unsafe partial struct ke_node_type_desc
     [NativeTypeName("ke_node_behaviour_fn")]
     public delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result> fixed_update;
 
+    [NativeTypeName("ke_node_behaviour_fn")]
+    public delegate* unmanaged[Cdecl]<ke_node_ctx*, void*, KernelEngine.Result.Native.Result> exit_tree;
+
     [NativeTypeName("const ke_component_id *")]
     public global::KernelEngine.Ecs.ComponentId* events;
 

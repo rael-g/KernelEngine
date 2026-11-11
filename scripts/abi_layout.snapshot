@@ -1022,10 +1022,6 @@ ke_node_component size=24 align=8
   component 0
   data 8
   size 16
-ke_node_field_value size=40 align=8
-  component 0
-  field 8
-  value 16
 ke_node_with size=24 align=8
   name 0
   initial 8
@@ -1034,7 +1030,7 @@ ke_action_ref size=40 align=4
   name 0
   id 32
   resolved 36
-ke_node_type_desc size=128 align=8
+ke_node_type_desc size=136 align=8
   name 0
   fields_size 8
   fields_alignment 16
@@ -1047,11 +1043,12 @@ ke_node_type_desc size=128 align=8
   ready 72
   update 80
   fixed_update 88
-  events 96
-  event_count 104
-  on 112
-  user_data 120
-ke_node_ctx size=176 align=8
+  exit_tree 96
+  events 104
+  event_count 112
+  on 120
+  user_data 128
+ke_node_ctx size=200 align=8
   handle 0
   self 8
   fields 16
@@ -1070,21 +1067,23 @@ ke_node_ctx size=176 align=8
   axis 112
   pressed 120
   spawn 128
-  spawn_named 136
-  destroy 144
-  change_scene 152
-  raise 160
-  exit 168
-ke_node_types size=72 align=8
+  destroy 136
+  change_scene 144
+  raise 152
+  exit 160
+  pressed_named 168
+  axis_named 176
+  find_type 184
+  find_component 192
+ke_node_types size=64 align=8
   handle 0
   register_type 8
   register_event 16
   spawn 24
-  spawn_named 32
-  find_type 40
-  find_component 48
-  initial 56
-  carries 64
+  find_type 32
+  find_component 40
+  initial 48
+  carries 56
 ke_node_types_handle size=16 align=8
   ref 0
   destroy 8

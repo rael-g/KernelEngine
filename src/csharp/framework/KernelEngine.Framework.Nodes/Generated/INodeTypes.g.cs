@@ -27,11 +27,12 @@ public interface INodeTypes : IDisposable
     /// <param name="ready">Runs once per node, in the PreUpdate after the node is created, before its first update.</param>
     /// <param name="update">Runs every tick, in Update.</param>
     /// <param name="fixedUpdate">Runs every fixed step, in FixedUpdate.</param>
+    /// <param name="exitTree">Runs once per node destroyed, in the PreUpdate after its destruction was recorded; the node and its descendants are removed in the PostUpdate after every one of them has run its exit.</param>
     /// <param name="events">The event types `on` handles.</param>
     /// <param name="on">Runs in PostUpdate for each node and each event raised this tick of a type in `events`; the ctx's `event_type` says which.</param>
     /// <returns>Receives the id of the type's tag.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null);
+    ComponentId RegisterType(string name, nuint fieldsSize = 0, nuint fieldsAlignment = 0, ReadOnlySpan<ComponentField> fields = default, ReadOnlySpan<byte> initial = default, ReadOnlySpan<NodeWith> with = default, NodeBehaviour? ready = null, NodeBehaviour? update = null, NodeBehaviour? fixedUpdate = null, NodeBehaviour? exitTree = null, ReadOnlySpan<ComponentId> events = default, NodeBehaviour? on = null);
     /// <summary>Registers an event type.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
@@ -47,13 +48,6 @@ public interface INodeTypes : IDisposable
     /// <returns>Usable as a reference at once; the node exists once the commands are applied.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity Spawn(IEcsCommands commands, ComponentId type, string name, Entity parent, ReadOnlySpan<NodeComponent> components = default);
-    /// <summary>Records into commands a node of the type named type with values written over its initial values, as a behaviour's ctx-&gt;spawn_named does.</summary>
-    /// <param name="commands">The queue the node is recorded into.</param>
-    /// <param name="parent">KE_ENTITY_INVALID places it at the root.</param>
-    /// <param name="values">Written in order.</param>
-    /// <returns>Usable as a reference at once.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    Entity SpawnNamed(IEcsCommands commands, string type, string name, Entity parent, ReadOnlySpan<NodeFieldValue> values = default);
     /// <summary>The id of the type registered under name.</summary>
     /// <param name="name">The name its desc gave, `node` for the base type.</param>
     /// <returns>Receives the id; KE_COMPONENT_INVALID when none has the name.</returns>

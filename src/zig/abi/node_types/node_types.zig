@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
-const abi_ecs_variant = @import("ecs_variant");
 const abi_result = @import("result");
 
 /// The ABI as the headers declare it.
@@ -86,14 +85,6 @@ pub const NodeCtx = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
-            .spawn_named = &struct {
-                fn call(self: ?*c.ke_node_ctx, a0: ?[*:0]const u8, a1: ?[*:0]const u8, a2: c.ke_entity, a3: ?[*]const c.ke_node_field_value, a4: u32, a5: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.spawnNamed(state, std.mem.span(a0 orelse return resultOf(error.Failed)), std.mem.span(a1 orelse return resultOf(error.Failed)), a2, if (a3) |items| items[0..a4] else &.{}) catch |failure| return resultOf(failure);
-                    (a5 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
             .destroy = &struct {
                 fn call(self: ?*c.ke_node_ctx, a0: c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -119,6 +110,34 @@ pub const NodeCtx = struct {
                 fn call(self: ?*c.ke_node_ctx) callconv(.c) void {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
                     return T.exit(state);
+                }
+            }.call,
+            .pressed_named = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: ?[*:0]const u8) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.pressedNamed(state, std.mem.span(a0 orelse return std.mem.zeroes(bool)));
+                }
+            }.call,
+            .axis_named = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: ?[*:0]const u8) callconv(.c) f32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(f32)));
+                    return T.axisNamed(state, std.mem.span(a0 orelse return std.mem.zeroes(f32)));
+                }
+            }.call,
+            .find_type = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: ?[*:0]const u8, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.findType(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .find_component = &struct {
+                fn call(self: ?*c.ke_node_ctx, a0: ?[*:0]const u8, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.findComponent(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
                 }
             }.call,
         };
@@ -183,16 +202,8 @@ pub const NodeCtx = struct {
         return written;
     }
 
-    /// Records a node of the type named type, its components born from the type's initial values
-    /// with each of values written over them by name; the way any language spawns any node type, an
-    /// engine one or a game's, without its ids or its structs.
-    pub fn spawnNamed(self: NodeCtx, @"type": [:0]const u8, name: [:0]const u8, parent_: c.ke_entity, values: []const c.ke_node_field_value) Error!c.ke_entity {
-        var written: c.ke_entity = undefined;
-        try checkResult(self.ptr.spawn_named.?(self.ptr, @"type".ptr, name.ptr, parent_, values.ptr, @intCast(values.len), &written));
-        return written;
-    }
-
-    /// Records the destruction of node and its descendants.
+    /// Marks node and its descendants as leaving the tree: no behaviour but `exit_tree` visits them
+    /// again, and they are removed once each has run its exit_tree.
     pub fn destroy(self: NodeCtx, node: c.ke_entity) Error!void {
         try checkResult(self.ptr.destroy.?(self.ptr, node));
     }
@@ -212,6 +223,32 @@ pub const NodeCtx = struct {
     /// Asks the runtime for the program to end; the host stops once it reads the request.
     pub fn exit(self: NodeCtx) void {
         return self.ptr.exit.?(self.ptr);
+    }
+
+    /// Whether the button action named name was pressed this tick, false without input actions or
+    /// for a name no map holds; the name is looked up once and its id kept.
+    pub fn pressedNamed(self: NodeCtx, name: [:0]const u8) bool {
+        return self.ptr.pressed_named.?(self.ptr, name.ptr);
+    }
+
+    /// The value of the axis action named name, 0 without input actions or for a name no map holds;
+    /// the name is looked up once and its id kept.
+    pub fn axisNamed(self: NodeCtx, name: [:0]const u8) f32 {
+        return self.ptr.axis_named.?(self.ptr, name.ptr);
+    }
+
+    /// The id of the node type registered under name, as the node types' find_type answers it.
+    pub fn findType(self: NodeCtx, name: [:0]const u8) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.find_type.?(self.ptr, name.ptr, &written));
+        return written;
+    }
+
+    /// The id of the component registered under name, as the node types' find_component answers it.
+    pub fn findComponent(self: NodeCtx, name: [:0]const u8) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.find_component.?(self.ptr, name.ptr, &written));
+        return written;
     }
 
 };
@@ -247,14 +284,6 @@ pub const NodeTypes = struct {
                 fn call(self: ?*c.ke_node_types, a0: ?*abi_ecs.c.ke_ecs_commands, a1: c.ke_component_id, a2: ?[*:0]const u8, a3: c.ke_entity, a4: ?[*]const c.ke_node_component, a5: u32, a6: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.spawn(state, a0, a1, std.mem.span(a2 orelse return resultOf(error.Failed)), a3, if (a4) |items| items[0..a5] else &.{}) catch |failure| return resultOf(failure);
-                    (a6 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .spawn_named = &struct {
-                fn call(self: ?*c.ke_node_types, a0: ?*abi_ecs.c.ke_ecs_commands, a1: ?[*:0]const u8, a2: ?[*:0]const u8, a3: c.ke_entity, a4: ?[*]const c.ke_node_field_value, a5: u32, a6: ?*c.ke_entity) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.spawnNamed(state, a0, std.mem.span(a1 orelse return resultOf(error.Failed)), std.mem.span(a2 orelse return resultOf(error.Failed)), a3, if (a4) |items| items[0..a5] else &.{}) catch |failure| return resultOf(failure);
                     (a6 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
@@ -313,14 +342,6 @@ pub const NodeTypes = struct {
         return written;
     }
 
-    /// Records into commands a node of the type named type with values written over its initial
-    /// values, as a behaviour's ctx->spawn_named does.
-    pub fn spawnNamed(self: NodeTypes, commands: ?*abi_ecs.c.ke_ecs_commands, @"type": [:0]const u8, name: [:0]const u8, parent: c.ke_entity, values: []const c.ke_node_field_value) Error!c.ke_entity {
-        var written: c.ke_entity = undefined;
-        try checkResult(self.ptr.spawn_named.?(self.ptr, commands, @"type".ptr, name.ptr, parent, values.ptr, @intCast(values.len), &written));
-        return written;
-    }
-
     /// The id of the type registered under name.
     pub fn findType(self: NodeTypes, name: [:0]const u8) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
@@ -349,7 +370,6 @@ pub const NodeTypes = struct {
 };
 
 pub const NodeComponent = c.ke_node_component;
-pub const NodeFieldValue = c.ke_node_field_value;
 pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeTypeDesc = c.ke_node_type_desc;
