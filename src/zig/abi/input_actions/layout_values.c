@@ -3,6 +3,7 @@
 const unsigned long long layout_values[] = {
     sizeof(ke_input_actions_config),
     offsetof(ke_input_actions_config, section),
+    offsetof(ke_input_actions_config, set),
     sizeof(ke_input_actions),
     offsetof(ke_input_actions, handle),
     offsetof(ke_input_actions, add_map),

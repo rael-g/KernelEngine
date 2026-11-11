@@ -12,6 +12,7 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 const abi_scene_tree = @import("scene_tree");
+const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
@@ -31,11 +32,14 @@ pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
 pub const ke_module_id = u64;
+pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
 pub const ke_render_chain_link = u32;
 pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
+pub const ke_scheduler_system_id = u64;
+pub const ke_set_id = u32;
 pub const ke_system_id = u64;
 
 /// Receives a pipeline compiled asynchronously.
@@ -51,6 +55,16 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// A structural operation applied when the queue holding it is drained. `user` points at the
+/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
+/// queue stops there: the operations recorded after it are dropped.
+pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of its phase, or once per slice when the system is
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
+pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
 /// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
 /// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
 /// section changed and does nothing else.
@@ -58,11 +72,6 @@ pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
-
-/// A structural operation applied when the queue holding it is drained. `user` points at the
-/// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
-/// queue stops there: the operations recorded after it are dropped.
-pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
@@ -99,10 +108,10 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". Given a runtime, it registers the PreUpdate
-/// system "input.actions", which advances input's frame and evaluates the maps against its
-/// snapshot before any behaviour reads an action; destroying the maps unregisters it.
-pub extern fn ke_input_actions_create(runtime: ?*abi_runtime.c.ke_runtime, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+/// key_quad, each a key name such as "Space" or "W". Given a scheduler, it registers the
+/// exclusive system "input.actions" in the config's set, which advances input's frame and
+/// evaluates the maps against its snapshot; destroying the maps unregisters it.
+pub extern fn ke_input_actions_create(scheduler: ?*abi_scheduler.c.ke_scheduler, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Registers the hierarchy flattening and transform propagation systems against `runtime`,
 /// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the

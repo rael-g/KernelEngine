@@ -34,6 +34,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/render"));
     translated.addIncludePath(b.path("../../../../c/resource_cache"));
     translated.addIncludePath(b.path("../../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/text"));
@@ -68,6 +69,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../../c/resource_cache"));
     tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../../c/text"));

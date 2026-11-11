@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/input/key.h>
 #include <kernel_engine/input/snapshot.h>
+#include <kernel_engine/scheduler/scheduler.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -106,6 +107,9 @@ extern "C"
     {
         /// [borrowed,utf8] The configuration section the maps are read from.
         const char *section;
+        /// The set the "input.actions" system joins when a scheduler is given; its phase must run
+        /// before any behaviour reads an action.
+        ke_set_id set;
     } ke_input_actions_config;
 
 #ifdef __cplusplus

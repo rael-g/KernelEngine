@@ -38,14 +38,14 @@ typedef enum ke_lifetime {
 /// When a phase runs within the ticks of a scheduler.
 typedef enum ke_phase_cadence {
     /// Once per tick, with the tick's dt.
-    KE_PHASE_EVERY_TICK = 0,
+    KE_PHASE_CADENCE_EVERY_TICK = 0,
     /// Once per fixed step, as many steps as the tick's time covers, with the fixed dt. Fixed phases
     /// registered one after another run together, in order, at each step.
-    KE_PHASE_FIXED      = 1,
+    KE_PHASE_CADENCE_FIXED      = 1,
     /// Once, before every other phase of the first tick, with a dt of zero.
-    KE_PHASE_STARTUP    = 2,
+    KE_PHASE_CADENCE_STARTUP    = 2,
     /// Once, when the scheduler shuts down after a tick ran, with a dt of zero.
-    KE_PHASE_SHUTDOWN   = 3,
+    KE_PHASE_CADENCE_SHUTDOWN   = 3,
 } ke_phase_cadence;
 
 /// [value] One id a system touches, and how. Two systems conflict when they name the same id

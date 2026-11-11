@@ -30,14 +30,14 @@ pub const KE_LIFETIME_UNTIL_READ: ke_lifetime = 2;
 /// When a phase runs within the ticks of a scheduler.
 pub const ke_phase_cadence = c_uint;
 /// Once per tick, with the tick's dt.
-pub const KE_PHASE_EVERY_TICK: ke_phase_cadence = 0;
+pub const KE_PHASE_CADENCE_EVERY_TICK: ke_phase_cadence = 0;
 /// Once per fixed step, as many steps as the tick's time covers, with the fixed dt. Fixed phases
 /// registered one after another run together, in order, at each step.
-pub const KE_PHASE_FIXED: ke_phase_cadence = 1;
+pub const KE_PHASE_CADENCE_FIXED: ke_phase_cadence = 1;
 /// Once, before every other phase of the first tick, with a dt of zero.
-pub const KE_PHASE_STARTUP: ke_phase_cadence = 2;
+pub const KE_PHASE_CADENCE_STARTUP: ke_phase_cadence = 2;
 /// Once, when the scheduler shuts down after a tick ran, with a dt of zero.
-pub const KE_PHASE_SHUTDOWN: ke_phase_cadence = 3;
+pub const KE_PHASE_CADENCE_SHUTDOWN: ke_phase_cadence = 3;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the

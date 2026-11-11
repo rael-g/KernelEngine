@@ -37,7 +37,7 @@ public class ReadyingTheNodesASlotOpens
         using var runtime = new DefaultRuntime(null, ecs, pool, new Runtime.RuntimeConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 });
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, runtime);
-        using var actions = new DefaultInputActions(null, runtime, input, config, new Framework.InputActionsConfig { Section = "input" });
+        using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
         using var types = new DefaultNodeTypes(null, runtime, ecs, tree, actions);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         var nodes = new NodeWorld(types);
@@ -65,7 +65,7 @@ public class ReadyingTheNodesASlotOpens
         using var runtime = new DefaultRuntime(null, ecs, pool, new Runtime.RuntimeConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 });
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, runtime);
-        using var actions = new DefaultInputActions(null, runtime, input, config, new Framework.InputActionsConfig { Section = "input" });
+        using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
         using var types = new DefaultNodeTypes(null, runtime, ecs, tree, actions);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         types.RegisterType(name: "node");

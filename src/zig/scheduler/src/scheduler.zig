@@ -162,7 +162,7 @@ fn addPhase(s: *State, desc: *const c.ke_phase_desc) R.Error!c.ke_phase_id {
     try s.refuseInRun();
     const name = desc.name orelse return reject(error.InvalidArgument, "a phase needs a name");
     switch (desc.cadence) {
-        c.KE_PHASE_EVERY_TICK, c.KE_PHASE_FIXED, c.KE_PHASE_STARTUP, c.KE_PHASE_SHUTDOWN => {},
+        c.KE_PHASE_CADENCE_EVERY_TICK, c.KE_PHASE_CADENCE_FIXED, c.KE_PHASE_CADENCE_STARTUP, c.KE_PHASE_CADENCE_SHUTDOWN => {},
         else => return reject(error.InvalidArgument, "unknown phase cadence"),
     }
     const copy = try gpa.dupeZ(u8, std.mem.span(name));
@@ -616,7 +616,7 @@ fn tickPhases(s: *State, dt: f32) R.Error!void {
     if (!s.started) {
         s.started = true;
         for (s.phases.items, 0..) |p, i| {
-            if (p.cadence == c.KE_PHASE_STARTUP) try runPhase(s, @intCast(i), 0);
+            if (p.cadence == c.KE_PHASE_CADENCE_STARTUP) try runPhase(s, @intCast(i), 0);
         }
     }
     s.accumulated = @min(s.accumulated + dt, s.fixed_dt_max_accum);
@@ -626,13 +626,13 @@ fn tickPhases(s: *State, dt: f32) R.Error!void {
     var i: usize = 0;
     while (i < phases) {
         switch (s.phases.items[i].cadence) {
-            c.KE_PHASE_EVERY_TICK => {
+            c.KE_PHASE_CADENCE_EVERY_TICK => {
                 try runPhase(s, @intCast(i), dt);
                 i += 1;
             },
-            c.KE_PHASE_FIXED => {
+            c.KE_PHASE_CADENCE_FIXED => {
                 var end = i;
-                while (end < phases and s.phases.items[end].cadence == c.KE_PHASE_FIXED) end += 1;
+                while (end < phases and s.phases.items[end].cadence == c.KE_PHASE_CADENCE_FIXED) end += 1;
                 for (0..steps) |_| {
                     for (i..end) |f| try runPhase(s, @intCast(f), s.fixed_dt);
                 }
@@ -658,7 +658,7 @@ fn shutdownPhases(s: *State) R.Error!void {
     applyPending(s);
     try bindQueries(s);
     for (s.phases.items, 0..) |p, i| {
-        if (p.cadence == c.KE_PHASE_SHUTDOWN) try runPhase(s, @intCast(i), 0);
+        if (p.cadence == c.KE_PHASE_CADENCE_SHUTDOWN) try runPhase(s, @intCast(i), 0);
     }
 }
 
@@ -826,7 +826,7 @@ const Rig = struct {
         _ = self.pool.when(.get_num_workers).returns(workers);
         try R.check(ke_scheduler_create(self.ecs.api(), self.pool.api(), &test_config, &self.handle));
         self.sched = self.handle.ref.?;
-        self.phase = try self.addPhase("update", c.KE_PHASE_EVERY_TICK);
+        self.phase = try self.addPhase("update", c.KE_PHASE_CADENCE_EVERY_TICK);
         self.set = .{try self.addSet("update", &.{})};
     }
 
@@ -916,7 +916,7 @@ test "a system runs once per run of its phase and never in another" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
-    const other = try rig.addPhase("shutdown", c.KE_PHASE_SHUTDOWN);
+    const other = try rig.addPhase("shutdown", c.KE_PHASE_CADENCE_SHUTDOWN);
     const other_set = [1]c.ke_set_id{try rig.addSetIn("shutdown", other, &.{})};
     var here = Probe{};
     var there = Probe{};
@@ -972,7 +972,7 @@ test "a system with no body, no name, no set, an unknown set or sets of two phas
     var unknown = rig.desc("x", &probe);
     unknown.sets = &.{7};
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_system.?(rig.sched, &unknown, &id));
-    const other = try rig.addPhase("render", c.KE_PHASE_EVERY_TICK);
+    const other = try rig.addPhase("render", c.KE_PHASE_CADENCE_EVERY_TICK);
     const foreign_set = try rig.addSetIn("render", other, &.{});
     var two = rig.desc("x", &probe);
     two.sets = &.{ rig.set[0], foreign_set };
@@ -1136,7 +1136,7 @@ test "a set may only follow a set of its own phase that already exists" {
     defer rig.deinit();
     var id: c.ke_set_id = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "a", .phase = rig.phase, .after = &.{9}, .after_count = 1 }, &id));
-    const other = try rig.addPhase("render", c.KE_PHASE_EVERY_TICK);
+    const other = try rig.addPhase("render", c.KE_PHASE_CADENCE_EVERY_TICK);
     const foreign = try rig.addSet("foreign", &.{});
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "b", .phase = other, .after = &.{foreign}, .after_count = 1 }, &id));
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(rig.sched, &.{ .name = "c", .phase = 9 }, &id));
@@ -1463,12 +1463,12 @@ const Cadences = struct {
     fn init(self: *Cadences) !void {
         try self.rig.init(1);
         const phases = [_]struct { name: [*:0]const u8, cadence: c.ke_phase_cadence, letter: u8 }{
-            .{ .name = "pre", .cadence = c.KE_PHASE_EVERY_TICK, .letter = 'p' },
-            .{ .name = "fixed_a", .cadence = c.KE_PHASE_FIXED, .letter = 'a' },
-            .{ .name = "fixed_b", .cadence = c.KE_PHASE_FIXED, .letter = 'b' },
-            .{ .name = "start", .cadence = c.KE_PHASE_STARTUP, .letter = 's' },
-            .{ .name = "end", .cadence = c.KE_PHASE_SHUTDOWN, .letter = 'e' },
-            .{ .name = "post", .cadence = c.KE_PHASE_EVERY_TICK, .letter = 'u' },
+            .{ .name = "pre", .cadence = c.KE_PHASE_CADENCE_EVERY_TICK, .letter = 'p' },
+            .{ .name = "fixed_a", .cadence = c.KE_PHASE_CADENCE_FIXED, .letter = 'a' },
+            .{ .name = "fixed_b", .cadence = c.KE_PHASE_CADENCE_FIXED, .letter = 'b' },
+            .{ .name = "start", .cadence = c.KE_PHASE_CADENCE_STARTUP, .letter = 's' },
+            .{ .name = "end", .cadence = c.KE_PHASE_CADENCE_SHUTDOWN, .letter = 'e' },
+            .{ .name = "post", .cadence = c.KE_PHASE_CADENCE_EVERY_TICK, .letter = 'u' },
         };
         for (phases, &self.marks, &self.sets) |ph, *mark, *set| {
             const phase = try self.rig.addPhase(ph.name, ph.cadence);
@@ -1571,7 +1571,7 @@ test "a writer of what lives until read is kept while a system of another phase 
     producer.access = &produce;
     producer.access_count = 1;
     _ = try rig.add(producer);
-    const later = try rig.addPhase("later", c.KE_PHASE_EVERY_TICK);
+    const later = try rig.addPhase("later", c.KE_PHASE_CADENCE_EVERY_TICK);
     const later_set = [1]c.ke_set_id{try rig.addSetIn("later", later, &.{})};
     const consume = [_]c.ke_id_access{idAccess(1, read)};
     var consumer = rig.desc("consumer", &probe);

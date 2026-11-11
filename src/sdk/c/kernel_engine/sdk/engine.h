@@ -33,6 +33,7 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
+#include <kernel_engine/scheduler/scheduler_create.h>
 #include <kernel_engine/sdk/paths.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
@@ -78,6 +79,20 @@ typedef struct ke_sdk_renderer
     ke_render_gbuffer_resources        gbuffer_resources;
 } ke_sdk_renderer;
 
+/** The set every standard phase of the scheduler is registered with, for the systems that need no other order. */
+typedef struct ke_sdk_sets
+{
+    ke_set_id startup;
+    ke_set_id pre_update;
+    ke_set_id fixed_pre_update;
+    ke_set_id fixed_update;
+    ke_set_id fixed_post_update;
+    ke_set_id update;
+    ke_set_id post_update;
+    ke_set_id render;
+    ke_set_id shutdown;
+} ke_sdk_sets;
+
 /**
  * Every part of an engine, each an owner its part function wrote, and the paths they are made from. A part
  * function reads the parts made before its own and writes its own; a part whose function is NULL is not made
@@ -97,6 +112,8 @@ typedef struct ke_sdk_engine
     ke_input_handle                input;
     ke_window_handle               window;
     ke_ecs_handle                  ecs;
+    ke_scheduler_handle            scheduler;
+    ke_sdk_sets                    sets;
     ke_runtime_handle              runtime;
     ke_gpu_device_handle           gpu_device;
     ke_gpu_render_target_handle    render_target;
@@ -129,6 +146,7 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part input;
     ke_sdk_engine_part window;
     ke_sdk_engine_part ecs;
+    ke_sdk_engine_part scheduler;
     ke_sdk_engine_part runtime;
     ke_sdk_engine_part gpu_device;
     ke_sdk_engine_part render_target;
@@ -206,6 +224,38 @@ static inline ke_result ke_sdk_window_glfw(ke_sdk_engine *e)
 static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 {
     return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
+}
+
+/** Registers the phase @p name with @p cadence and a set of the same name, written to @p out_set. */
+static inline ke_result ke_sdk_phase(ke_scheduler *s, const char *name, ke_phase_cadence cadence, ke_set_id *out_set)
+{
+    ke_phase_id phase = 0;
+    ke_result made = s->register_phase(s, &(ke_phase_desc){ .name = name, .cadence = cadence }, &phase);
+    if (made == KE_OK) made = s->register_set(s, &(ke_set_desc){ .name = name, .phase = phase, .after = NULL, .after_count = 0 }, out_set);
+    return made;
+}
+
+/** The scheduler, its timestep from `runtime`, with the standard phases in the order they tick. */
+static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const ke_scheduler_config config = {
+        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
+        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
+    };
+    ke_result made = ke_scheduler_create(e->ecs.ref, e->task_pool.ref, &config, &e->scheduler);
+    ke_scheduler *s = e->scheduler.ref;
+    ke_sdk_sets *sets = &e->sets;
+    if (made == KE_OK) made = ke_sdk_phase(s, "startup", KE_PHASE_CADENCE_STARTUP, &sets->startup);
+    if (made == KE_OK) made = ke_sdk_phase(s, "pre_update", KE_PHASE_CADENCE_EVERY_TICK, &sets->pre_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_pre_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_pre_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_post_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_post_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "update", KE_PHASE_CADENCE_EVERY_TICK, &sets->update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "post_update", KE_PHASE_CADENCE_EVERY_TICK, &sets->post_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "render", KE_PHASE_CADENCE_EVERY_TICK, &sets->render);
+    if (made == KE_OK) made = ke_sdk_phase(s, "shutdown", KE_PHASE_CADENCE_SHUTDOWN, &sets->shutdown);
+    return made;
 }
 
 /** The runtime, its timestep from `runtime`. */
@@ -362,7 +412,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 /** The action maps of the configuration's `input` section. */
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
-    return ke_input_actions_create(e->runtime.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
+    return ke_input_actions_create(e->scheduler.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input", .set = e->sets.pre_update }, &e->actions);
 }
 
 /** The node types. */
@@ -391,6 +441,7 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
         (void)engine->runtime.ref->flush_render(engine->runtime.ref);
         engine->runtime.ref->unload_modules(engine->runtime.ref);
     }
+    if (engine->scheduler.ref) (void)engine->scheduler.ref->shutdown(engine->scheduler.ref);
     ke_sdk_renderer *r = &engine->renderer;
     KE_SDK_ENGINE_RELEASE(engine->scene_files);
     KE_SDK_ENGINE_RELEASE(engine->node_types);
@@ -417,6 +468,7 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->assets);
     KE_SDK_ENGINE_RELEASE(engine->fonts);
     KE_SDK_ENGINE_RELEASE(engine->runtime);
+    KE_SDK_ENGINE_RELEASE(engine->scheduler);
     KE_SDK_ENGINE_RELEASE(engine->ecs);
     KE_SDK_ENGINE_RELEASE(engine->render_target);
     KE_SDK_ENGINE_RELEASE(engine->gpu_device);
@@ -446,7 +498,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
 
     const ke_sdk_engine_part parts[] = {
         desc->task_pool, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
-        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
+        desc->scheduler, desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
         desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
     };
@@ -474,25 +526,27 @@ static inline double ke_sdk_engine_now(void)
  * Opens the scene file at @p first_scene, or the one of the project's scenes directory `project.default_scene`
  * names, and ticks until the window closes or a node asks to exit.
  * @param first_scene [utf8,optional] A `res://` path; NULL takes the project's default scene.
- * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a runtime or
- *         scene files, or the code of the open or the tick that failed.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a scheduler,
+ *         a runtime or scene files, or the code of the open or the tick that failed.
  */
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
-    if (!engine->configuration.ref || !engine->window.ref || !engine->runtime.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
+    if (!engine->configuration.ref || !engine->window.ref || !engine->scheduler.ref || !engine->runtime.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
     ke_configuration *c = ke_sdk_engine_config(engine);
     char scene[KE_SDK_ENGINE_PATH_CAPACITY];
     if (first_scene) snprintf(scene, sizeof scene, "%s", first_scene);
     else snprintf(scene, sizeof scene, "res://scenes/%s.scene.toml", c->get_string(c, "project", "default_scene", "Main"));
     ke_runtime *rt = engine->runtime.ref;
+    ke_scheduler *sched = engine->scheduler.ref;
     ke_window *window = engine->window.ref;
     ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, rt->commands(rt), scene, NULL);
     double previous = ke_sdk_engine_now();
-    while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt))
+    while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt) && !sched->exit_requested(sched))
     {
         window->poll_events(window);
         double current = ke_sdk_engine_now();
-        made = rt->tick(rt, (float)(current - previous));
+        made = sched->tick(sched, (float)(current - previous));
+        if (made == KE_OK) made = rt->tick(rt, (float)(current - previous));
         previous = current;
     }
     return made;

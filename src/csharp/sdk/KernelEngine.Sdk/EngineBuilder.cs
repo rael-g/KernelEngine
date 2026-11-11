@@ -10,6 +10,7 @@ using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
@@ -85,6 +86,12 @@ public sealed class EngineBuilder
             Fullscreen = config.GetBool("runtime.window", "fullscreen", false),
         }));
         var ecs = Own(new FlecsEcsRegistry(log, new() { ReservedIdCapacity = 1048576 }));
+        var scheduler = Own(new DefaultScheduler(log, ecs, pool, new()
+        {
+            FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
+            FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
+        }));
+        var sets = EngineSets.Register(scheduler);
         var runtime = Own(new DefaultRuntime(log, ecs, pool, new()
         {
             FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
@@ -116,6 +123,8 @@ public sealed class EngineBuilder
             Input = input,
             Window = window,
             Ecs = ecs,
+            Scheduler = scheduler,
+            Sets = sets,
             Runtime = runtime,
             Gpu = gpu,
             Assets = assets,
@@ -132,7 +141,7 @@ public sealed class EngineBuilder
         owned.AddRange(_physics(parts));
         owned.AddRange(_audio(parts));
 
-        var actions = Own(new DefaultInputActions(log, runtime, input, config, new() { Section = "input" }));
+        var actions = Own(new DefaultInputActions(log, scheduler, input, config, new() { Section = "input", Set = sets.PreUpdate }));
         var types = Own(new DefaultNodeTypes(log, runtime, ecs, tree, actions));
         Own(new DefaultSceneFiles(log, ecs, types, assets, io));
         types.RegisterEngineNodeTypes();

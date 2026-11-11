@@ -29,6 +29,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/asset"));
     translated.addIncludePath(b.path("../../../../c/audio"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
@@ -63,6 +64,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));

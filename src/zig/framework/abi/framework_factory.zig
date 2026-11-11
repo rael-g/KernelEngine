@@ -12,6 +12,7 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_runtime = @import("runtime");
 const abi_scene_tree = @import("scene_tree");
+const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
 
 /// The ABI as the headers declare it.
@@ -43,12 +44,12 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". Given a runtime, it registers the PreUpdate
-/// system "input.actions", which advances input's frame and evaluates the maps against its
-/// snapshot before any behaviour reads an action; destroying the maps unregisters it.
-pub fn inputActionsCreate(runtime: ?*abi_runtime.c.ke_runtime, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
+/// key_quad, each a key name such as "Space" or "W". Given a scheduler, it registers the
+/// exclusive system "input.actions" in the config's set, which advances input's frame and
+/// evaluates the maps against its snapshot; destroying the maps unregisters it.
+pub fn inputActionsCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(runtime, input, configuration, config, &written));
+    try checkResult(c.ke_input_actions_create(scheduler, input, configuration, config, &written));
     return written;
 }
 

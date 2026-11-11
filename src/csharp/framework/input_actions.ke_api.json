@@ -829,6 +829,129 @@
       "external": true
     },
     {
+      "name": "ke_variant_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_VARIANT_NULL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_BOOL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_INT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_FLOAT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_STRING",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC2",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC3",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_VEC4",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_QUAT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_VARIANT_TABLE",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_access",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SCHEDULER_ACCESS_READ",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_SCHEDULER_ACCESS_WRITE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_lifetime",
+      "doc": "How long the value of an id lasts. A system whose every write has a lifetime shorter than persistent, and that no running system reads within that lifetime, is culled.",
+      "values": [
+        {
+          "name": "KE_LIFETIME_PERSISTENT",
+          "value": 0,
+          "doc": "The value outlives every run; writing it is an effect no cull removes."
+        },
+        {
+          "name": "KE_LIFETIME_PHASE",
+          "value": 1,
+          "doc": "The value lives from the run of the phase it is written in to the end of that run."
+        },
+        {
+          "name": "KE_LIFETIME_UNTIL_READ",
+          "value": 2,
+          "doc": "The value lives until every phase whose systems read it has run since it was written. Its writer runs while a system of any phase reads it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_phase_cadence",
+      "doc": "When a phase runs within the ticks of a scheduler.",
+      "values": [
+        {
+          "name": "KE_PHASE_CADENCE_EVERY_TICK",
+          "value": 0,
+          "doc": "Once per tick, with the tick\u0027s dt."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_FIXED",
+          "value": 1,
+          "doc": "Once per fixed step, as many steps as the tick\u0027s time covers, with the fixed dt. Fixed phases registered one after another run together, in order, at each step."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_STARTUP",
+          "value": 2,
+          "doc": "Once, before every other phase of the first tick, with a dt of zero."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_SHUTDOWN",
+          "value": 3,
+          "doc": "Once, when the scheduler shuts down after a tick ran, with a dt of zero."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_action_type",
       "doc": null,
       "values": [
@@ -943,6 +1066,742 @@
       "external": true
     },
     {
+      "name": "ke_vec2",
+      "doc": "Two floats, x then y.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec3",
+      "doc": "Three floats, x then y then z.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_vec4",
+      "doc": "Four floats, x then y then z then w.",
+      "tags": [
+        "vector"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_quat",
+      "doc": "A rotation; the four lanes are x, y, z, w.",
+      "tags": [
+        "quaternion"
+      ],
+      "fields": [
+        {
+          "name": "x",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "y",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "z",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "w",
+          "type": "float",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_mat4",
+      "doc": "Sixteen floats.",
+      "tags": [
+        "matrix"
+      ],
+      "fields": [
+        {
+          "name": "m",
+          "type": "float[16]",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_transform",
+      "doc": "Spatial transform: where a thing is, how it is turned, and how big it is.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "position",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "rotation",
+          "type": "ke_quat",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "scale",
+          "type": "ke_vec3",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "unnamed_0",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "b",
+                "type": "_Bool",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "i",
+                "type": "int64_t",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "f",
+                "type": "double",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "s",
+                "type": "const char *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v2",
+                "type": "ke_vec2",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v3",
+                "type": "ke_vec3",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "v4",
+                "type": "ke_vec4",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "q",
+                "type": "ke_quat",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "t",
+                "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              }
+            ],
+            "union": true
+          }
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table_entry",
+      "doc": "One authored key and its value. Whoever accepts the key sets \u0060consumed\u0060; the loader reports every entry left unclaimed.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "consumed",
+          "type": "_Bool",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_variant_table",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "entries",
+          "type": "const ke_variant_table_entry *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_field",
+      "doc": "One field of a component: where it lies, what a scene writes into it, and the names an integer field may be written as.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "The name a scene writes the field by."
+        },
+        {
+          "name": "type",
+          "type": "ke_variant_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "offset",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "default_value",
+          "type": "ke_variant",
+          "tags": [],
+          "doc": "What the field holds when nothing authors it. KE_VARIANT_NULL means the header declared no default and zero stands."
+        },
+        {
+          "name": "enum_names",
+          "type": "const char *const *",
+          "tags": [
+            "utf8",
+            "array_of:enum_count",
+            "default:empty"
+          ],
+          "doc": "The names a scene may write for an integer field, in value order; a name stands for its index. None leaves the field numeric."
+        },
+        {
+          "name": "enum_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060enum_names\u0060."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_params",
+      "doc": "What a component type is registered with.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "Unique component name."
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": "Bytes per entity; 0 registers a tag (no storage)."
+        },
+        {
+          "name": "alignment",
+          "type": "size_t",
+          "tags": [],
+          "doc": "A power of two for a sized component; ignored for a tag of size 0."
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "borrowed",
+            "optional",
+            "array_of:field_count"
+          ],
+          "doc": "The type\u0027s field layout, normally its field table; copied with every name it reaches, so it only has to live for the call. NULL registers the size alone."
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Entries in \u0060fields\u0060; 0 when \u0060fields\u0060 is NULL."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_component_meta",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "cid",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "alignment",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "fields",
+          "type": "const ke_component_field *",
+          "tags": [
+            "array_of:field_count"
+          ],
+          "doc": null
+        },
+        {
+          "name": "field_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_segment",
+      "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
+      "tags": [
+        "view"
+      ],
+      "fields": [
+        {
+          "name": "entities",
+          "type": "const ke_entity *",
+          "tags": [
+            "array_of:count"
+          ],
+          "doc": "The entities this segment matched."
+        },
+        {
+          "name": "count",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "columns",
+          "type": "void **",
+          "tags": [
+            "array_of:column_count"
+          ],
+          "doc": "One base pointer per query term."
+        },
+        {
+          "name": "column_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_config",
+      "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "reserved_id_capacity",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_id_access",
+      "doc": "One id a system touches, and how. Two systems conflict when they name the same id and at least one writes it; conflicting systems never run in the same wave.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "ke_scheduler_access",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_query_desc",
+      "doc": "A query a system reads through: components matched together, each with its access.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "terms",
+          "type": "const ke_id_access *",
+          "tags": [
+            "array_of:term_count"
+          ],
+          "doc": "The terms the query matches together."
+        },
+        {
+          "name": "term_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_phase_desc",
+      "doc": "A phase: a group of systems run together, wave by wave. A tick runs the phases in the order they were registered, each when its cadence says.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the phase in diagnostics."
+        },
+        {
+          "name": "cadence",
+          "type": "ke_phase_cadence",
+          "tags": [],
+          "doc": "When the phase runs."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_set_desc",
+      "doc": "An ordering set: a named anchor of one phase that systems join and that is ordered against other sets of the phase.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the set in diagnostics."
+        },
+        {
+          "name": "phase",
+          "type": "ke_phase_id",
+          "tags": [],
+          "doc": "The phase whose systems the set orders."
+        },
+        {
+          "name": "after",
+          "type": "const ke_set_id *",
+          "tags": [
+            "array_of:after_count"
+          ],
+          "doc": "Sets of the same phase whose systems all run before this set\u0027s."
+        },
+        {
+          "name": "after_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_system_desc",
+      "doc": "A system: a body, the sets it joins and what it touches. It runs in the phase of its sets.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the system in diagnostics and in the failure its body raises."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to every call of the body."
+        },
+        {
+          "name": "execute",
+          "type": "ke_scheduler_execute_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return"
+          ],
+          "doc": "The body."
+        },
+        {
+          "name": "queries",
+          "type": "const ke_query_desc *",
+          "tags": [
+            "array_of:query_count"
+          ],
+          "doc": "Queries the body reads through ke_scheduler_ctx.view."
+        },
+        {
+          "name": "query_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "const ke_id_access *",
+          "tags": [
+            "array_of:access_count"
+          ],
+          "doc": "Ids the system touches that no query term covers."
+        },
+        {
+          "name": "access_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sets",
+          "type": "const ke_set_id *",
+          "tags": [
+            "array_of:set_count"
+          ],
+          "doc": "The sets the system joins, at least one, all of one phase."
+        },
+        {
+          "name": "set_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "per_entity",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The body\u0027s work on one entity is independent of every other; the scheduler may run it as several concurrent slices of the same entity set."
+        },
+        {
+          "name": "exclusive",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The body runs alone at the start of its phase, and what it records is applied before the other systems of the phase run. Its access does not order it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_system_order",
+      "doc": "One system of a phase, as the built order places it.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "ke_scheduler_system_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "wave",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The wave the system runs in; systems of one wave run concurrently."
+        },
+        {
+          "name": "culled",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The system does not run: nothing that runs reads what it writes within its lifetime."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_config",
+      "doc": "What a scheduler is created with, each field applied as given.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fixed_dt",
+          "type": "float",
+          "tags": [],
+          "doc": "The dt of a fixed step, in seconds; greater than zero."
+        },
+        {
+          "name": "fixed_dt_max_accum",
+          "type": "float",
+          "tags": [],
+          "doc": "The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped; greater than zero."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_input_actions_config",
       "doc": "The values the action maps are created with, whatever its implementation, each applied as given. The values the action maps are created with.",
       "tags": [
@@ -957,11 +1816,891 @@
             "utf8"
           ],
           "doc": "The configuration section the maps are read from."
+        },
+        {
+          "name": "set",
+          "type": "ke_set_id",
+          "tags": [],
+          "doc": "The set the \u0022input.actions\u0022 system joins when a scheduler is given; its phase must run before any behaviour reads an action."
         }
       ]
     }
   ],
   "vtables": [
+    {
+      "name": "ke_ecs",
+      "doc": "Entity lifetime and component storage.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "entity_create",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Creates a fresh entity with no components. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the entity; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_destroy",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Destroys an entity and all its components; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "params",
+              "type": "const ke_component_params *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The name, size, alignment and field table of the type."
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id; KE_COMPONENT_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_lookup",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Looks up a previously registered component by name.",
+          "return_doc": "false if no component of that name is registered.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Component name to find."
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size, and field metadata."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_add",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive, the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_data",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_remove",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Detaches a component from an entity; an entity that is not alive is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns an entity\u0027s component storage, or NULL if it doesn\u0027t have that component. The pointer is valid until the next structural change on this ecs.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_size",
+          "returns": "size_t",
+          "tags": [],
+          "doc": "Byte size of a registered component\u0027s element; 0 for a tag or unknown cid.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "component_field_write",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Writes value into component at the place field describes, converted to the field\u0027s type: an integer and a float convert to each other, a boolean to an integer, and a vector widens or narrows to the field\u0027s width; a string is cut to the field\u0027s size and stays NUL-terminated.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, or for a value that does not convert to the field\u0027s type or a size the type cannot have, writing nothing.",
+          "params": [
+            {
+              "name": "component",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The component\u0027s memory."
+            },
+            {
+              "name": "field",
+              "type": "const ke_component_field *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Where in the component, and of which type and size."
+            },
+            {
+              "name": "value",
+              "type": "const ke_variant *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "The value to write."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_register",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a query over a component tuple (entities matching ALL cids).",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than the backend\u0027s queries hold, or one the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "cids",
+              "type": "const ke_component_id *",
+              "tags": [
+                "borrowed",
+                "array_of:cid_count"
+              ],
+              "doc": "Component tuple to match."
+            },
+            {
+              "name": "cid_count",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Number of components in the tuple."
+            },
+            {
+              "name": "out_query",
+              "type": "ke_query_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the query; KE_QUERY_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "query_resolve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown query, missing output arrays or a zero capacity, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "query",
+              "type": "ke_query_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_segments",
+              "type": "ke_ecs_segment *",
+              "tags": [
+                "out",
+                "array_of:max_segments"
+              ],
+              "doc": "Receives the matched segments."
+            },
+            {
+              "name": "max_segments",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Capacity of out_segments."
+            },
+            {
+              "name": "out_columns",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the cid_count entries starting at index i * cid_count, cid_count being the length of the tuple the query was registered with."
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them; zero on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_reserve",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve was handed out.",
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; the null entity on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_materialize",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null entity or when the backend refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_ecs *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_commands",
+      "doc": "A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation\u0027s effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.",
+      "tags": [
+        "lent"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "spawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the creation of an entity and answers the id it will have. The id can be named by later operations of this queue, and by any caller, at once; the entity itself exists once the queue is applied.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_entity",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the id; KE_ENTITY_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "attach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records giving \u0060entity\u0060 the component \u0060cid\u0060, initialised from \u0060size\u0060 bytes of \u0060data\u0060. The bytes are copied, so the caller\u0027s buffer need not outlive the call. \u0060size\u0060 must equal the registered size of \u0060cid\u0060, or be 0 to attach the component without copying bytes into it.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, when \u0060size\u0060 is neither 0 nor the registered size of \u0060cid\u0060.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "data",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "detach",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records removing component \u0060cid\u0060 from \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "despawn",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records destroying \u0060entity\u0060.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        },
+        {
+          "name": "defer",
+          "returns": "ke_result",
+          "tags": [
+            "internal"
+          ],
+          "doc": "Records a structural operation for work the fixed verbs above cannot express. \u0060fn\u0060 runs when the queue is applied, in order with the other operations. \u0060user_size\u0060 bytes of \u0060user\u0060 are copied, so the caller\u0027s buffer need not outlive the call.",
+          "return_doc": "KE_RESULT_INVALID_ARGUMENT, besides the codes above, for a null \u0060fn\u0060.",
+          "params": [
+            {
+              "name": "fn",
+              "type": "ke_defer_fn",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "user",
+              "type": "const void *",
+              "tags": [
+                "bytes_of:user_size"
+              ],
+              "doc": null
+            },
+            {
+              "name": "user_size",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_ecs_commands *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler",
+      "doc": "Orders systems by what they touch and the sets they join, and runs their phases tick by tick across the task pool.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "register_phase",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a phase.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_phase_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_phase_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the phase\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "register_set",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers an ordering set.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown phase or a set of \u0060after\u0060 from another phase; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_set_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_set_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the set\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "register_system",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a system. From a body, it takes effect with the next tick.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name or body, no set, an unknown set or sets of two phases; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_system_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_scheduler_system_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the system\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "unregister_system",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Removes a system. From a body, it takes effect with the next tick.",
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND when no system has that id.",
+          "params": [
+            {
+              "name": "id",
+              "type": "ke_scheduler_system_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "declare_lifetime",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares the lifetime of id; an id never declared is persistent.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown lifetime; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "id",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "lifetime",
+              "type": "ke_lifetime",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "declare_exclusive",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when group equals member; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "group",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "member",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "build",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Builds the order of every phase whose registrations changed since the last build; tick builds the same way. Within a phase, the systems of a set run after those of the sets it follows, a writer of an id before its readers, and of two writers with no other order, the one registered first: an ambiguity.",
+          "return_doc": "KE_OK; KE_RESULT_GENERAL when an order has a cycle or a refused ambiguity, the systems involved named in the log; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "refuse_ambiguity",
+              "type": "_Bool",
+              "tags": [],
+              "doc": "When true, an ambiguity fails the build."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "describe_phase",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The built order of phase, in registration order.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown phase or too small a capacity; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with.",
+          "params": [
+            {
+              "name": "phase",
+              "type": "ke_phase_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_systems",
+              "type": "ke_system_order *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives one entry per system of the phase."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of systems of the phase."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "tick",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Applies what was recorded into commands, then runs the phases in registration order: on the first tick the startup phases first, then each every-tick phase, and each block of fixed phases once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body or after shutdown; the code build fails with; the code a body or its commands failed with.",
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "shutdown",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body failed with.",
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "request_exit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Records that the program should end; any body or the caller may ask, from any thread.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "exit_requested",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether a request to end the program was recorded.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "commands",
+          "returns": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue the caller of tick records structural changes into between ticks; the next tick applies it first. Only the thread that calls tick records into it.",
+          "return_doc": "The queue, owned by the scheduler.",
+          "params": [],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "ke_scheduler *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scheduler *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_ctx",
+      "doc": "What one call of a system body is given: the entities its queries resolved to, its share of them, and the queue it records structural changes into. It means nothing outside the call.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "commands",
+          "type": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue the body records structural changes into, applied when its wave ends."
+        }
+      ],
+      "slots": [
+        {
+          "name": "view",
+          "returns": "const ke_ecs_segment *",
+          "tags": [],
+          "doc": "The resolved segments of the query at query_index, valid for the call.",
+          "return_doc": "The segments; NULL for an index past the system\u0027s queries.",
+          "params": [
+            {
+              "name": "query_index",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "ke_scheduler_ctx *"
+        },
+        {
+          "name": "slice",
+          "returns": "void",
+          "tags": [],
+          "doc": "Which share of its entity set this call owns: *out_index in [0, *out_count). A system that is not per_entity always gets index 0 of count 1.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_index",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler_ctx *"
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_input_actions",
       "doc": "Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame against an input snapshot and polled. Maps are evaluated from the highest priority down, ties in the order they were added; a key or mouse button bound in an enabled map is not seen by any map evaluated after it. The actions of a disabled map are inactive.",
@@ -1399,8 +3138,67 @@
     }
   ],
   "functions": [],
-  "callbacks": [],
+  "callbacks": [
+    {
+      "name": "ke_defer_fn",
+      "returns": "ke_result",
+      "doc": "A structural operation applied when the queue holding it is drained. \u0060user\u0060 points at the copy of the payload passed to defer; \u0060ecs\u0060 is the live world. A failure is returned, and the queue stops there: the operations recorded after it are dropped.",
+      "lanes": [
+        {
+          "name": "arg1",
+          "type": "ke_ecs *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "arg2",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_scheduler_execute_fn",
+      "returns": "ke_result",
+      "doc": "One call of a system body, once per run of its phase, or once per slice when the system is per_entity. A failure is carried to the thread that called tick, which fails with it; the rest of the wave still runs, and no later wave or phase starts.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "ke_scheduler_ctx *",
+          "tags": [],
+          "doc": "The body\u0027s only doorway to component memory for this call."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from register_system."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "The tick\u0027s dt, the fixed dt in a fixed phase, zero at startup and shutdown."
+        }
+      ]
+    }
+  ],
   "id_types": [],
-  "foreign_id_types": [],
-  "type_aliases": {}
+  "foreign_id_types": [
+    "ke_entity",
+    "ke_component_id"
+  ],
+  "type_aliases": {
+    "ke_entity": "uint64_t",
+    "ke_component_id": "uint32_t",
+    "ke_query_id": "uint64_t",
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
+    "ke_phase_id": "uint32_t",
+    "ke_set_id": "uint32_t",
+    "ke_scheduler_system_id": "uint64_t",
+    "ke_scheduler_execute_fn": "ke_result (*)(ke_scheduler_ctx *, void *, float)"
+  }
 }

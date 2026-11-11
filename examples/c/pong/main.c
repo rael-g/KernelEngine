@@ -14,6 +14,7 @@ int main(void)
         .input = ke_sdk_input,
         .window = ke_sdk_window_glfw,
         .ecs = ke_sdk_ecs_flecs,
+        .scheduler = ke_sdk_scheduler,
         .runtime = ke_sdk_runtime,
         .gpu_device = ke_sdk_gpu_device_webgpu,
         .render_target = ke_sdk_render_target_webgpu_window,

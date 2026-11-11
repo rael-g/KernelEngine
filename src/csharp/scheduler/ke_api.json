@@ -253,22 +253,22 @@
       "doc": "When a phase runs within the ticks of a scheduler.",
       "values": [
         {
-          "name": "KE_PHASE_EVERY_TICK",
+          "name": "KE_PHASE_CADENCE_EVERY_TICK",
           "value": 0,
           "doc": "Once per tick, with the tick\u0027s dt."
         },
         {
-          "name": "KE_PHASE_FIXED",
+          "name": "KE_PHASE_CADENCE_FIXED",
           "value": 1,
           "doc": "Once per fixed step, as many steps as the tick\u0027s time covers, with the fixed dt. Fixed phases registered one after another run together, in order, at each step."
         },
         {
-          "name": "KE_PHASE_STARTUP",
+          "name": "KE_PHASE_CADENCE_STARTUP",
           "value": 2,
           "doc": "Once, before every other phase of the first tick, with a dt of zero."
         },
         {
-          "name": "KE_PHASE_SHUTDOWN",
+          "name": "KE_PHASE_CADENCE_SHUTDOWN",
           "value": 3,
           "doc": "Once, when the scheduler shuts down after a tick ran, with a dt of zero."
         }

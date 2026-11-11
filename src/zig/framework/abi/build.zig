@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
+    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
     abi.addImport("text", b.dependency("abi_text", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
@@ -46,6 +47,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/physics"));
     translated.addIncludePath(b.path("../../../c/resource_cache"));
     translated.addIncludePath(b.path("../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../c/spatial"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../c/view"));
@@ -53,6 +55,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../input/default/include"));
     translated.addIncludePath(b.path("../../runtime/include"));
+    translated.addIncludePath(b.path("../../scheduler/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -81,6 +84,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../c/resource_cache"));
     tests.root_module.addIncludePath(b.path("../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../c/view"));
@@ -88,5 +92,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../input/default/include"));
     tests.root_module.addIncludePath(b.path("../../runtime/include"));
+    tests.root_module.addIncludePath(b.path("../../scheduler/include"));
     b.step("test", "Check the framework_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -52,10 +52,10 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_PERSISTENT), @as(i64, abi.c.KE_LIFETIME_PERSISTENT));
     try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_PHASE), @as(i64, abi.c.KE_LIFETIME_PHASE));
     try std.testing.expectEqual(@as(i64, c.KE_LIFETIME_UNTIL_READ), @as(i64, abi.c.KE_LIFETIME_UNTIL_READ));
-    try std.testing.expectEqual(@as(i64, c.KE_PHASE_EVERY_TICK), @as(i64, abi.c.KE_PHASE_EVERY_TICK));
-    try std.testing.expectEqual(@as(i64, c.KE_PHASE_FIXED), @as(i64, abi.c.KE_PHASE_FIXED));
-    try std.testing.expectEqual(@as(i64, c.KE_PHASE_STARTUP), @as(i64, abi.c.KE_PHASE_STARTUP));
-    try std.testing.expectEqual(@as(i64, c.KE_PHASE_SHUTDOWN), @as(i64, abi.c.KE_PHASE_SHUTDOWN));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_CADENCE_EVERY_TICK), @as(i64, abi.c.KE_PHASE_CADENCE_EVERY_TICK));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_CADENCE_FIXED), @as(i64, abi.c.KE_PHASE_CADENCE_FIXED));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_CADENCE_STARTUP), @as(i64, abi.c.KE_PHASE_CADENCE_STARTUP));
+    try std.testing.expectEqual(@as(i64, c.KE_PHASE_CADENCE_SHUTDOWN), @as(i64, abi.c.KE_PHASE_CADENCE_SHUTDOWN));
 }
 
 extern const layout_values: [57]c_ulonglong;
