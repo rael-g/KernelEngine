@@ -238,6 +238,8 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, co
         .scale_x = 1.0,
         .scale_y = 1.0,
     }, &shadow_depth_cid));
+    try R.check(p.runtime.?.declare_transient.?(p.runtime, shadow_map_cid));
+    try R.check(p.runtime.?.declare_transient.?(p.runtime, shadow_depth_cid));
     sh.resources.map = shadow_map_cid;
     sh.view = core.*.resource_view.?(core, shadow_map_cid);
 
@@ -443,6 +445,18 @@ test "creating and destroying the shadow pass leaves no block allocated and no G
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "the shadow map and depth live only within the render phase, so the pass is culled when nothing samples the map" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var res: abi_render.c.ke_render_shadow_resources = undefined;
+    var h: abi_render_shadow_factory.c.ke_render_shadow_handle = undefined;
+    try R.check(ke_render_shadow_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space }), &test_shape, &res, &h));
+    defer h.destroy.?(h.ref);
+    try rig.rt.received(.declare_transient).times(2);
 }
 
 test "destroying the shadow pass unregisters every system it registered" {

@@ -458,6 +458,13 @@ export fn ke_render_cluster_create(
         return R.code(err);
     };
 
+    const transient = rt.declare_transient.?(rt, cm.clusters_cid);
+    if (transient != R.ok) {
+        destroyModule(cm);
+        gpa.destroy(cm);
+        return transient;
+    }
+
     var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
     params.name = "render.cull";
     params.phase = abi_runtime.c.KE_PHASE_RENDER;
@@ -562,6 +569,19 @@ test "creating and destroying the cluster pass leaves no block allocated and no 
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
+}
+
+test "the clusters live only within the render phase, so the pass is culled when no lit pass reads them" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var camera = std.mem.zeroes(abi_render.c.ke_render_camera);
+    var view_space = std.mem.zeroes(abi_view.c.ke_view_space);
+    var res: abi_render.c.ke_render_cluster_resources = undefined;
+    var h: abi_render_cluster_factory.c.ke_render_cluster_handle = undefined;
+    try R.check(ke_render_cluster_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api(), .view_space = &view_space, .camera = &camera, .scene = &test_scene, .frame = &test_frame }), &test_grid, &res, &h));
+    defer h.destroy.?(h.ref);
+    try rig.rt.received(.declare_transient).times(1);
 }
 
 test "destroying the cluster pass unregisters every system it registered" {
