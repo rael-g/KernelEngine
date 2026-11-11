@@ -889,6 +889,33 @@
       ]
     },
     {
+      "name": "ke_runtime_system_order",
+      "doc": "One system of a phase, as the order the runtime built places it.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "ke_system_id",
+          "tags": [],
+          "doc": "The id register_system gave the system."
+        },
+        {
+          "name": "wave",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The wave the system runs in; systems of one wave run concurrently."
+        },
+        {
+          "name": "culled",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The system does not run: everything it writes is transient and no system of the phase that runs reads it."
+        }
+      ]
+    },
+    {
       "name": "ke_runtime_config",
       "doc": "The values a runtime is created with, whatever its implementation, each applied as given.",
       "tags": [],
@@ -1583,6 +1610,61 @@
               "type": "_Bool",
               "tags": [],
               "doc": "When true, an ambiguity fails the check too."
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "declare_transient",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares that the value of cid lives only within the phase it is written in. A system whose every write is transient and that no system of its phase reads is culled: it keeps its place in the order but does not run, and what it read no longer keeps its writers running.",
+          "return_doc": "KE_OK, or KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.",
+          "params": [
+            {
+              "name": "cid",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_runtime *"
+        },
+        {
+          "name": "describe_phase",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Builds the order of phase as the next tick would, culled systems included, in registration order.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the phase is unknown or holds more than \u0060capacity\u0060 systems; the code check_order reports when the order cannot be built.",
+          "params": [
+            {
+              "name": "phase",
+              "type": "ke_phase",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_systems",
+              "type": "ke_runtime_system_order *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives one entry per system of the phase."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": "The number of entries \u0060out_systems\u0060 holds."
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of systems of the phase."
             }
           ],
           "receiver": "ke_runtime *"

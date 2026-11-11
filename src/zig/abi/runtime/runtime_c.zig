@@ -134,6 +134,17 @@ pub const ke_runtime_system_params = extern struct {
     exclusive: bool = false,
 };
 
+/// One system of a phase, as the order the runtime built places it.
+pub const ke_runtime_system_order = extern struct {
+    /// The id register_system gave the system.
+    id: ke_system_id = std.mem.zeroes(ke_system_id),
+    /// The wave the system runs in; systems of one wave run concurrently.
+    wave: u32 = std.mem.zeroes(u32),
+    /// The system does not run: everything it writes is transient and no system of the phase that
+    /// runs reads it.
+    culled: bool = std.mem.zeroes(bool),
+};
+
 /// The values a runtime is created with, whatever its implementation, each applied as given.
 pub const ke_runtime_config = extern struct {
     /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
@@ -172,6 +183,13 @@ pub const ke_runtime = extern struct {
     /// component before a system that only reads it, and of two writers with neither order, the one
     /// registered first runs first: an ambiguity.
     check_order: ?*const fn (?*ke_runtime, bool) callconv(.c) abi_result.c.ke_result = null,
+    /// Declares that the value of cid lives only within the phase it is written in. A system whose
+    /// every write is transient and that no system of its phase reads is culled: it keeps its place
+    /// in the order but does not run, and what it read no longer keeps its writers running.
+    declare_transient: ?*const fn (?*ke_runtime, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// Builds the order of phase as the next tick would, culled systems included, in registration
+    /// order.
+    describe_phase: ?*const fn (?*ke_runtime, ke_phase, ?[*]ke_runtime_system_order, u32, ?*u32) callconv(.c) abi_result.c.ke_result = null,
     /// Runs one tick: every sim phase in order, then the render phase. This is where a body that
     /// failed during the tick is answered for.
     tick: ?*const fn (?*ke_runtime, f32) callconv(.c) abi_result.c.ke_result = null,
