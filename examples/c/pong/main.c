@@ -6,8 +6,35 @@
 
 int main(void)
 {
+    const ke_sdk_engine_desc desc = {
+        .task_pool = ke_sdk_task_pool_enki,
+        .file_system = ke_sdk_file_system_std,
+        .io = ke_sdk_io_pool,
+        .configuration = ke_sdk_configuration_toml,
+        .input = ke_sdk_input,
+        .window = ke_sdk_window_glfw,
+        .ecs = ke_sdk_ecs_flecs,
+        .runtime = ke_sdk_runtime,
+        .gpu_device = ke_sdk_gpu_device_webgpu,
+        .render_target = ke_sdk_render_target_webgpu_window,
+        .fonts = ke_sdk_fonts_stb,
+        .assets = ke_sdk_assets,
+        .scene_tree = ke_sdk_scene_tree,
+        .render_service = ke_sdk_render_service,
+        .gbuffer = ke_sdk_gbuffer,
+        .deferred_lighting = ke_sdk_deferred_lighting,
+        .forward = ke_sdk_forward,
+        .tonemap = ke_sdk_tonemap,
+        .ui = ke_sdk_ui,
+        .labels = ke_sdk_labels,
+        .physics = ke_sdk_physics_box2d,
+        .audio = ke_sdk_audio_miniaudio,
+        .actions = ke_sdk_actions,
+        .node_types = ke_sdk_node_types,
+        .scene_files = ke_sdk_scene_files,
+    };
     ke_sdk_engine engine;
-    ke_result made = ke_sdk_engine_create(&ke_sdk_engine_defaults, "pong", &engine);
+    ke_result made = ke_sdk_engine_create(&desc, "pong", &engine);
     if (made == KE_OK)
     {
         pong_game game = { .types = engine.node_types.ref };

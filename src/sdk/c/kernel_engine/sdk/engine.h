@@ -45,14 +45,17 @@
 
 /**
  * @file
- * An engine made of the default parts, each configured by the project file's section for it, with any
- * part swapped for a function of the caller's that makes it from the parts made before it.
+ * An engine made of the parts a game lists, each by a function that makes it from the parts made before it:
+ * one of the functions here, each configured by the project file's section for its part, or one of the game's.
  */
 
 /** The bytes each path an engine keeps can hold. */
 #define KE_SDK_ENGINE_PATH_CAPACITY 1024
 
-/** The render service and every pass the default renderer composes. */
+/**
+ * The render service, the parts every pass is built on, and the passes. The resources a pass writes start
+ * as KE_COMPONENT_INVALID, which a pass reading them meets with the neutral one when their pass is not made.
+ */
 typedef struct ke_sdk_renderer
 {
     ke_render_resource_binder_handle   binder;
@@ -69,12 +72,16 @@ typedef struct ke_sdk_renderer
     ke_render_tonemap_handle           tonemap;
     ke_render_ui_handle                ui;
     ke_render_label_resolve_handle     labels;
+    ke_render_context                  context;
+    ke_render_shadow_resources         shadow_resources;
+    ke_render_cluster_resources        cluster_resources;
+    ke_render_gbuffer_resources        gbuffer_resources;
 } ke_sdk_renderer;
 
 /**
  * Every part of an engine, each an owner its part function wrote, and the paths they are made from. A part
- * function reads the parts made before its own and writes its own; ke_sdk_engine_destroy releases each one
- * whose ref is set, the last made first.
+ * function reads the parts made before its own and writes its own; a part whose function is NULL is not made
+ * and its owner stays empty. ke_sdk_engine_destroy releases each one whose ref is set, the last made first.
  */
 typedef struct ke_sdk_engine
 {
@@ -112,7 +119,7 @@ typedef struct ke_sdk_engine
  */
 typedef ke_result (*ke_sdk_engine_part)(ke_sdk_engine *engine);
 
-/** The function each part of an engine is made by, in the order they are made. */
+/** The function each part of an engine is made by, in the order they are made; NULL leaves the part out. */
 typedef struct ke_sdk_engine_desc
 {
     ke_sdk_engine_part task_pool;
@@ -128,7 +135,15 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part fonts;
     ke_sdk_engine_part assets;
     ke_sdk_engine_part scene_tree;
-    ke_sdk_engine_part renderer;
+    ke_sdk_engine_part render_service;
+    ke_sdk_engine_part shadow;
+    ke_sdk_engine_part cluster;
+    ke_sdk_engine_part gbuffer;
+    ke_sdk_engine_part deferred_lighting;
+    ke_sdk_engine_part forward;
+    ke_sdk_engine_part tonemap;
+    ke_sdk_engine_part ui;
+    ke_sdk_engine_part labels;
     ke_sdk_engine_part physics;
     ke_sdk_engine_part audio;
     ke_sdk_engine_part actions;
@@ -140,25 +155,25 @@ typedef struct ke_sdk_engine_desc
 static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return e->configuration.ref; }
 
 /** An enkiTS pool with one worker per hardware thread. */
-static inline ke_result ke_sdk_default_task_pool(ke_sdk_engine *e)
+static inline ke_result ke_sdk_task_pool_enki(ke_sdk_engine *e)
 {
     return ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &e->task_pool);
 }
 
 /** The operating system's files, relative to the working directory. */
-static inline ke_result ke_sdk_default_file_system(ke_sdk_engine *e)
+static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
 {
     return ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &e->file_system);
 }
 
 /** Reads through the task pool. */
-static inline ke_result ke_sdk_default_io(ke_sdk_engine *e)
+static inline ke_result ke_sdk_io_pool(ke_sdk_engine *e)
 {
     return ke_io_pool_create(e->task_pool.ref, e->file_system.ref, &e->io);
 }
 
 /** The configuration, loaded from the file Project in the project directory. */
-static inline ke_result ke_sdk_default_configuration(ke_sdk_engine *e)
+static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
 {
     char project_file[KE_SDK_ENGINE_PATH_CAPACITY + 16];
     snprintf(project_file, sizeof project_file, "%s/Project", e->project_dir);
@@ -169,13 +184,13 @@ static inline ke_result ke_sdk_default_configuration(ke_sdk_engine *e)
 }
 
 /** The input every window event reaches. */
-static inline ke_result ke_sdk_default_input(ke_sdk_engine *e)
+static inline ke_result ke_sdk_input(ke_sdk_engine *e)
 {
     return ke_input_create(&e->input);
 }
 
 /** A GLFW window titled and sized by `runtime.window`. */
-static inline ke_result ke_sdk_default_window(ke_sdk_engine *e)
+static inline ke_result ke_sdk_window_glfw(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
     const ke_window_config config = {
@@ -188,13 +203,13 @@ static inline ke_result ke_sdk_default_window(ke_sdk_engine *e)
 }
 
 /** A flecs world. */
-static inline ke_result ke_sdk_default_ecs(ke_sdk_engine *e)
+static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 {
     return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
 }
 
 /** The runtime, its timestep from `runtime`. */
-static inline ke_result ke_sdk_default_runtime(ke_sdk_engine *e)
+static inline ke_result ke_sdk_runtime(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
     const ke_runtime_config config = {
@@ -206,13 +221,13 @@ static inline ke_result ke_sdk_default_runtime(ke_sdk_engine *e)
 }
 
 /** A WebGPU device. */
-static inline ke_result ke_sdk_default_gpu_device(ke_sdk_engine *e)
+static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
     return ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &e->gpu_device);
 }
 
 /** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
-static inline ke_result ke_sdk_default_render_target(ke_sdk_engine *e)
+static inline ke_result ke_sdk_render_target_webgpu_window(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
     const bool mailbox = strcmp(c->get_string(c, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
@@ -221,25 +236,25 @@ static inline ke_result ke_sdk_default_render_target(ke_sdk_engine *e)
 }
 
 /** stb_truetype fonts. */
-static inline ke_result ke_sdk_default_fonts(ke_sdk_engine *e)
+static inline ke_result ke_sdk_fonts_stb(ke_sdk_engine *e)
 {
     return ke_font_loader_stb_create(e->io.ref, &e->fonts);
 }
 
 /** Assets resolved under the project directory. */
-static inline ke_result ke_sdk_default_assets(ke_sdk_engine *e)
+static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 {
     return ke_asset_resolver_create(NULL, e->fonts.ref, e->project_dir, e->io.ref, &e->assets);
 }
 
 /** The scene tree. */
-static inline ke_result ke_sdk_default_scene_tree(ke_sdk_engine *e)
+static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
     return ke_scene_tree_create(e->ecs.ref, e->runtime.ref, &e->scene_tree);
 }
 
-/** The render service, cleared to `render.clear_color`, and the deferred and forward passes, the tonemap, the UI and its labels. */
-static inline ke_result ke_sdk_default_renderer(ke_sdk_engine *e)
+/** The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on. */
+static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
     ke_sdk_renderer *r = &e->renderer;
@@ -262,26 +277,69 @@ static inline ke_result ke_sdk_default_renderer(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_render_scene_resolve_create(e->runtime.ref, e->ecs.ref, r->service.ref, NULL, &r->scene);
     if (made == KE_OK) made = ke_render_frame_create(e->runtime.ref, e->ecs.ref, r->service.ref, r->camera.ref, r->scene.ref, &r->frame);
     if (made != KE_OK) return made;
-    const ke_render_context context = {
+    r->context = (ke_render_context){
         .runtime = e->runtime.ref, .ecs = e->ecs.ref, .service = r->service.ref, .device = gpu, .view_space = r->view_space.ref,
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
-    ke_render_shadow_resources shadow;
-    ke_render_cluster_resources clusters;
-    ke_render_gbuffer_resources gbuffer;
-    made = ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow);
-    if (made == KE_OK) made = ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster);
-    if (made == KE_OK) made = ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer);
-    if (made == KE_OK) made = ke_render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
-    if (made == KE_OK) made = ke_render_forward_create(&context, &shadow, &clusters, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
-    if (made == KE_OK) made = ke_render_tonemap_create(&context, &r->tonemap);
-    if (made == KE_OK) made = ke_render_ui_create(&context, &r->ui);
-    if (made == KE_OK) made = ke_render_label_resolve_create(&context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
-    return made;
+    return KE_OK;
+}
+
+/** A directional shadow map 1024 texels wide over a 20-unit area. */
+static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow_resources, &r->shadow);
+}
+
+/** Point and spot lights clustered on a 16 by 9 by 24 grid, 64 to a cluster. */
+static inline ke_result ke_sdk_cluster(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster_resources, &r->cluster);
+}
+
+/** The gbuffer the opaque meshes and sprites are drawn into. */
+static inline ke_result ke_sdk_gbuffer(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_gbuffer_create(&r->context, &r->gbuffer_resources, &r->gbuffer);
+}
+
+/** The gbuffer lit, with the sky's image-based light, the shadow and the clustered lights there are. */
+static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_deferred_lighting_create(&r->context, &r->gbuffer_resources, &r->shadow_resources, &r->cluster_resources, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+}
+
+/** The transparent meshes, lit as the deferred pass lights the opaque ones. */
+static inline ke_result ke_sdk_forward(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_forward_create(&r->context, &r->shadow_resources, &r->cluster_resources, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+}
+
+/** The frame's color mapped to the screen's range. */
+static inline ke_result ke_sdk_tonemap(ke_sdk_engine *e)
+{
+    return ke_render_tonemap_create(&e->renderer.context, &e->renderer.tonemap);
+}
+
+/** The UI drawn over the frame. */
+static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
+{
+    return ke_render_ui_create(&e->renderer.context, &e->renderer.ui);
+}
+
+/** The labels' text, laid out with the project's default font, drawn by the UI. */
+static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = &e->renderer;
+    return ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
 }
 
 /** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
-static inline ke_result ke_sdk_default_physics(ke_sdk_engine *e)
+static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
     const ke_physics_2d_config config = {
@@ -294,7 +352,7 @@ static inline ke_result ke_sdk_default_physics(ke_sdk_engine *e)
 }
 
 /** miniaudio, and the module playing the sound components, their clips under the project directory. */
-static inline ke_result ke_sdk_default_audio(ke_sdk_engine *e)
+static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
     if (made == KE_OK) made = ke_sound_module_create(e->runtime.ref, e->ecs.ref, e->audio.ref, &(ke_sound_module_config){ .root = e->project_dir }, &e->sounds);
@@ -302,45 +360,22 @@ static inline ke_result ke_sdk_default_audio(ke_sdk_engine *e)
 }
 
 /** The action maps of the configuration's `input` section. */
-static inline ke_result ke_sdk_default_actions(ke_sdk_engine *e)
+static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
     return ke_input_actions_create(e->runtime.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
 }
 
 /** The node types. */
-static inline ke_result ke_sdk_default_node_types(ke_sdk_engine *e)
+static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
     return ke_node_types_create(e->runtime.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
 }
 
 /** The scene files. */
-static inline ke_result ke_sdk_default_scene_files(ke_sdk_engine *e)
+static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 {
     return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, &e->scene_files);
 }
-
-/** Every default part; copy it and replace the parts the game makes its own way. */
-static const ke_sdk_engine_desc ke_sdk_engine_defaults = {
-    .task_pool = ke_sdk_default_task_pool,
-    .file_system = ke_sdk_default_file_system,
-    .io = ke_sdk_default_io,
-    .configuration = ke_sdk_default_configuration,
-    .input = ke_sdk_default_input,
-    .window = ke_sdk_default_window,
-    .ecs = ke_sdk_default_ecs,
-    .runtime = ke_sdk_default_runtime,
-    .gpu_device = ke_sdk_default_gpu_device,
-    .render_target = ke_sdk_default_render_target,
-    .fonts = ke_sdk_default_fonts,
-    .assets = ke_sdk_default_assets,
-    .scene_tree = ke_sdk_default_scene_tree,
-    .renderer = ke_sdk_default_renderer,
-    .physics = ke_sdk_default_physics,
-    .audio = ke_sdk_default_audio,
-    .actions = ke_sdk_default_actions,
-    .node_types = ke_sdk_default_node_types,
-    .scene_files = ke_sdk_default_scene_files,
-};
 
 /** Releases the owner @p handle when it holds a part, and leaves it empty. */
 #define KE_SDK_ENGINE_RELEASE(handle) do { if ((handle).ref) (handle).destroy((handle).ref); (handle).ref = NULL; } while (0)
@@ -396,8 +431,8 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
 
 /**
  * Makes every part of an engine through @p desc, in the order its fields list them, from the project
- * directory @p project beside the executable, then registers the engine's node types. On failure the
- * parts already made are released.
+ * directory @p project beside the executable, then registers the engine's node types when the node types
+ * are made. A part whose function is NULL is left out. On failure the parts already made are released.
  * @param project [utf8] The project directory's name beside the executable; its shaders are `shaders` there.
  * @return KE_OK, KE_RESULT_NOT_FOUND when the executable's directory is unknown, or the code of the part that failed.
  */
@@ -412,12 +447,13 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     const ke_sdk_engine_part parts[] = {
         desc->task_pool, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
         desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
-        desc->renderer, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
+        desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
+        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
     };
     ke_result made = KE_OK;
     for (size_t i = 0; made == KE_OK && i < sizeof parts / sizeof parts[0]; ++i)
-        made = parts[i] ? parts[i](out) : KE_RESULT_INVALID_ARGUMENT;
-    for (size_t i = 0; made == KE_OK && i < KE_ENGINE_NODE_TYPE_COUNT; ++i)
+        if (parts[i]) made = parts[i](out);
+    for (size_t i = 0; made == KE_OK && out->node_types.ref && i < KE_ENGINE_NODE_TYPE_COUNT; ++i)
     {
         ke_component_id type = KE_COMPONENT_INVALID;
         made = out->node_types.ref->register_type(out->node_types.ref, &ke_engine_node_types[i], &type);
@@ -438,10 +474,12 @@ static inline double ke_sdk_engine_now(void)
  * Opens the scene file at @p first_scene, or the one of the project's scenes directory `project.default_scene`
  * names, and ticks until the window closes or a node asks to exit.
  * @param first_scene [utf8,optional] A `res://` path; NULL takes the project's default scene.
- * @return KE_OK, or the code of the open or the tick that failed.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a runtime or
+ *         scene files, or the code of the open or the tick that failed.
  */
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
+    if (!engine->configuration.ref || !engine->window.ref || !engine->runtime.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
     ke_configuration *c = ke_sdk_engine_config(engine);
     char scene[KE_SDK_ENGINE_PATH_CAPACITY];
     if (first_scene) snprintf(scene, sizeof scene, "%s", first_scene);
