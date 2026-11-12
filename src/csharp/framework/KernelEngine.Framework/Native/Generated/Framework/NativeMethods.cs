@@ -11,7 +11,6 @@ using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Runtime.Native;
 using KernelEngine.Scheduler.Native;
 using KernelEngine.Text.Native;
 
@@ -21,7 +20,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, ke_scene_tree_handle* out_tree);
+    public static extern KernelEngine.Result.Native.Result scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_scheduler *")] KernelEngine.Scheduler.Native.ke_scheduler* scheduler, [NativeTypeName("const ke_scene_tree_config *")] ke_scene_tree_config* config, ke_scene_tree_handle* out_tree);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

@@ -3,6 +3,8 @@
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_files.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_scene_hierarchy_config),
+    offsetof(ke_scene_hierarchy_config, set),
     sizeof(ke_node_component),
     offsetof(ke_node_component, component),
     offsetof(ke_node_component, data),

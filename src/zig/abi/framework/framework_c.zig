@@ -3,12 +3,16 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_scheduler = @import("scheduler");
 
 pub const ke_scene_hierarchy = opaque {};
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
+pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
+pub const ke_scheduler_system_id = u64;
+pub const ke_set_id = u32;
 
 pub const KE_ACTION_NAME_MAX = 32;
 /// The longest path a scene slot holds, its terminator included.
@@ -21,10 +25,22 @@ pub const KE_COMPONENT_NAME_SCENE_SLOT = "scene_slot";
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
+/// One call of a system body, once per run of its phase, or once per slice when the system is
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
+pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// The values the scene hierarchy is created with.
+pub const ke_scene_hierarchy_config = extern struct {
+    /// The set the propagation system joins; its phase must run after transforms are written and
+    /// before world transforms are read.
+    set: ke_set_id = std.mem.zeroes(ke_set_id),
+};
 
 /// A component a spawned node starts with in place of its type's initial value.
 pub const ke_node_component = extern struct {
@@ -108,9 +124,7 @@ pub const ke_scene_slot_component = extern struct {
     loaded: [256]u8 = std.mem.zeroes([256]u8),
 };
 
-/// Owner wrapper: destroy releases the ordering buffers. The system is registered for the
-/// runtime's lifetime, so destroy the hierarchy only once [owner] the runtime it was created
-/// against is done ticking.
+/// Destroy unregisters the system and releases the ordering buffers.
 pub const ke_scene_hierarchy_handle = extern struct {
     ref: ?*ke_scene_hierarchy = std.mem.zeroes(?*ke_scene_hierarchy),
     destroy: ?*const fn (?*ke_scene_hierarchy) callconv(.c) void = null,

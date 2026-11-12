@@ -53,26 +53,26 @@ pub fn inputActionsCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, input: ?*ab
     return written;
 }
 
-/// Registers the hierarchy flattening and transform propagation systems against `runtime`,
-/// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the
-/// names a scene_tree already registers them under, so a scene_tree must exist on this ecs
-/// first; creating a hierarchy without one fails as not found. `runtime` must outlive the
-/// hierarchy, whose destroy unregisters what it registered.
-pub fn sceneHierarchyCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs) Error!abi_framework.c.ke_scene_hierarchy_handle {
+/// Registers the hierarchy flattening and transform propagation system in the config's set of
+/// `scheduler`, reading the scene graph out of `ecs`. The transform/hierarchy components are
+/// resolved by the names a scene_tree already registers them under, so a scene_tree must exist
+/// on this ecs first; creating a hierarchy without one fails as not found. `scheduler` must
+/// outlive the hierarchy, whose destroy unregisters what it registered.
+pub fn sceneHierarchyCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, config: ?*const abi_framework.c.ke_scene_hierarchy_config) Error!abi_framework.c.ke_scene_hierarchy_handle {
     var written: abi_framework.c.ke_scene_hierarchy_handle = undefined;
-    try checkResult(c.ke_scene_hierarchy_create(runtime, ecs, &written));
+    try checkResult(c.ke_scene_hierarchy_create(scheduler, ecs, config, &written));
     return written;
 }
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
-/// them, the existing cids are reused). `runtime` may be NULL, in which case no systems are
+/// them, the existing cids are reused). `scheduler` may be NULL, in which case no systems are
 /// registered and the caller is responsible for calling propagate_transforms itself. Passing one
-/// registers the hierarchy maintenance that keeps world matrices current, and that runtime must
-/// outlive the tree, whose destroy unregisters it.
-pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) Error!abi_scene_tree.c.ke_scene_tree_handle {
+/// registers, in the config's set, the hierarchy maintenance that keeps world matrices current,
+/// and that scheduler must outlive the tree, whose destroy unregisters it.
+pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, config: ?*const abi_scene_tree.c.ke_scene_tree_config) Error!abi_scene_tree.c.ke_scene_tree_handle {
     var written: abi_scene_tree.c.ke_scene_tree_handle = undefined;
-    try checkResult(c.ke_scene_tree_create(ecs, runtime, &written));
+    try checkResult(c.ke_scene_tree_create(ecs, scheduler, config, &written));
     return written;
 }
 

@@ -2,6 +2,7 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 
 using NodeStress;
@@ -13,7 +14,9 @@ uint workers = (uint)ArgValue("--workers", 0);
 using var pool = new EnkiTaskPool(new KernelEngine.TaskPool.TaskPoolConfig { WorkerCount = workers });
 using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
 using var runtime = new DefaultRuntime(ecs, pool, new KernelEngine.Runtime.RuntimeConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f, MaxSystemsPerPhase = 256 });
-using var tree = new DefaultSceneTree(ecs, runtime);
+using var scheduler = new DefaultScheduler(ecs, pool, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+var propagation = scheduler.RegisterSet("post_update", scheduler.RegisterPhase("post_update", PhaseCadence.EveryTick), []);
+using var tree = new DefaultSceneTree(ecs, scheduler, new() { Set = propagation });
 using var types = new DefaultNodeTypes(runtime, ecs, tree);
 
 var world = new NodeWorld(types);
@@ -30,11 +33,11 @@ types.Spawn(commands, listener, "Listener", default);
 Console.WriteLine($"[19_node_stress] {instances} movers, {instances / 10} raisers, {ticks} ticks, {pool.GetNumWorkers()} workers");
 
 const float dt = 1f / 60f;
-for (var i = 0; i < 30; i++) runtime.Tick(dt);
+for (var i = 0; i < 30; i++) { runtime.Tick(dt); scheduler.Tick(dt); }
 Listener.Heard = 0;
 
 var clock = System.Diagnostics.Stopwatch.StartNew();
-for (var i = 0; i < ticks; i++) runtime.Tick(dt);
+for (var i = 0; i < ticks; i++) { runtime.Tick(dt); scheduler.Tick(dt); }
 clock.Stop();
 
 Console.WriteLine($"[19_node_stress] {clock.Elapsed.TotalMilliseconds / ticks:F3} ms/tick");

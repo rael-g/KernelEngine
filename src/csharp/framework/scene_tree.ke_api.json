@@ -210,6 +210,72 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_scheduler_access",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_SCHEDULER_ACCESS_READ",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_SCHEDULER_ACCESS_WRITE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_lifetime",
+      "doc": "How long the value of an id lasts. A system whose every write has a lifetime shorter than persistent, and that no running system reads within that lifetime, is culled.",
+      "values": [
+        {
+          "name": "KE_LIFETIME_PERSISTENT",
+          "value": 0,
+          "doc": "The value outlives every run; writing it is an effect no cull removes."
+        },
+        {
+          "name": "KE_LIFETIME_PHASE",
+          "value": 1,
+          "doc": "The value lives from the run of the phase it is written in to the end of that run."
+        },
+        {
+          "name": "KE_LIFETIME_UNTIL_READ",
+          "value": 2,
+          "doc": "The value lives until every phase whose systems read it has run since it was written. Its writer runs while a system of any phase reads it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_phase_cadence",
+      "doc": "When a phase runs within the ticks of a scheduler.",
+      "values": [
+        {
+          "name": "KE_PHASE_CADENCE_EVERY_TICK",
+          "value": 0,
+          "doc": "Once per tick, with the tick\u0027s dt."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_FIXED",
+          "value": 1,
+          "doc": "Once per fixed step, as many steps as the tick\u0027s time covers, with the fixed dt. Fixed phases registered one after another run together, in order, at each step."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_STARTUP",
+          "value": 2,
+          "doc": "Once, before every other phase of the first tick, with a dt of zero."
+        },
+        {
+          "name": "KE_PHASE_CADENCE_SHUTDOWN",
+          "value": 3,
+          "doc": "Once, when the scheduler shuts down after a tick ran, with a dt of zero."
+        }
+      ],
+      "external": true
     }
   ],
   "structs": [
@@ -666,6 +732,268 @@
         }
       ],
       "external": true
+    },
+    {
+      "name": "ke_id_access",
+      "doc": "One id a system touches, and how. Two systems conflict when they name the same id and at least one writes it; conflicting systems never run in the same wave.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "ke_scheduler_access",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_query_desc",
+      "doc": "A query a system reads through: components matched together, each with its access.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "terms",
+          "type": "const ke_id_access *",
+          "tags": [
+            "array_of:term_count"
+          ],
+          "doc": "The terms the query matches together."
+        },
+        {
+          "name": "term_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_phase_desc",
+      "doc": "A phase: a group of systems run together, wave by wave. A tick runs the phases in the order they were registered, each when its cadence says.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the phase in diagnostics."
+        },
+        {
+          "name": "cadence",
+          "type": "ke_phase_cadence",
+          "tags": [],
+          "doc": "When the phase runs."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_set_desc",
+      "doc": "An ordering set: a named anchor of one phase that systems join and that is ordered against other sets of the phase.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the set in diagnostics."
+        },
+        {
+          "name": "phase",
+          "type": "ke_phase_id",
+          "tags": [],
+          "doc": "The phase whose systems the set orders."
+        },
+        {
+          "name": "after",
+          "type": "const ke_set_id *",
+          "tags": [
+            "array_of:after_count"
+          ],
+          "doc": "Sets of the same phase whose systems all run before this set\u0027s."
+        },
+        {
+          "name": "after_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_system_desc",
+      "doc": "A system: a body, the sets it joins and what it touches. It runs in the phase of its sets.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Identifies the system in diagnostics and in the failure its body raises."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded unchanged to every call of the body."
+        },
+        {
+          "name": "execute",
+          "type": "ke_scheduler_execute_fn",
+          "tags": [
+            "closure:user_data",
+            "retained:return"
+          ],
+          "doc": "The body."
+        },
+        {
+          "name": "queries",
+          "type": "const ke_query_desc *",
+          "tags": [
+            "array_of:query_count"
+          ],
+          "doc": "Queries the body reads through ke_scheduler_ctx.view."
+        },
+        {
+          "name": "query_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "const ke_id_access *",
+          "tags": [
+            "array_of:access_count"
+          ],
+          "doc": "Ids the system touches that no query term covers."
+        },
+        {
+          "name": "access_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "sets",
+          "type": "const ke_set_id *",
+          "tags": [
+            "array_of:set_count"
+          ],
+          "doc": "The sets the system joins, at least one, all of one phase."
+        },
+        {
+          "name": "set_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "per_entity",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The body\u0027s work on one entity is independent of every other; the scheduler may run it as several concurrent slices of the same entity set."
+        },
+        {
+          "name": "exclusive",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The body runs alone at the start of its phase, and what it records is applied before the other systems of the phase run. Its access does not order it."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_system_order",
+      "doc": "One system of a phase, as the built order places it.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "id",
+          "type": "ke_scheduler_system_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "wave",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The wave the system runs in; systems of one wave run concurrently."
+        },
+        {
+          "name": "culled",
+          "type": "_Bool",
+          "tags": [],
+          "doc": "The system does not run: nothing that runs reads what it writes within its lifetime."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_config",
+      "doc": "What a scheduler is created with, each field applied as given.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "fixed_dt",
+          "type": "float",
+          "tags": [],
+          "doc": "The dt of a fixed step, in seconds; greater than zero."
+        },
+        {
+          "name": "fixed_dt_max_accum",
+          "type": "float",
+          "tags": [],
+          "doc": "The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped; greater than zero."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scene_tree_config",
+      "doc": "The values a scene tree is created with.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "set",
+          "type": "ke_set_id",
+          "tags": [],
+          "doc": "The set the hierarchy the tree owns registers its system in, when a scheduler is given."
+        }
+      ]
     }
   ],
   "vtables": [
@@ -1182,6 +1510,368 @@
       "external": true
     },
     {
+      "name": "ke_scheduler",
+      "doc": "Orders systems by what they touch and the sets they join, and runs their phases tick by tick across the task pool.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "register_phase",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a phase.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_phase_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_phase_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the phase\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "register_set",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers an ordering set.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown phase or a set of \u0060after\u0060 from another phase; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_set_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_set_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the set\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "register_system",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Registers a system. From a body, it takes effect with the next tick.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name or body, no set, an unknown set or sets of two phases; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_system_desc *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_id",
+              "type": "ke_scheduler_system_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the system\u0027s id."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "unregister_system",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Removes a system. From a body, it takes effect with the next tick.",
+          "return_doc": "KE_OK, or KE_RESULT_NOT_FOUND when no system has that id.",
+          "params": [
+            {
+              "name": "id",
+              "type": "ke_scheduler_system_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "declare_lifetime",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares the lifetime of id; an id never declared is persistent.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown lifetime; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "id",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "lifetime",
+              "type": "ke_lifetime",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "declare_exclusive",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when group equals member; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "group",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "member",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "build",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Builds the order of every phase whose registrations changed since the last build; tick builds the same way. Within a phase, the systems of a set run after those of the sets it follows, a writer of an id before its readers, and of two writers with no other order, the one registered first: an ambiguity.",
+          "return_doc": "KE_OK; KE_RESULT_GENERAL when an order has a cycle or a refused ambiguity, the systems involved named in the log; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "refuse_ambiguity",
+              "type": "_Bool",
+              "tags": [],
+              "doc": "When true, an ambiguity fails the build."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "describe_phase",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The built order of phase, in registration order.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown phase or too small a capacity; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with.",
+          "params": [
+            {
+              "name": "phase",
+              "type": "ke_phase_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_systems",
+              "type": "ke_system_order *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives one entry per system of the phase."
+            },
+            {
+              "name": "capacity",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the number of systems of the phase."
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "tick",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Applies what was recorded into commands, then runs the phases in registration order: on the first tick the startup phases first, then each every-tick phase, and each block of fixed phases once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body or after shutdown; the code build fails with; the code a body or its commands failed with.",
+          "params": [
+            {
+              "name": "dt",
+              "type": "float",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "shutdown",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body failed with.",
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "request_exit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Records that the program should end; any body or the caller may ask, from any thread.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "exit_requested",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether a request to end the program was recorded.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "commands",
+          "returns": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue the caller of tick records structural changes into between ticks; the next tick applies it first. Only the thread that calls tick records into it.",
+          "return_doc": "The queue, owned by the scheduler.",
+          "params": [],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "ke_scheduler *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_scheduler *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_scheduler_ctx",
+      "doc": "What one call of a system body is given: the entities its queries resolved to, its share of them, and the queue it records structural changes into. It means nothing outside the call.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "commands",
+          "type": "ke_ecs_commands *",
+          "tags": [],
+          "doc": "The queue the body records structural changes into, applied when its wave ends."
+        }
+      ],
+      "slots": [
+        {
+          "name": "view",
+          "returns": "const ke_ecs_segment *",
+          "tags": [],
+          "doc": "The resolved segments of the query at query_index, valid for the call.",
+          "return_doc": "The segments; NULL for an index past the system\u0027s queries.",
+          "params": [
+            {
+              "name": "query_index",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "return_tags": [
+            "array_of:out_count"
+          ],
+          "receiver": "ke_scheduler_ctx *"
+        },
+        {
+          "name": "slice",
+          "returns": "void",
+          "tags": [],
+          "doc": "Which share of its entity set this call owns: *out_index in [0, *out_count). A system that is not per_entity always gets index 0 of count 1.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "out_index",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "uint32_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_scheduler_ctx *"
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_scene_tree",
       "doc": null,
       "tags": [],
@@ -1480,6 +2170,33 @@
           "doc": null
         }
       ]
+    },
+    {
+      "name": "ke_scheduler_execute_fn",
+      "returns": "ke_result",
+      "doc": "One call of a system body, once per run of its phase, or once per slice when the system is per_entity. A failure is carried to the thread that called tick, which fails with it; the rest of the wave still runs, and no later wave or phase starts.",
+      "lanes": [
+        {
+          "name": "ctx",
+          "type": "ke_scheduler_ctx *",
+          "tags": [],
+          "doc": "The body\u0027s only doorway to component memory for this call."
+        },
+        {
+          "name": "user_data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from register_system."
+        },
+        {
+          "name": "dt",
+          "type": "float",
+          "tags": [],
+          "doc": "The tick\u0027s dt, the fixed dt in a fixed phase, zero at startup and shutdown."
+        }
+      ]
     }
   ],
   "id_types": [],
@@ -1491,6 +2208,10 @@
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
     "ke_query_id": "uint64_t",
-    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)"
+    "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
+    "ke_phase_id": "uint32_t",
+    "ke_set_id": "uint32_t",
+    "ke_scheduler_system_id": "uint64_t",
+    "ke_scheduler_execute_fn": "ke_result (*)(ke_scheduler_ctx *, void *, float)"
   }
 }

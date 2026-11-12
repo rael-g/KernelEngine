@@ -3,15 +3,30 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_scheduler = @import("scheduler");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
+pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
+pub const ke_scheduler_system_id = u64;
+pub const ke_set_id = u32;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of its phase, or once per slice when the system is
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
+pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// The values a scene tree is created with.
+pub const ke_scene_tree_config = extern struct {
+    /// The set the hierarchy the tree owns registers its system in, when a scheduler is given.
+    set: ke_set_id = std.mem.zeroes(ke_set_id),
+};
 
 pub const ke_scene_tree = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),

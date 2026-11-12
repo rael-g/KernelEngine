@@ -104,7 +104,7 @@ public sealed class EngineBuilder
         var target = Own(new WebgpuWindowGpuRenderTarget(log, gpu, window, new() { PresentMode = mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo }));
         var fonts = Own(new StbFontLoader(log, io));
         var assets = Own(new DefaultAssetResolver(log, null, fonts, _projectDir, io));
-        var tree = Own(new DefaultSceneTree(log, ecs, runtime));
+        var tree = Own(new DefaultSceneTree(log, ecs, scheduler, new() { Set = sets.PostUpdate }));
 
         var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
         var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, new() { ShaderDir = shaderDir }));

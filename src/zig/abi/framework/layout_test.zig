@@ -23,6 +23,7 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_scene_hierarchy_config, translated("ke_scene_hierarchy_config"));
     try expectSameLayout(abi.c.ke_node_component, translated("ke_node_component"));
     try expectSameLayout(abi.c.ke_node_with, translated("ke_node_with"));
     try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
@@ -38,7 +39,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_node_behaviour_fn")) try expectSameLayout(abi.c.ke_node_behaviour_fn, c.ke_node_behaviour_fn);
+    if (@hasDecl(c, "ke_phase_id")) try expectSameLayout(abi.c.ke_phase_id, c.ke_phase_id);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
+    if (@hasDecl(c, "ke_scheduler_execute_fn")) try expectSameLayout(abi.c.ke_scheduler_execute_fn, c.ke_scheduler_execute_fn);
+    if (@hasDecl(c, "ke_scheduler_system_id")) try expectSameLayout(abi.c.ke_scheduler_system_id, c.ke_scheduler_system_id);
+    if (@hasDecl(c, "ke_set_id")) try expectSameLayout(abi.c.ke_set_id, c.ke_set_id);
 }
 
 test "every constant is the header's value" {
@@ -48,11 +53,13 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SCENE_SLOT, abi.c.KE_COMPONENT_NAME_SCENE_SLOT);
 }
 
-extern const layout_values: [83]c_ulonglong;
+extern const layout_values: [85]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_scene_hierarchy_config),
+        @offsetOf(abi.c.ke_scene_hierarchy_config, "set"),
         @sizeOf(abi.c.ke_node_component),
         @offsetOf(abi.c.ke_node_component, "component"),
         @offsetOf(abi.c.ke_node_component, "data"),

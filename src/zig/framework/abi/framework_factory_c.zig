@@ -73,6 +73,11 @@ pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
+/// One call of a behaviour over the nodes of its type. The body walks them with next, which
+/// points self and fields at each node in turn; an on handler walks every pair of a node and an
+/// event, with event pointing at the event.
+pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
 /// Registers the module's components and systems against the runtime it is being loaded into.
 /// Runs inside register_module, before that call returns.
 pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
@@ -86,11 +91,6 @@ pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopa
 /// runtime logs the system's name. The remaining bodies of the same wave still run — they were
 /// already dispatched — but no later phase of that tick starts.
 pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// One call of a behaviour over the nodes of its type. The body walks them with next, which
-/// points self and fields at each node in turn; an on handler walks every pair of a node and an
-/// event, with event pointing at the event.
-pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
@@ -113,20 +113,20 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// evaluates the maps against its snapshot; destroying the maps unregisters it.
 pub extern fn ke_input_actions_create(scheduler: ?*abi_scheduler.c.ke_scheduler, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
-/// Registers the hierarchy flattening and transform propagation systems against `runtime`,
-/// reading the scene graph out of `ecs`. The transform/hierarchy components are resolved by the
-/// names a scene_tree already registers them under, so a scene_tree must exist on this ecs
-/// first; creating a hierarchy without one fails as not found. `runtime` must outlive the
-/// hierarchy, whose destroy unregisters what it registered.
-pub extern fn ke_scene_hierarchy_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle) abi_result.c.ke_result;
+/// Registers the hierarchy flattening and transform propagation system in the config's set of
+/// `scheduler`, reading the scene graph out of `ecs`. The transform/hierarchy components are
+/// resolved by the names a scene_tree already registers them under, so a scene_tree must exist
+/// on this ecs first; creating a hierarchy without one fails as not found. `scheduler` must
+/// outlive the hierarchy, whose destroy unregisters what it registered.
+pub extern fn ke_scene_hierarchy_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, config: ?*const abi_framework.c.ke_scene_hierarchy_config, out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle) abi_result.c.ke_result;
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
-/// them, the existing cids are reused). `runtime` may be NULL, in which case no systems are
+/// them, the existing cids are reused). `scheduler` may be NULL, in which case no systems are
 /// registered and the caller is responsible for calling propagate_transforms itself. Passing one
-/// registers the hierarchy maintenance that keeps world matrices current, and that runtime must
-/// outlive the tree, whose destroy unregisters it.
-pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
+/// registers, in the config's set, the hierarchy maintenance that keeps world matrices current,
+/// and that scheduler must outlive the tree, whose destroy unregisters it.
+pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, config: ?*const abi_scene_tree.c.ke_scene_tree_config, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
 
 /// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
 /// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component

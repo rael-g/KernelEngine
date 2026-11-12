@@ -300,7 +300,7 @@ static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 /** The scene tree. */
 static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
-    return ke_scene_tree_create(e->ecs.ref, e->runtime.ref, &e->scene_tree);
+    return ke_scene_tree_create(e->ecs.ref, e->scheduler.ref, &(ke_scene_tree_config){ .set = e->sets.post_update }, &e->scene_tree);
 }
 
 /** The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on. */

@@ -639,6 +639,7 @@
         "src/c/ecs/kernel_engine/ecs/ecs.h"
       ],
       "includeDirs": [
+        "src/c/scheduler",
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
@@ -725,6 +726,7 @@
         "src/c/framework/kernel_engine/framework/node_types.h"
       ],
       "includeDirs": [
+        "src/c/scheduler",
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
@@ -749,6 +751,7 @@
         "src/c/framework/kernel_engine/framework/node_types.h"
       ],
       "includeDirs": [
+        "src/c/scheduler",
         "src/c/framework",
         "src/zig/framework/include",
         "src/c/ecs",
@@ -770,6 +773,7 @@
         "src/c/framework/kernel_engine/framework/engine_node_types.h"
       ],
       "includeDirs": [
+        "src/c/scheduler",
         "src/c/framework",
         "src/c/audio",
         "src/c/physics",
