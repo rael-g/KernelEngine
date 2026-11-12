@@ -187,6 +187,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_schedule", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     const runtime = ctx.member("ke_runtime", .{
         .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
         .target = target,

@@ -320,6 +320,35 @@
       "library": "ke_scheduler"
     },
     {
+      "name": "schedule",
+      "providers": [
+        "ke_schedule_ctx"
+      ],
+      "headers": [
+        "src/c/schedule/kernel_engine/schedule/schedule.h",
+        "src/zig/schedule/include/kernel_engine/schedule/schedule_create.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h"
+      ],
+      "includeDirs": [
+        "src/c/schedule",
+        "src/zig/schedule/include",
+        "src/c/ecs",
+        "src/c/task_pool",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/schedule/ke_api.json",
+      "namespace": "KernelEngine.Schedule",
+      "nativeNamespace": "KernelEngine.Schedule.Native",
+      "outDir": "src/csharp/schedule/KernelEngine.Schedule/Generated",
+      "abstractionsOutDir": "src/csharp/schedule/KernelEngine.Schedule.Abstractions/Generated",
+      "usings": ["KernelEngine.TaskPool.Native", "KernelEngine.Ecs", "KernelEngine.Ecs.Native"],
+      "library": "ke_schedule"
+    },
+    {
       "name": "ecs",
       "providers": [
         "ke_ecs_commands"
@@ -891,6 +920,7 @@
     { "name": "resource_cache_default_factory", "packageDir": "src/zig/resource_cache/default/abi", "headers": ["src/zig/resource_cache/default/include/kernel_engine/resource_cache/default/resource_cache_default_create.h", "src/zig/resource_cache/default/include/kernel_engine/resource_cache/default/resource_cache_default_log.h"], "includeDirs": ["src/c/logger", "src/c/resource_cache", "src/zig/resource_cache/default/include", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/runtime", "src/c/scheduler", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "runtime_factory", "packageDir": "src/zig/runtime/abi", "headers": ["src/zig/runtime/include/kernel_engine/runtime/runtime_create.h", "src/zig/runtime/include/kernel_engine/runtime/runtime_log.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/zig/runtime/include", "src/c/task_pool", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "scheduler_factory", "packageDir": "src/zig/scheduler/abi", "headers": ["src/zig/scheduler/include/kernel_engine/scheduler/scheduler_create.h", "src/zig/scheduler/include/kernel_engine/scheduler/scheduler_log.h"], "includeDirs": ["src/c/scheduler", "src/c/ecs", "src/c/task_pool", "src/c/math", "src/c/result", "src/zig/common/include", "src/zig/scheduler/include", "src/c/logger"] },
+    { "name": "schedule_factory", "packageDir": "src/zig/schedule/abi", "headers": ["src/zig/schedule/include/kernel_engine/schedule/schedule_create.h", "src/zig/schedule/include/kernel_engine/schedule/schedule_log.h"], "includeDirs": ["src/c/schedule", "src/c/ecs", "src/c/task_pool", "src/c/math", "src/c/result", "src/zig/common/include", "src/zig/schedule/include", "src/c/logger"] },
     { "name": "task_pool_enki_factory", "packageDir": "src/zig/task_pool/enki/abi", "headers": ["src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/enki_task_pool.h", "src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/task_pool_enki_log.h"], "includeDirs": ["src/c/logger", "src/c/result", "src/c/task_pool", "src/zig/task_pool/enki/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "text_stb_truetype_factory", "packageDir": "src/zig/text/stb_truetype/abi", "headers": ["src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/stb_font.h", "src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/text_stb_truetype_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/text", "src/zig/text/stb_truetype/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/spatial", "src/c/task_pool", "src/c/view", "src/c/window"] },
     { "name": "view_space_factory", "packageDir": "src/zig/view/space/abi", "headers": ["src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_log.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/view", "src/zig/view/space/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/task_pool", "src/c/text", "src/c/window"] },
@@ -958,7 +988,7 @@
     },
 
     "fieldTables": {},
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule"] }
   },
   "bindings": [
     {
@@ -1431,6 +1461,18 @@
       ],
       "library": "ke_scheduler",
       "output": "Generated/Scheduler/"
+    },
+    {
+      "name": "Schedule",
+      "project": "src/csharp/schedule/KernelEngine.Schedule",
+      "namespace": "KernelEngine.Schedule.Native",
+      "headers": [
+        "src/c/schedule/kernel_engine/schedule/schedule.h",
+        "src/zig/schedule/include/kernel_engine/schedule/schedule_create.h",
+        "src/zig/schedule/include/kernel_engine/schedule/schedule_log.h"
+      ],
+      "library": "ke_schedule",
+      "output": "Generated/Schedule/"
     },
     {
       "name": "Enki",

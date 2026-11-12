@@ -603,6 +603,47 @@ ke_scheduler_ctx size=32 align=8
   view 16
   slice 24
 
+[schedule]
+ke_schedule_set_desc size=24 align=8
+  name 0
+  after 8
+  after_count 16
+ke_schedule_system_desc size=80 align=8
+  name 0
+  user_data 8
+  execute 16
+  condition 24
+  queries 32
+  query_count 40
+  access 48
+  access_count 56
+  sets 64
+  set_count 72
+  per_entity 76
+  exclusive 77
+ke_schedule_system_order size=16 align=8
+  id 0
+  wave 8
+  ambiguous 12
+ke_schedule size=72 align=8
+  handle 0
+  register_set 8
+  register_system 16
+  unregister_system 24
+  declare_exclusive 32
+  build 40
+  describe 48
+  run 56
+  commands 64
+ke_schedule_handle size=16 align=8
+  ref 0
+  destroy 8
+ke_schedule_ctx size=32 align=8
+  handle 0
+  commands 8
+  view 16
+  slice 24
+
 [ecs]
 ke_component_field size=64 align=8
   name 0

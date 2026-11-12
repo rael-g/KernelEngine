@@ -15,6 +15,7 @@
         .ke_task_pool_enki = .{ .path = "src/zig/task_pool/enki" },
         .ke_runtime = .{ .path = "src/zig/runtime" },
         .ke_scheduler = .{ .path = "src/zig/scheduler" },
+        .ke_schedule = .{ .path = "src/zig/schedule" },
         .ke_framework = .{ .path = "src/zig/framework" },
         .ke_window_glfw = .{ .path = "src/zig/window/glfw" },
         .ke_asset_stb_image = .{ .path = "src/zig/asset/stb_image" },
