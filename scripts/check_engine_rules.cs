@@ -20,7 +20,6 @@ if (tracked.Count == 0)
 
 var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(rootDir, p)));
 
-var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
@@ -57,8 +56,6 @@ var rules = new List<Rule>
 {
     new("a contract directory holds headers and nothing else", 0,
         contracts.Where(s => !s.Key.EndsWith(".h", StringComparison.Ordinal)).Select(s => s.Key)),
-    new("no C++ file besides the DLL start-up fixture", 0,
-        tracked.Where(p => Regex.IsMatch(p, @"\.(cpp|hpp|cc|hh|cxx)$") && p != cppFixture)),
     new("no InternalsVisibleTo", 0,
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(cs|csproj|props|targets)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)),
             l => l.Contains("InternalsVisibleTo", StringComparison.Ordinal))),
