@@ -6,7 +6,7 @@ using global::KernelEngine.Logger;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Physics.Native;
 

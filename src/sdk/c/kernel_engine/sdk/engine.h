@@ -397,7 +397,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
         .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
     };
     ke_result made = ke_physics_2d_box2d_create(&config, &e->physics);
-    if (made == KE_OK) made = ke_physics_body2d_module_create(e->runtime.ref, e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
+    if (made == KE_OK) made = ke_physics_body2d_module_create(e->scheduler.ref, e->ecs.ref, e->physics.ref, e->scene_tree.ref, &(ke_physics_body2d_module_config){ .set = e->sets.fixed_post_update }, &e->bodies);
     return made;
 }
 

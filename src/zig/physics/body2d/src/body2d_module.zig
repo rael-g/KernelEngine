@@ -16,7 +16,7 @@ const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_physics_body2d_factory = @import("abi_physics_body2d_factory");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_scheduler = @import("abi_scheduler");
 const abi_spatial = @import("abi_spatial");
 
 const heap = @import("heap");
@@ -34,18 +34,19 @@ const Tracked = struct {
 /// `update` counts the body system's runs, so a body whose entity no longer holds it is found.
 const Module = struct {
     physics: *abi_physics.c.ke_physics_2d,
-    runtime: *abi_runtime.c.ke_runtime,
+    scheduler: *abi_scheduler.c.ke_scheduler,
     tree: *abi_scene_tree.c.ke_scene_tree,
     body_generation: u64 = 0,
     attempt: ?Attempt = null,
-    body_system: abi_runtime.c.ke_system_id = 0,
-    collider_system: abi_runtime.c.ke_system_id = 0,
+    body_system: abi_scheduler.c.ke_scheduler_system_id = 0,
+    collider_system: abi_scheduler.c.ke_scheduler_system_id = 0,
+    set: [1]abi_scheduler.c.ke_set_id = .{0},
     tracked: std.AutoHashMapUnmanaged(abi_asset_resolver.c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
-    body_queries_terms: [2]abi_runtime.c.ke_component_access = undefined,
-    body_queries: [1]abi_runtime.c.ke_query_decl = undefined,
-    collider_queries_terms: [4]abi_runtime.c.ke_component_access = undefined,
-    collider_queries: [3]abi_runtime.c.ke_query_decl = undefined,
+    body_queries_terms: [2]abi_scheduler.c.ke_id_access = undefined,
+    body_queries: [1]abi_scheduler.c.ke_query_desc = undefined,
+    collider_queries_terms: [4]abi_scheduler.c.ke_id_access = undefined,
+    collider_queries: [3]abi_scheduler.c.ke_query_desc = undefined,
 };
 
 /// What the collider system last tried to attach against: the tree's hierarchy generation, the
@@ -71,7 +72,7 @@ const R = @import("result").Result(.{});
 /// on the next update; nothing is written to the error output and the system still returns true.
 /// Before the step, a recorded body whose entity no longer holds it, destroyed or stripped of the
 /// component, is destroyed.
-fn bodySystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
+fn bodySystem(ctx: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
     const m = moduleOf(user);
     const p = m.physics;
     m.update += 1;
@@ -164,7 +165,7 @@ fn destroyUnseen(m: *Module) void {
 
 /// Counts the colliders and those still unattached, so `colliderSystem` can return before it
 /// builds any index.
-fn countColliders(ctx: ?*abi_runtime.c.ke_system_ctx) struct { total: usize, unattached: usize } {
+fn countColliders(ctx: ?*abi_scheduler.c.ke_scheduler_ctx) struct { total: usize, unattached: usize } {
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 0, &segc);
     var total: usize = 0;
@@ -190,7 +191,7 @@ fn countColliders(ctx: ?*abi_runtime.c.ke_system_ctx) struct { total: usize, una
 /// before the first fixture is added, so an out-of-memory failure, reported through the error
 /// output, leaves every collider unattached. A shape that resolves to no body, or whose fixture the
 /// world refuses, is logged and stays unattached; neither is reported through the error output.
-fn colliderSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
+fn colliderSystem(ctx: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
     _ = dt;
     const m = moduleOf(user);
     const p = m.physics;
@@ -284,13 +285,13 @@ fn findBody(
 }
 
 /// The `destroy` slot of the handle `ke_physics_body2d_module_create` returns, called by the owner
-/// of that handle. Its two systems are unregistered from the runtime and the bodies the module
-/// created are destroyed with it, so the runtime and the physics world it was given must still be
+/// of that handle. Its two systems are unregistered from the scheduler and the bodies the module
+/// created are destroyed with it, so the scheduler and the physics world it was given must still be
 /// alive.
 fn destroyHandle(self: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
-    _ = m.runtime.unregister_system.?(m.runtime, m.collider_system);
-    _ = m.runtime.unregister_system.?(m.runtime, m.body_system);
+    _ = m.scheduler.unregister_system.?(m.scheduler, m.collider_system);
+    _ = m.scheduler.unregister_system.?(m.scheduler, m.body_system);
     var it = m.tracked.valueIterator();
     while (it.next()) |t| m.physics.destroy_body.?(m.physics, t.body);
     m.tracked.deinit(gpa);
@@ -298,34 +299,36 @@ fn destroyHandle(self: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module) 
 }
 
 /// Registers the component ids with the ECS, then the body system and the collider system, both in
-/// the fixed post-update phase, after the fixed update where scripts write. Fails with invalid
-/// argument for a missing argument, out of memory for a failed allocation, and the runtime's code
+/// the config's set. Fails with invalid
+/// argument for a missing argument, out of memory for a failed allocation, and the scheduler's code
 /// for a system it refuses. On success, the handle's `destroy` frees the module.
 export fn ke_physics_body2d_module_create(
-    runtime: ?*abi_runtime.c.ke_runtime,
+    scheduler: ?*abi_scheduler.c.ke_scheduler,
     ecs: ?*abi_ecs.c.ke_ecs,
     physics: ?*abi_physics.c.ke_physics_2d,
     scene_tree: ?*abi_scene_tree.c.ke_scene_tree,
+    config: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_config,
     out_module: ?*abi_physics_body2d_factory.c.ke_physics_body2d_module_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    out.* = create(runtime, ecs, physics, scene_tree) catch |err| {
+    out.* = create(scheduler, ecs, physics, scene_tree, config) catch |err| {
         log.warn("creating the body2d module failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(runtime: ?*abi_runtime.c.ke_runtime, ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree) R.Error!abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
-    const rt = runtime orelse return error.InvalidArgument;
+fn create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs_in: ?*abi_ecs.c.ke_ecs, physics_in: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, config: ?*const abi_physics_body2d_factory.c.ke_physics_body2d_module_config) R.Error!abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
+    const rt = scheduler orelse return error.InvalidArgument;
+    const given = config orelse return error.InvalidArgument;
     const ecs = ecs_in orelse return error.InvalidArgument;
     const physics = physics_in orelse return error.InvalidArgument;
     const tree = scene_tree orelse return error.InvalidArgument;
 
     const m = gpa.create(Module) catch return error.OutOfMemory;
     errdefer gpa.destroy(m);
-    m.* = .{ .physics = physics, .runtime = rt, .tree = tree };
+    m.* = .{ .physics = physics, .scheduler = rt, .tree = tree, .set = .{given.set} };
 
     var body_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_physics_contract.c.KE_COMPONENT_NAME_BODY2D, .size = @sizeOf(abi_physics_components.c.ke_body2d_component), .alignment = @alignOf(abi_physics_components.c.ke_body2d_component), .fields = &abi_physics_contract.c.ke_body2d_component_fields, .field_count = abi_physics_contract.c.ke_body2d_component_fields.len }, &body_cid));
@@ -336,31 +339,35 @@ fn create(runtime: ?*abi_runtime.c.ke_runtime, ecs_in: ?*abi_ecs.c.ke_ecs, physi
     var hierarchy_cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_framework_components.c.KE_COMPONENT_NAME_HIERARCHY, .size = @sizeOf(abi_framework_components.c.ke_hierarchy_component), .alignment = @alignOf(abi_framework_components.c.ke_hierarchy_component), .fields = null, .field_count = 0 }, &hierarchy_cid));
 
-    const rd = abi_runtime.c.KE_ACCESS_READ;
-    const wr = abi_runtime.c.KE_ACCESS_WRITE;
-    m.body_queries_terms = .{ .{ .cid = body_cid, .access = wr }, .{ .cid = transform_cid, .access = wr } };
+    const rd = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ;
+    const wr = abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE;
+    m.body_queries_terms = .{ .{ .id = body_cid, .access = wr }, .{ .id = transform_cid, .access = wr } };
     m.body_queries = .{ .{ .terms = m.body_queries_terms[0..].ptr, .term_count = 2 } };
 
-    var sp = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    sp.name = "physics.body2d";
-    sp.phase = abi_runtime.c.KE_PHASE_FIXED_POST_UPDATE;
-    sp.queries = &m.body_queries;
-    sp.query_count = m.body_queries.len;
-    sp.user_data = m;
-    sp.execute = bodySystem;
+    const sp: abi_scheduler.c.ke_system_desc = .{
+        .name = "physics.body2d",
+        .user_data = m,
+        .execute = bodySystem,
+        .queries = &m.body_queries,
+        .query_count = m.body_queries.len,
+        .sets = &m.set,
+        .set_count = 1,
+    };
     m.body_system = 0;
     try R.check(rt.*.register_system.?(rt, &sp, &m.body_system));
     errdefer _ = rt.*.unregister_system.?(rt, m.body_system);
-    m.collider_queries_terms = .{ .{ .cid = collider_cid, .access = wr }, .{ .cid = transform_cid, .access = rd }, .{ .cid = body_cid, .access = rd }, .{ .cid = hierarchy_cid, .access = rd } };
+    m.collider_queries_terms = .{ .{ .id = collider_cid, .access = wr }, .{ .id = transform_cid, .access = rd }, .{ .id = body_cid, .access = rd }, .{ .id = hierarchy_cid, .access = rd } };
     m.collider_queries = .{ .{ .terms = m.collider_queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = m.collider_queries_terms[2..].ptr, .term_count = 1 }, .{ .terms = m.collider_queries_terms[3..].ptr, .term_count = 1 } };
 
-    var cp = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    cp.name = "physics.collider2d";
-    cp.phase = abi_runtime.c.KE_PHASE_FIXED_POST_UPDATE;
-    cp.queries = &m.collider_queries;
-    cp.query_count = m.collider_queries.len;
-    cp.user_data = m;
-    cp.execute = colliderSystem;
+    const cp: abi_scheduler.c.ke_system_desc = .{
+        .name = "physics.collider2d",
+        .user_data = m,
+        .execute = colliderSystem,
+        .queries = &m.collider_queries,
+        .query_count = m.collider_queries.len,
+        .sets = &m.set,
+        .set_count = 1,
+    };
     m.collider_system = 0;
     try R.check(rt.*.register_system.?(rt, &cp, &m.collider_system));
 
@@ -370,7 +377,7 @@ fn create(runtime: ?*abi_runtime.c.ke_runtime, ecs_in: ?*abi_ecs.c.ke_ecs, physi
 const testing = std.testing;
 
 const Deps = struct {
-    runtime: ?*abi_runtime.c.ke_runtime = null,
+    scheduler: ?*abi_scheduler.c.ke_scheduler = null,
     ecs: ?*abi_ecs.c.ke_ecs = null,
     physics: ?*abi_physics.c.ke_physics_2d = null,
     scene_tree: ?*abi_scene_tree.c.ke_scene_tree = null,
@@ -378,14 +385,14 @@ const Deps = struct {
 
 fn made(deps: *const Deps) !abi_physics_body2d_factory.c.ke_physics_body2d_module_handle {
     var h: abi_physics_body2d_factory.c.ke_physics_body2d_module_handle = undefined;
-    try R.check(ke_physics_body2d_module_create(deps.runtime, deps.ecs, deps.physics, deps.scene_tree, &h));
+    try R.check(ke_physics_body2d_module_create(deps.scheduler, deps.ecs, deps.physics, deps.scene_tree, &.{ .set = 0 }, &h));
     return h;
 }
 
 const zsub = @import("zsub");
 
 const EcsSub = zsub.For(abi_ecs.c.ke_ecs);
-const RuntimeSub = zsub.For(abi_runtime.c.ke_runtime);
+const RuntimeSub = zsub.For(abi_scheduler.c.ke_scheduler);
 
 fn substituteEcs(ecs: *EcsSub) !void {
     try ecs.init();
@@ -434,7 +441,7 @@ test "creating and destroying the body2d module leaves no block allocated and no
     var physics = std.mem.zeroes(abi_physics.c.ke_physics_2d);
 
     var params: Deps = .{};
-    params.runtime = rt.api();
+    params.scheduler = rt.api();
     params.ecs = ecs.api();
     params.physics = &physics;
     var tree: Tree = undefined;
@@ -448,7 +455,7 @@ test "creating and destroying the body2d module leaves no block allocated and no
     try heap.expectNoLeaks();
 }
 
-test "a body2d module missing its runtime, ecs, physics or scene tree is refused" {
+test "a body2d module missing its scheduler, ecs, physics or scene tree is refused" {
     var ecs: EcsSub = undefined;
     try substituteEcs(&ecs);
     defer ecs.deinit();
@@ -459,7 +466,7 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
 
     var params: Deps = .{};
     try testing.expect(std.meta.isError(made(&params)));
-    params.runtime = rt.api();
+    params.scheduler = rt.api();
     try testing.expect(std.meta.isError(made(&params)));
     params.ecs = ecs.api();
     try testing.expect(std.meta.isError(made(&params)));
@@ -473,7 +480,7 @@ test "a body2d module missing its runtime, ecs, physics or scene tree is refused
     try heap.expectNoLeaks();
 }
 
-test "a body2d module the runtime refuses a system of fails the create and leaves no system registered" {
+test "a body2d module the scheduler refuses a system of fails the create and leaves no system registered" {
     var ecs: EcsSub = undefined;
     try substituteEcs(&ecs);
     defer ecs.deinit();
@@ -485,7 +492,7 @@ test "a body2d module the runtime refuses a system of fails the create and leave
         defer rt.deinit();
         _ = rt.when(.register_system).returnsSeq(answers);
         var params: Deps = .{};
-        params.runtime = rt.api();
+        params.scheduler = rt.api();
         params.ecs = ecs.api();
         params.physics = &physics;
         var tree: Tree = undefined;
@@ -560,7 +567,7 @@ const BodyView = struct {
     var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var live: usize = 1;
 
-    fn view(_: [*c]abi_runtime.c.ke_system_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+    fn view(_: [*c]abi_scheduler.c.ke_scheduler_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
         segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
         segment.count = live;
         segment.entities = &entities;
@@ -581,8 +588,8 @@ test "a body whose entity no longer holds it is destroyed on the next update" {
     const m = try gpa.create(Module);
     var tree: Tree = undefined;
     tree.init();
-    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    m.* = .{ .physics = &physics, .scheduler = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(abi_scheduler.c.ke_scheduler_ctx);
     ctx.view = BodyView.view;
 
     BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);
@@ -613,8 +620,8 @@ test "a pending impulse is applied once before the step and cleared" {
     const m = try gpa.create(Module);
     var tree: Tree = undefined;
     tree.init();
-    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    m.* = .{ .physics = &physics, .scheduler = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(abi_scheduler.c.ke_scheduler_ctx);
     ctx.view = BodyView.view;
 
     BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);
@@ -643,7 +650,7 @@ const OrphanView = struct {
     var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var hierarchy_reads: usize = 0;
 
-    fn view(_: [*c]abi_runtime.c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+    fn view(_: [*c]abi_scheduler.c.ke_scheduler_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
         segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
         segment.entities = &entities;
         segment.count = 1;
@@ -669,8 +676,8 @@ test "a collider with no body above it is retried only once the hierarchy has mo
     var tree: Tree = undefined;
     tree.init();
     const m = try gpa.create(Module);
-    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    m.* = .{ .physics = &physics, .scheduler = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(abi_scheduler.c.ke_scheduler_ctx);
     ctx.view = OrphanView.view;
 
     OrphanView.colliders[0] = std.mem.zeroes(abi_physics_components.c.ke_collider2d_component);
@@ -699,8 +706,8 @@ test "destroying the module destroys the bodies it created" {
     const m = try gpa.create(Module);
     var tree: Tree = undefined;
     tree.init();
-    m.* = .{ .physics = &physics, .runtime = rt.api(), .tree = tree.api() };
-    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    m.* = .{ .physics = &physics, .scheduler = rt.api(), .tree = tree.api() };
+    var ctx = std.mem.zeroes(abi_scheduler.c.ke_scheduler_ctx);
     ctx.view = BodyView.view;
 
     BodyView.bodies[0] = std.mem.zeroes(abi_physics_components.c.ke_body2d_component);

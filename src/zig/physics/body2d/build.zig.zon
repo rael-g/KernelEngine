@@ -15,7 +15,7 @@
         .abi_physics = .{ .path = "../../abi/physics" },
         .abi_math = .{ .path = "../../abi/math" },
         .abi_result = .{ .path = "../../abi/result" },
-        .abi_runtime = .{ .path = "../../abi/runtime" },
+        .abi_scheduler = .{ .path = "../../abi/scheduler" },
         .abi_spatial = .{ .path = "../../abi/spatial" },
         .abi_physics_body2d_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
