@@ -80,6 +80,12 @@ pub const Schedule = struct {
                     return T.commands(state);
                 }
             }.call,
+            .reads = &struct {
+                fn call(self: ?*c.ke_schedule, a0: c.ke_component_id) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.reads(state, a0);
+                }
+            }.call,
         };
     }
 
@@ -131,6 +137,12 @@ pub const Schedule = struct {
     /// first. Only the thread that calls run records into it.
     pub fn commands(self: Schedule) ?*abi_ecs.c.ke_ecs_commands {
         return self.ptr.commands.?(self.ptr);
+    }
+
+    /// Whether a registered system reads component, through a query term or its access; a system
+    /// registered from a body counts from the next run. Callable from a body.
+    pub fn reads(self: Schedule, component: c.ke_component_id) bool {
+        return self.ptr.reads.?(self.ptr, component);
     }
 
     /// Creates a schedule over ecs and task_pool, both borrowed for its lifetime.

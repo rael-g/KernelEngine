@@ -41,7 +41,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
-extern const layout_values: [40]c_ulonglong;
+extern const layout_values: [41]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -77,6 +77,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_schedule, "describe"),
         @offsetOf(abi.c.ke_schedule, "run"),
         @offsetOf(abi.c.ke_schedule, "commands"),
+        @offsetOf(abi.c.ke_schedule, "reads"),
         @sizeOf(abi.c.ke_schedule_handle),
         @offsetOf(abi.c.ke_schedule_handle, "ref"),
         @offsetOf(abi.c.ke_schedule_handle, "destroy"),

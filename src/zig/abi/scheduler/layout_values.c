@@ -12,6 +12,8 @@ const unsigned long long layout_values[] = {
     offsetof(ke_scheduler, shutdown),
     offsetof(ke_scheduler, request_exit),
     offsetof(ke_scheduler, exit_requested),
+    offsetof(ke_scheduler, sequence),
+    offsetof(ke_scheduler, expired),
     sizeof(ke_scheduler_handle),
     offsetof(ke_scheduler_handle, ref),
     offsetof(ke_scheduler_handle, destroy),

@@ -33,6 +33,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_schedule, describe),
     offsetof(ke_schedule, run),
     offsetof(ke_schedule, commands),
+    offsetof(ke_schedule, reads),
     sizeof(ke_schedule_handle),
     offsetof(ke_schedule_handle, ref),
     offsetof(ke_schedule_handle, destroy),

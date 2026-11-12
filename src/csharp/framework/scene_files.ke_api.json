@@ -1864,6 +1864,22 @@
             "borrowed"
           ],
           "receiver": "ke_schedule *"
+        },
+        {
+          "name": "reads",
+          "returns": "bool",
+          "tags": [],
+          "doc": "Whether a registered system reads component, through a query term or its access; a system registered from a body counts from the next run. Callable from a body.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_schedule *"
         }
       ],
       "external": true

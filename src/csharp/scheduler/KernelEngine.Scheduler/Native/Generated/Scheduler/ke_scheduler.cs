@@ -27,4 +27,10 @@ public unsafe partial struct ke_scheduler
 
     [NativeTypeName("bool (*)(ke_scheduler *)")]
     public delegate* unmanaged[Cdecl]<ke_scheduler*, bool> exit_requested;
+
+    [NativeTypeName("uint64_t (*)(ke_scheduler *)")]
+    public delegate* unmanaged[Cdecl]<ke_scheduler*, ulong> sequence;
+
+    [NativeTypeName("bool (*)(ke_scheduler *, ke_component_id, uint64_t)")]
+    public delegate* unmanaged[Cdecl]<ke_scheduler*, global::KernelEngine.Ecs.ComponentId, ulong, bool> expired;
 }

@@ -4,6 +4,7 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Ecs;
 using KernelEngine.Schedule;
 
 namespace KernelEngine.Scheduler;
@@ -25,4 +26,8 @@ public interface IScheduler : IDisposable
     void RequestExit();
     /// <summary>Whether a request to end the program was recorded.</summary>
     bool ExitRequested();
+    /// <summary>The number of the schedule run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
+    ulong Sequence();
+    /// <summary>Whether every added schedule that reads component completed a run numbered stamp or later; true when no schedule reads it. Called from a body or between ticks.</summary>
+    bool Expired(ComponentId component, ulong stamp);
 }

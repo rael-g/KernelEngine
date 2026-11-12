@@ -314,7 +314,7 @@
       "nativeNamespace": "KernelEngine.Scheduler.Native",
       "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
       "abstractionsOutDir": "src/csharp/scheduler/KernelEngine.Scheduler.Abstractions/Generated",
-      "usings": ["KernelEngine.Schedule", "KernelEngine.Schedule.Native"],
+      "usings": ["KernelEngine.Ecs", "KernelEngine.Schedule", "KernelEngine.Schedule.Native"],
       "library": "ke_scheduler"
     },
     {

@@ -597,6 +597,18 @@ fn commands(self: ?*c.ke_schedule) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
     return @ptrCast(&s.host.commands);
 }
 
+/// Slot `reads`. Walks the registered systems, which only the thread calling `run` changes, and only
+/// before the waves start.
+fn reads(self: ?*c.ke_schedule, component: Id) callconv(.c) bool {
+    const s = stateOf(self) orelse return false;
+    for (s.systems.items) |system| {
+        for (system.access) |a| {
+            if (a.component == component and (@as(c_uint, @intCast(a.access)) & abi_ecs.c.KE_ECS_ACCESS_READ) != 0) return true;
+        }
+    }
+    return false;
+}
+
 /// Slot `destroy` of the handle: frees every system, pending or registered, and every declaration.
 fn destroy(self: ?*c.ke_schedule) callconv(.c) void {
     const s = stateOf(self) orelse return;
@@ -631,6 +643,7 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool
             .describe = &describe,
             .run = &run,
             .commands = &commands,
+            .reads = &reads,
         },
         .ecs = ecs.?,
         .pool = task_pool.?,
@@ -1268,6 +1281,26 @@ test "describing reports the count and refuses too small a capacity, and a negat
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.describe.?(rig.sched, &out, 1, &count));
     try testing.expectEqual(2, count);
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(rig.sched, -1));
+}
+
+test "a schedule reads a component a query term or an access entry reads, and not one it only writes" {
+    var rig: Rig = undefined;
+    try rig.init(1);
+    defer rig.deinit();
+    var probe = Probe{};
+    const terms = [_]Term{ term(1, read), term(2, write) };
+    const query = [_]abi_ecs.c.ke_ecs_query_desc{queryOf(&terms, &.{}, &.{})};
+    const access = [_]Term{term(3, read | write)};
+    var desc = rig.desc("reader", &probe);
+    desc.queries = &query;
+    desc.query_count = 1;
+    desc.access = &access;
+    desc.access_count = 1;
+    _ = try rig.add(desc);
+    try testing.expect(rig.sched.reads.?(rig.sched, 1));
+    try testing.expect(!rig.sched.reads.?(rig.sched, 2));
+    try testing.expect(rig.sched.reads.?(rig.sched, 3));
+    try testing.expect(!rig.sched.reads.?(rig.sched, 4));
 }
 
 test "creating a schedule without an ecs or a task pool is refused and leaves the handle zeroed" {

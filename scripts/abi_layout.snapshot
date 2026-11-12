@@ -547,13 +547,15 @@ ke_system_ctx size=32 align=8
 ke_scheduler_config size=8 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
-ke_scheduler size=48 align=8
+ke_scheduler size=64 align=8
   handle 0
   add_schedule 8
   tick 16
   shutdown 24
   request_exit 32
   exit_requested 40
+  sequence 48
+  expired 56
 ke_scheduler_handle size=16 align=8
   ref 0
   destroy 8
@@ -580,7 +582,7 @@ ke_schedule_system_order size=16 align=8
   id 0
   wave 8
   ambiguous 12
-ke_schedule size=72 align=8
+ke_schedule size=80 align=8
   handle 0
   register_set 8
   register_system 16
@@ -590,6 +592,7 @@ ke_schedule size=72 align=8
   describe 48
   run 56
   commands 64
+  reads 72
 ke_schedule_handle size=16 align=8
   ref 0
   destroy 8

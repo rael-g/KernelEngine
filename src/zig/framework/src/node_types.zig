@@ -22,6 +22,10 @@ const Entity = abi_ecs.c.ke_entity;
 const Cid = abi_ecs.c.ke_component_id;
 const invalid = abi_ecs.c.KE_ENTITY_INVALID;
 const status_name = "node_status";
+const stamp_name = "node_event_stamp";
+
+/// The number of the schedule run an event was raised in, which decides when it expires.
+const EventStamp = extern struct { sequence: u64 };
 const base_type_name = "node";
 const scene_slot_name = "scene_slot";
 const scene_slot_path_field = "path";
@@ -63,11 +67,12 @@ const Type = struct {
 /// A registered event type, and the system of the pre-update set that destroys the events of the
 /// last tick.
 const Event = struct {
+    owner: *State,
     cid: Cid,
     size: usize,
     system: abi_schedule.c.ke_schedule_system_id = 0,
     name: [:0]u8,
-    terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    terms: [2]abi_ecs.c.ke_ecs_query_term = undefined,
     queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
@@ -90,6 +95,7 @@ const State = struct {
     tree: *abi_scene_tree.c.ke_scene_tree,
     actions: ?*abi_input_actions.c.ke_input_actions,
     status_cid: Cid,
+    stamp_cid: Cid,
     name_cid: Cid,
     types: std.ArrayList(*Type) = .empty,
     events: std.ArrayList(*Event) = .empty,
@@ -484,9 +490,12 @@ fn raise(ctx: ?*abi_framework.c.ke_node_ctx, event_cid: Cid, data: ?*const anyop
     }
     const commands = w.api.commands;
     var entity: Entity = invalid;
-    const rc = commands.?.spawn.?(commands, &entity);
+    var rc = commands.?.spawn.?(commands, &entity);
     if (rc != R.ok) return rc;
-    return commands.?.attach.?(commands, entity, e.cid, data, size);
+    rc = commands.?.attach.?(commands, entity, e.cid, data, size);
+    if (rc != R.ok) return rc;
+    const stamp: EventStamp = .{ .sequence = s.loop.sequence.?(s.loop) };
+    return commands.?.attach.?(commands, entity, s.stamp_cid, &stamp, @sizeOf(EventStamp));
 }
 
 fn viewOf(sys: ?*abi_schedule.c.ke_schedule_ctx, query: u32) []const abi_ecs.c.ke_ecs_segment {
@@ -541,11 +550,17 @@ fn behaviourSystem(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, dt:
 }
 
 /// The PreUpdate system of an event type: records the destruction of every event of the type.
-fn clearEvents(sys: ?*abi_schedule.c.ke_schedule_ctx, _: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+/// The body of an event's clearing system: despawns the events of its type that every schedule
+/// reading the type has seen.
+fn clearEvents(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const e: *Event = @ptrCast(@alignCast(user orelse return R.ok));
+    const loop = e.owner.loop;
     const commands = sys.?.commands;
     for (viewOf(sys, 0)) |seg| {
-        for (seg.entities.?[0..seg.count]) |e| {
-            const rc = commands.?.despawn.?(commands, e);
+        const stamps: [*]const EventStamp = @ptrCast(@alignCast(seg.columns.?[1].?));
+        for (seg.entities.?[0..seg.count], stamps[0..seg.count]) |entity, stamp| {
+            if (!loop.expired.?(loop, e.cid, stamp.sequence)) continue;
+            const rc = commands.?.despawn.?(commands, entity);
             if (rc != R.ok) return rc;
         }
     }
@@ -722,11 +737,11 @@ fn registerEvent(s: *State, params: *const abi_ecs.c.ke_component_params) R.Erro
     const name = params.name orelse return error.InvalidArgument;
     const e = heap.gpa.create(Event) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(e);
-    e.* = .{ .cid = 0, .size = params.size, .name = heap.gpa.dupeZ(u8, std.mem.span(name)) catch return error.OutOfMemory };
+    e.* = .{ .owner = s, .cid = 0, .size = params.size, .name = heap.gpa.dupeZ(u8, std.mem.span(name)) catch return error.OutOfMemory };
     errdefer heap.gpa.free(e.name);
     try R.check(s.ecs.component_register.?(s.ecs, params, &e.cid));
-    e.terms = .{.{ .component = e.cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
-    e.queries = .{.{ .terms = &e.terms, .term_count = 1 }};
+    e.terms = .{ .{ .component = e.cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }, .{ .component = s.stamp_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ } };
+    e.queries = .{.{ .terms = &e.terms, .term_count = 2 }};
 
     const system_name = std.fmt.allocPrintSentinel(heap.gpa, "{s}.clear", .{e.name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(system_name);
@@ -851,6 +866,14 @@ fn create(schedules: Schedules, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.
         const params: abi_ecs.c.ke_component_params = .{ .name = status_name, .size = @sizeOf(NodeStatus), .alignment = @alignOf(NodeStatus) };
         try R.check(ecs.component_register.?(ecs, &params, &status_cid));
     }
+    var stamp_cid: Cid = 0;
+    var stamp_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    if (ecs.component_lookup.?(ecs, stamp_name, &stamp_meta)) {
+        stamp_cid = stamp_meta.cid;
+    } else {
+        const params: abi_ecs.c.ke_component_params = .{ .name = stamp_name, .size = @sizeOf(EventStamp), .alignment = @alignOf(EventStamp) };
+        try R.check(ecs.component_register.?(ecs, &params, &stamp_cid));
+    }
 
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
@@ -867,6 +890,7 @@ fn create(schedules: Schedules, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.
         .tree = tree,
         .actions = actions,
         .status_cid = status_cid,
+        .stamp_cid = stamp_cid,
         .name_cid = name_meta.cid,
     };
     s.api.handle = s;
@@ -1381,7 +1405,54 @@ test "raise records an entity carrying the event and refuses a size that is not 
     rows.sys.commands = commands.api();
     try runSystem(registered[1], &rows);
     try commands.received(.spawn).times(1);
-    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 30))).times(1);
+    try commands.received(.attach).where(zsub.argIs(1, @as(Entity, 30))).times(2);
+    try f.loop.received(.sequence).times(1);
+}
+
+fn expiredBelowFive(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.expired)) bool {
+    return args[2] < 5;
+}
+
+const EventRows = struct {
+    entities: [2]Entity = .{ 40, 41 },
+    goals: [2]Goal = .{ .{ .left = 1 }, .{ .left = 0 } },
+    stamps: [2]EventStamp = .{ .{ .sequence = 3 }, .{ .sequence = 6 } },
+    columns: [2]?*anyopaque = undefined,
+    segs: [1]abi_ecs.c.ke_ecs_segment = undefined,
+    sys: abi_schedule.c.ke_schedule_ctx = undefined,
+
+    fn build(r: *EventRows) void {
+        r.columns = .{ &r.goals, &r.stamps };
+        r.segs = .{.{ .entities = &r.entities, .count = 2, .columns = &r.columns, .column_count = 2 }};
+        r.sys = .{ .handle = r, .view = &view };
+    }
+
+    fn view(sys: ?*abi_schedule.c.ke_schedule_ctx, _: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+        const r: *EventRows = @ptrCast(@alignCast(sys.?.handle));
+        out_count.?.* = 1;
+        return &r.segs;
+    }
+};
+
+test "clearing despawns only the events every reading schedule has seen" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    _ = f.loop.when(.expired).does(&expiredBelowFive);
+    const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
+    var goal_cid: Cid = 0;
+    try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
+    const clear = registered[0];
+    try testing.expectEqual(2, clear.queries.?[0].term_count);
+    var commands: zsub.For(abi_ecs.c.ke_ecs_commands) = undefined;
+    try commands.init();
+    defer commands.deinit();
+    var rows: EventRows = .{};
+    rows.build();
+    rows.sys.commands = commands.api();
+    try R.check(clear.execute.?(&rows.sys, clear.user_data, 0));
+    try commands.received(.despawn).times(1);
+    try commands.received(.despawn).where(zsub.argIs(1, @as(Entity, 40))).times(1);
 }
 
 fn spawnPaddle(ctx: ?*abi_framework.c.ke_node_ctx, user: ?*anyopaque) callconv(.c) abi_result.c.ke_result {

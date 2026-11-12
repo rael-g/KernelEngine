@@ -44,7 +44,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SCHEDULER_CADENCE_SHUTDOWN), @as(i64, abi.c.KE_SCHEDULER_CADENCE_SHUTDOWN));
 }
 
-extern const layout_values: [14]c_ulonglong;
+extern const layout_values: [16]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -59,6 +59,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_scheduler, "shutdown"),
         @offsetOf(abi.c.ke_scheduler, "request_exit"),
         @offsetOf(abi.c.ke_scheduler, "exit_requested"),
+        @offsetOf(abi.c.ke_scheduler, "sequence"),
+        @offsetOf(abi.c.ke_scheduler, "expired"),
         @sizeOf(abi.c.ke_scheduler_handle),
         @offsetOf(abi.c.ke_scheduler_handle, "ref"),
         @offsetOf(abi.c.ke_scheduler_handle, "destroy"),

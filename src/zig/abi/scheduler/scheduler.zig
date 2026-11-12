@@ -64,6 +64,18 @@ pub const Scheduler = struct {
                     return T.exitRequested(state);
                 }
             }.call,
+            .sequence = &struct {
+                fn call(self: ?*c.ke_scheduler) callconv(.c) u64 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u64)));
+                    return T.sequence(state);
+                }
+            }.call,
+            .expired = &struct {
+                fn call(self: ?*c.ke_scheduler, a0: c.ke_component_id, a1: u64) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.expired(state, a0, a1);
+                }
+            }.call,
         };
     }
 
@@ -93,6 +105,18 @@ pub const Scheduler = struct {
     /// Whether a request to end the program was recorded.
     pub fn exitRequested(self: Scheduler) bool {
         return self.ptr.exit_requested.?(self.ptr);
+    }
+
+    /// The number of the schedule run started last; every run started takes the next number, and
+    /// zero means none started. Readable from any thread; a body stamps what it writes with it.
+    pub fn sequence(self: Scheduler) u64 {
+        return self.ptr.sequence.?(self.ptr);
+    }
+
+    /// Whether every added schedule that reads component completed a run numbered stamp or later;
+    /// true when no schedule reads it. Called from a body or between ticks.
+    pub fn expired(self: Scheduler, component: c.ke_component_id, stamp: u64) bool {
+        return self.ptr.expired.?(self.ptr, component, stamp);
     }
 
     /// Creates a scheduler with no schedule.

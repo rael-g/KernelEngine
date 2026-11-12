@@ -16,14 +16,17 @@ const log = std.log.scoped(.scheduler);
 const c = abi_scheduler.c;
 const gpa = heap.gpa;
 
+/// One added schedule. `completed` is the number of its last run that completed, zero before one.
 const Entry = struct {
     schedule: *abi_schedule.c.ke_schedule,
     cadence: c.ke_scheduler_cadence,
+    completed: std.atomic.Value(u64) = .init(0),
 };
 
 /// The state behind the `ke_scheduler` handle, whose `api.handle` points back at it. `entries` are
 /// the schedules in the order they were added; `accumulated` is the time fixed steps have not yet
-/// consumed. Only `exit` is touched by several threads.
+/// consumed. `sequence` numbers the runs as they start. Bodies read `exit`, `sequence` and each entry's
+/// `completed` while the thread calling tick writes them.
 const State = struct {
     api: c.ke_scheduler,
     entries: std.ArrayList(Entry) = .empty,
@@ -33,6 +36,7 @@ const State = struct {
     started: bool = false,
     shut_down: bool = false,
     exit: std.atomic.Value(bool) = .init(false),
+    sequence: std.atomic.Value(u64) = .init(0),
 };
 
 fn stateOf(self: ?*c.ke_scheduler) ?*State {
@@ -65,16 +69,18 @@ fn append(s: *State, schedule: *abi_schedule.c.ke_schedule, cadence: c.ke_schedu
     try s.entries.append(gpa, .{ .schedule = schedule, .cadence = cadence });
 }
 
-fn runEntry(entry: Entry, dt: f32) R.Error!void {
+fn runEntry(s: *State, entry: *Entry, dt: f32) R.Error!void {
+    const number = s.sequence.fetchAdd(1, .acq_rel) + 1;
     R.check(entry.schedule.run.?(entry.schedule, dt)) catch |err| {
         log.warn("a schedule failed: {t}", .{err});
         return err;
     };
+    entry.completed.store(number, .release);
 }
 
 fn runCadence(s: *State, cadence: c.ke_scheduler_cadence) R.Error!void {
-    for (s.entries.items) |entry| {
-        if (entry.cadence == cadence) try runEntry(entry, 0);
+    for (s.entries.items) |*entry| {
+        if (entry.cadence == cadence) try runEntry(s, entry, 0);
     }
 }
 
@@ -100,14 +106,14 @@ fn tickSchedules(s: *State, dt: f32) R.Error!void {
     while (i < entries.len) {
         switch (entries[i].cadence) {
             c.KE_SCHEDULER_CADENCE_EVERY_TICK => {
-                try runEntry(entries[i], dt);
+                try runEntry(s, &entries[i], dt);
                 i += 1;
             },
             c.KE_SCHEDULER_CADENCE_FIXED => {
                 var end = i;
                 while (end < entries.len and entries[end].cadence == c.KE_SCHEDULER_CADENCE_FIXED) end += 1;
                 for (0..steps) |_| {
-                    for (entries[i..end]) |entry| try runEntry(entry, s.fixed_dt);
+                    for (entries[i..end]) |*entry| try runEntry(s, entry, s.fixed_dt);
                 }
                 i = end;
             },
@@ -142,6 +148,23 @@ fn exitRequested(self: ?*c.ke_scheduler) callconv(.c) bool {
     return s.exit.load(.acquire);
 }
 
+/// Slot `sequence`.
+fn sequence(self: ?*c.ke_scheduler) callconv(.c) u64 {
+    const s = stateOf(self) orelse return 0;
+    return s.sequence.load(.acquire);
+}
+
+/// Slot `expired`. Asks each schedule whether it reads the component; `entries` only grows between
+/// ticks, on the thread calling tick.
+fn expired(self: ?*c.ke_scheduler, component: abi_schedule.c.ke_component_id, stamp: u64) callconv(.c) bool {
+    const s = stateOf(self) orelse return false;
+    for (s.entries.items) |*entry| {
+        if (entry.completed.load(.acquire) >= stamp) continue;
+        if (entry.schedule.reads.?(entry.schedule, component)) return false;
+    }
+    return true;
+}
+
 /// Slot `destroy` of the handle: shuts down for a caller that did not, then frees the state.
 fn destroy(self: ?*c.ke_scheduler) callconv(.c) void {
     const s = stateOf(self) orelse return;
@@ -164,6 +187,8 @@ export fn ke_scheduler_create(config: ?*const c.ke_scheduler_config, out_schedul
             .shutdown = &shutdown,
             .request_exit = &requestExit,
             .exit_requested = &exitRequested,
+            .sequence = &sequence,
+            .expired = &expired,
         },
         .fixed_dt = cfg.fixed_dt,
         .fixed_dt_max_accum = cfg.fixed_dt_max_accum,
@@ -193,13 +218,20 @@ const Fake = struct {
     log: *Log,
     letter: u8,
     fails: bool = false,
+    read: abi_schedule.c.ke_component_id = 0,
 
     fn init(f: *Fake, log_to: *Log, letter: u8) void {
         f.* = .{ .api = std.mem.zeroes(abi_schedule.c.ke_schedule), .log = log_to, .letter = letter };
         f.api.handle = f;
         f.api.run = &fakeRun;
+        f.api.reads = &fakeReads;
     }
 };
+
+fn fakeReads(self: ?*abi_schedule.c.ke_schedule, component: abi_schedule.c.ke_component_id) callconv(.c) bool {
+    const f: *Fake = @ptrCast(@alignCast(self.?.handle.?));
+    return f.read != 0 and f.read == component;
+}
 
 fn fakeRun(self: ?*abi_schedule.c.ke_schedule, dt: f32) callconv(.c) abi_result.c.ke_result {
     const f: *Fake = @ptrCast(@alignCast(self.?.handle.?));
@@ -319,6 +351,35 @@ test "an unknown cadence, a null schedule and a negative dt are refused" {
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add_schedule.?(rig.sched, @ptrCast(&fake.api), 9));
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add_schedule.?(rig.sched, null, every));
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.tick.?(rig.sched, -1));
+}
+
+test "each run takes the next number, and a failed run does not complete" {
+    var rig: Rig = .{ .handle = undefined, .sched = undefined };
+    try rig.init(&.{ every, every });
+    defer rig.deinit();
+    try testing.expectEqual(0, rig.sched.sequence.?(rig.sched));
+    try rig.tick(0);
+    try testing.expectEqual(2, rig.sched.sequence.?(rig.sched));
+    rig.fakes[1].fails = true;
+    try testing.expectEqual(R.code(error.Io), rig.sched.tick.?(rig.sched, 0));
+    try testing.expectEqual(4, rig.sched.sequence.?(rig.sched));
+    rig.fakes[1].read = 9;
+    try testing.expect(!rig.sched.expired.?(rig.sched, 9, 4));
+}
+
+test "a stamp expires once every schedule reading the component completed a run numbered from it, and at once with no reader" {
+    var rig: Rig = .{ .handle = undefined, .sched = undefined };
+    try rig.init(&.{ every, fixed });
+    defer rig.deinit();
+    rig.fakes[1].read = 7;
+    try testing.expect(rig.sched.expired.?(rig.sched, 8, 1));
+    try rig.tick(0);
+    const stamp = rig.sched.sequence.?(rig.sched);
+    try testing.expect(!rig.sched.expired.?(rig.sched, 7, stamp));
+    try rig.tick(0.1);
+    try testing.expect(!rig.sched.expired.?(rig.sched, 7, stamp));
+    try rig.tick(0.2);
+    try testing.expect(rig.sched.expired.?(rig.sched, 7, stamp));
 }
 
 test "a request to exit is recorded and read back, and a fresh scheduler has none" {

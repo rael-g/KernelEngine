@@ -137,6 +137,10 @@ typedef struct ke_schedule {
     /// first. Only the thread that calls run records into it.
     /// @return [borrowed] The queue, owned by the schedule.
     ke_ecs_commands *(*commands)(ke_schedule *self);
+
+    /// Whether a registered system reads @p component, through a query term or its access; a system
+    /// registered from a body counts from the next run. Callable from a body.
+    bool (*reads)(ke_schedule *self, ke_component_id component);
 } ke_schedule;
 
 /// [owner]

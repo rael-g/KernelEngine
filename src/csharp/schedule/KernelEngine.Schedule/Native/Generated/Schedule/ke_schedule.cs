@@ -37,4 +37,7 @@ public unsafe partial struct ke_schedule
 
     [NativeTypeName("ke_ecs_commands *(*)(ke_schedule *)")]
     public delegate* unmanaged[Cdecl]<ke_schedule*, KernelEngine.Ecs.Native.ke_ecs_commands*> commands;
+
+    [NativeTypeName("bool (*)(ke_schedule *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_schedule*, global::KernelEngine.Ecs.ComponentId, bool> reads;
 }

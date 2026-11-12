@@ -53,6 +53,14 @@ typedef struct ke_scheduler {
 
     /// Whether a request to end the program was recorded.
     bool (*exit_requested)(ke_scheduler *self);
+
+    /// The number of the schedule run started last; every run started takes the next number, and
+    /// zero means none started. Readable from any thread; a body stamps what it writes with it.
+    uint64_t (*sequence)(ke_scheduler *self);
+
+    /// Whether every added schedule that reads @p component completed a run numbered @p stamp or
+    /// later; true when no schedule reads it. Called from a body or between ticks.
+    bool (*expired)(ke_scheduler *self, ke_component_id component, uint64_t stamp);
 } ke_scheduler;
 
 /// [owner]

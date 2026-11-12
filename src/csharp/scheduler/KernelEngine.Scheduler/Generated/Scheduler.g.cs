@@ -8,6 +8,7 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Ecs;
 using KernelEngine.Schedule;
 using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
@@ -101,6 +102,18 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
     public bool ExitRequested()
     {
         return Handle->exit_requested(Handle);
+    }
+
+    /// <summary>The number of the schedule run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
+    public ulong Sequence()
+    {
+        return Handle->sequence(Handle);
+    }
+
+    /// <summary>Whether every added schedule that reads component completed a run numbered stamp or later; true when no schedule reads it. Called from a body or between ticks.</summary>
+    public bool Expired(ComponentId component, ulong stamp)
+    {
+        return Handle->expired(Handle, component, stamp);
     }
 
     /// <summary>Releases the native scheduler.</summary>

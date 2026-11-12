@@ -59,4 +59,6 @@ public interface ISchedule : IDisposable
     /// <summary>The queue the caller records structural changes into between runs; the next run applies it first. Only the thread that calls run records into it.</summary>
     /// <returns>The queue, owned by the schedule.</returns>
     IEcsCommands Commands();
+    /// <summary>Whether a registered system reads component, through a query term or its access; a system registered from a body counts from the next run. Callable from a body.</summary>
+    bool Reads(ComponentId component);
 }

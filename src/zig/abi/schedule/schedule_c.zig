@@ -106,6 +106,9 @@ pub const ke_schedule = extern struct {
     /// The queue the caller records structural changes into between runs; the next run applies it
     /// first. Only the thread that calls run records into it.
     commands: ?*const fn (?*ke_schedule) callconv(.c) ?*abi_ecs.c.ke_ecs_commands = null,
+    /// Whether a registered system reads component, through a query term or its access; a system
+    /// registered from a body counts from the next run. Callable from a body.
+    reads: ?*const fn (?*ke_schedule, ke_component_id) callconv(.c) bool = null,
 };
 
 pub const ke_schedule_handle = extern struct {

@@ -1688,6 +1688,22 @@
             "borrowed"
           ],
           "receiver": "ke_schedule *"
+        },
+        {
+          "name": "reads",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether a registered system reads component, through a query term or its access; a system registered from a body counts from the next run. Callable from a body.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_schedule *"
         }
       ],
       "external": true
@@ -1874,6 +1890,37 @@
           "doc": "Whether a request to end the program was recorded.",
           "return_doc": null,
           "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "sequence",
+          "returns": "uint64_t",
+          "tags": [],
+          "doc": "The number of the schedule run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
+          "name": "expired",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether every added schedule that reads component completed a run numbered stamp or later; true when no schedule reads it. Called from a body or between ticks.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "stamp",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "ke_scheduler *"
         }
       ]

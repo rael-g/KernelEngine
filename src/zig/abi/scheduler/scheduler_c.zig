@@ -62,6 +62,12 @@ pub const ke_scheduler = extern struct {
     request_exit: ?*const fn (?*ke_scheduler) callconv(.c) void = null,
     /// Whether a request to end the program was recorded.
     exit_requested: ?*const fn (?*ke_scheduler) callconv(.c) bool = null,
+    /// The number of the schedule run started last; every run started takes the next number, and
+    /// zero means none started. Readable from any thread; a body stamps what it writes with it.
+    sequence: ?*const fn (?*ke_scheduler) callconv(.c) u64 = null,
+    /// Whether every added schedule that reads component completed a run numbered stamp or later;
+    /// true when no schedule reads it. Called from a body or between ticks.
+    expired: ?*const fn (?*ke_scheduler, ke_component_id, u64) callconv(.c) bool = null,
 };
 
 pub const ke_scheduler_handle = extern struct {

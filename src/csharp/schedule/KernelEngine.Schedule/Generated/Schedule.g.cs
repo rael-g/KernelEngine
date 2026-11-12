@@ -303,6 +303,12 @@ public unsafe partial class Schedule : IDisposable, INativeSchedule, ISchedule
         return EcsCommands.Borrow(Handle->commands(Handle));
     }
 
+    /// <summary>Whether a registered system reads component, through a query term or its access; a system registered from a body counts from the next run. Callable from a body.</summary>
+    public bool Reads(ComponentId component)
+    {
+        return Handle->reads(Handle, component);
+    }
+
     /// <summary>Releases the native schedule.</summary>
     public void Dispose()
     {
