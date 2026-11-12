@@ -12,8 +12,10 @@ This is a map: the pool, who submits to it and where work lands. Contract is `ke
 | ecs | `ke_ecs_flecs_create` | nothing from the pool | single-threaded storage |
 | managed layer | `ITaskPool` | actions | tasks on the pool |
 
-**There is one pool and no named thread.** Workers are addressed by index. No contract or plugin
-in the engine's native side defines a "sim" or a "render" thread.
+**Pools are made by the host, and no thread is named.** The host may create several `ke_task_pool`
+instances and hands each consumer the one it runs on; no plugin starts a thread or uses a foreign pool.
+Workers are addressed by index. No contract or plugin in the engine's native side defines a "sim" or a
+"render" thread.
 
 **The runtime is a client of the pool.** A system body runs as a task on whichever worker takes
 it. The render phase is one

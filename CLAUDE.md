@@ -83,7 +83,7 @@ Contracts worth knowing by name:
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_task_pool` — the single shared worker pool every parallel subsystem routes through
+- `ke_task_pool` — a worker pool; every parallel subsystem routes through the one the host hands it
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
@@ -140,11 +140,11 @@ A service locator is forbidden: injection happens in the orchestration area, nev
 
 ## Threading model
 
-There is one worker pool, behind `ke_task_pool`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+Every thread is a worker of a `ke_task_pool`. The host may create several pools and hands each consumer the pool it runs on; nothing else starts a thread, and no foreign pool (Zig's, .NET's, a library's own) runs engine work. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pool**: a single shared `ke_task_pool` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
+**Worker pools**: `ke_task_pool` (enkiTS), as many as the host creates, each injected into the consumers that run on it. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
 
 ---
 
