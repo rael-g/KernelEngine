@@ -9,7 +9,7 @@ const std = @import("std");
 
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
-const abi_scheduler = @import("abi_scheduler");
+const abi_schedule = @import("abi_schedule");
 const zsub = @import("zsub");
 const heap = @import("heap");
 
@@ -200,10 +200,10 @@ const State = struct {
     actions: ?[*]Action = null,
     action_count: u32 = 0,
     action_capacity: u32 = 0,
-    scheduler: ?*abi_scheduler.c.ke_scheduler = null,
+    scheduler: ?*abi_schedule.c.ke_schedule = null,
     input: ?*abi_input.c.ke_input = null,
-    system: abi_scheduler.c.ke_scheduler_system_id = 0,
-    set: [1]abi_scheduler.c.ke_set_id = .{0},
+    system: abi_schedule.c.ke_schedule_system_id = 0,
+    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
 };
 
 fn stateOf(self: *abi_input_actions.c.ke_input_actions) *State {
@@ -687,7 +687,7 @@ fn readBinding(w: *Walk, index: [:0]const u8) void {
 /// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
 /// The system the factory registers when it is given a scheduler: it advances the input's frame and
 /// evaluates the maps against its snapshot.
-fn pump(_: ?*abi_scheduler.c.ke_scheduler_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn pump(_: ?*abi_schedule.c.ke_schedule_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
     const input = s.input orelse return R.code(error.InvalidArgument);
     input.update.?(input);
@@ -697,7 +697,7 @@ fn pump(_: ?*abi_scheduler.c.ke_scheduler_ctx, user_data: ?*anyopaque, _: f32) c
 }
 
 export fn ke_input_actions_create(
-    scheduler: ?*abi_scheduler.c.ke_scheduler,
+    scheduler: ?*abi_schedule.c.ke_schedule,
     input: ?*abi_input.c.ke_input,
     configuration: ?*abi_configuration.c.ke_configuration,
     config: ?*const abi_input_actions.c.ke_input_actions_config,
@@ -758,7 +758,7 @@ export fn ke_input_actions_create(
 
     if (scheduler) |sched| {
         s.set = .{config.?.set};
-        const desc: abi_scheduler.c.ke_system_desc = .{
+        const desc: abi_schedule.c.ke_schedule_system_desc = .{
             .name = "input.actions",
             .user_data = s,
             .execute = pump,
@@ -1033,10 +1033,10 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     }
 }
 
-var pumped: abi_scheduler.c.ke_system_desc = undefined;
-var pumped_set: abi_scheduler.c.ke_set_id = undefined;
+var pumped: abi_schedule.c.ke_schedule_system_desc = undefined;
+var pumped_set: abi_schedule.c.ke_schedule_set_id = undefined;
 
-fn keepSystem(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.register_system)) abi_result.c.ke_result {
+fn keepSystem(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)) abi_result.c.ke_result {
     pumped = args[1].?.*;
     pumped_set = pumped.sets.?[0];
     args[2].?.* = 7;
@@ -1044,7 +1044,7 @@ fn keepSystem(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.register_system
 }
 
 test "given a scheduler, the maps register a system in the config's set that advances the input and evaluates them, and unregister it when destroyed" {
-    var rt: zsub.For(abi_scheduler.c.ke_scheduler) = undefined;
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
     var input: zsub.For(abi_input.c.ke_input) = undefined;
@@ -1058,11 +1058,11 @@ test "given a scheduler, the maps register a system in the config's set that adv
     try input.received(.update).times(1);
     try input.received(.get_snapshot).times(1);
     h.destroy.?(h.ref);
-    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_scheduler.c.ke_scheduler_system_id, 7))).times(1);
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 7))).times(1);
 }
 
 test "a scheduler without the input to read or the config naming the set is refused" {
-    var rt: zsub.For(abi_scheduler.c.ke_scheduler) = undefined;
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
     var input: zsub.For(abi_input.c.ke_input) = undefined;

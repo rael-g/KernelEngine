@@ -33,6 +33,7 @@
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
+#include <kernel_engine/schedule/schedule_create.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
 #include <kernel_engine/sdk/paths.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
@@ -79,18 +80,27 @@ typedef struct ke_sdk_renderer
     ke_render_gbuffer_resources        gbuffer_resources;
 } ke_sdk_renderer;
 
-/** The set every standard phase of the scheduler is registered with, for the systems that need no other order. */
+/** The standard schedules, in the order the scheduler runs them, each at its cadence. */
+typedef struct ke_sdk_schedules
+{
+    ke_schedule_handle startup;
+    ke_schedule_handle pre_update;
+    ke_schedule_handle fixed;
+    ke_schedule_handle update;
+    ke_schedule_handle shutdown;
+} ke_sdk_schedules;
+
+/** The standard sets, each in one of the standard schedules, for the systems that need no other order. */
 typedef struct ke_sdk_sets
 {
-    ke_set_id startup;
-    ke_set_id pre_update;
-    ke_set_id fixed_pre_update;
-    ke_set_id fixed_update;
-    ke_set_id fixed_post_update;
-    ke_set_id update;
-    ke_set_id post_update;
-    ke_set_id render;
-    ke_set_id shutdown;
+    ke_schedule_set_id startup;           ///< In the startup schedule.
+    ke_schedule_set_id pre_update;        ///< In the pre-update schedule.
+    ke_schedule_set_id fixed_pre_update;  ///< In the fixed schedule.
+    ke_schedule_set_id fixed_update;      ///< In the fixed schedule, after fixed_pre_update.
+    ke_schedule_set_id fixed_post_update; ///< In the fixed schedule, after fixed_update.
+    ke_schedule_set_id update;            ///< In the update schedule.
+    ke_schedule_set_id post_update;       ///< In the update schedule, after update.
+    ke_schedule_set_id shutdown;          ///< In the shutdown schedule.
 } ke_sdk_sets;
 
 /**
@@ -113,6 +123,7 @@ typedef struct ke_sdk_engine
     ke_window_handle               window;
     ke_ecs_handle                  ecs;
     ke_scheduler_handle            scheduler;
+    ke_sdk_schedules               schedules;
     ke_sdk_sets                    sets;
     ke_runtime_handle              runtime;
     ke_gpu_device_handle           gpu_device;
@@ -226,16 +237,21 @@ static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
     return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
 }
 
-/** Registers the phase @p name with @p cadence, pipelined or not, and a set of the same name, written to @p out_set. */
-static inline ke_result ke_sdk_phase(ke_scheduler *s, const char *name, ke_phase_cadence cadence, bool pipelined, ke_set_id *out_set)
+/** Registers the set @p name in @p schedule, after @p after when it is not NULL, written to @p out_set. */
+static inline ke_result ke_sdk_set(ke_schedule *schedule, const char *name, const ke_schedule_set_id *after, ke_schedule_set_id *out_set)
 {
-    ke_phase_id phase = 0;
-    ke_result made = s->register_phase(s, &(ke_phase_desc){ .name = name, .cadence = cadence, .pipelined = pipelined }, &phase);
-    if (made == KE_OK) made = s->register_set(s, &(ke_set_desc){ .name = name, .phase = phase, .after = NULL, .after_count = 0 }, out_set);
+    return schedule->register_set(schedule, &(ke_schedule_set_desc){ .name = name, .after = after, .after_count = after ? 1u : 0u }, out_set);
+}
+
+/** Makes a schedule over the engine's world and adds it to the scheduler with @p cadence. */
+static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_scheduler_cadence cadence, ke_schedule_handle *out)
+{
+    ke_result made = ke_schedule_create(e->ecs.ref, e->task_pool.ref, out);
+    if (made == KE_OK) made = e->scheduler.ref->add_schedule(e->scheduler.ref, out->ref, cadence);
     return made;
 }
 
-/** The scheduler, its timestep from `runtime`, with the standard phases in the order they tick. */
+/** The scheduler, its timestep from `runtime`, with the standard schedules in the order they tick and their sets. */
 static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
 {
     ke_configuration *c = ke_sdk_engine_config(e);
@@ -243,18 +259,22 @@ static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
         .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
         .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
     };
-    ke_result made = ke_scheduler_create(e->ecs.ref, e->task_pool.ref, &config, &e->scheduler);
-    ke_scheduler *s = e->scheduler.ref;
+    ke_result made = ke_scheduler_create(&config, &e->scheduler);
+    ke_sdk_schedules *sc = &e->schedules;
     ke_sdk_sets *sets = &e->sets;
-    if (made == KE_OK) made = ke_sdk_phase(s, "startup", KE_PHASE_CADENCE_STARTUP, false, &sets->startup);
-    if (made == KE_OK) made = ke_sdk_phase(s, "pre_update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->pre_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_pre_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_pre_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_post_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_post_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "post_update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->post_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "render", KE_PHASE_CADENCE_EVERY_TICK, true, &sets->render);
-    if (made == KE_OK) made = ke_sdk_phase(s, "shutdown", KE_PHASE_CADENCE_SHUTDOWN, false, &sets->shutdown);
+    if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_STARTUP, &sc->startup);
+    if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_EVERY_TICK, &sc->pre_update);
+    if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_FIXED, &sc->fixed);
+    if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_EVERY_TICK, &sc->update);
+    if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_SHUTDOWN, &sc->shutdown);
+    if (made == KE_OK) made = ke_sdk_set(sc->startup.ref, "startup", NULL, &sets->startup);
+    if (made == KE_OK) made = ke_sdk_set(sc->pre_update.ref, "pre_update", NULL, &sets->pre_update);
+    if (made == KE_OK) made = ke_sdk_set(sc->fixed.ref, "fixed_pre_update", NULL, &sets->fixed_pre_update);
+    if (made == KE_OK) made = ke_sdk_set(sc->fixed.ref, "fixed_update", &sets->fixed_pre_update, &sets->fixed_update);
+    if (made == KE_OK) made = ke_sdk_set(sc->fixed.ref, "fixed_post_update", &sets->fixed_update, &sets->fixed_post_update);
+    if (made == KE_OK) made = ke_sdk_set(sc->update.ref, "update", NULL, &sets->update);
+    if (made == KE_OK) made = ke_sdk_set(sc->update.ref, "post_update", &sets->update, &sets->post_update);
+    if (made == KE_OK) made = ke_sdk_set(sc->shutdown.ref, "shutdown", NULL, &sets->shutdown);
     return made;
 }
 
@@ -300,7 +320,7 @@ static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 /** The scene tree. */
 static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
-    return ke_scene_tree_create(e->ecs.ref, e->scheduler.ref, &(ke_scene_tree_config){ .set = e->sets.post_update }, &e->scene_tree);
+    return ke_scene_tree_create(e->ecs.ref, e->schedules.update.ref, &(ke_scene_tree_config){ .set = e->sets.post_update }, &e->scene_tree);
 }
 
 /** The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on. */
@@ -397,7 +417,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
         .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
     };
     ke_result made = ke_physics_2d_box2d_create(&config, &e->physics);
-    if (made == KE_OK) made = ke_physics_body2d_module_create(e->scheduler.ref, e->ecs.ref, e->physics.ref, e->scene_tree.ref, &(ke_physics_body2d_module_config){ .set = e->sets.fixed_post_update }, &e->bodies);
+    if (made == KE_OK) made = ke_physics_body2d_module_create(e->schedules.fixed.ref, e->ecs.ref, e->physics.ref, e->scene_tree.ref, &(ke_physics_body2d_module_config){ .set = e->sets.fixed_post_update }, &e->bodies);
     return made;
 }
 
@@ -405,14 +425,14 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
-    if (made == KE_OK) made = ke_sound_module_create(e->scheduler.ref, e->ecs.ref, e->audio.ref, &(ke_sound_module_config){ .root = e->project_dir, .set = e->sets.post_update }, &e->sounds);
+    if (made == KE_OK) made = ke_sound_module_create(e->schedules.update.ref, e->ecs.ref, e->audio.ref, &(ke_sound_module_config){ .root = e->project_dir, .set = e->sets.post_update }, &e->sounds);
     return made;
 }
 
 /** The action maps of the configuration's `input` section. */
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
-    return ke_input_actions_create(e->scheduler.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input", .set = e->sets.pre_update }, &e->actions);
+    return ke_input_actions_create(e->schedules.pre_update.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input", .set = e->sets.pre_update }, &e->actions);
 }
 
 /** The node types. */
@@ -424,7 +444,7 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
         .fixed_update = e->sets.fixed_update,
         .post_update = e->sets.post_update,
     };
-    return ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &config, &e->node_types);
+    return ke_node_types_create(e->scheduler.ref, e->schedules.pre_update.ref, e->schedules.fixed.ref, e->schedules.update.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &config, &e->node_types);
 }
 
 /** The scene files. */
@@ -475,6 +495,11 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->fonts);
     KE_SDK_ENGINE_RELEASE(engine->runtime);
     KE_SDK_ENGINE_RELEASE(engine->scheduler);
+    KE_SDK_ENGINE_RELEASE(engine->schedules.shutdown);
+    KE_SDK_ENGINE_RELEASE(engine->schedules.update);
+    KE_SDK_ENGINE_RELEASE(engine->schedules.fixed);
+    KE_SDK_ENGINE_RELEASE(engine->schedules.pre_update);
+    KE_SDK_ENGINE_RELEASE(engine->schedules.startup);
     KE_SDK_ENGINE_RELEASE(engine->ecs);
     KE_SDK_ENGINE_RELEASE(engine->render_target);
     KE_SDK_ENGINE_RELEASE(engine->gpu_device);
@@ -545,7 +570,8 @@ static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *fir
     ke_runtime *rt = engine->runtime.ref;
     ke_scheduler *sched = engine->scheduler.ref;
     ke_window *window = engine->window.ref;
-    ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, sched->commands(sched), scene, NULL);
+    ke_schedule *first = engine->schedules.pre_update.ref;
+    ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, first->commands(first), scene, NULL);
     double previous = ke_sdk_engine_now();
     while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt) && !sched->exit_requested(sched))
     {

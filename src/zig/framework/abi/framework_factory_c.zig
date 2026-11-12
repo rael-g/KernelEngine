@@ -11,6 +11,7 @@ const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
+const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
 
@@ -30,14 +31,13 @@ pub const ke_gpu_texture = u64;
 pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
 pub const ke_render_chain_link = u32;
 pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
@@ -57,10 +57,14 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
 /// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
@@ -91,32 +95,33 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". Given a scheduler, it registers the
+/// key_quad, each a key name such as "Space" or "W". Given a schedule, it registers the
 /// exclusive system "input.actions" in the config's set, which advances input's frame and
 /// evaluates the maps against its snapshot; destroying the maps unregisters it.
-pub extern fn ke_input_actions_create(scheduler: ?*abi_scheduler.c.ke_scheduler, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+pub extern fn ke_input_actions_create(schedule: ?*abi_schedule.c.ke_schedule, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Registers the hierarchy flattening and transform propagation system in the config's set of
-/// `scheduler`, reading the scene graph out of `ecs`. The transform/hierarchy components are
+/// `schedule`, reading the scene graph out of `ecs`. The transform/hierarchy components are
 /// resolved by the names a scene_tree already registers them under, so a scene_tree must exist
-/// on this ecs first; creating a hierarchy without one fails as not found. `scheduler` must
+/// on this ecs first; creating a hierarchy without one fails as not found. `schedule` must
 /// outlive the hierarchy, whose destroy unregisters what it registered.
-pub extern fn ke_scene_hierarchy_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, config: ?*const abi_framework.c.ke_scene_hierarchy_config, out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle) abi_result.c.ke_result;
+pub extern fn ke_scene_hierarchy_create(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, config: ?*const abi_framework.c.ke_scene_hierarchy_config, out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle) abi_result.c.ke_result;
 
 /// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
 /// components by name (idempotent — if a previous scene_tree on the same ecs already registered
-/// them, the existing cids are reused). `scheduler` may be NULL, in which case no systems are
+/// them, the existing cids are reused). `schedule` may be NULL, in which case no systems are
 /// registered and the caller is responsible for calling propagate_transforms itself. Passing one
 /// registers, in the config's set, the hierarchy maintenance that keeps world matrices current,
-/// and that scheduler must outlive the tree, whose destroy unregisters it.
-pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, config: ?*const abi_scene_tree.c.ke_scene_tree_config, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
+/// and that schedule must outlive the tree, whose destroy unregisters it.
+pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, schedule: ?*abi_schedule.c.ke_schedule, config: ?*const abi_scene_tree.c.ke_scene_tree_config, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
 
-/// Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the
-/// config's sets, whose nodes live in `scene_tree` and whose axis and pressed read
-/// `input_actions`. Registers the component that marks a node readied, and the system that frees
-/// the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions` must
-/// outlive the node types, whose destroy unregisters every system they registered.
-pub extern fn ke_node_types_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, config: ?*const abi_framework.c.ke_node_types_config, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
+/// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
+/// read `input_actions`. Ready and exit behaviours, and the systems that clear the last tick's
+/// events, run in `first`; fixed update behaviours in `fixed`; update and event behaviours, and
+/// the system that frees the nodes that left the tree, in `main`; each in the config's set. A
+/// node's exit request goes to `scheduler`. Every argument but `input_actions` and `out_types`
+/// must outlive the node types, whose destroy unregisters every system they registered.
+pub extern fn ke_node_types_create(scheduler: ?*abi_scheduler.c.ke_scheduler, first: ?*abi_schedule.c.ke_schedule, fixed: ?*abi_schedule.c.ke_schedule, main: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, config: ?*const abi_framework.c.ke_node_types_config, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
 
 /// Creates scene files that spawn through `node_types`, look components up and write their
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through

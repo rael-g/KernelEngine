@@ -10,7 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
-    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler.Abstractions\KernelEngine.Scheduler.Abstractions.csproj" />
+    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
   </ItemGroup>
 

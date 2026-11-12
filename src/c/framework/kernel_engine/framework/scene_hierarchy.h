@@ -1,7 +1,7 @@
 #ifndef KERNEL_ENGINE_FRAMEWORK_SCENE_HIERARCHY_H_
 #define KERNEL_ENGINE_FRAMEWORK_SCENE_HIERARCHY_H_
 
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -9,13 +9,13 @@ extern "C"
 #endif
 
     /// Keeps every world transform equal to its local transform composed with its
-    /// parent's world transform, through one scheduler system in the set its config names.
+    /// parent's world transform, through one schedule system in the set its config names.
     ///
     /// Each tick the system orders the entities parents-before-children, then walks
     /// that order once, so a parent's world matrix is final before its children are
     /// reached.
     ///
-    /// The system declares its component access, so the scheduler orders it against
+    /// The system declares its component access, so the schedule orders it against
     /// other systems that touch transforms.
     typedef struct ke_scene_hierarchy ke_scene_hierarchy;
 
@@ -29,9 +29,9 @@ extern "C"
     /// [borrowed] The values the scene hierarchy is created with.
     typedef struct ke_scene_hierarchy_config
     {
-        /// The set the propagation system joins; its phase must run after transforms are written
+        /// The set the propagation system joins; its schedule must run after transforms are written
         /// and before world transforms are read.
-        ke_set_id set;
+        ke_schedule_set_id set;
     } ke_scene_hierarchy_config;
 
 #ifdef __cplusplus

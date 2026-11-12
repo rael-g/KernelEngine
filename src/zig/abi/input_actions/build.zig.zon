@@ -7,7 +7,7 @@
         .abi_ecs = .{ .path = "../ecs" },
         .abi_input = .{ .path = "../input" },
         .abi_result = .{ .path = "../result" },
-        .abi_scheduler = .{ .path = "../scheduler" },
+        .abi_schedule = .{ .path = "../schedule" },
     },
     .paths = .{"."},
 }

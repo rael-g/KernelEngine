@@ -5,6 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Io.Pool;
+using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 
@@ -25,10 +26,34 @@ partial class Probe : Node
 
 public class ReadyingTheNodesASlotOpens
 {
-    static NodeTypesConfig NodeSets(DefaultScheduler scheduler)
+    sealed class Loop : IDisposable
     {
-        uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence, false), []);
-        return new NodeTypesConfig { PreUpdate = Phase("pre_update", PhaseCadence.EveryTick), FixedUpdate = Phase("fixed_update", PhaseCadence.Fixed), Update = Phase("update", PhaseCadence.EveryTick), PostUpdate = Phase("post_update", PhaseCadence.EveryTick) };
+        public readonly DefaultSchedule First;
+        public readonly DefaultSchedule Fixed;
+        public readonly DefaultSchedule Main;
+        public readonly DefaultScheduler Scheduler;
+        public readonly NodeTypesConfig Sets;
+
+        public Loop(FlecsEcsRegistry ecs, EnkiTaskPool pool)
+        {
+            First = new DefaultSchedule(null, ecs, pool);
+            Fixed = new DefaultSchedule(null, ecs, pool);
+            Main = new DefaultSchedule(null, ecs, pool);
+            Scheduler = new DefaultScheduler(null, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+            Scheduler.AddSchedule(First, SchedulerCadence.EveryTick);
+            Scheduler.AddSchedule(Fixed, SchedulerCadence.Fixed);
+            Scheduler.AddSchedule(Main, SchedulerCadence.EveryTick);
+            var update = Main.RegisterSet("update", []);
+            Sets = new NodeTypesConfig { PreUpdate = First.RegisterSet("pre_update", []), FixedUpdate = Fixed.RegisterSet("fixed_update", []), Update = update, PostUpdate = Main.RegisterSet("post_update", [update]) };
+        }
+
+        public void Dispose()
+        {
+            Scheduler.Dispose();
+            Main.Dispose();
+            Fixed.Dispose();
+            First.Dispose();
+        }
     }
 
     [Fact]
@@ -40,19 +65,19 @@ public class ReadyingTheNodesASlotOpens
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-        using var scheduler = new DefaultScheduler(null, ecs, pool, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
-        var sets = NodeSets(scheduler);
+        using var loop = new Loop(ecs, pool);
+        var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, null, new());
         using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
-        using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions, sets);
+        using var types = new DefaultNodeTypes(null, scheduler, loop.First, loop.Fixed, loop.Main, ecs, tree, actions, loop.Sets);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());
         Probe.Readied.Clear();
 
         var slot = new SceneSlotComponent { Path = "res://scenes/Opened.scene.toml" };
-        types.Spawn(scheduler.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
+        types.Spawn(loop.First.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
         for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
         scheduler.Shutdown();
 
@@ -68,12 +93,12 @@ public class ReadyingTheNodesASlotOpens
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-        using var scheduler = new DefaultScheduler(null, ecs, pool, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
-        var sets = NodeSets(scheduler);
+        using var loop = new Loop(ecs, pool);
+        var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, null, new());
         using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
-        using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions, sets);
+        using var types = new DefaultNodeTypes(null, scheduler, loop.First, loop.Fixed, loop.Main, ecs, tree, actions, loop.Sets);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         types.RegisterType(name: "node");
         var nodes = new NodeWorld(types);
@@ -81,7 +106,7 @@ public class ReadyingTheNodesASlotOpens
         Probe.Readied.Clear();
 
         var slot = new SceneSlotComponent { Path = "res://scenes/Grouped.scene.toml" };
-        types.Spawn(scheduler.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
+        types.Spawn(loop.First.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
         for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
         scheduler.Shutdown();
 

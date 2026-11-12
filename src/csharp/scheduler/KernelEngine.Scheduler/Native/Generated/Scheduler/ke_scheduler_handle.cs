@@ -4,9 +4,8 @@ using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 using global::KernelEngine.Scheduler;
 
-using KernelEngine.Ecs.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.TaskPool.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Scheduler.Native;
 

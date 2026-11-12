@@ -3,8 +3,8 @@
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
-const abi_task_pool = @import("task_pool");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scheduler_factory_c.zig");
@@ -13,10 +13,10 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-/// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
-pub fn schedulerCreate(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const abi_scheduler.c.ke_scheduler_config) Error!abi_scheduler.c.ke_scheduler_handle {
+/// Creates a scheduler with no schedule.
+pub fn schedulerCreate(config: ?*const abi_scheduler.c.ke_scheduler_config) Error!abi_scheduler.c.ke_scheduler_handle {
     var written: abi_scheduler.c.ke_scheduler_handle = undefined;
-    try checkResult(c.ke_scheduler_create(ecs, task_pool, config, &written));
+    try checkResult(c.ke_scheduler_create(config, &written));
     return written;
 }
 

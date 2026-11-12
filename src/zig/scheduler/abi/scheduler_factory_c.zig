@@ -3,31 +3,28 @@
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_scheduler = @import("scheduler");
-const abi_task_pool = @import("task_pool");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Body of a scheduled task, run on a worker thread.
-pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// Run once the task body has returned, on the same worker thread.
-pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*anyopaque, abi_result.c.ke_result) callconv(.c) void;
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -36,8 +33,8 @@ pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*an
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
-pub extern fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const abi_scheduler.c.ke_scheduler_config, out_scheduler: ?*abi_scheduler.c.ke_scheduler_handle) abi_result.c.ke_result;
+/// Creates a scheduler with no schedule.
+pub extern fn ke_scheduler_create(config: ?*const abi_scheduler.c.ke_scheduler_config, out_scheduler: ?*abi_scheduler.c.ke_scheduler_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_scheduler logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

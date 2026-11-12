@@ -10,6 +10,7 @@ using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
+using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
@@ -86,12 +87,21 @@ public sealed class EngineBuilder
             Fullscreen = config.GetBool("runtime.window", "fullscreen", false),
         }));
         var ecs = Own(new FlecsEcsRegistry(log, new() { ReservedIdCapacity = 1048576 }));
-        var scheduler = Own(new DefaultScheduler(log, ecs, pool, new()
+        var schedules = new EngineSchedules
+        {
+            Startup = Own(new DefaultSchedule(log, ecs, pool)),
+            PreUpdate = Own(new DefaultSchedule(log, ecs, pool)),
+            Fixed = Own(new DefaultSchedule(log, ecs, pool)),
+            Update = Own(new DefaultSchedule(log, ecs, pool)),
+            Shutdown = Own(new DefaultSchedule(log, ecs, pool)),
+        };
+        var sets = EngineSets.Register(schedules);
+        var scheduler = Own(new DefaultScheduler(log, new()
         {
             FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
             FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
         }));
-        var sets = EngineSets.Register(scheduler);
+        schedules.AddTo(scheduler);
         var runtime = Own(new DefaultRuntime(log, ecs, pool, new()
         {
             FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
@@ -104,7 +114,7 @@ public sealed class EngineBuilder
         var target = Own(new WebgpuWindowGpuRenderTarget(log, gpu, window, new() { PresentMode = mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo }));
         var fonts = Own(new StbFontLoader(log, io));
         var assets = Own(new DefaultAssetResolver(log, null, fonts, _projectDir, io));
-        var tree = Own(new DefaultSceneTree(log, ecs, scheduler, new() { Set = sets.PostUpdate }));
+        var tree = Own(new DefaultSceneTree(log, ecs, schedules.Update, new() { Set = sets.PostUpdate }));
 
         var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
         var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, new() { ShaderDir = shaderDir }));
@@ -124,6 +134,7 @@ public sealed class EngineBuilder
             Window = window,
             Ecs = ecs,
             Scheduler = scheduler,
+            Schedules = schedules,
             Sets = sets,
             Runtime = runtime,
             Gpu = gpu,
@@ -141,8 +152,8 @@ public sealed class EngineBuilder
         owned.AddRange(_physics(parts));
         owned.AddRange(_audio(parts));
 
-        var actions = Own(new DefaultInputActions(log, scheduler, input, config, new() { Section = "input", Set = sets.PreUpdate }));
-        var types = Own(new DefaultNodeTypes(log, scheduler, ecs, tree, actions, new() { PreUpdate = sets.PreUpdate, Update = sets.Update, FixedUpdate = sets.FixedUpdate, PostUpdate = sets.PostUpdate }));
+        var actions = Own(new DefaultInputActions(log, schedules.PreUpdate, input, config, new() { Section = "input", Set = sets.PreUpdate }));
+        var types = Own(new DefaultNodeTypes(log, scheduler, schedules.PreUpdate, schedules.Fixed, schedules.Update, ecs, tree, actions, new() { PreUpdate = sets.PreUpdate, Update = sets.Update, FixedUpdate = sets.FixedUpdate, PostUpdate = sets.PostUpdate }));
         Own(new DefaultSceneFiles(log, ecs, types, assets, io));
         types.RegisterEngineNodeTypes();
         return new Engine(parts, owned, types, log);
@@ -175,13 +186,13 @@ public sealed class EngineBuilder
             GravityX = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
             GravityY = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0),
         });
-        return [world, new Physics.PhysicsBody2DModule(p.Logging, p.Scheduler, p.Ecs, world, p.Tree, new() { Set = p.Sets.FixedPostUpdate })];
+        return [world, new Physics.PhysicsBody2DModule(p.Logging, p.Schedules.Fixed, p.Ecs, world, p.Tree, new() { Set = p.Sets.FixedPostUpdate })];
     }
 
     /// <summary>The default audio: miniaudio, and the module playing the sound components.</summary>
     public static IEnumerable<IDisposable> DefaultAudio(EngineParts p)
     {
         var audio = new MiniaudioAudio(p.Logging, p.Io);
-        return [audio, new Audio.SoundModule(p.Logging, p.Scheduler, p.Ecs, audio, new() { Root = p.ProjectDir, Set = p.Sets.PostUpdate })];
+        return [audio, new Audio.SoundModule(p.Logging, p.Schedules.Update, p.Ecs, audio, new() { Root = p.ProjectDir, Set = p.Sets.PostUpdate })];
     }
 }

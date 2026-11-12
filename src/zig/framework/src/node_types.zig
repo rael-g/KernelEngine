@@ -10,6 +10,7 @@ const abi_framework_components = @import("abi_framework_components");
 const abi_input_actions = @import("abi_input_actions");
 const abi_ecs_variant = @import("abi_ecs_variant");
 const abi_result = @import("abi_result");
+const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
 const abi_scene_tree = @import("abi_scene_tree");
 const R = @import("result").Result(.{});
@@ -37,11 +38,11 @@ const Behaviour = struct {
     kind: Kind,
     run: abi_framework.c.ke_node_behaviour_fn,
     event: ?*Event = null,
-    system: abi_scheduler.c.ke_scheduler_system_id = 0,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
     name: [:0]u8,
-    terms: []abi_scheduler.c.ke_id_access,
-    event_terms: [1]abi_scheduler.c.ke_id_access = undefined,
-    queries: [2]abi_scheduler.c.ke_query_desc = undefined,
+    terms: []abi_ecs.c.ke_ecs_query_term,
+    event_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries: [2]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 /// A registered node type: its tag, the component ids its nodes carry, the fields first when it
@@ -64,22 +65,27 @@ const Type = struct {
 const Event = struct {
     cid: Cid,
     size: usize,
-    system: abi_scheduler.c.ke_scheduler_system_id = 0,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
     name: [:0]u8,
-    terms: [1]abi_scheduler.c.ke_id_access = undefined,
-    queries: [1]abi_scheduler.c.ke_query_desc = undefined,
+    terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 /// Created by `ke_node_types_create` and freed by `vtDestroy`, which unregisters every system the
-/// types and events registered first. It owns the types and events, whose addresses the scheduler
-/// holds as user data, and the set of each kind of system, which every registration points at.
+/// types and events registered first. It owns the types and events, whose addresses the schedules
+/// hold as user data, and the set of each kind of system, which every registration points at. A
+/// ready, exit and event-clearing system runs in `first`, a fixed update in `fixed`, and an update,
+/// event and reaping system in `main`; `loop` takes the requests to exit.
 const State = struct {
     api: abi_framework.c.ke_node_types,
-    scheduler: *abi_scheduler.c.ke_scheduler,
-    pre_update: [1]abi_scheduler.c.ke_set_id,
-    update: [1]abi_scheduler.c.ke_set_id,
-    fixed_update: [1]abi_scheduler.c.ke_set_id,
-    post_update: [1]abi_scheduler.c.ke_set_id,
+    loop: *abi_scheduler.c.ke_scheduler,
+    first: *abi_schedule.c.ke_schedule,
+    fixed: *abi_schedule.c.ke_schedule,
+    main: *abi_schedule.c.ke_schedule,
+    pre_update: [1]abi_schedule.c.ke_schedule_set_id,
+    update: [1]abi_schedule.c.ke_schedule_set_id,
+    fixed_update: [1]abi_schedule.c.ke_schedule_set_id,
+    post_update: [1]abi_schedule.c.ke_schedule_set_id,
     ecs: *abi_ecs.c.ke_ecs,
     tree: *abi_scene_tree.c.ke_scene_tree,
     actions: ?*abi_input_actions.c.ke_input_actions,
@@ -88,9 +94,9 @@ const State = struct {
     types: std.ArrayList(*Type) = .empty,
     events: std.ArrayList(*Event) = .empty,
     action_ids: std.StringHashMapUnmanaged(i32) = .empty,
-    reap: abi_scheduler.c.ke_scheduler_system_id = 0,
-    reap_terms: [1]abi_scheduler.c.ke_id_access = undefined,
-    reap_queries: [1]abi_scheduler.c.ke_query_desc = undefined,
+    reap: abi_schedule.c.ke_schedule_system_id = 0,
+    reap_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    reap_queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 fn stateOf(self: ?*abi_framework.c.ke_node_types) ?*State {
@@ -402,7 +408,7 @@ fn leavingDone(s: *State, node: Entity) bool {
 
 /// The PostUpdate system that removes the nodes left: it records the destruction of each node
 /// leaving the tree whose parent is not leaving, once every node of its subtree has run its exit.
-fn reapLeaving(sys: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn reapLeaving(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
     for (viewOf(sys, 0)) |seg| {
         const statuses: [*]const NodeStatus = @ptrCast(@alignCast(seg.columns.?[0] orelse continue));
@@ -460,8 +466,8 @@ fn axisNamed(ctx: ?*abi_framework.c.ke_node_ctx, name: ?[*:0]const u8) callconv(
 /// Slot `exit`. Forwards the request to the scheduler.
 fn exit(ctx: ?*abi_framework.c.ke_node_ctx) callconv(.c) void {
     const w = walkOf(ctx) orelse return;
-    const sched = w.behaviour.owner.state.scheduler;
-    sched.request_exit.?(sched);
+    const loop = w.behaviour.owner.state.loop;
+    loop.request_exit.?(loop);
 }
 
 /// Slot `raise`. Records an entity carrying a copy of `data` as the event.
@@ -483,7 +489,7 @@ fn raise(ctx: ?*abi_framework.c.ke_node_ctx, event_cid: Cid, data: ?*const anyop
     return commands.?.attach.?(commands, entity, e.cid, data, size);
 }
 
-fn viewOf(sys: ?*abi_scheduler.c.ke_scheduler_ctx, query: u32) []const abi_ecs.c.ke_ecs_segment {
+fn viewOf(sys: ?*abi_schedule.c.ke_schedule_ctx, query: u32) []const abi_ecs.c.ke_ecs_segment {
     var count: usize = 0;
     const segs = sys.?.view.?(sys, query, &count) orelse return &.{};
     return segs[0..count];
@@ -491,7 +497,7 @@ fn viewOf(sys: ?*abi_scheduler.c.ke_scheduler_ctx, query: u32) []const abi_ecs.c
 
 /// The body of every behaviour system: builds the walk over the system's queries and hands it to
 /// the behaviour once.
-fn behaviourSystem(sys: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
+fn behaviourSystem(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
     const b: *Behaviour = @ptrCast(@alignCast(user orelse return R.ok));
     var w: Walk = .{
         .api = .{
@@ -535,7 +541,7 @@ fn behaviourSystem(sys: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, d
 }
 
 /// The PreUpdate system of an event type: records the destruction of every event of the type.
-fn clearEvents(sys: ?*abi_scheduler.c.ke_scheduler_ctx, _: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn clearEvents(sys: ?*abi_schedule.c.ke_schedule_ctx, _: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const commands = sys.?.commands;
     for (viewOf(sys, 0)) |seg| {
         for (seg.entities.?[0..seg.count]) |e| {
@@ -546,7 +552,15 @@ fn clearEvents(sys: ?*abi_scheduler.c.ke_scheduler_ctx, _: ?*anyopaque, _: f32) 
     return R.ok;
 }
 
-fn setOf(s: *State, kind: Kind) *const [1]abi_scheduler.c.ke_set_id {
+fn scheduleOf(s: *State, kind: Kind) *abi_schedule.c.ke_schedule {
+    return switch (kind) {
+        .ready, .exit => s.first,
+        .fixed_update => s.fixed,
+        .update, .on => s.main,
+    };
+}
+
+fn setOf(s: *State, kind: Kind) *const [1]abi_schedule.c.ke_schedule_set_id {
     return switch (kind) {
         .ready, .exit => &s.pre_update,
         .update => &s.update,
@@ -563,7 +577,10 @@ fn freeBehaviour(b: *Behaviour) void {
 
 fn freeType(s: *State, t: *Type) void {
     for (t.behaviours.items) |b| {
-        if (b.system != 0) _ = s.scheduler.unregister_system.?(s.scheduler, b.system);
+        if (b.system != 0) {
+            const schedule = scheduleOf(s, b.kind);
+            _ = schedule.unregister_system.?(schedule, b.system);
+        }
         freeBehaviour(b);
     }
     t.behaviours.deinit(heap.gpa);
@@ -585,17 +602,17 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     const name = std.fmt.allocPrintSentinel(heap.gpa, "{s}.{s}{s}{s}", .{ type_name, suffix, if (event) |_| "." else "", if (event) |e| e.name else "" }, 0) catch return error.OutOfMemory;
     errdefer heap.gpa.free(name);
     const extra: usize = 2;
-    const terms = heap.gpa.alloc(abi_scheduler.c.ke_id_access, t.columns.len + extra) catch return error.OutOfMemory;
+    const terms = heap.gpa.alloc(abi_ecs.c.ke_ecs_query_term, t.columns.len + extra) catch return error.OutOfMemory;
     errdefer heap.gpa.free(terms);
-    terms[0] = .{ .id = t.tag, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ };
-    for (t.columns, 1..) |c, i| terms[i] = .{ .id = c, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE };
-    terms[t.columns.len + 1] = .{ .id = s.status_cid, .access = if (kind == .ready or kind == .exit) abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE else abi_scheduler.c.KE_SCHEDULER_ACCESS_READ };
+    terms[0] = .{ .component = t.tag, .access = abi_ecs.c.KE_ECS_ACCESS_READ };
+    for (t.columns, 1..) |c, i| terms[i] = .{ .component = c, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE };
+    terms[t.columns.len + 1] = .{ .component = s.status_cid, .access = if (kind == .ready or kind == .exit) abi_ecs.c.KE_ECS_ACCESS_WRITE else abi_ecs.c.KE_ECS_ACCESS_READ };
 
     const b = heap.gpa.create(Behaviour) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(b);
     b.* = .{ .owner = t, .kind = kind, .run = run, .event = event, .name = name, .terms = terms };
 
-    var params = std.mem.zeroes(abi_scheduler.c.ke_system_desc);
+    var params = std.mem.zeroes(abi_schedule.c.ke_schedule_system_desc);
     params.name = name.ptr;
     params.sets = setOf(s, kind);
     params.set_count = 1;
@@ -603,7 +620,7 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     params.execute = behaviourSystem;
     params.exclusive = true;
     if (event) |e| {
-        b.event_terms = .{.{ .id = e.cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ }};
+        b.event_terms = .{.{ .component = e.cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ }};
         b.queries = .{
             .{ .terms = &b.event_terms, .term_count = 1 },
             .{ .terms = terms.ptr, .term_count = @intCast(terms.len) },
@@ -616,7 +633,8 @@ fn addBehaviour(s: *State, t: *Type, kind: Kind, run: abi_framework.c.ke_node_be
     params.queries = &b.queries;
     t.behaviours.append(heap.gpa, b) catch return error.OutOfMemory;
     errdefer _ = t.behaviours.pop();
-    try R.check(s.scheduler.register_system.?(s.scheduler, &params, &b.system));
+    const schedule = scheduleOf(s, kind);
+    try R.check(schedule.register_system.?(schedule, &params, &b.system));
 }
 
 fn prototypeOf(size: usize, initial: ?*const anyopaque, initial_size: usize, type_name: [*:0]const u8) R.Error![]align(16) u8 {
@@ -707,12 +725,12 @@ fn registerEvent(s: *State, params: *const abi_ecs.c.ke_component_params) R.Erro
     e.* = .{ .cid = 0, .size = params.size, .name = heap.gpa.dupeZ(u8, std.mem.span(name)) catch return error.OutOfMemory };
     errdefer heap.gpa.free(e.name);
     try R.check(s.ecs.component_register.?(s.ecs, params, &e.cid));
-    e.terms = .{.{ .id = e.cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE }};
+    e.terms = .{.{ .component = e.cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     e.queries = .{.{ .terms = &e.terms, .term_count = 1 }};
 
     const system_name = std.fmt.allocPrintSentinel(heap.gpa, "{s}.clear", .{e.name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(system_name);
-    var p = std.mem.zeroes(abi_scheduler.c.ke_system_desc);
+    var p = std.mem.zeroes(abi_schedule.c.ke_schedule_system_desc);
     p.name = system_name.ptr;
     p.sets = &s.pre_update;
     p.set_count = 1;
@@ -720,8 +738,8 @@ fn registerEvent(s: *State, params: *const abi_ecs.c.ke_component_params) R.Erro
     p.execute = clearEvents;
     p.queries = &e.queries;
     p.query_count = 1;
-    try R.check(s.scheduler.register_system.?(s.scheduler, &p, &e.system));
-    errdefer _ = s.scheduler.unregister_system.?(s.scheduler, e.system);
+    try R.check(s.first.register_system.?(s.first, &p, &e.system));
+    errdefer _ = s.first.unregister_system.?(s.first, e.system);
     s.events.append(heap.gpa, e) catch return error.OutOfMemory;
     return e.cid;
 }
@@ -800,19 +818,26 @@ fn vtDestroy(self_in: ?*abi_framework.c.ke_node_types) callconv(.c) void {
     for (s.types.items) |t| freeType(s, t);
     s.types.deinit(heap.gpa);
     for (s.events.items) |e| {
-        _ = s.scheduler.unregister_system.?(s.scheduler, e.system);
+        _ = s.first.unregister_system.?(s.first, e.system);
         heap.gpa.free(e.name);
         heap.gpa.destroy(e);
     }
     s.events.deinit(heap.gpa);
-    if (s.reap != 0) _ = s.scheduler.unregister_system.?(s.scheduler, s.reap);
+    if (s.reap != 0) _ = s.main.unregister_system.?(s.main, s.reap);
     var keys = s.action_ids.keyIterator();
     while (keys.next()) |k| heap.gpa.free(k.*);
     s.action_ids.deinit(heap.gpa);
     heap.gpa.destroy(s);
 }
 
-fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.ke_scene_tree, actions: ?*abi_input_actions.c.ke_input_actions, config: *const abi_framework.c.ke_node_types_config) R.Error!abi_framework.c.ke_node_types_handle {
+const Schedules = struct {
+    loop: *abi_scheduler.c.ke_scheduler,
+    first: *abi_schedule.c.ke_schedule,
+    fixed: *abi_schedule.c.ke_schedule,
+    main: *abi_schedule.c.ke_schedule,
+};
+
+fn create(schedules: Schedules, ecs: *abi_ecs.c.ke_ecs, tree: *abi_scene_tree.c.ke_scene_tree, actions: ?*abi_input_actions.c.ke_input_actions, config: *const abi_framework.c.ke_node_types_config) R.Error!abi_framework.c.ke_node_types_handle {
     var name_meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     if (!ecs.component_lookup.?(ecs, abi_framework_components.c.KE_COMPONENT_NAME_NAME, &name_meta)) {
         log.warn("node types: the scene tree components are not registered on this ecs", .{});
@@ -830,7 +855,10 @@ fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     s.* = .{
         .api = .{ .register_type = &vtRegisterType, .register_event = &vtRegisterEvent, .spawn = &vtSpawn, .carries = &vtCarries, .find_type = &vtFindType, .find_component = &vtFindComponent, .initial = &vtInitial },
-        .scheduler = scheduler,
+        .loop = schedules.loop,
+        .first = schedules.first,
+        .fixed = schedules.fixed,
+        .main = schedules.main,
         .pre_update = .{config.pre_update},
         .update = .{config.update},
         .fixed_update = .{config.fixed_update},
@@ -843,9 +871,9 @@ fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree
     };
     s.api.handle = s;
     errdefer vtDestroy(&s.api);
-    s.reap_terms = .{.{ .id = status_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE }};
+    s.reap_terms = .{.{ .component = status_cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     s.reap_queries = .{.{ .terms = &s.reap_terms, .term_count = 1 }};
-    var reap = std.mem.zeroes(abi_scheduler.c.ke_system_desc);
+    var reap = std.mem.zeroes(abi_schedule.c.ke_schedule_system_desc);
     reap.name = "nodes.reap";
     reap.sets = &s.post_update;
     reap.set_count = 1;
@@ -854,18 +882,21 @@ fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree
     reap.queries = &s.reap_queries;
     reap.query_count = 1;
     reap.exclusive = true;
-    try R.check(scheduler.register_system.?(scheduler, &reap, &s.reap));
+    try R.check(s.main.register_system.?(s.main, &reap, &s.reap));
     var base = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     base.name = base_type_name;
     _ = try registerType(s, &base);
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
 
-/// Factory. A null scheduler, ecs, scene tree, config or out handle fails as an invalid argument; an ecs
+/// Factory. A null scheduler, schedule, ecs, scene tree, config or out handle fails as an invalid argument; an ecs
 /// without the scene tree components fails as not found; a refused registration fails with the
 /// ecs's code. Each leaves the handle zeroed.
 export fn ke_node_types_create(
-    scheduler_in: ?*abi_scheduler.c.ke_scheduler,
+    loop_in: ?*abi_scheduler.c.ke_scheduler,
+    first_in: ?*abi_schedule.c.ke_schedule,
+    fixed_in: ?*abi_schedule.c.ke_schedule,
+    main_in: ?*abi_schedule.c.ke_schedule,
     ecs_in: ?*abi_ecs.c.ke_ecs,
     tree_in: ?*abi_scene_tree.c.ke_scene_tree,
     actions: ?*abi_input_actions.c.ke_input_actions,
@@ -874,11 +905,16 @@ export fn ke_node_types_create(
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_types orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_framework.c.ke_node_types_handle);
-    const scheduler = scheduler_in orelse return R.code(error.InvalidArgument);
+    const schedules: Schedules = .{
+        .loop = loop_in orelse return R.code(error.InvalidArgument),
+        .first = first_in orelse return R.code(error.InvalidArgument),
+        .fixed = fixed_in orelse return R.code(error.InvalidArgument),
+        .main = main_in orelse return R.code(error.InvalidArgument),
+    };
     const ecs = ecs_in orelse return R.code(error.InvalidArgument);
     const tree = tree_in orelse return R.code(error.InvalidArgument);
     const config = config_in orelse return R.code(error.InvalidArgument);
-    out.* = create(scheduler, ecs, tree, actions, config) catch |err| return R.code(err);
+    out.* = create(schedules, ecs, tree, actions, config) catch |err| return R.code(err);
     return R.ok;
 }
 
@@ -892,11 +928,11 @@ const name_cid: Cid = 40;
 
 const test_sets: abi_framework.c.ke_node_types_config = .{ .pre_update = 11, .update = 12, .fixed_update = 13, .post_update = 14 };
 
-var registered: [8]abi_scheduler.c.ke_system_desc = undefined;
+var registered: [8]abi_schedule.c.ke_schedule_system_desc = undefined;
 var registered_count: usize = 0;
-var reap_params: abi_scheduler.c.ke_system_desc = undefined;
+var reap_params: abi_schedule.c.ke_schedule_system_desc = undefined;
 
-fn recordSystem(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.register_system)) abi_result.c.ke_result {
+fn recordSystem(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)) abi_result.c.ke_result {
     registered[registered_count] = args[1].?.*;
     registered_count += 1;
     args[2].?.* = registered_count;
@@ -945,7 +981,8 @@ fn lookupComponent(args: zsub.For(abi_ecs.c.ke_ecs).Args(.component_lookup)) boo
 
 const Fixture = struct {
     ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined,
-    rt: zsub.For(abi_scheduler.c.ke_scheduler) = undefined,
+    rt: zsub.For(abi_schedule.c.ke_schedule) = undefined,
+    loop: zsub.For(abi_scheduler.c.ke_scheduler) = undefined,
     tree: zsub.For(abi_scene_tree.c.ke_scene_tree) = undefined,
     types: abi_framework.c.ke_node_types_handle = undefined,
 
@@ -954,11 +991,12 @@ const Fixture = struct {
         tag_count = 0;
         try f.ecs.init();
         try f.rt.init();
+        try f.loop.init();
         try f.tree.init();
         _ = f.ecs.when(.component_lookup).does(lookupComponent);
         _ = f.ecs.when(.component_register).does(registerComponent);
         _ = f.rt.when(.register_system).does(recordSystem);
-        try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), null, &test_sets, &f.types));
+        try R.check(ke_node_types_create(f.loop.api(), f.rt.api(), f.rt.api(), f.rt.api(), f.ecs.api(), f.tree.api(), null, &test_sets, &f.types));
         reap_params = registered[0];
         registered_count = 0;
     }
@@ -966,6 +1004,7 @@ const Fixture = struct {
     fn deinit(f: *Fixture) void {
         f.types.destroy.?(f.types.ref);
         f.tree.deinit();
+        f.loop.deinit();
         f.rt.deinit();
         f.ecs.deinit();
     }
@@ -994,7 +1033,7 @@ const Rows = struct {
     goal_columns: [1]?*anyopaque = undefined,
     segs: [2]abi_ecs.c.ke_ecs_segment = undefined,
     goal_segs: [1]abi_ecs.c.ke_ecs_segment = undefined,
-    sys: abi_scheduler.c.ke_scheduler_ctx = undefined,
+    sys: abi_schedule.c.ke_schedule_ctx = undefined,
     with_events: bool = false,
 
     fn build(r: *Rows) void {
@@ -1010,7 +1049,7 @@ const Rows = struct {
 
     var second_columns: [4]?*anyopaque = undefined;
 
-    fn view(sys: ?*abi_scheduler.c.ke_scheduler_ctx, query: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    fn view(sys: ?*abi_schedule.c.ke_schedule_ctx, query: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
         const r: *Rows = @ptrCast(@alignCast(sys.?.handle));
         second_columns = .{ null, @ptrCast(&r.paddles[2]), @ptrCast(&r.transforms[2]), @ptrCast(&r.status[2]) };
         r.segs[1].columns = &second_columns;
@@ -1023,7 +1062,7 @@ const Rows = struct {
     }
 };
 
-fn runSystem(params: abi_scheduler.c.ke_system_desc, rows: *Rows) !void {
+fn runSystem(params: abi_schedule.c.ke_schedule_system_desc, rows: *Rows) !void {
     try R.check(params.execute.?(&rows.sys, params.user_data, 0.5));
 }
 
@@ -1115,7 +1154,7 @@ test "an action reference is resolved by name on its first read, action 0 among 
     _ = actions.when(.was_action_pressed).returns(true);
     var with_actions: abi_framework.c.ke_node_types_handle = undefined;
     registered_count = 0;
-    try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &test_sets, &with_actions));
+    try R.check(ke_node_types_create(f.loop.api(), f.rt.api(), f.rt.api(), f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &test_sets, &with_actions));
     defer with_actions.destroy.?(with_actions.ref);
     var d = paddleDesc();
     d.update = readLaunch;
@@ -1153,7 +1192,7 @@ test "an action read by name is looked up once and kept" {
     _ = actions.when(.was_action_pressed).returns(true);
     var with_actions: abi_framework.c.ke_node_types_handle = undefined;
     registered_count = 0;
-    try R.check(ke_node_types_create(f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &test_sets, &with_actions));
+    try R.check(ke_node_types_create(f.loop.api(), f.rt.api(), f.rt.api(), f.rt.api(), f.ecs.api(), f.tree.api(), actions.api(), &test_sets, &with_actions));
     defer with_actions.destroy.?(with_actions.ref);
     var d = paddleDesc();
     d.update = readLaunchByName;
@@ -1195,7 +1234,7 @@ var leaving_entities = [_]Entity{12};
 var leaving_columns: [1]?*anyopaque = undefined;
 var leaving_segs: [1]abi_ecs.c.ke_ecs_segment = undefined;
 
-fn leavingView(_: ?*abi_scheduler.c.ke_scheduler_ctx, _: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+fn leavingView(_: ?*abi_schedule.c.ke_schedule_ctx, _: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
     leaving_columns = .{&leaving_status};
     leaving_segs = .{.{ .entities = &leaving_entities, .count = 1, .columns = &leaving_columns, .column_count = 1 }};
     out_count.?.* = 1;
@@ -1214,7 +1253,7 @@ test "the reap removes a node leaving the tree only once its exit ran" {
     _ = f.tree.when(.parent).returns(invalid);
     _ = f.tree.when(.first_child).returns(invalid);
     _ = f.tree.when(.destroy_node_deferred).returns(R.ok);
-    var sys: abi_scheduler.c.ke_scheduler_ctx = .{ .view = &leavingView };
+    var sys: abi_schedule.c.ke_schedule_ctx = .{ .view = &leavingView };
     leaving_status[0].exited = 0;
     try R.check(reap_params.execute.?(&sys, reap_params.user_data, 0));
     try f.tree.received(.destroy_node_deferred).times(0);
@@ -1239,7 +1278,7 @@ test "exit forwards the request to the scheduler" {
     var rows: Rows = .{};
     rows.build();
     try runSystem(registered[0], &rows);
-    try f.rt.received(.request_exit).times(1);
+    try f.loop.received(.request_exit).times(1);
 }
 
 test "component reaches another node's component and is null for one the node does not carry" {

@@ -4,7 +4,7 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_input = @import("input");
 const abi_result = @import("result");
-const abi_scheduler = @import("scheduler");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("input_actions_c.zig");

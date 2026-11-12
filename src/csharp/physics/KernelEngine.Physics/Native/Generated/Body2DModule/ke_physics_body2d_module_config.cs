@@ -6,12 +6,12 @@ using global::KernelEngine.Logger;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Physics.Native;
 
 public partial struct ke_physics_body2d_module_config
 {
-    [NativeTypeName("ke_set_id")]
+    [NativeTypeName("ke_schedule_set_id")]
     public uint set;
 }

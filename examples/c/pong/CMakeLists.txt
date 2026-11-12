@@ -14,6 +14,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_ecs_flecs
     KernelEngine::ke_runtime
     KernelEngine::ke_scheduler
+    KernelEngine::ke_schedule
     KernelEngine::ke_framework
     KernelEngine::ke_configuration
     KernelEngine::ke_configuration_toml

@@ -4,14 +4,13 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_input = @import("input");
 const abi_result = @import("result");
-const abi_scheduler = @import("scheduler");
+const abi_schedule = @import("schedule");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 pub const ke_action_type = c_uint;
 pub const KE_ACTION_TYPE_BUTTON: ke_action_type = 0;
@@ -24,19 +23,23 @@ pub const KE_ACTION_TYPE_AXIS3D: ke_action_type = 3;
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// The values the action maps are created with, whatever its implementation, each applied as
 /// given. The values the action maps are created with.
 pub const ke_input_actions_config = extern struct {
     /// The configuration section the maps are read from.
     section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The set the "input.actions" system joins when a scheduler is given; its phase must run before
-    /// any behaviour reads an action.
-    set: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set the "input.actions" system joins when a schedule is given; its schedule must run
+    /// before any behaviour reads an action.
+    set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
 };
 
 /// Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame

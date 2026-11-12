@@ -7,7 +7,7 @@ const abi_physics_components = @import("physics_components");
 const abi_render_components = @import("render_components");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
-const abi_scheduler = @import("scheduler");
+const abi_schedule = @import("schedule");
 const abi_spatial = @import("spatial");
 const abi_ui_components = @import("ui_components");
 
@@ -15,10 +15,9 @@ pub const ke_audio_sound = u32;
 pub const ke_audio_voice = u32;
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// The number of entries in `ke_engine_node_types`.
 pub const KE_ENGINE_NODE_TYPE_COUNT = 15;
@@ -28,10 +27,14 @@ pub const KE_ENGINE_NODE_TYPE_COUNT = 15;
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an

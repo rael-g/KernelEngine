@@ -10,7 +10,7 @@ const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
-const abi_scheduler = @import("abi_scheduler");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
@@ -22,9 +22,9 @@ const mat4 = @import("mat4.zig");
 /// user data of that system, so the record must not be moved or copied: `queries` and `access` are
 /// pointed at from the registration, and the query's terms point into `queries_terms`.
 const State = struct {
-    scheduler: *abi_scheduler.c.ke_scheduler = undefined,
-    system: abi_scheduler.c.ke_scheduler_system_id = 0,
-    set: [1]abi_scheduler.c.ke_set_id = .{0},
+    scheduler: *abi_schedule.c.ke_schedule = undefined,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
+    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     ecs: *abi_ecs.c.ke_ecs,
     transform_cid: abi_asset_resolver.c.ke_component_id,
     transform2d_cid: abi_asset_resolver.c.ke_component_id,
@@ -34,10 +34,10 @@ const State = struct {
     order: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
     stack: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
 
-    queries_terms: [1]abi_scheduler.c.ke_id_access = undefined,
+    queries_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
 
-    queries: [1]abi_scheduler.c.ke_query_desc = undefined,
-    access: [4]abi_scheduler.c.ke_id_access = undefined,
+    queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
+    access: [4]abi_ecs.c.ke_ecs_query_term = undefined,
 };
 
 fn hierarchyOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*const abi_framework_components.c.ke_hierarchy_component {
@@ -80,7 +80,7 @@ fn pushSubtree(s: *State, root: abi_asset_resolver.c.ke_entity) void {
 
 /// Runs at the start of every tick, before any world matrix is written, so `order` reflects the
 /// parent links of that tick.
-fn flatten(s: *State, ctx: ?*abi_scheduler.c.ke_scheduler_ctx) void {
+fn flatten(s: *State, ctx: ?*abi_schedule.c.ke_schedule_ctx) void {
     s.order.clearRetainingCapacity();
 
     var segc: usize = 0;
@@ -102,7 +102,7 @@ fn flatten(s: *State, ctx: ?*abi_scheduler.c.ke_scheduler_ctx) void {
 /// a world transform is passed over; one without a parent, or whose parent has no world
 /// transform, composes with the identity. Always succeeds and reports nothing. Without a `State` it
 /// does nothing.
-fn propagateSystem(ctx: ?*abi_scheduler.c.ke_scheduler_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn propagateSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
     flatten(s, ctx);
 
@@ -146,7 +146,7 @@ fn vtDestroy(self_in: ?*abi_framework.c.ke_scene_hierarchy) callconv(.c) void {
 /// fails as not found; a failed allocation fails as out of memory; a refused system registration
 /// fails with the scheduler's code. Each leaves the handle zeroed.
 export fn ke_scene_hierarchy_create(
-    scheduler_in: ?*abi_scheduler.c.ke_scheduler,
+    scheduler_in: ?*abi_schedule.c.ke_schedule,
     ecs_in: ?*abi_ecs.c.ke_ecs,
     config: ?*const abi_framework.c.ke_scene_hierarchy_config,
     out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle,
@@ -160,7 +160,7 @@ export fn ke_scene_hierarchy_create(
     return R.ok;
 }
 
-fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, set: abi_scheduler.c.ke_set_id) R.Error!abi_framework.c.ke_scene_hierarchy_handle {
+fn create(scheduler: *abi_schedule.c.ke_schedule, ecs: *abi_ecs.c.ke_ecs, set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_framework.c.ke_scene_hierarchy_handle {
     var transform_meta: abi_ecs.c.ke_component_meta = undefined;
     var transform2d_meta: abi_ecs.c.ke_component_meta = undefined;
     var world_transform_meta: abi_ecs.c.ke_component_meta = undefined;
@@ -184,17 +184,17 @@ fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, set:
         .hierarchy_cid = hierarchy_meta.cid,
         .set = .{set},
     };
-    s.queries_terms = .{ .{ .id = s.hierarchy_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ } };
+    s.queries_terms = .{ .{ .component = s.hierarchy_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ } };
     s.queries = .{ .{ .terms = s.queries_terms[0..].ptr, .term_count = 1 } };
 
     s.access = .{
-        .{ .id = s.hierarchy_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ },
-        .{ .id = s.transform_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ },
-        .{ .id = s.transform2d_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_READ },
-        .{ .id = s.world_transform_cid, .access = abi_scheduler.c.KE_SCHEDULER_ACCESS_WRITE },
+        .{ .component = s.hierarchy_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.transform_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.transform2d_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.world_transform_cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE },
     };
 
-    const propagate: abi_scheduler.c.ke_system_desc = .{
+    const propagate: abi_schedule.c.ke_schedule_system_desc = .{
         .name = "scene.propagate_transforms",
         .user_data = s,
         .execute = propagateSystem,
@@ -206,7 +206,7 @@ fn create(scheduler: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, set:
         .set_count = 1,
     };
 
-    var system_id: abi_scheduler.c.ke_scheduler_system_id = 0;
+    var system_id: abi_schedule.c.ke_schedule_system_id = 0;
     try R.check(scheduler.register_system.?(scheduler, &propagate, &system_id));
     s.scheduler = scheduler;
     s.system = system_id;
@@ -229,7 +229,7 @@ test "destroying the scene hierarchy unregisters its system" {
     try ecs.init();
     defer ecs.deinit();
     _ = ecs.when(.component_lookup).does(lookupFound);
-    var rt: zsub.For(abi_scheduler.c.ke_scheduler) = undefined;
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
     _ = rt.when(.register_system).writesFresh(2);
@@ -237,6 +237,6 @@ test "destroying the scene hierarchy unregisters its system" {
     try R.check(ke_scene_hierarchy_create(rt.api(), ecs.api(), &.{ .set = 0 }, &h));
     h.destroy.?(h.ref);
     try rt.received(.register_system).times(1);
-    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_scheduler.c.ke_scheduler_system_id, 0))).never();
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 0))).never();
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));
 }

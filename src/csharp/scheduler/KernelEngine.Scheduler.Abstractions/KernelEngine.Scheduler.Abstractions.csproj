@@ -12,5 +12,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Abstractions\KernelEngine.Ecs.Abstractions.csproj" />
+    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
   </ItemGroup>
 </Project>

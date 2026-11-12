@@ -5,22 +5,22 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". Given a scheduler, it registers the exclusive system "input.actions" in the config's set, which advances input's frame and evaluates the maps against its snapshot; destroying the maps unregisters it.</summary>
+/// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". Given a schedule, it registers the exclusive system "input.actions" in the config's set, which advances input's frame and evaluates the maps against its snapshot; destroying the maps unregisters it.</summary>
 public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.InputActions
 {
-    /// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". Given a scheduler, it registers the exclusive system "input.actions" in the config's set, which advances input's frame and evaluates the maps against its snapshot; destroying the maps unregisters it.</summary>
-    /// <param name="scheduler">NULL registers no system; the caller then evaluates.</param>
-    /// <param name="input">The input the system reads; required with scheduler.</param>
+    /// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". Given a schedule, it registers the exclusive system "input.actions" in the config's set, which advances input's frame and evaluates the maps against its snapshot; destroying the maps unregisters it.</summary>
+    /// <param name="schedule">NULL registers no system; the caller then evaluates.</param>
+    /// <param name="input">The input the system reads; required with schedule.</param>
     /// <param name="configuration">Read during the call only; NULL creates no map.</param>
-    /// <param name="config">Required with configuration or scheduler; every field is read as given.</param>
-    public DefaultInputActions(KernelEngine.Scheduler.INativeScheduler? scheduler, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(Create(scheduler, input, configuration, config))
+    /// <param name="config">Required with configuration or schedule; every field is read as given.</param>
+    public DefaultInputActions(KernelEngine.Schedule.INativeSchedule? schedule, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(Create(schedule, input, configuration, config))
     {
-        Hold(scheduler?.Owner);
+        Hold(schedule?.Owner);
         Hold(input?.Owner);
         Hold(configuration?.Owner);
     }
 
-    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Scheduler.INativeScheduler? scheduler, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
+    private static KernelEngine.Framework.Native.ke_input_actions_handle Create(KernelEngine.Schedule.INativeSchedule? schedule, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
     {
         var sectionConfigBytes = config.Section is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Section + "\0");
         fixed (byte* sectionConfigPtr = sectionConfigBytes)
@@ -29,7 +29,7 @@ public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.
             nativeConfig.section = (sbyte*)sectionConfigPtr;
             nativeConfig.set = config.Set;
             KernelEngine.Framework.Native.ke_input_actions_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((scheduler is null ? null : scheduler.Native), (input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &nativeConfig, &handle), "ke_input_actions_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((schedule is null ? null : schedule.Native), (input is null ? null : input.Native), (configuration is null ? null : configuration.Native), &nativeConfig, &handle), "ke_input_actions_create");
             return handle;
         }
     }

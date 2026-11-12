@@ -6,26 +6,29 @@ const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
-const abi_scheduler = @import("scheduler");
+const abi_schedule = @import("schedule");
 
 pub const ke_physics_body2d_module = opaque {};
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -36,8 +39,8 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// The values the body2d module is created with.
 pub const ke_physics_body2d_module_config = extern struct {
-    /// The set both systems join; its phase must run after scripts write bodies and transforms.
-    set: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set both systems join; its schedule must run after scripts write bodies and transforms.
+    set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
 };
 
 pub const ke_physics_body2d_module_handle = extern struct {
@@ -46,7 +49,7 @@ pub const ke_physics_body2d_module_handle = extern struct {
 };
 
 /// Registers, in the config's set, the systems that create, step, and sync 2D bodies.
-pub extern fn ke_physics_body2d_module_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, config: ?*const ke_physics_body2d_module_config, out_module: ?*ke_physics_body2d_module_handle) abi_result.c.ke_result;
+pub extern fn ke_physics_body2d_module_create(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, config: ?*const ke_physics_body2d_module_config, out_module: ?*ke_physics_body2d_module_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_physics_body2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

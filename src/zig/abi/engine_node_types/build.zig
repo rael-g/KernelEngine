@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
+    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 
@@ -28,8 +28,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/physics"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/result"));
-    translated.addIncludePath(b.path("../../../c/scheduler"));
-    translated.addIncludePath(b.path("../../scheduler/include"));
+    translated.addIncludePath(b.path("../../../c/schedule"));
+    translated.addIncludePath(b.path("../../schedule/include"));
     translated.addIncludePath(b.path("../../../c/spatial"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -51,8 +51,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
-    tests.root_module.addIncludePath(b.path("../../scheduler/include"));
+    tests.root_module.addIncludePath(b.path("../../../c/schedule"));
+    tests.root_module.addIncludePath(b.path("../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     b.step("test", "Check the engine_node_types ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
+    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
     abi.addImport("text", b.dependency("abi_text", .{}).module("abi"));
 
@@ -43,6 +44,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/result"));
+    translated.addIncludePath(b.path("../../../c/schedule"));
+    translated.addIncludePath(b.path("../../schedule/include"));
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../../scheduler/include"));
     translated.addIncludePath(b.path("../../../c/spatial"));
@@ -73,6 +76,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
+    tests.root_module.addIncludePath(b.path("../../../c/schedule"));
+    tests.root_module.addIncludePath(b.path("../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../scheduler/include"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));

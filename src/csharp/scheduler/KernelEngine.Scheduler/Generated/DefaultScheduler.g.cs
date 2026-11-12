@@ -5,26 +5,20 @@
 
 namespace KernelEngine.Scheduler;
 
-/// <summary>Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.</summary>
+/// <summary>Creates a scheduler with no schedule.</summary>
 public sealed unsafe partial class DefaultScheduler : KernelEngine.Scheduler.Scheduler
 {
-    /// <summary>Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.</summary>
-    /// <param name="ecs"></param>
-    /// <param name="taskPool"></param>
+    /// <summary>Creates a scheduler with no schedule.</summary>
     /// <param name="config">Required; every field is read as given.</param>
-    public DefaultScheduler(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, in KernelEngine.Scheduler.SchedulerConfig config) : base(Create(ecs, taskPool, config))
+    public DefaultScheduler(in KernelEngine.Scheduler.SchedulerConfig config) : base(Create(config))
     {
-        Hold(ecs.Owner);
-        Hold(taskPool.Owner);
     }
 
-    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool, in KernelEngine.Scheduler.SchedulerConfig config)
+    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(in KernelEngine.Scheduler.SchedulerConfig config)
     {
-        ArgumentNullException.ThrowIfNull(ecs);
-        ArgumentNullException.ThrowIfNull(taskPool);
         var nativeConfig = config;
         KernelEngine.Scheduler.Native.ke_scheduler_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(ecs.Native, taskPool.Native, &nativeConfig, &handle), "ke_scheduler_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(&nativeConfig, &handle), "ke_scheduler_create");
         return handle;
     }
 }

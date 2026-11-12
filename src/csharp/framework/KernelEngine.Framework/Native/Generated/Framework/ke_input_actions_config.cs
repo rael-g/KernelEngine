@@ -10,7 +10,7 @@ using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.Schedule.Native;
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
@@ -20,6 +20,6 @@ public unsafe partial struct ke_input_actions_config
     [NativeTypeName("const char *")]
     public sbyte* section;
 
-    [NativeTypeName("ke_set_id")]
+    [NativeTypeName("ke_schedule_set_id")]
     public uint set;
 }

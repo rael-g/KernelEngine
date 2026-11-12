@@ -9,7 +9,7 @@
         .abi_physics = .{ .path = "../../../abi/physics" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_scene_tree = .{ .path = "../../../abi/scene_tree" },
-        .abi_scheduler = .{ .path = "../../../abi/scheduler" },
+        .abi_schedule = .{ .path = "../../../abi/schedule" },
     },
     .paths = .{"."},
 }

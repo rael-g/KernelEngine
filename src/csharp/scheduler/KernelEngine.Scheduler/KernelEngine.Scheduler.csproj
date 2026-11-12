@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Scheduler.Abstractions\KernelEngine.Scheduler.Abstractions.csproj" />
+    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool\KernelEngine.TaskPool.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />

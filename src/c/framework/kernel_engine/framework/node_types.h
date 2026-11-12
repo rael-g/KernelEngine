@@ -4,7 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/commands.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/schedule/schedule.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -238,7 +238,7 @@ extern "C"
     } ke_node_type_desc;
 
     /// Node types and the events between them: each behaviour of a registered type runs as a
-    /// system of its phase over the nodes of the type, one behaviour at a time. A type named
+    /// system of its schedule over the nodes of the type, one behaviour at a time. A type named
     /// `node`, with no fields and no components, is registered from the start.
     typedef struct ke_node_types
     {
@@ -310,16 +310,16 @@ extern "C"
     /// [borrowed] The values the node types are created with: the set each kind of system joins.
     typedef struct ke_node_types_config
     {
-        /// The set of the ready and exit behaviours and of the systems that clear the last tick's
-        /// events; its phase must run first in a tick.
-        ke_set_id pre_update;
-        /// The set of the update behaviours.
-        ke_set_id update;
-        /// The set of the fixed update behaviours.
-        ke_set_id fixed_update;
-        /// The set of the event behaviours and of the system that frees the nodes that left the
-        /// tree; its phase must run after the update.
-        ke_set_id post_update;
+        /// The set, in the first schedule, of the ready and exit behaviours and of the systems that
+        /// clear the last tick's events; that schedule must run first in a tick.
+        ke_schedule_set_id pre_update;
+        /// The set, in the main schedule, of the update behaviours.
+        ke_schedule_set_id update;
+        /// The set, in the fixed schedule, of the fixed update behaviours.
+        ke_schedule_set_id fixed_update;
+        /// The set, in the main schedule, of the event behaviours and of the system that frees the
+        /// nodes that left the tree; it must follow the update set.
+        ke_schedule_set_id post_update;
     } ke_node_types_config;
 
 /** Moves @p ctx to each node in turn, with @p var pointing at the node's fields as @p type. */

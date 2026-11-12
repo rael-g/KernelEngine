@@ -8,11 +8,9 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs;
-using KernelEngine.Ecs.Native;
+using KernelEngine.Schedule;
+using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
-using KernelEngine.TaskPool;
-using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Scheduler;
 
@@ -25,7 +23,7 @@ public unsafe interface INativeScheduler
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Orders systems by what they touch and the sets they join, and runs their phases tick by tick across the task pool.</summary>
+/// <summary>The frame loop: runs the schedules it was given, each when its cadence says, tick by tick.</summary>
 public unsafe partial class Scheduler : IDisposable, INativeScheduler, IScheduler
 {
     private ke_scheduler* _native;
@@ -33,23 +31,6 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
     private readonly delegate* unmanaged[Cdecl]<ke_scheduler*, void> _destroy;
     private readonly global::KernelEngine.Interop.NativeOwner? _owner;
     private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
-
-    /// <summary>
-    /// Keeps every registered handler reachable, one per key the slot registers against.
-    /// The native side holds only an opaque pointer to it, which stops nothing on this
-    /// side from collecting or moving the object before the native side calls back into it.
-    /// </summary>
-    private readonly Dictionary<ulong, GCHandle> _retainedExecute = new();
-
-    /// <summary>
-    /// Where a managed exception waits out the native frames. A handler runs
-    /// underneath native code that has no way to carry an exception, so throwing
-    /// through it would tear down the process; the trampoline parks it here and
-    /// the call rethrows once the native stack has unwound. Per-thread, because
-    /// a handler runs on whichever thread the native side called it from.
-    /// </summary>
-    [ThreadStatic]
-    private static Exception? s_parkedCallbackException;
 
     private ke_scheduler* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Scheduler));
@@ -88,222 +69,26 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
         _owner = null;
     }
 
-    /// <summary>Registers a phase.</summary>
-    /// <param name="name">Identifies the phase in diagnostics.</param>
-    /// <param name="cadence">When the phase runs.</param>
-    /// <param name="pipelined">The phase runs on the task pool while the tick goes on and the next one runs; only an every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the queries of its systems match, entities and columns, which is all its bodies read; a body of the phase records no structural change.</param>
-    /// <returns>Receives the phase's id.</returns>
+    /// <summary>Adds a schedule; a tick runs the schedules in the order they were added.</summary>
+    /// <param name="schedule">Must outlive the scheduler.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint RegisterPhase(string name, PhaseCadence cadence, bool pipelined)
+    public void AddSchedule(INativeSchedule schedule, SchedulerCadence cadence)
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            ke_phase_desc desc = default;
-            desc.name = (sbyte*)namePtr;
-            desc.cadence = (PhaseCadence)cadence;
-            desc.pipelined = pipelined;
-            uint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_phase(Handle, &desc, &resultOut)), "register_phase");
-            return resultOut;
-        }
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_schedule(Handle, schedule.Native, (SchedulerCadence)cadence), "add_schedule");
     }
 
-    /// <summary>Registers an ordering set.</summary>
-    /// <param name="name">Identifies the set in diagnostics.</param>
-    /// <param name="phase">The phase whose systems the set orders.</param>
-    /// <param name="after">Sets of the same phase whose systems all run before this set's.</param>
-    /// <returns>Receives the set's id.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public uint RegisterSet(string name, uint phase, ReadOnlySpan<uint> after)
-    {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            fixed (uint* afterPtr = after)
-            {
-                ke_set_desc desc = default;
-                desc.name = (sbyte*)namePtr;
-                desc.phase = phase;
-                desc.after = afterPtr;
-                desc.after_count = (uint)after.Length;
-                uint resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_set(Handle, &desc, &resultOut)), "register_set");
-                return resultOut;
-            }
-        }
-    }
-
-    /// <summary>Registers a system. From a body, it takes effect with the next tick.</summary>
-    /// <param name="name">Identifies the system in diagnostics and in the failure its body raises.</param>
-    /// <param name="execute">The body.</param>
-    /// <param name="queries">Queries the body reads through ke_scheduler_ctx.view.</param>
-    /// <param name="access">Ids the system touches that no query term covers.</param>
-    /// <param name="sets">The sets the system joins, at least one, all of one phase.</param>
-    /// <param name="perEntity">The body's work on one entity is independent of every other; the scheduler may run it as several concurrent slices of the same entity set.</param>
-    /// <param name="exclusive">The body runs alone at the start of its phase, and what it records is applied before the other systems of the phase run. Its access does not order it.</param>
-    /// <returns>Receives the system's id.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ulong RegisterSystem(string name, SchedulerExecute? execute, ReadOnlySpan<QueryDesc> queries, ReadOnlySpan<IdAccess> access, ReadOnlySpan<uint> sets, bool perEntity, bool exclusive)
-    {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            var queriesPins = new System.Buffers.MemoryHandle[queries.Length];
-            var queriesNative = new ke_query_desc[queries.Length];
-            try
-            {
-                for (var queriesAt = 0; queriesAt < queries.Length; queriesAt++)
-                {
-                    queriesPins[queriesAt] = queries[queriesAt].Terms.Pin();
-                    queriesNative[queriesAt].terms = (IdAccess*)queriesPins[queriesAt].Pointer;
-                    queriesNative[queriesAt].term_count = (uint)queries[queriesAt].Terms.Length;
-                }
-                fixed (ke_query_desc* queriesPtr = queriesNative)
-                {
-                    fixed (IdAccess* accessPtr = access)
-                    {
-                        fixed (uint* setsPtr = sets)
-                        {
-                            var executeHandle = execute is null ? default : GCHandle.Alloc(execute);
-                            ke_system_desc desc = default;
-                            desc.name = (sbyte*)namePtr;
-                            desc.user_data = (void*)GCHandle.ToIntPtr(executeHandle);
-                            desc.execute = execute is null ? null : (delegate* unmanaged[Cdecl]<ke_scheduler_ctx*, void*, float, KernelEngine.Result.Native.Result>)&RegisterSystemExecuteTrampoline;
-                            desc.queries = queriesPtr;
-                            desc.query_count = (uint)queries.Length;
-                            desc.access = accessPtr;
-                            desc.access_count = (uint)access.Length;
-                            desc.sets = setsPtr;
-                            desc.set_count = (uint)sets.Length;
-                            desc.per_entity = perEntity;
-                            desc.exclusive = exclusive;
-                            s_parkedCallbackException = null;
-                            ulong resultOut = default;
-                            KernelEngine.Result.Native.Result rc;
-                            bool ok;
-                            try
-                            {
-                                ok = (rc = Handle->register_system(Handle, &desc, &resultOut)) == KernelEngine.Result.Native.Result.Ok;
-                            }
-                            catch
-                            {
-                                if (executeHandle.IsAllocated) executeHandle.Free();
-                                throw;
-                            }
-                            if (s_parkedCallbackException is { } parked)
-                            {
-                                s_parkedCallbackException = null;
-                                throw parked;
-                            }
-                            if (!ok)
-                            {
-                                if (executeHandle.IsAllocated) executeHandle.Free();
-                                throw KernelEngine.NativeResults.FromCode(rc, "register_system");
-                            }
-                            if (executeHandle.IsAllocated) _retainedExecute[resultOut] = executeHandle;
-                            return resultOut;
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                for (var queriesAt = 0; queriesAt < queriesPins.Length; queriesAt++) queriesPins[queriesAt].Dispose();
-            }
-        }
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static KernelEngine.Result.Native.Result RegisterSystemExecuteTrampoline(ke_scheduler_ctx* arg0, void* ctx, float arg2)
-    {
-        try
-        {
-            if (GCHandle.FromIntPtr((nint)ctx).Target is SchedulerExecute handler)
-            {
-                handler(SchedulerCtx.Borrow(arg0), arg2);
-                return KernelEngine.Result.Native.Result.Ok;
-            }
-            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_scheduler_execute_fn: no handler is registered"));
-        }
-        catch (Exception ex)
-        {
-            s_raisedCallbackFailures.Enqueue(ex);
-            return KernelEngine.NativeResults.ToCode(ex);
-        }
-    }
-
-    /// <summary>Removes a system. From a body, it takes effect with the next tick.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void UnregisterSystem(ulong id)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->unregister_system(Handle, id)), "unregister_system");
-    }
-
-    /// <summary>Declares the lifetime of id; an id never declared is persistent.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void DeclareLifetime(ComponentId id, Lifetime lifetime)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->declare_lifetime(Handle, id, (Lifetime)lifetime)), "declare_lifetime");
-    }
-
-    /// <summary>Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void DeclareExclusive(ComponentId group, ComponentId member)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->declare_exclusive(Handle, group, member)), "declare_exclusive");
-    }
-
-    /// <summary>Builds the order of every phase whose registrations changed since the last build; tick builds the same way. Within a phase, the systems of a set run after those of the sets it follows, a writer of an id before its readers, and of two writers with no other order, the one registered first: an ambiguity.</summary>
-    /// <param name="refuseAmbiguity">When true, an ambiguity fails the build.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Build(bool refuseAmbiguity)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->build(Handle, refuseAmbiguity)), "build");
-    }
-
-    /// <summary>The built order of phase, in registration order.</summary>
-    /// <param name="outSystems">Receives one entry per system of the phase.</param>
-    /// <returns>Receives the number of systems of the phase.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public uint DescribePhase(uint phase, Span<SystemOrder> outSystems)
-    {
-        fixed (SystemOrder* outSystemsPtr = outSystems)
-        {
-            uint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->describe_phase(Handle, phase, outSystemsPtr, (uint)outSystems.Length, &resultOut)), "describe_phase");
-            return resultOut;
-        }
-    }
-
-    /// <summary>Applies what was recorded into commands, then runs the phases in registration order: on the first tick the startup phases first, then each every-tick phase, and each block of fixed phases once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
+    /// <summary>Runs the schedules: on the first tick the startup ones first, then each every-tick one, and each block of fixed ones once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Tick(float dt)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->tick(Handle, dt)), "tick");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->tick(Handle, dt), "tick");
     }
 
-    /// <summary>Waits for every pipelined phase still running.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Flush()
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->flush(Handle)), "flush");
-    }
-
-    /// <summary>Waits for every pipelined phase still running, then runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.</summary>
+    /// <summary>Runs the shutdown schedules once if a tick ran; a later call does nothing, and a later tick is refused. Destroying the scheduler calls it for a caller that did not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Shutdown()
     {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->shutdown(Handle)), "shutdown");
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->shutdown(Handle), "shutdown");
     }
 
     /// <summary>Records that the program should end; any body or the caller may ask, from any thread.</summary>
@@ -318,13 +103,6 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
         return Handle->exit_requested(Handle);
     }
 
-    /// <summary>The queue the caller of tick records structural changes into between ticks; the next tick applies it first. Only the thread that calls tick records into it.</summary>
-    /// <returns>The queue, owned by the scheduler.</returns>
-    public IEcsCommands Commands()
-    {
-        return EcsCommands.Borrow(Handle->commands(Handle));
-    }
-
     /// <summary>Releases the native scheduler.</summary>
     public void Dispose()
     {
@@ -336,8 +114,6 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
             _owner.Dispose();
             return;
         }
-        foreach (var retained in _retainedExecute.Values) retained.Free();
-        _retainedExecute.Clear();
         foreach (var held in _held) held.DangerousRelease();
         _held.Clear();
     }
@@ -345,25 +121,10 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
     /// <summary>Destroys the native scheduler once its last reference is released, then releases what it held.</summary>
     private void Teardown()
     {
-        foreach (var retained in _retainedExecute.Values) retained.Free();
-        _retainedExecute.Clear();
         _destroy(_owned);
         foreach (var held in _held) held.DangerousRelease();
         _held.Clear();
     }
 
     partial void OnDispose();
-
-    /// <summary>What retained handlers threw and no call has reported yet, from any thread the native side ran them on.</summary>
-    private static readonly System.Collections.Concurrent.ConcurrentQueue<Exception> s_raisedCallbackFailures = new();
-
-    /// <summary>Throws what retained handlers raised, or returns <paramref name="code"/> when they raised nothing.</summary>
-    private static T DrainRaised<T>(T code)
-    {
-        var collected = new List<Exception>();
-        while (s_raisedCallbackFailures.TryDequeue(out var failure)) collected.Add(failure);
-        if (collected.Count == 0) return code;
-        throw new InvalidOperationException("A handler registered with this provider threw",
-            collected.Count == 1 ? collected[0] : new AggregateException(collected));
-    }
 }

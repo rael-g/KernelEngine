@@ -10,6 +10,6 @@ namespace KernelEngine.Framework;
 /// <summary>The values a scene tree is created with.</summary>
 public partial struct SceneTreeConfig
 {
-    /// <summary>The set the hierarchy the tree owns registers its system in, when a scheduler is given.</summary>
+    /// <summary>The set the hierarchy the tree owns registers its system in, when a schedule is given.</summary>
     public uint Set;
 }

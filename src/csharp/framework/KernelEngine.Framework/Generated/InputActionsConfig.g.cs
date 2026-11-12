@@ -12,6 +12,6 @@ public partial struct InputActionsConfig
 {
     /// <summary>The configuration section the maps are read from.</summary>
     public string? Section;
-    /// <summary>The set the "input.actions" system joins when a scheduler is given; its phase must run before any behaviour reads an action.</summary>
+    /// <summary>The set the "input.actions" system joins when a schedule is given; its schedule must run before any behaviour reads an action.</summary>
     public uint Set;
 }

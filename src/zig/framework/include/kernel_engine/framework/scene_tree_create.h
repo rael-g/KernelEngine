@@ -3,7 +3,7 @@
 
 #include <kernel_engine/framework/scene_tree.h>
 #include <kernel_engine/ecs/ke_ecs.h>
-#include <kernel_engine/scheduler/scheduler.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -30,19 +30,19 @@ extern "C"
     /// transform/hierarchy/name components by name (idempotent — if a previous
     /// scene_tree on the same ecs already registered them, the existing cids
     /// are reused).
-    /// `scheduler` may be NULL, in which case no systems are registered and the
+    /// `schedule` may be NULL, in which case no systems are registered and the
     /// caller is responsible for calling propagate_transforms itself. Passing one
     /// registers, in the config's set, the hierarchy maintenance that keeps world matrices
-    /// current, and that scheduler must outlive the tree, whose destroy unregisters it.
-    /// @param scheduler [borrowed,optional] Registers the hierarchy maintenance; NULL registers none.
-    /// @param config [borrowed,optional] Required with @p scheduler; every field is read as given.
+    /// current, and that schedule must outlive the tree, whose destroy unregisters it.
+    /// @param schedule  [borrowed,optional] Registers the hierarchy maintenance; NULL registers none.
+    /// @param config [borrowed,optional] Required with @p schedule; every field is read as given.
     /// @param out_tree [out] Receives the tree; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs or @p out_tree, or a scheduler
-    ///         without a config; KE_RESULT_OUT_OF_MEMORY, or the code of the ecs or the scheduler
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs or @p out_tree, or a schedule
+    ///         without a config; KE_RESULT_OUT_OF_MEMORY, or the code of the ecs or the schedule
     ///         that refused.
     KE_FRAMEWORK_API ke_result ke_scene_tree_create(
         ke_ecs               *ecs,
-        ke_scheduler               *scheduler,
+        ke_schedule                *schedule,
         const ke_scene_tree_config *config,
         ke_scene_tree_handle       *out_tree);
 

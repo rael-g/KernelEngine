@@ -8,8 +8,8 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
-    abi.addImport("task_pool", b.dependency("abi_task_pool", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/scheduler/scheduler_create.h>
@@ -20,9 +20,11 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/result"));
+    translated.addIncludePath(b.path("../../../c/schedule"));
+    translated.addIncludePath(b.path("../../schedule/include"));
+    translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../include"));
-    translated.addIncludePath(b.path("../../common/include"));
     translated.addIncludePath(b.path("../../../c/task_pool"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -39,9 +41,11 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
+    tests.root_module.addIncludePath(b.path("../../../c/schedule"));
+    tests.root_module.addIncludePath(b.path("../../schedule/include"));
+    tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../include"));
-    tests.root_module.addIncludePath(b.path("../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     b.step("test", "Check the scheduler_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

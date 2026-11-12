@@ -13,7 +13,7 @@
         .abi_result = .{ .path = "../../abi/result" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },
-        .abi_scheduler = .{ .path = "../../abi/scheduler" },
+        .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_audio_module_factory = .{ .path = "abi" },
         .ke_common = .{ .path = "../../common" },
         .zsub = .{

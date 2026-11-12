@@ -3,7 +3,7 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
-const abi_task_pool = @import("task_pool");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scheduler_c.zig");
@@ -12,20 +12,7 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const SchedulerAccess = enum(c.ke_scheduler_access) {
-    read = 1,
-    write = 2,
-    _,
-};
-
-pub const Lifetime = enum(c.ke_lifetime) {
-    persistent = 0,
-    phase = 1,
-    until_read = 2,
-    _,
-};
-
-pub const PhaseCadence = enum(c.ke_phase_cadence) {
+pub const SchedulerCadence = enum(c.ke_scheduler_cadence) {
     every_tick = 0,
     fixed = 1,
     startup = 2,
@@ -44,62 +31,10 @@ pub const Scheduler = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_scheduler {
         return .{
-            .register_phase = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: ?*const c.ke_phase_desc, a1: ?*c.ke_phase_id) callconv(.c) abi_result.c.ke_result {
+            .add_schedule = &struct {
+                fn call(self: ?*c.ke_scheduler, a0: ?*abi_schedule.c.ke_schedule, a1: c.ke_scheduler_cadence) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.registerPhase(state, a0) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .register_set = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: ?*const c.ke_set_desc, a1: ?*c.ke_set_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.registerSet(state, a0) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .register_system = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: ?*const c.ke_system_desc, a1: ?*c.ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.registerSystem(state, a0) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .unregister_system = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: c.ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.unregisterSystem(state, a0) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .declare_lifetime = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: c.ke_component_id, a1: c.ke_lifetime) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.declareLifetime(state, a0, @enumFromInt(a1)) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .declare_exclusive = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.declareExclusive(state, a0, a1) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .build = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: bool) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.build(state, a0) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .describe_phase = &struct {
-                fn call(self: ?*c.ke_scheduler, a0: c.ke_phase_id, a1: ?[*]c.ke_system_order, a2: u32, a3: ?*u32) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.describePhase(state, a0, a1, a2, a3) catch |failure| return resultOf(failure);
+                    T.addSchedule(state, a0, @enumFromInt(a1)) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -107,13 +42,6 @@ pub const Scheduler = struct {
                 fn call(self: ?*c.ke_scheduler, a0: f32) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     T.tick(state, a0) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .flush = &struct {
-                fn call(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.flush(state) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -136,81 +64,23 @@ pub const Scheduler = struct {
                     return T.exitRequested(state);
                 }
             }.call,
-            .commands = &struct {
-                fn call(self: ?*c.ke_scheduler) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*abi_ecs.c.ke_ecs_commands)));
-                    return T.commands(state);
-                }
-            }.call,
         };
     }
 
-    /// Registers a phase.
-    pub fn registerPhase(self: Scheduler, desc: ?*const c.ke_phase_desc) Error!c.ke_phase_id {
-        var written: c.ke_phase_id = undefined;
-        try checkResult(self.ptr.register_phase.?(self.ptr, desc, &written));
-        return written;
+    /// Adds a schedule; a tick runs the schedules in the order they were added.
+    pub fn addSchedule(self: Scheduler, schedule: ?*abi_schedule.c.ke_schedule, cadence: SchedulerCadence) Error!void {
+        try checkResult(self.ptr.add_schedule.?(self.ptr, schedule, @intFromEnum(cadence)));
     }
 
-    /// Registers an ordering set.
-    pub fn registerSet(self: Scheduler, desc: ?*const c.ke_set_desc) Error!c.ke_set_id {
-        var written: c.ke_set_id = undefined;
-        try checkResult(self.ptr.register_set.?(self.ptr, desc, &written));
-        return written;
-    }
-
-    /// Registers a system. From a body, it takes effect with the next tick.
-    pub fn registerSystem(self: Scheduler, desc: ?*const c.ke_system_desc) Error!c.ke_scheduler_system_id {
-        var written: c.ke_scheduler_system_id = undefined;
-        try checkResult(self.ptr.register_system.?(self.ptr, desc, &written));
-        return written;
-    }
-
-    /// Removes a system. From a body, it takes effect with the next tick.
-    pub fn unregisterSystem(self: Scheduler, id: c.ke_scheduler_system_id) Error!void {
-        try checkResult(self.ptr.unregister_system.?(self.ptr, id));
-    }
-
-    /// Declares the lifetime of id; an id never declared is persistent.
-    pub fn declareLifetime(self: Scheduler, id: c.ke_component_id, lifetime: Lifetime) Error!void {
-        try checkResult(self.ptr.declare_lifetime.?(self.ptr, id, @intFromEnum(lifetime)));
-    }
-
-    /// Declares member one of the members of the exclusive group group: no entity holds two members
-    /// of one group, so queries requiring different members do not conflict.
-    pub fn declareExclusive(self: Scheduler, group: c.ke_component_id, member: c.ke_component_id) Error!void {
-        try checkResult(self.ptr.declare_exclusive.?(self.ptr, group, member));
-    }
-
-    /// Builds the order of every phase whose registrations changed since the last build; tick builds
-    /// the same way. Within a phase, the systems of a set run after those of the sets it follows, a
-    /// writer of an id before its readers, and of two writers with no other order, the one
-    /// registered first: an ambiguity.
-    pub fn build(self: Scheduler, refuse_ambiguity: bool) Error!void {
-        try checkResult(self.ptr.build.?(self.ptr, refuse_ambiguity));
-    }
-
-    /// The built order of phase, in registration order.
-    pub fn describePhase(self: Scheduler, phase: c.ke_phase_id, out_systems: ?[*]c.ke_system_order, capacity: u32, out_count: ?*u32) Error!void {
-        try checkResult(self.ptr.describe_phase.?(self.ptr, phase, out_systems, capacity, out_count));
-    }
-
-    /// Applies what was recorded into commands, then runs the phases in registration order: on the
-    /// first tick the startup phases first, then each every-tick phase, and each block of fixed
-    /// phases once per fixed step the accumulated time covers, the accumulation capped at
-    /// fixed_dt_max_accum.
+    /// Runs the schedules: on the first tick the startup ones first, then each every-tick one, and
+    /// each block of fixed ones once per fixed step the accumulated time covers, the accumulation
+    /// capped at fixed_dt_max_accum.
     pub fn tick(self: Scheduler, dt: f32) Error!void {
         try checkResult(self.ptr.tick.?(self.ptr, dt));
     }
 
-    /// Waits for every pipelined phase still running.
-    pub fn flush(self: Scheduler) Error!void {
-        try checkResult(self.ptr.flush.?(self.ptr));
-    }
-
-    /// Waits for every pipelined phase still running, then runs the shutdown phases once if a tick
-    /// ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the
-    /// scheduler calls it for a caller that did not.
+    /// Runs the shutdown schedules once if a tick ran; a later call does nothing, and a later tick
+    /// is refused. Destroying the scheduler calls it for a caller that did not.
     pub fn shutdown(self: Scheduler) Error!void {
         try checkResult(self.ptr.shutdown.?(self.ptr));
     }
@@ -225,60 +95,14 @@ pub const Scheduler = struct {
         return self.ptr.exit_requested.?(self.ptr);
     }
 
-    /// The queue the caller of tick records structural changes into between ticks; the next tick
-    /// applies it first. Only the thread that calls tick records into it.
-    pub fn commands(self: Scheduler) ?*abi_ecs.c.ke_ecs_commands {
-        return self.ptr.commands.?(self.ptr);
-    }
-
-    /// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
-    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_scheduler_config) Error!Scheduler {
+    /// Creates a scheduler with no schedule.
+    pub fn create(config: ?*const c.ke_scheduler_config) Error!Scheduler {
         var written: c.ke_scheduler_handle = undefined;
-        try checkResult(c.ke_scheduler_create(ecs, task_pool, config, &written));
+        try checkResult(c.ke_scheduler_create(config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
 };
 
-pub const SchedulerCtx = struct {
-    ptr: *c.ke_scheduler_ctx,
-
-    /// The vtable whose slots call the methods of T, which embeds it as the named field.
-    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_scheduler_ctx {
-        return .{
-            .view = &struct {
-                fn call(self: ?*c.ke_scheduler_ctx, a0: u32, a1: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?[*]const abi_ecs.c.ke_ecs_segment)));
-                    return T.view(state, a0, a1);
-                }
-            }.call,
-            .slice = &struct {
-                fn call(self: ?*c.ke_scheduler_ctx, a0: ?*u32, a1: ?*u32) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.slice(state, a0, a1);
-                }
-            }.call,
-        };
-    }
-
-    /// The resolved segments of the query at query_index, valid for the call.
-    pub fn view(self: SchedulerCtx, query_index: u32, out_count: ?*usize) ?[*]const abi_ecs.c.ke_ecs_segment {
-        return self.ptr.view.?(self.ptr, query_index, out_count);
-    }
-
-    /// Which share of its entity set this call owns: *out_index in [0, *out_count). A system that is
-    /// not per_entity always gets index 0 of count 1.
-    pub fn slice(self: SchedulerCtx, out_index: ?*u32, out_count: ?*u32) void {
-        return self.ptr.slice.?(self.ptr, out_index, out_count);
-    }
-
-};
-
-pub const IdAccess = c.ke_id_access;
-pub const QueryDesc = c.ke_query_desc;
-pub const PhaseDesc = c.ke_phase_desc;
-pub const SetDesc = c.ke_set_desc;
-pub const SystemDesc = c.ke_system_desc;
-pub const SystemOrder = c.ke_system_order;
 pub const SchedulerConfig = c.ke_scheduler_config;
 pub const SchedulerHandle = c.ke_scheduler_handle;

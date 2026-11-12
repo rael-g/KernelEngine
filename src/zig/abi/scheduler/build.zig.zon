@@ -6,7 +6,7 @@
     .dependencies = .{
         .abi_ecs = .{ .path = "../ecs" },
         .abi_result = .{ .path = "../result" },
-        .abi_task_pool = .{ .path = "../task_pool" },
+        .abi_schedule = .{ .path = "../schedule" },
     },
     .paths = .{"."},
 }

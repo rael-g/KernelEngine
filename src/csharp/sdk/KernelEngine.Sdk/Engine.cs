@@ -50,10 +50,13 @@ public sealed class EngineParts
     /// <summary>The world's entities and components.</summary>
     public required FlecsEcsRegistry Ecs { get; init; }
 
-    /// <summary>The scheduler the systems that moved off the runtime tick in.</summary>
+    /// <summary>The frame loop that ticks the standard schedules.</summary>
     public required DefaultScheduler Scheduler { get; init; }
 
-    /// <summary>The set of each standard phase of <see cref="Scheduler"/>.</summary>
+    /// <summary>The standard schedules <see cref="Scheduler"/> runs.</summary>
+    public required EngineSchedules Schedules { get; init; }
+
+    /// <summary>The standard sets, each in one of <see cref="Schedules"/>.</summary>
     public required EngineSets Sets { get; init; }
 
     /// <summary>The phase loop.</summary>
@@ -131,7 +134,7 @@ public sealed class Engine : IDisposable
     {
         var slot = new SceneSlotComponent();
         slot.Path = firstScene ?? $"res://scenes/{Parts.Configuration.GetString("project", "default_scene", "Main")}.scene.toml";
-        Types.Spawn(Parts.Scheduler.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
+        Types.Spawn(Parts.Schedules.PreUpdate.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
 
         var clock = Stopwatch.StartNew();
         var previous = clock.Elapsed.TotalSeconds;

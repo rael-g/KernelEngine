@@ -15,6 +15,7 @@
         .abi_logger = .{ .path = "../../abi/logger" },
         .abi_result = .{ .path = "../../abi/result" },
         .abi_scene_tree = .{ .path = "../../abi/scene_tree" },
+        .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_scheduler = .{ .path = "../../abi/scheduler" },
         .abi_text = .{ .path = "../../abi/text" },
     },

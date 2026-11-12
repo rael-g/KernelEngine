@@ -5,7 +5,7 @@ using global::KernelEngine.Logger;
 
 using KernelEngine.Ecs.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Scheduler.Native;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Audio.Native;
 

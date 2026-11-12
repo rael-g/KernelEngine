@@ -9,13 +9,13 @@ namespace KernelEngine.Audio;
 public sealed unsafe partial class SoundModule : IDisposable
 {
     /// <summary>Registers, in the config's set, the system that loads, plays and releases the clip of every ke_sound_component. Destroying the module stops every voice and releases every clip it holds.</summary>
-    /// <param name="scheduler">Registers the system; must outlive the module.</param>
+    /// <param name="schedule">Registers the system; must outlive the module.</param>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
     /// <param name="config">Required; every field is read as given.</param>
-    public SoundModule(KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config) : this(Create(scheduler, ecs, audio, config))
+    public SoundModule(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config) : this(Create(schedule, ecs, audio, config))
     {
-        Hold(scheduler.Owner);
+        Hold(schedule.Owner);
         Hold(ecs.Owner);
         Hold(audio.Owner);
     }
@@ -44,9 +44,9 @@ public sealed unsafe partial class SoundModule : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Audio.Native.ke_sound_module_handle Create(KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config)
+    private static KernelEngine.Audio.Native.ke_sound_module_handle Create(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config)
     {
-        ArgumentNullException.ThrowIfNull(scheduler);
+        ArgumentNullException.ThrowIfNull(schedule);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(audio);
         var rootConfigBytes = config.Root is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Root + "\0");
@@ -56,7 +56,7 @@ public sealed unsafe partial class SoundModule : IDisposable
             nativeConfig.root = (sbyte*)rootConfigPtr;
             nativeConfig.set = config.Set;
             KernelEngine.Audio.Native.ke_sound_module_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(scheduler.Native, ecs.Native, audio.Native, &nativeConfig, &handle), "ke_sound_module_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(schedule.Native, ecs.Native, audio.Native, &nativeConfig, &handle), "ke_sound_module_create");
             return handle;
         }
     }

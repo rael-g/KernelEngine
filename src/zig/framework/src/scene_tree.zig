@@ -12,7 +12,7 @@ const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
-const abi_scheduler = @import("abi_scheduler");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 
@@ -539,7 +539,7 @@ fn vtDestroy(self_in: ?*abi_scene_tree.c.ke_scene_tree) callconv(.c) void {
 /// created, so no entity or allocation is left.
 export fn ke_scene_tree_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
-    scheduler: ?*abi_scheduler.c.ke_scheduler,
+    scheduler: ?*abi_schedule.c.ke_schedule,
     config: ?*const abi_scene_tree.c.ke_scene_tree_config,
     out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle,
 ) callconv(.c) abi_result.c.ke_result {
@@ -554,7 +554,7 @@ export fn ke_scene_tree_create(
     return R.ok;
 }
 
-fn create(ecs: *abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, config: ?*const abi_scene_tree.c.ke_scene_tree_config) R.Error!abi_scene_tree.c.ke_scene_tree_handle {
+fn create(ecs: *abi_ecs.c.ke_ecs, scheduler: ?*abi_schedule.c.ke_schedule, config: ?*const abi_scene_tree.c.ke_scene_tree_config) R.Error!abi_scene_tree.c.ke_scene_tree_handle {
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
     s.* = .{

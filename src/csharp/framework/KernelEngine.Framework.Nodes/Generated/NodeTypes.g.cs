@@ -23,7 +23,7 @@ public unsafe interface INativeNodeTypes
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Node types and the events between them: each behaviour of a registered type runs as a system of its phase over the nodes of the type, one behaviour at a time. A type named `node`, with no fields and no components, is registered from the start.</summary>
+/// <summary>Node types and the events between them: each behaviour of a registered type runs as a system of its schedule over the nodes of the type, one behaviour at a time. A type named `node`, with no fields and no components, is registered from the start.</summary>
 public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeTypes
 {
     private ke_node_types* _native;

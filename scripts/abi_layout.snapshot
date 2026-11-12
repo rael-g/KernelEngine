@@ -544,64 +544,19 @@ ke_system_ctx size=32 align=8
   slice 24
 
 [scheduler]
-ke_id_access size=8 align=4
-  id 0
-  access 4
-ke_query_desc size=16 align=8
-  terms 0
-  term_count 8
-ke_phase_desc size=16 align=8
-  name 0
-  cadence 8
-  pipelined 12
-ke_set_desc size=32 align=8
-  name 0
-  phase 8
-  after 16
-  after_count 24
-ke_system_desc size=72 align=8
-  name 0
-  user_data 8
-  execute 16
-  queries 24
-  query_count 32
-  access 40
-  access_count 48
-  sets 56
-  set_count 64
-  per_entity 68
-  exclusive 69
-ke_system_order size=16 align=8
-  id 0
-  wave 8
-  culled 12
 ke_scheduler_config size=8 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
-ke_scheduler size=120 align=8
+ke_scheduler size=48 align=8
   handle 0
-  register_phase 8
-  register_set 16
-  register_system 24
-  unregister_system 32
-  declare_lifetime 40
-  declare_exclusive 48
-  build 56
-  describe_phase 64
-  tick 72
-  flush 80
-  shutdown 88
-  request_exit 96
-  exit_requested 104
-  commands 112
+  add_schedule 8
+  tick 16
+  shutdown 24
+  request_exit 32
+  exit_requested 40
 ke_scheduler_handle size=16 align=8
   ref 0
   destroy 8
-ke_scheduler_ctx size=32 align=8
-  handle 0
-  commands 8
-  view 16
-  slice 24
 
 [schedule]
 ke_schedule_set_desc size=24 align=8

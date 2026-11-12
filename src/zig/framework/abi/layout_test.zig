@@ -46,15 +46,15 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_gpu_texture_view")) try expectSameLayout(abi.c.ke_gpu_texture_view, c.ke_gpu_texture_view);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
     if (@hasDecl(c, "ke_node_behaviour_fn")) try expectSameLayout(abi.c.ke_node_behaviour_fn, c.ke_node_behaviour_fn);
-    if (@hasDecl(c, "ke_phase_id")) try expectSameLayout(abi.c.ke_phase_id, c.ke_phase_id);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_render_chain_link")) try expectSameLayout(abi.c.ke_render_chain_link, c.ke_render_chain_link);
     if (@hasDecl(c, "ke_render_material_binding")) try expectSameLayout(abi.c.ke_render_material_binding, c.ke_render_material_binding);
     if (@hasDecl(c, "ke_render_resource_set")) try expectSameLayout(abi.c.ke_render_resource_set, c.ke_render_resource_set);
     if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
-    if (@hasDecl(c, "ke_scheduler_execute_fn")) try expectSameLayout(abi.c.ke_scheduler_execute_fn, c.ke_scheduler_execute_fn);
-    if (@hasDecl(c, "ke_scheduler_system_id")) try expectSameLayout(abi.c.ke_scheduler_system_id, c.ke_scheduler_system_id);
-    if (@hasDecl(c, "ke_set_id")) try expectSameLayout(abi.c.ke_set_id, c.ke_set_id);
+    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
+    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
+    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
+    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
 extern const layout_values: [1]c_ulonglong;

@@ -1,6 +1,7 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
+using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 
@@ -12,14 +13,19 @@ uint workers = (uint)ArgValue("--workers", 0);
 
 using var pool = new EnkiTaskPool(new KernelEngine.TaskPool.TaskPoolConfig { WorkerCount = workers });
 using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-using var scheduler = new DefaultScheduler(ecs, pool, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
-uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence, false), []);
-var preUpdate = Phase("pre_update", PhaseCadence.EveryTick);
-var fixedUpdate = Phase("fixed_update", PhaseCadence.Fixed);
-var update = Phase("update", PhaseCadence.EveryTick);
-var propagation = Phase("post_update", PhaseCadence.EveryTick);
-using var tree = new DefaultSceneTree(ecs, scheduler, new() { Set = propagation });
-using var types = new DefaultNodeTypes(scheduler, ecs, tree, null, new NodeTypesConfig { PreUpdate = preUpdate, Update = update, FixedUpdate = fixedUpdate, PostUpdate = propagation });
+using var first = new DefaultSchedule(ecs, pool);
+using var fixedSchedule = new DefaultSchedule(ecs, pool);
+using var main = new DefaultSchedule(ecs, pool);
+using var scheduler = new DefaultScheduler(new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+scheduler.AddSchedule(first, SchedulerCadence.EveryTick);
+scheduler.AddSchedule(fixedSchedule, SchedulerCadence.Fixed);
+scheduler.AddSchedule(main, SchedulerCadence.EveryTick);
+var preUpdate = first.RegisterSet("pre_update", []);
+var fixedUpdate = fixedSchedule.RegisterSet("fixed_update", []);
+var update = main.RegisterSet("update", []);
+var propagation = main.RegisterSet("post_update", [update]);
+using var tree = new DefaultSceneTree(ecs, main, new() { Set = propagation });
+using var types = new DefaultNodeTypes(scheduler, first, fixedSchedule, main, ecs, tree, null, new NodeTypesConfig { PreUpdate = preUpdate, Update = update, FixedUpdate = fixedUpdate, PostUpdate = propagation });
 
 var world = new NodeWorld(types);
 world.RegisterEvent<Crossed>();
@@ -27,7 +33,7 @@ var mover = world.Register(new Mover());
 var raiser = world.Register(new Raiser());
 var listener = world.Register(new Listener());
 
-var commands = scheduler.Commands();
+var commands = first.Commands();
 for (var i = 0; i < instances; i++) types.Spawn(commands, mover, $"Mover{i}", default);
 for (var i = 0; i < instances / 10; i++) types.Spawn(commands, raiser, $"Raiser{i}", default);
 types.Spawn(commands, listener, "Listener", default);

@@ -3,131 +3,39 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
-const abi_task_pool = @import("task_pool");
+const abi_schedule = @import("schedule");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
-pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
-pub const ke_scheduler_system_id = u64;
-pub const ke_set_id = u32;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
-pub const ke_scheduler_access = c_uint;
-pub const KE_SCHEDULER_ACCESS_READ: ke_scheduler_access = 1;
-pub const KE_SCHEDULER_ACCESS_WRITE: ke_scheduler_access = 2;
-
-/// How long the value of an id lasts. A system whose every write has a lifetime shorter than
-/// persistent, and that no running system reads within that lifetime, is culled.
-pub const ke_lifetime = c_uint;
-/// The value outlives every run; writing it is an effect no cull removes.
-pub const KE_LIFETIME_PERSISTENT: ke_lifetime = 0;
-/// The value lives from the run of the phase it is written in to the end of that run.
-pub const KE_LIFETIME_PHASE: ke_lifetime = 1;
-/// The value lives until every phase whose systems read it has run since it was written. Its
-/// writer runs while a system of any phase reads it.
-pub const KE_LIFETIME_UNTIL_READ: ke_lifetime = 2;
-
-/// When a phase runs within the ticks of a scheduler.
-pub const ke_phase_cadence = c_uint;
+/// When a schedule runs within the ticks of a scheduler.
+pub const ke_scheduler_cadence = c_uint;
 /// Once per tick, with the tick's dt.
-pub const KE_PHASE_CADENCE_EVERY_TICK: ke_phase_cadence = 0;
-/// Once per fixed step, as many steps as the tick's time covers, with the fixed dt. Fixed phases
-/// registered one after another run together, in order, at each step.
-pub const KE_PHASE_CADENCE_FIXED: ke_phase_cadence = 1;
-/// Once, before every other phase of the first tick, with a dt of zero.
-pub const KE_PHASE_CADENCE_STARTUP: ke_phase_cadence = 2;
+pub const KE_SCHEDULER_CADENCE_EVERY_TICK: ke_scheduler_cadence = 0;
+/// Once per fixed step, as many steps as the tick's time covers, with the fixed dt. Fixed
+/// schedules added one after another run together, in order, at each step.
+pub const KE_SCHEDULER_CADENCE_FIXED: ke_scheduler_cadence = 1;
+/// Once, before every other schedule of the first tick, with a dt of zero.
+pub const KE_SCHEDULER_CADENCE_STARTUP: ke_scheduler_cadence = 2;
 /// Once, when the scheduler shuts down after a tick ran, with a dt of zero.
-pub const KE_PHASE_CADENCE_SHUTDOWN: ke_phase_cadence = 3;
+pub const KE_SCHEDULER_CADENCE_SHUTDOWN: ke_scheduler_cadence = 3;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of its phase, or once per slice when the system is
-/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
-/// rest of the wave still runs, and no later wave or phase starts.
-pub const ke_scheduler_execute_fn = ?*const fn (?*ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Body of a scheduled task, run on a worker thread.
-pub const ke_task_func = ?*const fn (?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// Run once the task body has returned, on the same worker thread.
-pub const ke_task_on_complete_func = ?*const fn (?*abi_task_pool.c.ke_task, ?*anyopaque, abi_result.c.ke_result) callconv(.c) void;
-
-/// One id a system touches, and how. Two systems conflict when they name the same id and at
-/// least one writes it; conflicting systems never run in the same wave.
-pub const ke_id_access = extern struct {
-    id: ke_component_id = std.mem.zeroes(ke_component_id),
-    access: ke_scheduler_access = std.mem.zeroes(ke_scheduler_access),
-};
-
-/// A query a system reads through: components matched together, each with its access.
-pub const ke_query_desc = extern struct {
-    /// The terms the query matches together.
-    terms: ?[*]const ke_id_access = std.mem.zeroes(?[*]const ke_id_access),
-    term_count: u32 = std.mem.zeroes(u32),
-};
-
-/// A phase: a group of systems run together, wave by wave. A tick runs the phases in the order
-/// they were registered, each when its cadence says.
-pub const ke_phase_desc = extern struct {
-    /// Identifies the phase in diagnostics.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// When the phase runs.
-    cadence: ke_phase_cadence = std.mem.zeroes(ke_phase_cadence),
-    /// The phase runs on the task pool while the tick goes on and the next one runs; only an
-    /// every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the
-    /// queries of its systems match, entities and columns, which is all its bodies read; a body of
-    /// the phase records no structural change.
-    pipelined: bool = std.mem.zeroes(bool),
-};
-
-/// An ordering set: a named anchor of one phase that systems join and that is ordered against
-/// other sets of the phase.
-pub const ke_set_desc = extern struct {
-    /// Identifies the set in diagnostics.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The phase whose systems the set orders.
-    phase: ke_phase_id = std.mem.zeroes(ke_phase_id),
-    /// Sets of the same phase whose systems all run before this set's.
-    after: ?[*]const ke_set_id = std.mem.zeroes(?[*]const ke_set_id),
-    after_count: u32 = std.mem.zeroes(u32),
-};
-
-/// A system: a body, the sets it joins and what it touches. It runs in the phase of its sets.
-pub const ke_system_desc = extern struct {
-    /// Identifies the system in diagnostics and in the failure its body raises.
-    name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Forwarded unchanged to every call of the body.
-    user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The body.
-    execute: ke_scheduler_execute_fn = std.mem.zeroes(ke_scheduler_execute_fn),
-    /// Queries the body reads through ke_scheduler_ctx.view.
-    queries: ?[*]const ke_query_desc = std.mem.zeroes(?[*]const ke_query_desc),
-    query_count: u32 = std.mem.zeroes(u32),
-    /// Ids the system touches that no query term covers.
-    access: ?[*]const ke_id_access = std.mem.zeroes(?[*]const ke_id_access),
-    access_count: u32 = std.mem.zeroes(u32),
-    /// The sets the system joins, at least one, all of one phase.
-    sets: ?[*]const ke_set_id = std.mem.zeroes(?[*]const ke_set_id),
-    set_count: u32 = std.mem.zeroes(u32),
-    /// The body's work on one entity is independent of every other; the scheduler may run it as
-    /// several concurrent slices of the same entity set.
-    per_entity: bool = std.mem.zeroes(bool),
-    /// The body runs alone at the start of its phase, and what it records is applied before the
-    /// other systems of the phase run. Its access does not order it.
-    exclusive: bool = std.mem.zeroes(bool),
-};
-
-/// One system of a phase, as the built order places it.
-pub const ke_system_order = extern struct {
-    id: ke_scheduler_system_id = std.mem.zeroes(ke_scheduler_system_id),
-    /// The wave the system runs in; systems of one wave run concurrently.
-    wave: u32 = std.mem.zeroes(u32),
-    /// The system does not run: nothing that runs reads what it writes within its lifetime.
-    culled: bool = std.mem.zeroes(bool),
-};
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// What a scheduler is created with, each field applied as given.
 pub const ke_scheduler_config = extern struct {
@@ -138,48 +46,22 @@ pub const ke_scheduler_config = extern struct {
     fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
 };
 
-/// Orders systems by what they touch and the sets they join, and runs their phases tick by tick
-/// across the task pool.
+/// The frame loop: runs the schedules it was given, each when its cadence says, tick by tick.
 pub const ke_scheduler = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// Registers a phase.
-    register_phase: ?*const fn (?*ke_scheduler, ?*const ke_phase_desc, ?*ke_phase_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Registers an ordering set.
-    register_set: ?*const fn (?*ke_scheduler, ?*const ke_set_desc, ?*ke_set_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Registers a system. From a body, it takes effect with the next tick.
-    register_system: ?*const fn (?*ke_scheduler, ?*const ke_system_desc, ?*ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Removes a system. From a body, it takes effect with the next tick.
-    unregister_system: ?*const fn (?*ke_scheduler, ke_scheduler_system_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Declares the lifetime of id; an id never declared is persistent.
-    declare_lifetime: ?*const fn (?*ke_scheduler, ke_component_id, ke_lifetime) callconv(.c) abi_result.c.ke_result = null,
-    /// Declares member one of the members of the exclusive group group: no entity holds two members
-    /// of one group, so queries requiring different members do not conflict.
-    declare_exclusive: ?*const fn (?*ke_scheduler, ke_component_id, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
-    /// Builds the order of every phase whose registrations changed since the last build; tick builds
-    /// the same way. Within a phase, the systems of a set run after those of the sets it follows, a
-    /// writer of an id before its readers, and of two writers with no other order, the one
-    /// registered first: an ambiguity.
-    build: ?*const fn (?*ke_scheduler, bool) callconv(.c) abi_result.c.ke_result = null,
-    /// The built order of phase, in registration order.
-    describe_phase: ?*const fn (?*ke_scheduler, ke_phase_id, ?[*]ke_system_order, u32, ?*u32) callconv(.c) abi_result.c.ke_result = null,
-    /// Applies what was recorded into commands, then runs the phases in registration order: on the
-    /// first tick the startup phases first, then each every-tick phase, and each block of fixed
-    /// phases once per fixed step the accumulated time covers, the accumulation capped at
-    /// fixed_dt_max_accum.
+    /// Adds a schedule; a tick runs the schedules in the order they were added.
+    add_schedule: ?*const fn (?*ke_scheduler, ?*abi_schedule.c.ke_schedule, ke_scheduler_cadence) callconv(.c) abi_result.c.ke_result = null,
+    /// Runs the schedules: on the first tick the startup ones first, then each every-tick one, and
+    /// each block of fixed ones once per fixed step the accumulated time covers, the accumulation
+    /// capped at fixed_dt_max_accum.
     tick: ?*const fn (?*ke_scheduler, f32) callconv(.c) abi_result.c.ke_result = null,
-    /// Waits for every pipelined phase still running.
-    flush: ?*const fn (?*ke_scheduler) callconv(.c) abi_result.c.ke_result = null,
-    /// Waits for every pipelined phase still running, then runs the shutdown phases once if a tick
-    /// ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the
-    /// scheduler calls it for a caller that did not.
+    /// Runs the shutdown schedules once if a tick ran; a later call does nothing, and a later tick
+    /// is refused. Destroying the scheduler calls it for a caller that did not.
     shutdown: ?*const fn (?*ke_scheduler) callconv(.c) abi_result.c.ke_result = null,
     /// Records that the program should end; any body or the caller may ask, from any thread.
     request_exit: ?*const fn (?*ke_scheduler) callconv(.c) void = null,
     /// Whether a request to end the program was recorded.
     exit_requested: ?*const fn (?*ke_scheduler) callconv(.c) bool = null,
-    /// The queue the caller of tick records structural changes into between ticks; the next tick
-    /// applies it first. Only the thread that calls tick records into it.
-    commands: ?*const fn (?*ke_scheduler) callconv(.c) ?*abi_ecs.c.ke_ecs_commands = null,
 };
 
 pub const ke_scheduler_handle = extern struct {
@@ -187,18 +69,5 @@ pub const ke_scheduler_handle = extern struct {
     destroy: ?*const fn (?*ke_scheduler) callconv(.c) void = null,
 };
 
-/// What one call of a system body is given: the entities its queries resolved to, its share of
-/// them, and the queue it records structural changes into. It means nothing outside the call.
-pub const ke_scheduler_ctx = extern struct {
-    handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The queue the body records structural changes into, applied when its wave ends.
-    commands: ?*abi_ecs.c.ke_ecs_commands = std.mem.zeroes(?*abi_ecs.c.ke_ecs_commands),
-    /// The resolved segments of the query at query_index, valid for the call.
-    view: ?*const fn (?*ke_scheduler_ctx, u32, ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment = null,
-    /// Which share of its entity set this call owns: *out_index in [0, *out_count). A system that is
-    /// not per_entity always gets index 0 of count 1.
-    slice: ?*const fn (?*ke_scheduler_ctx, ?*u32, ?*u32) callconv(.c) void = null,
-};
-
-/// Creates a scheduler over ecs and task_pool, both borrowed for its lifetime.
-pub extern fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const ke_scheduler_config, out_scheduler: ?*ke_scheduler_handle) abi_result.c.ke_result;
+/// Creates a scheduler with no schedule.
+pub extern fn ke_scheduler_create(config: ?*const ke_scheduler_config, out_scheduler: ?*ke_scheduler_handle) abi_result.c.ke_result;

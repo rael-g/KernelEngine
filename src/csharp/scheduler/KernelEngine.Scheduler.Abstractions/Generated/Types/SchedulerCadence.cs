@@ -4,7 +4,7 @@ using global::KernelEngine.Ecs;
 
 namespace KernelEngine.Scheduler;
 
-public enum PhaseCadence : uint
+public enum SchedulerCadence : uint
 {
     EveryTick = 0,
     Fixed = 1,

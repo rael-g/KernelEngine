@@ -6,7 +6,7 @@ const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
-const abi_scheduler = @import("scheduler");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("physics_body2d_factory_c.zig");
@@ -24,9 +24,9 @@ pub const PhysicsBody2dModule = struct {
     }
 
     /// Registers, in the config's set, the systems that create, step, and sync 2D bodies.
-    pub fn create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, config: ?*const c.ke_physics_body2d_module_config) Error!PhysicsBody2dModule {
+    pub fn create(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, physics: ?*abi_physics.c.ke_physics_2d, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, config: ?*const c.ke_physics_body2d_module_config) Error!PhysicsBody2dModule {
         var written: c.ke_physics_body2d_module_handle = undefined;
-        try checkResult(c.ke_physics_body2d_module_create(scheduler, ecs, physics, scene_tree, config, &written));
+        try checkResult(c.ke_physics_body2d_module_create(schedule, ecs, physics, scene_tree, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 

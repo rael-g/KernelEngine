@@ -10,7 +10,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("physics", b.dependency("abi_physics", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("scene_tree", b.dependency("abi_scene_tree", .{}).module("abi"));
-    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
+    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/physics/body2d/body2d_module.h>
@@ -25,8 +25,8 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/scheduler"));
-    translated.addIncludePath(b.path("../../../scheduler/include"));
+    translated.addIncludePath(b.path("../../../../c/schedule"));
+    translated.addIncludePath(b.path("../../../schedule/include"));
     translated.addIncludePath(b.path("../../../../c/task_pool"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -47,8 +47,8 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
-    tests.root_module.addIncludePath(b.path("../../../scheduler/include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
+    tests.root_module.addIncludePath(b.path("../../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
     b.step("test", "Check the physics_body2d_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

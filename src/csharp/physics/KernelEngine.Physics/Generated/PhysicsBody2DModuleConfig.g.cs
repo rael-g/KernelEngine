@@ -10,6 +10,6 @@ namespace KernelEngine.Physics;
 /// <summary>The values the body2d module is created with.</summary>
 public partial struct PhysicsBody2DModuleConfig
 {
-    /// <summary>The set both systems join; its phase must run after scripts write bodies and transforms.</summary>
+    /// <summary>The set both systems join; its schedule must run after scripts write bodies and transforms.</summary>
     public uint Set;
 }
