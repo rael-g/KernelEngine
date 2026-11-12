@@ -9,7 +9,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));
+    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/audio/module/audio_module_log.h>
@@ -26,6 +26,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/input"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/asset"));
     translated.addIncludePath(b.path("../../../../c/configuration"));
     translated.addIncludePath(b.path("../../../../c/file_system"));
@@ -38,7 +39,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/text"));
     translated.addIncludePath(b.path("../../../../c/view"));
     translated.addIncludePath(b.path("../../../../c/window"));
-    translated.addIncludePath(b.path("../../../runtime/include"));
+    translated.addIncludePath(b.path("../../../scheduler/include"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -60,6 +61,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/input"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../../c/asset"));
     tests.root_module.addIncludePath(b.path("../../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../../c/file_system"));
@@ -72,6 +74,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/text"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     tests.root_module.addIncludePath(b.path("../../../../c/window"));
-    tests.root_module.addIncludePath(b.path("../../../runtime/include"));
+    tests.root_module.addIncludePath(b.path("../../../scheduler/include"));
     b.step("test", "Check the audio_module_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

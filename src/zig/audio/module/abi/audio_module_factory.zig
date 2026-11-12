@@ -5,7 +5,7 @@ const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
+const abi_scheduler = @import("scheduler");
 
 /// The ABI as the headers declare it.
 pub const c = @import("audio_module_factory_c.zig");
@@ -22,11 +22,11 @@ pub const SoundModule = struct {
         if (self.owner) |owner| owner.destroy.?(owner.ref);
     }
 
-    /// Registers the post-update-phase system that loads, plays and releases the clip of every
+    /// Registers, in the config's set, the system that loads, plays and releases the clip of every
     /// ke_sound_component. Destroying the module stops every voice and releases every clip it holds.
-    pub fn create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const c.ke_sound_module_config) Error!SoundModule {
+    pub fn create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const c.ke_sound_module_config) Error!SoundModule {
         var written: c.ke_sound_module_handle = undefined;
-        try checkResult(c.ke_sound_module_create(runtime, ecs, audio, config, &written));
+        try checkResult(c.ke_sound_module_create(scheduler, ecs, audio, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 

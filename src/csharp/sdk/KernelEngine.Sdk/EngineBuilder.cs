@@ -182,6 +182,6 @@ public sealed class EngineBuilder
     public static IEnumerable<IDisposable> DefaultAudio(EngineParts p)
     {
         var audio = new MiniaudioAudio(p.Logging, p.Io);
-        return [audio, new Audio.SoundModule(p.Logging, p.Runtime, p.Ecs, audio, new() { Root = p.ProjectDir })];
+        return [audio, new Audio.SoundModule(p.Logging, p.Scheduler, p.Ecs, audio, new() { Root = p.ProjectDir, Set = p.Sets.PostUpdate })];
     }
 }

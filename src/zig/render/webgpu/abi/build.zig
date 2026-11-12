@@ -37,6 +37,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/physics"));
     translated.addIncludePath(b.path("../../../../c/resource_cache"));
     translated.addIncludePath(b.path("../../../../c/runtime"));
+    translated.addIncludePath(b.path("../../../../c/scheduler"));
     translated.addIncludePath(b.path("../../../../c/text"));
     translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -70,6 +71,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../../c/resource_cache"));
     tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
+    tests.root_module.addIncludePath(b.path("../../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../../../c/text"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the gpu_device_webgpu_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
