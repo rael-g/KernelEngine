@@ -27,7 +27,7 @@ public class ReadyingTheNodesASlotOpens
 {
     static NodeTypesConfig NodeSets(DefaultScheduler scheduler)
     {
-        uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence), []);
+        uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence, false), []);
         return new NodeTypesConfig { PreUpdate = Phase("pre_update", PhaseCadence.EveryTick), FixedUpdate = Phase("fixed_update", PhaseCadence.Fixed), Update = Phase("update", PhaseCadence.EveryTick), PostUpdate = Phase("post_update", PhaseCadence.EveryTick) };
     }
 

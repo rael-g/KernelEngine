@@ -226,11 +226,11 @@ static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
     return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
 }
 
-/** Registers the phase @p name with @p cadence and a set of the same name, written to @p out_set. */
-static inline ke_result ke_sdk_phase(ke_scheduler *s, const char *name, ke_phase_cadence cadence, ke_set_id *out_set)
+/** Registers the phase @p name with @p cadence, pipelined or not, and a set of the same name, written to @p out_set. */
+static inline ke_result ke_sdk_phase(ke_scheduler *s, const char *name, ke_phase_cadence cadence, bool pipelined, ke_set_id *out_set)
 {
     ke_phase_id phase = 0;
-    ke_result made = s->register_phase(s, &(ke_phase_desc){ .name = name, .cadence = cadence }, &phase);
+    ke_result made = s->register_phase(s, &(ke_phase_desc){ .name = name, .cadence = cadence, .pipelined = pipelined }, &phase);
     if (made == KE_OK) made = s->register_set(s, &(ke_set_desc){ .name = name, .phase = phase, .after = NULL, .after_count = 0 }, out_set);
     return made;
 }
@@ -246,15 +246,15 @@ static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
     ke_result made = ke_scheduler_create(e->ecs.ref, e->task_pool.ref, &config, &e->scheduler);
     ke_scheduler *s = e->scheduler.ref;
     ke_sdk_sets *sets = &e->sets;
-    if (made == KE_OK) made = ke_sdk_phase(s, "startup", KE_PHASE_CADENCE_STARTUP, &sets->startup);
-    if (made == KE_OK) made = ke_sdk_phase(s, "pre_update", KE_PHASE_CADENCE_EVERY_TICK, &sets->pre_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_pre_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_pre_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_post_update", KE_PHASE_CADENCE_FIXED, &sets->fixed_post_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "update", KE_PHASE_CADENCE_EVERY_TICK, &sets->update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "post_update", KE_PHASE_CADENCE_EVERY_TICK, &sets->post_update);
-    if (made == KE_OK) made = ke_sdk_phase(s, "render", KE_PHASE_CADENCE_EVERY_TICK, &sets->render);
-    if (made == KE_OK) made = ke_sdk_phase(s, "shutdown", KE_PHASE_CADENCE_SHUTDOWN, &sets->shutdown);
+    if (made == KE_OK) made = ke_sdk_phase(s, "startup", KE_PHASE_CADENCE_STARTUP, false, &sets->startup);
+    if (made == KE_OK) made = ke_sdk_phase(s, "pre_update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->pre_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_pre_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_pre_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "fixed_post_update", KE_PHASE_CADENCE_FIXED, false, &sets->fixed_post_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "post_update", KE_PHASE_CADENCE_EVERY_TICK, false, &sets->post_update);
+    if (made == KE_OK) made = ke_sdk_phase(s, "render", KE_PHASE_CADENCE_EVERY_TICK, true, &sets->render);
+    if (made == KE_OK) made = ke_sdk_phase(s, "shutdown", KE_PHASE_CADENCE_SHUTDOWN, false, &sets->shutdown);
     return made;
 }
 

@@ -114,13 +114,72 @@ pub const Segments = struct {
     }
 };
 
+/// What one query of a system shows its body: the segments it resolved to before the wave, or the
+/// one segment of the snapshot a pipelined phase took.
+pub const View = struct {
+    segments: [*]const abi_ecs.c.ke_ecs_segment = undefined,
+    count: usize = 0,
+
+    pub fn of(s: *const Segments) View {
+        return .{ .segments = s.segments.ptr, .count = s.count };
+    }
+};
+
+/// The copy of what one query matched, taken for a pipelined phase before it is dispatched: the
+/// entities and, for every term with storage, its column, gathered into one segment. The buffers
+/// are kept and reused across ticks.
+pub const Snapshot = struct {
+    entities: std.ArrayList(abi_ecs.c.ke_entity) = .empty,
+    columns: []std.array_list.Aligned(u8, arena_alignment) = &.{},
+    pointers: []?*anyopaque = &.{},
+    sizes: []usize = &.{},
+    segment: abi_ecs.c.ke_ecs_segment = undefined,
+
+    pub fn deinit(snap: *Snapshot) void {
+        snap.entities.deinit(gpa);
+        for (snap.columns) |*col| col.deinit(gpa);
+        gpa.free(snap.columns);
+        gpa.free(snap.pointers);
+        gpa.free(snap.sizes);
+        snap.* = .{};
+    }
+
+    /// Copies the segments of `raw` into the snapshot and returns the view of its one segment.
+    pub fn take(snap: *Snapshot, ecs: *abi_ecs.c.ke_ecs, raw: *const Segments, terms: []const c.ke_id_access) R.Error!View {
+        if (snap.sizes.len != terms.len) {
+            snap.deinit();
+            snap.sizes = try gpa.alloc(usize, terms.len);
+            snap.pointers = try gpa.alloc(?*anyopaque, terms.len);
+            snap.columns = try gpa.alloc(std.array_list.Aligned(u8, arena_alignment), terms.len);
+            for (terms, snap.sizes, snap.columns) |t, *size, *col| {
+                size.* = ecs.component_size.?(ecs, t.id);
+                col.* = .empty;
+            }
+        }
+        snap.entities.clearRetainingCapacity();
+        for (snap.columns) |*col| col.clearRetainingCapacity();
+        for (raw.segments[0..raw.count]) |seg| {
+            if (seg.count == 0) continue;
+            try snap.entities.appendSlice(gpa, seg.entities.?[0..seg.count]);
+            for (snap.sizes, snap.columns, 0..) |size, *col, t| {
+                if (size == 0) continue;
+                const bytes: [*]const u8 = @ptrCast(seg.columns.?[t].?);
+                try col.appendSlice(gpa, bytes[0 .. seg.count * size]);
+            }
+        }
+        for (snap.sizes, snap.columns, snap.pointers) |size, *col, *ptr| ptr.* = if (size == 0) null else col.items.ptr;
+        snap.segment = .{ .entities = snap.entities.items.ptr, .count = snap.entities.items.len, .columns = snap.pointers.ptr, .column_count = @intCast(terms.len) };
+        return .{ .segments = @ptrCast(&snap.segment), .count = @intFromBool(snap.entities.items.len > 0) };
+    }
+};
+
 /// The state behind both the `ke_scheduler_ctx` and the `ke_ecs_commands` of one body call, or of
-/// the caller of `run`. `queue` is null where recording is refused; `queries` are the segments the
-/// system's queries resolved to before its wave was dispatched.
+/// the caller of `tick`. `queue` is null where recording is refused; `views` show what the system's
+/// queries match.
 pub const Context = struct {
     ecs: *abi_ecs.c.ke_ecs,
     queue: ?*Queue,
-    queries: []const Segments = &.{},
+    views: []const View = &.{},
     slice_index: u32 = 0,
     slice_count: u32 = 1,
     ctx: c.ke_scheduler_ctx = undefined,
@@ -162,10 +221,10 @@ fn refused(comptime what: []const u8, err: R.Error) abi_result.c.ke_result {
 fn view(ctx: ?*c.ke_scheduler_ctx, query_index: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
     if (out_count) |out| out.* = 0;
     const state = contextOf(ctx) orelse return null;
-    if (query_index >= state.queries.len) return null;
-    const q = &state.queries[query_index];
-    if (out_count) |out| out.* = q.count;
-    return q.segments.ptr;
+    if (query_index >= state.views.len) return null;
+    const v = state.views[query_index];
+    if (out_count) |out| out.* = v.count;
+    return v.segments;
 }
 
 /// Slot `slice`: the share of its entity set this call owns.

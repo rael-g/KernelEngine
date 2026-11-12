@@ -42,6 +42,9 @@ public unsafe partial struct ke_scheduler
     public delegate* unmanaged[Cdecl]<ke_scheduler*, float, KernelEngine.Result.Native.Result> tick;
 
     [NativeTypeName("ke_result (*)(ke_scheduler *)")]
+    public delegate* unmanaged[Cdecl]<ke_scheduler*, KernelEngine.Result.Native.Result> flush;
+
+    [NativeTypeName("ke_result (*)(ke_scheduler *)")]
     public delegate* unmanaged[Cdecl]<ke_scheduler*, KernelEngine.Result.Native.Result> shutdown;
 
     [NativeTypeName("void (*)(ke_scheduler *)")]

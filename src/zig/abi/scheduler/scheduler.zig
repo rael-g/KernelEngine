@@ -110,6 +110,13 @@ pub const Scheduler = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .flush = &struct {
+                fn call(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.flush(state) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .shutdown = &struct {
                 fn call(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -196,8 +203,14 @@ pub const Scheduler = struct {
         try checkResult(self.ptr.tick.?(self.ptr, dt));
     }
 
-    /// Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and
-    /// are refused respectively. Destroying the scheduler calls it for a caller that did not.
+    /// Waits for every pipelined phase still running.
+    pub fn flush(self: Scheduler) Error!void {
+        try checkResult(self.ptr.flush.?(self.ptr));
+    }
+
+    /// Waits for every pipelined phase still running, then runs the shutdown phases once if a tick
+    /// ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the
+    /// scheduler calls it for a caller that did not.
     pub fn shutdown(self: Scheduler) Error!void {
         try checkResult(self.ptr.shutdown.?(self.ptr));
     }

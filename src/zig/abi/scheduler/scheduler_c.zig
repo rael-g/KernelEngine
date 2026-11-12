@@ -76,6 +76,11 @@ pub const ke_phase_desc = extern struct {
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// When the phase runs.
     cadence: ke_phase_cadence = std.mem.zeroes(ke_phase_cadence),
+    /// The phase runs on the task pool while the tick goes on and the next one runs; only an
+    /// every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the
+    /// queries of its systems match, entities and columns, which is all its bodies read; a body of
+    /// the phase records no structural change.
+    pipelined: bool = std.mem.zeroes(bool),
 };
 
 /// An ordering set: a named anchor of one phase that systems join and that is ordered against
@@ -162,8 +167,11 @@ pub const ke_scheduler = extern struct {
     /// phases once per fixed step the accumulated time covers, the accumulation capped at
     /// fixed_dt_max_accum.
     tick: ?*const fn (?*ke_scheduler, f32) callconv(.c) abi_result.c.ke_result = null,
-    /// Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and
-    /// are refused respectively. Destroying the scheduler calls it for a caller that did not.
+    /// Waits for every pipelined phase still running.
+    flush: ?*const fn (?*ke_scheduler) callconv(.c) abi_result.c.ke_result = null,
+    /// Waits for every pipelined phase still running, then runs the shutdown phases once if a tick
+    /// ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the
+    /// scheduler calls it for a caller that did not.
     shutdown: ?*const fn (?*ke_scheduler) callconv(.c) abi_result.c.ke_result = null,
     /// Records that the program should end; any body or the caller may ask, from any thread.
     request_exit: ?*const fn (?*ke_scheduler) callconv(.c) void = null,

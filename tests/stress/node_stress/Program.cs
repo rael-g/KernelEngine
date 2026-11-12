@@ -13,7 +13,7 @@ uint workers = (uint)ArgValue("--workers", 0);
 using var pool = new EnkiTaskPool(new KernelEngine.TaskPool.TaskPoolConfig { WorkerCount = workers });
 using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
 using var scheduler = new DefaultScheduler(ecs, pool, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
-uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence), []);
+uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence, false), []);
 var preUpdate = Phase("pre_update", PhaseCadence.EveryTick);
 var fixedUpdate = Phase("fixed_update", PhaseCadence.Fixed);
 var update = Phase("update", PhaseCadence.EveryTick);

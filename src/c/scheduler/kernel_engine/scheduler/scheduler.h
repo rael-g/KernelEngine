@@ -69,6 +69,11 @@ typedef struct ke_phase_desc {
     const char *name;
     /// When the phase runs.
     ke_phase_cadence cadence;
+    /// The phase runs on the task pool while the tick goes on and the next one runs; only an
+    /// every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the
+    /// queries of its systems match, entities and columns, which is all its bodies read; a body of
+    /// the phase records no structural change.
+    bool pipelined;
 } ke_phase_desc;
 
 /// [bag] An ordering set: a named anchor of one phase that systems join and that is ordered
@@ -133,8 +138,8 @@ typedef struct ke_scheduler {
 
     /// Registers a phase.
     /// @param out_id [out] Receives the phase's id.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name; KE_RESULT_NOT_SUPPORTED from a
-    ///         body; KE_RESULT_OUT_OF_MEMORY.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name, an unknown cadence or a pipelined
+    ///         phase that is not every-tick; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.
     ke_result (*register_phase)(ke_scheduler *self, const ke_phase_desc *desc, ke_phase_id *out_id);
     /// Registers an ordering set.
     /// @param out_id [out] Receives the set's id.
@@ -182,11 +187,15 @@ typedef struct ke_scheduler {
     /// fixed_dt_max_accum.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative @p dt; KE_RESULT_NOT_SUPPORTED from a
     ///         body or after shutdown; the code build fails with; the code a body or its commands
-    ///         failed with.
+    ///         failed with, a body of a pipelined phase's previous run included.
     ke_result (*tick)(ke_scheduler *self, float dt);
 
-    /// Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and
-    /// are refused respectively. Destroying the scheduler calls it for a caller that did not.
+    /// [drains] Waits for every pipelined phase still running.
+    /// @return KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body of those runs failed with.
+    ke_result (*flush)(ke_scheduler *self);
+
+    /// Waits for every pipelined phase still running, then runs the shutdown phases once if a tick
+    /// ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.
     /// @return KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body failed with.
     ke_result (*shutdown)(ke_scheduler *self);
 

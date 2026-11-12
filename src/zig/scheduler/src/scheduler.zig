@@ -44,11 +44,14 @@ const System = struct {
     queries: []Query,
     query_terms: []const []const c.ke_id_access,
     segments: []body.Segments,
+    snapshots: []body.Snapshot,
+    views: []body.View,
     sets: []const c.ke_set_id,
     next: ?*System = null,
 
     fn destroy(s: *System) void {
         for (s.segments) |*seg| seg.deinit();
+        for (s.snapshots) |*snap| snap.deinit();
         s.arena.deinit();
         gpa.destroy(s);
     }
@@ -59,6 +62,8 @@ const System = struct {
 const Phase = struct {
     name: [:0]u8,
     cadence: c.ke_phase_cadence,
+    pipelined: bool,
+    job: ?*Job = null,
     built: bool = false,
     systems: []*System = &.{},
     waves: []u32 = &.{},
@@ -71,7 +76,7 @@ const Phase = struct {
         gpa.free(p.systems);
         gpa.free(p.waves);
         gpa.free(p.culled);
-        p.* = .{ .name = p.name, .cadence = p.cadence };
+        p.* = .{ .name = p.name, .cadence = p.cadence, .pipelined = p.pipelined, .job = p.job };
     }
 };
 
@@ -95,11 +100,25 @@ const Package = struct {
     task: ?*abi_task_pool.c.ke_task = null,
 };
 
+/// The run of a pipelined phase on the task pool, with its own packages, kept for the phase and
+/// reused by every run. `task` is set while the run is in flight; `failure` is what it ended with.
+const Job = struct {
+    state: *State,
+    phase: c.ke_phase_id,
+    dt: f32 = 0,
+    task: ?*abi_task_pool.c.ke_task = null,
+    failure: ?Failure = null,
+    packages: std.ArrayList(Package) = .empty,
+};
+
+threadlocal var inside_body: bool = false;
+
 /// The state behind the `ke_scheduler` handle, whose `api.handle` points back at it. Phases, sets,
 /// systems and declarations change only while no tick is in flight: a system registered or removed
 /// from a body waits on the lock-free `pending` and `removals` lists until the next tick applies
-/// them, in call order, and every other change is refused from a body. `accumulated` is the time
-/// fixed steps have not yet consumed.
+/// them, in call order, and every other change is refused from a body. A change the caller makes
+/// first waits for every pipelined phase in flight, whose failure waits in `deferred` for the next
+/// tick or flush. `accumulated` is the time fixed steps have not yet consumed.
 const State = struct {
     api: c.ke_scheduler,
     ecs: *abi_ecs.c.ke_ecs,
@@ -111,7 +130,6 @@ const State = struct {
     exclusive: std.ArrayList(order.Exclusive) = .empty,
     packages: std.ArrayList(Package) = .empty,
     next_system: std.atomic.Value(SystemId) = .init(0),
-    running: std.atomic.Value(bool) = .init(false),
     pending: std.atomic.Value(?*System) = .init(null),
     removals: std.atomic.Value(?*Removal) = .init(null),
     host_queue: body.Queue = .{},
@@ -122,6 +140,7 @@ const State = struct {
     started: bool = false,
     shut_down: bool = false,
     exit: std.atomic.Value(bool) = .init(false),
+    deferred: ?Failure = null,
 
     fn dirtyPhase(s: *State, phase: c.ke_phase_id) void {
         s.phases.items[phase].clear();
@@ -132,7 +151,24 @@ const State = struct {
     }
 
     fn refuseInRun(s: *State) R.Error!void {
-        if (s.running.load(.acquire)) return reject(error.NotSupported, "the call is refused from a body");
+        if (inside_body) return reject(error.NotSupported, "the call is refused from a body");
+        s.quiesce();
+    }
+
+    fn quiesce(s: *State) void {
+        for (s.phases.items) |*p| {
+            const job = p.job orelse continue;
+            if (joinJob(s, job)) |f| {
+                if (s.deferred == null) s.deferred = f;
+            }
+        }
+    }
+
+    fn takeDeferred(s: *State) R.Error!void {
+        const f = s.deferred orelse return;
+        s.deferred = null;
+        log.warn("{s} failed: {t}", .{ f.name, f.err });
+        return f.err;
     }
 };
 
@@ -165,9 +201,10 @@ fn addPhase(s: *State, desc: *const c.ke_phase_desc) R.Error!c.ke_phase_id {
         c.KE_PHASE_CADENCE_EVERY_TICK, c.KE_PHASE_CADENCE_FIXED, c.KE_PHASE_CADENCE_STARTUP, c.KE_PHASE_CADENCE_SHUTDOWN => {},
         else => return reject(error.InvalidArgument, "unknown phase cadence"),
     }
+    if (desc.pipelined and desc.cadence != c.KE_PHASE_CADENCE_EVERY_TICK) return reject(error.InvalidArgument, "only an every-tick phase can be pipelined");
     const copy = try gpa.dupeZ(u8, std.mem.span(name));
     errdefer gpa.free(copy);
-    try s.phases.append(gpa, .{ .name = copy, .cadence = desc.cadence });
+    try s.phases.append(gpa, .{ .name = copy, .cadence = desc.cadence, .pipelined = desc.pipelined });
     return @intCast(s.phases.items.len - 1);
 }
 
@@ -250,6 +287,10 @@ fn makeSystem(s: *State, desc: *const c.ke_system_desc) R.Error!*System {
     for (explicit) |e| try merge(&access, a, e);
     const segments = try a.alloc(body.Segments, queries.len);
     @memset(segments, .{});
+    const snapshots = try a.alloc(body.Snapshot, queries.len);
+    @memset(snapshots, .{});
+    const views = try a.alloc(body.View, queries.len);
+    @memset(views, .{});
 
     system.* = .{
         .arena = system.arena,
@@ -265,6 +306,8 @@ fn makeSystem(s: *State, desc: *const c.ke_system_desc) R.Error!*System {
         .queries = owned_queries,
         .query_terms = query_terms,
         .segments = segments,
+        .snapshots = snapshots,
+        .views = views,
         .sets = try a.dupe(c.ke_set_id, sets),
     };
     return system;
@@ -281,13 +324,14 @@ fn registerSystem(self: ?*c.ke_scheduler, desc: ?*const c.ke_system_desc, out_id
 fn addSystem(s: *State, desc: *const c.ke_system_desc) R.Error!SystemId {
     const system = try makeSystem(s, desc);
     system.id = s.next_system.fetchAdd(1, .monotonic) + 1;
-    if (s.running.load(.acquire)) {
+    if (inside_body) {
         var head = s.pending.load(.acquire);
         while (true) {
             system.next = head;
             head = s.pending.cmpxchgWeak(head, system, .release, .acquire) orelse return system.id;
         }
     }
+    s.quiesce();
     s.systems.append(gpa, system) catch |err| {
         system.destroy();
         return err;
@@ -306,7 +350,7 @@ fn unregisterSystem(self: ?*c.ke_scheduler, id: SystemId) callconv(.c) abi_resul
 
 fn removeSystem(s: *State, id: SystemId) R.Error!void {
     if (id == 0 or id > s.next_system.load(.monotonic)) return reject(error.NotFound, "no system has that id");
-    if (s.running.load(.acquire)) {
+    if (inside_body) {
         const removal = try gpa.create(Removal);
         removal.* = .{ .id = id };
         var head = s.removals.load(.acquire);
@@ -315,6 +359,7 @@ fn removeSystem(s: *State, id: SystemId) R.Error!void {
             head = s.removals.cmpxchgWeak(head, removal, .release, .acquire) orelse return;
         }
     }
+    s.quiesce();
     if (!removeNow(s, id)) return reject(error.NotFound, "no system has that id");
 }
 
@@ -332,6 +377,8 @@ fn removeNow(s: *State, id: SystemId) bool {
 /// Applies what bodies registered and removed during the last run, in call order, so a removal of
 /// a system registered in the same run still finds it.
 fn applyPending(s: *State) void {
+    if (s.pending.load(.acquire) == null and s.removals.load(.acquire) == null) return;
+    s.quiesce();
     var stack = s.pending.swap(null, .acq_rel);
     var reversed: ?*System = null;
     while (stack) |system| {
@@ -479,6 +526,8 @@ fn buildPhase(s: *State, index: c.ke_phase_id) R.Error!void {
     phase.* = .{
         .name = phase.name,
         .cadence = phase.cadence,
+        .pipelined = phase.pipelined,
+        .job = phase.job,
         .built = true,
         .systems = try systems.toOwnedSlice(gpa),
         .waves = waves,
@@ -581,6 +630,8 @@ fn slicesOf(s: *State, system: *const System) u32 {
 /// The task pool body of one package.
 fn runPackage(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const pkg: *Package = @ptrCast(@alignCast(data.?));
+    inside_body = true;
+    defer inside_body = false;
     return pkg.system.execute.?(&pkg.context.ctx, pkg.system.user_data, pkg.dt);
 }
 
@@ -604,9 +655,10 @@ fn tick(self: ?*c.ke_scheduler, dt: f32) callconv(.c) abi_result.c.ke_result {
 }
 
 fn tickPhases(s: *State, dt: f32) R.Error!void {
-    try s.refuseInRun();
+    if (inside_body) return reject(error.NotSupported, "the call is refused from a body");
     if (s.shut_down) return reject(error.NotSupported, "the scheduler was shut down");
     if (!(dt >= 0)) return reject(error.InvalidArgument, "a tick needs a dt of zero or more");
+    try s.takeDeferred();
     applyPending(s);
     s.host_queue.flush(s.ecs) catch |err| {
         log.warn("applying the caller's commands failed", .{});
@@ -627,7 +679,7 @@ fn tickPhases(s: *State, dt: f32) R.Error!void {
     while (i < phases) {
         switch (s.phases.items[i].cadence) {
             c.KE_PHASE_CADENCE_EVERY_TICK => {
-                try runPhase(s, @intCast(i), dt);
+                if (s.phases.items[i].pipelined) try dispatchPhase(s, @intCast(i), dt) else try runPhase(s, @intCast(i), dt);
                 i += 1;
             },
             c.KE_PHASE_CADENCE_FIXED => {
@@ -653,6 +705,7 @@ fn shutdown(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
 fn shutdownPhases(s: *State) R.Error!void {
     try s.refuseInRun();
     if (s.shut_down) return;
+    try s.takeDeferred();
     s.shut_down = true;
     if (!s.started) return;
     applyPending(s);
@@ -678,48 +731,54 @@ fn runPhase(s: *State, index: c.ke_phase_id, dt: f32) R.Error!void {
     try buildPhase(s, index);
     const phase = &s.phases.items[index];
     try orderFailure(phase, false);
+    for (phase.systems, phase.culled) |system, culled| {
+        if (culled) continue;
+        for (system.queries, system.segments, system.views) |q, *seg, *v| {
+            seg.resolve(s.ecs, q.id, q.terms.len) catch |err| {
+                log.warn("resolving a query of {s} failed", .{system.name});
+                return err;
+            };
+            v.* = .of(seg);
+        }
+    }
+    if (runWaves(s, phase, dt, &s.packages, true)) |f| {
+        log.warn("{s} failed: {t}", .{ f.name, f.err });
+        return f.err;
+    }
+}
 
-    s.running.store(true, .release);
-    defer s.running.store(false, .release);
-
+/// Runs the built waves of `phase` with the views its systems hold, in packages from `packages`,
+/// and returns the first failure. Without `record`, a body records no structural change.
+fn runWaves(s: *State, phase: *const Phase, dt: f32, packages: *std.ArrayList(Package), record: bool) ?Failure {
     var failure: ?Failure = null;
     for (0..phase.wave_count) |w| {
         var count: usize = 0;
         for (phase.systems, phase.waves, phase.culled) |system, wave, culled| {
-            if (wave != w or culled) continue;
-            for (system.queries, system.segments) |q, *seg| {
-                seg.resolve(s.ecs, q.id, q.terms.len) catch |err| {
-                    log.warn("resolving a query of {s} failed", .{system.name});
-                    return err;
-                };
-            }
-            count += slicesOf(s, system);
+            if (wave == w and !culled) count += slicesOf(s, system);
         }
-
-        s.packages.clearRetainingCapacity();
-        try s.packages.ensureTotalCapacity(gpa, count);
+        packages.clearRetainingCapacity();
+        packages.ensureTotalCapacity(gpa, count) catch return .{ .err = error.OutOfMemory, .name = phase.name };
         for (phase.systems, phase.waves, phase.culled) |system, wave, culled| {
             if (wave != w or culled) continue;
             const slices = slicesOf(s, system);
             for (0..slices) |slice| {
-                s.packages.appendAssumeCapacity(.{
-                    .context = .{ .ecs = s.ecs, .queue = null, .queries = system.segments, .slice_index = @intCast(slice), .slice_count = slices },
+                packages.appendAssumeCapacity(.{
+                    .context = .{ .ecs = s.ecs, .queue = null, .views = system.views, .slice_index = @intCast(slice), .slice_count = slices },
                     .system = system,
                     .dt = dt,
                 });
             }
         }
-        for (s.packages.items) |*pkg| {
-            pkg.context.queue = &pkg.queue;
+        for (packages.items) |*pkg| {
+            if (record) pkg.context.queue = &pkg.queue;
             pkg.context.bind();
         }
-
-        for (s.packages.items) |*pkg| keepFirst(&failure, s.pool.dispatch.?(s.pool, &runPackage, pkg, &pkg.task), pkg.system.name);
-        for (s.packages.items) |*pkg| {
+        for (packages.items) |*pkg| keepFirst(&failure, s.pool.dispatch.?(s.pool, &runPackage, pkg, &pkg.task), pkg.system.name);
+        for (packages.items) |*pkg| {
             const task = pkg.task orelse continue;
             keepFirst(&failure, s.pool.wait.?(s.pool, task), pkg.system.name);
         }
-        for (s.packages.items) |*pkg| {
+        for (packages.items) |*pkg| {
             pkg.queue.flush(s.ecs) catch |err| {
                 if (failure == null) failure = .{ .err = err, .name = pkg.system.name };
             };
@@ -727,10 +786,72 @@ fn runPhase(s: *State, index: c.ke_phase_id, dt: f32) R.Error!void {
         }
         if (failure != null) break;
     }
-    if (failure) |f| {
+    return failure;
+}
+
+/// Waits for the run of `job` in flight, if any, and hands back what it failed with, once.
+fn joinJob(s: *State, job: *Job) ?Failure {
+    const task = job.task orelse return null;
+    _ = s.pool.wait.?(s.pool, task);
+    job.task = null;
+    const f = job.failure;
+    job.failure = null;
+    return f;
+}
+
+/// The task pool body of a pipelined phase's run.
+fn runJob(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const job: *Job = @ptrCast(@alignCast(data.?));
+    const s = job.state;
+    job.failure = runWaves(s, &s.phases.items[job.phase], job.dt, &job.packages, false);
+    return if (job.failure) |f| R.code(f.err) else R.ok;
+}
+
+/// The turn of a pipelined phase in a tick: waits for its previous run, copies what the queries of
+/// its systems match, and dispatches the run without waiting for it.
+fn dispatchPhase(s: *State, index: c.ke_phase_id, dt: f32) R.Error!void {
+    const job = s.phases.items[index].job orelse blk: {
+        const made = try gpa.create(Job);
+        made.* = .{ .state = s, .phase = index };
+        s.phases.items[index].job = made;
+        break :blk made;
+    };
+    if (joinJob(s, job)) |f| {
         log.warn("{s} failed: {t}", .{ f.name, f.err });
         return f.err;
     }
+    try buildPhase(s, index);
+    const phase = &s.phases.items[index];
+    try orderFailure(phase, false);
+    for (phase.systems, phase.culled) |system, culled| {
+        if (culled) continue;
+        for (system.queries, system.segments, system.snapshots, system.views) |q, *seg, *snap, *v| {
+            seg.resolve(s.ecs, q.id, q.terms.len) catch |err| {
+                log.warn("resolving a query of {s} failed", .{system.name});
+                return err;
+            };
+            v.* = try snap.take(s.ecs, seg, q.terms);
+        }
+    }
+    job.dt = dt;
+    const code = s.pool.dispatch.?(s.pool, &runJob, job, &job.task);
+    if (code != R.ok) {
+        job.failure = null;
+        log.warn("dispatching the pipelined phase {s} failed", .{phase.name});
+        return R.check(code);
+    }
+}
+
+/// Slot `flush`.
+fn flush(self: ?*c.ke_scheduler) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return failed("flush", error.InvalidArgument);
+    flushPhases(s) catch |err| return failed("flush", err);
+    return R.ok;
+}
+
+fn flushPhases(s: *State) R.Error!void {
+    try s.refuseInRun();
+    try s.takeDeferred();
 }
 
 /// Slot `commands`.
@@ -743,12 +864,17 @@ fn commands(self: ?*c.ke_scheduler) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
 fn destroy(self: ?*c.ke_scheduler) callconv(.c) void {
     const s = stateOf(self) orelse return;
     shutdownPhases(s) catch {};
+    s.quiesce();
     applyPending(s);
     for (s.systems.items) |system| system.destroy();
     s.systems.deinit(gpa);
     for (s.phases.items) |*p| {
         p.clear();
         gpa.free(p.name);
+        if (p.job) |job| {
+            job.packages.deinit(gpa);
+            gpa.destroy(job);
+        }
     }
     s.phases.deinit(gpa);
     for (s.sets.items) |set| {
@@ -781,6 +907,7 @@ export fn ke_scheduler_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_poo
             .build = &build,
             .describe_phase = &describePhase,
             .tick = &tick,
+            .flush = &flush,
             .shutdown = &shutdown,
             .request_exit = &requestExit,
             .exit_requested = &exitRequested,
@@ -1597,6 +1724,150 @@ test "a fixed dt or a catch-up budget that is not greater than zero is refused" 
     var handle: c.ke_scheduler_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), pool.api(), &.{ .fixed_dt = 0, .fixed_dt_max_accum = 1 }, &handle));
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(ecs.api(), pool.api(), &.{ .fixed_dt = 0.25, .fixed_dt_max_accum = 0 }, &handle));
+}
+
+const Deferred = struct {
+    const Task = struct { func: abi_task_pool.c.ke_task_func, data: ?*anyopaque, result: abi_result.c.ke_result = R.ok, done: bool = false };
+    var tasks: [64]Task = undefined;
+    var count: usize = 0;
+
+    fn dispatch(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_task_pool.c.ke_task_pool, "dispatch")).optional.child).pointer.child)) abi_result.c.ke_result {
+        tasks[count] = .{ .func = args[1], .data = args[2] };
+        count += 1;
+        args[3].?.* = @ptrFromInt(count);
+        return R.ok;
+    }
+
+    fn wait(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_task_pool.c.ke_task_pool, "wait")).optional.child).pointer.child)) abi_result.c.ke_result {
+        const t = &tasks[@intFromPtr(args[1].?) - 1];
+        if (!t.done) {
+            t.done = true;
+            t.result = t.func.?(t.data);
+        }
+        return t.result;
+    }
+
+    fn use(rig: *Rig) void {
+        count = 0;
+        _ = rig.pool.when(.dispatch).does(&dispatch);
+        _ = rig.pool.when(.wait).does(&wait);
+    }
+};
+
+const World = struct {
+    var value: u32 = 7;
+    var entities: [1]c.ke_entity = .{42};
+    var column: [1]?*anyopaque = undefined;
+
+    fn resolve(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_ecs.c.ke_ecs, "query_resolve")).optional.child).pointer.child)) abi_result.c.ke_result {
+        args[4].?.* = &value;
+        args[2].?[0] = .{ .entities = &entities, .count = 1, .columns = @ptrCast(args[4]), .column_count = 1 };
+        args[5].?.* = 1;
+        return R.ok;
+    }
+};
+
+const Seen = struct {
+    value: u32 = 0,
+    calls: u32 = 0,
+    recorded: abi_result.c.ke_result = R.ok,
+};
+
+fn reading(ctx: ?*c.ke_scheduler_ctx, ud: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const seen: *Seen = @ptrCast(@alignCast(ud.?));
+    seen.calls += 1;
+    var count: usize = 0;
+    const segs = ctx.?.view.?(ctx, 0, &count) orelse return R.ok;
+    if (count == 1) seen.value = @as(*const u32, @ptrCast(@alignCast(segs[0].columns.?[0].?))).*;
+    const commands_of = ctx.?.commands.?;
+    seen.recorded = commands_of.despawn.?(commands_of, 1);
+    return R.ok;
+}
+
+fn pipelinedRig(rig: *Rig, seen: *Seen, set: *[1]c.ke_set_id) !void {
+    try rig.init(1);
+    Deferred.use(rig);
+    _ = rig.ecs.when(.query_resolve).does(&World.resolve);
+    World.value = 7;
+    var id: c.ke_phase_id = undefined;
+    try R.check(rig.sched.register_phase.?(rig.sched, &.{ .name = "render", .cadence = c.KE_PHASE_CADENCE_EVERY_TICK, .pipelined = true }, &id));
+    set.* = .{try rig.addSetIn("render", id, &.{})};
+    const terms = [_]c.ke_id_access{idAccess(1, read)};
+    const query = [_]c.ke_query_desc{.{ .terms = &terms, .term_count = 1 }};
+    _ = try rig.add(.{ .name = "drawer", .user_data = seen, .execute = &reading, .queries = &query, .query_count = 1, .sets = set, .set_count = 1 });
+}
+
+test "a pipelined phase reads the world as its tick left it, while the caller goes on changing it" {
+    var rig: Rig = undefined;
+    var seen = Seen{};
+    var set: [1]c.ke_set_id = undefined;
+    try pipelinedRig(&rig, &seen, &set);
+    defer rig.deinit();
+    try rig.run();
+    try testing.expectEqual(0, seen.calls);
+    World.value = 99;
+    try R.check(rig.sched.flush.?(rig.sched));
+    try testing.expectEqual(1, seen.calls);
+    try testing.expectEqual(7, seen.value);
+}
+
+test "a body of a pipelined phase records no structural change" {
+    var rig: Rig = undefined;
+    var seen = Seen{};
+    var set: [1]c.ke_set_id = undefined;
+    try pipelinedRig(&rig, &seen, &set);
+    defer rig.deinit();
+    try rig.run();
+    try R.check(rig.sched.flush.?(rig.sched));
+    try testing.expectEqual(R.code(error.NotSupported), seen.recorded);
+}
+
+test "the next tick waits for the previous run of a pipelined phase before taking its turn" {
+    var rig: Rig = undefined;
+    var seen = Seen{};
+    var set: [1]c.ke_set_id = undefined;
+    try pipelinedRig(&rig, &seen, &set);
+    defer rig.deinit();
+    try rig.run();
+    try rig.run();
+    try testing.expectEqual(1, seen.calls);
+    try R.check(rig.sched.flush.?(rig.sched));
+    try testing.expectEqual(2, seen.calls);
+}
+
+test "a change the caller makes waits for the pipelined phase in flight, and destroying waits too" {
+    var rig: Rig = undefined;
+    var seen = Seen{};
+    var set: [1]c.ke_set_id = undefined;
+    try pipelinedRig(&rig, &seen, &set);
+    try rig.run();
+    var probe = Probe{};
+    _ = try rig.add(rig.desc("late", &probe));
+    try testing.expectEqual(1, seen.calls);
+    try rig.run();
+    rig.deinit();
+    try testing.expectEqual(2, seen.calls);
+}
+
+test "a pipelined run that fails fails the flush, once" {
+    var rig: Rig = undefined;
+    var seen = Seen{};
+    var set: [1]c.ke_set_id = undefined;
+    try pipelinedRig(&rig, &seen, &set);
+    defer rig.deinit();
+    var failing = Probe{};
+    _ = try rig.add(.{ .name = "broken", .user_data = &failing, .execute = &refusing, .sets = &set, .set_count = 1 });
+    try rig.run();
+    try testing.expectEqual(R.code(error.Io), rig.sched.flush.?(rig.sched));
+    try R.check(rig.sched.flush.?(rig.sched));
+}
+
+test "only an every-tick phase can be pipelined" {
+    var rig: Rig = undefined;
+    try rig.init(1);
+    defer rig.deinit();
+    var id: c.ke_phase_id = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_phase.?(rig.sched, &.{ .name = "x", .cadence = c.KE_PHASE_CADENCE_FIXED, .pipelined = true }, &id));
 }
 
 test "nothing the scheduler allocated is left behind" {

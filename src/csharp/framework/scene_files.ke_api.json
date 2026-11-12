@@ -857,6 +857,12 @@
           "type": "ke_phase_cadence",
           "tags": [],
           "doc": "When the phase runs."
+        },
+        {
+          "name": "pipelined",
+          "type": "bool",
+          "tags": [],
+          "doc": "The phase runs on the task pool while the tick goes on and the next one runs; only an every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the queries of its systems match, entities and columns, which is all its bodies read; a body of the phase records no structural change."
         }
       ],
       "external": true
@@ -1685,7 +1691,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Registers a phase.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a missing name, an unknown cadence or a pipelined phase that is not every-tick; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "desc",
@@ -1872,7 +1878,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Applies what was recorded into commands, then runs the phases in registration order: on the first tick the startup phases first, then each every-tick phase, and each block of fixed phases once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body or after shutdown; the code build fails with; the code a body or its commands failed with.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body or after shutdown; the code build fails with; the code a body or its commands failed with, a body of a pipelined phase\u0027s previous run included.",
           "params": [
             {
               "name": "dt",
@@ -1884,10 +1890,21 @@
           "receiver": "ke_scheduler *"
         },
         {
+          "name": "flush",
+          "returns": "ke_result",
+          "tags": [
+            "drains"
+          ],
+          "doc": "Waits for every pipelined phase still running.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body of those runs failed with.",
+          "params": [],
+          "receiver": "ke_scheduler *"
+        },
+        {
           "name": "shutdown",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.",
+          "doc": "Waits for every pipelined phase still running, then runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.",
           "return_doc": "KE_OK; KE_RESULT_NOT_SUPPORTED from a body; the code a body failed with.",
           "params": [],
           "receiver": "ke_scheduler *"

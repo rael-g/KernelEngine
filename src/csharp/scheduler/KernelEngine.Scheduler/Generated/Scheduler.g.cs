@@ -91,9 +91,10 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
     /// <summary>Registers a phase.</summary>
     /// <param name="name">Identifies the phase in diagnostics.</param>
     /// <param name="cadence">When the phase runs.</param>
+    /// <param name="pipelined">The phase runs on the task pool while the tick goes on and the next one runs; only an every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the queries of its systems match, entities and columns, which is all its bodies read; a body of the phase records no structural change.</param>
     /// <returns>Receives the phase's id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public uint RegisterPhase(string name, PhaseCadence cadence)
+    public uint RegisterPhase(string name, PhaseCadence cadence, bool pipelined)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -104,6 +105,7 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
             ke_phase_desc desc = default;
             desc.name = (sbyte*)namePtr;
             desc.cadence = (PhaseCadence)cadence;
+            desc.pipelined = pipelined;
             uint resultOut = default;
             KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->register_phase(Handle, &desc, &resultOut)), "register_phase");
             return resultOut;
@@ -290,7 +292,14 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
         KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->tick(Handle, dt)), "tick");
     }
 
-    /// <summary>Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.</summary>
+    /// <summary>Waits for every pipelined phase still running.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void Flush()
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->flush(Handle)), "flush");
+    }
+
+    /// <summary>Waits for every pipelined phase still running, then runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Shutdown()
     {

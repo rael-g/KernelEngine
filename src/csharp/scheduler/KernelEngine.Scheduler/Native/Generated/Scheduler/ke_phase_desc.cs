@@ -17,4 +17,6 @@ public unsafe partial struct ke_phase_desc
 
     [NativeTypeName("ke_phase_cadence")]
     public global::KernelEngine.Scheduler.PhaseCadence cadence;
+
+    public bool pipelined;
 }

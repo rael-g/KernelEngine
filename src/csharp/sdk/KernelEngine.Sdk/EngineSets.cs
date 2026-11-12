@@ -40,7 +40,7 @@ public sealed class EngineSets
     /// <returns>The set of each phase.</returns>
     public static EngineSets Register(DefaultScheduler scheduler)
     {
-        uint Phase(string name, PhaseCadence cadence) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence), []);
+        uint Phase(string name, PhaseCadence cadence, bool pipelined = false) => scheduler.RegisterSet(name, scheduler.RegisterPhase(name, cadence, pipelined), []);
         return new EngineSets
         {
             Startup = Phase("startup", PhaseCadence.Startup),
@@ -50,7 +50,7 @@ public sealed class EngineSets
             FixedPostUpdate = Phase("fixed_post_update", PhaseCadence.Fixed),
             Update = Phase("update", PhaseCadence.EveryTick),
             PostUpdate = Phase("post_update", PhaseCadence.EveryTick),
-            Render = Phase("render", PhaseCadence.EveryTick),
+            Render = Phase("render", PhaseCadence.EveryTick, pipelined: true),
             Shutdown = Phase("shutdown", PhaseCadence.Shutdown),
         };
     }

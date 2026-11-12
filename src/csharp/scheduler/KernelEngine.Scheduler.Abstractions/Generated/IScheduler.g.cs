@@ -19,9 +19,10 @@ public interface IScheduler : IDisposable
     /// <summary>Registers a phase.</summary>
     /// <param name="name">Identifies the phase in diagnostics.</param>
     /// <param name="cadence">When the phase runs.</param>
+    /// <param name="pipelined">The phase runs on the task pool while the tick goes on and the next one runs; only an every-tick phase can be. Its turn in a tick waits for its previous run, then copies what the queries of its systems match, entities and columns, which is all its bodies read; a body of the phase records no structural change.</param>
     /// <returns>Receives the phase's id.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    uint RegisterPhase(string name, PhaseCadence cadence);
+    uint RegisterPhase(string name, PhaseCadence cadence, bool pipelined);
     /// <summary>Registers an ordering set.</summary>
     /// <param name="name">Identifies the set in diagnostics.</param>
     /// <param name="phase">The phase whose systems the set orders.</param>
@@ -61,7 +62,10 @@ public interface IScheduler : IDisposable
     /// <summary>Applies what was recorded into commands, then runs the phases in registration order: on the first tick the startup phases first, then each every-tick phase, and each block of fixed phases once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);
-    /// <summary>Runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.</summary>
+    /// <summary>Waits for every pipelined phase still running.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void Flush();
+    /// <summary>Waits for every pipelined phase still running, then runs the shutdown phases once if a tick ran; a later call, and a later tick, do nothing and are refused respectively. Destroying the scheduler calls it for a caller that did not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Shutdown();
     /// <summary>Records that the program should end; any body or the caller may ask, from any thread.</summary>
