@@ -8,7 +8,6 @@ const ToolTree = @import("scripts/tool_tree.zig").ToolTree;
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const debug = optimize == .Debug;
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
@@ -99,8 +98,8 @@ pub fn build(b: *std.Build) void {
     };
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
-    const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
-    const vcpkg_lib = if (debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib_release;
+    const vcpkg_lib = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
+    const flecs_lib = if (optimize == .Debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib;
 
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
@@ -153,7 +152,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"flecs-include" = vcpkg_include,
-        .@"flecs-lib" = b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" }),
+        .@"flecs-lib" = b.pathJoin(&.{ flecs_lib, "libflecs_static.a" }),
     }, &.{}, .has_tests);
 
     _ = ctx.member("ke_input_default", .{
@@ -230,20 +229,17 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"box2d-include" = vcpkg_include,
-        .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
+        .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, "libbox2d.a" }),
     }, &.{}, .has_tests);
 
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
-        b.pathJoin(&.{ vcpkg_lib, if (debug) "libassimpd.a" else "libassimp.a" }),
+        b.pathJoin(&.{ vcpkg_lib, "libassimp.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpolyclipping.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpoly2tri.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpugixml.a" }),
-        b.pathJoin(&.{ vcpkg_lib_release, if (is_windows) "libzs.a" else "libz.a" }),
-        b.pathJoin(&.{ vcpkg_lib, if (is_windows)
-            (if (debug) "libminizipsd.a" else "libminizips.a")
-        else
-            "libminizip.a" }),
+        b.pathJoin(&.{ vcpkg_lib, if (is_windows) "libzs.a" else "libz.a" }),
+        b.pathJoin(&.{ vcpkg_lib, if (is_windows) "libminizips.a" else "libminizip.a" }),
     });
     _ = ctx.member("ke_asset_assimp", .{
         .target = target,
