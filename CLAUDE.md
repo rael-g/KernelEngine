@@ -215,6 +215,8 @@ The rules below and the conventions above that a machine can check are checked b
 
 10. **Code first, files on top.** The engine is a framework first. Everything an auxiliary file describes (a project, a scene, input actions, a module) is first an API a program calls; the file is a loader that reads the text and calls that same API, and adds nothing the API cannot do. A file format never reaches state the code cannot reach.
 
+11. **The contract is the product.** A contract is written to outlive every implementation of it: it serves an implementation built the way established engines build it, the way current ones do and the way a future one might, and is never touched again. It is checked against more than one way of implementing it, and promises only what all of them keep. Contracts do not couple to each other: a contract names another contract's type only where the concept is inherent, so each implementation can be replaced on its own. An implementation starts as the simplest one that keeps the contract, built on a third-party library where one exists, and is improved or replaced later, one piece at a time.
+
 ---
 
 ## Key documents
