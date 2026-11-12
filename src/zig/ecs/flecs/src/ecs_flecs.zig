@@ -142,14 +142,25 @@ fn copyFields(source: []const abi_ecs.c.ke_component_field) error{OutOfMemory}![
     return fields;
 }
 
-/// A query registered by `queryRegister`. It owns `elem_sizes`, one size per term, and `destroy`
-/// frees it.
+/// A query registered by `queryRegister`, with the copy of its description that later
+/// registrations are compared with. It owns `elem_sizes`, one size per term, and the three copied
+/// arrays, and `destroy` frees them.
 const RegisteredQuery = struct {
     query: ?*c.ecs_query_t,
     elem_sizes: []usize,
-    cids: []abi_asset_resolver.c.ke_component_id,
+    terms: []abi_ecs.c.ke_ecs_query_term,
+    with: []abi_asset_resolver.c.ke_component_id,
+    without: []abi_asset_resolver.c.ke_component_id,
+    track_changes: bool,
     term_count: usize,
 };
+
+fn freeRegistered(rq: *const RegisteredQuery) void {
+    heap.gpa.free(rq.elem_sizes);
+    heap.gpa.free(rq.terms);
+    heap.gpa.free(rq.with);
+    heap.gpa.free(rq.without);
+}
 
 const test_config: abi_ecs.c.ke_ecs_config = .{ .reserved_id_capacity = 1048576 };
 
@@ -163,11 +174,13 @@ const test_config: abi_ecs.c.ke_ecs_config = .{ .reserved_id_capacity = 1048576 
 /// each component name, which later registrations are compared with and which seeds defaults on
 /// attach. `queries` holds one cached query per component and `rqueries` the queries made by
 /// `queryRegister`, whose id is the index plus one. `materialized` and the three arrays stay null
-/// until something first needs them. Nothing here is locked and no thread is started; only
+/// until something first needs them. `singletons` is a disabled entity, which no query matches,
+/// holding the world's singleton components. Nothing here is locked and no thread is started; only
 /// `reserve_next` is touched by several threads.
 const State = struct {
     api: abi_ecs.c.ke_ecs,
     world: ?*c.ecs_world_t,
+    singletons: c.ecs_entity_t,
 
     reserve_low: u32,
     reserve_end: u32,
@@ -525,15 +538,20 @@ fn componentAdd(
         log.warn("attaching component {d} to entity {d}, which is not alive", .{ component, entity });
         return R.code(error.InvalidArgument);
     }
+    return attachTo(s, @intCast(entity), component, out);
+}
 
-    const already_had = c.ecs_has_id(s.world, @intCast(entity), @intCast(component));
-    c.ecs_add_id(s.world, @intCast(entity), @intCast(component));
+/// Adds a component to a living entity, zeroing and seeding it with the remembered defaults only
+/// when the entity did not hold it, and writes its bytes, or null for a zero-size component.
+fn attachTo(s: *State, entity: c.ecs_entity_t, component: abi_asset_resolver.c.ke_component_id, out: *?*anyopaque) abi_result.c.ke_result {
+    const already_had = c.ecs_has_id(s.world, entity, @intCast(component));
+    c.ecs_add_id(s.world, entity, @intCast(component));
     var rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
     const ti = c.ecs_get_type_info(s.world, @intCast(component));
     if (ti == null or ti.*.size <= 0) return R.ok;
 
-    const slot = c.ecs_get_mut_id(s.world, @intCast(entity), @intCast(component));
+    const slot = c.ecs_get_mut_id(s.world, entity, @intCast(component));
     rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
     if (!already_had) {
@@ -588,40 +606,69 @@ fn componentFieldWrite(self_in: ?*abi_ecs.c.ke_ecs, component: ?*anyopaque, plac
     return R.ok;
 }
 
-/// Slot `query_register`. Builds a flecs query with one term per component id and records the byte
-/// size of each term for `queryResolve`; a tuple registered before, in the same order, answers the
-/// id it got then and builds nothing. The id counts from one, so it is never the invalid id. A null
-/// argument, a zero count, more ids than a flecs query has terms and a query flecs refuses are
-/// invalid arguments; a flecs query created before a later step fails is finalized first.
+/// Slot `query_register`. Builds a flecs query with one term per description term, reading as
+/// `EcsIn` or writing as `EcsInOut`, one data-less term per `with` component and one `EcsNot` term
+/// per `without` component, cached with change detection when the description tracks changes; and
+/// records the byte size of each term for `queryResolve`. A description registered before, tracking
+/// no changes, answers the id it got then and builds nothing. The id counts from one, so it is never
+/// the invalid id. A null argument, no terms, a term with no access or an unknown one, more terms
+/// than a flecs query has and a query flecs refuses are invalid arguments; a flecs query created
+/// before a later step fails is finalized first.
 fn queryRegister(
     self_in: ?*abi_ecs.c.ke_ecs,
-    cids: [*c]const abi_asset_resolver.c.ke_component_id,
-    cid_count: usize,
+    desc_in: ?*const abi_ecs.c.ke_ecs_query_desc,
     out_query: ?*abi_ecs.c.ke_query_id,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_query orelse return R.code(error.InvalidArgument);
     out.* = abi_ecs.c.KE_QUERY_INVALID;
     const self = self_in orelse return R.code(error.InvalidArgument);
-    var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
-    if (self.handle == null or cids == null or cid_count == 0) return R.code(error.InvalidArgument);
-    if (cid_count > desc.terms.len) {
-        log.warn("a query of {d} terms is more than the {d} a flecs query holds", .{ cid_count, desc.terms.len });
+    const d = desc_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or d.terms == null or d.term_count == 0) return R.code(error.InvalidArgument);
+    if ((d.with_count != 0 and d.with == null) or (d.without_count != 0 and d.without == null)) return R.code(error.InvalidArgument);
+    const terms = d.terms.?[0..d.term_count];
+    const with: []const abi_asset_resolver.c.ke_component_id = if (d.with_count == 0) &.{} else d.with.?[0..d.with_count];
+    const without: []const abi_asset_resolver.c.ke_component_id = if (d.without_count == 0) &.{} else d.without.?[0..d.without_count];
+    const access_mask: c_uint = abi_ecs.c.KE_ECS_ACCESS_READ | abi_ecs.c.KE_ECS_ACCESS_WRITE;
+    for (terms, 0..) |t, i| {
+        if (t.access == 0 or (@as(c_uint, @intCast(t.access)) & ~access_mask) != 0) {
+            log.warn("query term {d} has the access {d}, which is neither read nor write", .{ i, t.access });
+            return R.code(error.InvalidArgument);
+        }
+    }
+    var fdesc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    const total = terms.len + with.len + without.len;
+    if (total > fdesc.terms.len) {
+        log.warn("a query of {d} terms and filters is more than the {d} a flecs query holds", .{ total, fdesc.terms.len });
         return R.code(error.InvalidArgument);
     }
     const s = stateOf(self);
 
-    if (s.rqueries) |existing| {
+    if (!d.track_changes) if (s.rqueries) |existing| {
         for (existing[0..s.rquery_count], 1..) |*rq, id| {
-            if (std.mem.eql(abi_asset_resolver.c.ke_component_id, rq.cids, cids[0..cid_count])) {
-                out.* = @intCast(id);
-                return R.ok;
-            }
+            if (rq.track_changes) continue;
+            if (!std.mem.eql(u8, std.mem.sliceAsBytes(rq.terms), std.mem.sliceAsBytes(terms))) continue;
+            if (!std.mem.eql(abi_asset_resolver.c.ke_component_id, rq.with, with)) continue;
+            if (!std.mem.eql(abi_asset_resolver.c.ke_component_id, rq.without, without)) continue;
+            out.* = @intCast(id);
+            return R.ok;
         }
-    }
+    };
 
-    for (0..cid_count) |i| desc.terms[i].id = @intCast(cids[i]);
+    for (terms, 0..) |t, i| {
+        fdesc.terms[i].id = @intCast(t.component);
+        fdesc.terms[i].inout = if ((@as(c_uint, @intCast(t.access)) & abi_ecs.c.KE_ECS_ACCESS_WRITE) != 0) c.EcsInOut else c.EcsIn;
+    }
+    for (with, terms.len..) |cid, i| {
+        fdesc.terms[i].id = @intCast(cid);
+        fdesc.terms[i].inout = c.EcsInOutNone;
+    }
+    for (without, terms.len + with.len..) |cid, i| {
+        fdesc.terms[i].id = @intCast(cid);
+        fdesc.terms[i].oper = c.EcsNot;
+    }
+    if (d.track_changes) fdesc.flags = c.EcsQueryDetectChanges;
     begin();
-    const query = c.ecs_query_init(s.world, &desc);
+    const query = c.ecs_query_init(s.world, &fdesc);
     const rc = outcome();
     const q = query orelse {
         if (rc == abi_result.c.KE_OK) log.warn("flecs refused the query", .{});
@@ -631,21 +678,21 @@ fn queryRegister(
         c.ecs_query_fini(q);
         return rc;
     }
-    const elem_sizes = heap.gpa.alloc(usize, cid_count) catch {
+    var rq: RegisteredQuery = .{ .query = q, .elem_sizes = &.{}, .terms = &.{}, .with = &.{}, .without = &.{}, .track_changes = d.track_changes, .term_count = terms.len };
+    copyDescription(&rq, terms, with, without) catch {
+        freeRegistered(&rq);
         c.ecs_query_fini(q);
         return R.code(error.OutOfMemory);
     };
-    const owned_cids = heap.gpa.dupe(abi_asset_resolver.c.ke_component_id, cids[0..cid_count]) catch {
-        heap.gpa.free(elem_sizes);
-        c.ecs_query_fini(q);
-        return R.code(error.OutOfMemory);
-    };
+    for (terms, rq.elem_sizes) |t, *size| {
+        const ti = c.ecs_get_type_info(s.world, @intCast(t.component));
+        size.* = if (ti != null) @intCast(ti.*.size) else 0;
+    }
 
     if (s.rquery_count == s.rquery_capacity) {
         const new_cap: usize = if (s.rquery_capacity != 0) s.rquery_capacity * 2 else 8;
         const new_buf = heap.gpa.alloc(RegisteredQuery, new_cap) catch {
-            heap.gpa.free(owned_cids);
-            heap.gpa.free(elem_sizes);
+            freeRegistered(&rq);
             c.ecs_query_fini(q);
             return R.code(error.OutOfMemory);
         };
@@ -657,26 +704,32 @@ fn queryRegister(
         s.rquery_capacity = new_cap;
     }
 
-    const rq = &s.rqueries.?[s.rquery_count];
-    rq.query = q;
-    rq.term_count = cid_count;
-    rq.elem_sizes = elem_sizes;
-    rq.cids = owned_cids;
-    for (0..cid_count) |i| {
-        const ti = c.ecs_get_type_info(s.world, @intCast(cids[i]));
-        rq.elem_sizes[i] = if (ti != null) @intCast(ti.*.size) else 0;
-    }
+    s.rqueries.?[s.rquery_count] = rq;
     s.rquery_count += 1;
     out.* = @intCast(s.rquery_count);
     return R.ok;
 }
 
+fn copyDescription(
+    rq: *RegisteredQuery,
+    terms: []const abi_ecs.c.ke_ecs_query_term,
+    with: []const abi_asset_resolver.c.ke_component_id,
+    without: []const abi_asset_resolver.c.ke_component_id,
+) error{OutOfMemory}!void {
+    rq.elem_sizes = try heap.gpa.alloc(usize, terms.len);
+    rq.terms = try heap.gpa.dupe(abi_ecs.c.ke_ecs_query_term, terms);
+    rq.with = try heap.gpa.dupe(abi_asset_resolver.c.ke_component_id, with);
+    rq.without = try heap.gpa.dupe(abi_asset_resolver.c.ke_component_id, without);
+}
+
 /// Slot `query_resolve`. Runs the query from its start and writes one segment per matching table:
-/// its entities, its count and one column per term, with the columns of segment n starting at n
-/// times the term count in the caller's array. Column pointers refer into the world's storage and
+/// its entities, its count, one column per term, with the columns of segment n starting at n times
+/// the term count in the caller's array, and whether the table changed for a query tracking
+/// changes. flecs marks the written columns of a table changed, and moves the query's view of it
+/// forward, when the iteration leaves the table. Column pointers refer into the world's storage and
 /// stay valid until the next structural change, and a zero-size term's column is null. Segments
-/// beyond the caller's capacity are counted but not written, so the count written to out_count is
-/// the total. Any invalid argument or unknown query leaves that count at zero.
+/// beyond the caller's capacity are counted but skipped, keeping their changes, so the count written
+/// to out_count is the total. Any invalid argument or unknown query leaves that count at zero.
 fn queryResolve(
     self_in: ?*abi_ecs.c.ke_ecs,
     query: abi_ecs.c.ke_query_id,
@@ -704,6 +757,7 @@ fn queryResolve(
     var it = c.ecs_query_iter(s.world, q);
     while (c.ecs_query_next(&it)) {
         if (seg >= max_segments) {
+            c.ecs_iter_skip(&it);
             seg += 1;
             continue;
         }
@@ -715,12 +769,63 @@ fn queryResolve(
             cols[t] = if (rq.elem_sizes[t] != 0) c.ecs_field_w_size(&it, rq.elem_sizes[t], @intCast(t)) else null;
         dst.columns = cols;
         dst.column_count = @intCast(rq.term_count);
+        dst.changed = rq.track_changes and c.ecs_iter_changed(&it);
         seg += 1;
     }
     const rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
     out_count.* = seg;
     return R.ok;
+}
+
+/// Slot `entity_mark_changed`. Marks the component's column changed in the entity's table through
+/// `ecs_modified_id`.
+fn entityMarkChanged(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, component: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
+    const s = stateOf(self);
+    if (!c.ecs_is_alive(s.world, @intCast(entity)) or !c.ecs_has_id(s.world, @intCast(entity), @intCast(component))) {
+        log.warn("marking component {d} of entity {d} changed, which does not hold it", .{ component, entity });
+        return R.code(error.InvalidArgument);
+    }
+    begin();
+    c.ecs_modified_id(s.world, @intCast(entity), @intCast(component));
+    return outcome();
+}
+
+/// Slot `singleton_add`. Attaches the component to the disabled singleton entity, as `component_add`
+/// attaches it to an entity.
+fn singletonAdd(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id, out_data: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const out = out_data orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or component == 0) return R.code(error.InvalidArgument);
+    const s = stateOf(self);
+    if (!isRegistered(s, component)) {
+        log.warn("no component has id {d}", .{component});
+        return R.code(error.InvalidArgument);
+    }
+    begin();
+    return attachTo(s, s.singletons, component, out);
+}
+
+/// Slot `singleton_get`. The bytes of the component on the singleton entity, otherwise null.
+fn singletonGet(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id) callconv(.c) ?*anyopaque {
+    const self = self_in orelse return null;
+    if (self.handle == null or component == 0) return null;
+    const s = stateOf(self);
+    if (!c.ecs_has_id(s.world, s.singletons, @intCast(component))) return null;
+    return @constCast(c.ecs_get_id(s.world, s.singletons, @intCast(component)));
+}
+
+/// Slot `singleton_remove`. Removes the component from the singleton entity.
+fn singletonRemove(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+    const self = self_in orelse return R.code(error.InvalidArgument);
+    if (self.handle == null or component == 0) return R.code(error.InvalidArgument);
+    const s = stateOf(self);
+    begin();
+    c.ecs_remove_id(s.world, s.singletons, @intCast(component));
+    return outcome();
 }
 
 /// The handle's `destroy`. Finalizes every cached and registered query and frees their arrays, the
@@ -740,8 +845,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
     if (s.rqueries) |rqs| {
         for (0..s.rquery_count) |i| {
             if (rqs[i].query) |q| c.ecs_query_fini(q);
-            heap.gpa.free(rqs[i].elem_sizes);
-            heap.gpa.free(rqs[i].cids);
+            freeRegistered(&rqs[i]);
         }
         heap.gpa.free(rqs[0..s.rquery_capacity]);
     }
@@ -787,6 +891,7 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
     s.* = .{
         .api = std.mem.zeroes(abi_ecs.c.ke_ecs),
         .world = null,
+        .singletons = 0,
         .reserve_low = 0,
         .reserve_end = reserved_id_capacity,
         .reserve_next = std.atomic.Value(u32).init(0),
@@ -817,6 +922,8 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
         log.warn("flecs would not keep its ids clear of the reserve pool", .{});
         return error.NotInitialized;
     }
+    s.singletons = c.ecs_new(s.world);
+    c.ecs_enable(s.world, s.singletons, false);
 
     s.api.handle = s;
     s.api.entity_create = entityCreate;
@@ -832,6 +939,10 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
     s.api.component_field_write = componentFieldWrite;
     s.api.query_register = queryRegister;
     s.api.query_resolve = queryResolve;
+    s.api.entity_mark_changed = entityMarkChanged;
+    s.api.singleton_add = singletonAdd;
+    s.api.singleton_get = singletonGet;
+    s.api.singleton_remove = singletonRemove;
 
     return .{ .ref = &s.api, .destroy = destroy };
 }
@@ -873,9 +984,45 @@ fn attach(h: abi_ecs.c.ke_ecs_handle, entity: abi_asset_resolver.c.ke_entity, ci
 }
 
 fn queryOf(h: abi_ecs.c.ke_ecs_handle, cids: []const abi_asset_resolver.c.ke_component_id) R.Error!abi_ecs.c.ke_query_id {
+    var terms: [32]abi_ecs.c.ke_ecs_query_term = undefined;
+    for (cids, terms[0..cids.len]) |cid, *t| t.* = .{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ };
+    return registerDesc(h, .{ .terms = &terms, .term_count = @intCast(cids.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false });
+}
+
+fn registerDesc(h: abi_ecs.c.ke_ecs_handle, desc: abi_ecs.c.ke_ecs_query_desc) R.Error!abi_ecs.c.ke_query_id {
     var query: abi_ecs.c.ke_query_id = abi_ecs.c.KE_QUERY_INVALID;
-    try R.check(h.ref.?.query_register.?(h.ref, cids.ptr, cids.len, &query));
+    try R.check(h.ref.?.query_register.?(h.ref, &desc, &query));
     return query;
+}
+
+fn sized(h: abi_ecs.c.ke_ecs_handle, name: [*:0]const u8) R.Error!abi_asset_resolver.c.ke_component_id {
+    return register(h, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 });
+}
+
+fn term(cid: abi_asset_resolver.c.ke_component_id, access: c_uint) abi_ecs.c.ke_ecs_query_term {
+    return .{ .component = cid, .access = @intCast(access) };
+}
+
+fn tracking(h: abi_ecs.c.ke_ecs_handle, terms: []const abi_ecs.c.ke_ecs_query_term) R.Error!abi_ecs.c.ke_query_id {
+    return registerDesc(h, .{ .terms = terms.ptr, .term_count = @intCast(terms.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = true });
+}
+
+const Resolved = struct {
+    segs: [4]abi_ecs.c.ke_ecs_segment = undefined,
+    columns: [16]?*anyopaque = undefined,
+    count: usize = 0,
+
+    fn changedCount(r: *const Resolved) usize {
+        var n: usize = 0;
+        for (r.segs[0..@min(r.count, r.segs.len)]) |seg| n += @intFromBool(seg.changed);
+        return n;
+    }
+};
+
+fn resolveInto(h: abi_ecs.c.ke_ecs_handle, query: abi_ecs.c.ke_query_id, capacity: usize) R.Error!Resolved {
+    var r: Resolved = .{};
+    try R.check(h.ref.?.query_resolve.?(h.ref, query, &r.segs, capacity, &r.columns[0], &r.count));
+    return r;
 }
 
 test "flecsLogHandler stashes a fatal-level message with file:line" {
@@ -1478,6 +1625,149 @@ test "a query over twelve components resolves with a column for each" {
     try testing.expectEqual(@as(usize, 1), count);
     try testing.expectEqual(@as(u32, 12), segs[0].column_count);
     for (0..12) |t| try testing.expect(segs[0].columns.?[t] != null);
+}
+
+test "a query matches only entities having every with component and none of the without components, handing columns of its terms alone" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "filter_pos");
+    const tag = try register(h, &abi_ecs.c.ke_component_params{ .name = "filter_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
+    const hidden = try sized(h, "filter_hidden");
+    const plain = try spawn(h);
+    _ = try attach(h, plain, pos);
+    const tagged = try spawn(h);
+    _ = try attach(h, tagged, pos);
+    _ = try attach(h, tagged, tag);
+    const tagged_hidden = try spawn(h);
+    _ = try attach(h, tagged_hidden, pos);
+    _ = try attach(h, tagged_hidden, tag);
+    _ = try attach(h, tagged_hidden, hidden);
+
+    const terms = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    const query = try registerDesc(h, .{ .terms = &terms, .term_count = 1, .with = @ptrCast(&tag), .with_count = 1, .without = @ptrCast(&hidden), .without_count = 1, .track_changes = false });
+    const r = try resolveInto(h, query, 4);
+    try testing.expectEqual(1, r.count);
+    try testing.expectEqual(1, r.segs[0].count);
+    try testing.expectEqual(tagged, r.segs[0].entities.?[0]);
+    try testing.expectEqual(1, r.segs[0].column_count);
+}
+
+test "a term with no access, or one beyond read and write, is refused" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "access_pos");
+    var query: abi_ecs.c.ke_query_id = 7;
+    for ([_]c_uint{ 0, 4 }) |access| {
+        const terms = [_]abi_ecs.c.ke_ecs_query_term{term(pos, access)};
+        const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = &terms, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+        try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.query_register.?(h.ref, &desc, &query));
+        try testing.expectEqual(abi_ecs.c.KE_QUERY_INVALID, query);
+    }
+}
+
+test "a description registered twice is shared unless it tracks changes" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "share_pos");
+    const terms = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    try testing.expectEqual(try queryOf(h, &.{pos}), try queryOf(h, &.{pos}));
+    try testing.expect(try tracking(h, &terms) != try tracking(h, &terms));
+}
+
+test "a tracking query sees a table changed on its first resolve, then only after a written term is resolved or the table gains an entity" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "change_pos");
+    _ = try attach(h, try spawn(h), pos);
+    const watch = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    const observer = try tracking(h, &watch);
+    const reader = try queryOf(h, &.{pos});
+    const writes = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ | abi_ecs.c.KE_ECS_ACCESS_WRITE)};
+    const writer = try registerDesc(h, .{ .terms = &writes, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false });
+
+    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
+    try testing.expectEqual(0, (try resolveInto(h, observer, 4)).changedCount());
+    _ = try resolveInto(h, reader, 4);
+    try testing.expectEqual(0, (try resolveInto(h, observer, 4)).changedCount());
+    _ = try resolveInto(h, writer, 4);
+    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
+    _ = try attach(h, try spawn(h), pos);
+    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
+    try testing.expectEqual(0, (try resolveInto(h, observer, 4)).changedCount());
+}
+
+test "marking an entity's component changed is seen by a tracking query, and a component it does not hold is refused" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "mark_pos");
+    const other = try sized(h, "mark_other");
+    const entity = try spawn(h);
+    _ = try attach(h, entity, pos);
+    const watch = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    const observer = try tracking(h, &watch);
+    _ = try resolveInto(h, observer, 4);
+    try R.check(h.ref.?.entity_mark_changed.?(h.ref, entity, pos));
+    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.entity_mark_changed.?(h.ref, entity, other));
+}
+
+test "a segment beyond the resolve's capacity keeps its change for the next resolve" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "spill_pos");
+    const extra = try sized(h, "spill_extra");
+    _ = try attach(h, try spawn(h), pos);
+    const second = try spawn(h);
+    _ = try attach(h, second, pos);
+    _ = try attach(h, second, extra);
+    const watch = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    const observer = try tracking(h, &watch);
+    const first = try resolveInto(h, observer, 1);
+    try testing.expectEqual(2, first.count);
+    try testing.expectEqual(1, first.changedCount());
+    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
+}
+
+test "a singleton is seeded once, kept by a second add, matched by no query, and gone after its removal" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const fields = [_]abi_ecs.c.ke_component_field{defaulted("value", abi_ecs_variant.c.KE_VARIANT_INT, 0, 4, intVariant(9))};
+    const cid = try register(h, &abi_ecs.c.ke_component_params{ .name = "singleton_value", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 });
+    try testing.expectEqual(null, h.ref.?.singleton_get.?(h.ref, cid));
+    var data: ?*anyopaque = null;
+    try R.check(h.ref.?.singleton_add.?(h.ref, cid, &data));
+    const value: *i32 = @ptrCast(@alignCast(data.?));
+    try testing.expectEqual(9, value.*);
+    value.* = 4;
+    try R.check(h.ref.?.singleton_add.?(h.ref, cid, &data));
+    try testing.expectEqual(4, @as(*i32, @ptrCast(@alignCast(h.ref.?.singleton_get.?(h.ref, cid).?))).*);
+    try testing.expectEqual(0, (try resolveInto(h, try queryOf(h, &.{cid}), 4)).count);
+    try R.check(h.ref.?.singleton_remove.?(h.ref, cid));
+    try testing.expectEqual(null, h.ref.?.singleton_get.?(h.ref, cid));
+}
+
+test "a singleton of an unregistered component is refused" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    var data: ?*anyopaque = null;
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.singleton_add.?(h.ref, 0xBEEF, &data));
+    try testing.expectEqual(null, data);
+}
+
+test "two worlds share no component, entity or query" {
+    const a = try made();
+    defer a.destroy.?(a.ref);
+    const b = try made();
+    defer b.destroy.?(b.ref);
+    const pos = try sized(a, "world_pos");
+    const entity = try spawn(a);
+    _ = try attach(a, entity, pos);
+    _ = try queryOf(a, &.{pos});
+    var meta: abi_ecs.c.ke_component_meta = undefined;
+    try testing.expect(!b.ref.?.component_lookup.?(b.ref, "world_pos", &meta));
+    try testing.expectEqual(null, b.ref.?.component_get.?(b.ref, entity, pos));
+    var r: Resolved = .{};
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, b.ref.?.query_resolve.?(b.ref, 1, &r.segs, 4, &r.columns[0], &r.count));
 }
 
 test "creating, filling and destroying an ecs leaves no block allocated" {

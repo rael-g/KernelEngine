@@ -993,10 +993,11 @@ fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*Registered
         const rs = h.state.systems.?[si].?;
         for (0..rs.query_count) |q| {
             const qd = &rs.query_decls[q];
-            const cids = heap.gpa.alloc(abi_asset_resolver.c.ke_component_id, qd.term_count) catch return rs;
-            defer heap.gpa.free(cids);
-            for (0..qd.term_count) |t| cids[t] = qd.terms[t].cid;
-            if (h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count, &rs.query_ids[q]) != abi_result.c.KE_OK) return rs;
+            const terms = heap.gpa.alloc(abi_ecs.c.ke_ecs_query_term, qd.term_count) catch return rs;
+            defer heap.gpa.free(terms);
+            for (terms, qd.terms[0..qd.term_count]) |*t, from| t.* = .{ .component = from.cid, .access = @intCast(from.access) };
+            const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = terms.ptr, .term_count = @intCast(terms.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+            if (h.state.ecs.query_register.?(h.state.ecs, &desc, &rs.query_ids[q]) != abi_result.c.KE_OK) return rs;
         }
     }
     return null;
@@ -2055,7 +2056,7 @@ test "the shutdown phase runs once when the runtime is destroyed, after every ti
     try testing.expectEqual(@as(c_int, abi_runtime.c.KE_PHASE_SHUTDOWN), seen_log.seen[2]);
 }
 
-fn fakeQueryRegister(_: ?*abi_ecs.c.ke_ecs, _: [*c]const abi_asset_resolver.c.ke_component_id, _: usize, out_query: [*c]abi_ecs.c.ke_query_id) callconv(.c) abi_result.c.ke_result {
+fn fakeQueryRegister(_: ?*abi_ecs.c.ke_ecs, _: ?*const abi_ecs.c.ke_ecs_query_desc, out_query: [*c]abi_ecs.c.ke_query_id) callconv(.c) abi_result.c.ke_result {
     out_query.* = 1;
     return R.ok;
 }
@@ -3228,7 +3229,9 @@ test "a zero size component registers as a usable tag" {
     _ = (try ecsAttach(ecs, e, tag));
 
     var q: abi_ecs.c.ke_query_id = abi_ecs.c.KE_QUERY_INVALID;
-    try R.check(ecs.query_register.?(ecs, (&tag)[0..1], 1, &q));
+    const terms = [_]abi_ecs.c.ke_ecs_query_term{.{ .component = tag, .access = abi_ecs.c.KE_ECS_ACCESS_READ }};
+    const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = &terms, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+    try R.check(ecs.query_register.?(ecs, &desc, &q));
     try testing.expect(q != abi_ecs.c.KE_QUERY_INVALID);
 
     var segs = std.mem.zeroes([8]abi_ecs.c.ke_ecs_segment);

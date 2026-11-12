@@ -28,11 +28,11 @@ public interface IEcsRegistry : IDisposable
     nint ComponentGet(Entity entity, ComponentId component);
     /// <summary>Byte size of a registered component's element; 0 for a tag or unknown cid.</summary>
     nuint ComponentSize(ComponentId cid);
-    /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>
-    /// <param name="cids">Component tuple to match.</param>
+    /// <summary>Registers a query. A description equal to one registered before answers the id it got then, unless it tracks changes.</summary>
+    /// <param name="desc">The terms, the required and excluded components, and whether changes are tracked.</param>
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ulong QueryRegister(ReadOnlySpan<ComponentId> cids);
+    ulong QueryRegister(EcsQueryDesc desc);
     /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.</summary>
     /// <returns>Receives the id; the null entity on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -40,4 +40,16 @@ public interface IEcsRegistry : IDisposable
     /// <summary>Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void EntityMaterialize(Entity entity);
+    /// <summary>Marks an entity's component changed, for a writer that reached it by component_get.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void EntityMarkChanged(Entity entity, ComponentId component);
+    /// <summary>Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component's field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.</summary>
+    /// <returns>Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    nint SingletonAdd(ComponentId component);
+    /// <summary>Returns the world's value of a component, or NULL if it has none. The pointer is valid until the next structural change on this ecs.</summary>
+    nint SingletonGet(ComponentId component);
+    /// <summary>Takes a component's value from the world; a component without one is left alone. Structural; single-threaded.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void SingletonRemove(ComponentId component);
 }

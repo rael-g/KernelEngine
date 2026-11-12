@@ -21,7 +21,7 @@ public unsafe interface INativeEcs
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Entity lifetime and component storage.</summary>
+/// <summary>One world: entity lifetime, component storage and queries. The ids, components and queries of one ke_ecs mean nothing to another.</summary>
 public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
 {
     private ke_ecs* _native;
@@ -191,18 +191,26 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         return Handle->component_size(Handle, cid);
     }
 
-    /// <summary>Registers a query over a component tuple (entities matching ALL cids).</summary>
-    /// <param name="cids">Component tuple to match.</param>
+    /// <summary>Registers a query. A description equal to one registered before answers the id it got then, unless it tracks changes.</summary>
+    /// <param name="desc">The terms, the required and excluded components, and whether changes are tracked.</param>
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ulong QueryRegister(ReadOnlySpan<ComponentId> cids)
+    public ulong QueryRegister(EcsQueryDesc desc)
     {
-        fixed (ComponentId* cidsPtr = cids)
-        {
-            ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_register(Handle, cidsPtr, (nuint)cids.Length, &resultOut), "query_register");
-            return resultOut;
-        }
+        var descNative = new ke_ecs_query_desc();
+        using var descTermsPin = desc.Terms.Pin();
+        descNative.terms = (EcsQueryTerm*)descTermsPin.Pointer;
+        descNative.term_count = (uint)desc.Terms.Length;
+        using var descWithPin = desc.With.Pin();
+        descNative.with = (ComponentId*)descWithPin.Pointer;
+        descNative.with_count = (uint)desc.With.Length;
+        using var descWithoutPin = desc.Without.Pin();
+        descNative.without = (ComponentId*)descWithoutPin.Pointer;
+        descNative.without_count = (uint)desc.Without.Length;
+        descNative.track_changes = desc.TrackChanges;
+        ulong resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->query_register(Handle, &descNative, &resultOut), "query_register");
+        return resultOut;
     }
 
     /// <summary>Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.</summary>
@@ -234,6 +242,36 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public void EntityMaterialize(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_materialize(Handle, entity), "entity_materialize");
+    }
+
+    /// <summary>Marks an entity's component changed, for a writer that reached it by component_get.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void EntityMarkChanged(Entity entity, ComponentId component)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_mark_changed(Handle, entity, component), "entity_mark_changed");
+    }
+
+    /// <summary>Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component's field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.</summary>
+    /// <returns>Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public nint SingletonAdd(ComponentId component)
+    {
+        nint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->singleton_add(Handle, component, (void**)&resultOut), "singleton_add");
+        return resultOut;
+    }
+
+    /// <summary>Returns the world's value of a component, or NULL if it has none. The pointer is valid until the next structural change on this ecs.</summary>
+    public nint SingletonGet(ComponentId component)
+    {
+        return (nint)Handle->singleton_get(Handle, component);
+    }
+
+    /// <summary>Takes a component's value from the world; a component without one is left alone. Structural; single-threaded.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void SingletonRemove(ComponentId component)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->singleton_remove(Handle, component), "singleton_remove");
     }
 
     /// <summary>Releases the native ecsregistry.</summary>

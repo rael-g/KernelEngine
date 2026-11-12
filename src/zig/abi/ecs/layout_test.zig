@@ -26,6 +26,8 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_component_field, translated("ke_component_field"));
     try expectSameLayout(abi.c.ke_component_params, translated("ke_component_params"));
     try expectSameLayout(abi.c.ke_component_meta, translated("ke_component_meta"));
+    try expectSameLayout(abi.c.ke_ecs_query_term, translated("ke_ecs_query_term"));
+    try expectSameLayout(abi.c.ke_ecs_query_desc, translated("ke_ecs_query_desc"));
     try expectSameLayout(abi.c.ke_ecs_segment, translated("ke_ecs_segment"));
     try expectSameLayout(abi.c.ke_ecs_config, translated("ke_ecs_config"));
     try expectSameLayout(abi.c.ke_ecs, translated("ke_ecs"));
@@ -37,6 +39,12 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
 }
 
+test "every enum value is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i64, c.KE_ECS_ACCESS_READ), @as(i64, abi.c.KE_ECS_ACCESS_READ));
+    try std.testing.expectEqual(@as(i64, c.KE_ECS_ACCESS_WRITE), @as(i64, abi.c.KE_ECS_ACCESS_WRITE));
+}
+
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_QUERY_INVALID), @as(i128, abi.c.KE_QUERY_INVALID));
@@ -44,7 +52,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_COMPONENT_INVALID), @as(i128, abi.c.KE_COMPONENT_INVALID));
 }
 
-extern const layout_values: [53]c_ulonglong;
+extern const layout_values: [69]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -69,11 +77,23 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_component_meta, "alignment"),
         @offsetOf(abi.c.ke_component_meta, "fields"),
         @offsetOf(abi.c.ke_component_meta, "field_count"),
+        @sizeOf(abi.c.ke_ecs_query_term),
+        @offsetOf(abi.c.ke_ecs_query_term, "component"),
+        @offsetOf(abi.c.ke_ecs_query_term, "access"),
+        @sizeOf(abi.c.ke_ecs_query_desc),
+        @offsetOf(abi.c.ke_ecs_query_desc, "terms"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "term_count"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "with"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "with_count"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "without"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "without_count"),
+        @offsetOf(abi.c.ke_ecs_query_desc, "track_changes"),
         @sizeOf(abi.c.ke_ecs_segment),
         @offsetOf(abi.c.ke_ecs_segment, "entities"),
         @offsetOf(abi.c.ke_ecs_segment, "count"),
         @offsetOf(abi.c.ke_ecs_segment, "columns"),
         @offsetOf(abi.c.ke_ecs_segment, "column_count"),
+        @offsetOf(abi.c.ke_ecs_segment, "changed"),
         @sizeOf(abi.c.ke_ecs_config),
         @offsetOf(abi.c.ke_ecs_config, "reserved_id_capacity"),
         @sizeOf(abi.c.ke_ecs),
@@ -91,6 +111,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_ecs, "query_resolve"),
         @offsetOf(abi.c.ke_ecs, "entity_reserve"),
         @offsetOf(abi.c.ke_ecs, "entity_materialize"),
+        @offsetOf(abi.c.ke_ecs, "entity_mark_changed"),
+        @offsetOf(abi.c.ke_ecs, "singleton_add"),
+        @offsetOf(abi.c.ke_ecs, "singleton_get"),
+        @offsetOf(abi.c.ke_ecs, "singleton_remove"),
         @sizeOf(abi.c.ke_ecs_handle),
         @offsetOf(abi.c.ke_ecs_handle, "ref"),
         @offsetOf(abi.c.ke_ecs_handle, "destroy"),

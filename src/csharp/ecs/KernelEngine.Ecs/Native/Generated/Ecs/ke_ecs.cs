@@ -38,8 +38,8 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("ke_result (*)(struct ke_ecs *, void *, const ke_component_field *, const ke_variant *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, void*, ke_component_field*, Variant*, KernelEngine.Result.Native.Result> component_field_write;
 
-    [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_component_id *, size_t, ke_query_id *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId*, nuint, ulong*, KernelEngine.Result.Native.Result> query_register;
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_ecs_query_desc *, ke_query_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ke_ecs_query_desc*, ulong*, KernelEngine.Result.Native.Result> query_register;
 
     [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_query_id, ke_ecs_segment *, size_t, void **, size_t *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, ulong, ke_ecs_segment*, nuint, void**, nuint*, KernelEngine.Result.Native.Result> query_resolve;
@@ -49,4 +49,16 @@ public unsafe partial struct ke_ecs
 
     [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.Entity, KernelEngine.Result.Native.Result> entity_materialize;
+
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_entity, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.Entity, global::KernelEngine.Ecs.ComponentId, KernelEngine.Result.Native.Result> entity_mark_changed;
+
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_component_id, void **)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId, void**, KernelEngine.Result.Native.Result> singleton_add;
+
+    [NativeTypeName("void *(*)(struct ke_ecs *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId, void*> singleton_get;
+
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId, KernelEngine.Result.Native.Result> singleton_remove;
 }

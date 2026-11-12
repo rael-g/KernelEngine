@@ -609,10 +609,11 @@ fn bindQueries(s: *State) R.Error!void {
         for (system.queries) |*q| {
             if (q.bound) continue;
             const register = s.ecs.query_register orelse return reject(error.NotSupported, "the ecs registers no query");
-            const ids = try gpa.alloc(Id, q.terms.len);
-            defer gpa.free(ids);
-            for (q.terms, ids) |t, *id| id.* = t.id;
-            R.check(register(s.ecs, ids.ptr, ids.len, &q.id)) catch |err| {
+            const terms = try gpa.alloc(abi_ecs.c.ke_ecs_query_term, q.terms.len);
+            defer gpa.free(terms);
+            for (q.terms, terms) |from, *t| t.* = .{ .component = from.id, .access = @intCast(from.access) };
+            const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = terms.ptr, .term_count = @intCast(terms.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+            R.check(register(s.ecs, &desc, &q.id)) catch |err| {
                 log.warn("the ecs refused a query of {s}", .{system.name});
                 return err;
             };
@@ -945,7 +946,7 @@ const Rig = struct {
 
     fn init(self: *Rig, workers: u32) !void {
         try self.ecs.init();
-        _ = self.ecs.when(.query_register).writesFresh(3);
+        _ = self.ecs.when(.query_register).writesFresh(2);
         _ = self.ecs.when(.entity_reserve).writesFresh(1);
         _ = self.ecs.when(.component_size).returns(4);
         try self.pool.init();

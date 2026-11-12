@@ -78,7 +78,7 @@ public unsafe partial class SchedulerCtx : IDisposable, INativeSchedulerCtx, ISc
     public EcsSegment ViewAt(uint queryIndex, int index)
     {
         fixed (ke_ecs_segment* reading = &ViewNative(queryIndex)[index])
-            return new EcsSegment(new ReadOnlySpan<Entity>((Entity*)reading->entities, (int)reading->count), new ReadOnlySpan<nint>((nint*)reading->columns, (int)reading->column_count));
+            return new EcsSegment(new ReadOnlySpan<Entity>((Entity*)reading->entities, (int)reading->count), new ReadOnlySpan<nint>((nint*)reading->columns, (int)reading->column_count), reading->changed);
     }
 
     /// <summary>Which share of its entity set this call owns: *out_index in [0, *out_count). A system that is not per_entity always gets index 0 of count 1.</summary>

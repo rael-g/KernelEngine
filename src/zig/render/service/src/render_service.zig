@@ -641,7 +641,7 @@ const Gpu = struct {
         _ = self.binder.when(.create_set).writesFresh(6);
         try self.ecs.init();
         _ = self.ecs.when(.component_register).writesFresh(2);
-        _ = self.ecs.when(.query_register).writesFresh(3);
+        _ = self.ecs.when(.query_register).writesFresh(2);
     }
 
     fn deinit(self: *Gpu) void {

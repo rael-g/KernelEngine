@@ -212,6 +212,23 @@
       "external": true
     },
     {
+      "name": "ke_ecs_access",
+      "doc": "How a query term\u0027s column is used. Resolving a query marks the columns of its written terms changed in every table it hands out.",
+      "values": [
+        {
+          "name": "KE_ECS_ACCESS_READ",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_ECS_ACCESS_WRITE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_scheduler_access",
       "doc": null,
       "values": [
@@ -717,6 +734,88 @@
       "external": true
     },
     {
+      "name": "ke_ecs_query_term",
+      "doc": "One component a query matches and hands a column of, and how the column is used.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "component",
+          "type": "ke_component_id",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "access",
+          "type": "ke_ecs_access",
+          "tags": [],
+          "doc": "Read, write, or both."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ecs_query_desc",
+      "doc": "A query to register: the entities having every term\u0027s component and every \u0060with\u0060 component, and none of the \u0060without\u0060 components.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "terms",
+          "type": "const ke_ecs_query_term *",
+          "tags": [
+            "array_of:term_count"
+          ],
+          "doc": "One column each, in this order."
+        },
+        {
+          "name": "term_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "with",
+          "type": "const ke_component_id *",
+          "tags": [
+            "optional",
+            "array_of:with_count"
+          ],
+          "doc": "Required, handing no column."
+        },
+        {
+          "name": "with_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "without",
+          "type": "const ke_component_id *",
+          "tags": [
+            "optional",
+            "array_of:without_count"
+          ],
+          "doc": "Excluded."
+        },
+        {
+          "name": "without_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "track_changes",
+          "type": "bool",
+          "tags": [],
+          "doc": "Each resolve reports which segments changed since this query\u0027s previous resolve; such a query is never shared with another registration of the same description."
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_ecs_segment",
       "doc": "One archetype\u0027s slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with \u0060entities\u0060. A tag term\u0027s column is NULL. Pointers stay valid until the next structural change.",
       "tags": [
@@ -750,6 +849,12 @@
           "type": "uint32_t",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "changed",
+          "type": "bool",
+          "tags": [],
+          "doc": "For a query tracking changes: since its previous resolve, the segment\u0027s archetype gained or lost entities, or a column of one of the query\u0027s terms was marked changed; true on the first resolve. False for a query that does not track changes."
         }
       ],
       "external": true
@@ -1296,7 +1401,7 @@
   "vtables": [
     {
       "name": "ke_ecs",
-      "doc": "Entity lifetime and component storage.",
+      "doc": "One world: entity lifetime, component storage and queries. The ids, components and queries of one ke_ecs mean nothing to another.",
       "tags": [],
       "fields": [
         {
@@ -1524,23 +1629,16 @@
           "name": "query_register",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a query over a component tuple (entities matching ALL cids).",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an empty tuple, one with more terms than the backend\u0027s queries hold, or one the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "doc": "Registers a query. A description equal to one registered before answers the id it got then, unless it tracks changes.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for no terms, a term with no access or an unknown one, more terms and filters than the backend\u0027s queries hold, or a query the backend refuses, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
-              "name": "cids",
-              "type": "const ke_component_id *",
+              "name": "desc",
+              "type": "const ke_ecs_query_desc *",
               "tags": [
-                "borrowed",
-                "array_of:cid_count"
+                "borrowed"
               ],
-              "doc": "Component tuple to match."
-            },
-            {
-              "name": "cid_count",
-              "type": "size_t",
-              "tags": [],
-              "doc": "Number of components in the tuple."
+              "doc": "The terms, the required and excluded components, and whether changes are tracked."
             },
             {
               "name": "out_query",
@@ -1579,7 +1677,7 @@
               "name": "max_segments",
               "type": "size_t",
               "tags": [],
-              "doc": "Capacity of out_segments."
+              "doc": "Capacity of out_segments. Marks the columns of the query\u0027s written terms changed in the segments it writes."
             },
             {
               "name": "out_columns",
@@ -1587,7 +1685,7 @@
               "tags": [
                 "out"
               ],
-              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the cid_count entries starting at index i * cid_count, cid_count being the length of the tuple the query was registered with."
+              "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the term_count entries starting at index i * term_count, term_count being that of the description the query was registered with."
             },
             {
               "name": "out_count",
@@ -1595,7 +1693,7 @@
               "tags": [
                 "out"
               ],
-              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them; zero on failure."
+              "doc": "Receives how many segments the query matches; above max_segments, out_segments holds only the first max_segments of them, and the others keep their changes for the next resolve; zero on failure."
             }
           ],
           "receiver": "struct ke_ecs *"
@@ -1628,6 +1726,84 @@
             {
               "name": "entity",
               "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_mark_changed",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Marks an entity\u0027s component changed, for a writer that reached it by component_get.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive or lacks the component, its reason logged.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "singleton_add",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component\u0027s field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null or an unknown component, or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_data",
+              "type": "void **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "singleton_get",
+          "returns": "void *",
+          "tags": [],
+          "doc": "Returns the world\u0027s value of a component, or NULL if it has none. The pointer is valid until the next structural change on this ecs.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "singleton_remove",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Takes a component\u0027s value from the world; a component without one is left alone. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null component or when the backend refuses the call, its reason logged.",
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
