@@ -113,6 +113,20 @@ pub const ke_node_type_desc = extern struct {
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
 };
 
+/// The values the node types are created with: the set each kind of system joins.
+pub const ke_node_types_config = extern struct {
+    /// The set of the ready and exit behaviours and of the systems that clear the last tick's
+    /// events; its phase must run first in a tick.
+    pre_update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the update behaviours.
+    update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the fixed update behaviours.
+    fixed_update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the event behaviours and of the system that frees the nodes that left the tree;
+    /// its phase must run after the update.
+    post_update: ke_set_id = std.mem.zeroes(ke_set_id),
+};
+
 /// A node whose children are the scene file it names. Writing path replaces them: on the next
 /// update the slot's children are destroyed and the file at path is instantiated under the slot;
 /// an empty path only destroys them. What lies outside a slot outlives the change, and several

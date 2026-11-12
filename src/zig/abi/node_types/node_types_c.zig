@@ -3,10 +3,14 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_scheduler = @import("scheduler");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
+pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
+pub const ke_scheduler_system_id = u64;
+pub const ke_set_id = u32;
 
 pub const KE_ACTION_NAME_MAX = 32;
 
@@ -14,6 +18,11 @@ pub const KE_ACTION_NAME_MAX = 32;
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of its phase, or once per slice when the system is
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
+pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
@@ -89,6 +98,20 @@ pub const ke_node_type_desc = extern struct {
     on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
     /// Forwarded to every behaviour.
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+};
+
+/// The values the node types are created with: the set each kind of system joins.
+pub const ke_node_types_config = extern struct {
+    /// The set of the ready and exit behaviours and of the systems that clear the last tick's
+    /// events; its phase must run first in a tick.
+    pre_update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the update behaviours.
+    update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the fixed update behaviours.
+    fixed_update: ke_set_id = std.mem.zeroes(ke_set_id),
+    /// The set of the event behaviours and of the system that frees the nodes that left the tree;
+    /// its phase must run after the update.
+    post_update: ke_set_id = std.mem.zeroes(ke_set_id),
 };
 
 /// What a behaviour is given. Behaviours run one at a time, never two at once, so a body may

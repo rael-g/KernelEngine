@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_scheduler = @import("scheduler");
 
 /// The ABI as the headers declare it.
 pub const c = @import("node_types_c.zig");
@@ -373,4 +374,5 @@ pub const NodeComponent = c.ke_node_component;
 pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeTypeDesc = c.ke_node_type_desc;
+pub const NodeTypesConfig = c.ke_node_types_config;
 pub const NodeTypesHandle = c.ke_node_types_handle;

@@ -5,29 +5,35 @@
 
 namespace KernelEngine.Framework.Nodes;
 
-/// <summary>Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component that marks a node readied, and the system that clears the events at PreUpdate. `runtime`, `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy unregisters every system they registered.</summary>
+/// <summary>Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the config's sets, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component that marks a node readied, and the system that frees the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy unregisters every system they registered.</summary>
 public sealed unsafe partial class DefaultNodeTypes : KernelEngine.Framework.Nodes.NodeTypes
 {
-    /// <summary>Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component that marks a node readied, and the system that clears the events at PreUpdate. `runtime`, `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy unregisters every system they registered.</summary>
-    /// <param name="runtime"></param>
+    /// <summary>Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the config's sets, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component that marks a node readied, and the system that frees the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy unregisters every system they registered.</summary>
+    /// <param name="scheduler"></param>
     /// <param name="ecs"></param>
     /// <param name="sceneTree"></param>
     /// <param name="inputActions">Without it, axis answers 0 and pressed false.</param>
-    public DefaultNodeTypes(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions = default) : base(Create(runtime, ecs, sceneTree, inputActions))
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultNodeTypes(KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions, in KernelEngine.Framework.Nodes.NodeTypesConfig config) : base(Create(scheduler, ecs, sceneTree, inputActions, config))
     {
-        Hold(runtime.Owner);
+        Hold(scheduler.Owner);
         Hold(ecs.Owner);
         Hold(sceneTree.Owner);
         Hold(inputActions?.Owner);
     }
 
-    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions)
+    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle Create(KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions, in KernelEngine.Framework.Nodes.NodeTypesConfig config)
     {
-        ArgumentNullException.ThrowIfNull(runtime);
+        ArgumentNullException.ThrowIfNull(scheduler);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(sceneTree);
+        KernelEngine.Framework.Nodes.Native.ke_node_types_config nativeConfig = default;
+        nativeConfig.pre_update = config.PreUpdate;
+        nativeConfig.update = config.Update;
+        nativeConfig.fixed_update = config.FixedUpdate;
+        nativeConfig.post_update = config.PostUpdate;
         KernelEngine.Framework.Nodes.Native.ke_node_types_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.node_types_create(runtime.Native, ecs.Native, sceneTree.Native, (inputActions is null ? null : inputActions.Native), &handle), "ke_node_types_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.node_types_create(scheduler.Native, ecs.Native, sceneTree.Native, (inputActions is null ? null : inputActions.Native), &nativeConfig, &handle), "ke_node_types_create");
         return handle;
     }
 }

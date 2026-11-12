@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/commands.h>
+#include <kernel_engine/scheduler/scheduler.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -305,6 +306,21 @@ extern "C"
         ke_node_types *ref;
         void (*destroy)(ke_node_types *self);
     } ke_node_types_handle;
+
+    /// [borrowed] The values the node types are created with: the set each kind of system joins.
+    typedef struct ke_node_types_config
+    {
+        /// The set of the ready and exit behaviours and of the systems that clear the last tick's
+        /// events; its phase must run first in a tick.
+        ke_set_id pre_update;
+        /// The set of the update behaviours.
+        ke_set_id update;
+        /// The set of the fixed update behaviours.
+        ke_set_id fixed_update;
+        /// The set of the event behaviours and of the system that frees the nodes that left the
+        /// tree; its phase must run after the update.
+        ke_set_id post_update;
+    } ke_node_types_config;
 
 /** Moves @p ctx to each node in turn, with @p var pointing at the node's fields as @p type. */
 #define KE_FOR_EACH_NODE(ctx, type, var) \

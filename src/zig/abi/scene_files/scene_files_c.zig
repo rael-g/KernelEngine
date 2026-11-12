@@ -4,10 +4,14 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_result = @import("result");
+const abi_scheduler = @import("scheduler");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
+pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
+pub const ke_scheduler_system_id = u64;
+pub const ke_set_id = u32;
 
 /// The longest path a scene slot holds, its terminator included.
 pub const KE_SCENE_SLOT_MAX_PATH = 256;
@@ -18,6 +22,11 @@ pub const KE_COMPONENT_NAME_SCENE_SLOT = "scene_slot";
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of its phase, or once per slice when the system is
+/// per_entity. A failure is carried to the thread that called tick, which fails with it; the
+/// rest of the wave still runs, and no later wave or phase starts.
+pub const ke_scheduler_execute_fn = ?*const fn (?*abi_scheduler.c.ke_scheduler_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an

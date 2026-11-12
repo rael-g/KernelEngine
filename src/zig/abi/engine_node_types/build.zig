@@ -12,6 +12,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 

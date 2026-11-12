@@ -434,6 +434,7 @@ pub const NodeComponent = c.ke_node_component;
 pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeTypeDesc = c.ke_node_type_desc;
+pub const NodeTypesConfig = c.ke_node_types_config;
 pub const SceneSlotComponent = c.ke_scene_slot_component;
 pub const SceneHierarchyHandle = c.ke_scene_hierarchy_handle;
 pub const NodeTypesHandle = c.ke_node_types_handle;

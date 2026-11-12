@@ -8,6 +8,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("framework", b.dependency("abi_framework", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("scheduler", b.dependency("abi_scheduler", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/framework/scene_files.h>

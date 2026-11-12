@@ -12,7 +12,7 @@ using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
 
@@ -20,7 +20,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_types_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result node_types_create([NativeTypeName("ke_runtime *")] KernelEngine.Runtime.Native.ke_runtime* runtime, [NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_scene_tree *")] KernelEngine.Framework.Native.ke_scene_tree* scene_tree, [NativeTypeName("ke_input_actions *")] KernelEngine.Framework.Native.ke_input_actions* input_actions, ke_node_types_handle* out_types);
+    public static extern KernelEngine.Result.Native.Result node_types_create([NativeTypeName("ke_scheduler *")] KernelEngine.Scheduler.Native.ke_scheduler* scheduler, [NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_scene_tree *")] KernelEngine.Framework.Native.ke_scene_tree* scene_tree, [NativeTypeName("ke_input_actions *")] KernelEngine.Framework.Native.ke_input_actions* input_actions, [NativeTypeName("const ke_node_types_config *")] ke_node_types_config* config, ke_node_types_handle* out_types);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_files_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

@@ -5,7 +5,7 @@
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_tree.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -28,22 +28,24 @@ extern "C"
 #endif
 #endif
 
-    /// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose
-    /// nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the
-    /// component that marks a node readied, and the system that clears the events at PreUpdate.
-    /// `runtime`, `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose
-    /// destroy unregisters every system they registered.
+    /// Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the
+    /// config's sets, whose nodes live in `scene_tree` and whose axis and pressed read
+    /// `input_actions`. Registers the component that marks a node readied, and the system that
+    /// frees the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions`
+    /// must outlive the node types, whose destroy unregisters every system they registered.
     /// @param input_actions [borrowed,optional] Without it, axis answers 0 and pressed false.
+    /// @param config [borrowed] Required; every field is read as given.
     /// @param out_types [out] Receives the node types; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p runtime, @p ecs, @p scene_tree or
-    ///         @p out_types, KE_RESULT_OUT_OF_MEMORY, or the code of the ecs or the runtime that
-    ///         refused.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p scheduler, @p ecs, @p scene_tree,
+    ///         @p config or @p out_types, KE_RESULT_OUT_OF_MEMORY, or the code of the ecs or the
+    ///         scheduler that refused.
     KE_FRAMEWORK_API ke_result ke_node_types_create(
-        ke_runtime           *runtime,
-        ke_ecs               *ecs,
-        ke_scene_tree        *scene_tree,
-        ke_input_actions     *input_actions,
-        ke_node_types_handle *out_types);
+        ke_scheduler               *scheduler,
+        ke_ecs                     *ecs,
+        ke_scene_tree              *scene_tree,
+        ke_input_actions           *input_actions,
+        const ke_node_types_config *config,
+        ke_node_types_handle       *out_types);
 
 #ifdef __cplusplus
 }

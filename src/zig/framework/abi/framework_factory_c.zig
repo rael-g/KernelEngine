@@ -10,7 +10,6 @@ const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
 const abi_scene_tree = @import("scene_tree");
 const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
@@ -31,7 +30,6 @@ pub const ke_gpu_texture = u64;
 pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
-pub const ke_module_id = u64;
 pub const ke_phase_id = u32;
 pub const ke_query_id = u64;
 pub const ke_render_chain_link = u32;
@@ -40,7 +38,6 @@ pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
 pub const ke_scheduler_system_id = u64;
 pub const ke_set_id = u32;
-pub const ke_system_id = u64;
 
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
@@ -78,20 +75,6 @@ pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque)
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// Registers the module's components and systems against the runtime it is being loaded into.
-/// Runs inside register_module, before that call returns.
-pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// Releases whatever the matching load acquired, as the modules are unloaded.
-pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) void;
-
-/// One call of a system body. The runtime calls it once per tick the system's phase runs, or
-/// once per slice when the system declared per_entity. A body runs on a worker thread; the code
-/// it returns is carried to the thread driving the tick, which tick() then fails with, and the
-/// runtime logs the system's name. The remaining bodies of the same wave still run — they were
-/// already dispatched — but no later phase of that tick starts.
-pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
 /// loader. project_root may be NULL — res:// resolution is then disabled; only absolute or
@@ -128,12 +111,12 @@ pub extern fn ke_scene_hierarchy_create(scheduler: ?*abi_scheduler.c.ke_schedule
 /// and that scheduler must outlive the tree, whose destroy unregisters it.
 pub extern fn ke_scene_tree_create(ecs: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_scheduler, config: ?*const abi_scene_tree.c.ke_scene_tree_config, out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle) abi_result.c.ke_result;
 
-/// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
-/// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component
-/// that marks a node readied, and the system that clears the events at PreUpdate. `runtime`,
-/// `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy
-/// unregisters every system they registered.
-pub extern fn ke_node_types_create(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
+/// Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the
+/// config's sets, whose nodes live in `scene_tree` and whose axis and pressed read
+/// `input_actions`. Registers the component that marks a node readied, and the system that frees
+/// the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions` must
+/// outlive the node types, whose destroy unregisters every system they registered.
+pub extern fn ke_node_types_create(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, config: ?*const abi_framework.c.ke_node_types_config, out_types: ?*abi_framework.c.ke_node_types_handle) abi_result.c.ke_result;
 
 /// Creates scene files that spawn through `node_types`, look components up and write their
 /// fields through `ecs`, resolve a `res://` path through `assets` and read every file through

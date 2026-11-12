@@ -10,7 +10,6 @@ const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
 const abi_scene_tree = @import("scene_tree");
 const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
@@ -76,14 +75,14 @@ pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs, scheduler: ?*abi_scheduler.c.ke_
     return written;
 }
 
-/// Creates the node types of `ecs`, whose behaviours run as systems of `runtime`, whose nodes
-/// live in `scene_tree` and whose axis and pressed read `input_actions`. Registers the component
-/// that marks a node readied, and the system that clears the events at PreUpdate. `runtime`,
-/// `ecs`, `scene_tree` and `input_actions` must outlive the node types, whose destroy
-/// unregisters every system they registered.
-pub fn nodeTypesCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions) Error!abi_framework.c.ke_node_types_handle {
+/// Creates the node types of `ecs`, whose behaviours run as systems of `scheduler` in the
+/// config's sets, whose nodes live in `scene_tree` and whose axis and pressed read
+/// `input_actions`. Registers the component that marks a node readied, and the system that frees
+/// the nodes that left the tree. `scheduler`, `ecs`, `scene_tree` and `input_actions` must
+/// outlive the node types, whose destroy unregisters every system they registered.
+pub fn nodeTypesCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, config: ?*const abi_framework.c.ke_node_types_config) Error!abi_framework.c.ke_node_types_handle {
     var written: abi_framework.c.ke_node_types_handle = undefined;
-    try checkResult(c.ke_node_types_create(runtime, ecs, scene_tree, input_actions, &written));
+    try checkResult(c.ke_node_types_create(scheduler, ecs, scene_tree, input_actions, config, &written));
     return written;
 }
 

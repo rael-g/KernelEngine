@@ -418,7 +418,13 @@ static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 /** The node types. */
 static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
-    return ke_node_types_create(e->runtime.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
+    const ke_node_types_config config = {
+        .pre_update = e->sets.pre_update,
+        .update = e->sets.update,
+        .fixed_update = e->sets.fixed_update,
+        .post_update = e->sets.post_update,
+    };
+    return ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &config, &e->node_types);
 }
 
 /** The scene files. */
@@ -539,7 +545,7 @@ static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *fir
     ke_runtime *rt = engine->runtime.ref;
     ke_scheduler *sched = engine->scheduler.ref;
     ke_window *window = engine->window.ref;
-    ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, rt->commands(rt), scene, NULL);
+    ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, sched->commands(sched), scene, NULL);
     double previous = ke_sdk_engine_now();
     while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt) && !sched->exit_requested(sched))
     {

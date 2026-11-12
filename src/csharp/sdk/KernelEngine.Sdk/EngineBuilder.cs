@@ -142,7 +142,7 @@ public sealed class EngineBuilder
         owned.AddRange(_audio(parts));
 
         var actions = Own(new DefaultInputActions(log, scheduler, input, config, new() { Section = "input", Set = sets.PreUpdate }));
-        var types = Own(new DefaultNodeTypes(log, runtime, ecs, tree, actions));
+        var types = Own(new DefaultNodeTypes(log, scheduler, ecs, tree, actions, new() { PreUpdate = sets.PreUpdate, Update = sets.Update, FixedUpdate = sets.FixedUpdate, PostUpdate = sets.PostUpdate }));
         Own(new DefaultSceneFiles(log, ecs, types, assets, io));
         types.RegisterEngineNodeTypes();
         return new Engine(parts, owned, types, log);
