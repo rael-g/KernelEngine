@@ -147,8 +147,9 @@ fn taskRun(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     return request.code;
 }
 
-/// Allocates a request, copies `path` into it, and dispatches it on the task pool. Returns null
-/// with nothing left allocated when an allocation or the dispatch fails.
+/// Allocates a request, copies `path` into it, and dispatches it on the task pool. A request from a
+/// thread the task pool refuses runs on the calling thread before this returns, with no task. Returns
+/// null with nothing left allocated when an allocation or any other refusal fails.
 fn submit(self: *abi_io.c.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_file_system.c.ke_open_file, offset: u64, dst: ?[*]u8, len: usize, out: *?*abi_io.c.ke_io_request) abi_result.c.ke_result {
     const s = stateOf(self);
     const request = heap.gpa.create(Request) catch {
@@ -173,10 +174,16 @@ fn submit(self: *abi_io.c.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_f
         request.free();
         return R.code(error.OutOfMemory);
     };
-    R.check(s.task_pool.dispatch.?(s.task_pool, taskRun, request, &request.task)) catch |err| {
-        log.warn("submitting a {t} request failed: the task pool refused it: {t}", .{ kind, err });
-        request.free();
-        return R.code(err);
+    R.check(s.task_pool.dispatch.?(s.task_pool, taskRun, request, &request.task)) catch |err| switch (err) {
+        error.NotSupported => {
+            request.task = null;
+            request.run();
+        },
+        else => {
+            log.warn("submitting a {t} request failed: the task pool refused it: {t}", .{ kind, err });
+            request.free();
+            return R.code(err);
+        },
     };
     out.* = @ptrCast(request);
     return R.ok;
@@ -280,7 +287,7 @@ fn wait(self_in: ?*abi_io.c.ke_io, request_in: ?*abi_io.c.ke_io_request, out_res
     const request = requestOf(request_in orelse return R.code(error.InvalidArgument));
     const s = stateOf(self);
 
-    R.check(s.task_pool.wait.?(s.task_pool, request.task)) catch |err| switch (err) {
+    if (request.task != null) R.check(s.task_pool.wait.?(s.task_pool, request.task)) catch |err| switch (err) {
         error.NotSupported => {
             log.warn("wait refused: the task pool does not accept the calling thread", .{});
             return R.code(err);
@@ -573,15 +580,19 @@ test "dir_exists, list_dir, write_file, make_dir, remove and rename are not supp
     try rig.pool.received(.dispatch).never();
 }
 
-test "a request the task pool refuses fails with the pool's code and returns no request" {
+test "a request from a thread the task pool refuses runs on the calling thread and is waited on as any other" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     _ = rig.pool.when(.dispatch).does(refuseDispatch);
 
     var request: ?*abi_io.c.ke_io_request = null;
-    try testing.expectError(error.NotSupported, R.check(rig.io().read_file.?(rig.io(), "fox.txt", &request)));
-    try testing.expect(request == null);
+    try R.check(rig.io().read_file.?(rig.io(), "fox.txt", &request));
+    try testing.expect(rig.io().is_completed.?(rig.io(), request));
+    var result: abi_io.c.ke_io_result = undefined;
+    _ = rig.io().wait.?(rig.io(), request, &result);
+    rig.io().free_bytes.?(rig.io(), result.bytes);
+    try rig.pool.received(.wait).never();
 }
 
 test "submits with missing arguments are an invalid argument and a null request is refused by wait" {
