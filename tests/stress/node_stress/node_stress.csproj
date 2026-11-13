@@ -14,6 +14,8 @@
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk\KernelEngine.Sdk.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\generators\KernelEngine.Framework.Nodes.Generator\KernelEngine.Framework.Nodes.Generator.csproj"
                       OutputItemType="Analyzer" ReferenceOutputAssembly="false" />

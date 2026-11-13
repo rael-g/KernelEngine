@@ -1,7 +1,7 @@
 {
   "convention": {
     "format": { "csharp": "../.editorconfig" },
-    "unprojected": [ "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_ecs.component_field_write" ],
+    "unprojected": [ "ke_scheduler.add", "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_ecs.component_field_write" ],
     "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
     "names": { "factory": [ { "match": "^(.*)_create$", "replace": "$1" } ], "csharp-type": [ { "match": "^ke_task$", "replace": "NativeTask" }, { "match": "^ke_action_type$", "replace": "NativeActionType" }, { "match": "^ke_ecs$", "replace": "EcsRegistry" }, { "match": "^ke_physics_2d$", "replace": "Physics2D" }, { "match": "^ke_body_type_2d$", "replace": "BodyType2D" }, { "match": "^ke_phase$", "replace": "RuntimePhase" }, { "match": "^ke_access$", "replace": "RuntimeAccess" } ] },
     "types": { "csharp": { "ke_vec2": "System.Numerics.Vector2", "ke_vec3": "System.Numerics.Vector3", "ke_vec4": "System.Numerics.Vector4", "ke_quat": "System.Numerics.Quaternion", "ke_mat4": "System.Numerics.Matrix4x4" } },
@@ -298,13 +298,16 @@
         "src/zig/scheduler/include/kernel_engine/scheduler/scheduler_create.h"
       ],
       "auxHeaders": [
-        "src/c/ecs/kernel_engine/ecs/ecs.h"
+        "src/c/completion/kernel_engine/completion/completion.h",
+        "src/c/job/kernel_engine/job/job_system.h",
+        "src/c/async/kernel_engine/async/async.h"
       ],
       "includeDirs": [
         "src/c/scheduler",
         "src/c/schedule",
         "src/c/completion",
         "src/c/job",
+        "src/c/async",
         "src/zig/scheduler/include",
         "src/c/ecs",
         "src/c/task_pool",
@@ -317,7 +320,7 @@
       "nativeNamespace": "KernelEngine.Scheduler.Native",
       "outDir": "src/csharp/scheduler/KernelEngine.Scheduler/Generated",
       "abstractionsOutDir": "src/csharp/scheduler/KernelEngine.Scheduler.Abstractions/Generated",
-      "usings": ["KernelEngine.Ecs", "KernelEngine.Schedule", "KernelEngine.Schedule.Native"],
+      "usings": ["KernelEngine.Completion", "KernelEngine.Completion.Native", "KernelEngine.Job", "KernelEngine.Job.Native", "KernelEngine.Async", "KernelEngine.Async.Native"],
       "library": "ke_scheduler"
     },
     {
@@ -1007,7 +1010,7 @@
     { "name": "gpu_device_webgpu_factory", "packageDir": "src/zig/render/webgpu/abi", "headers": ["src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_create.h", "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_device_webgpu_log.h", "src/zig/render/webgpu/include/kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h"], "includeDirs": ["src/c/ecs", "src/zig/render/webgpu/include", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/task_pool", "src/c/window", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/text", "src/c/view"] },
     { "name": "resource_cache_default_factory", "packageDir": "src/zig/resource_cache/default/abi", "headers": ["src/zig/resource_cache/default/include/kernel_engine/resource_cache/default/resource_cache_default_create.h", "src/zig/resource_cache/default/include/kernel_engine/resource_cache/default/resource_cache_default_log.h"], "includeDirs": ["src/c/logger", "src/c/resource_cache", "src/zig/resource_cache/default/include", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "runtime_factory", "packageDir": "src/zig/runtime/abi", "headers": ["src/zig/runtime/include/kernel_engine/runtime/runtime_create.h", "src/zig/runtime/include/kernel_engine/runtime/runtime_log.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/zig/runtime/include", "src/c/task_pool", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
-    { "name": "scheduler_factory", "packageDir": "src/zig/scheduler/abi", "headers": ["src/zig/scheduler/include/kernel_engine/scheduler/scheduler_create.h", "src/zig/scheduler/include/kernel_engine/scheduler/scheduler_log.h"], "includeDirs": ["src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/task_pool", "src/c/math", "src/c/result", "src/zig/common/include", "src/zig/scheduler/include", "src/c/logger"] },
+    { "name": "scheduler_factory", "packageDir": "src/zig/scheduler/abi", "headers": ["src/zig/scheduler/include/kernel_engine/scheduler/scheduler_create.h", "src/zig/scheduler/include/kernel_engine/scheduler/scheduler_log.h"], "includeDirs": ["src/c/scheduler", "src/c/async", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/task_pool", "src/c/math", "src/c/result", "src/zig/common/include", "src/zig/scheduler/include", "src/c/logger"] },
     { "name": "schedule_factory", "packageDir": "src/zig/schedule/abi", "headers": ["src/zig/schedule/include/kernel_engine/schedule/schedule_create.h", "src/zig/schedule/include/kernel_engine/schedule/schedule_log.h"], "includeDirs": ["src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/task_pool", "src/c/math", "src/c/result", "src/zig/common/include", "src/zig/schedule/include", "src/c/logger"] },
     { "name": "task_pool_enki_factory", "packageDir": "src/zig/task_pool/enki/abi", "headers": ["src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/enki_task_pool.h", "src/zig/task_pool/enki/include/kernel_engine/task_pool/enki/task_pool_enki_log.h"], "includeDirs": ["src/c/logger", "src/c/result", "src/c/task_pool", "src/zig/task_pool/enki/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "text_stb_truetype_factory", "packageDir": "src/zig/text/stb_truetype/abi", "headers": ["src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/stb_font.h", "src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/text_stb_truetype_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/text", "src/zig/text/stb_truetype/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/view", "src/c/window"] },

@@ -554,17 +554,26 @@ fn behaviourSystem(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, dt:
 /// reading the type has seen.
 fn clearEvents(sys: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const e: *Event = @ptrCast(@alignCast(user orelse return R.ok));
-    const loop = e.owner.loop;
     const commands = sys.?.commands;
     for (viewOf(sys, 0)) |seg| {
         const stamps: [*]const EventStamp = @ptrCast(@alignCast(seg.columns.?[1].?));
         for (seg.entities.?[0..seg.count], stamps[0..seg.count]) |entity, stamp| {
-            if (!loop.expired.?(loop, e.cid, stamp.sequence)) continue;
+            if (!seenByEveryReader(e.owner, e.cid, stamp.sequence)) continue;
             const rc = commands.?.despawn.?(commands, entity);
             if (rc != R.ok) return rc;
         }
     }
     return R.ok;
+}
+
+/// Whether every schedule of the node types that reads `cid` completed a run numbered `stamp` or
+/// later, each schedule being the user its executable was added to the scheduler with.
+fn seenByEveryReader(s: *State, cid: Cid, stamp: u64) bool {
+    for ([_]*abi_schedule.c.ke_schedule{ s.first, s.fixed, s.main }) |schedule| {
+        if (!schedule.reads.?(schedule, cid)) continue;
+        if (!s.loop.completed_since.?(s.loop, schedule, stamp)) return false;
+    }
+    return true;
 }
 
 fn scheduleOf(s: *State, kind: Kind) *abi_schedule.c.ke_schedule {
@@ -1409,7 +1418,7 @@ test "raise records an entity carrying the event and refuses a size that is not 
     try f.loop.received(.sequence).times(1);
 }
 
-fn expiredBelowFive(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.expired)) bool {
+fn completedBelowFive(args: zsub.For(abi_scheduler.c.ke_scheduler).Args(.completed_since)) bool {
     return args[2] < 5;
 }
 
@@ -1438,7 +1447,8 @@ test "clearing despawns only the events every reading schedule has seen" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    _ = f.loop.when(.expired).does(&expiredBelowFive);
+    _ = f.loop.when(.completed_since).does(&completedBelowFive);
+    _ = f.rt.when(.reads).returns(true);
     const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));

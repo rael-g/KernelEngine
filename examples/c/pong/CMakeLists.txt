@@ -12,6 +12,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_file_system_std
     KernelEngine::ke_task_pool_enki
     KernelEngine::ke_job_system_enki
+    KernelEngine::ke_async_enki
     KernelEngine::ke_ecs_flecs
     KernelEngine::ke_runtime
     KernelEngine::ke_scheduler

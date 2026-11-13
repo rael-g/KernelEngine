@@ -35,6 +35,9 @@ public sealed class EngineParts
     /// <summary>The worker pool.</summary>
     public required EnkiTaskPool Pool { get; init; }
 
+    /// <summary>The job system the schedules and the physics run their work on.</summary>
+    public required Job.Enki.EnkiJobSystem Jobs { get; init; }
+
     /// <summary>What every file is read through.</summary>
     public required PoolIo Io { get; init; }
 

@@ -1,3 +1,4 @@
+using KernelEngine.Async.Enki;
 using KernelEngine.Audio.MiniAudio;
 using KernelEngine.Configuration;
 using KernelEngine.Ecs.Flecs;
@@ -79,6 +80,11 @@ public sealed class EngineBuilder
         var io = Own(new PoolIo(log, pool, files));
         var config = Own(new DefaultConfiguration(log));
         Own(new ConfigurationTomlConfigurationSource(log, io)).Load(config, Path.Combine(_projectDir, "Project"));
+        var asyncs = Own(new EnkiAsync(log, new()
+        {
+            WorkerCount = (uint)config.GetInt("async", "worker_count", 2),
+            SubmitCapacity = (uint)config.GetInt("async", "submit_capacity", 1024),
+        }));
 
         var input = Own(new Input.DefaultInput());
         var window = Own(new GlfwWindow(log, input, new()
@@ -98,7 +104,7 @@ public sealed class EngineBuilder
             Shutdown = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
         };
         var sets = EngineSets.Register(schedules);
-        var scheduler = Own(new DefaultScheduler(log, new()
+        var scheduler = Own(new DefaultScheduler(log, jobs, asyncs, new()
         {
             FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
             FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
@@ -130,6 +136,7 @@ public sealed class EngineBuilder
         {
             ProjectDir = _projectDir,
             Pool = pool,
+            Jobs = jobs,
             Io = io,
             Configuration = config,
             Input = input,
@@ -183,7 +190,7 @@ public sealed class EngineBuilder
     /// <summary>The default physics: a Box2D world with the gravity of <c>runtime.physics_2d</c>, and the module syncing bodies.</summary>
     public static IEnumerable<IDisposable> DefaultPhysics(EngineParts p)
     {
-        var world = new Box2DPhysics2D(p.Logging, new()
+        var world = new Box2DPhysics2D(p.Logging, p.Jobs, new()
         {
             GravityX = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
             GravityY = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0),

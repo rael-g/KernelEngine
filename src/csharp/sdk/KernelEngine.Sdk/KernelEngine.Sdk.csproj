@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>KernelEngine</RootNamespace>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -14,6 +15,7 @@
     <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool.Enki\KernelEngine.TaskPool.Enki.csproj" />
     <ProjectReference Include="..\..\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
+    <ProjectReference Include="..\..\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
     <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
     <ProjectReference Include="..\..\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />

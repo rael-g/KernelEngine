@@ -12,6 +12,7 @@ int main(void)
         .file_system = ke_sdk_file_system_std,
         .io = ke_sdk_io_pool,
         .configuration = ke_sdk_configuration_toml,
+        .async = ke_sdk_async_enki,
         .input = ke_sdk_input,
         .window = ke_sdk_window_glfw,
         .ecs = ke_sdk_ecs_flecs,

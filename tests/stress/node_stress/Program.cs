@@ -1,3 +1,5 @@
+using KernelEngine;
+using KernelEngine.Async.Enki;
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
@@ -12,14 +14,15 @@ int ticks = ArgValue("--ticks", 300);
 uint workers = (uint)ArgValue("--workers", 0);
 
 using var jobs = new EnkiJobSystem(new KernelEngine.Job.JobSystemConfig { WorkerCount = workers });
+using var asyncs = new EnkiAsync(new KernelEngine.Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
 using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
 using var first = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
 using var fixedSchedule = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
 using var main = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
-using var scheduler = new DefaultScheduler(new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
-scheduler.AddSchedule(first, SchedulerCadence.EveryTick);
-scheduler.AddSchedule(fixedSchedule, SchedulerCadence.Fixed);
-scheduler.AddSchedule(main, SchedulerCadence.EveryTick);
+using var scheduler = new DefaultScheduler(jobs, asyncs, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+EngineSchedules.Add(scheduler, first, SchedulerCadence.EveryTick);
+EngineSchedules.Add(scheduler, fixedSchedule, SchedulerCadence.Fixed);
+EngineSchedules.Add(scheduler, main, SchedulerCadence.EveryTick);
 var preUpdate = first.RegisterSet("pre_update", []);
 var fixedUpdate = fixedSchedule.RegisterSet("fixed_update", []);
 var update = main.RegisterSet("update", []);

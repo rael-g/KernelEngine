@@ -1,11 +1,12 @@
 using System.Numerics;
 
-using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
 using global::KernelEngine.Scheduler;
 
+using KernelEngine.Async.Native;
+using KernelEngine.Completion.Native;
+using KernelEngine.Job.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Scheduler.Native;
 

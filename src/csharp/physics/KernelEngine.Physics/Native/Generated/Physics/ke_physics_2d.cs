@@ -1,6 +1,5 @@
 using System.Numerics;
 
-using global::KernelEngine.Common;
 using global::KernelEngine.Physics;
 
 using KernelEngine.Common.Native;

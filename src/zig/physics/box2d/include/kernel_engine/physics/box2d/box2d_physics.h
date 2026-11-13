@@ -1,6 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 #define KERNEL_ENGINE_PHYSICS_BOX2D_BOX2D_PHYSICS_H_
 
+#include <kernel_engine/job/job_system.h>
 #include <kernel_engine/physics/physics_2d.h>
 
 #ifndef KE_PHYSICS_BOX2D_API
@@ -22,13 +23,16 @@ extern "C" {
 #endif
 
 /**
- * @brief Creates a 2D physics world.
+ * @brief Creates a 2D physics world whose solver runs its tasks on @p job_system, borrowed for the
+ *        world's lifetime, one Box2D worker per worker slot.
  * @param config [borrowed] The world's values; Required; every field is read as given.
  * @param out_world [out] Receives the world; left zeroed on failure.
- * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_world or a gravity that is not finite;
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p job_system, @p config or @p out_world, or
+ *         a gravity that is not finite;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when Box2D refuses the world.
  */
 KE_PHYSICS_BOX2D_API ke_result ke_physics_2d_box2d_create(
+    ke_job_system              *job_system,
     const ke_physics_2d_config *config,
     ke_physics_2d_handle             *out_world);
 

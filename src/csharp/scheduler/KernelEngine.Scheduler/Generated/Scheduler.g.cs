@@ -6,11 +6,14 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
+using KernelEngine.Async;
+using KernelEngine.Async.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
-using KernelEngine.Ecs;
-using KernelEngine.Schedule;
-using KernelEngine.Schedule.Native;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
+using KernelEngine.Job;
+using KernelEngine.Job.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Scheduler;
@@ -24,7 +27,7 @@ public unsafe interface INativeScheduler
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>The frame loop: runs the schedules it was given, each when its cadence says, tick by tick.</summary>
+/// <summary>The frame loop: runs the executables it was given, each when its cadence says, tick by tick, waiting on each run before the next starts. It knows no schedule, render, event or component.</summary>
 public unsafe partial class Scheduler : IDisposable, INativeScheduler, IScheduler
 {
     private ke_scheduler* _native;
@@ -70,22 +73,14 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
         _owner = null;
     }
 
-    /// <summary>Adds a schedule; a tick runs the schedules in the order they were added.</summary>
-    /// <param name="schedule">Must outlive the scheduler.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void AddSchedule(INativeSchedule schedule, SchedulerCadence cadence)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_schedule(Handle, schedule.Native, (SchedulerCadence)cadence), "add_schedule");
-    }
-
-    /// <summary>Runs the schedules: on the first tick the startup ones first, then each every-tick one, and each block of fixed ones once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
+    /// <summary>Drains the job and async systems, then runs the executables: on the first tick the startup ones first, then each every-tick one, and each block of fixed ones once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Tick(float dt)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->tick(Handle, dt), "tick");
     }
 
-    /// <summary>Runs the shutdown schedules once if a tick ran; a later call does nothing, and a later tick is refused. Destroying the scheduler calls it for a caller that did not.</summary>
+    /// <summary>Runs the shutdown executables once if a tick ran; a later call does nothing, and a later tick is refused. Destroying the scheduler calls it for a caller that did not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Shutdown()
     {
@@ -104,16 +99,22 @@ public unsafe partial class Scheduler : IDisposable, INativeScheduler, ISchedule
         return Handle->exit_requested(Handle);
     }
 
-    /// <summary>The number of the schedule run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
+    /// <summary>The number of the run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
     public ulong Sequence()
     {
         return Handle->sequence(Handle);
     }
 
-    /// <summary>Whether every added schedule that reads component completed a run numbered stamp or later; true when no schedule reads it. Called from a body or between ticks.</summary>
-    public bool Expired(ComponentId component, ulong stamp)
+    /// <summary>Whether every executable added with user completed a run numbered sequence or later; true when none was added with it. Called from a body or between ticks.</summary>
+    public bool CompletedSince(nint user, ulong sequence)
     {
-        return Handle->expired(Handle, component, stamp);
+        return Handle->completed_since(Handle, (void*)user, sequence);
+    }
+
+    /// <summary>How far the time accumulated toward the next fixed step is, in [0, 1): what the tick's fixed steps left over divided by fixed_dt. Read between ticks or from a body.</summary>
+    public float FixedAlpha()
+    {
+        return Handle->fixed_alpha(Handle);
     }
 
     /// <summary>Releases the native scheduler.</summary>

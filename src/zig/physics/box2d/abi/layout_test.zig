@@ -23,6 +23,8 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    if (@hasDecl(c, "ke_job_fn")) try expectSameLayout(abi.c.ke_job_fn, c.ke_job_fn);
+    if (@hasDecl(c, "ke_job_range_fn")) try expectSameLayout(abi.c.ke_job_range_fn, c.ke_job_range_fn);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
 }
 
