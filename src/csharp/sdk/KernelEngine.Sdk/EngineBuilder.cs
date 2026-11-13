@@ -136,6 +136,7 @@ public sealed class EngineBuilder
         {
             ProjectDir = _projectDir,
             Pool = pool,
+            Jobs = jobs,
             Io = io,
             Configuration = config,
             Input = input,
@@ -189,7 +190,7 @@ public sealed class EngineBuilder
     /// <summary>The default physics: a Box2D world with the gravity of <c>runtime.physics_2d</c>, and the module syncing bodies.</summary>
     public static IEnumerable<IDisposable> DefaultPhysics(EngineParts p)
     {
-        var world = new Box2DPhysics2D(p.Logging, new()
+        var world = new Box2DPhysics2D(p.Logging, p.Jobs, new()
         {
             GravityX = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
             GravityY = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0),

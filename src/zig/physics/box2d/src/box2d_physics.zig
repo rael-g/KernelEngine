@@ -10,6 +10,8 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_result = @import("abi_result");
+const abi_completion = @import("abi_completion");
+const abi_job = @import("abi_job");
 const abi_factory = @import("abi_physics_2d_box2d_factory");
 const b2 = @import("box2d");
 const heap = @import("heap");
@@ -40,6 +42,7 @@ const Entry = struct {
 /// world must be driven from one thread at a time.
 const State = struct {
     api: abi_physics.c.ke_physics_2d,
+    jobs: *abi_job.c.ke_job_system,
     world: b2.b2WorldId,
     bodies: ?[*]Entry,
     body_count: u32,
@@ -278,21 +281,26 @@ fn destroy(self_in: ?*abi_physics.c.ke_physics_2d) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Writes the world's handle, or a zeroed one on failure, created with `config` applied as given or
-/// with the defaults of every field when it is null; a gravity that is not finite fails with
-/// invalid argument. A failure after the state exists frees the state first. On success the
-/// handle's destroy slot releases the world and everything the state owns.
+/// Writes the world's handle, or a zeroed one on failure, created with `config` applied as given,
+/// its solver's tasks run on `job_system` with one Box2D worker per worker slot; a gravity that is
+/// not finite fails with invalid argument. A failure after the state exists frees the state first.
+/// On success the handle's destroy slot releases the world and everything the state owns.
 export fn ke_physics_2d_box2d_create(
+    job_system: ?*abi_job.c.ke_job_system,
     config: ?*const Config,
     out_world: ?*abi_physics.c.ke_physics_2d_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
+    const jobs = job_system orelse {
+        log.warn("creating the physics world failed: no job system", .{});
+        return R.code(error.InvalidArgument);
+    };
     const given = config orelse {
         log.warn("creating the physics world failed: no config", .{});
         return R.code(error.InvalidArgument);
     };
-    out.* = create(given) catch |err| {
+    out.* = create(jobs, given) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
         return R.code(err);
     };
@@ -300,12 +308,53 @@ export fn ke_physics_2d_box2d_create(
     return R.ok;
 }
 
-fn create(params: *const Config) R.Error!abi_physics.c.ke_physics_2d_handle {
+/// One Box2D task handed to the job system: Box2D's callback and context, and the completion of the
+/// ranges, waited on and freed by `finishTask`.
+const Task = struct {
+    callback: *const b2.b2TaskCallback,
+    context: ?*anyopaque,
+    done: ?*abi_completion.c.ke_completion = null,
+};
+
+fn runRange(data: ?*anyopaque, start: u32, end: u32, worker: u32) callconv(.c) abi_result.c.ke_result {
+    const task: *Task = @ptrCast(@alignCast(data.?));
+    task.callback(@intCast(start), @intCast(end), worker, task.context);
+    return R.ok;
+}
+
+/// Box2D's `enqueueTask`: runs the task's ranges as a parallel_for of the job system, or inline when
+/// it cannot be started, in which case Box2D gets no task to finish.
+fn enqueueTask(callback: ?*const b2.b2TaskCallback, item_count: c_int, min_range: c_int, task_context: ?*anyopaque, user_context: ?*anyopaque) callconv(.c) ?*anyopaque {
+    const s: *State = @ptrCast(@alignCast(user_context.?));
+    const task = heap.gpa.create(Task) catch {
+        callback.?(0, item_count, 0, task_context);
+        return null;
+    };
+    task.* = .{ .callback = callback.?, .context = task_context };
+    R.check(s.jobs.parallel_for.?(s.jobs, "box2d", &runRange, task, @intCast(item_count), @intCast(min_range), null, 0, &task.done)) catch {
+        heap.gpa.destroy(task);
+        callback.?(0, item_count, 0, task_context);
+        return null;
+    };
+    return task;
+}
+
+/// Box2D's `finishTask`: waits on the task's ranges and frees it.
+fn finishTask(user_task: ?*anyopaque, _: ?*anyopaque) callconv(.c) void {
+    const task: *Task = @ptrCast(@alignCast(user_task orelse return));
+    const done = task.done.?;
+    _ = done.wait.?(done);
+    done.release.?(done);
+    heap.gpa.destroy(task);
+}
+
+fn create(jobs: *abi_job.c.ke_job_system, params: *const Config) R.Error!abi_physics.c.ke_physics_2d_handle {
     if (!std.math.isFinite(params.gravity_x) or !std.math.isFinite(params.gravity_y)) return error.InvalidArgument;
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
         .api = std.mem.zeroes(abi_physics.c.ke_physics_2d),
+        .jobs = jobs,
         .world = undefined,
         .bodies = null,
         .body_count = 0,
@@ -314,6 +363,10 @@ fn create(params: *const Config) R.Error!abi_physics.c.ke_physics_2d_handle {
 
     var world_def = b2.b2DefaultWorldDef();
     world_def.gravity = .{ .x = params.gravity_x, .y = params.gravity_y };
+    world_def.workerCount = @intCast(jobs.worker_slots.?(jobs));
+    world_def.enqueueTask = &enqueueTask;
+    world_def.finishTask = &finishTask;
+    world_def.userTaskContext = s;
     s.world = b2.b2CreateWorld(&world_def);
     if (!b2.b2World_IsValid(s.world)) return error.General;
 
@@ -335,16 +388,59 @@ fn create(params: *const Config) R.Error!abi_physics.c.ke_physics_2d_handle {
 }
 
 const testing = std.testing;
+const zsub = @import("zsub");
+
+const Done = struct {
+    api: abi_completion.c.ke_completion,
+
+    fn poll(_: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
+        if (out) |o| o.* = R.ok;
+        return true;
+    }
+
+    fn wait(_: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+        return R.ok;
+    }
+
+    fn release(c_in: ?*abi_completion.c.ke_completion) callconv(.c) void {
+        heap.gpa.destroy(@as(*Done, @ptrCast(@alignCast(c_in.?.handle))));
+    }
+};
+
+fn inlineRanges(args: zsub.For(abi_job.c.ke_job_system).Args(.parallel_for)) abi_result.c.ke_result {
+    const half = args[4] / 2;
+    _ = args[2].?(args[3], 0, half, 0);
+    _ = args[2].?(args[3], half, args[4], 1);
+    const done = heap.gpa.create(Done) catch return R.code(error.OutOfMemory);
+    done.* = .{ .api = .{ .handle = done, .poll = &Done.poll, .wait = &Done.wait, .release = &Done.release } };
+    args[8].?.* = &done.api;
+    return R.ok;
+}
+
+var test_jobs: zsub.For(abi_job.c.ke_job_system) = undefined;
+var test_jobs_ready = false;
+
+fn jobsForTests() !*abi_job.c.ke_job_system {
+    if (!test_jobs_ready) {
+        try test_jobs.init();
+        _ = test_jobs.when(.parallel_for).does(&inlineRanges);
+        _ = test_jobs.when(.worker_slots).returns(2);
+        test_jobs_ready = true;
+    }
+    return test_jobs.api();
+}
 
 fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle {
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    R.check(ke_physics_2d_box2d_create(&.{ .gravity_x = gravity_x, .gravity_y = gravity_y }, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
+    const jobs = jobsForTests() catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
+    R.check(ke_physics_2d_box2d_create(jobs, &.{ .gravity_x = gravity_x, .gravity_y = gravity_y }, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
     return h;
 }
 
-test "a null config is refused" {
+test "a null config or job system is refused" {
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(null, &.{ .gravity_x = 0, .gravity_y = 0 }, &h));
 }
 
 fn newBody(h: abi_physics.c.ke_physics_2d_handle, body_type: abi_physics.c.ke_body_type_2d, x: f32, y: f32) !abi_physics.c.ke_body_2d {
@@ -607,9 +703,9 @@ test "a zero gravity is applied as given and leaves a dynamic body where it was"
 
 test "a gravity that is not finite is refused and leaves the handle zeroed" {
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(&.{ .gravity_y = std.math.nan(f32) }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &.{ .gravity_y = std.math.nan(f32) }, &h));
     try testing.expect(h.ref == null);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(&.{ .gravity_x = std.math.inf(f32) }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &.{ .gravity_x = std.math.inf(f32) }, &h));
     try testing.expect(h.ref == null);
 }
 
