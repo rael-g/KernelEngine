@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("gpu_device_webgpu_factory.zig") });
+    abi.addImport("completion", b.dependency("abi_completion", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
@@ -17,6 +18,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
+    translated.addIncludePath(b.path("../../../../c/completion"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/logger"));
@@ -35,6 +37,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));

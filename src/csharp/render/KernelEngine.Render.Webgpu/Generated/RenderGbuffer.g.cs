@@ -8,6 +8,9 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It writes the frame's depth and albedo, normal and emissive targets each the size of the backbuffer.</summary>
 public sealed unsafe partial class RenderGbuffer : IDisposable
 {
+    /// <summary>Receives the ids of the targets it writes; every id KE_COMPONENT_INVALID on failure.</summary>
+    public KernelEngine.Render.RenderGbufferResources Resources { get; }
+
     /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument. It writes the frame's depth and albedo, normal and emissive targets each the size of the backbuffer.</summary>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
@@ -17,9 +20,6 @@ public sealed unsafe partial class RenderGbuffer : IDisposable
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    /// <summary>Receives the ids of the targets it writes; every id KE_COMPONENT_INVALID on failure.</summary>
-    public KernelEngine.Render.RenderGbufferResources Resources { get; }
-
     public RenderGbuffer(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame))
     {
         Hold(runtime.Owner);

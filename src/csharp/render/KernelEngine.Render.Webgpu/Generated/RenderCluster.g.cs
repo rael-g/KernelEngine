@@ -8,6 +8,9 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Creates a light-cluster pass and registers its render-phase system.</summary>
 public sealed unsafe partial class RenderCluster : IDisposable
 {
+    /// <summary>Receives the ids of its tag, light lists and grid; every id KE_COMPONENT_INVALID on failure.</summary>
+    public KernelEngine.Render.RenderClusterResources Resources { get; }
+
     /// <summary>Creates a light-cluster pass and registers its render-phase system.</summary>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
@@ -18,9 +21,6 @@ public sealed unsafe partial class RenderCluster : IDisposable
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
     /// <param name="config">The pass's values; Required; every field is read as given.</param>
-    /// <summary>Receives the ids of its tag, light lists and grid; every id KE_COMPONENT_INVALID on failure.</summary>
-    public KernelEngine.Render.RenderClusterResources Resources { get; }
-
     public RenderCluster(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, config))
     {
         Hold(runtime.Owner);

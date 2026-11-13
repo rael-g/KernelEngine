@@ -507,6 +507,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_c, "completion" }),
             vcpkg_include,
         }),
         .libs = joinPaths(b, &.{
@@ -520,6 +521,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "completion" }),
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),

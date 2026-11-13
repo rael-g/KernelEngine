@@ -41,6 +41,9 @@
 /** The bytes each path an engine keeps can hold. */
 #define KE_SDK_ENGINE_PATH_CAPACITY 1024
 
+/** The modules an engine attaches, and the completions it waits on, at most. */
+#define KE_SDK_ENGINE_LIST_CAPACITY 32
+
 /** The standard schedules, in the order the scheduler runs them, each at its cadence. */
 typedef struct ke_sdk_schedules
 {
@@ -106,6 +109,13 @@ typedef struct ke_sdk_engine
     ke_node_types_handle           node_types;
     ke_module_handle               node_systems;
     ke_scene_files_handle          scene_files;
+
+    /** The modules ke_sdk_engine_run attaches once every completion in pending finished; borrowed. */
+    ke_module                     *modules[KE_SDK_ENGINE_LIST_CAPACITY];
+    size_t                         module_count;
+    /** The completions of parts not ready yet, each released by the engine. */
+    ke_completion                 *pending[KE_SDK_ENGINE_LIST_CAPACITY];
+    size_t                         pending_count;
 } ke_sdk_engine;
 
 /**
@@ -213,6 +223,33 @@ static inline ke_result ke_sdk_attach(ke_sdk_engine *e, ke_module *module)
     return module->attach(module, &targets);
 }
 
+/**
+ * Lists @p module for ke_sdk_engine_run to attach to the standard schedules of @p e once every part is ready.
+ * @return KE_OK; KE_RESULT_OUT_OF_MEMORY when the list is full.
+ */
+static inline ke_result ke_sdk_add_module(ke_sdk_engine *e, ke_module *module)
+{
+    if (e->module_count == KE_SDK_ENGINE_LIST_CAPACITY) return KE_RESULT_OUT_OF_MEMORY;
+    e->modules[e->module_count++] = module;
+    return KE_OK;
+}
+
+/**
+ * Lists @p ready, the completion a part finishes when it is ready, for ke_sdk_engine_run to wait on; the engine
+ * releases it. When the list is full, @p ready is released and the call fails.
+ * @return KE_OK; KE_RESULT_OUT_OF_MEMORY when the list is full.
+ */
+static inline ke_result ke_sdk_await(ke_sdk_engine *e, ke_completion *ready)
+{
+    if (e->pending_count == KE_SDK_ENGINE_LIST_CAPACITY)
+    {
+        ready->release(ready);
+        return KE_RESULT_OUT_OF_MEMORY;
+    }
+    e->pending[e->pending_count++] = ready;
+    return KE_OK;
+}
+
 /** Releases the owner @p handle when it holds a part, and leaves it empty. */
 #define KE_SDK_ENGINE_RELEASE(handle) do { if ((handle).ref) (handle).destroy((handle).ref); (handle).ref = NULL; } while (0)
 
@@ -228,6 +265,9 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
         engine->runtime.ref->unload_modules(engine->runtime.ref);
     }
     if (engine->scheduler.ref) (void)engine->scheduler.ref->shutdown(engine->scheduler.ref);
+    for (size_t i = 0; i < engine->pending_count; ++i) engine->pending[i]->release(engine->pending[i]);
+    engine->pending_count = 0;
+    engine->module_count = 0;
     if (engine->release_extra) engine->release_extra(engine);
     engine->release_extra = NULL;
     KE_SDK_ENGINE_RELEASE(engine->scene_files);
@@ -312,11 +352,47 @@ static inline double ke_sdk_engine_now(void)
 }
 
 /**
- * Opens the scene file at @p first_scene, or the one of the project's scenes directory `project.default_scene`
- * names, and ticks until the window closes or a node asks to exit.
+ * Pumps the window's events until every completion @p engine waits on finished, releasing each as it does.
+ * @return KE_OK, or the code the first failed completion finished with.
+ */
+static inline ke_result ke_sdk_engine_ready(ke_sdk_engine *engine)
+{
+    ke_result failed = KE_OK;
+    while (engine->pending_count > 0 && !engine->window.ref->should_close(engine->window.ref))
+    {
+        engine->window.ref->poll_events(engine->window.ref);
+        for (size_t i = 0; i < engine->pending_count;)
+        {
+            ke_completion *c = engine->pending[i];
+            ke_result result = KE_OK;
+            if (!c->poll(c, &result))
+            {
+                ++i;
+                continue;
+            }
+            c->release(c);
+            engine->pending[i] = engine->pending[--engine->pending_count];
+            if (result != KE_OK && failed == KE_OK) failed = result;
+        }
+    }
+    return failed;
+}
+
+/** Attaches every listed module of @p engine to its standard schedules, in the order they were listed. */
+static inline ke_result ke_sdk_engine_attach(ke_sdk_engine *engine)
+{
+    ke_result made = KE_OK;
+    for (size_t i = 0; made == KE_OK && i < engine->module_count; ++i) made = ke_sdk_attach(engine, engine->modules[i]);
+    return made;
+}
+
+/**
+ * Waits, pumping the window's events, until every listed completion finished; attaches every listed module; opens the
+ * scene file at @p first_scene, or the one of the project's scenes directory `project.default_scene` names; and ticks
+ * until the window closes or a node asks to exit.
  * @param first_scene [utf8,optional] A `res://` path; NULL takes the project's default scene.
  * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a scheduler,
- *         a runtime or scene files, or the code of the open or the tick that failed.
+ *         a runtime or scene files, or the code of the completion, the attach, the open or the tick that failed.
  */
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
@@ -329,7 +405,9 @@ static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *fir
     ke_scheduler *sched = engine->scheduler.ref;
     ke_window *window = engine->window.ref;
     ke_schedule *first = engine->schedules.pre_update.ref;
-    ke_result made = engine->scene_files.ref->open(engine->scene_files.ref, first->commands(first), scene, NULL);
+    ke_result made = ke_sdk_engine_ready(engine);
+    if (made == KE_OK) made = ke_sdk_engine_attach(engine);
+    if (made == KE_OK) made = engine->scene_files.ref->open(engine->scene_files.ref, first->commands(first), scene, NULL);
     double previous = ke_sdk_engine_now();
     while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt) && !sched->exit_requested(sched))
     {

@@ -15,6 +15,7 @@ pub const wgpu = @import("c");
 const abi_gpu_device_webgpu_factory = @import("abi_gpu_device_webgpu_factory");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
+const abi_completion = @import("abi_completion");
 const abi_task_pool = @import("abi_task_pool");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
@@ -359,10 +360,13 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
 pub export fn ke_gpu_device_webgpu_create(
     task_pool: ?*abi_task_pool.c.ke_task_pool,
     config: ?*const abi_render_gpu.c.ke_gpu_device_config,
+    out_ready: ?*?*abi_completion.c.ke_completion,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
 ) abi_result.c.ke_result {
     const out = out_device orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
+    const ready = out_ready orelse return R.code(error.InvalidArgument);
+    ready.* = null;
     const given = config orelse {
         log.warn("gpu device: no config", .{});
         return R.code(error.InvalidArgument);
@@ -386,8 +390,27 @@ pub export fn ke_gpu_device_webgpu_create(
     };
 
     out.* = .{ .ref = dev, .destroy = deviceDestroy };
+    ready.* = &finished;
     return R.ok;
 }
+
+/// The completion the factory hands out: the device is ready before the factory returns, so it is
+/// finished from the start, with nothing to free when it is released.
+var finished: abi_completion.c.ke_completion = .{ .handle = null, .poll = finishedPoll, .wait = finishedWait, .release = finishedRelease };
+
+/// Slot `poll` of `finished`.
+fn finishedPoll(_: ?*abi_completion.c.ke_completion, out_result: ?*abi_result.c.ke_result) callconv(.c) bool {
+    if (out_result) |r| r.* = R.ok;
+    return true;
+}
+
+/// Slot `wait` of `finished`.
+fn finishedWait(_: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    return R.ok;
+}
+
+/// Slot `release` of `finished`.
+fn finishedRelease(_: ?*abi_completion.c.ke_completion) callconv(.c) void {}
 
 /// The destroy slot of the factory's owner wrapper. It does not wait for the tasks still listed in
 /// `pending_compiles`.
@@ -1740,6 +1763,18 @@ fn queryExtension(_: [*c]abi_render_gpu.c.ke_gpu_device, _: [*c]const u8) callco
 }
 
 const test_device_config: abi_render_gpu.c.ke_gpu_device_config = .{ .enable_validation = true, .debug_labels = false };
+var test_ready: ?*abi_completion.c.ke_completion = null;
+
+test "the device is ready as soon as the factory returns" {
+    var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
+    var ready: ?*abi_completion.c.ke_completion = null;
+    if (ke_gpu_device_webgpu_create(null, &test_device_config, &ready, &handle) != R.ok) return error.SkipZigTest;
+    defer handle.destroy.?(handle.ref);
+    var result: abi_result.c.ke_result = R.code(error.General);
+    try std.testing.expect(ready.?.poll.?(ready, &result));
+    try std.testing.expectEqual(R.ok, result);
+    ready.?.release.?(ready);
+}
 
 test "a sampler's filters and address modes reach wgpu as the modes they name" {
     try std.testing.expectEqual(@as(wgpu.WGPUFilterMode, wgpu.WGPUFilterMode_Linear), toWgpuFilter(abi_render_gpu.c.KE_GPU_FILTER_LINEAR));
@@ -1751,7 +1786,7 @@ test "a sampler's filters and address modes reach wgpu as the modes they name" {
 
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &test_device_config, &handle) == R.ok) handle.destroy.?(handle.ref);
+    if (ke_gpu_device_webgpu_create(null, &test_device_config, &test_ready, &handle) == R.ok) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
 }
 
@@ -1768,7 +1803,7 @@ fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_
 
 test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &test_device_config, &handle) != R.ok) return error.SkipZigTest;
+    if (ke_gpu_device_webgpu_create(null, &test_device_config, &test_ready, &handle) != R.ok) return error.SkipZigTest;
     defer handle.destroy.?(handle.ref);
     const dev = handle.ref;
 

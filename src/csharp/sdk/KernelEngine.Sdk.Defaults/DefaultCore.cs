@@ -95,6 +95,7 @@ public static class DefaultCore
         });
 
         services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(Log(sp), null, new() { EnableValidation = false, DebugLabels = false }));
+        services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));
         services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp =>
         {
             var mailbox = Get<Configuration.Configuration>(sp).GetString("runtime.renderer", "present_mode", "fifo") == "mailbox";

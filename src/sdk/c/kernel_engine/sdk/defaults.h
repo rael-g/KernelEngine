@@ -220,7 +220,10 @@ static inline ke_result ke_sdk_runtime(ke_sdk_engine *e)
 /** A WebGPU device. */
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
-    return ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &e->gpu_device);
+    ke_completion *ready = NULL;
+    ke_result made = ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &ready, &e->gpu_device);
+    if (made == KE_OK) made = ke_sdk_await(e, ready);
+    return made;
 }
 
 /** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
@@ -251,7 +254,7 @@ static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
     ke_result made = ke_scene_tree_create(e->ecs.ref, &e->scene_tree);
     if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, &e->hierarchy);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->hierarchy.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->hierarchy.ref);
     return made;
 }
 
@@ -355,7 +358,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
     };
     ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
     if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->bodies.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->bodies.ref);
     return made;
 }
 
@@ -364,7 +367,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
     if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &(ke_sound_config){ .root = e->project_dir }, &e->sounds);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->sounds.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
     return made;
 }
 
@@ -373,7 +376,7 @@ static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
     ke_result made = ke_input_actions_create(e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
     if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->action_evaluation.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->action_evaluation.ref);
     return made;
 }
 
@@ -382,7 +385,7 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
     ke_result made = ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
     if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, &e->node_systems);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->node_systems.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->node_systems.ref);
     return made;
 }
 
