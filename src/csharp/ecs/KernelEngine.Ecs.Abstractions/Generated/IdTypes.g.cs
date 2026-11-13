@@ -10,3 +10,6 @@ public readonly record struct ComponentId(uint Value);
 
 /// <summary>A <c>ke_entity</c>.</summary>
 public readonly record struct Entity(ulong Value);
+
+/// <summary>A <c>ke_removal_tracker</c>.</summary>
+public readonly record struct RemovalTracker(ulong Value);

@@ -35,6 +35,8 @@ public enum ComponentFieldKind
     Vec4,
     /// <summary>Spelled <c>KE_VARIANT_QUAT</c> natively.</summary>
     Quat,
+    /// <summary>Spelled <c>KE_VARIANT_ENTITY</c> natively.</summary>
+    Entity = 10,
 }
 
 /// <summary>One row of a component's field table.</summary>

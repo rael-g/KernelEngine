@@ -33,16 +33,13 @@ public interface IEcsRegistry : IDisposable
     /// <returns>Receives the query; KE_QUERY_INVALID on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong QueryRegister(EcsQueryDesc desc);
-    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.</summary>
+    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded. The implementation may replace a reserved id when the commands recorded with it are applied, rewriting every ENTITY field that holds it; a caller does not rely on the number before then.</summary>
     /// <returns>Receives the id; the null entity on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Entity EntityReserve();
     /// <summary>Brings a reserved id into the world, so an entity that never receives a component still exists. Structural; single-threaded. A no-op for an id that is already alive or was never reserved.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void EntityMaterialize(Entity entity);
-    /// <summary>Marks an entity's component changed, for a writer that reached it by component_get.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void EntityMarkChanged(Entity entity, ComponentId component);
     /// <summary>Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component's field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.</summary>
     /// <returns>Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -52,4 +49,42 @@ public interface IEcsRegistry : IDisposable
     /// <summary>Takes a component's value from the world; a component without one is left alone. Structural; single-threaded.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void SingletonRemove(ComponentId component);
+    /// <summary>The component id of a pair: relation applied to target. A pair is added, removed, read and queried as any component, holding the relation's storage. With KE_ENTITY_WILDCARD as target the id matches every pair of the relation, in a query term, a with or a without alone.</summary>
+    /// <returns>Receives the pair's id; KE_COMPONENT_INVALID on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    ComponentId Pair(ComponentId relation, Entity target);
+    /// <summary>The relation and the target of a pair's id.</summary>
+    /// <param name="outRelation">Receives the relation.</param>
+    /// <param name="outTarget">Receives the target, KE_ENTITY_WILDCARD for a wildcard pair.</param>
+    /// <returns>false for an id that is not a pair.</returns>
+    bool TryPairParts(ComponentId pair, out ComponentId outRelation, out Entity outTarget);
+    /// <summary>Starts remembering the entities that lose component, by removal or by being destroyed. Single-threaded.</summary>
+    /// <returns>Receives the tracker.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    RemovalTracker RemovalTrack(ComponentId component);
+    /// <summary>Hands out the entities that lost the tracker's component since the previous call, and forgets them. Single-threaded.</summary>
+    /// <param name="outEntities">Receives the entities.</param>
+    /// <returns>Receives how many were lost; above capacity, the rest stay for the next call.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    nuint Removals(RemovalTracker tracker, Span<Entity> outEntities);
+    /// <summary>The components an entity has, pairs included.</summary>
+    /// <param name="outCids">Receives the components.</param>
+    /// <returns>Receives how many it has; above capacity only the first fit.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    nuint EntityComponents(Entity entity, Span<ComponentId> outCids);
+    /// <summary>The components registered in the world.</summary>
+    /// <param name="outCids">Receives the components.</param>
+    /// <returns>Receives how many are registered; above capacity only the first fit.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    nuint Components(Span<ComponentId> outCids);
+    /// <summary>Captures the world's entities and the values of the listed components and of their singletons. Single-threaded.</summary>
+    /// <param name="components">What the snapshot holds the values of.</param>
+    /// <returns>Receives the snapshot, freed with snapshot_free.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    EcsSnapshot Snapshot(ReadOnlySpan<ComponentId> components);
+    /// <summary>Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken for its entities, the ids later creations receive, and the components and singletons the snapshot lists, and for nothing else. A handle a component holds comes back as the number it was. Structural; single-threaded.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void Restore(EcsSnapshot snapshot);
+    /// <summary>Frees a snapshot; a null one is ignored.</summary>
+    void SnapshotFree(EcsSnapshot snapshot);
 }

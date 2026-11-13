@@ -212,6 +212,11 @@
           "name": "KE_VARIANT_TABLE",
           "value": 9,
           "doc": null
+        },
+        {
+          "name": "KE_VARIANT_ENTITY",
+          "value": 10,
+          "doc": "An entity of the world the component lives in: the only place a component holds one."
         }
       ],
       "external": true
@@ -1212,6 +1217,12 @@
               {
                 "name": "t",
                 "type": "const struct ke_variant_table *",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "e",
+                "type": "uint64_t",
                 "tags": [],
                 "doc": null
               }

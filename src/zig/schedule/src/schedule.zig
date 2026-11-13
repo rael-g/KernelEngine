@@ -1231,7 +1231,7 @@ test "an attach whose size differs from the component's is refused" {
 }
 
 fn manySegments(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_ecs.c.ke_ecs, "query_resolve")).optional.child).pointer.child)) abi_result.c.ke_result {
-    args[5].?.* = 6;
+    args[6].?.* = 6;
     return R.ok;
 }
 

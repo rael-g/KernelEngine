@@ -38,7 +38,8 @@
         "vec2": { "constant": "KE_VARIANT_VEC2", "member": ".v2" },
         "vec3": { "constant": "KE_VARIANT_VEC3", "member": ".v3" },
         "vec4": { "constant": "KE_VARIANT_VEC4", "member": ".v4" },
-        "quat": { "constant": "KE_VARIANT_QUAT", "member": ".q" }
+        "quat": { "constant": "KE_VARIANT_QUAT", "member": ".q" },
+        "entity": { "constant": "KE_VARIANT_ENTITY", "member": ".e" }
       }
     },
     "includeDirectoryName": "kernel_engine",

@@ -16,4 +16,5 @@ public enum VariantType : uint
     Vec4 = 7,
     Quat = 8,
     Table = 9,
+    Entity = 10,
 }

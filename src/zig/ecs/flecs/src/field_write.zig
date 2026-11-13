@@ -127,6 +127,10 @@ pub fn write(component: ?*anyopaque, field: ?*const abi_ecs.c.ke_component_field
             const x = asVec4(v) orelse return false;
             return writeValue(base, f, x);
         },
+        abi_ecs_variant.c.KE_VARIANT_ENTITY => {
+            if (v.type != abi_ecs_variant.c.KE_VARIANT_ENTITY or f.size != 8) return false;
+            return writeValue(base, f, @as(u64, v.unnamed_0.e));
+        },
         abi_ecs_variant.c.KE_VARIANT_STRING => {
             if (v.type != abi_ecs_variant.c.KE_VARIANT_STRING or v.unnamed_0.s == null or f.size == 0) return false;
             const src = std.mem.span(v.unnamed_0.s.?);

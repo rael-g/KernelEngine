@@ -13,6 +13,7 @@ pub const ke_physics_body2d_module = opaque {};
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
+pub const ke_removal_tracker = u64;
 pub const ke_schedule_set_id = u32;
 pub const ke_schedule_system_id = u64;
 

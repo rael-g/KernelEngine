@@ -78,11 +78,13 @@ pub const Queue = struct {
 pub const Segments = struct {
     segments: []abi_ecs.c.ke_ecs_segment = &.{},
     columns: []?*anyopaque = &.{},
+    matched: []abi_ecs.c.ke_component_id = &.{},
     count: usize = 0,
 
     pub fn deinit(s: *Segments) void {
         gpa.free(s.segments);
         gpa.free(s.columns);
+        gpa.free(s.matched);
         s.* = .{};
     }
 
@@ -93,9 +95,15 @@ pub const Segments = struct {
             gpa.free(segments);
             return err;
         };
+        const matched = gpa.alloc(abi_ecs.c.ke_component_id, needed * terms) catch |err| {
+            gpa.free(segments);
+            gpa.free(columns);
+            return err;
+        };
         s.deinit();
         s.segments = segments;
         s.columns = columns;
+        s.matched = matched;
     }
 
     /// Resolves `query` into the buffers, starting from the one segment the ecs requires at least,
@@ -104,10 +112,10 @@ pub const Segments = struct {
     pub fn resolve(s: *Segments, ecs: *abi_ecs.c.ke_ecs, query: abi_ecs.c.ke_query_id, terms: usize) R.Error!void {
         try s.reserve(1, terms);
         var matched: usize = 0;
-        try R.check(ecs.query_resolve.?(ecs, query, s.segments.ptr, s.segments.len, @ptrCast(s.columns.ptr), &matched));
+        try R.check(ecs.query_resolve.?(ecs, query, s.segments.ptr, s.segments.len, @ptrCast(s.columns.ptr), @ptrCast(s.matched.ptr), &matched));
         if (matched > s.segments.len) {
             try s.reserve(matched, terms);
-            try R.check(ecs.query_resolve.?(ecs, query, s.segments.ptr, s.segments.len, @ptrCast(s.columns.ptr), &matched));
+            try R.check(ecs.query_resolve.?(ecs, query, s.segments.ptr, s.segments.len, @ptrCast(s.columns.ptr), @ptrCast(s.matched.ptr), &matched));
             if (matched > s.segments.len) return error.General;
         }
         s.count = matched;

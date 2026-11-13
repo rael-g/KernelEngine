@@ -16,8 +16,7 @@ extern "C"
     typedef uint64_t ke_query_id;
 #define KE_QUERY_INVALID ((ke_query_id)0)
 
-    /** How a query term's column is used. Resolving a query marks the columns of its written
-     * terms changed in every table it hands out. */
+    /** How a query term's column is used. */
     typedef enum ke_ecs_access
     {
         KE_ECS_ACCESS_READ  = 1 << 0,
@@ -60,11 +59,21 @@ extern "C"
         size_t           count;
         void           **columns; ///< [array_of:column_count] One base pointer per query term.
         uint32_t         column_count;
-        /// For a query tracking changes: since its previous resolve, the segment's archetype gained
-        /// or lost entities, or a column of one of the query's terms was marked changed; true on the
-        /// first resolve. False for a query that does not track changes.
+        /// For a query tracking changes: never false when, since the query's previous resolve, an
+        /// entity of the segment gained a component of one of its terms or had one written through
+        /// a resolve or a command; it may be true without that, and is true on the first resolve.
+        /// False for a query that does not track changes.
         bool             changed;
+        /// [array_of:column_count] Per term, the component it matched: the pair a wildcard pair
+        /// term matched, the term's own component otherwise.
+        const ke_component_id *matched;
     } ke_ecs_segment;
+
+    /** A captured state of some components of a world, restored with ke_ecs.restore. */
+    typedef struct ke_ecs_snapshot ke_ecs_snapshot;
+
+    /// [id] What remembers the entities that lost one component, for ke_ecs.removals.
+    typedef uint64_t ke_removal_tracker;
 
     /** One world: entity lifetime, component storage and queries. The ids, components and
      * queries of one ke_ecs mean nothing to another. */
@@ -91,15 +100,17 @@ extern "C"
         /**
          * Registers a component type by name, or returns the existing id if already registered.
          *
-         * A repeated name must describe the same size, alignment and layout as its first
-         * registration. With `fields` the layouts are compared field by field; without them,
-         * only the size and the alignment are compared.
+         * A repeated name with the same size, alignment and layout answers the same id. A repeated
+         * name with another layout and a field table on both registrations migrates the data of
+         * every entity and singleton by field name: a field of the same name and type is copied,
+         * a new field takes the default of the table, a field that is gone is dropped; the id
+         * stays. Without field tables a different size or alignment is refused.
          *
          * @param params [borrowed] The name, size, alignment and field table of the type.
          * @param out_cid [out] Receives the component's id; KE_COMPONENT_INVALID on failure.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is
-         *         not a power of two, or the type conflicts with the name's prior registration,
-         *         what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.
+         *         not a power of two, or the type differs from the name's prior registration with
+         *         no field table to migrate by, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*component_register)(struct ke_ecs              *self,
                                         const ke_component_params  *params,
@@ -187,10 +198,12 @@ extern "C"
          * backend state.
          * @param out_segments [out,array_of:max_segments] Receives the matched segments.
          * @param max_segments Capacity of out_segments.
-         * Marks the columns of the query's written terms changed in the segments it writes.
+         * Counts the columns of the query's written terms as written, for change tracking.
          * @param out_columns [out] Backing store of the segments' columns: segment i's columns
          *        are the term_count entries starting at index i * term_count, term_count being
          *        that of the description the query was registered with.
+         * @param out_matched [out] Backing store of the segments' matched components, laid out as
+         *        @p out_columns.
          * @param out_count [out] Receives how many segments the query matches; above
          *        max_segments, out_segments holds only the first max_segments of them, and the
          *        others keep their changes for the next resolve; zero on failure.
@@ -202,6 +215,7 @@ extern "C"
                                    ke_ecs_segment   *out_segments,
                                    size_t            max_segments,
                                    void            **out_columns,
+                                   ke_component_id  *out_matched,
                                    size_t           *out_count);
 
         /**
@@ -212,6 +226,9 @@ extern "C"
          *
          * An implementation may not satisfy this by forwarding to entity_create,
          * which is single-threaded.
+         * The implementation may replace a reserved id when the commands recorded with it are
+         * applied, rewriting every ENTITY field that holds it; a caller does not rely on the
+         * number before then.
          * @param out_entity [out] Receives the id; the null entity on failure.
          * @return KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve
          *         was handed out.
@@ -226,15 +243,6 @@ extern "C"
          *         refuses the call, its reason logged; KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*entity_materialize)(struct ke_ecs *self, ke_entity entity);
-
-        /**
-         * Marks an entity's component changed, for a writer that reached it by component_get.
-         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive or lacks the
-         *         component, its reason logged.
-         */
-        ke_result (*entity_mark_changed)(struct ke_ecs  *self,
-                                         ke_entity       entity,
-                                         ke_component_id component);
 
         /**
          * Gives the world one value of a component, matched by no query: its storage is zeroed,
@@ -263,6 +271,82 @@ extern "C"
          */
         ke_result (*singleton_remove)(struct ke_ecs *self, ke_component_id component);
 
+        /**
+         * The component id of a pair: @p relation applied to @p target. A pair is added, removed,
+         * read and queried as any component, holding the relation's storage. With
+         * KE_ENTITY_WILDCARD as target the id matches every pair of the relation, in a query term,
+         * a with or a without alone.
+         * @param out_cid [out] Receives the pair's id; KE_COMPONENT_INVALID on failure.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown relation or the null target;
+         *         KE_RESULT_OUT_OF_MEMORY.
+         */
+        ke_result (*pair)(struct ke_ecs *self, ke_component_id relation, ke_entity target,
+                          ke_component_id *out_cid);
+        /**
+         * [try] The relation and the target of a pair's id.
+         * @param out_relation [out] Receives the relation.
+         * @param out_target [out] Receives the target, KE_ENTITY_WILDCARD for a wildcard pair.
+         * @return false for an id that is not a pair.
+         */
+        bool (*pair_parts)(struct ke_ecs *self, ke_component_id pair, ke_component_id *out_relation,
+                           ke_entity *out_target);
+        /**
+         * Starts remembering the entities that lose @p component, by removal or by being
+         * destroyed. Single-threaded.
+         * @param out_tracker [out] Receives the tracker.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for the null or an unknown component;
+         *         KE_RESULT_OUT_OF_MEMORY.
+         */
+        ke_result (*removal_track)(struct ke_ecs *self, ke_component_id component,
+                                   ke_removal_tracker *out_tracker);
+        /**
+         * Hands out the entities that lost the tracker's component since the previous call, and
+         * forgets them. Single-threaded.
+         * @param out_entities [out,array_of:capacity] Receives the entities.
+         * @param out_count [out] Receives how many were lost; above @p capacity, the rest stay for
+         *        the next call.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown tracker or a null output.
+         */
+        ke_result (*removals)(struct ke_ecs *self, ke_removal_tracker tracker, ke_entity *out_entities,
+                              size_t capacity, size_t *out_count);
+        /**
+         * The components an entity has, pairs included.
+         * @param out_cids [out,array_of:capacity] Receives the components.
+         * @param out_count [out] Receives how many it has; above @p capacity only the first fit.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive or a null output.
+         */
+        ke_result (*entity_components)(struct ke_ecs *self, ke_entity entity, ke_component_id *out_cids,
+                                       size_t capacity, size_t *out_count);
+        /**
+         * The components registered in the world.
+         * @param out_cids [out,array_of:capacity] Receives the components.
+         * @param out_count [out] Receives how many are registered; above @p capacity only the
+         *        first fit.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null output.
+         */
+        ke_result (*components)(struct ke_ecs *self, ke_component_id *out_cids, size_t capacity,
+                                size_t *out_count);
+        /**
+         * Captures the world's entities and the values of the listed components and of their
+         * singletons. Single-threaded.
+         * @param components [borrowed,array_of:component_count] What the snapshot holds the values of.
+         * @param out_snapshot [out] Receives the snapshot, freed with snapshot_free.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component;
+         *         KE_RESULT_OUT_OF_MEMORY.
+         */
+        ke_result (*snapshot)(struct ke_ecs *self, const ke_component_id *components,
+                              uint32_t component_count, ke_ecs_snapshot **out_snapshot);
+        /**
+         * Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken
+         * for its entities, the ids later creations receive, and the components and singletons
+         * the snapshot lists, and for nothing else. A handle a component holds comes back as the
+         * number it was. Structural; single-threaded.
+         * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a snapshot of another world;
+         *         KE_RESULT_OUT_OF_MEMORY.
+         */
+        ke_result (*restore)(struct ke_ecs *self, const ke_ecs_snapshot *snapshot);
+        /** Frees a snapshot; a null one is ignored. */
+        void (*snapshot_free)(struct ke_ecs *self, ke_ecs_snapshot *snapshot);
     } ke_ecs;
 
     /// [owner]

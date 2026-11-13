@@ -44,11 +44,13 @@ pub const SegBuf = struct {
     ptr: ?[*]abi_ecs.c.ke_ecs_segment = null,
     cap: usize = 0,
     cols: ?[*]?*anyopaque = null,
+    matched: ?[*]abi_asset_resolver.c.ke_component_id = null,
     cols_cap: usize = 0,
 
     pub fn free(self: *SegBuf) void {
         cFree(abi_ecs.c.ke_ecs_segment, self.ptr, self.cap);
         cFree(?*anyopaque, self.cols, self.cols_cap);
+        cFree(abi_asset_resolver.c.ke_component_id, self.matched, self.cols_cap);
         self.* = .{};
     }
 
@@ -61,9 +63,15 @@ pub const SegBuf = struct {
             cFree(abi_ecs.c.ke_ecs_segment, segments, needed);
             return false;
         };
+        const matched = cAlloc(abi_asset_resolver.c.ke_component_id, needed * terms) orelse {
+            cFree(abi_ecs.c.ke_ecs_segment, segments, needed);
+            cFree(?*anyopaque, columns, needed * terms);
+            return false;
+        };
         cFree(abi_ecs.c.ke_ecs_segment, self.ptr, self.cap);
         cFree(?*anyopaque, self.cols, self.cols_cap);
-        self.* = .{ .ptr = segments, .cap = needed, .cols = columns, .cols_cap = needed * terms };
+        cFree(abi_asset_resolver.c.ke_component_id, self.matched, self.cols_cap);
+        self.* = .{ .ptr = segments, .cap = needed, .cols = columns, .matched = matched, .cols_cap = needed * terms };
         return true;
     }
 };
@@ -75,7 +83,7 @@ pub fn resolveInto(ecs: *abi_ecs.c.ke_ecs, query: abi_ecs.c.ke_query_id, buf: *S
     if (!buf.reserve(initial_segments_per_query, terms)) return error.OutOfMemory;
     for (0..resolve_attempts) |_| {
         var matched: usize = 0;
-        try R.check(ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, &buf.cols.?[0], &matched));
+        try R.check(ecs.query_resolve.?(ecs, query, buf.ptr, buf.cap, &buf.cols.?[0], &buf.matched.?[0], &matched));
         if (matched <= buf.cap) return matched;
         if (!buf.reserve(matched, terms)) return error.OutOfMemory;
     }
