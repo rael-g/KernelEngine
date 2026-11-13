@@ -10,14 +10,15 @@ public sealed unsafe partial class DefaultSchedule
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs"></param>
-    /// <param name="taskPool"></param>
-    public DefaultSchedule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool) : base(CreateLogged(loggerFactory, ecs, taskPool))
+    /// <param name="jobSystem"></param>
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultSchedule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config) : base(CreateLogged(loggerFactory, ecs, jobSystem, config))
     {
     }
 
-    private static KernelEngine.Schedule.Native.ke_schedule_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool)
+    private static KernelEngine.Schedule.Native.ke_schedule_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Schedule.Native.NativeMethods.schedule_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(ecs, taskPool);
+        return Create(ecs, jobSystem, config);
     }
 }

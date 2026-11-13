@@ -31,6 +31,7 @@ pub fn build(b: *std.Build) void {
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/asset"));
+    translated.addIncludePath(b.path("../../../c/completion"));
     translated.addIncludePath(b.path("../../../c/configuration"));
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/file_system"));
@@ -40,6 +41,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/input"));
     translated.addIncludePath(b.path("../../input/default/include"));
     translated.addIncludePath(b.path("../../../c/io"));
+    translated.addIncludePath(b.path("../../../c/job"));
     translated.addIncludePath(b.path("../../../c/logger"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
@@ -49,7 +51,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../../scheduler/include"));
     translated.addIncludePath(b.path("../../../c/spatial"));
-    translated.addIncludePath(b.path("../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../c/text"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -63,6 +64,7 @@ pub fn build(b: *std.Build) void {
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/asset"));
+    tests.root_module.addIncludePath(b.path("../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../../../c/configuration"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/file_system"));
@@ -72,6 +74,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/input"));
     tests.root_module.addIncludePath(b.path("../../input/default/include"));
     tests.root_module.addIncludePath(b.path("../../../c/io"));
+    tests.root_module.addIncludePath(b.path("../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
@@ -81,7 +84,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../scheduler/include"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
-    tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../c/text"));
     b.step("test", "Check the framework_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

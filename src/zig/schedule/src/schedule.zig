@@ -8,7 +8,8 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 const abi_ecs = @import("abi_ecs");
 const abi_result = @import("abi_result");
 const abi_schedule = @import("abi_schedule");
-const abi_task_pool = @import("abi_task_pool");
+const abi_completion = @import("abi_completion");
+const abi_job = @import("abi_job");
 const heap = @import("heap");
 const order = @import("schedule_order.zig");
 const body = @import("schedule_commands.zig");
@@ -87,30 +88,33 @@ const Set = struct {
 
 const Removal = struct { id: SystemId, next: ?*Removal = null };
 
-/// One task of a wave: one slice of one system, with its own context and queue. The task pool is
+/// One job of a wave: one slice of one system, with its own context and queue. The job system is
 /// handed its address, so it stays in place until the wave has been waited for.
 const Package = struct {
     context: body.Context,
     queue: body.Queue = .{},
     system: *System,
     dt: f32,
-    task: ?*abi_task_pool.c.ke_task = null,
+    job: ?*abi_completion.c.ke_completion = null,
 };
 
 threadlocal var inside_body: bool = false;
 
-/// The state behind the `ke_schedule` handle, whose `api.handle` points back at it. Sets, systems
-/// and declarations change only while no run is in flight: a system registered or removed from a
-/// body waits on the lock-free `pending` and `removals` lists until the next run applies them, in
-/// call order, and every other change is refused from a body.
+/// The state behind the `ke_schedule` handle, whose `api.handle` points back at it. Sets and systems
+/// change only while no run is in flight: a system registered or removed from a body, or while a
+/// run is in flight, waits on the lock-free `pending` and `removals` lists until the next run
+/// applies them, in call order, and every other change is refused then. `in_flight` holds from the
+/// start of a run until its driver job, which runs the waves with `dt`, ends.
 const State = struct {
     api: c.ke_schedule,
     ecs: *abi_ecs.c.ke_ecs,
-    pool: *abi_task_pool.c.ke_task_pool,
+    jobs: *abi_job.c.ke_job_system,
+    refuse_ambiguity: bool,
+    in_flight: std.atomic.Value(bool) = .init(false),
+    dt: f32 = 0,
     built: Built = .{},
     sets: std.ArrayList(Set) = .empty,
     systems: std.ArrayList(*System) = .empty,
-    exclusive: std.ArrayList(order.Exclusive) = .empty,
     packages: std.ArrayList(Package) = .empty,
     next_system: std.atomic.Value(SystemId) = .init(0),
     pending: std.atomic.Value(?*System) = .init(null),
@@ -141,6 +145,10 @@ fn refuseInBody() R.Error!void {
     if (inside_body) return reject(error.NotSupported, "the call is refused from a body");
 }
 
+fn deferred(s: *State) bool {
+    return inside_body or s.in_flight.load(.acquire);
+}
+
 /// Slot `register_set`.
 fn registerSet(self: ?*c.ke_schedule, desc: ?*const c.ke_schedule_set_desc, out_id: ?*SetId) callconv(.c) abi_result.c.ke_result {
     const s = stateOf(self) orelse return failed("register_set", error.InvalidArgument);
@@ -150,7 +158,7 @@ fn registerSet(self: ?*c.ke_schedule, desc: ?*const c.ke_schedule_set_desc, out_
 }
 
 fn addSet(s: *State, desc: *const c.ke_schedule_set_desc) R.Error!SetId {
-    try refuseInBody();
+    if (deferred(s)) return reject(error.NotSupported, "a set is refused from a body or while a run is in flight");
     const name = desc.name orelse return reject(error.InvalidArgument, "a set needs a name");
     const after: []const SetId = if (desc.after_count == 0) &.{} else (desc.after orelse return reject(error.InvalidArgument, "a set counts sets it does not point at"))[0..desc.after_count];
     for (after) |a| {
@@ -263,7 +271,7 @@ fn registerSystem(self: ?*c.ke_schedule, desc: ?*const c.ke_schedule_system_desc
 fn addSystem(s: *State, desc: *const c.ke_schedule_system_desc) R.Error!SystemId {
     const system = try makeSystem(s, desc);
     system.id = s.next_system.fetchAdd(1, .monotonic) + 1;
-    if (inside_body) {
+    if (deferred(s)) {
         var head = s.pending.load(.acquire);
         while (true) {
             system.next = head;
@@ -288,7 +296,7 @@ fn unregisterSystem(self: ?*c.ke_schedule, id: SystemId) callconv(.c) abi_result
 
 fn removeSystem(s: *State, id: SystemId) R.Error!void {
     if (id == 0 or id > s.next_system.load(.monotonic)) return reject(error.NotFound, "no system has that id");
-    if (inside_body) {
+    if (deferred(s)) {
         const removal = try gpa.create(Removal);
         removal.* = .{ .id = id };
         var head = s.removals.load(.acquire);
@@ -346,20 +354,6 @@ fn applyPending(s: *State) void {
     }
 }
 
-/// Slot `declare_exclusive`.
-fn declareExclusive(self: ?*c.ke_schedule, group: Id, member: Id) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return failed("declare_exclusive", error.InvalidArgument);
-    addExclusive(s, group, member) catch |err| return failed("declare_exclusive", err);
-    return R.ok;
-}
-
-fn addExclusive(s: *State, group: Id, member: Id) R.Error!void {
-    try refuseInBody();
-    if (group == member) return reject(error.InvalidArgument, "a group and a different member are required");
-    try s.exclusive.append(gpa, .{ .group = group, .member = member });
-    s.dirty();
-}
-
 /// Builds the order when a registration changed since the last build. A cycle is kept as the
 /// order's failure, which `run` and `describe` report until a registration changes.
 fn buildOrder(s: *State) R.Error!void {
@@ -394,7 +388,7 @@ fn buildOrder(s: *State) R.Error!void {
     const ambiguous = try gpa.alloc(bool, nodes.len);
     errdefer gpa.free(ambiguous);
     @memset(ambiguous, false);
-    const built: order.Order = if (cycle) |set| .{ .failure = .{ .cycle = s.sets.items[set].name } } else order.order(nodes, follows, set_count, s.exclusive.items, waves, ambiguous);
+    const built: order.Order = if (cycle) |set| .{ .failure = .{ .cycle = s.sets.items[set].name } } else order.order(nodes, follows, set_count, &.{}, waves, ambiguous);
     if (built.failure == .out_of_memory) return error.OutOfMemory;
 
     s.built = .{
@@ -406,6 +400,10 @@ fn buildOrder(s: *State) R.Error!void {
         .failure = built.failure,
         .ambiguity = built.ambiguity,
     };
+    switch (built.ambiguity) {
+        .ambiguity => |a| log.info("{s} and {s} both write {d} with no order between them; either may run first", .{ a.first, a.second, a.id }),
+        else => {},
+    }
 }
 
 /// The failure the order holds, logged with the names involved.
@@ -424,38 +422,6 @@ fn orderFailure(built: *const Built, refuse_ambiguity: bool) R.Error!void {
             return error.General;
         },
         else => {},
-    }
-}
-
-/// Slot `build`.
-fn build(self: ?*c.ke_schedule, refuse_ambiguity: bool) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return failed("build", error.InvalidArgument);
-    buildChecked(s, refuse_ambiguity) catch |err| return failed("build", err);
-    return R.ok;
-}
-
-fn buildChecked(s: *State, refuse_ambiguity: bool) R.Error!void {
-    try refuseInBody();
-    try buildOrder(s);
-    try orderFailure(&s.built, refuse_ambiguity);
-}
-
-/// Slot `describe`. The count is written even when the capacity is too small.
-fn describe(self: ?*c.ke_schedule, out_systems: ?[*]c.ke_schedule_system_order, capacity: u32, out_count: ?*u32) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return failed("describe", error.InvalidArgument);
-    describeOrder(s, out_systems, capacity, out_count orelse return failed("describe", error.InvalidArgument)) catch |err| return failed("describe", err);
-    return R.ok;
-}
-
-fn describeOrder(s: *State, out_systems: ?[*]c.ke_schedule_system_order, capacity: u32, out_count: *u32) R.Error!void {
-    try buildChecked(s, false);
-    const built = &s.built;
-    out_count.* = @intCast(built.systems.len);
-    if (built.systems.len > capacity) return reject(error.InvalidArgument, "the schedule holds more systems than the capacity given");
-    if (built.systems.len == 0) return;
-    const out = out_systems orelse return reject(error.InvalidArgument, "describe needs an array to write");
-    for (built.systems, built.waves, built.ambiguous, out[0..built.systems.len]) |system, wave, ambiguous, *entry| {
-        entry.* = .{ .id = system.id, .wave = wave, .ambiguous = ambiguous };
     }
 }
 
@@ -484,12 +450,11 @@ fn bindQueries(s: *State) R.Error!void {
 
 fn slicesOf(s: *State, system: *const System) u32 {
     if (!system.per_entity or system.exclusive) return 1;
-    const workers = if (s.pool.get_num_workers) |f| f(s.pool) else 1;
-    return @max(workers, 1);
+    return @max(s.jobs.worker_slots.?(s.jobs), 1);
 }
 
-/// The task pool body of one package.
-fn runPackage(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+/// The job body of one package.
+fn runPackage(data: ?*anyopaque, _: ?*const abi_job.c.ke_job_ctx) callconv(.c) abi_result.c.ke_result {
     const pkg: *Package = @ptrCast(@alignCast(data.?));
     inside_body = true;
     defer inside_body = false;
@@ -508,16 +473,20 @@ fn keepFirst(failure: *?Failure, code: abi_result.c.ke_result, name: [:0]const u
     };
 }
 
-/// Slot `run`.
-fn run(self: ?*c.ke_schedule, dt: f32) callconv(.c) abi_result.c.ke_result {
+/// Slot `run`. Applies the pending registrations and the caller's commands and builds the order on
+/// the calling thread, then hands the waves to a driver job, whose completion is the run's.
+fn run(self: ?*c.ke_schedule, dt: f32, out_completion: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    const out = out_completion orelse return failed("run", error.InvalidArgument);
+    out.* = null;
     const s = stateOf(self) orelse return failed("run", error.InvalidArgument);
-    runSystems(s, dt) catch |err| return failed("run", err);
+    startRun(s, dt, out) catch |err| return failed("run", err);
     return R.ok;
 }
 
-fn runSystems(s: *State, dt: f32) R.Error!void {
+fn startRun(s: *State, dt: f32, out: *?*abi_completion.c.ke_completion) R.Error!void {
     try refuseInBody();
     if (!(dt >= 0)) return reject(error.InvalidArgument, "a run needs a dt of zero or more");
+    if (s.in_flight.load(.acquire)) return reject(error.NotSupported, "a run is refused while another is in flight");
     applyPending(s);
     s.host_queue.flush(s.ecs) catch |err| {
         log.warn("applying the caller's commands failed", .{});
@@ -525,8 +494,31 @@ fn runSystems(s: *State, dt: f32) R.Error!void {
     };
     try bindQueries(s);
     try buildOrder(s);
-    try orderFailure(&s.built, false);
-    for (s.built.systems) |system| {
+    try orderFailure(&s.built, s.refuse_ambiguity);
+    s.dt = dt;
+    s.in_flight.store(true, .release);
+    R.check(s.jobs.dispatch.?(s.jobs, "schedule run", &drive, s, null, 0, out)) catch |err| {
+        s.in_flight.store(false, .release);
+        return err;
+    };
+}
+
+/// The driver job of a run: runs the waves, ending the run with the first failure.
+fn drive(data: ?*anyopaque, _: ?*const abi_job.c.ke_job_ctx) callconv(.c) abi_result.c.ke_result {
+    const s: *State = @ptrCast(@alignCast(data.?));
+    defer s.in_flight.store(false, .release);
+    if (runWaves(s, s.dt)) |f| {
+        log.warn("{s} failed: {t}", .{ f.name, f.err });
+        return R.code(f.err);
+    }
+    return R.ok;
+}
+
+/// Asks the condition of every system of wave `w` and resolves the queries of those that run, once
+/// every earlier wave finished and what it recorded was applied.
+fn prepare(s: *State, w: usize) R.Error!void {
+    for (s.built.systems, s.built.waves) |system, wave| {
+        if (wave != w) continue;
         system.runs = true;
         if (system.condition) |cond| {
             R.check(cond(system.user_data, &system.runs)) catch |err| {
@@ -543,10 +535,6 @@ fn runSystems(s: *State, dt: f32) R.Error!void {
             v.* = .of(seg);
         }
     }
-    if (runWaves(s, dt)) |f| {
-        log.warn("{s} failed: {t}", .{ f.name, f.err });
-        return f.err;
-    }
 }
 
 /// Runs the built waves with the views the systems hold, and returns the first failure.
@@ -554,6 +542,7 @@ fn runWaves(s: *State, dt: f32) ?Failure {
     const built = &s.built;
     var failure: ?Failure = null;
     for (0..built.wave_count) |w| {
+        prepare(s, w) catch |err| return .{ .err = err, .name = "a condition or a query" };
         var count: usize = 0;
         for (built.systems, built.waves) |system, wave| {
             if (wave == w and system.runs) count += slicesOf(s, system);
@@ -575,10 +564,12 @@ fn runWaves(s: *State, dt: f32) ?Failure {
             pkg.context.queue = &pkg.queue;
             pkg.context.bind();
         }
-        for (s.packages.items) |*pkg| keepFirst(&failure, s.pool.dispatch.?(s.pool, &runPackage, pkg, &pkg.task), pkg.system.name);
+        for (s.packages.items) |*pkg| keepFirst(&failure, s.jobs.dispatch.?(s.jobs, pkg.system.name.ptr, &runPackage, pkg, null, 0, &pkg.job), pkg.system.name);
         for (s.packages.items) |*pkg| {
-            const task = pkg.task orelse continue;
-            keepFirst(&failure, s.pool.wait.?(s.pool, task), pkg.system.name);
+            const job = pkg.job orelse continue;
+            keepFirst(&failure, job.wait.?(job), pkg.system.name);
+            job.release.?(job);
+            pkg.job = null;
         }
         for (s.packages.items) |*pkg| {
             pkg.queue.flush(s.ecs) catch |err| {
@@ -597,8 +588,7 @@ fn commands(self: ?*c.ke_schedule) callconv(.c) ?*abi_ecs.c.ke_ecs_commands {
     return @ptrCast(&s.host.commands);
 }
 
-/// Slot `reads`. Walks the registered systems, which only the thread calling `run` changes, and only
-/// before the waves start.
+/// Slot `reads`. Walks the registered systems, which change only while no run is in flight.
 fn reads(self: ?*c.ke_schedule, component: Id) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
     for (s.systems.items) |system| {
@@ -621,32 +611,29 @@ fn destroy(self: ?*c.ke_schedule) callconv(.c) void {
         gpa.free(set.after);
     }
     s.sets.deinit(gpa);
-    s.exclusive.deinit(gpa);
     s.packages.deinit(gpa);
     s.host_queue.deinit();
     gpa.destroy(s);
 }
 
-/// The factory: a schedule over an ecs and a task pool it borrows and never frees.
-export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, out_schedule: ?*c.ke_schedule_handle) callconv(.c) abi_result.c.ke_result {
+/// The factory: a schedule over an ecs and a job system it borrows and never frees.
+export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const c.ke_schedule_config, out_schedule: ?*c.ke_schedule_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_schedule orelse return failed("ke_schedule_create", error.InvalidArgument);
     out.* = .{};
-    if (ecs == null or task_pool == null) return failed("ke_schedule_create", reject(error.InvalidArgument, "a schedule needs an ecs and a task pool"));
+    if (ecs == null or job_system == null or config == null) return failed("ke_schedule_create", reject(error.InvalidArgument, "a schedule needs an ecs, a job system and its config"));
     const s = gpa.create(State) catch |err| return failed("ke_schedule_create", err);
     s.* = .{
         .api = .{
             .register_set = &registerSet,
             .register_system = &registerSystem,
             .unregister_system = &unregisterSystem,
-            .declare_exclusive = &declareExclusive,
-            .build = &build,
-            .describe = &describe,
             .run = &run,
             .commands = &commands,
             .reads = &reads,
         },
         .ecs = ecs.?,
-        .pool = task_pool.?,
+        .jobs = job_system.?,
+        .refuse_ambiguity = config.?.refuse_ambiguity,
         .host = .{ .ecs = ecs.?, .queue = undefined },
     };
     s.api.handle = s;
@@ -659,13 +646,48 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool
 const testing = std.testing;
 const zsub = @import("zsub");
 
-fn inlineDispatch(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_task_pool.c.ke_task_pool, "dispatch")).optional.child).pointer.child)) abi_result.c.ke_result {
-    return args[1].?(args[2]);
+const Done = struct {
+    api: abi_completion.c.ke_completion,
+    result: abi_result.c.ke_result,
+
+    fn poll(c_in: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
+        const d: *Done = @ptrCast(@alignCast(c_in.?.handle));
+        if (out) |o| o.* = d.result;
+        return true;
+    }
+
+    fn wait(c_in: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+        return @as(*Done, @ptrCast(@alignCast(c_in.?.handle))).result;
+    }
+
+    fn release(c_in: ?*abi_completion.c.ke_completion) callconv(.c) void {
+        gpa.destroy(@as(*Done, @ptrCast(@alignCast(c_in.?.handle))));
+    }
+};
+
+fn inlineDispatch(args: std.meta.ArgsTuple(@typeInfo(@typeInfo(@FieldType(abi_job.c.ke_job_system, "dispatch")).optional.child).pointer.child)) abi_result.c.ke_result {
+    const ctx: abi_job.c.ke_job_ctx = .{ .dep_results = null, .dep_count = 0 };
+    const result = args[2].?(args[3], &ctx);
+    const done = gpa.create(Done) catch return R.code(error.OutOfMemory);
+    done.* = .{ .api = .{ .handle = done, .poll = &Done.poll, .wait = &Done.wait, .release = &Done.release }, .result = result };
+    args[6].?.* = &done.api;
+    return R.ok;
 }
+
+fn runOnce(sched: *c.ke_schedule, dt: f32) abi_result.c.ke_result {
+    var done: ?*abi_completion.c.ke_completion = null;
+    const started = sched.run.?(sched, dt, &done);
+    if (started != R.ok) return started;
+    const result = done.?.wait.?(done.?);
+    done.?.release.?(done.?);
+    return result;
+}
+
+const Placed = struct { id: SystemId, wave: u32, ambiguous: bool };
 
 const Rig = struct {
     ecs: zsub.For(abi_ecs.c.ke_ecs),
-    pool: zsub.For(abi_task_pool.c.ke_task_pool),
+    jobs: zsub.For(abi_job.c.ke_job_system),
     handle: c.ke_schedule_handle,
     sched: *c.ke_schedule,
     set: [1]SetId,
@@ -675,17 +697,17 @@ const Rig = struct {
         _ = self.ecs.when(.query_register).writesFresh(2);
         _ = self.ecs.when(.entity_reserve).writesFresh(1);
         _ = self.ecs.when(.component_size).returns(4);
-        try self.pool.init();
-        _ = self.pool.when(.dispatch).does(&inlineDispatch);
-        _ = self.pool.when(.get_num_workers).returns(workers);
-        try R.check(ke_schedule_create(self.ecs.api(), self.pool.api(), &self.handle));
+        try self.jobs.init();
+        _ = self.jobs.when(.dispatch).does(&inlineDispatch);
+        _ = self.jobs.when(.worker_slots).returns(workers);
+        try R.check(ke_schedule_create(self.ecs.api(), self.jobs.api(), &.{ .refuse_ambiguity = false }, &self.handle));
         self.sched = self.handle.ref.?;
         self.set = .{try self.addSet("update", &.{})};
     }
 
     fn deinit(self: *Rig) void {
         self.handle.destroy.?(self.sched);
-        self.pool.deinit();
+        self.jobs.deinit();
         self.ecs.deinit();
     }
 
@@ -706,13 +728,22 @@ const Rig = struct {
     }
 
     fn run(self: *Rig) !void {
-        try R.check(self.sched.run.?(self.sched, 0));
+        try R.check(runOnce(self.sched, 0));
     }
 
-    fn describe(self: *Rig, out: []c.ke_schedule_system_order) !u32 {
-        var count: u32 = 0;
-        try R.check(self.sched.describe.?(self.sched, out.ptr, @intCast(out.len), &count));
-        return count;
+    fn build(self: *Rig, refuse_ambiguity: bool) R.Error!void {
+        const st = stateOf(self.sched).?;
+        try buildOrder(st);
+        try orderFailure(&st.built, refuse_ambiguity);
+    }
+
+    fn describe(self: *Rig, out: []Placed) !u32 {
+        try self.build(false);
+        const built = &stateOf(self.sched).?.built;
+        for (built.systems, built.waves, built.ambiguous, out[0..built.systems.len]) |system, wave, ambiguous, *entry| {
+            entry.* = .{ .id = system.id, .wave = wave, .ambiguous = ambiguous };
+        }
+        return @intCast(built.systems.len);
     }
 };
 
@@ -806,7 +837,7 @@ test "a condition that fails fails the run before any body runs" {
     var desc = rig.desc("guarded", &probe);
     desc.condition = &broken;
     _ = try rig.add(desc);
-    try testing.expectEqual(R.code(error.Io), rig.sched.run.?(rig.sched, 0));
+    try testing.expectEqual(R.code(error.Io), runOnce(rig.sched, 0));
     try testing.expectEqual(0, plain.calls.load(.monotonic));
 }
 
@@ -909,7 +940,7 @@ test "a registered system keeps its own copy of the name and the access it was g
     reader.access = &reads_one;
     reader.access_count = 1;
     _ = try rig.add(reader);
-    var out: [2]c.ke_schedule_system_order = undefined;
+    var out: [2]Placed = undefined;
     _ = try rig.describe(&out);
     try testing.expectEqual(0, out[0].wave);
     try testing.expectEqual(1, out[1].wave);
@@ -935,11 +966,11 @@ test "a writer of a component runs in a wave before a system that only reads it,
     const r = try rig.add(reader);
     const w = try rig.add(writer);
     const o = try rig.add(other);
-    var out: [3]c.ke_schedule_system_order = undefined;
+    var out: [3]Placed = undefined;
     try testing.expectEqual(3, try rig.describe(&out));
-    try testing.expectEqual(c.ke_schedule_system_order{ .id = r, .wave = 1, .ambiguous = false }, out[0]);
-    try testing.expectEqual(c.ke_schedule_system_order{ .id = w, .wave = 0, .ambiguous = false }, out[1]);
-    try testing.expectEqual(c.ke_schedule_system_order{ .id = o, .wave = 0, .ambiguous = false }, out[2]);
+    try testing.expectEqual(Placed{ .id = r, .wave = 1, .ambiguous = false }, out[0]);
+    try testing.expectEqual(Placed{ .id = w, .wave = 0, .ambiguous = false }, out[1]);
+    try testing.expectEqual(Placed{ .id = o, .wave = 0, .ambiguous = false }, out[2]);
 }
 
 test "two writers with no other order run in registration order, are described as ambiguous, and a build refusing ambiguity fails" {
@@ -956,9 +987,9 @@ test "two writers with no other order run in registration order, are described a
     _ = try rig.add(first);
     _ = try rig.add(second);
     _ = try rig.add(rig.desc("bystander", &probe));
-    try R.check(rig.sched.build.?(rig.sched, false));
-    try testing.expectEqual(R.code(error.General), rig.sched.build.?(rig.sched, true));
-    var out: [3]c.ke_schedule_system_order = undefined;
+    try rig.build(false);
+    try testing.expectError(error.General, rig.build(true));
+    var out: [3]Placed = undefined;
     _ = try rig.describe(&out);
     try testing.expectEqual(0, out[0].wave);
     try testing.expectEqual(1, out[1].wave);
@@ -983,8 +1014,8 @@ test "two writers in sets ordered against each other are not ambiguous and run i
     sooner.sets = &.{early};
     _ = try rig.add(later);
     _ = try rig.add(sooner);
-    try R.check(rig.sched.build.?(rig.sched, true));
-    var out: [2]c.ke_schedule_system_order = undefined;
+    try rig.build(true);
+    var out: [2]Placed = undefined;
     _ = try rig.describe(&out);
     try testing.expectEqual(1, out[0].wave);
     try testing.expectEqual(0, out[1].wave);
@@ -1006,7 +1037,7 @@ test "a set orders systems that touch nothing in common, through a set no system
     a.set_count = 1;
     _ = try rig.add(b);
     _ = try rig.add(a);
-    var out: [2]c.ke_schedule_system_order = undefined;
+    var out: [2]Placed = undefined;
     _ = try rig.describe(&out);
     try testing.expectEqual(1, out[0].wave);
     try testing.expectEqual(0, out[1].wave);
@@ -1030,13 +1061,13 @@ test "an exclusive system runs alone before every other system" {
     var alone = rig.desc("alone", &probe);
     alone.exclusive = true;
     _ = try rig.add(alone);
-    var out: [2]c.ke_schedule_system_order = undefined;
+    var out: [2]Placed = undefined;
     _ = try rig.describe(&out);
     try testing.expectEqual(1, out[0].wave);
     try testing.expectEqual(0, out[1].wave);
 }
 
-fn twoWriters(rig: *Rig, probe: *Probe, left: *const [1]abi_ecs.c.ke_ecs_query_desc, right: *const [1]abi_ecs.c.ke_ecs_query_desc) ![2]c.ke_schedule_system_order {
+fn twoWriters(rig: *Rig, probe: *Probe, left: *const [1]abi_ecs.c.ke_ecs_query_desc, right: *const [1]abi_ecs.c.ke_ecs_query_desc) ![2]Placed {
     var a = rig.desc("left", probe);
     a.queries = left;
     a.query_count = 1;
@@ -1045,25 +1076,10 @@ fn twoWriters(rig: *Rig, probe: *Probe, left: *const [1]abi_ecs.c.ke_ecs_query_d
     b.query_count = 1;
     _ = try rig.add(a);
     _ = try rig.add(b);
-    try R.check(rig.sched.build.?(rig.sched, true));
-    var out: [2]c.ke_schedule_system_order = undefined;
+    try rig.build(true);
+    var out: [2]Placed = undefined;
     _ = try rig.describe(&out);
     return out;
-}
-
-test "queries requiring different members of one exclusive group do not conflict" {
-    var rig: Rig = undefined;
-    try rig.init(1);
-    defer rig.deinit();
-    try R.check(rig.sched.declare_exclusive.?(rig.sched, 10, 11));
-    try R.check(rig.sched.declare_exclusive.?(rig.sched, 10, 12));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.declare_exclusive.?(rig.sched, 10, 10));
-    var probe = Probe{};
-    const left_terms = [_]Term{ term(1, write), term(11, read) };
-    const right_terms = [_]Term{ term(1, write), term(12, read) };
-    const out = try twoWriters(&rig, &probe, &.{queryOf(&left_terms, &.{}, &.{})}, &.{queryOf(&right_terms, &.{}, &.{})});
-    try testing.expectEqual(0, out[0].wave);
-    try testing.expectEqual(0, out[1].wave);
 }
 
 test "a query excluding a component the other requires does not conflict with it" {
@@ -1106,7 +1122,7 @@ test "a body that fails the run keeps the later waves from starting, while its o
     _ = try rig.add(bad);
     _ = try rig.add(rig.desc("beside", &beside));
     _ = try rig.add(reader);
-    try testing.expectEqual(R.code(error.Io), rig.sched.run.?(rig.sched, 0));
+    try testing.expectEqual(R.code(error.Io), runOnce(rig.sched, 0));
     try testing.expectEqual(1, beside.calls.load(.monotonic));
     try testing.expectEqual(0, after.calls.load(.monotonic));
 }
@@ -1133,7 +1149,8 @@ fn registering(_: ?*c.ke_schedule_ctx, ud: ?*anyopaque, _: f32) callconv(.c) abi
         _ = r.sched.unregister_system.?(r.sched, r.remove);
         r.remove = 0;
     }
-    r.nested = r.sched.run.?(r.sched, 0);
+    var nested_done: ?*abi_completion.c.ke_completion = null;
+    r.nested = r.sched.run.?(r.sched, 0, &nested_done);
     var set: SetId = undefined;
     r.nested_set = r.sched.register_set.?(r.sched, &.{ .name = "inner" }, &set);
     return R.ok;
@@ -1269,18 +1286,13 @@ test "a system whose condition answers false resolves none of its queries" {
     try rig.ecs.received(.query_resolve).times(0);
 }
 
-test "describing reports the count and refuses too small a capacity, and a negative dt is refused" {
+test "a negative dt or a missing completion is refused" {
     var rig: Rig = undefined;
     try rig.init(1);
     defer rig.deinit();
-    var probe = Probe{};
-    _ = try rig.add(rig.desc("a", &probe));
-    _ = try rig.add(rig.desc("b", &probe));
-    var out: [1]c.ke_schedule_system_order = undefined;
-    var count: u32 = 0;
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.describe.?(rig.sched, &out, 1, &count));
-    try testing.expectEqual(2, count);
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(rig.sched, -1));
+    var done: ?*abi_completion.c.ke_completion = null;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(rig.sched, -1, &done));
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(rig.sched, 0, null));
 }
 
 test "a schedule reads a component a query term or an access entry reads, and not one it only writes" {
@@ -1303,17 +1315,18 @@ test "a schedule reads a component a query term or an access entry reads, and no
     try testing.expect(!rig.sched.reads.?(rig.sched, 4));
 }
 
-test "creating a schedule without an ecs or a task pool is refused and leaves the handle zeroed" {
+test "creating a schedule without an ecs, a job system or a config is refused and leaves the handle zeroed" {
     var ecs: zsub.For(abi_ecs.c.ke_ecs) = undefined;
     try ecs.init();
     defer ecs.deinit();
-    var pool: zsub.For(abi_task_pool.c.ke_task_pool) = undefined;
-    try pool.init();
-    defer pool.deinit();
+    var jobs: zsub.For(abi_job.c.ke_job_system) = undefined;
+    try jobs.init();
+    defer jobs.deinit();
     var handle: c.ke_schedule_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(null, pool.api(), &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(null, jobs.api(), &.{ .refuse_ambiguity = false }, &handle));
     try testing.expectEqual(null, handle.ref);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), null, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), null, &.{ .refuse_ambiguity = false }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), jobs.api(), null, &handle));
 }
 
 test "a slot given no schedule refuses" {
@@ -1322,7 +1335,8 @@ test "a slot given no schedule refuses" {
     defer rig.deinit();
     var id: SetId = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.register_set.?(null, &.{ .name = "x" }, &id));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(null, 0));
+    var done: ?*abi_completion.c.ke_completion = null;
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.run.?(null, 0, &done));
     try testing.expectEqual(null, rig.sched.commands.?(null));
 }
 

@@ -39,6 +39,7 @@ public static class NativeResults
         KernelEngine.Result.Native.Result.NotInitialized => new InvalidOperationException(message),
         KernelEngine.Result.Native.Result.NotSupported => new NotSupportedException(message),
         KernelEngine.Result.Native.Result.AlreadyExists => new InvalidOperationException(message),
+        KernelEngine.Result.Native.Result.Cancelled => new OperationCanceledException(message),
         _ => new InvalidOperationException(message),
     };
 
@@ -54,6 +55,7 @@ public static class NativeResults
         "OutOfMemoryException" => KernelEngine.Result.Native.Result.OutOfMemory,
         "ArgumentException" => KernelEngine.Result.Native.Result.InvalidArgument,
         "NotSupportedException" => KernelEngine.Result.Native.Result.NotSupported,
+        "OperationCanceledException" => KernelEngine.Result.Native.Result.Cancelled,
         _ => KernelEngine.Result.Native.Result.General,
     };
 }

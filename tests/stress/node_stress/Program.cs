@@ -1,9 +1,9 @@
 using KernelEngine.Ecs.Flecs;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
+using KernelEngine.Job.Enki;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
-using KernelEngine.TaskPool.Enki;
 
 using NodeStress;
 
@@ -11,11 +11,11 @@ int instances = ArgValue("--instances", 2000);
 int ticks = ArgValue("--ticks", 300);
 uint workers = (uint)ArgValue("--workers", 0);
 
-using var pool = new EnkiTaskPool(new KernelEngine.TaskPool.TaskPoolConfig { WorkerCount = workers });
+using var jobs = new EnkiJobSystem(new KernelEngine.Job.JobSystemConfig { WorkerCount = workers });
 using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-using var first = new DefaultSchedule(ecs, pool);
-using var fixedSchedule = new DefaultSchedule(ecs, pool);
-using var main = new DefaultSchedule(ecs, pool);
+using var first = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
+using var fixedSchedule = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
+using var main = new DefaultSchedule(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
 using var scheduler = new DefaultScheduler(new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
 scheduler.AddSchedule(first, SchedulerCadence.EveryTick);
 scheduler.AddSchedule(fixedSchedule, SchedulerCadence.Fixed);
@@ -38,7 +38,7 @@ for (var i = 0; i < instances; i++) types.Spawn(commands, mover, $"Mover{i}", de
 for (var i = 0; i < instances / 10; i++) types.Spawn(commands, raiser, $"Raiser{i}", default);
 types.Spawn(commands, listener, "Listener", default);
 
-Console.WriteLine($"[19_node_stress] {instances} movers, {instances / 10} raisers, {ticks} ticks, {pool.GetNumWorkers()} workers");
+Console.WriteLine($"[19_node_stress] {instances} movers, {instances / 10} raisers, {ticks} ticks, {jobs.WorkerSlots() - 1} workers");
 
 const float dt = 1f / 60f;
 for (var i = 0; i < 30; i++) scheduler.Tick(dt);

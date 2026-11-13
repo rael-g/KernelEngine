@@ -25,24 +25,24 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_schedule_set_desc, translated("ke_schedule_set_desc"));
     try expectSameLayout(abi.c.ke_schedule_system_desc, translated("ke_schedule_system_desc"));
-    try expectSameLayout(abi.c.ke_schedule_system_order, translated("ke_schedule_system_order"));
+    try expectSameLayout(abi.c.ke_schedule_config, translated("ke_schedule_config"));
     try expectSameLayout(abi.c.ke_schedule, translated("ke_schedule"));
     try expectSameLayout(abi.c.ke_schedule_handle, translated("ke_schedule_handle"));
     try expectSameLayout(abi.c.ke_schedule_ctx, translated("ke_schedule_ctx"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
+    if (@hasDecl(c, "ke_job_fn")) try expectSameLayout(abi.c.ke_job_fn, c.ke_job_fn);
+    if (@hasDecl(c, "ke_job_range_fn")) try expectSameLayout(abi.c.ke_job_range_fn, c.ke_job_range_fn);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
     if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
     if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
     if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
     if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
-    if (@hasDecl(c, "ke_task_func")) try expectSameLayout(abi.c.ke_task_func, c.ke_task_func);
-    if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
-extern const layout_values: [41]c_ulonglong;
+extern const layout_values: [36]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -64,18 +64,13 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_schedule_system_desc, "set_count"),
         @offsetOf(abi.c.ke_schedule_system_desc, "per_entity"),
         @offsetOf(abi.c.ke_schedule_system_desc, "exclusive"),
-        @sizeOf(abi.c.ke_schedule_system_order),
-        @offsetOf(abi.c.ke_schedule_system_order, "id"),
-        @offsetOf(abi.c.ke_schedule_system_order, "wave"),
-        @offsetOf(abi.c.ke_schedule_system_order, "ambiguous"),
+        @sizeOf(abi.c.ke_schedule_config),
+        @offsetOf(abi.c.ke_schedule_config, "refuse_ambiguity"),
         @sizeOf(abi.c.ke_schedule),
         @offsetOf(abi.c.ke_schedule, "handle"),
         @offsetOf(abi.c.ke_schedule, "register_set"),
         @offsetOf(abi.c.ke_schedule, "register_system"),
         @offsetOf(abi.c.ke_schedule, "unregister_system"),
-        @offsetOf(abi.c.ke_schedule, "declare_exclusive"),
-        @offsetOf(abi.c.ke_schedule, "build"),
-        @offsetOf(abi.c.ke_schedule, "describe"),
         @offsetOf(abi.c.ke_schedule, "run"),
         @offsetOf(abi.c.ke_schedule, "commands"),
         @offsetOf(abi.c.ke_schedule, "reads"),

@@ -874,45 +874,19 @@
       ]
     },
     {
-      "name": "ke_schedule_system_order",
-      "doc": "One system, as the built order places it.",
+      "name": "ke_schedule_config",
+      "doc": "What a schedule is created with, each field applied as given.",
       "tags": [
         "value"
       ],
       "fields": [
         {
-          "name": "id",
-          "type": "ke_schedule_system_id",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "wave",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "The wave the system runs in; systems of one wave run concurrently."
-        },
-        {
-          "name": "ambiguous",
+          "name": "refuse_ambiguity",
           "type": "_Bool",
           "tags": [],
-          "doc": "The system and one registered before it write a component with nothing else ordering them; the earlier one runs first."
+          "doc": "An ambiguity between two writers fails the run instead of being logged."
         }
       ]
-    },
-    {
-      "name": "ke_task_pool_config",
-      "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "worker_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD."
-        }
-      ],
-      "external": true
     }
   ],
   "vtables": [
@@ -1751,7 +1725,7 @@
     },
     {
       "name": "ke_schedule",
-      "doc": "Orders the systems of one world by what they touch and the sets they join, and runs them wave by wave across the task pool. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity: queries one of which excludes a component the other requires, or requiring different members of one exclusive group, never do.",
+      "doc": "Orders the systems of one world by what they touch and the sets they join, and runs them on the job system. The systems of a set run after those of the sets it follows, and a writer of a component before its readers. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity; queries one of which excludes a component the other requires never do. Two writers with no other order run in an order this contract leaves open, and are reported as ambiguous in the log; the run order is neither promised nor forbidden to repeat.",
       "tags": [
         "interface"
       ],
@@ -1829,88 +1803,25 @@
           "receiver": "ke_schedule *"
         },
         {
-          "name": "declare_exclusive",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when group equals member; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
-          "params": [
-            {
-              "name": "group",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "member",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
-          "name": "build",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Builds the order if a registration changed since the last build; run builds the same way. The systems of a set run after those of the sets it follows, a writer of a component before its readers, and of two writers with no other order, the one registered first: an ambiguity.",
-          "return_doc": "KE_OK; KE_RESULT_GENERAL when the order has a cycle or a refused ambiguity, the systems involved named in the log; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
-          "params": [
-            {
-              "name": "refuse_ambiguity",
-              "type": "_Bool",
-              "tags": [],
-              "doc": "When true, an ambiguity fails the build."
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
-          "name": "describe",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "The built order, in registration order.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for too small a capacity; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with.",
-          "params": [
-            {
-              "name": "out_systems",
-              "type": "ke_schedule_system_order *",
-              "tags": [
-                "out",
-                "array_of:capacity"
-              ],
-              "doc": "Receives one entry per system."
-            },
-            {
-              "name": "capacity",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_count",
-              "type": "uint32_t *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the number of systems."
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
           "name": "run",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Applies what bodies registered and removed, then what the caller recorded into commands, then runs the systems whose condition holds, wave by wave, applying what each wave recorded before the next starts.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with; the code a condition, a body or its commands failed with.",
+          "doc": "Applies what bodies registered and removed and what the caller recorded into commands, then starts a run of the systems. A system\u0027s condition is asked once per run, after everything ordered before the system finished; a failing condition fails the run. An exclusive system runs with no other system of the schedule. What a body records is applied before any system ordered after it starts, and at the latest when the run ends. The run ends with the first failure, and a system not yet started then may or may not run.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt or a null out_completion; KE_RESULT_NOT_SUPPORTED from a body or while a run is in flight; KE_RESULT_GENERAL when the order has a cycle, or an ambiguity the schedule was created to refuse, the systems involved named in the log; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "dt",
               "type": "float",
               "tags": [],
               "doc": null
+            },
+            {
+              "name": "out_completion",
+              "type": "ke_completion **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the run\u0027s completion, which carries the first failure of a condition, a body or its commands, and which the caller releases."
             }
           ],
           "receiver": "ke_schedule *"
@@ -1986,7 +1897,7 @@
           "name": "commands",
           "type": "ke_ecs_commands *",
           "tags": [],
-          "doc": "The queue the body records structural changes into, applied when its wave ends."
+          "doc": "The queue the body records structural changes into, applied before any system ordered after it starts."
         }
       ],
       "slots": [
@@ -2044,184 +1955,14 @@
           "receiver": "ke_schedule_ctx *"
         }
       ]
-    },
-    {
-      "name": "ke_task_pool",
-      "doc": "Dispatches work to a native thread pool.",
-      "tags": [
-        "interface"
-      ],
-      "fields": [
-        {
-          "name": "handle",
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "dispatch",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Schedules a task, which the caller releases by waiting on it.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null func or out_task, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does not accept the calling thread.",
-          "params": [
-            {
-              "name": "func",
-              "type": "ke_task_func",
-              "tags": [
-                "closure:data"
-              ],
-              "doc": "Entry point invoked on a worker thread."
-            },
-            {
-              "name": "data",
-              "type": "void *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Opaque context passed to func unchanged."
-            },
-            {
-              "name": "out_task",
-              "type": "ke_task **",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the task; null on failure."
-            }
-          ],
-          "receiver": "struct ke_task_pool *"
-        },
-        {
-          "name": "dispatch_on_complete",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Schedules a task and a completion callback run once it finishes.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null func or out_task, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_NOT_SUPPORTED when the pool does not accept the calling thread.",
-          "params": [
-            {
-              "name": "func",
-              "type": "ke_task_func",
-              "tags": [
-                "closure:data"
-              ],
-              "doc": "Entry point invoked on a worker thread."
-            },
-            {
-              "name": "data",
-              "type": "void *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Opaque context passed to func unchanged."
-            },
-            {
-              "name": "on_complete",
-              "type": "ke_task_on_complete_func",
-              "tags": [
-                "closure:user_data"
-              ],
-              "doc": "Invoked after func returns."
-            },
-            {
-              "name": "user_data",
-              "type": "void *",
-              "tags": [
-                "borrowed"
-              ],
-              "doc": "Opaque context passed to on_complete unchanged."
-            },
-            {
-              "name": "out_task",
-              "type": "ke_task **",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the task; null on failure."
-            }
-          ],
-          "receiver": "struct ke_task_pool *"
-        },
-        {
-          "name": "wait",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Blocks the calling thread until the task completes, releases the task, and returns what its body returned. Every task a dispatch slot returns is waited on exactly once: afterwards the pointer is invalid for wait and is_completed alike, and a task never waited on is never released and reports its failure nowhere.",
-          "return_doc": "What the task body returned, or KE_RESULT_INVALID_ARGUMENT for a null task.",
-          "params": [
-            {
-              "name": "task",
-              "type": "ke_task *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_task_pool *"
-        },
-        {
-          "name": "is_completed",
-          "returns": "_Bool",
-          "tags": [],
-          "doc": "Returns true if the task has finished. Valid only before the task is waited on.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "task",
-              "type": "ke_task *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_task_pool *"
-        },
-        {
-          "name": "get_num_workers",
-          "returns": "uint32_t",
-          "tags": [],
-          "doc": "Returns the number of worker threads in the pool.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_task_pool *"
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_task_pool_handle",
-      "doc": null,
-      "tags": [
-        "owner"
-      ],
-      "fields": [
-        {
-          "name": "ref",
-          "type": "ke_task_pool *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "destroy",
-          "returns": "void",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_task_pool *"
-        }
-      ],
-      "external": true
     }
   ],
   "functions": [
     {
       "name": "ke_schedule_create",
       "returns": "ke_result",
-      "doc": "Creates a schedule over ecs and task_pool, both borrowed for its lifetime.",
-      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, task_pool or out_schedule; KE_RESULT_OUT_OF_MEMORY.",
+      "doc": "Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.",
+      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, job_system, config or out_schedule; KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
           "name": "ecs",
@@ -2230,10 +1971,18 @@
           "doc": null
         },
         {
-          "name": "task_pool",
-          "type": "ke_task_pool *",
+          "name": "job_system",
+          "type": "ke_job_system *",
           "tags": [],
           "doc": null
+        },
+        {
+          "name": "config",
+          "type": "const ke_schedule_config *",
+          "tags": [
+            "borrowed"
+          ],
+          "doc": "Required; every field is read as given."
         },
         {
           "name": "out_schedule",
@@ -2317,45 +2066,56 @@
       ]
     },
     {
-      "name": "ke_task_func",
+      "name": "ke_job_fn",
       "returns": "ke_result",
-      "doc": "Body of a scheduled task, run on a worker thread.",
+      "doc": "The body of a job, run once on a worker after every dependency finished, whatever each finished with.",
       "lanes": [
         {
           "name": "data",
           "type": "void *",
           "tags": [
-            "context",
-            "borrowed"
+            "context"
           ],
-          "doc": "Opaque context handed to the dispatch call."
+          "doc": "Forwarded from dispatch."
+        },
+        {
+          "name": "ctx",
+          "type": "const ke_job_ctx *",
+          "tags": [],
+          "doc": "The results of the dependencies."
         }
       ]
     },
     {
-      "name": "ke_task_on_complete_func",
-      "returns": "void",
-      "doc": "Run once the task body has returned, on the same worker thread.",
+      "name": "ke_job_range_fn",
+      "returns": "ke_result",
+      "doc": "One range of a parallel_for, run on a worker; ranges cover [0, item_count) without overlap.",
       "lanes": [
         {
-          "name": "task",
-          "type": "ke_task *",
-          "tags": [],
-          "doc": "The task that finished."
-        },
-        {
-          "name": "user_data",
+          "name": "data",
           "type": "void *",
           "tags": [
             "context"
           ],
-          "doc": "Opaque context handed to the dispatch call."
+          "doc": "Forwarded from parallel_for."
         },
         {
-          "name": "result",
-          "type": "ke_result",
+          "name": "arg2",
+          "type": "uint32_t",
           "tags": [],
-          "doc": "What the body returned."
+          "doc": null
+        },
+        {
+          "name": "arg3",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "worker_index",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Unique among the threads running at once, in [0, worker_slots)."
         }
       ]
     }
@@ -2376,7 +2136,7 @@
     "ke_schedule_system_id": "uint64_t",
     "ke_schedule_execute_fn": "ke_result (*)(ke_schedule_ctx *, void *, float)",
     "ke_schedule_condition_fn": "ke_result (*)(void *, _Bool *)",
-    "ke_task_func": "ke_result (*)(void *)",
-    "ke_task_on_complete_func": "void (*)(ke_task *, void *, ke_result)"
+    "ke_job_fn": "ke_result (*)(void *, const ke_job_ctx *)",
+    "ke_job_range_fn": "ke_result (*)(void *, uint32_t, uint32_t, uint32_t)"
   }
 }

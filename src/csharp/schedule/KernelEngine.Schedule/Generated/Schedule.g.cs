@@ -8,11 +8,13 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Job;
+using KernelEngine.Job.Native;
 using KernelEngine.Schedule.Native;
-using KernelEngine.TaskPool;
-using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Schedule;
 
@@ -25,7 +27,7 @@ public unsafe interface INativeSchedule
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Orders the systems of one world by what they touch and the sets they join, and runs them wave by wave across the task pool. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity: queries one of which excludes a component the other requires, or requiring different members of one exclusive group, never do.</summary>
+/// <summary>Orders the systems of one world by what they touch and the sets they join, and runs them on the job system. The systems of a set run after those of the sets it follows, and a writer of a component before its readers. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity; queries one of which excludes a component the other requires never do. Two writers with no other order run in an order this contract leaves open, and are reported as ambiguous in the log; the run order is neither promised nor forbidden to repeat.</summary>
 public unsafe partial class Schedule : IDisposable, INativeSchedule, ISchedule
 {
     private ke_schedule* _native;
@@ -260,40 +262,14 @@ public unsafe partial class Schedule : IDisposable, INativeSchedule, ISchedule
         KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->unregister_system(Handle, id)), "unregister_system");
     }
 
-    /// <summary>Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.</summary>
+    /// <summary>Applies what bodies registered and removed and what the caller recorded into commands, then starts a run of the systems. A system's condition is asked once per run, after everything ordered before the system finished; a failing condition fails the run. An exclusive system runs with no other system of the schedule. What a body records is applied before any system ordered after it starts, and at the latest when the run ends. The run ends with the first failure, and a system not yet started then may or may not run.</summary>
+    /// <returns>Receives the run's completion, which carries the first failure of a condition, a body or its commands, and which the caller releases.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void DeclareExclusive(ComponentId group, ComponentId member)
+    public nint Run(float dt)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->declare_exclusive(Handle, group, member)), "declare_exclusive");
-    }
-
-    /// <summary>Builds the order if a registration changed since the last build; run builds the same way. The systems of a set run after those of the sets it follows, a writer of a component before its readers, and of two writers with no other order, the one registered first: an ambiguity.</summary>
-    /// <param name="refuseAmbiguity">When true, an ambiguity fails the build.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Build(bool refuseAmbiguity)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->build(Handle, refuseAmbiguity)), "build");
-    }
-
-    /// <summary>The built order, in registration order.</summary>
-    /// <param name="outSystems">Receives one entry per system.</param>
-    /// <returns>Receives the number of systems.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public uint Describe(Span<ScheduleSystemOrder> outSystems)
-    {
-        fixed (ScheduleSystemOrder* outSystemsPtr = outSystems)
-        {
-            uint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->describe(Handle, outSystemsPtr, (uint)outSystems.Length, &resultOut)), "describe");
-            return resultOut;
-        }
-    }
-
-    /// <summary>Applies what bodies registered and removed, then what the caller recorded into commands, then runs the systems whose condition holds, wave by wave, applying what each wave recorded before the next starts.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void Run(float dt)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->run(Handle, dt)), "run");
+        nint resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->run(Handle, dt, (ke_completion**)&resultOut)), "run");
+        return resultOut;
     }
 
     /// <summary>The queue the caller records structural changes into between runs; the next run applies it first. Only the thread that calls run records into it.</summary>

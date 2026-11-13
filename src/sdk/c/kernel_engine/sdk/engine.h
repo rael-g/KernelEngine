@@ -37,6 +37,7 @@
 #include <kernel_engine/scheduler/scheduler_create.h>
 #include <kernel_engine/sdk/paths.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/job/enki/job_system_enki_create.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
 #include <kernel_engine/view/space/view_space_rh_create.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
@@ -115,6 +116,7 @@ typedef struct ke_sdk_engine
     char default_font[KE_SDK_ENGINE_PATH_CAPACITY];
 
     ke_task_pool_handle            task_pool;
+    ke_job_system_handle           job_system;
     ke_file_system_handle          file_system;
     ke_io_handle                   io;
     ke_configuration_handle        configuration;
@@ -151,6 +153,7 @@ typedef ke_result (*ke_sdk_engine_part)(ke_sdk_engine *engine);
 typedef struct ke_sdk_engine_desc
 {
     ke_sdk_engine_part task_pool;
+    ke_sdk_engine_part job_system;
     ke_sdk_engine_part file_system;
     ke_sdk_engine_part io;
     ke_sdk_engine_part configuration;
@@ -187,6 +190,12 @@ static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return 
 static inline ke_result ke_sdk_task_pool_enki(ke_sdk_engine *e)
 {
     return ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &e->task_pool);
+}
+
+/** An enkiTS job system with one worker per hardware thread besides the calling one. */
+static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
+{
+    return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
 }
 
 /** The operating system's files, relative to the working directory. */
@@ -246,7 +255,7 @@ static inline ke_result ke_sdk_set(ke_schedule *schedule, const char *name, cons
 /** Makes a schedule over the engine's world and adds it to the scheduler with @p cadence. */
 static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_scheduler_cadence cadence, ke_schedule_handle *out)
 {
-    ke_result made = ke_schedule_create(e->ecs.ref, e->task_pool.ref, out);
+    ke_result made = ke_schedule_create(e->ecs.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, out);
     if (made == KE_OK) made = e->scheduler.ref->add_schedule(e->scheduler.ref, out->ref, cadence);
     return made;
 }
@@ -509,6 +518,7 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->configuration);
     KE_SDK_ENGINE_RELEASE(engine->io);
     KE_SDK_ENGINE_RELEASE(engine->file_system);
+    KE_SDK_ENGINE_RELEASE(engine->job_system);
     KE_SDK_ENGINE_RELEASE(engine->task_pool);
 }
 
@@ -528,7 +538,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part parts[] = {
-        desc->task_pool, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
+        desc->task_pool, desc->job_system, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
         desc->scheduler, desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
         desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,

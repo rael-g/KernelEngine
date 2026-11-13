@@ -8,11 +8,13 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.Ecs;
 using KernelEngine.Ecs.Native;
+using KernelEngine.Job;
+using KernelEngine.Job.Native;
 using KernelEngine.Schedule.Native;
-using KernelEngine.TaskPool;
-using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.Schedule;
 

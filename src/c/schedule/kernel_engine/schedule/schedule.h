@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_SCHEDULE_SCHEDULE_H_
 #define KERNEL_ENGINE_SCHEDULE_SCHEDULE_H_
 
+#include <kernel_engine/completion/completion.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/ke_ecs.h>
@@ -71,21 +72,13 @@ typedef struct ke_schedule_system_desc {
     bool exclusive;
 } ke_schedule_system_desc;
 
-/// [value] One system, as the built order places it.
-typedef struct ke_schedule_system_order {
-    ke_schedule_system_id id;
-    /// The wave the system runs in; systems of one wave run concurrently.
-    uint32_t wave;
-    /// The system and one registered before it write a component with nothing else ordering them;
-    /// the earlier one runs first.
-    bool ambiguous;
-} ke_schedule_system_order;
-
 /// [interface] Orders the systems of one world by what they touch and the sets they join, and runs
-/// them wave by wave across the task pool. Two systems conflict when they touch the same component,
-/// at least one writes it, and their queries can match the same entity: queries one of which
-/// excludes a component the other requires, or requiring different members of one exclusive
-/// group, never do.
+/// them on the job system. The systems of a set run after those of the sets it follows, and a
+/// writer of a component before its readers. Two systems conflict when they touch the same
+/// component, at least one writes it, and their queries can match the same entity; queries one of
+/// which excludes a component the other requires never do. Two writers with no other order run in
+/// an order this contract leaves open, and are reported as ambiguous in the log; the run order is
+/// neither promised nor forbidden to repeat.
 typedef struct ke_schedule {
     void *handle;
 
@@ -103,35 +96,19 @@ typedef struct ke_schedule {
     /// Removes a system. From a body, it takes effect with the next run.
     /// @return KE_OK, or KE_RESULT_NOT_FOUND when no system has that id.
     ke_result (*unregister_system)(ke_schedule *self, ke_schedule_system_id id);
-    /// Declares @p member one of the members of the exclusive group @p group: no entity holds two
-    /// members of one group, so queries requiring different members do not conflict.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when @p group equals @p member;
-    ///         KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.
-    ke_result (*declare_exclusive)(ke_schedule *self, ke_component_id group, ke_component_id member);
-
-    /// Builds the order if a registration changed since the last build; run builds the same way.
-    /// The systems of a set run after those of the sets it follows, a writer of a component before
-    /// its readers, and of two writers with no other order, the one registered first: an ambiguity.
-    /// @param refuse_ambiguity When true, an ambiguity fails the build.
-    /// @return KE_OK; KE_RESULT_GENERAL when the order has a cycle or a refused ambiguity, the
-    ///         systems involved named in the log; KE_RESULT_NOT_SUPPORTED from a body;
-    ///         KE_RESULT_OUT_OF_MEMORY.
-    ke_result (*build)(ke_schedule *self, bool refuse_ambiguity);
-    /// The built order, in registration order.
-    /// @param out_systems [out,array_of:capacity] Receives one entry per system.
-    /// @param out_count [out] Receives the number of systems.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for too small a capacity; KE_RESULT_NOT_SUPPORTED
-    ///         from a body; the code build fails with.
-    ke_result (*describe)(ke_schedule *self, ke_schedule_system_order *out_systems, uint32_t capacity,
-                          uint32_t *out_count);
-
-    /// Applies what bodies registered and removed, then what the caller recorded into commands,
-    /// then runs the systems whose condition holds, wave by wave, applying what each wave recorded
-    /// before the next starts.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative @p dt; KE_RESULT_NOT_SUPPORTED from
-    ///         a body; the code build fails with; the code a condition, a body or its commands
-    ///         failed with.
-    ke_result (*run)(ke_schedule *self, float dt);
+    /// Applies what bodies registered and removed and what the caller recorded into commands, then
+    /// starts a run of the systems. A system's condition is asked once per run, after everything
+    /// ordered before the system finished; a failing condition fails the run. An exclusive system
+    /// runs with no other system of the schedule. What a body records is applied before any system
+    /// ordered after it starts, and at the latest when the run ends. The run ends with the first
+    /// failure, and a system not yet started then may or may not run.
+    /// @param out_completion [out] Receives the run's completion, which carries the first failure
+    ///        of a condition, a body or its commands, and which the caller releases.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative @p dt or a null @p out_completion;
+    ///         KE_RESULT_NOT_SUPPORTED from a body or while a run is in flight; KE_RESULT_GENERAL
+    ///         when the order has a cycle, or an ambiguity the schedule was created to refuse, the
+    ///         systems involved named in the log; KE_RESULT_OUT_OF_MEMORY.
+    ke_result (*run)(ke_schedule *self, float dt, ke_completion **out_completion);
 
     /// The queue the caller records structural changes into between runs; the next run applies it
     /// first. Only the thread that calls run records into it.
@@ -142,6 +119,12 @@ typedef struct ke_schedule {
     /// registered from a body counts from the next run. Callable from a body.
     bool (*reads)(ke_schedule *self, ke_component_id component);
 } ke_schedule;
+
+/// [value] What a schedule is created with, each field applied as given.
+typedef struct ke_schedule_config {
+    /// An ambiguity between two writers fails the run instead of being logged.
+    bool refuse_ambiguity;
+} ke_schedule_config;
 
 /// [owner]
 typedef struct ke_schedule_handle {
@@ -154,7 +137,8 @@ typedef struct ke_schedule_handle {
 struct ke_schedule_ctx {
     void *handle;
 
-    /// The queue the body records structural changes into, applied when its wave ends.
+    /// The queue the body records structural changes into, applied before any system ordered after
+    /// it starts.
     ke_ecs_commands *commands;
 
     /// The resolved segments of the query at @p query_index, valid for the call.
