@@ -1,0 +1,395 @@
+#ifndef KERNEL_ENGINE_SDK_DEFAULTS_H_
+#define KERNEL_ENGINE_SDK_DEFAULTS_H_
+
+#include <kernel_engine/sdk/engine.h>
+#include <kernel_engine/audio/miniaudio/miniaudio_audio.h>
+#include <kernel_engine/audio/module/sound_module.h>
+#include <kernel_engine/configuration/configuration_create.h>
+#include <kernel_engine/configuration/toml/configuration_toml.h>
+#include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/file_system/std/file_system_std_create.h>
+#include <kernel_engine/framework/asset_resolver_create.h>
+#include <kernel_engine/framework/engine_node_types.h>
+#include <kernel_engine/framework/input_actions_create.h>
+#include <kernel_engine/framework/input_actions_evaluation_create.h>
+#include <kernel_engine/framework/node_types_create.h>
+#include <kernel_engine/framework/node_types_systems_create.h>
+#include <kernel_engine/framework/scene_hierarchy_create.h>
+#include <kernel_engine/framework/scene_files_create.h>
+#include <kernel_engine/framework/scene_tree_create.h>
+#include <kernel_engine/input/default/input_default_create.h>
+#include <kernel_engine/io/pool/io_pool_create.h>
+#include <kernel_engine/physics/body2d/body2d_module.h>
+#include <kernel_engine/physics/box2d/box2d_physics.h>
+#include <kernel_engine/render/binder_grouped/resource_binder_grouped_create.h>
+#include <kernel_engine/render/camera/camera_create.h>
+#include <kernel_engine/render/cluster/cluster_create.h>
+#include <kernel_engine/render/deferred_lighting/deferred_lighting_create.h>
+#include <kernel_engine/render/forward/forward_create.h>
+#include <kernel_engine/render/frame/frame_create.h>
+#include <kernel_engine/render/gbuffer/gbuffer_create.h>
+#include <kernel_engine/render/scene/label_resolve_create.h>
+#include <kernel_engine/render/scene/scene_resolve_create.h>
+#include <kernel_engine/render/service/render_service_create.h>
+#include <kernel_engine/render/shadow/shadow_create.h>
+#include <kernel_engine/render/tonemap/tonemap_create.h>
+#include <kernel_engine/render/ui/ui_create.h>
+#include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
+#include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
+#include <kernel_engine/runtime/runtime_create.h>
+#include <kernel_engine/schedule/schedule_create.h>
+#include <kernel_engine/scheduler/scheduler_create.h>
+#include <kernel_engine/task_pool/enki/enki_task_pool.h>
+#include <kernel_engine/job/enki/job_system_enki_create.h>
+#include <kernel_engine/async/enki/async_enki_create.h>
+#include <kernel_engine/text/stb_truetype/stb_font.h>
+#include <kernel_engine/view/space/view_space_rh_create.h>
+#include <kernel_engine/window/glfw/glfw_window.h>
+
+#include <stdio.h>
+#include <string.h>
+
+/**
+ * @file
+ * The common implementations of every part of an engine, each made by a function configured by the project file's
+ * section for its part, which a game lists in its ke_sdk_engine_desc beside its own.
+ */
+
+/**
+ * The render service, the parts every pass is built on, and the passes. The resources a pass writes start
+ * as KE_COMPONENT_INVALID, which a pass reading them meets with the neutral one when their pass is not made.
+ */
+typedef struct ke_sdk_renderer
+{
+    ke_render_resource_binder_handle   binder;
+    ke_render_service_handle           service;
+    ke_view_space_handle               view_space;
+    ke_render_camera_handle            camera;
+    ke_render_scene_resolve_handle     scene;
+    ke_render_frame_handle             frame;
+    ke_render_shadow_handle            shadow;
+    ke_render_cluster_handle           cluster;
+    ke_render_gbuffer_handle           gbuffer;
+    ke_render_deferred_lighting_handle deferred;
+    ke_render_forward_handle           forward;
+    ke_render_tonemap_handle           tonemap;
+    ke_render_ui_handle                ui;
+    ke_render_label_resolve_handle     labels;
+    ke_render_context                  context;
+    ke_render_shadow_resources         shadow_resources;
+    ke_render_cluster_resources        cluster_resources;
+    ke_render_gbuffer_resources        gbuffer_resources;
+} ke_sdk_renderer;
+
+/** An engine made of the default parts: the parts every engine has, and the renderer these parts make. */
+typedef struct ke_sdk_default_engine
+{
+    ke_sdk_engine   engine;
+    ke_sdk_renderer renderer;
+} ke_sdk_default_engine;
+
+/** The renderer of @p e, which must be the engine of a ke_sdk_default_engine. */
+static inline ke_sdk_renderer *ke_sdk_renderer_of(ke_sdk_engine *e)
+{
+    return &((ke_sdk_default_engine *)e)->renderer;
+}
+
+/** Releases the passes and the render service of @p engine, the last made first. */
+static inline void ke_sdk_renderer_release(ke_sdk_engine *engine)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(engine);
+    KE_SDK_ENGINE_RELEASE(r->labels);
+    KE_SDK_ENGINE_RELEASE(r->ui);
+    KE_SDK_ENGINE_RELEASE(r->tonemap);
+    KE_SDK_ENGINE_RELEASE(r->forward);
+    KE_SDK_ENGINE_RELEASE(r->deferred);
+    KE_SDK_ENGINE_RELEASE(r->gbuffer);
+    KE_SDK_ENGINE_RELEASE(r->cluster);
+    KE_SDK_ENGINE_RELEASE(r->shadow);
+    KE_SDK_ENGINE_RELEASE(r->frame);
+    KE_SDK_ENGINE_RELEASE(r->scene);
+    KE_SDK_ENGINE_RELEASE(r->camera);
+    KE_SDK_ENGINE_RELEASE(r->service);
+    KE_SDK_ENGINE_RELEASE(r->binder);
+    KE_SDK_ENGINE_RELEASE(r->view_space);
+}
+
+/** A schedule over the engine's world, running on its job system. */
+static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_schedule_handle *out)
+{
+    return ke_schedule_create(e->ecs.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, out);
+}
+
+/** The scheduler, its timestep from `runtime`. */
+static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const ke_scheduler_config config = {
+        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
+        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
+    };
+    return ke_scheduler_create(e->job_system.ref, e->async.ref, &config, &e->scheduler);
+}
+
+/** An enkiTS pool with one worker per hardware thread. */
+static inline ke_result ke_sdk_task_pool_enki(ke_sdk_engine *e)
+{
+    return ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &e->task_pool);
+}
+
+/** An enkiTS job system with one worker per hardware thread besides the calling one. */
+static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
+{
+    return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
+}
+
+/** An enkiTS async system, its workers and the room for submissions from other threads from `async`. */
+static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
+{
+    ke_configuration *c = e->configuration.ref;
+    const ke_async_config config = {
+        .worker_count = c ? (uint32_t)c->get_int(c, "async", "worker_count", 2) : 2u,
+        .submit_capacity = c ? (uint32_t)c->get_int(c, "async", "submit_capacity", 1024) : 1024u,
+    };
+    return ke_async_enki_create(&config, &e->async);
+}
+
+/** The operating system's files, relative to the working directory. */
+static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
+{
+    return ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &e->file_system);
+}
+
+/** Reads through the task pool. */
+static inline ke_result ke_sdk_io_pool(ke_sdk_engine *e)
+{
+    return ke_io_pool_create(e->task_pool.ref, e->file_system.ref, &e->io);
+}
+
+/** The configuration, loaded from the file Project in the project directory. */
+static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
+{
+    char project_file[KE_SDK_ENGINE_PATH_CAPACITY + 16];
+    snprintf(project_file, sizeof project_file, "%s/Project", e->project_dir);
+    ke_result made = ke_configuration_create(&e->configuration);
+    if (made == KE_OK) made = ke_configuration_toml_create(e->io.ref, &e->configuration_source);
+    if (made == KE_OK) made = e->configuration_source.ref->load(e->configuration_source.ref, e->configuration.ref, project_file);
+    return made;
+}
+
+/** The input every window event reaches. */
+static inline ke_result ke_sdk_input(ke_sdk_engine *e)
+{
+    return ke_input_create(&e->input);
+}
+
+/** A GLFW window titled and sized by `runtime.window`. */
+static inline ke_result ke_sdk_window_glfw(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const ke_window_config config = {
+        .title = c->get_string(c, "runtime.window", "title", "KernelEngine"),
+        .width = (int32_t)c->get_int(c, "runtime.window", "width", 1280),
+        .height = (int32_t)c->get_int(c, "runtime.window", "height", 720),
+        .fullscreen = c->get_bool(c, "runtime.window", "fullscreen", false),
+    };
+    return ke_window_glfw_create(e->input.ref, &config, &e->window);
+}
+
+/** A flecs world. */
+static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
+{
+    return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
+}
+
+
+
+
+/** The runtime, its timestep from `runtime`. */
+static inline ke_result ke_sdk_runtime(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const ke_runtime_config config = {
+        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
+        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
+        .max_systems_per_phase = (uint32_t)c->get_int(c, "runtime", "max_systems_per_phase", 256),
+    };
+    return ke_runtime_create(e->ecs.ref, e->task_pool.ref, &config, &e->runtime);
+}
+
+/** A WebGPU device. */
+static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
+{
+    return ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &e->gpu_device);
+}
+
+/** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
+static inline ke_result ke_sdk_render_target_webgpu_window(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const bool mailbox = strcmp(c->get_string(c, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
+    const ke_gpu_render_target_window_config config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
+    return ke_gpu_render_target_webgpu_window_create(e->gpu_device.ref, e->window.ref, &config, &e->render_target);
+}
+
+/** stb_truetype fonts. */
+static inline ke_result ke_sdk_fonts_stb(ke_sdk_engine *e)
+{
+    return ke_font_loader_stb_create(e->io.ref, &e->fonts);
+}
+
+/** Assets resolved under the project directory. */
+static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
+{
+    return ke_asset_resolver_create(NULL, e->fonts.ref, e->project_dir, e->io.ref, &e->assets);
+}
+
+
+
+/** The scene tree, and the module keeping its world transforms current. */
+static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
+{
+    ke_result made = ke_scene_tree_create(e->ecs.ref, &e->scene_tree);
+    if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, &e->hierarchy);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->hierarchy.ref);
+    return made;
+}
+
+/**
+ * The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on.
+ * It starts the renderer of the ke_sdk_default_engine @p e is the engine of, which the engine then releases.
+ */
+static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    memset(r, 0, sizeof *r);
+    e->release_extra = ke_sdk_renderer_release;
+    ke_gpu_device *gpu = e->gpu_device.ref;
+    const ke_render_service_config service_config = {
+        .shader_dir = e->shader_dir,
+        .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
+        .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
+        .clear_color = {
+            (float)c->get_double(c, "render", "clear_color.0", 0.0),
+            (float)c->get_double(c, "render", "clear_color.1", 0.0),
+            (float)c->get_double(c, "render", "clear_color.2", 0.0),
+            (float)c->get_double(c, "render", "clear_color.3", 1.0),
+        },
+    };
+    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, &(ke_render_resource_binder_grouped_config){ .shader_dir = e->shader_dir }, &r->binder);
+    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->ecs.ref, e->io.ref, r->binder.ref, &service_config, &r->service);
+    if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
+    if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);
+    if (made == KE_OK) made = ke_render_scene_resolve_create(e->runtime.ref, e->ecs.ref, r->service.ref, NULL, &r->scene);
+    if (made == KE_OK) made = ke_render_frame_create(e->runtime.ref, e->ecs.ref, r->service.ref, r->camera.ref, r->scene.ref, &r->frame);
+    if (made != KE_OK) return made;
+    r->context = (ke_render_context){
+        .runtime = e->runtime.ref, .ecs = e->ecs.ref, .service = r->service.ref, .device = gpu, .view_space = r->view_space.ref,
+        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
+    };
+    return KE_OK;
+}
+
+/** A directional shadow map 1024 texels wide over a 20-unit area. */
+static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow_resources, &r->shadow);
+}
+
+/** Point and spot lights clustered on a 16 by 9 by 24 grid, 64 to a cluster. */
+static inline ke_result ke_sdk_cluster(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster_resources, &r->cluster);
+}
+
+/** The gbuffer the opaque meshes and sprites are drawn into. */
+static inline ke_result ke_sdk_gbuffer(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_gbuffer_create(&r->context, &r->gbuffer_resources, &r->gbuffer);
+}
+
+/** The gbuffer lit, with the sky's image-based light, the shadow and the clustered lights there are. */
+static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_deferred_lighting_create(&r->context, &r->gbuffer_resources, &r->shadow_resources, &r->cluster_resources, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+}
+
+/** The transparent meshes, lit as the deferred pass lights the opaque ones. */
+static inline ke_result ke_sdk_forward(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_forward_create(&r->context, &r->shadow_resources, &r->cluster_resources, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+}
+
+/** The frame's color mapped to the screen's range. */
+static inline ke_result ke_sdk_tonemap(ke_sdk_engine *e)
+{
+    return ke_render_tonemap_create(&ke_sdk_renderer_of(e)->context, &ke_sdk_renderer_of(e)->tonemap);
+}
+
+/** The UI drawn over the frame. */
+static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
+{
+    return ke_render_ui_create(&ke_sdk_renderer_of(e)->context, &ke_sdk_renderer_of(e)->ui);
+}
+
+/** The labels' text, laid out with the project's default font, drawn by the UI. */
+static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
+{
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    return ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
+}
+
+/** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
+static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
+{
+    ke_configuration *c = ke_sdk_engine_config(e);
+    const ke_physics_2d_config config = {
+        .gravity_x = (float)c->get_double(c, "runtime.physics_2d", "gravity_x", 0.0),
+        .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
+    };
+    ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
+    if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->bodies.ref);
+    return made;
+}
+
+/** miniaudio, and the module playing the sound components, their clips under the project directory. */
+static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
+{
+    ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
+    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &(ke_sound_config){ .root = e->project_dir }, &e->sounds);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->sounds.ref);
+    return made;
+}
+
+/** The action maps of the configuration's `input` section, and the module evaluating them each tick. */
+static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
+{
+    ke_result made = ke_input_actions_create(e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
+    if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->action_evaluation.ref);
+    return made;
+}
+
+/** The node types, and the module running their behaviours. */
+static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
+{
+    ke_result made = ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
+    if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, &e->node_systems);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->node_systems.ref);
+    return made;
+}
+
+/** The scene files. */
+static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
+{
+    return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, &e->scene_files);
+}
+
+#endif

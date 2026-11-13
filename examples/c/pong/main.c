@@ -1,6 +1,6 @@
 #include "pong.h"
 
-#include <kernel_engine/sdk/engine.h>
+#include <kernel_engine/sdk/defaults.h>
 
 #include <stdio.h>
 
@@ -17,6 +17,7 @@ int main(void)
         .window = ke_sdk_window_glfw,
         .ecs = ke_sdk_ecs_flecs,
         .scheduler = ke_sdk_scheduler,
+        .schedule = ke_sdk_schedule,
         .runtime = ke_sdk_runtime,
         .gpu_device = ke_sdk_gpu_device_webgpu,
         .render_target = ke_sdk_render_target_webgpu_window,
@@ -36,15 +37,16 @@ int main(void)
         .node_types = ke_sdk_node_types,
         .scene_files = ke_sdk_scene_files,
     };
-    ke_sdk_engine engine;
-    ke_result made = ke_sdk_engine_create(&desc, "pong", &engine);
+    ke_sdk_default_engine parts;
+    ke_sdk_engine *engine = &parts.engine;
+    ke_result made = ke_sdk_engine_create(&desc, "pong", engine);
     if (made == KE_OK)
     {
-        pong_game game = { .types = engine.node_types.ref };
+        pong_game game = { .types = engine->node_types.ref };
         made = pong_register(&game);
     }
-    if (made == KE_OK) made = ke_sdk_engine_run(&engine, NULL);
-    ke_sdk_engine_destroy(&engine);
+    if (made == KE_OK) made = ke_sdk_engine_run(engine, NULL);
+    ke_sdk_engine_destroy(engine);
     if (made != KE_OK)
     {
         fprintf(stderr, "pong failed with result code 0x%08x\n", (unsigned)made);
