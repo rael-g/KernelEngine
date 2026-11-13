@@ -85,19 +85,22 @@ fn destroy(self: [*c]abi_render_gpu.c.ke_gpu_render_target) callconv(.c) void {
 }
 
 /// Builds the color view of the texture, then allocates the target, so a failed allocation has
-/// only the view to undo. Fails as an invalid argument when the device or the params are missing
+/// only the view to undo. Fails as an invalid argument when the device is missing
 /// or the texture, the format or either size is unset, with the device's code when it yields no
 /// color view, and as out of memory when the allocation fails. A failure leaves the handle zeroed,
 /// with no view or target left allocated.
 export fn ke_gpu_render_target_texture_create(
     device: ?*abi_render_gpu.c.ke_gpu_device,
-    params: ?*const abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params,
+    texture: abi_render_gpu.c.ke_gpu_texture,
+    width: u32,
+    height: u32,
+    texture_format: abi_render_gpu.c.ke_gpu_texture_format,
     out_target: [*c]abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const dev = device orelse return R.code(error.InvalidArgument);
-    const p = params orelse return R.code(error.InvalidArgument);
+    const p: Target = .{ .texture = texture, .width = width, .height = height, .format = texture_format };
     if (p.texture == abi_render_gpu.c.KE_GPU_INVALID_HANDLE or p.format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID or p.width == 0 or p.height == 0)
         return R.code(error.InvalidArgument);
     var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
@@ -139,7 +142,18 @@ fn substituteDevice(dev: *DeviceSub) !void {
     _ = dev.when(.create_texture_view).writesFresh(3);
 }
 
-fn validParams() abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params {
+const Target = struct {
+    texture: abi_render_gpu.c.ke_gpu_texture,
+    width: u32,
+    height: u32,
+    format: abi_render_gpu.c.ke_gpu_texture_format,
+};
+
+fn createdOn(device: ?*abi_render_gpu.c.ke_gpu_device, p: *const Target, out: *abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result {
+    return ke_gpu_render_target_texture_create(device, p.texture, p.width, p.height, p.format, out);
+}
+
+fn validParams() Target {
     return .{ .texture = 7, .width = 64, .height = 32, .format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM };
 }
 
@@ -149,7 +163,7 @@ test "a texture target hands out one view per frame, reports the texture's size 
     defer dev.deinit();
     const p = validParams();
     var h: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
-    try R.check(ke_gpu_render_target_texture_create(dev.api(), &p, &h));
+    try R.check(createdOn(dev.api(), &p, &h));
     const t = h.ref orelse return error.TestUnexpectedResult;
 
     var w: u32 = 0;
@@ -180,7 +194,7 @@ test "a texture target refuses a second acquire and a present without a frame" {
     defer dev.deinit();
     const p = validParams();
     var h: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
-    try R.check(ke_gpu_render_target_texture_create(dev.api(), &p, &h));
+    try R.check(createdOn(dev.api(), &p, &h));
     const t = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(t);
 
@@ -192,23 +206,22 @@ test "a texture target refuses a second acquire and a present without a frame" {
     try testing.expectEqual(@as(abi_asset_resolver.c.ke_gpu_texture_view, abi_render_gpu.c.KE_GPU_INVALID_HANDLE), view);
 }
 
-test "a texture target without a device, params, texture, format or size is refused and leaves nothing behind" {
+test "a texture target without a device, texture, format or size is refused and leaves nothing behind" {
     var dev: DeviceSub = undefined;
     try substituteDevice(&dev);
     defer dev.deinit();
     const valid = validParams();
-    var cases = [_]abi_gpu_render_target_texture_factory.c.ke_gpu_render_target_texture_params{ valid, valid, valid, valid };
+    var cases = [_]Target{ valid, valid, valid, valid };
     cases[0].texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     cases[1].format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID;
     cases[2].width = 0;
     cases[3].height = 0;
     var h: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
     for (&cases) |*p| {
-        try testing.expectError(error.InvalidArgument, R.check(ke_gpu_render_target_texture_create(dev.api(), p, &h)));
+        try testing.expectError(error.InvalidArgument, R.check(createdOn(dev.api(), p, &h)));
         try testing.expect(h.ref == null);
     }
-    try testing.expectError(error.InvalidArgument, R.check(ke_gpu_render_target_texture_create(null, &valid, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_gpu_render_target_texture_create(dev.api(), null, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(createdOn(null, &valid, &h)));
     try dev.received(.destroy_texture_view).sameAs(dev.received(.create_texture_view));
     try heap.expectNoLeaks();
 }

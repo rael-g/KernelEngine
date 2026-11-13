@@ -7,6 +7,7 @@ const abi_physics_components = @import("physics_components");
 const abi_render_components = @import("render_components");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_spatial = @import("spatial");
 const abi_ui_components = @import("ui_components");
 

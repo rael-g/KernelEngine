@@ -1,0 +1,12 @@
+.{
+    .name = .abi_scheduler,
+    .version = "0.1.0",
+    .fingerprint = 0xdbcb3a004c056d68,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_result = .{ .path = "../result" },
+        .abi_schedule = .{ .path = "../schedule" },
+    },
+    .paths = .{"."},
+}

@@ -12,7 +12,7 @@ const abi_framework = @import("abi_framework");
 const abi_framework_factory = @import("abi_framework_factory");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const heap = @import("heap");
 
@@ -31,7 +31,7 @@ const name_max = @typeInfo(@FieldType(abi_framework_components.c.ke_name_compone
 /// is asked. The hierarchy component is an intrusive doubly linked list (parent, first and last
 /// child, previous and next sibling), and a node's children are the chain from its first child.
 /// `root` is the entity the invalid entity stands for as a parent. The ecs is borrowed;
-/// `hierarchy` is owned and stays null unless the tree was created with a runtime.
+/// `hierarchy` is owned and stays null unless the tree was created with a scheduler.
 /// `hierarchy_generation` moves with every link and unlink of a node.
 const State = struct {
     api: abi_scene_tree.c.ke_scene_tree,
@@ -531,24 +531,30 @@ fn vtDestroy(self_in: ?*abi_scene_tree.c.ke_scene_tree) callconv(.c) void {
 
 /// Factory. On success the handle's ref is the vtable inside a new State: the five components are
 /// registered on the ecs when it does not know them, and a root entity named "Root" carries
-/// hierarchy and name. A runtime additionally creates the scene hierarchy the tree owns. A null
-/// ecs or out-parameter fails as an invalid argument, a failed allocation as out of memory, a
-/// refused component or hierarchy with the code of the ecs or the runtime, and a failed root entity
+/// hierarchy and name. A scheduler additionally creates the scene hierarchy the tree owns. A null
+/// ecs or out-parameter, or a scheduler without a config, fails as an invalid argument, a failed
+/// allocation as out of memory, a refused component or hierarchy with the code of the ecs or the
+/// scheduler, and a failed root entity
 /// or root component as general. Each leaves the handle zeroed and releases whatever this call
 /// created, so no entity or allocation is left.
 export fn ke_scene_tree_create(
     ecs_in: ?*abi_ecs.c.ke_ecs,
-    runtime: ?*abi_runtime.c.ke_runtime,
+    scheduler: ?*abi_schedule.c.ke_schedule,
+    config: ?*const abi_scene_tree.c.ke_scene_tree_config,
     out_tree: ?*abi_scene_tree.c.ke_scene_tree_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_tree orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_scene_tree.c.ke_scene_tree_handle);
     const ecs = ecs_in orelse return R.code(error.InvalidArgument);
-    out.* = create(ecs, runtime) catch |err| return R.code(err);
+    if (scheduler != null and config == null) {
+        log.warn("scene tree: a scheduler is given without the config naming its set", .{});
+        return R.code(error.InvalidArgument);
+    }
+    out.* = create(ecs, scheduler, config) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn create(ecs: *abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) R.Error!abi_scene_tree.c.ke_scene_tree_handle {
+fn create(ecs: *abi_ecs.c.ke_ecs, scheduler: ?*abi_schedule.c.ke_schedule, config: ?*const abi_scene_tree.c.ke_scene_tree_config) R.Error!abi_scene_tree.c.ke_scene_tree_handle {
     const s = try heap.gpa.create(State);
     errdefer heap.gpa.destroy(s);
     s.* = .{
@@ -599,7 +605,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, runtime: ?*abi_runtime.c.ke_runtime) R.Error!a
     s.api.propagate_transforms = vtPropagateTransforms;
     s.api.hierarchy_generation = vtHierarchyGeneration;
 
-    if (runtime) |rt| try R.check(abi_framework_factory.c.ke_scene_hierarchy_create(rt, ecs, &s.hierarchy));
+    if (scheduler) |sched| try R.check(abi_framework_factory.c.ke_scene_hierarchy_create(sched, ecs, &.{ .set = config.?.set }, &s.hierarchy));
 
     return .{ .ref = &s.api, .destroy = vtDestroy };
 }
@@ -781,7 +787,7 @@ pub const Fixture = struct {
         self.ecs.vtable.component_get = fakeComponentGet;
         self.ecs.vtable.component_size = fakeComponentSize;
 
-        try testing.expectEqual(R.ok, ke_scene_tree_create(&self.ecs.vtable, null, &self.handle));
+        try testing.expectEqual(R.ok, ke_scene_tree_create(&self.ecs.vtable, null, null, &self.handle));
         try testing.expect(self.handle.ref != null);
     }
 
@@ -1328,9 +1334,9 @@ test "a grandchild accumulates every translation on its chain" {
 
 test "a tree without an ecs is refused as an invalid argument and leaves the handle zeroed" {
     var h: abi_scene_tree.c.ke_scene_tree_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, null, &h));
     try testing.expect(h.ref == null);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, null));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(null, null, null, null));
 }
 
 test "a tree registers each transform with the field table its header generates" {
@@ -1353,7 +1359,7 @@ test "a tree whose component the ecs refuses is not created and fails with the e
 
     f.ecs.refused = abi_framework_components.c.KE_COMPONENT_NAME_NAME;
     var h: abi_scene_tree.c.ke_scene_tree_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(&f.ecs.vtable, null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scene_tree_create(&f.ecs.vtable, null, null, &h));
     try testing.expect(h.ref == null);
 }
 

@@ -11,6 +11,12 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
+pub const EcsAccess = enum(c.ke_ecs_access) {
+    read = 1,
+    write = 2,
+    _,
+};
+
 pub const Ecs = struct {
     ptr: *c.ke_ecs,
     owner: ?c.ke_ecs_handle = null,
@@ -86,10 +92,10 @@ pub const Ecs = struct {
                 }
             }.call,
             .query_register = &struct {
-                fn call(self: ?*c.ke_ecs, a0: ?[*]const c.ke_component_id, a1: usize, a2: ?*c.ke_query_id) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_ecs, a0: ?*const c.ke_ecs_query_desc, a1: ?*c.ke_query_id) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.queryRegister(state, if (a0) |items| items[0..a1] else &.{}) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.queryRegister(state, a0) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -112,6 +118,34 @@ pub const Ecs = struct {
                 fn call(self: ?*c.ke_ecs, a0: c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     T.entityMaterialize(state, a0) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .entity_mark_changed = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_entity, a1: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.entityMarkChanged(state, a0, a1) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .singleton_add = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id, a1: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.singletonAdd(state, a0) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .singleton_get = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id) callconv(.c) ?*anyopaque {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*anyopaque)));
+                    return T.singletonGet(state, a0);
+                }
+            }.call,
+            .singleton_remove = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.singletonRemove(state, a0) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -179,10 +213,11 @@ pub const Ecs = struct {
         try checkResult(self.ptr.component_field_write.?(self.ptr, component, field, value));
     }
 
-    /// Registers a query over a component tuple (entities matching ALL cids).
-    pub fn queryRegister(self: Ecs, cids: []const c.ke_component_id) Error!c.ke_query_id {
+    /// Registers a query. A description equal to one registered before answers the id it got then,
+    /// unless it tracks changes.
+    pub fn queryRegister(self: Ecs, desc: ?*const c.ke_ecs_query_desc) Error!c.ke_query_id {
         var written: c.ke_query_id = undefined;
-        try checkResult(self.ptr.query_register.?(self.ptr, cids.ptr, @intCast(cids.len), &written));
+        try checkResult(self.ptr.query_register.?(self.ptr, desc, &written));
         return written;
     }
 
@@ -207,6 +242,32 @@ pub const Ecs = struct {
     /// reserved.
     pub fn entityMaterialize(self: Ecs, entity: c.ke_entity) Error!void {
         try checkResult(self.ptr.entity_materialize.?(self.ptr, entity));
+    }
+
+    /// Marks an entity's component changed, for a writer that reached it by component_get.
+    pub fn entityMarkChanged(self: Ecs, entity: c.ke_entity, component: c.ke_component_id) Error!void {
+        try checkResult(self.ptr.entity_mark_changed.?(self.ptr, entity, component));
+    }
+
+    /// Gives the world one value of a component, matched by no query: its storage is zeroed, then
+    /// seeded with the defaults of the component's field table, the first time; a singleton that
+    /// exists keeps its storage. Structural; single-threaded.
+    pub fn singletonAdd(self: Ecs, component: c.ke_component_id) Error!?*anyopaque {
+        var written: ?*anyopaque = undefined;
+        try checkResult(self.ptr.singleton_add.?(self.ptr, component, &written));
+        return written;
+    }
+
+    /// Returns the world's value of a component, or NULL if it has none. The pointer is valid until
+    /// the next structural change on this ecs.
+    pub fn singletonGet(self: Ecs, component: c.ke_component_id) ?*anyopaque {
+        return self.ptr.singleton_get.?(self.ptr, component);
+    }
+
+    /// Takes a component's value from the world; a component without one is left alone. Structural;
+    /// single-threaded.
+    pub fn singletonRemove(self: Ecs, component: c.ke_component_id) Error!void {
+        try checkResult(self.ptr.singleton_remove.?(self.ptr, component));
     }
 
 };
@@ -294,5 +355,8 @@ pub const EcsCommands = struct {
 pub const ComponentField = c.ke_component_field;
 pub const ComponentParams = c.ke_component_params;
 pub const ComponentMeta = c.ke_component_meta;
+pub const EcsQueryTerm = c.ke_ecs_query_term;
+pub const EcsQueryDesc = c.ke_ecs_query_desc;
 pub const EcsSegment = c.ke_ecs_segment;
+pub const EcsConfig = c.ke_ecs_config;
 pub const EcsHandle = c.ke_ecs_handle;

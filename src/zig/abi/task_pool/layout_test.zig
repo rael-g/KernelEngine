@@ -23,17 +23,25 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_task_pool_config, translated("ke_task_pool_config"));
     try expectSameLayout(abi.c.ke_task_pool, translated("ke_task_pool"));
     try expectSameLayout(abi.c.ke_task_pool_handle, translated("ke_task_pool_handle"));
     if (@hasDecl(c, "ke_task_func")) try expectSameLayout(abi.c.ke_task_func, c.ke_task_func);
     if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
-extern const layout_values: [11]c_ulonglong;
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD), @as(i128, abi.c.KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD));
+}
+
+extern const layout_values: [13]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_task_pool_config),
+        @offsetOf(abi.c.ke_task_pool_config, "worker_count"),
         @sizeOf(abi.c.ke_task_pool),
         @offsetOf(abi.c.ke_task_pool, "handle"),
         @offsetOf(abi.c.ke_task_pool, "dispatch"),

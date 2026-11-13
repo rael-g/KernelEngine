@@ -9,17 +9,16 @@ namespace KernelEngine.Ecs.Flecs;
 public sealed unsafe partial class FlecsEcsRegistry : KernelEngine.Ecs.EcsRegistry
 {
     /// <summary>Creates a ke_ecs vtable backed by an internally-owned world. Also installs process-wide log and abort handlers: a check flecs fails makes the slot that called it return KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the stack before flecs ends the process.</summary>
-    /// <param name="worldIdBase">First id the world's own allocator may issue. Ids below it form the pool entity_reserve draws from, so this doubles as that pool's capacity — the world's own side is unbounded. Raise it for a world whose systems spawn heavily; entity_reserve fails as out of memory once it is spent.</param>
-    public FlecsEcsRegistry(uint worldIdBase) : base(Create(worldIdBase))
+    /// <param name="config">Required; every field is read as given.</param>
+    public FlecsEcsRegistry(in KernelEngine.Ecs.EcsConfig config) : base(Create(config))
     {
     }
 
-    private static KernelEngine.Ecs.Native.ke_ecs_handle Create(uint worldIdBase)
+    private static KernelEngine.Ecs.Native.ke_ecs_handle Create(in KernelEngine.Ecs.EcsConfig config)
     {
-        KernelEngine.Ecs.Flecs.Native.EcsFlecsConfig config = default;
-        config.WorldIdBase = worldIdBase;
+        var nativeConfig = config;
         KernelEngine.Ecs.Native.ke_ecs_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&config, &handle), "ke_ecs_flecs_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Ecs.Flecs.Native.NativeMethods.ecs_flecs_create(&nativeConfig, &handle), "ke_ecs_flecs_create");
         return handle;
     }
 }

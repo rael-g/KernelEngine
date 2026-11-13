@@ -1,0 +1,17 @@
+.{
+    .name = .ke_scheduler,
+    .version = "0.1.0",
+    .fingerprint = 0xebbc11606b299d4f,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_result = .{ .path = "../abi/result" },
+        .abi_scheduler = .{ .path = "../abi/scheduler" },
+        .abi_schedule = .{ .path = "../abi/schedule" },
+        .abi_scheduler_factory = .{ .path = "abi" },
+        .ke_common = .{ .path = "../common" },
+        .ke_build = .{ .path = "../build" },
+        .ke_logger = .{ .path = "../logger" },
+        .ke_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

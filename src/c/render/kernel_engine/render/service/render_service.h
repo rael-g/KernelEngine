@@ -376,6 +376,20 @@ typedef struct ke_render_service_handle
     void (*destroy)(ke_render_service *self);
 } ke_render_service_handle;
 
+/// [borrowed] The values a render service is created with, whatever its implementation, each applied as given.
+typedef struct ke_render_service_config
+{
+    /// [utf8] Directory the shaders are loaded from; copied. Required.
+    const char           *shader_dir;
+    /// Format of the frame's color up to
+    /// KE_RENDER_STAGE_HDR_POST.
+    ke_gpu_texture_format color_format;
+    /// Format of the frame's depth.
+    ke_gpu_texture_format depth_format;
+    /// Color the frame is cleared to.
+    ke_vec4               clear_color;
+} ke_render_service_config;
+
 #ifdef __cplusplus
 }
 #endif

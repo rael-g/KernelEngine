@@ -23,10 +23,12 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_scene_hierarchy_config, translated("ke_scene_hierarchy_config"));
     try expectSameLayout(abi.c.ke_node_component, translated("ke_node_component"));
     try expectSameLayout(abi.c.ke_node_with, translated("ke_node_with"));
     try expectSameLayout(abi.c.ke_action_ref, translated("ke_action_ref"));
     try expectSameLayout(abi.c.ke_node_type_desc, translated("ke_node_type_desc"));
+    try expectSameLayout(abi.c.ke_node_types_config, translated("ke_node_types_config"));
     try expectSameLayout(abi.c.ke_scene_slot_component, translated("ke_scene_slot_component"));
     try expectSameLayout(abi.c.ke_scene_hierarchy_handle, translated("ke_scene_hierarchy_handle"));
     try expectSameLayout(abi.c.ke_node_ctx, translated("ke_node_ctx"));
@@ -39,6 +41,10 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_node_behaviour_fn")) try expectSameLayout(abi.c.ke_node_behaviour_fn, c.ke_node_behaviour_fn);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
+    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
+    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
+    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
+    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
 test "every constant is the header's value" {
@@ -48,11 +54,13 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SCENE_SLOT, abi.c.KE_COMPONENT_NAME_SCENE_SLOT);
 }
 
-extern const layout_values: [83]c_ulonglong;
+extern const layout_values: [90]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_scene_hierarchy_config),
+        @offsetOf(abi.c.ke_scene_hierarchy_config, "set"),
         @sizeOf(abi.c.ke_node_component),
         @offsetOf(abi.c.ke_node_component, "component"),
         @offsetOf(abi.c.ke_node_component, "data"),
@@ -83,6 +91,11 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_node_type_desc, "event_count"),
         @offsetOf(abi.c.ke_node_type_desc, "on"),
         @offsetOf(abi.c.ke_node_type_desc, "user_data"),
+        @sizeOf(abi.c.ke_node_types_config),
+        @offsetOf(abi.c.ke_node_types_config, "pre_update"),
+        @offsetOf(abi.c.ke_node_types_config, "update"),
+        @offsetOf(abi.c.ke_node_types_config, "fixed_update"),
+        @offsetOf(abi.c.ke_node_types_config, "post_update"),
         @sizeOf(abi.c.ke_scene_slot_component),
         @offsetOf(abi.c.ke_scene_slot_component, "path"),
         @offsetOf(abi.c.ke_scene_slot_component, "loaded"),

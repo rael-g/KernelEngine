@@ -27,23 +27,18 @@ extern "C"
 {
 #endif
 
-    /// [bag] What the scene resolve needs to register the components and upload what they name.
-    typedef struct ke_render_scene_resolve_params
-    {
-        ke_runtime        *runtime;  ///< Registers the resolve systems; borrowed, must outlive it.
-        ke_ecs            *ecs;      ///< Registers the components; borrowed.
-        ke_render_service *service;  ///< Uploads the meshes, materials and textures; borrowed, must outlive it.
-        /// Reads the image a sprite names; optional, borrowed. Without it a sprite draws untextured.
-        ke_asset_resolver *resolver; ///< [optional]
-    } ke_render_scene_resolve_params;
-
     /// Registers the scene's render components and the update-phase systems
     /// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
     /// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
     /// failure, and the component types registered before it stay registered.
+    /// @param runtime  Registers the resolve systems; borrowed, must outlive it.
+    /// @param ecs      Registers the components; borrowed.
+    /// @param service  Uploads the meshes, materials and textures; borrowed, must outlive it.
+    /// @param resolver [optional] Reads the image a sprite names; borrowed. Without it a sprite draws untextured.
     /// @param out_resolve [out] Receives the handle; left zeroed on failure.
     KE_RENDER_SCENE_API ke_result ke_render_scene_resolve_create(
-        const ke_render_scene_resolve_params *params, ke_render_scene_resolve_handle *out_resolve);
+        ke_runtime *runtime, ke_ecs *ecs, ke_render_service *service, ke_asset_resolver *resolver,
+        ke_render_scene_resolve_handle *out_resolve);
 
 #ifdef __cplusplus
 }

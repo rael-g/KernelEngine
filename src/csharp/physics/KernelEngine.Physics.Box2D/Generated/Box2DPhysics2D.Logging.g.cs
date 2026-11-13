@@ -9,15 +9,14 @@ public sealed unsafe partial class Box2DPhysics2D
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="gravityX">Horizontal gravity, in metres per second squared.</param>
-    /// <param name="gravityY">Vertical gravity, in metres per second squared.</param>
-    public Box2DPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, float gravityX, float gravityY) : base(CreateLogged(loggerFactory, gravityX, gravityY))
+    /// <param name="config">The world's values; Required; every field is read as given.</param>
+    public Box2DPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Physics.Physics2dConfig config) : base(CreateLogged(loggerFactory, config))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, float gravityX, float gravityY)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Physics.Physics2dConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(gravityX, gravityY);
+        return Create(config);
     }
 }

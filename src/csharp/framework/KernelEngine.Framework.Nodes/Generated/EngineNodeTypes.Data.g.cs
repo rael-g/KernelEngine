@@ -288,6 +288,7 @@ public static class EngineNodeTypes
         self.RegisterType(name: "directional_light", with: DirectionalLightNodeWith);
         self.RegisterType(name: "label", with: LabelNodeWith);
         self.RegisterType(name: "mesh", with: MeshNodeWith);
+        self.RegisterType(name: "node");
         self.RegisterType(name: "point_light", with: PointLightNodeWith);
         self.RegisterType(name: "skybox", with: SkyboxNodeWith);
         self.RegisterType(name: "sound", with: SoundNodeWith);

@@ -1,5 +1,5 @@
 //! Keeps the world matrix of every entity equal to its local matrix composed with its parent's
-//! world matrix, through one runtime system registered by the scene hierarchy factory.
+//! world matrix, through one scheduler system registered by the scene hierarchy factory.
 
 const abi_framework_components = @import("abi_framework_components");
 const abi_spatial_contract = @import("abi_spatial_contract");
@@ -10,7 +10,7 @@ const abi_ecs = @import("abi_ecs");
 const abi_framework = @import("abi_framework");
 const abi_math = @import("abi_math");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.framework);
@@ -18,12 +18,13 @@ const heap = @import("heap");
 const mat4 = @import("mat4.zig");
 
 /// Created by `ke_scene_hierarchy_create`, owned by the handle it returns, and freed by
-/// `vtDestroy`, which unregisters `propagateSystem` first. The runtime keeps its address as the
+/// `vtDestroy`, which unregisters `propagateSystem` first. The scheduler keeps its address as the
 /// user data of that system, so the record must not be moved or copied: `queries` and `access` are
 /// pointed at from the registration, and the query's terms point into `queries_terms`.
 const State = struct {
-    runtime: *abi_runtime.c.ke_runtime = undefined,
-    system: abi_runtime.c.ke_system_id = 0,
+    scheduler: *abi_schedule.c.ke_schedule = undefined,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
+    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     ecs: *abi_ecs.c.ke_ecs,
     transform_cid: abi_asset_resolver.c.ke_component_id,
     transform2d_cid: abi_asset_resolver.c.ke_component_id,
@@ -33,10 +34,10 @@ const State = struct {
     order: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
     stack: std.ArrayList(abi_asset_resolver.c.ke_entity) = .empty,
 
-    queries_terms: [1]abi_runtime.c.ke_component_access = undefined,
+    queries_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
 
-    queries: [1]abi_runtime.c.ke_query_decl = undefined,
-    access: [4]abi_runtime.c.ke_component_access = undefined,
+    queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
+    access: [4]abi_ecs.c.ke_ecs_query_term = undefined,
 };
 
 fn hierarchyOf(s: *State, e: abi_asset_resolver.c.ke_entity) ?*const abi_framework_components.c.ke_hierarchy_component {
@@ -79,7 +80,7 @@ fn pushSubtree(s: *State, root: abi_asset_resolver.c.ke_entity) void {
 
 /// Runs at the start of every tick, before any world matrix is written, so `order` reflects the
 /// parent links of that tick.
-fn flatten(s: *State, ctx: ?*abi_runtime.c.ke_system_ctx) void {
+fn flatten(s: *State, ctx: ?*abi_schedule.c.ke_schedule_ctx) void {
     s.order.clearRetainingCapacity();
 
     var segc: usize = 0;
@@ -101,7 +102,7 @@ fn flatten(s: *State, ctx: ?*abi_runtime.c.ke_system_ctx) void {
 /// a world transform is passed over; one without a parent, or whose parent has no world
 /// transform, composes with the identity. Always succeeds and reports nothing. Without a `State` it
 /// does nothing.
-fn propagateSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn propagateSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user orelse return R.ok));
     flatten(s, ctx);
 
@@ -133,31 +134,33 @@ fn propagateSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32
 fn vtDestroy(self_in: ?*abi_framework.c.ke_scene_hierarchy) callconv(.c) void {
     const self = self_in orelse return;
     const s: *State = @ptrCast(@alignCast(self));
-    _ = s.runtime.unregister_system.?(s.runtime, s.system);
+    _ = s.scheduler.unregister_system.?(s.scheduler, s.system);
     s.order.deinit(heap.gpa);
     s.stack.deinit(heap.gpa);
     heap.gpa.destroy(s);
 }
 
-/// Factory. Registers the system `scene.propagate_transforms` on the runtime, in the post-update
-/// phase, and writes a handle that owns the `State`. A null argument fails as an invalid argument;
+/// Factory. Registers the system `scene.propagate_transforms` on the scheduler, in the config's
+/// set, and writes a handle that owns the `State`. A null argument fails as an invalid argument;
 /// a transform, 2D transform, world transform or hierarchy component not registered on the ecs
 /// fails as not found; a failed allocation fails as out of memory; a refused system registration
-/// fails with the runtime's code. Each leaves the handle zeroed.
+/// fails with the scheduler's code. Each leaves the handle zeroed.
 export fn ke_scene_hierarchy_create(
-    runtime_in: ?*abi_runtime.c.ke_runtime,
+    scheduler_in: ?*abi_schedule.c.ke_schedule,
     ecs_in: ?*abi_ecs.c.ke_ecs,
+    config: ?*const abi_framework.c.ke_scene_hierarchy_config,
     out_hierarchy: ?*abi_framework.c.ke_scene_hierarchy_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_hierarchy orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_framework.c.ke_scene_hierarchy_handle);
-    const runtime = runtime_in orelse return R.code(error.InvalidArgument);
+    const scheduler = scheduler_in orelse return R.code(error.InvalidArgument);
     const ecs = ecs_in orelse return R.code(error.InvalidArgument);
-    out.* = create(runtime, ecs) catch |err| return R.code(err);
+    const given = config orelse return R.code(error.InvalidArgument);
+    out.* = create(scheduler, ecs, given.set) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs) R.Error!abi_framework.c.ke_scene_hierarchy_handle {
+fn create(scheduler: *abi_schedule.c.ke_schedule, ecs: *abi_ecs.c.ke_ecs, set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_framework.c.ke_scene_hierarchy_handle {
     var transform_meta: abi_ecs.c.ke_component_meta = undefined;
     var transform2d_meta: abi_ecs.c.ke_component_meta = undefined;
     var world_transform_meta: abi_ecs.c.ke_component_meta = undefined;
@@ -179,30 +182,33 @@ fn create(runtime: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs) R.Error!ab
         .transform2d_cid = transform2d_meta.cid,
         .world_transform_cid = world_transform_meta.cid,
         .hierarchy_cid = hierarchy_meta.cid,
+        .set = .{set},
     };
-    s.queries_terms = .{ .{ .cid = s.hierarchy_cid, .access = abi_runtime.c.KE_ACCESS_READ } };
+    s.queries_terms = .{ .{ .component = s.hierarchy_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ } };
     s.queries = .{ .{ .terms = s.queries_terms[0..].ptr, .term_count = 1 } };
 
     s.access = .{
-        .{ .cid = s.hierarchy_cid, .access = abi_runtime.c.KE_ACCESS_READ },
-        .{ .cid = s.transform_cid, .access = abi_runtime.c.KE_ACCESS_READ },
-        .{ .cid = s.transform2d_cid, .access = abi_runtime.c.KE_ACCESS_READ },
-        .{ .cid = s.world_transform_cid, .access = abi_runtime.c.KE_ACCESS_WRITE },
+        .{ .component = s.hierarchy_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.transform_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.transform2d_cid, .access = abi_ecs.c.KE_ECS_ACCESS_READ },
+        .{ .component = s.world_transform_cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE },
     };
 
-    var propagate = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    propagate.name = "scene.propagate_transforms";
-    propagate.phase = abi_runtime.c.KE_PHASE_POST_UPDATE;
-    propagate.queries = &s.queries;
-    propagate.query_count = s.queries.len;
-    propagate.access_list = &s.access;
-    propagate.access_count = s.access.len;
-    propagate.user_data = s;
-    propagate.execute = propagateSystem;
+    const propagate: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "scene.propagate_transforms",
+        .user_data = s,
+        .execute = propagateSystem,
+        .queries = &s.queries,
+        .query_count = s.queries.len,
+        .access = &s.access,
+        .access_count = s.access.len,
+        .sets = &s.set,
+        .set_count = 1,
+    };
 
-    var system_id: abi_runtime.c.ke_system_id = 0;
-    try R.check(runtime.register_system.?(runtime, &propagate, &system_id));
-    s.runtime = runtime;
+    var system_id: abi_schedule.c.ke_schedule_system_id = 0;
+    try R.check(scheduler.register_system.?(scheduler, &propagate, &system_id));
+    s.scheduler = scheduler;
     s.system = system_id;
 
     return .{ .ref = @ptrCast(s), .destroy = vtDestroy };
@@ -223,14 +229,14 @@ test "destroying the scene hierarchy unregisters its system" {
     try ecs.init();
     defer ecs.deinit();
     _ = ecs.when(.component_lookup).does(lookupFound);
-    var rt: zsub.For(abi_runtime.c.ke_runtime) = undefined;
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
     _ = rt.when(.register_system).writesFresh(2);
     var h: abi_framework.c.ke_scene_hierarchy_handle = undefined;
-    try R.check(ke_scene_hierarchy_create(rt.api(), ecs.api(), &h));
+    try R.check(ke_scene_hierarchy_create(rt.api(), ecs.api(), &.{ .set = 0 }, &h));
     h.destroy.?(h.ref);
     try rt.received(.register_system).times(1);
-    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 0))).never();
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));
 }

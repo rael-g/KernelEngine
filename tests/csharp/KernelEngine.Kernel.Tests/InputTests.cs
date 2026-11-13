@@ -9,21 +9,21 @@ public class InputTests
     [Fact]
     public void Input_CanBeCreated()
     {
-        using var input = new Input();
+        using var input = new DefaultInput();
         Assert.NotNull(input);
     }
 
     [Fact]
     public void IsKeyDown_ReturnsFalse_ByDefault()
     {
-        using var input = new Input();
+        using var input = new DefaultInput();
         Assert.False(input.IsKeyDown(Key.A));
     }
 
     [Fact]
     public void CaptureSnapshot_ReturnsValidReader()
     {
-        using var input = new Input();
+        using var input = new DefaultInput();
         var reader = input.CaptureSnapshot();
         Assert.NotNull(reader);
         Assert.False(reader.IsKeyDown(Key.A));
@@ -32,7 +32,7 @@ public class InputTests
     [Fact]
     public void InputReaderExtensions_WorkCorrectly()
     {
-        using var input = new Input();
+        using var input = new DefaultInput();
 
         var reader = input.CaptureSnapshot();
         Assert.False(reader.IsKeyDown(Key.W));

@@ -5,7 +5,8 @@ using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Io.Pool;
-using KernelEngine.Runtime;
+using KernelEngine.Schedule;
+using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 
 using Xunit;
@@ -25,31 +26,90 @@ partial class Probe : Node
 
 public class ReadyingTheNodesASlotOpens
 {
+    sealed class Loop : IDisposable
+    {
+        public readonly DefaultSchedule First;
+        public readonly DefaultSchedule Fixed;
+        public readonly DefaultSchedule Main;
+        public readonly DefaultScheduler Scheduler;
+        public readonly NodeTypesConfig Sets;
+
+        public Loop(FlecsEcsRegistry ecs, EnkiTaskPool pool)
+        {
+            First = new DefaultSchedule(null, ecs, pool);
+            Fixed = new DefaultSchedule(null, ecs, pool);
+            Main = new DefaultSchedule(null, ecs, pool);
+            Scheduler = new DefaultScheduler(null, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+            Scheduler.AddSchedule(First, SchedulerCadence.EveryTick);
+            Scheduler.AddSchedule(Fixed, SchedulerCadence.Fixed);
+            Scheduler.AddSchedule(Main, SchedulerCadence.EveryTick);
+            var update = Main.RegisterSet("update", []);
+            Sets = new NodeTypesConfig { PreUpdate = First.RegisterSet("pre_update", []), FixedUpdate = Fixed.RegisterSet("fixed_update", []), Update = update, PostUpdate = Main.RegisterSet("post_update", [update]) };
+        }
+
+        public void Dispose()
+        {
+            Scheduler.Dispose();
+            Main.Dispose();
+            Fixed.Dispose();
+            First.Dispose();
+        }
+    }
+
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var pool = new EnkiTaskPool(null, uint.MaxValue);
-        using var files = new StdFileSystem(null, ".");
+        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
         using var io = new PoolIo(null, pool, files);
         using var config = new DefaultConfiguration(null);
-        using var input = new Input.Input();
-        using var ecs = new FlecsEcsRegistry(null, 1048576);
-        using var runtime = new DefaultRuntime(null, ecs, pool, 1.0f / 60.0f, 0.25f, 256);
+        using var input = new Input.DefaultInput();
+        using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+        using var loop = new Loop(ecs, pool);
+        var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
-        using var tree = new DefaultSceneTree(null, ecs, runtime);
-        using var actions = new DefaultInputActions(null, runtime, input, config, "input");
-        using var types = new DefaultNodeTypes(null, runtime, ecs, tree, actions);
+        using var tree = new DefaultSceneTree(null, ecs, null, new());
+        using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
+        using var types = new DefaultNodeTypes(null, scheduler, loop.First, loop.Fixed, loop.Main, ecs, tree, actions, loop.Sets);
         using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());
         Probe.Readied.Clear();
 
         var slot = new SceneSlotComponent { Path = "res://scenes/Opened.scene.toml" };
-        types.Spawn(runtime.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
-        for (var i = 0; i < 3; i++) runtime.Tick(1.0f / 60.0f);
-        runtime.Flush();
-        runtime.UnloadModules();
+        types.Spawn(loop.First.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
+        for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
+        scheduler.Shutdown();
 
         Assert.Equal([1, 2], Probe.Readied.Order());
+    }
+
+    [Fact]
+    public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
+    {
+        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
+        using var io = new PoolIo(null, pool, files);
+        using var config = new DefaultConfiguration(null);
+        using var input = new Input.DefaultInput();
+        using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+        using var loop = new Loop(ecs, pool);
+        var scheduler = loop.Scheduler;
+        using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
+        using var tree = new DefaultSceneTree(null, ecs, null, new());
+        using var actions = new DefaultInputActions(null, null, input, config, new Framework.InputActionsConfig { Section = "input" });
+        using var types = new DefaultNodeTypes(null, scheduler, loop.First, loop.Fixed, loop.Main, ecs, tree, actions, loop.Sets);
+        using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
+        types.RegisterType(name: "node");
+        var nodes = new NodeWorld(types);
+        nodes.Register(new Probe());
+        Probe.Readied.Clear();
+
+        var slot = new SceneSlotComponent { Path = "res://scenes/Grouped.scene.toml" };
+        types.Spawn(loop.First.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
+        for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
+        scheduler.Shutdown();
+
+        Assert.Equal([3], Probe.Readied);
     }
 }

@@ -142,6 +142,19 @@ pub const ke_render_pass_io = extern struct {
     depth: ke_render_depth_mode = std.mem.zeroes(ke_render_depth_mode),
 };
 
+/// The values a render service is created with, whatever its implementation, each applied as
+/// given.
+pub const ke_render_service_config = extern struct {
+    /// Directory the shaders are loaded from; copied. Required.
+    shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.
+    color_format: abi_render_gpu.c.ke_gpu_texture_format = std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format),
+    /// Format of the frame's depth.
+    depth_format: abi_render_gpu.c.ke_gpu_texture_format = std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format),
+    /// Color the frame is cleared to.
+    clear_color: abi_math.c.ke_vec4 = std.mem.zeroes(abi_math.c.ke_vec4),
+};
+
 /// The perspective frustum a camera's field of view describes.
 pub const ke_camera_frustum = extern struct {
     /// Tangent of half the vertical field of view.

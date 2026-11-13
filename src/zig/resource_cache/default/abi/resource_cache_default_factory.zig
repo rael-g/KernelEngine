@@ -12,9 +12,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a resource cache.
-pub fn resourceCacheCreate(params: ?*const abi_resource_cache.c.ke_resource_cache_params) Error!abi_resource_cache.c.ke_resource_cache_handle {
+pub fn resourceCacheCreate(destroy_fn: c.ke_resource_destroy_func, destroy_ctx: ?*anyopaque) Error!abi_resource_cache.c.ke_resource_cache_handle {
     var written: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    try checkResult(c.ke_resource_cache_create(params, &written));
+    try checkResult(c.ke_resource_cache_create(destroy_fn, destroy_ctx, &written));
     return written;
 }
 

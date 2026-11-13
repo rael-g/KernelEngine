@@ -10,15 +10,14 @@ public sealed unsafe partial class WebgpuGpuDevice
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
-    /// <param name="enableValidation">Asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
-    /// <param name="debugLabels">The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
-    public WebgpuGpuDevice(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels) : base(CreateLogged(loggerFactory, taskPool, enableValidation, debugLabels))
+    /// <param name="config">The device's values; Required; every field is read as given.</param>
+    public WebgpuGpuDevice(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config) : base(CreateLogged(loggerFactory, taskPool, config))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_device_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels)
+    private static KernelEngine.Render.Native.ke_gpu_device_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(taskPool, enableValidation, debugLabels);
+        return Create(taskPool, config);
     }
 }

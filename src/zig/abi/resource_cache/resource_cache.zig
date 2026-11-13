@@ -104,5 +104,4 @@ pub const ResourceCache = struct {
 
 };
 
-pub const ResourceCacheParams = c.ke_resource_cache_params;
 pub const ResourceCacheHandle = c.ke_resource_cache_handle;

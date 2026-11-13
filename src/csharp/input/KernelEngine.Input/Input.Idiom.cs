@@ -9,7 +9,7 @@ namespace KernelEngine.Input;
 /// The input service over <c>ke_input</c>, with a snapshot reader and the translation of native
 /// events into <see cref="InputEvent"/> values.
 /// </summary>
-public sealed unsafe partial class Input : IInput
+public unsafe partial class Input : IInput
 {
     /// <inheritdoc/>
     public IInputReader CaptureSnapshot() => new SnapshotReader(this, GetSnapshot());

@@ -5,6 +5,7 @@
 #include <kernel_engine/ecs/ecs.h>
 #include <kernel_engine/ecs/commands.h>
 #include <kernel_engine/framework/components.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -111,6 +112,13 @@ extern "C"
         ke_scene_tree *ref;
         void (*destroy)(ke_scene_tree *self);
     } ke_scene_tree_handle;
+
+    /// [borrowed] The values a scene tree is created with.
+    typedef struct ke_scene_tree_config
+    {
+        /// The set the hierarchy the tree owns registers its system in, when a schedule is given.
+        ke_schedule_set_id set;
+    } ke_scene_tree_config;
 
 #ifdef __cplusplus
 }

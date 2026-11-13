@@ -157,6 +157,17 @@ typedef struct ke_runtime_system_params {
     bool exclusive;
 } ke_runtime_system_params;
 
+/// [value] One system of a phase, as the order the runtime built places it.
+typedef struct ke_runtime_system_order {
+    /// The id register_system gave the system.
+    ke_system_id id;
+    /// The wave the system runs in; systems of one wave run concurrently.
+    uint32_t     wave;
+    /// The system does not run: everything it writes is transient and no system of the phase
+    /// that runs reads it.
+    bool         culled;
+} ke_runtime_system_order;
+
 /// [interface] Owns the simulation world, dispatches systems across the worker pool and
 /// drives the frame loop.
 typedef struct ke_runtime {
@@ -203,6 +214,21 @@ typedef struct ke_runtime {
     ///         phase; KE_RESULT_GENERAL when the order has a cycle or, when refused, two writers
     ///         are ambiguous. The systems involved are named in the log.
     ke_result (*check_order)(ke_runtime *self, bool refuse_ambiguity);
+    /// Declares that the value of @p cid lives only within the phase it is written in. A system
+    /// whose every write is transient and that no system of its phase reads is culled: it keeps
+    /// its place in the order but does not run, and what it read no longer keeps its writers
+    /// running.
+    /// @return KE_OK, or KE_RESULT_OUT_OF_MEMORY when the declaration cannot be stored.
+    ke_result (*declare_transient)(ke_runtime *self, ke_component_id cid);
+    /// Builds the order of @p phase as the next tick would, culled systems included, in
+    /// registration order.
+    /// @param out_systems [out,array_of:capacity] Receives one entry per system of the phase.
+    /// @param capacity The number of entries `out_systems` holds.
+    /// @param out_count [out] Receives the number of systems of the phase.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the phase is unknown or holds more than
+    ///         `capacity` systems; the code check_order reports when the order cannot be built.
+    ke_result (*describe_phase)(ke_runtime *self, ke_phase phase, ke_runtime_system_order *out_systems,
+                                uint32_t capacity, uint32_t *out_count);
 
     /// Runs one tick: every sim phase in order, then the render phase.
     ///
@@ -246,6 +272,19 @@ typedef struct ke_runtime_handle {
     ke_runtime *ref;
     void (*destroy)(ke_runtime *self);
 } ke_runtime_handle;
+
+/// The values a runtime is created with, whatever its implementation, each applied as given.
+typedef struct ke_runtime_config {
+    /// Timestep KE_PHASE_FIXED_UPDATE runs at, in seconds; greater than zero.
+    float fixed_dt;
+
+    /// Largest catch-up budget a tick may accumulate, in seconds; excess is
+    /// discarded; greater than zero.
+    float fixed_dt_max_accum;
+
+    /// Most systems one phase may hold; registering past it fails.
+    uint32_t max_systems_per_phase;
+} ke_runtime_config;
 
 #ifdef __cplusplus
 }

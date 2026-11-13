@@ -92,6 +92,20 @@ pub const Runtime = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .declare_transient = &struct {
+                fn call(self: ?*c.ke_runtime, a0: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.declareTransient(state, a0) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .describe_phase = &struct {
+                fn call(self: ?*c.ke_runtime, a0: c.ke_phase, a1: ?[*]c.ke_runtime_system_order, a2: u32, a3: ?*u32) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.describePhase(state, @enumFromInt(a0), a1, a2, a3) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .tick = &struct {
                 fn call(self: ?*c.ke_runtime, a0: f32) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -181,6 +195,19 @@ pub const Runtime = struct {
         try checkResult(self.ptr.check_order.?(self.ptr, refuse_ambiguity));
     }
 
+    /// Declares that the value of cid lives only within the phase it is written in. A system whose
+    /// every write is transient and that no system of its phase reads is culled: it keeps its place
+    /// in the order but does not run, and what it read no longer keeps its writers running.
+    pub fn declareTransient(self: Runtime, cid: c.ke_component_id) Error!void {
+        try checkResult(self.ptr.declare_transient.?(self.ptr, cid));
+    }
+
+    /// Builds the order of phase as the next tick would, culled systems included, in registration
+    /// order.
+    pub fn describePhase(self: Runtime, phase: Phase, out_systems: ?[*]c.ke_runtime_system_order, capacity: u32, out_count: ?*u32) Error!void {
+        try checkResult(self.ptr.describe_phase.?(self.ptr, @intFromEnum(phase), out_systems, capacity, out_count));
+    }
+
     /// Runs one tick: every sim phase in order, then the render phase. This is where a body that
     /// failed during the tick is answered for.
     pub fn tick(self: Runtime, dt: f32) Error!void {
@@ -224,9 +251,9 @@ pub const Runtime = struct {
     }
 
     /// Creates a runtime over ecs and task_pool, both borrowed for its lifetime.
-    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: ?*const c.ke_runtime_params) Error!Runtime {
+    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, config: ?*const c.ke_runtime_config) Error!Runtime {
         var written: c.ke_runtime_handle = undefined;
-        try checkResult(c.ke_runtime_create(ecs, task_pool, params, &written));
+        try checkResult(c.ke_runtime_create(ecs, task_pool, config, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -274,5 +301,6 @@ pub const ComponentAccess = c.ke_component_access;
 pub const QueryDecl = c.ke_query_decl;
 pub const RuntimeModuleParams = c.ke_runtime_module_params;
 pub const RuntimeSystemParams = c.ke_runtime_system_params;
-pub const RuntimeParams = c.ke_runtime_params;
+pub const RuntimeSystemOrder = c.ke_runtime_system_order;
+pub const RuntimeConfig = c.ke_runtime_config;
 pub const RuntimeHandle = c.ke_runtime_handle;

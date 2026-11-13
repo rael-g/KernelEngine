@@ -1,6 +1,8 @@
 #include <stddef.h>
 #include <kernel_engine/framework/scene_tree.h>
 const unsigned long long layout_values[] = {
+    sizeof(ke_scene_tree_config),
+    offsetof(ke_scene_tree_config, set),
     sizeof(ke_scene_tree),
     offsetof(ke_scene_tree, handle),
     offsetof(ke_scene_tree, root),

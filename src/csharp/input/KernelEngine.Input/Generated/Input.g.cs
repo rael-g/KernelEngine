@@ -48,18 +48,6 @@ public unsafe partial class Input : IDisposable, INativeInput, IInput
         _held.Add(owner);
     }
 
-    /// <summary>Creates an input system.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public Input()
-    {
-        ke_input_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Input.Native.NativeMethods.input_create(&handle), "ke_input_create");
-        _native = handle.@ref;
-        _owned = handle.@ref;
-        _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
-    }
-
     /// <summary>Wraps an owner <c>ke_input_handle</c> and runs input's startup lifecycle hook.</summary>
     public Input(ke_input_handle handle)
     {

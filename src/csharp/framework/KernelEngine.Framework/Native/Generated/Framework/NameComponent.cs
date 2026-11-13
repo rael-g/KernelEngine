@@ -11,7 +11,7 @@ using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Runtime.Native;
+using KernelEngine.Schedule.Native;
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;

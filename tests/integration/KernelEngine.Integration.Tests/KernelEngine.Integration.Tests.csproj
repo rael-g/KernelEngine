@@ -23,7 +23,7 @@
     <ProjectReference Include="..\..\..\src\csharp\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework.Nodes\KernelEngine.Framework.Nodes.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />

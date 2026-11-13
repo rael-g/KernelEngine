@@ -7,6 +7,7 @@ const abi_physics_components = @import("physics_components");
 const abi_render_components = @import("render_components");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 const abi_spatial = @import("spatial");
 const abi_ui_components = @import("ui_components");
 
@@ -15,14 +16,25 @@ pub const ke_audio_voice = u32;
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// The number of entries in `ke_engine_node_types`.
-pub const KE_ENGINE_NODE_TYPE_COUNT = 14;
+pub const KE_ENGINE_NODE_TYPE_COUNT = 15;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
@@ -83,4 +95,4 @@ pub const ke_transform2d_node_with: [1]abi_framework.c.ke_node_with = .{ .{ .nam
 
 pub const ke_transform_node_with: [1]abi_framework.c.ke_node_with = .{ .{ .name = "transform", .initial = @ptrCast(&ke_transform_node_initial), .initial_size = @sizeOf(abi_spatial.c.ke_transform_component) } };
 
-pub const ke_engine_node_types: [14]abi_framework.c.ke_node_type_desc = .{ .{ .name = "ambient_light", .with = @ptrCast(&ke_ambient_light_node_with), .with_count = 2 }, .{ .name = "body2d", .with = @ptrCast(&ke_body2d_node_with), .with_count = 2 }, .{ .name = "camera", .with = @ptrCast(&ke_camera_node_with), .with_count = 2 }, .{ .name = "collider2d", .with = @ptrCast(&ke_collider2d_node_with), .with_count = 2 }, .{ .name = "directional_light", .with = @ptrCast(&ke_directional_light_node_with), .with_count = 2 }, .{ .name = "label", .with = @ptrCast(&ke_label_node_with), .with_count = 2 }, .{ .name = "mesh", .with = @ptrCast(&ke_mesh_node_with), .with_count = 2 }, .{ .name = "point_light", .with = @ptrCast(&ke_point_light_node_with), .with_count = 2 }, .{ .name = "skybox", .with = @ptrCast(&ke_skybox_node_with), .with_count = 2 }, .{ .name = "sound", .with = @ptrCast(&ke_sound_node_with), .with_count = 2 }, .{ .name = "spot_light", .with = @ptrCast(&ke_spot_light_node_with), .with_count = 2 }, .{ .name = "sprite2d", .with = @ptrCast(&ke_sprite2d_node_with), .with_count = 2 }, .{ .name = "transform2d", .with = @ptrCast(&ke_transform2d_node_with), .with_count = 1 }, .{ .name = "transform", .with = @ptrCast(&ke_transform_node_with), .with_count = 1 } };
+pub const ke_engine_node_types: [15]abi_framework.c.ke_node_type_desc = .{ .{ .name = "ambient_light", .with = @ptrCast(&ke_ambient_light_node_with), .with_count = 2 }, .{ .name = "body2d", .with = @ptrCast(&ke_body2d_node_with), .with_count = 2 }, .{ .name = "camera", .with = @ptrCast(&ke_camera_node_with), .with_count = 2 }, .{ .name = "collider2d", .with = @ptrCast(&ke_collider2d_node_with), .with_count = 2 }, .{ .name = "directional_light", .with = @ptrCast(&ke_directional_light_node_with), .with_count = 2 }, .{ .name = "label", .with = @ptrCast(&ke_label_node_with), .with_count = 2 }, .{ .name = "mesh", .with = @ptrCast(&ke_mesh_node_with), .with_count = 2 }, .{ .name = "node" }, .{ .name = "point_light", .with = @ptrCast(&ke_point_light_node_with), .with_count = 2 }, .{ .name = "skybox", .with = @ptrCast(&ke_skybox_node_with), .with_count = 2 }, .{ .name = "sound", .with = @ptrCast(&ke_sound_node_with), .with_count = 2 }, .{ .name = "spot_light", .with = @ptrCast(&ke_spot_light_node_with), .with_count = 2 }, .{ .name = "sprite2d", .with = @ptrCast(&ke_sprite2d_node_with), .with_count = 2 }, .{ .name = "transform2d", .with = @ptrCast(&ke_transform2d_node_with), .with_count = 1 }, .{ .name = "transform", .with = @ptrCast(&ke_transform_node_with), .with_count = 1 } };

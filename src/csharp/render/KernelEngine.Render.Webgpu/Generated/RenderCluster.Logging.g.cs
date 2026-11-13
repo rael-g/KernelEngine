@@ -17,17 +17,14 @@ public sealed unsafe partial class RenderCluster
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    /// <param name="gridX">Clusters across the screen.</param>
-    /// <param name="gridY">Clusters down the screen.</param>
-    /// <param name="gridZ">Depth slices.</param>
-    /// <param name="maxLightsPerCluster">Lights one cluster can list.</param>
-    public RenderCluster(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster))
+    /// <param name="config">The pass's values; Required; every field is read as given.</param>
+    public RenderCluster(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config) : this(CreateLogged(loggerFactory, runtime, ecs, service, device, viewSpace, camera, scene, frame, config))
     {
     }
 
-    private static (KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Handle, KernelEngine.Render.RenderClusterResources Resources) CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, uint gridX, uint gridY, uint gridZ, uint maxLightsPerCluster)
+    private static (KernelEngine.Render.Webgpu.Native.ke_render_cluster_handle Handle, KernelEngine.Render.RenderClusterResources Resources) CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, gridX, gridY, gridZ, maxLightsPerCluster);
+        return Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, config);
     }
 }

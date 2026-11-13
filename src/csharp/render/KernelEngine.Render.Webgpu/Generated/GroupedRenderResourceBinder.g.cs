@@ -10,27 +10,25 @@ public sealed unsafe partial class GroupedRenderResourceBinder : KernelEngine.Re
 {
     /// <summary>Creates a resource binder that gives every group of a shader one bind group and every material one bind group of its own.</summary>
     /// <param name="device">Borrowed; must outlive the binder.</param>
-    /// <param name="shaderDir">Directory the build wrote each compiled shader's reflection into; copied.</param>
     /// <param name="io">Borrowed; must outlive the binder. The reflection is read through it.</param>
-    public GroupedRenderResourceBinder(KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io) : base(Create(device, shaderDir, io))
+    /// <param name="config">Required; every field is read as given.</param>
+    public GroupedRenderResourceBinder(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Io.INativeIo io, in KernelEngine.Render.Webgpu.RenderResourceBinderGroupedConfig config) : base(Create(device, io, config))
     {
         Hold(device.Owner);
         Hold(io.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_resource_binder_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, string? shaderDir, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Render.Native.ke_render_resource_binder_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Io.INativeIo io, in KernelEngine.Render.Webgpu.RenderResourceBinderGroupedConfig config)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(io);
-        var shaderDirBytes = shaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(shaderDir + "\0");
-        fixed (byte* shaderDirPtr = shaderDirBytes)
+        var shaderDirConfigBytes = config.ShaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(config.ShaderDir + "\0");
+        fixed (byte* shaderDirConfigPtr = shaderDirConfigBytes)
         {
-            KernelEngine.Render.Webgpu.Native.ke_render_resource_binder_grouped_params config = default;
-            config.device = device.Native;
-            config.shader_dir = (sbyte*)shaderDirPtr;
-            config.io = io.Native;
+            KernelEngine.Render.Webgpu.Native.ke_render_resource_binder_grouped_config nativeConfig = default;
+            nativeConfig.shader_dir = (sbyte*)shaderDirConfigPtr;
             KernelEngine.Render.Native.ke_render_resource_binder_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(&config, &handle), "ke_render_resource_binder_grouped_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_resource_binder_grouped_create(device.Native, io.Native, &nativeConfig, &handle), "ke_render_resource_binder_grouped_create");
             return handle;
         }
     }

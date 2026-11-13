@@ -261,7 +261,7 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 /// failure it leaves the handles it had already made in the module, where `destroyModule` finds and releases them.
 /// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
 /// frame's color.
-fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_forward_factory.c.ke_render_forward_config) R.Error!void {
+fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, shadow: *const abi_render.c.ke_render_shadow_resources, clusters: *const abi_render.c.ke_render_cluster_resources, config: *const abi_render_forward_factory.c.ke_render_forward_config) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const mesh_cid = p.scene.?.component_ids.?(p.scene).?.mesh;
@@ -278,8 +278,8 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, 
     fwd.skybox_cid = skybox_cid;
     fwd.env_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
 
-    fwd.shadow = config.shadow;
-    fwd.clusters = config.clusters;
+    fwd.shadow = shadow.*;
+    fwd.clusters = clusters.*;
     fwd.io.name = "render.forward_transparent";
     fwd.io.depth = abi_render.c.KE_RENDER_DEPTH_TEST;
     try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TRANSPARENT, abi_render.c.KE_RENDER_CHAIN_SAMPLE_OVER, &fwd.io.chain));
@@ -391,7 +391,7 @@ fn destroyHandle(self: ?*abi_render_forward_factory.c.ke_render_forward) callcon
 /// module, and its `destroy` must be called to release it. On failure `ref` is null and the module
 /// and its GPU objects are released. A missing runtime, service or device fails as an invalid
 /// argument. A failure in `setup` or of the registration fails with its code.
-export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, config_in: ?*const abi_render_forward_factory.c.ke_render_forward_config, out_forward: [*c]abi_render_forward_factory.c.ke_render_forward_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, shadow_in: ?*const abi_render.c.ke_render_shadow_resources, clusters_in: ?*const abi_render.c.ke_render_cluster_resources, config_in: ?*const abi_render_forward_factory.c.ke_render_forward_config, out_forward: [*c]abi_render_forward_factory.c.ke_render_forward_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_forward orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = context_in orelse return R.code(error.InvalidArgument);
@@ -399,13 +399,15 @@ export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_r
         log.warn("transparent-forward: no config", .{});
         return R.code(error.InvalidArgument);
     };
+    const shadow = shadow_in orelse return R.code(error.InvalidArgument);
+    const clusters = clusters_in orelse return R.code(error.InvalidArgument);
     const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null)
         return R.code(error.InvalidArgument);
 
     const fwd = gpa.create(ForwardModule) catch |err| return R.code(err);
     fwd.* = .{};
-    setup(fwd, p, config) catch |err| {
+    setup(fwd, p, shadow, clusters, config) catch |err| {
         destroyModule(fwd);
         gpa.destroy(fwd);
         return R.code(err);
@@ -737,7 +739,7 @@ test "creating and destroying the forward pass leaves no block allocated and no 
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h));
+    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h));
     h.destroy.?(h.ref);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -748,7 +750,7 @@ test "destroying the forward pass unregisters every system it registered" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h));
+    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h));
     h.destroy.?(h.ref);
     try rig.rt.received(.register_system).atLeast(1);
     try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
@@ -761,7 +763,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
+    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();
@@ -772,7 +774,7 @@ test "a missing frame is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h)));
 }
 
 test "a missing scene is refused" {
@@ -780,7 +782,7 @@ test "a missing scene is refused" {
     try rig.init();
     defer rig.deinit();
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h)));
 }
 
 test "a forward pass the runtime refuses to register releases what it had created" {
@@ -789,7 +791,7 @@ test "a forward pass the runtime refuses to register releases what it had create
     defer rig.deinit();
     _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
     var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &.{ .ibl_enabled = false, .shadow = test_shadow, .clusters = test_clusters }, &h) != R.ok);
+    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
     try heap.expectNoLeaks();

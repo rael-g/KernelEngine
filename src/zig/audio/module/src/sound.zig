@@ -9,7 +9,7 @@ const abi_audio_contract = @import("abi_audio_contract");
 const abi_audio_module_factory = @import("abi_audio_module_factory");
 const abi_ecs = @import("abi_ecs");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 
 const heap = @import("heap");
 var gpa = heap.gpa;
@@ -34,13 +34,14 @@ const Tracked = struct {
 /// found.
 const Module = struct {
     audio: *abi_audio.c.ke_audio,
-    runtime: *abi_runtime.c.ke_runtime,
+    scheduler: *abi_schedule.c.ke_schedule,
     root: ?[]u8 = null,
-    system: abi_runtime.c.ke_system_id = 0,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
+    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     tracked: std.AutoHashMapUnmanaged(abi_ecs.c.ke_entity, Tracked) = .empty,
     update: u64 = 0,
-    terms: [1]abi_runtime.c.ke_component_access = undefined,
-    queries: [1]abi_runtime.c.ke_query_decl = undefined,
+    terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 fn moduleOf(user: ?*anyopaque) *Module {
@@ -54,7 +55,7 @@ fn moduleOf(user: ?*anyopaque) *Module {
 /// through the context's command queue when its release is when-done; a clip that cannot be loaded
 /// or a voice that cannot start ends the sound the same way, and is logged. A tracked sound whose
 /// entity no longer holds the component is then stopped and its clip released.
-fn soundSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn soundSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const m = moduleOf(user);
     m.update += 1;
 
@@ -70,7 +71,7 @@ fn soundSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) ca
     return R.ok;
 }
 
-fn reconcile(m: *Module, ctx: *abi_runtime.c.ke_system_ctx, entity: abi_ecs.c.ke_entity, p: *Sound) void {
+fn reconcile(m: *Module, ctx: *abi_schedule.c.ke_schedule_ctx, entity: abi_ecs.c.ke_entity, p: *Sound) void {
     if (p.clip == abi_audio.c.KE_AUDIO_SOUND_INVALID) load(m, entity, p);
     const t = m.tracked.getPtr(entity) orelse {
         if (p.playing) end(ctx, entity, p);
@@ -106,7 +107,7 @@ fn stopVoice(m: *Module, t: *Tracked, p: *Sound) void {
     p.voice = abi_audio.c.KE_AUDIO_VOICE_INVALID;
 }
 
-fn end(ctx: *abi_runtime.c.ke_system_ctx, entity: abi_ecs.c.ke_entity, p: *Sound) void {
+fn end(ctx: *abi_schedule.c.ke_schedule_ctx, entity: abi_ecs.c.ke_entity, p: *Sound) void {
     p.playing = false;
     if (p.release != abi_audio_components.c.KE_SOUND_RELEASE_WHEN_DONE) return;
     R.check(ctx.commands.?.despawn.?(ctx.commands, entity)) catch |err|
@@ -157,14 +158,14 @@ fn destroyModule(m: *Module) void {
 /// the module.
 fn destroyHandle(self: ?*abi_audio_module_factory.c.ke_sound_module) callconv(.c) void {
     const m: *Module = @ptrCast(@alignCast(self orelse return));
-    _ = m.runtime.unregister_system.?(m.runtime, m.system);
+    _ = m.scheduler.unregister_system.?(m.scheduler, m.system);
     destroyModule(m);
 }
 
-/// Builds the module and registers its system with the runtime given. A missing runtime, ecs or
+/// Builds the module and registers its system with the scheduler given. A missing scheduler, ecs or
 /// audio fails as an invalid argument; the objects made so far are released on any failure.
 export fn ke_sound_module_create(
-    runtime: ?*abi_runtime.c.ke_runtime,
+    scheduler: ?*abi_schedule.c.ke_schedule,
     ecs: ?*abi_ecs.c.ke_ecs,
     audio: ?*abi_audio.c.ke_audio,
     config: ?*const abi_audio_module_factory.c.ke_sound_module_config,
@@ -176,32 +177,34 @@ export fn ke_sound_module_create(
         log.warn("creating the sound module failed: no config", .{});
         return R.code(error.InvalidArgument);
     };
-    out.* = create(runtime orelse return R.code(error.InvalidArgument), ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), given.root) catch |err| {
+    out.* = create(scheduler orelse return R.code(error.InvalidArgument), ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), given.root, given.set) catch |err| {
         log.warn("creating the sound module failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(rt: *abi_runtime.c.ke_runtime, ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: ?[*:0]const u8) R.Error!abi_audio_module_factory.c.ke_sound_module_handle {
+fn create(sched: *abi_schedule.c.ke_schedule, ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: ?[*:0]const u8, set: abi_schedule.c.ke_schedule_set_id) R.Error!abi_audio_module_factory.c.ke_sound_module_handle {
     const m = try gpa.create(Module);
-    m.* = .{ .audio = audio, .runtime = rt };
+    m.* = .{ .audio = audio, .scheduler = sched, .set = .{set} };
     errdefer destroyModule(m);
     if (root) |r| m.root = try gpa.dupe(u8, std.mem.span(r));
 
     var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
 
-    m.terms = .{.{ .cid = cid, .access = abi_runtime.c.KE_ACCESS_WRITE }};
+    m.terms = .{.{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     m.queries = .{.{ .terms = &m.terms, .term_count = 1 }};
-    var sp = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    sp.name = "audio.sound";
-    sp.phase = abi_runtime.c.KE_PHASE_POST_UPDATE;
-    sp.queries = &m.queries;
-    sp.query_count = m.queries.len;
-    sp.user_data = m;
-    sp.execute = soundSystem;
-    try R.check(rt.*.register_system.?(rt, &sp, &m.system));
+    const desc: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "audio.sound",
+        .user_data = m,
+        .execute = soundSystem,
+        .queries = &m.queries,
+        .query_count = m.queries.len,
+        .sets = &m.set,
+        .set_count = 1,
+    };
+    try R.check(sched.register_system.?(sched, &desc, &m.system));
     return .{ .ref = @ptrCast(m), .destroy = destroyHandle };
 }
 
@@ -209,7 +212,7 @@ const testing = std.testing;
 const zsub = @import("zsub");
 
 const EcsSub = zsub.For(abi_ecs.c.ke_ecs);
-const RuntimeSub = zsub.For(abi_runtime.c.ke_runtime);
+const RuntimeSub = zsub.For(abi_schedule.c.ke_schedule);
 const CommandsSub = zsub.For(abi_ecs.c.ke_ecs_commands);
 
 const FakeAudio = struct {
@@ -279,7 +282,7 @@ const SoundView = struct {
     var segment: abi_ecs.c.ke_ecs_segment = undefined;
     var live: usize = 1;
 
-    fn view(_: [*c]abi_runtime.c.ke_system_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+    fn view(_: [*c]abi_schedule.c.ke_schedule_ctx, _: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
         segment = std.mem.zeroes(abi_ecs.c.ke_ecs_segment);
         columns = .{&sounds};
         segment.columns = &columns;
@@ -302,7 +305,7 @@ const Harness = struct {
     audio: abi_audio.c.ke_audio,
     rt: RuntimeSub,
     cmds: CommandsSub,
-    ctx: abi_runtime.c.ke_system_ctx,
+    ctx: abi_schedule.c.ke_schedule_ctx,
     m: *Module,
 
     fn init(h: *Harness, root: ?[]const u8) !void {
@@ -310,11 +313,11 @@ const Harness = struct {
         h.audio = FakeAudio.api();
         try h.rt.init();
         try h.cmds.init();
-        h.ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+        h.ctx = std.mem.zeroes(abi_schedule.c.ke_schedule_ctx);
         h.ctx.view = SoundView.view;
         h.ctx.commands = h.cmds.api();
         h.m = try gpa.create(Module);
-        h.m.* = .{ .audio = &h.audio, .runtime = h.rt.api() };
+        h.m.* = .{ .audio = &h.audio, .scheduler = h.rt.api() };
         if (root) |r| h.m.root = try gpa.dupe(u8, r);
     }
 
@@ -448,7 +451,7 @@ test "a sound whose entity no longer holds it is stopped and its clip released o
     try testing.expectEqual(@as(usize, 1), FakeAudio.unloaded);
 }
 
-test "a sound module missing its runtime, ecs or audio is refused, and a whole one registers one system" {
+test "a sound module missing its scheduler, ecs or audio is refused, and a whole one registers one system" {
     FakeAudio.reset();
     var audio = FakeAudio.api();
     var ecs: EcsSub = undefined;
@@ -465,7 +468,7 @@ test "a sound module missing its runtime, ecs or audio is refused, and a whole o
     try testing.expectError(error.InvalidArgument, R.check(ke_sound_module_create(rt.api(), null, &audio, null, &h)));
     try testing.expectError(error.InvalidArgument, R.check(ke_sound_module_create(rt.api(), ecs.api(), null, null, &h)));
     try testing.expect(h.ref == null);
-    try R.check(ke_sound_module_create(rt.api(), ecs.api(), &audio, &.{ .root = "base" }, &h));
+    try R.check(ke_sound_module_create(rt.api(), ecs.api(), &audio, &.{ .root = "base", .set = 0 }, &h));
     try rt.received(.register_system).times(1);
     h.destroy.?(h.ref);
     try rt.received(.unregister_system).sameAs(rt.received(.register_system));

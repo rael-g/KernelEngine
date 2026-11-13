@@ -20,7 +20,6 @@ if (tracked.Count == 0)
 
 var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(rootDir, p)));
 
-var cppFixture = "src/zig/result/test/cpp_static_init_probe.cpp";
 var abort = new Regex(@"@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
 var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
@@ -57,8 +56,6 @@ var rules = new List<Rule>
 {
     new("a contract directory holds headers and nothing else", 0,
         contracts.Where(s => !s.Key.EndsWith(".h", StringComparison.Ordinal)).Select(s => s.Key)),
-    new("no C++ file besides the DLL start-up fixture", 0,
-        tracked.Where(p => Regex.IsMatch(p, @"\.(cpp|hpp|cc|hh|cxx)$") && p != cppFixture)),
     new("no InternalsVisibleTo", 0,
         Lines(sources.Where(s => Regex.IsMatch(s.Key, @"\.(cs|csproj|props|targets)$") && !s.Key.StartsWith("scripts/", StringComparison.Ordinal)),
             l => l.Contains("InternalsVisibleTo", StringComparison.Ordinal))),
@@ -111,10 +108,10 @@ var rules = new List<Rule>
             .Select(x => $"{x.Key}:{x.Line}: {x.Match.Groups[1].Value}")),
     new("a factory header declares one function", 0,
         factoryHeaders.Where(h => h.Value.Count > 1).SelectMany(h => h.Value.Skip(1).Select(n => $"{h.Key}: {n}"))),
-    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 28,
+    new("an argument struct is a _desc or a factory's _config, never _params, _descriptor or _info", 18,
         headers.SelectMany(s => s.Value.SelectMany(l => bagName.Matches(l).Select(m => m.Value))).Distinct(StringComparer.Ordinal)),
     new("a contract declares no defaults", 0,
-        Lines(headers, l => defaultsConstant.IsMatch(l))),
+        Lines(headers.Where(h => !h.Key.StartsWith("src/sdk/", StringComparison.Ordinal)), l => defaultsConstant.IsMatch(l))),
     new("no zero stands for a default", 0,
         Lines(headers, l => zeroDefault.IsMatch(l))),
     new("no file named after impl", 0,

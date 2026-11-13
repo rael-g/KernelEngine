@@ -19,4 +19,6 @@ public unsafe partial struct ke_ecs_segment
 
     [NativeTypeName("uint32_t")]
     public uint column_count;
+
+    public bool changed;
 }

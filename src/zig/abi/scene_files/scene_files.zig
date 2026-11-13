@@ -4,6 +4,7 @@ const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_framework = @import("framework");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scene_files_c.zig");

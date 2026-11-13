@@ -9,7 +9,7 @@ const std = @import("std");
 
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const zsub = @import("zsub");
 const heap = @import("heap");
 
@@ -200,9 +200,10 @@ const State = struct {
     actions: ?[*]Action = null,
     action_count: u32 = 0,
     action_capacity: u32 = 0,
-    runtime: ?*abi_runtime.c.ke_runtime = null,
+    scheduler: ?*abi_schedule.c.ke_schedule = null,
     input: ?*abi_input.c.ke_input = null,
-    system: abi_runtime.c.ke_system_id = 0,
+    system: abi_schedule.c.ke_schedule_system_id = 0,
+    set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
 };
 
 fn stateOf(self: *abi_input_actions.c.ke_input_actions) *State {
@@ -560,7 +561,7 @@ fn vtGetAxis3d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, out_x: 
 fn vtDestroy(self_in: ?*abi_input_actions.c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    if (s.runtime) |rt| _ = rt.unregister_system.?(rt, s.system);
+    if (s.scheduler) |sched| _ = sched.unregister_system.?(sched, s.system);
     if (s.actions) |actions| {
         for (actions[0..s.action_count]) |*a| {
             if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
@@ -684,9 +685,9 @@ fn readBinding(w: *Walk, index: [:0]const u8) void {
 
 /// Factory. Builds an empty set of maps, then adds those the configuration describes through the
 /// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
-/// The PreUpdate system the factory registers when it is given a runtime: it advances the input's
-/// frame and evaluates the maps against its snapshot, before any behaviour reads an action.
-fn pump(_: ?*abi_runtime.c.ke_system_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+/// The system the factory registers when it is given a scheduler: it advances the input's frame and
+/// evaluates the maps against its snapshot.
+fn pump(_: ?*abi_schedule.c.ke_schedule_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
     const input = s.input orelse return R.code(error.InvalidArgument);
     input.update.?(input);
@@ -696,16 +697,16 @@ fn pump(_: ?*abi_runtime.c.ke_system_ctx, user_data: ?*anyopaque, _: f32) callco
 }
 
 export fn ke_input_actions_create(
-    runtime: ?*abi_runtime.c.ke_runtime,
+    scheduler: ?*abi_schedule.c.ke_schedule,
     input: ?*abi_input.c.ke_input,
     configuration: ?*abi_configuration.c.ke_configuration,
-    config: ?*const abi_framework_factory.c.ke_input_actions_config,
+    config: ?*const abi_input_actions.c.ke_input_actions_config,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-    if (runtime != null and input == null) {
-        log.warn("input actions: a runtime is given without the input to read", .{});
+    if (scheduler != null and (input == null or config == null)) {
+        log.warn("input actions: a scheduler is given without the input to read or the config naming its set", .{});
         return R.code(error.InvalidArgument);
     }
 
@@ -755,19 +756,22 @@ export fn ke_input_actions_create(
         }
     }
 
-    if (runtime) |rt| {
-        var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-        params.name = "input.actions";
-        params.phase = abi_runtime.c.KE_PHASE_PRE_UPDATE;
-        params.exclusive = true;
-        params.user_data = s;
-        params.execute = pump;
-        const registered = rt.register_system.?(rt, &params, &s.system);
+    if (scheduler) |sched| {
+        s.set = .{config.?.set};
+        const desc: abi_schedule.c.ke_schedule_system_desc = .{
+            .name = "input.actions",
+            .user_data = s,
+            .execute = pump,
+            .sets = &s.set,
+            .set_count = 1,
+            .exclusive = true,
+        };
+        const registered = sched.register_system.?(sched, &desc, &s.system);
         if (registered != R.ok) {
             vtDestroy(&s.api);
             return registered;
         }
-        s.runtime = rt;
+        s.scheduler = sched;
         s.input = input;
     }
 
@@ -1029,16 +1033,18 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     }
 }
 
-var pumped: abi_runtime.c.ke_runtime_system_params = undefined;
+var pumped: abi_schedule.c.ke_schedule_system_desc = undefined;
+var pumped_set: abi_schedule.c.ke_schedule_set_id = undefined;
 
-fn keepSystem(args: zsub.For(abi_runtime.c.ke_runtime).Args(.register_system)) abi_result.c.ke_result {
+fn keepSystem(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system)) abi_result.c.ke_result {
     pumped = args[1].?.*;
+    pumped_set = pumped.sets.?[0];
     args[2].?.* = 7;
     return R.ok;
 }
 
-test "given a runtime, the maps register a PreUpdate system that advances the input and evaluates them, and unregister it when destroyed" {
-    var rt: zsub.For(abi_runtime.c.ke_runtime) = undefined;
+test "given a scheduler, the maps register a system in the config's set that advances the input and evaluates them, and unregister it when destroyed" {
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
     var input: zsub.For(abi_input.c.ke_input) = undefined;
@@ -1046,21 +1052,25 @@ test "given a runtime, the maps register a PreUpdate system that advances the in
     defer input.deinit();
     _ = rt.when(.register_system).does(keepSystem);
     var h: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try R.check(ke_input_actions_create(rt.api(), input.api(), null, null, &h));
-    try testing.expectEqual(abi_runtime.c.KE_PHASE_PRE_UPDATE, pumped.phase);
+    try R.check(ke_input_actions_create(rt.api(), input.api(), null, &.{ .section = "input", .set = 3 }, &h));
+    try testing.expectEqual(3, pumped_set);
     try R.check(pumped.execute.?(null, pumped.user_data, 0));
     try input.received(.update).times(1);
     try input.received(.get_snapshot).times(1);
     h.destroy.?(h.ref);
-    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 7))).times(1);
+    try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 7))).times(1);
 }
 
-test "a runtime without the input to read is refused" {
-    var rt: zsub.For(abi_runtime.c.ke_runtime) = undefined;
+test "a scheduler without the input to read or the config naming the set is refused" {
+    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
+    var input: zsub.For(abi_input.c.ke_input) = undefined;
+    try input.init();
+    defer input.deinit();
     var h: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), null, null, null, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), null, null, &.{ .section = "input", .set = 0 }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), input.api(), null, null, &h));
 }
 
 test "creating and destroying the action maps leaves no block allocated" {

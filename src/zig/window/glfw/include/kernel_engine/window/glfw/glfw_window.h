@@ -24,15 +24,6 @@ extern "C" {
 
 struct ke_input;
 
-/// [bag] The values a window is created with, each applied as given.
-typedef struct ke_window_glfw_config {
-    const char *title;  /**< [borrowed,utf8] Window title. */
-    int32_t     width;      /**< Client width in pixels. */
-    int32_t     height;     /**< Client height in pixels. */
-    bool        fullscreen; /**< Whether the window covers the primary monitor. */
-} ke_window_glfw_config;
-
-
 /**
  * Creates a window and starts it.
  * @param input [borrowed,optional] Input sink target.
@@ -41,7 +32,7 @@ typedef struct ke_window_glfw_config {
  * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for null @p out_window;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the OS refuses the window.
  */
-KE_WINDOW_API ke_result ke_window_glfw_create(struct ke_input *input, const ke_window_glfw_config *config, ke_window_handle *out_window);
+KE_WINDOW_API ke_result ke_window_glfw_create(struct ke_input *input, const ke_window_config *config, ke_window_handle *out_window);
 
 #ifdef __cplusplus
 }

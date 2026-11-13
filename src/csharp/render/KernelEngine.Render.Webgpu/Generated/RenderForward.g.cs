@@ -5,10 +5,10 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
+/// <summary>Registers the pass's render-phase system. A missing runtime, service, device, shadow or clusters fails as an invalid argument.</summary>
 public sealed unsafe partial class RenderForward : IDisposable
 {
-    /// <summary>Registers the pass's render-phase system. A missing runtime, service or device fails as an invalid argument.</summary>
+    /// <summary>Registers the pass's render-phase system. A missing runtime, service, device, shadow or clusters fails as an invalid argument.</summary>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
     /// <param name="service">Holds the resources the passes read and write.</param>
@@ -17,10 +17,10 @@ public sealed unsafe partial class RenderForward : IDisposable
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
-    /// <param name="iblEnabled">Whether the pass samples the sky for image-based light.</param>
     /// <param name="shadow">The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.</param>
     /// <param name="clusters">The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.</param>
-    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, iblEnabled, shadow, clusters))
+    /// <param name="config">The pass \ 's values; Required; every field is read as given.</param>
+    public RenderForward(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, in KernelEngine.Render.Webgpu.Native.RenderForwardConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, shadow, clusters, config))
     {
         Hold(runtime.Owner);
         Hold(ecs.Owner);
@@ -56,7 +56,7 @@ public sealed unsafe partial class RenderForward : IDisposable
         _held.Clear();
     }
 
-    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, bool iblEnabled, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters)
+    private static KernelEngine.Render.Webgpu.Native.ke_render_forward_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, KernelEngine.Render.RenderShadowResources shadow, KernelEngine.Render.RenderClusterResources clusters, in KernelEngine.Render.Webgpu.Native.RenderForwardConfig config)
     {
         ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
@@ -66,10 +66,7 @@ public sealed unsafe partial class RenderForward : IDisposable
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        KernelEngine.Render.Webgpu.Native.ke_render_forward_config config = default;
-        config.ibl_enabled = iblEnabled;
-        config.shadow = shadow;
-        config.clusters = clusters;
+        var nativeConfig = config;
         KernelEngine.Render.Webgpu.Native.RenderContext context = default;
         context.Runtime = runtime.Native;
         context.Ecs = ecs.Native;
@@ -80,7 +77,7 @@ public sealed unsafe partial class RenderForward : IDisposable
         context.Scene = scene.Native;
         context.Frame = frame.Native;
         KernelEngine.Render.Webgpu.Native.ke_render_forward_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&context, &config, &handle), "ke_render_forward_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_forward_create(&context, &shadow, &clusters, &nativeConfig, &handle), "ke_render_forward_create");
         return handle;
     }
 }

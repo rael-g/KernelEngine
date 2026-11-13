@@ -240,11 +240,11 @@ fn chooseFormat(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter) ?Choice {
 }
 
 /// The WebGPU present mode for the one asked for, when the surface offers it on this adapter.
-fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi_gpu_device_webgpu_factory.c.ke_gpu_present_mode) ?wgpu.WGPUPresentMode {
+fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi_render_gpu.c.ke_gpu_present_mode) ?wgpu.WGPUPresentMode {
     const wanted: wgpu.WGPUPresentMode = switch (mode) {
-        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_FIFO => wgpu.WGPUPresentMode_Fifo,
-        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_MAILBOX => wgpu.WGPUPresentMode_Mailbox,
-        abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_IMMEDIATE => wgpu.WGPUPresentMode_Immediate,
+        abi_render_gpu.c.KE_GPU_PRESENT_MODE_FIFO => wgpu.WGPUPresentMode_Fifo,
+        abi_render_gpu.c.KE_GPU_PRESENT_MODE_MAILBOX => wgpu.WGPUPresentMode_Mailbox,
+        abi_render_gpu.c.KE_GPU_PRESENT_MODE_IMMEDIATE => wgpu.WGPUPresentMode_Immediate,
         else => return null,
     };
     var caps = std.mem.zeroes(wgpu.WGPUSurfaceCapabilities);
@@ -263,13 +263,13 @@ fn presentModeOf(surface: wgpu.WGPUSurface, adapter: wgpu.WGPUAdapter, mode: abi
 export fn ke_gpu_render_target_webgpu_window_create(
     device: [*c]abi_render_gpu.c.ke_gpu_device,
     window: ?*abi_window.c.ke_window,
-    config: ?*const abi_gpu_device_webgpu_factory.c.ke_gpu_render_target_webgpu_window_config,
+    config: ?*const abi_render_gpu.c.ke_gpu_render_target_window_config,
     out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle,
 ) abi_result.c.ke_result {
     const out = out_target orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const given = config orelse return fail(error.InvalidArgument, "window target: no config");
-    if (given.present_mode > abi_gpu_device_webgpu_factory.c.KE_GPU_PRESENT_MODE_IMMEDIATE) {
+    if (given.present_mode > abi_render_gpu.c.KE_GPU_PRESENT_MODE_IMMEDIATE) {
         return fail(error.InvalidArgument, "window target: the present mode is not a ke_gpu_present_mode");
     }
     if (device == null or device.*.get_default_queue != dev_impl.getDefaultQueue) {

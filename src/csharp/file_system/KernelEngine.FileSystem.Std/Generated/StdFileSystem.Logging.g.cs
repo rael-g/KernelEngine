@@ -9,14 +9,14 @@ public sealed unsafe partial class StdFileSystem
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="root">The directory relative paths are resolved against; "." for the working directory of the process.</param>
-    public StdFileSystem(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, string? root = default) : base(CreateLogged(loggerFactory, root))
+    /// <param name="config">Required; every field is read as given.</param>
+    public StdFileSystem(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.FileSystem.FileSystemConfig config) : base(CreateLogged(loggerFactory, config))
     {
     }
 
-    private static KernelEngine.FileSystem.Native.ke_file_system_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, string? root)
+    private static KernelEngine.FileSystem.Native.ke_file_system_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.FileSystem.FileSystemConfig config)
     {
         if (loggerFactory is not null) KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(root);
+        return Create(config);
     }
 }

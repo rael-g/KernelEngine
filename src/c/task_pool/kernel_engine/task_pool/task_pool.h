@@ -85,6 +85,17 @@ extern "C"
         void (*destroy)(ke_task_pool *self);
     } ke_task_pool_handle;
 
+/** The worker_count that takes one worker per hardware thread besides the calling one. */
+#define KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD UINT32_MAX
+
+/// The values a task pool is created with, whatever its implementation, each applied as given.
+typedef struct ke_task_pool_config
+{
+    /// Worker threads besides the calling thread, 0 for none, or
+    /// KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD.
+    uint32_t worker_count;
+} ke_task_pool_config;
+
 #ifdef __cplusplus
 }
 #endif

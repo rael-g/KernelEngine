@@ -10,20 +10,17 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
 {
     /// <summary>Creates a ke_gpu_device backed by WebGPU.</summary>
     /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
-    /// <param name="enableValidation">Asks the underlying graphics API to validate every call, which takes effect only where that API's validation layers are installed.</param>
-    /// <param name="debugLabels">The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them.</param>
-    public WebgpuGpuDevice(KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels) : base(Create(taskPool, enableValidation, debugLabels))
+    /// <param name="config">The device's values; Required; every field is read as given.</param>
+    public WebgpuGpuDevice(KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config) : base(Create(taskPool, config))
     {
         Hold(taskPool?.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_device_handle Create(KernelEngine.TaskPool.INativeTaskPool? taskPool, bool enableValidation, bool debugLabels)
+    private static KernelEngine.Render.Native.ke_gpu_device_handle Create(KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config)
     {
-        KernelEngine.Render.Webgpu.Native.ke_gpu_device_webgpu_config config = default;
-        config.enable_validation = enableValidation;
-        config.debug_labels = debugLabels;
+        var nativeConfig = config;
         KernelEngine.Render.Native.ke_gpu_device_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((taskPool is null ? null : taskPool.Native), &config, &handle), "ke_gpu_device_webgpu_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((taskPool is null ? null : taskPool.Native), &nativeConfig, &handle), "ke_gpu_device_webgpu_create");
         return handle;
     }
 }

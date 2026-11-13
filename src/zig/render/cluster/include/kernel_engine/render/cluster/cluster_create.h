@@ -39,7 +39,7 @@ extern "C"
         void (*destroy)(ke_render_cluster *self);
     } ke_render_cluster_handle;
 
-    /// [bag] The values a light-cluster pass is created with, each applied as given.
+    /// The values a light-cluster pass is created with, each applied as given.
     typedef struct ke_render_cluster_config
     {
         /// Clusters across the screen.

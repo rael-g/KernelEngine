@@ -28,8 +28,8 @@ pub fn clusterBuffer(clusters: *Clusters, comptime index: usize) *abi_asset_reso
 pub const count = 3 + cluster_buffers.len;
 
 /// Fills `out` with every feature binding, from the ids the shadow and cluster passes published.
-/// An absent id binds the neutral value: the white texture for the shadow map and no buffer
-/// otherwise. `environment` is the view the environment is sampled from.
+/// An absent id binds the neutral value: the white texture for the shadow map and a buffer of
+/// zeros otherwise. `environment` is the view the environment is sampled from.
 pub fn fill(core: *abi_render.c.ke_render_service, environment: abi_asset_resolver.c.ke_gpu_texture_view, shadow: abi_render.c.ke_render_shadow_resources, clusters: Clusters, out: *[count]abi_render_gpu.c.ke_render_shader_binding) void {
     const white_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
     const shadow_raw = core.*.resource_view.?(core, shadow.map);

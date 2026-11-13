@@ -155,7 +155,21 @@
       "external": true
     }
   ],
-  "structs": [],
+  "structs": [
+    {
+      "name": "ke_task_pool_config",
+      "doc": "The values a task pool is created with, whatever its implementation, each applied as given.",
+      "tags": [],
+      "fields": [
+        {
+          "name": "worker_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Worker threads besides the calling thread, 0 for none, or KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD."
+        }
+      ]
+    }
+  ],
   "vtables": [
     {
       "name": "ke_task_pool",
@@ -274,7 +288,7 @@
         },
         {
           "name": "is_completed",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true if the task has finished. Valid only before the task is waited on.",
           "return_doc": null,
@@ -380,5 +394,13 @@
   },
   "opaques": [
     "ke_task"
+  ],
+  "constants": [
+    {
+      "name": "KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD",
+      "type": "unsigned int",
+      "value": "4294967295",
+      "doc": "The worker_count that takes one worker per hardware thread besides the calling one."
+    }
   ]
 }

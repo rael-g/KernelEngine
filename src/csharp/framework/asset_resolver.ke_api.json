@@ -941,7 +941,7 @@
           "name": "buffer",
           "type": "ke_gpu_buffer",
           "tags": [],
-          "doc": null
+          "doc": "The buffer of a buffer parameter; KE_GPU_INVALID_HANDLE binds one that reads as zeros, at least as large as the parameter declares."
         },
         {
           "name": "buffer_offset",
@@ -1394,6 +1394,42 @@
           "type": "ke_render_depth_mode",
           "tags": [],
           "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_service_config",
+      "doc": "The values a render service is created with, whatever its implementation, each applied as given.",
+      "tags": [
+        "borrowed"
+      ],
+      "fields": [
+        {
+          "name": "shader_dir",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Directory the shaders are loaded from; copied. Required."
+        },
+        {
+          "name": "color_format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Format of the frame\u0027s color up to KE_RENDER_STAGE_HDR_POST."
+        },
+        {
+          "name": "depth_format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "Format of the frame\u0027s depth."
+        },
+        {
+          "name": "clear_color",
+          "type": "ke_vec4",
+          "tags": [],
+          "doc": "Color the frame is cleared to."
         }
       ],
       "external": true

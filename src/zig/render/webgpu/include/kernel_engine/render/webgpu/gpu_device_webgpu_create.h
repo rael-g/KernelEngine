@@ -25,18 +25,6 @@ extern "C"
 {
 #endif
 
-/// [bag] The values a WebGPU device is created with, each applied as given.
-typedef struct ke_gpu_device_webgpu_config
-{
-    /// Asks the underlying graphics API to validate every call, which takes effect
-    /// only where that API's validation layers are installed.
-    bool enable_validation;
-    /// The labels and debug groups given through ke_gpu_device reach the
-    /// underlying graphics API, where capture tools read them.
-    bool debug_labels;
-} ke_gpu_device_webgpu_config;
-
-
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
  * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
@@ -47,7 +35,7 @@ typedef struct ke_gpu_device_webgpu_config
  *         when done.
  */
 KE_GPU_WEBGPU_API ke_result
-ke_gpu_device_webgpu_create(struct ke_task_pool *task_pool, const ke_gpu_device_webgpu_config *config,
+ke_gpu_device_webgpu_create(struct ke_task_pool *task_pool, const ke_gpu_device_config *config,
                              ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus

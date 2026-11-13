@@ -3,6 +3,7 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("framework_c.zig");
@@ -10,11 +11,6 @@ pub const c = @import("framework_c.zig");
 pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
-
-pub const SceneHierarchyHandle = struct {
-    ptr: *c.ke_scene_hierarchy_handle,
-
-};
 
 pub const NodeCtx = struct {
     ptr: *c.ke_node_ctx,
@@ -425,13 +421,21 @@ pub const SceneFiles = struct {
 
 pub const SceneHierarchy = struct {
     ptr: *c.ke_scene_hierarchy,
+    owner: ?c.ke_scene_hierarchy_handle = null,
+
+    pub fn deinit(self: SceneHierarchy) void {
+        if (self.owner) |owner| owner.destroy.?(owner.ref);
+    }
 
 };
 
+pub const SceneHierarchyConfig = c.ke_scene_hierarchy_config;
 pub const NodeComponent = c.ke_node_component;
 pub const NodeWith = c.ke_node_with;
 pub const ActionRef = c.ke_action_ref;
 pub const NodeTypeDesc = c.ke_node_type_desc;
+pub const NodeTypesConfig = c.ke_node_types_config;
 pub const SceneSlotComponent = c.ke_scene_slot_component;
+pub const SceneHierarchyHandle = c.ke_scene_hierarchy_handle;
 pub const NodeTypesHandle = c.ke_node_types_handle;
 pub const SceneFilesHandle = c.ke_scene_files_handle;

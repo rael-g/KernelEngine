@@ -486,7 +486,7 @@ fn assemble(dev: *abi_render_gpu.c.ke_gpu_device, tgt: *abi_render_gpu.c.ke_gpu_
 
 fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: *CoreState) R.Error!abi_resource_cache.c.ke_resource_cache_handle {
     var h: abi_resource_cache.c.ke_resource_cache_handle = undefined;
-    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(&abi_resource_cache.c.ke_resource_cache_params{ .destroy_fn = destroy_fn, .destroy_ctx = st }, &h));
+    try R.check(abi_resource_cache_default_factory.c.ke_resource_cache_create(destroy_fn, st, &h));
     return h;
 }
 
@@ -530,7 +530,7 @@ export fn ke_render_service_create(
     return R.ok;
 }
 
-const Config = abi_render_service_factory.c.ke_render_service_config;
+const Config = abi_render.c.ke_render_service_config;
 
 fn prepare(core: *abi_render.c.ke_render_service, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format) R.Error!void {
     const st = coreOf(core);
@@ -641,7 +641,7 @@ const Gpu = struct {
         _ = self.binder.when(.create_set).writesFresh(6);
         try self.ecs.init();
         _ = self.ecs.when(.component_register).writesFresh(2);
-        _ = self.ecs.when(.query_register).writesFresh(3);
+        _ = self.ecs.when(.query_register).writesFresh(2);
     }
 
     fn deinit(self: *Gpu) void {

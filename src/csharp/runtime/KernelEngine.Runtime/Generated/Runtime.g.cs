@@ -74,19 +74,6 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
         _held.Add(owner);
     }
 
-    /// <summary>Creates a runtime over ecs and task_pool, both borrowed for its lifetime.</summary>
-    /// <param name="@params">Required; every field is read as given.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    internal Runtime(ke_ecs* ecs, ke_task_pool* taskPool, ke_runtime_params* @params)
-    {
-        ke_runtime_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(global::KernelEngine.Runtime.Native.NativeMethods.runtime_create(ecs, taskPool, @params, &handle), "ke_runtime_create");
-        _native = handle.@ref;
-        _owned = handle.@ref;
-        _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
-    }
-
     /// <summary>Wraps an owner <c>ke_runtime_handle</c> and runs runtime's startup lifecycle hook.</summary>
     public Runtime(ke_runtime_handle handle)
     {
@@ -362,6 +349,27 @@ public unsafe partial class Runtime : IDisposable, INativeRuntime, IRuntime
     public void CheckOrder(bool refuseAmbiguity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->check_order(Handle, refuseAmbiguity)), "check_order");
+    }
+
+    /// <summary>Declares that the value of cid lives only within the phase it is written in. A system whose every write is transient and that no system of its phase reads is culled: it keeps its place in the order but does not run, and what it read no longer keeps its writers running.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void DeclareTransient(ComponentId cid)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->declare_transient(Handle, cid)), "declare_transient");
+    }
+
+    /// <summary>Builds the order of phase as the next tick would, culled systems included, in registration order.</summary>
+    /// <param name="outSystems">Receives one entry per system of the phase.</param>
+    /// <returns>Receives the number of systems of the phase.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public uint DescribePhase(RuntimePhase phase, Span<RuntimeSystemOrder> outSystems)
+    {
+        fixed (RuntimeSystemOrder* outSystemsPtr = outSystems)
+        {
+            uint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(DrainRaised(Handle->describe_phase(Handle, (RuntimePhase)phase, outSystemsPtr, (uint)outSystems.Length, &resultOut)), "describe_phase");
+            return resultOut;
+        }
     }
 
     /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>

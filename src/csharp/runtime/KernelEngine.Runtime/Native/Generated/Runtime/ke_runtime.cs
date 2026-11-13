@@ -35,6 +35,12 @@ public unsafe partial struct ke_runtime
     [NativeTypeName("ke_result (*)(ke_runtime *, bool)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, bool, KernelEngine.Result.Native.Result> check_order;
 
+    [NativeTypeName("ke_result (*)(ke_runtime *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, global::KernelEngine.Ecs.ComponentId, KernelEngine.Result.Native.Result> declare_transient;
+
+    [NativeTypeName("ke_result (*)(ke_runtime *, ke_phase, ke_runtime_system_order *, uint32_t, uint32_t *)")]
+    public delegate* unmanaged[Cdecl]<ke_runtime*, global::KernelEngine.Runtime.RuntimePhase, global::KernelEngine.Runtime.RuntimeSystemOrder*, uint, uint*, KernelEngine.Result.Native.Result> describe_phase;
+
     [NativeTypeName("ke_result (*)(ke_runtime *, float)")]
     public delegate* unmanaged[Cdecl]<ke_runtime*, float, KernelEngine.Result.Native.Result> tick;
 

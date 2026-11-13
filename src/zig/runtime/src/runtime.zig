@@ -222,6 +222,7 @@ const RuntimeState = struct {
     render_job: ?*RenderJob,
     exclusive: std.ArrayList(wave_mod.Exclusive),
     self_ordered: std.ArrayList(abi_asset_resolver.c.ke_component_id),
+    transient: std.ArrayList(abi_asset_resolver.c.ke_component_id),
 
     fn rules(self: *const RuntimeState) wave_mod.Rules {
         return .{ .exclusive = self.exclusive.items, .self_ordered = self.self_ordered.items };
@@ -724,7 +725,9 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: abi_runtime.c.ke_phase, dt: f32) Ph
     if (phase_count == 0) return .{};
 
     const wave_assignments = (h.state.wave_assignments orelse return .{}) + base;
-    const ordered = orderPhase(h, phase_indices[0..phase_count], wave_assignments[0..phase_count]);
+    const culled = heap.gpa.alloc(bool, phase_count) catch return .{ .code = R.code(error.OutOfMemory), .system = "phase order" };
+    defer heap.gpa.free(culled);
+    const ordered = orderPhase(h, phase_indices[0..phase_count], wave_assignments[0..phase_count], culled);
     if (orderFailure(ordered.failure)) |f| return f;
     const wave_count = ordered.wave_count;
 
@@ -737,7 +740,7 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: abi_runtime.c.ke_phase, dt: f32) Ph
         var wave_size: u32 = 0;
 
         for (0..phase_count) |k| {
-            if (wave_assignments[k] != w) continue;
+            if (wave_assignments[k] != w or culled[k]) continue;
             const rs = h.state.systems.?[phase_indices[k]].?;
 
             if (rs.query_count > 0 and phase != abi_runtime.c.KE_PHASE_RENDER and h.state.ecs.query_resolve != null) {
@@ -797,14 +800,16 @@ fn runtimeRunPhase(h: *RuntimeHandle, phase: abi_runtime.c.ke_phase, dt: f32) Ph
     return failure;
 }
 
-/// Orders the systems at `indices`, a phase's systems in registration order, into `out_waves`.
-fn orderPhase(h: *RuntimeHandle, indices: []const u32, out_waves: []u32) wave_mod.Order {
+/// Orders the systems at `indices`, a phase's systems in registration order, into `out_waves`,
+/// and marks in `out_culled` those the phase's transient components let it skip.
+fn orderPhase(h: *RuntimeHandle, indices: []const u32, out_waves: []u32, out_culled: []bool) wave_mod.Order {
     const nodes = heap.gpa.alloc(wave_mod.Node, indices.len) catch return .{ .failure = .out_of_memory };
     defer heap.gpa.free(nodes);
     for (indices, nodes) |si, *node| {
         const rs = h.state.systems.?[si].?;
         node.* = .{ .params = &rs.params, .explicit = rs.explicit_access, .queries = rs.query_decls[0..rs.query_count] };
     }
+    wave_mod.cull(nodes, h.state.transient.items, out_culled);
     return wave_mod.order(nodes, h.state.rules(), out_waves);
 }
 
@@ -847,6 +852,70 @@ fn runtimeDeclareSelfOrdered(self: ?*abi_runtime.c.ke_runtime, cid: abi_asset_re
     return R.ok;
 }
 
+/// Slot `declare_transient`.
+fn runtimeDeclareTransient(self: ?*abi_runtime.c.ke_runtime, cid: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+    if (self == null or self.?.handle == null) {
+        return R.code(reportFailure(error.InvalidArgument, "invalid argument"));
+    }
+    const st = &handleOf(self.?).state;
+    if (std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, st.transient.items, cid) != null) return R.ok;
+    st.transient.append(heap.gpa, cid) catch {
+        return R.code(reportFailure(error.OutOfMemory, "declare_transient: allocation failed"));
+    };
+    return R.ok;
+}
+
+/// Slot `describe_phase`. Builds the order of one phase over the systems registered so far,
+/// including those still pending, and writes each system's wave and whether it is culled.
+fn runtimeDescribePhase(self: ?*abi_runtime.c.ke_runtime, phase: abi_runtime.c.ke_phase, out_systems: [*c]abi_runtime.c.ke_runtime_system_order, capacity: u32, out_count: ?*u32) callconv(.c) abi_result.c.ke_result {
+    const count_out = out_count orelse return R.code(reportFailure(error.InvalidArgument, "describe_phase: out_count is required"));
+    count_out.* = 0;
+    if (self == null or self.?.handle == null or @as(u32, @intCast(phase)) >= KE_RUNTIME_PHASE_COUNT) {
+        return R.code(reportFailure(error.InvalidArgument, "describe_phase: a runtime and a known phase are required"));
+    }
+    const h = handleOf(self.?);
+    applyPendingSystems(h);
+    var count: u32 = 0;
+    for (0..h.state.system_count) |si| {
+        if (h.state.systems.?[si].?.params.phase == phase) count += 1;
+    }
+    if (count > capacity or (count != 0 and out_systems == null)) {
+        log.warn("describe_phase: the phase holds {d} systems, more than the {d} given room", .{ count, capacity });
+        return R.code(error.InvalidArgument);
+    }
+    const indices = heap.gpa.alloc(u32, count) catch return R.code(reportFailure(error.OutOfMemory, "describe_phase: allocation failed"));
+    defer heap.gpa.free(indices);
+    const waves = heap.gpa.alloc(u32, count) catch return R.code(reportFailure(error.OutOfMemory, "describe_phase: allocation failed"));
+    defer heap.gpa.free(waves);
+    const culled = heap.gpa.alloc(bool, count) catch return R.code(reportFailure(error.OutOfMemory, "describe_phase: allocation failed"));
+    defer heap.gpa.free(culled);
+    var k: usize = 0;
+    for (0..h.state.system_count) |si| {
+        if (h.state.systems.?[si].?.params.phase != phase) continue;
+        indices[k] = @intCast(si);
+        k += 1;
+    }
+    const ordered = orderPhase(h, indices, waves, culled);
+    switch (ordered.failure) {
+        .none, .ambiguity => {},
+        .out_of_memory => return R.code(reportFailure(error.OutOfMemory, "describe_phase: allocation failed")),
+        .unknown_name => |u| {
+            log.warn("system '{s}' names '{s}', which no system of its phase carries", .{ spanOr(u.system), spanOr(u.name) });
+            return R.code(error.NotFound);
+        },
+        .cycle => |cy| {
+            log.warn("system '{s}' is in a cycle of its phase's order", .{spanOr(cy.system)});
+            return R.code(error.General);
+        },
+    }
+    for (indices, waves, culled, 0..) |si, wave, gone, i| {
+        const rs = h.state.systems.?[si].?;
+        out_systems[i] = .{ .id = rs.id, .wave = wave, .culled = gone };
+    }
+    count_out.* = count;
+    return R.ok;
+}
+
 /// Slot `check_order`. Builds the order of each phase over the systems registered so far,
 /// including those still pending, and fails on the first problem found, phase by phase, logging
 /// the systems it names.
@@ -864,6 +933,10 @@ fn runtimeCheckOrder(self: ?*abi_runtime.c.ke_runtime, refuse_ambiguity: bool) c
         return R.code(reportFailure(error.OutOfMemory, "check_order: allocation failed"));
     };
     defer heap.gpa.free(waves);
+    const culled = heap.gpa.alloc(bool, h.state.system_count) catch {
+        return R.code(reportFailure(error.OutOfMemory, "check_order: allocation failed"));
+    };
+    defer heap.gpa.free(culled);
     var phase: u32 = 0;
     while (phase < KE_RUNTIME_PHASE_COUNT) : (phase += 1) {
         var count: usize = 0;
@@ -872,7 +945,7 @@ fn runtimeCheckOrder(self: ?*abi_runtime.c.ke_runtime, refuse_ambiguity: bool) c
             indices[count] = @intCast(si);
             count += 1;
         }
-        const ordered = orderPhase(h, indices[0..count], waves[0..count]);
+        const ordered = orderPhase(h, indices[0..count], waves[0..count], culled[0..count]);
         const problem = if (ordered.failure != .none) ordered.failure else if (refuse_ambiguity) ordered.ambiguity else .none;
         switch (problem) {
             .none => {},
@@ -920,10 +993,11 @@ fn runtimeBindQueries(h: *RuntimeHandle, first: usize, last: usize) ?*Registered
         const rs = h.state.systems.?[si].?;
         for (0..rs.query_count) |q| {
             const qd = &rs.query_decls[q];
-            const cids = heap.gpa.alloc(abi_asset_resolver.c.ke_component_id, qd.term_count) catch return rs;
-            defer heap.gpa.free(cids);
-            for (0..qd.term_count) |t| cids[t] = qd.terms[t].cid;
-            if (h.state.ecs.query_register.?(h.state.ecs, cids.ptr, qd.term_count, &rs.query_ids[q]) != abi_result.c.KE_OK) return rs;
+            const terms = heap.gpa.alloc(abi_ecs.c.ke_ecs_query_term, qd.term_count) catch return rs;
+            defer heap.gpa.free(terms);
+            for (terms, qd.terms[0..qd.term_count]) |*t, from| t.* = .{ .component = from.cid, .access = @intCast(from.access) };
+            const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = terms.ptr, .term_count = @intCast(terms.len), .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+            if (h.state.ecs.query_register.?(h.state.ecs, &desc, &rs.query_ids[q]) != abi_result.c.KE_OK) return rs;
         }
     }
     return null;
@@ -1233,6 +1307,7 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
     freePhaseScratch(h);
     h.state.exclusive.deinit(heap.gpa);
     h.state.self_ordered.deinit(heap.gpa);
+    h.state.transient.deinit(heap.gpa);
     cFree(RuntimeHandle, @ptrCast(h), 1);
 }
 
@@ -1243,14 +1318,14 @@ fn runtimeDestroy(self: ?*abi_runtime.c.ke_runtime) callconv(.c) void {
 /// with `invalid_argument`. The
 /// per-phase scratch arrays are allocated here, and if that fails the result is an empty handle
 /// with the error set.
-export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime.c.ke_runtime_config, out_runtime: ?*abi_runtime.c.ke_runtime_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_runtime orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     if (ecs == null or task_pool == null) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs an ecs and a task pool"));
     }
     if (params == null) return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs its params"));
-    const p: *const abi_runtime_factory.c.ke_runtime_params = params;
+    const p: *const abi_runtime.c.ke_runtime_config = params;
     if (!(p.fixed_dt > 0.0) or !(p.fixed_dt_max_accum > 0.0) or p.max_systems_per_phase == 0) {
         return R.code(reportFailure(error.InvalidArgument, "creating the runtime needs a positive fixed step, catch-up budget and system count"));
     }
@@ -1265,6 +1340,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.state.task_pool = task_pool.?;
     h.state.exclusive = .empty;
     h.state.self_ordered = .empty;
+    h.state.transient = .empty;
 
     h.state.fixed_dt = p.fixed_dt;
     h.state.fixed_dt_max_accum = p.fixed_dt_max_accum;
@@ -1294,6 +1370,8 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     h.api.declare_exclusive = &runtimeDeclareExclusive;
     h.api.declare_self_ordered = &runtimeDeclareSelfOrdered;
     h.api.check_order = &runtimeCheckOrder;
+    h.api.declare_transient = &runtimeDeclareTransient;
+    h.api.describe_phase = &runtimeDescribePhase;
     h.api.tick = &runtimeTick;
     h.api.flush_render = &runtimeFlushRender;
     h.api.unload_modules = &runtimeUnloadModules;
@@ -1316,7 +1394,7 @@ export fn ke_runtime_create(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.
     return R.ok;
 }
 
-const test_params: abi_runtime_factory.c.ke_runtime_params = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
+const test_params: abi_runtime.c.ke_runtime_config = .{ .fixed_dt = 1.0 / 60.0, .fixed_dt_max_accum = 0.25, .max_systems_per_phase = 256 };
 const testing = std.testing;
 
 fn systemId(rt: [*c]abi_runtime.c.ke_runtime, p: [*c]const abi_runtime.c.ke_runtime_system_params) abi_runtime.c.ke_system_id {
@@ -1341,7 +1419,7 @@ fn spawned(commands: [*c]abi_ecs.c.ke_ecs_commands) abi_asset_resolver.c.ke_enti
     return entity;
 }
 
-fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime_factory.c.ke_runtime_params) abi_runtime.c.ke_runtime_handle {
+fn createdRuntime(ecs: ?*abi_ecs.c.ke_ecs, task_pool: ?*abi_task_pool.c.ke_task_pool, params: [*c]const abi_runtime.c.ke_runtime_config) abi_runtime.c.ke_runtime_handle {
     var h: abi_runtime.c.ke_runtime_handle = .{ .ref = null, .destroy = null };
     _ = ke_runtime_create(ecs, task_pool, params, &h);
     return h;
@@ -1978,7 +2056,7 @@ test "the shutdown phase runs once when the runtime is destroyed, after every ti
     try testing.expectEqual(@as(c_int, abi_runtime.c.KE_PHASE_SHUTDOWN), seen_log.seen[2]);
 }
 
-fn fakeQueryRegister(_: ?*abi_ecs.c.ke_ecs, _: [*c]const abi_asset_resolver.c.ke_component_id, _: usize, out_query: [*c]abi_ecs.c.ke_query_id) callconv(.c) abi_result.c.ke_result {
+fn fakeQueryRegister(_: ?*abi_ecs.c.ke_ecs, _: ?*const abi_ecs.c.ke_ecs_query_desc, out_query: [*c]abi_ecs.c.ke_query_id) callconv(.c) abi_result.c.ke_result {
     out_query.* = 1;
     return R.ok;
 }
@@ -2621,6 +2699,80 @@ fn orderOf(params: []const abi_runtime.c.ke_runtime_system_params, rules: wave_m
     return wave_mod.order(nodes[0..params.len], rules, waves);
 }
 
+fn culledOf(params: []const abi_runtime.c.ke_runtime_system_params, transient: []const abi_asset_resolver.c.ke_component_id, culled: []bool) void {
+    var nodes: [8]wave_mod.Node = undefined;
+    for (params, nodes[0..params.len]) |*p, *n| n.* = .{ .params = p };
+    wave_mod.cull(nodes[0..params.len], transient, culled);
+}
+
+fn withAccess(name: [*c]const u8, list: []const abi_runtime.c.ke_component_access) abi_runtime.c.ke_runtime_system_params {
+    var p = systemParams(name, abi_runtime.c.KE_PHASE_RENDER);
+    p.access_list = list.ptr;
+    p.access_count = @intCast(list.len);
+    return p;
+}
+
+test "a system writing only transient components nobody reads is culled, and so is the one feeding only it" {
+    const W = abi_runtime.c.KE_ACCESS_WRITE;
+    const Rd = abi_runtime.c.KE_ACCESS_READ;
+    const feeder = [_]abi_runtime.c.ke_component_access{access(1, W)};
+    const orphan = [_]abi_runtime.c.ke_component_access{ access(1, Rd), access(2, W) };
+    const producer = [_]abi_runtime.c.ke_component_access{access(3, W)};
+    const consumer = [_]abi_runtime.c.ke_component_access{ access(3, Rd), access(4, W) };
+    const params = [_]abi_runtime.c.ke_runtime_system_params{ withAccess("feeder", &feeder), withAccess("orphan", &orphan), withAccess("producer", &producer), withAccess("consumer", &consumer) };
+    var culled: [4]bool = undefined;
+    culledOf(&params, &.{ 1, 2, 3 }, &culled);
+    try testing.expectEqualSlices(bool, &.{ true, true, false, false }, &culled);
+}
+
+test "a system writing a component that is not transient, or writing nothing, is never culled" {
+    const W = abi_runtime.c.KE_ACCESS_WRITE;
+    const mixed = [_]abi_runtime.c.ke_component_access{ access(1, W), access(2, W) };
+    const reader = [_]abi_runtime.c.ke_component_access{access(1, abi_runtime.c.KE_ACCESS_READ)};
+    const params = [_]abi_runtime.c.ke_runtime_system_params{ withAccess("mixed", &mixed), withAccess("reader", &reader) };
+    var culled: [2]bool = undefined;
+    culledOf(&params, &.{1}, &culled);
+    try testing.expectEqualSlices(bool, &.{ false, false }, &culled);
+}
+
+test "a culled system keeps its place in the described order and does not run" {
+    var f = try Fixture.init();
+    defer f.deinit();
+    const W = abi_runtime.c.KE_ACCESS_WRITE;
+    const scratch = [_]abi_runtime.c.ke_component_access{access(900, W)};
+    const kept = [_]abi_runtime.c.ke_component_access{access(901, W)};
+    var culled_runs = Counter.init(0);
+    var kept_runs = Counter.init(0);
+    var orphan = systemParams("orphan", abi_runtime.c.KE_PHASE_UPDATE);
+    orphan.execute = &countingSystem;
+    orphan.user_data = &culled_runs;
+    orphan.access_list = &scratch;
+    orphan.access_count = scratch.len;
+    var keeper = systemParams("keeper", abi_runtime.c.KE_PHASE_UPDATE);
+    keeper.execute = &countingSystem;
+    keeper.user_data = &kept_runs;
+    keeper.access_list = &kept;
+    keeper.access_count = kept.len;
+    const orphan_id = systemId(f.rt(), &orphan);
+    _ = systemId(f.rt(), &keeper);
+    try R.check(f.rt().*.declare_transient.?(f.rt(), 900));
+
+    try testing.expect(f.tick(1.0 / 60.0));
+    try testing.expectEqual(@as(u32, 0), culled_runs.load(.acquire));
+    try testing.expectEqual(@as(u32, 1), kept_runs.load(.acquire));
+
+    var order: [2]abi_runtime.c.ke_runtime_system_order = undefined;
+    var count: u32 = 0;
+    try R.check(f.rt().*.describe_phase.?(f.rt(), abi_runtime.c.KE_PHASE_UPDATE, &order, order.len, &count));
+    try testing.expectEqual(@as(u32, 2), count);
+    try testing.expectEqual(orphan_id, order[0].id);
+    try testing.expect(order[0].culled and !order[1].culled);
+    try testing.expectEqual(@as(u32, 0), order[1].wave);
+
+    var short: [1]abi_runtime.c.ke_runtime_system_order = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(f.rt().*.describe_phase.?(f.rt(), abi_runtime.c.KE_PHASE_UPDATE, &short, short.len, &count)));
+}
+
 test "no systems produce no waves" {
     var waves: [1]u32 = undefined;
     try testing.expectEqual(@as(u32, 0), orderOf(&.{}, .{}, &waves).wave_count);
@@ -3077,7 +3229,9 @@ test "a zero size component registers as a usable tag" {
     _ = (try ecsAttach(ecs, e, tag));
 
     var q: abi_ecs.c.ke_query_id = abi_ecs.c.KE_QUERY_INVALID;
-    try R.check(ecs.query_register.?(ecs, (&tag)[0..1], 1, &q));
+    const terms = [_]abi_ecs.c.ke_ecs_query_term{.{ .component = tag, .access = abi_ecs.c.KE_ECS_ACCESS_READ }};
+    const desc: abi_ecs.c.ke_ecs_query_desc = .{ .terms = &terms, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false };
+    try R.check(ecs.query_register.?(ecs, &desc, &q));
     try testing.expect(q != abi_ecs.c.KE_QUERY_INVALID);
 
     var segs = std.mem.zeroes([8]abi_ecs.c.ke_ecs_segment);

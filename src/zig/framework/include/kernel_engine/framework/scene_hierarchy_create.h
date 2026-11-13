@@ -3,7 +3,7 @@
 
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/framework/scene_hierarchy.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/schedule/schedule.h>
 
 #ifdef __cplusplus
 extern "C"
@@ -26,19 +26,20 @@ extern "C"
 #endif
 #endif
 
-    /// Registers the hierarchy flattening and transform propagation systems
-    /// against `runtime`, reading the scene graph out of `ecs`. The
+    /// Registers the hierarchy flattening and transform propagation system in
+    /// the config's set of `schedule`, reading the scene graph out of `ecs`. The
     /// transform/hierarchy components are resolved by the names a scene_tree
     /// already registers them under, so a scene_tree must exist on this ecs
-    /// first; creating a hierarchy without one fails as not found. `runtime` must
+    /// first; creating a hierarchy without one fails as not found. `schedule` must
     /// outlive the hierarchy, whose destroy unregisters what it registered.
     /// @param out_hierarchy [out] Receives the hierarchy; left zeroed on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_NOT_FOUND,
-    ///         KE_RESULT_OUT_OF_MEMORY, or the code of the runtime that refused the system.
+    ///         KE_RESULT_OUT_OF_MEMORY, or the code of the schedule that refused the system.
     KE_FRAMEWORK_API ke_result ke_scene_hierarchy_create(
-        ke_runtime                *runtime,
-        ke_ecs                    *ecs,
-        ke_scene_hierarchy_handle *out_hierarchy);
+        ke_schedule                     *schedule,
+        ke_ecs                          *ecs,
+        const ke_scene_hierarchy_config *config,
+        ke_scene_hierarchy_handle       *out_hierarchy);
 
 #ifdef __cplusplus
 }

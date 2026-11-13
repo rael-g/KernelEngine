@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/input/key.h>
 #include <kernel_engine/input/snapshot.h>
+#include <kernel_engine/schedule/schedule.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -99,6 +100,17 @@ extern "C"
         ke_input_actions *ref;
         void (*destroy)(ke_input_actions *self);
     } ke_input_actions_handle;
+
+/// [borrowed] The values the action maps are created with, whatever its implementation, each applied as given.
+    /// The values the action maps are created with.
+    typedef struct ke_input_actions_config
+    {
+        /// [borrowed,utf8] The configuration section the maps are read from.
+        const char *section;
+        /// The set the "input.actions" system joins when a schedule is given; its schedule must run
+        /// before any behaviour reads an action.
+        ke_schedule_set_id set;
+    } ke_input_actions_config;
 
 #ifdef __cplusplus
 }

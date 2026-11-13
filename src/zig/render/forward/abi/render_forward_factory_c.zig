@@ -71,10 +71,6 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 pub const ke_render_forward_config = extern struct {
     /// Whether the pass samples the sky for image-based light.
     ibl_enabled: bool = std.mem.zeroes(bool),
-    /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
-    shadow: abi_render.c.ke_render_shadow_resources = std.mem.zeroes(abi_render.c.ke_render_shadow_resources),
-    /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
-    clusters: abi_render.c.ke_render_cluster_resources = std.mem.zeroes(abi_render.c.ke_render_cluster_resources),
 };
 
 pub const ke_render_forward_handle = extern struct {
@@ -82,9 +78,9 @@ pub const ke_render_forward_handle = extern struct {
     destroy: ?*const fn (?*ke_render_forward) callconv(.c) void = null,
 };
 
-/// Registers the pass's render-phase system. A missing runtime, service or device fails as an
-/// invalid argument.
-pub extern fn ke_render_forward_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_forward_config, out_forward: ?*ke_render_forward_handle) abi_result.c.ke_result;
+/// Registers the pass's render-phase system. A missing runtime, service, device, shadow or
+/// clusters fails as an invalid argument.
+pub extern fn ke_render_forward_create(context: ?*const abi_render_context.c.ke_render_context, shadow: ?*const abi_render.c.ke_render_shadow_resources, clusters: ?*const abi_render.c.ke_render_cluster_resources, config: ?*const ke_render_forward_config, out_forward: ?*ke_render_forward_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_forward logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

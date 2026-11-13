@@ -38,28 +38,27 @@ extern "C"
         void (*destroy)(ke_render_deferred_lighting *self);
     } ke_render_deferred_lighting_handle;
 
-    /// [bag] The values the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
+    /// The values the deferred lighting pass reads. It joins the chain at KE_RENDER_STAGE_OPAQUE and draws
     /// over the frame's color, sampling the frame's depth.
     typedef struct ke_render_deferred_lighting_config
     {
         /// Whether the pass samples the sky for image-based light.
         bool ibl_enabled;
-        /// The gbuffer it lights.
-        ke_render_gbuffer_resources gbuffer;
-        /// The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
-        ke_render_shadow_resources shadow;
-        /// The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
-        ke_render_cluster_resources clusters;
     } ke_render_deferred_lighting_config;
 
 
-    /// Registers the pass's render-phase system. A missing runtime, service or device, or a
-    /// gbuffer with an invalid id, fails as an invalid argument.
+    /// Registers the pass's render-phase system. A missing runtime, service, device, gbuffer, shadow or
+    /// clusters, or a gbuffer with an invalid id, fails as an invalid argument.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
+    /// @param gbuffer [borrowed] The gbuffer it lights.
+    /// @param shadow [borrowed] The shadow it samples; every id KE_COMPONENT_INVALID samples the neutral one.
+    /// @param clusters [borrowed] The clustered lights it adds; every id KE_COMPONENT_INVALID adds none.
     /// @param config [borrowed] The pass\'s values; Required; every field is read as given.
     /// @param out_lighting [out] Receives the handle; left zeroed on failure.
     KE_RENDER_DEFERRED_LIGHTING_API ke_result ke_render_deferred_lighting_create(
-        const ke_render_context *context, const ke_render_deferred_lighting_config *config, ke_render_deferred_lighting_handle *out_lighting);
+        const ke_render_context *context, const ke_render_gbuffer_resources *gbuffer,
+        const ke_render_shadow_resources *shadow, const ke_render_cluster_resources *clusters,
+        const ke_render_deferred_lighting_config *config, ke_render_deferred_lighting_handle *out_lighting);
 
 #ifdef __cplusplus
 }

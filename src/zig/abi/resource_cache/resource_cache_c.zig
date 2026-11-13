@@ -11,13 +11,6 @@ pub const KE_RESOURCE_HANDLE_NONE = 4294967295;
 /// during destroy() for every still-live resource).
 pub const ke_resource_destroy_func = ?*const fn (ke_resource_handle, ?*anyopaque) callconv(.c) void;
 
-pub const ke_resource_cache_params = extern struct {
-    /// invoked on refcount → 0 (and on destroy of still-live entries); may be NULL
-    destroy_fn: ke_resource_destroy_func = std.mem.zeroes(ke_resource_destroy_func),
-    /// forwarded to destroy_fn unchanged
-    destroy_ctx: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-};
-
 pub const ke_resource_cache = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Registers a new resource with refcount = 1. Returns KE_RESULT_INVALID_ARGUMENT for

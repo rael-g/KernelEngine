@@ -15,6 +15,7 @@ using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Runtime;
+using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
@@ -48,6 +49,15 @@ public sealed class EngineParts
 
     /// <summary>The world's entities and components.</summary>
     public required FlecsEcsRegistry Ecs { get; init; }
+
+    /// <summary>The frame loop that ticks the standard schedules.</summary>
+    public required DefaultScheduler Scheduler { get; init; }
+
+    /// <summary>The standard schedules <see cref="Scheduler"/> runs.</summary>
+    public required EngineSchedules Schedules { get; init; }
+
+    /// <summary>The standard sets, each in one of <see cref="Schedules"/>.</summary>
+    public required EngineSets Sets { get; init; }
 
     /// <summary>The phase loop.</summary>
     public required DefaultRuntime Runtime { get; init; }
@@ -124,14 +134,15 @@ public sealed class Engine : IDisposable
     {
         var slot = new SceneSlotComponent();
         slot.Path = firstScene ?? $"res://scenes/{Parts.Configuration.GetString("project", "default_scene", "Main")}.scene.toml";
-        Types.Spawn(Parts.Runtime.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
+        Types.Spawn(Parts.Schedules.PreUpdate.Commands(), Nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(Nodes.Component("scene_slot"), slot)]);
 
         var clock = Stopwatch.StartNew();
         var previous = clock.Elapsed.TotalSeconds;
-        while (!Parts.Window.ShouldClose() && !Parts.Runtime.ExitRequested())
+        while (!Parts.Window.ShouldClose() && !Parts.Runtime.ExitRequested() && !Parts.Scheduler.ExitRequested())
         {
             Parts.Window.PollEvents();
             var current = clock.Elapsed.TotalSeconds;
+            Parts.Scheduler.Tick((float)(current - previous));
             Parts.Runtime.Tick((float)(current - previous));
             previous = current;
         }
@@ -143,6 +154,7 @@ public sealed class Engine : IDisposable
     {
         Parts.Runtime.Flush();
         Parts.Runtime.UnloadModules();
+        Parts.Scheduler.Shutdown();
         for (var i = _owned.Count - 1; i >= 0; i--) _owned[i].Dispose();
         _owned.Clear();
     }

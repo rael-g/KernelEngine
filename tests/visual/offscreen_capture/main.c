@@ -102,7 +102,7 @@ int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
-    ke_gpu_device_webgpu_config dp = { .enable_validation = 1 };
+    ke_gpu_device_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
     check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
 
@@ -114,9 +114,8 @@ int main(int argc, char **argv)
         .mip_level_count = 1, .sample_count = 1 }, &texture));
 
     ke_gpu_render_target_handle target = { 0 };
-    check("render target create", ke_gpu_render_target_texture_create(gpu.ref,
-        &(ke_gpu_render_target_texture_params){ .texture = texture, .width = WIDTH, .height = HEIGHT,
-                                                 .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM }, &target));
+    check("render target create", ke_gpu_render_target_texture_create(gpu.ref, texture, WIDTH, HEIGHT,
+                                                                  KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, &target));
 
     ke_gpu_capabilities caps = { 0 };
     gpu.ref->get_capabilities(gpu.ref, &caps);

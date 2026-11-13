@@ -189,6 +189,15 @@ pub const KE_GPU_SHADER_LANG_SPIRV: ke_gpu_shader_language = 1;
 pub const KE_GPU_SHADER_LANG_MSL: ke_gpu_shader_language = 2;
 pub const KE_GPU_SHADER_LANG_DXIL: ke_gpu_shader_language = 3;
 
+/// How presented frames reach the screen.
+pub const ke_gpu_present_mode = c_uint;
+/// Each frame waits for the display's vertical blank; no tearing.
+pub const KE_GPU_PRESENT_MODE_FIFO: ke_gpu_present_mode = 0;
+/// The newest frame replaces the one waiting for the blank; no tearing, no waiting.
+pub const KE_GPU_PRESENT_MODE_MAILBOX: ke_gpu_present_mode = 1;
+/// Frames are shown at once and may tear.
+pub const KE_GPU_PRESENT_MODE_IMMEDIATE: ke_gpu_present_mode = 2;
+
 /// What a pass states about a shader binding that the shader's reflection does not carry.
 pub const ke_render_binding_hint_flags = c_uint;
 /// The texture is bound to a depth-format view.
@@ -445,9 +454,26 @@ pub const ke_gpu_compute_pass_params = extern struct {
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
+/// The values a GPU device is created with, whatever its implementation, each applied as given.
+pub const ke_gpu_device_config = extern struct {
+    /// Asks the underlying graphics API to validate every call, which takes effect only where that
+    /// API's validation layers are installed.
+    enable_validation: bool = std.mem.zeroes(bool),
+    /// The labels and debug groups given through ke_gpu_device reach the underlying graphics API,
+    /// where capture tools read them.
+    debug_labels: bool = std.mem.zeroes(bool),
+};
+
 /// Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.
 pub const ke_gpu_command_buffer = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+};
+
+/// The values a render target presenting to a window is created with, whatever its
+/// implementation, each applied as given.
+pub const ke_gpu_render_target_window_config = extern struct {
+    /// How presented frames reach the screen.
+    present_mode: ke_gpu_present_mode = std.mem.zeroes(ke_gpu_present_mode),
 };
 
 /// A hint for the binding a shader declares under `name`.
@@ -460,6 +486,8 @@ pub const ke_render_binding_hint = extern struct {
 pub const ke_render_shader_binding = extern struct {
     /// The parameter's name; the uniform data of a block is named after the block.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// The buffer of a buffer parameter; KE_GPU_INVALID_HANDLE binds one that reads as zeros, at
+    /// least as large as the parameter declares.
     buffer: ke_gpu_buffer = std.mem.zeroes(ke_gpu_buffer),
     buffer_offset: u64 = std.mem.zeroes(u64),
     buffer_size: u64 = std.mem.zeroes(u64),

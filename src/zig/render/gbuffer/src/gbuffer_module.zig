@@ -284,6 +284,7 @@ fn setup(gb: *GBufferModule, p: *const abi_render_context.c.ke_render_context) R
             .size_mode = abi_render.c.KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER,
             .width = 0, .height = 0, .scale_x = 1.0, .scale_y = 1.0,
         }, cid));
+        try R.check(p.runtime.?.declare_transient.?(p.runtime, cid.*));
         gb.writes[i] = cid.*;
     }
 
@@ -614,6 +615,17 @@ test "a missing scene is refused" {
     var res: abi_render.c.ke_render_gbuffer_resources = undefined;
     var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_render_gbuffer_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &res, &h)));
+}
+
+test "the gbuffer targets live only within the render phase" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    var res: abi_render.c.ke_render_gbuffer_resources = undefined;
+    var h: abi_render_gbuffer_factory.c.ke_render_gbuffer_handle = undefined;
+    try R.check(ke_render_gbuffer_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &res, &h));
+    defer h.destroy.?(h.ref);
+    try rig.rt.received(.declare_transient).times(3);
 }
 
 test "a gbuffer pass the runtime refuses to register releases what it had created" {

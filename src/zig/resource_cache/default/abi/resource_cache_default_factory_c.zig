@@ -18,7 +18,7 @@ pub const ke_resource_destroy_func = ?*const fn (ke_resource_handle, ?*anyopaque
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a resource cache.
-pub extern fn ke_resource_cache_create(params: ?*const abi_resource_cache.c.ke_resource_cache_params, out_cache: ?*abi_resource_cache.c.ke_resource_cache_handle) abi_result.c.ke_result;
+pub extern fn ke_resource_cache_create(destroy_fn: ke_resource_destroy_func, destroy_ctx: ?*anyopaque, out_cache: ?*abi_resource_cache.c.ke_resource_cache_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_resource_cache_default logs to callback, with ctx; a NULL callback sends
 /// them back to stderr, where they go until this is called. Called once, before the library

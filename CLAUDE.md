@@ -83,7 +83,7 @@ Contracts worth knowing by name:
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_task_pool` — the single shared worker pool every parallel subsystem routes through
+- `ke_task_pool` — a worker pool; every parallel subsystem routes through the one the host hands it
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
@@ -91,7 +91,7 @@ Contracts worth knowing by name:
 
 Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-five plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
-No C++ implementation. The one `.cpp` in the tree, `src/zig/result/test/cpp_static_init_probe.cpp`, is a test fixture for the Windows DLL start-up workaround. The C libraries plugins compile come from vcpkg (stb, miniaudio) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
+The libraries plugins compile come from vcpkg (stb, miniaudio, assimp) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
 Dependencies enter through dependency management: vcpkg for native libraries, NuGet for .NET, `build.zig.zon` for Zig packages and C sources built by the graph. A pinned fetch step in the root `build.zig` is the exception for what none of them carries, a vendored copy the exception after that, and the machine's environment or the operating system's package manager is never a source — see [`docs/conventions/build.md`](docs/conventions/build.md).
 
@@ -134,17 +134,17 @@ partial class Paddle : Body2D
 
 A complete game is [`examples/csharp/games/pong/`](examples/csharp/games/pong/Program.cs) — copy that, not these snippets.
 
-A service locator is forbidden: injection happens in the orchestration area, never by asking a container for a dependency from inside engine code.
+A service locator is forbidden: no global object that engine code asks for its dependencies. A container used by inversion of control in the host and the SDK is not one: each plugin receives its dependencies through its factory and never sees the container. Composition belongs to each language: C# composes in the host's own container through the constructors the projection generates, C composes explicitly, and no SDK grows with the engine.
 
 ---
 
 ## Threading model
 
-There is one worker pool, behind `ke_task_pool`, and workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+Every thread is a worker of a `ke_task_pool`. The host may create several pools and hands each consumer the pool it runs on; nothing else starts a thread, and no foreign pool (Zig's, .NET's, a library's own) runs engine work. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pool**: a single shared `ke_task_pool` (enkiTS). The runtime's wave dispatcher submits tasks directly, and every parallel subsystem routes through the same pool. The flecs plugin asks flecs for no threads (`ecs_init()` only).
+**Worker pools**: `ke_task_pool` (enkiTS), as many as the host creates, each injected into the consumers that run on it. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
 
 ---
 
@@ -157,7 +157,7 @@ There is one worker pool, behind `ke_task_pool`, and workers are addressed by in
 - Rationale, history, a consumer's or example's name, `<remarks>`, `<para>`, `@note`, `TODO` and any line of context are comments, however they are formatted. The rules a doc comment is written to are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
 
 ### C (contracts) and Zig (implementations)
-- **Extensions**: `.h` for contract and factory headers; `.zig` for implementations. C++ is not used — do not introduce `.cpp`/`.hpp`.
+- **Extensions**: `.h` for contract and factory headers.
 - **Naming**: `snake_case` with a `ke_` prefix on everything crossing the ABI.
 - **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail returns `ke_result` (`KE_OK` or the code of the failure), writes its value through a last `out_` parameter, and logs the reason with `log.warn`. All callers check the code.
@@ -214,6 +214,8 @@ The rules below and the conventions above that a machine can check are checked b
 9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 
 10. **Code first, files on top.** The engine is a framework first. Everything an auxiliary file describes (a project, a scene, input actions, a module) is first an API a program calls; the file is a loader that reads the text and calls that same API, and adds nothing the API cannot do. A file format never reaches state the code cannot reach.
+
+11. **The contract is the product.** A contract is written to outlive every implementation of it: it serves an implementation built the way established engines build it, the way current ones do and the way a future one might, and is never touched again. It is checked against more than one way of implementing it, and promises only what all of them keep. Contracts do not couple to each other: a contract names another contract's type only where the concept is inherent, so each implementation can be replaced on its own. An implementation starts as the simplest one that keeps the contract, built on a third-party library where one exists, and is improved or replaced later, one piece at a time.
 
 ---
 

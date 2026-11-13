@@ -254,3 +254,46 @@ pub fn order(nodes: []const Node, rules: Rules, out_waves: []u32) Order {
     }
     return result;
 }
+
+const ACCESS_READ: c_uint = @intCast(abi_runtime.c.KE_ACCESS_READ);
+
+fn accesses(n: Node) []const abi_runtime.c.ke_component_access {
+    const list = n.params.access_list orelse return &.{};
+    return list[0..n.params.access_count];
+}
+
+fn readsCid(n: Node, cid: abi_asset_resolver.c.ke_component_id) bool {
+    for (accesses(n)) |a| {
+        if (a.cid == cid and (@as(c_uint, @intCast(a.access)) & ACCESS_READ) != 0) return true;
+    }
+    return false;
+}
+
+fn cullable(nodes: []const Node, i: usize, transient: []const abi_asset_resolver.c.ke_component_id, culled: []const bool) bool {
+    var writes_any = false;
+    for (accesses(nodes[i])) |a| {
+        if (!termWrites(a)) continue;
+        writes_any = true;
+        if (std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, transient, a.cid) == null) return false;
+        for (nodes, culled, 0..) |other, gone, j| {
+            if (j != i and !gone and readsCid(other, a.cid)) return false;
+        }
+    }
+    return writes_any;
+}
+
+/// Marks in `out_culled` the systems of one phase whose every write is one of `transient` and that
+/// no other system still running reads, repeating until a pass culls nothing more.
+pub fn cull(nodes: []const Node, transient: []const abi_asset_resolver.c.ke_component_id, out_culled: []bool) void {
+    @memset(out_culled, false);
+    if (transient.len == 0) return;
+    var changed = true;
+    while (changed) {
+        changed = false;
+        for (0..nodes.len) |i| {
+            if (out_culled[i] or !cullable(nodes, i, transient, out_culled)) continue;
+            out_culled[i] = true;
+            changed = true;
+        }
+    }
+}

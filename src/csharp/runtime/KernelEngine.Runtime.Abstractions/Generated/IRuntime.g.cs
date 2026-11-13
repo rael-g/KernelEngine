@@ -59,6 +59,14 @@ public interface IRuntime : IDisposable
     /// <param name="refuseAmbiguity">When true, an ambiguity fails the check too.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void CheckOrder(bool refuseAmbiguity);
+    /// <summary>Declares that the value of cid lives only within the phase it is written in. A system whose every write is transient and that no system of its phase reads is culled: it keeps its place in the order but does not run, and what it read no longer keeps its writers running.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void DeclareTransient(ComponentId cid);
+    /// <summary>Builds the order of phase as the next tick would, culled systems included, in registration order.</summary>
+    /// <param name="outSystems">Receives one entry per system of the phase.</param>
+    /// <returns>Receives the number of systems of the phase.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    uint DescribePhase(RuntimePhase phase, Span<RuntimeSystemOrder> outSystems);
     /// <summary>Runs one tick: every sim phase in order, then the render phase. This is where a body that failed during the tick is answered for.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);

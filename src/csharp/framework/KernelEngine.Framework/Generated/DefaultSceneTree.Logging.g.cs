@@ -10,14 +10,15 @@ public sealed unsafe partial class DefaultSceneTree
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs"></param>
-    /// <param name="runtime"></param>
-    public DefaultSceneTree(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Runtime.INativeRuntime runtime) : base(CreateLogged(loggerFactory, ecs, runtime))
+    /// <param name="schedule">Registers the hierarchy maintenance; NULL registers none.</param>
+    /// <param name="config">Required with schedule; every field is read as given.</param>
+    public DefaultSceneTree(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule? schedule, in KernelEngine.Framework.SceneTreeConfig config) : base(CreateLogged(loggerFactory, ecs, schedule, config))
     {
     }
 
-    private static KernelEngine.Framework.Native.ke_scene_tree_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Runtime.INativeRuntime runtime)
+    private static KernelEngine.Framework.Native.ke_scene_tree_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule? schedule, in KernelEngine.Framework.SceneTreeConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(ecs, runtime);
+        return Create(ecs, schedule, config);
     }
 }

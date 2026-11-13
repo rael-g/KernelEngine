@@ -7,10 +7,12 @@
 namespace KernelEngine.Ecs;
 
 /// <summary>One archetype's slice of a query match: the matched entities, plus one column base pointer per query term in the order query_register received them, each aligned 1:1 with `entities`. A tag term's column is NULL. Pointers stay valid until the next structural change.</summary>
-public readonly ref struct EcsSegment(ReadOnlySpan<Entity> entities, ReadOnlySpan<nint> columns)
+public readonly ref struct EcsSegment(ReadOnlySpan<Entity> entities, ReadOnlySpan<nint> columns, bool changed)
 {
     /// <summary>The entities this segment matched.</summary>
     public ReadOnlySpan<Entity> Entities { get; } = entities;
     /// <summary>One base pointer per query term.</summary>
     public ReadOnlySpan<nint> Columns { get; } = columns;
+    /// <summary>For a query tracking changes: since its previous resolve, the segment's archetype gained or lost entities, or a column of one of the query's terms was marked changed; true on the first resolve. False for a query that does not track changes.</summary>
+    public bool Changed { get; } = changed;
 }

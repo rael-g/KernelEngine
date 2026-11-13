@@ -10,27 +10,24 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
 {
     /// <summary>Creates a window and starts it.</summary>
     /// <param name="input">Input sink target.</param>
-    /// <param name="title">Window title.</param>
-    /// <param name="width">Client width in pixels.</param>
-    /// <param name="height">Client height in pixels.</param>
-    /// <param name="fullscreen">Whether the window covers the primary monitor.</param>
-    public GlfwWindow(KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen) : base(Create(input, title, width, height, fullscreen))
+    /// <param name="config">The window's values; Required; every field is read as given.</param>
+    public GlfwWindow(KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config) : base(Create(input, config))
     {
         Hold(input?.Owner);
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, string? title, int width, int height, bool fullscreen)
+    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config)
     {
-        var titleBytes = title is null ? null : System.Text.Encoding.UTF8.GetBytes(title + "\0");
-        fixed (byte* titlePtr = titleBytes)
+        var titleConfigBytes = config.Title is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Title + "\0");
+        fixed (byte* titleConfigPtr = titleConfigBytes)
         {
-            KernelEngine.Window.Glfw.Native.ke_window_glfw_config config = default;
-            config.title = (sbyte*)titlePtr;
-            config.width = width;
-            config.height = height;
-            config.fullscreen = fullscreen;
+            KernelEngine.Window.Native.ke_window_config nativeConfig = default;
+            nativeConfig.title = (sbyte*)titleConfigPtr;
+            nativeConfig.width = config.Width;
+            nativeConfig.height = config.Height;
+            nativeConfig.fullscreen = config.Fullscreen;
             KernelEngine.Window.Native.ke_window_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), &config, &handle), "ke_window_glfw_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), &nativeConfig, &handle), "ke_window_glfw_create");
             return handle;
         }
     }

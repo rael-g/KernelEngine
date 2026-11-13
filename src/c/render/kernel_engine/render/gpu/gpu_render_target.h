@@ -39,6 +39,25 @@ typedef struct ke_gpu_render_target_handle
     void (*destroy)(ke_gpu_render_target *self);
 } ke_gpu_render_target_handle;
 
+/** How presented frames reach the screen. */
+typedef enum ke_gpu_present_mode
+{
+    /** Each frame waits for the display's vertical blank; no tearing. */
+    KE_GPU_PRESENT_MODE_FIFO = 0,
+    /** The newest frame replaces the one waiting for the blank; no tearing, no waiting. */
+    KE_GPU_PRESENT_MODE_MAILBOX = 1,
+    /** Frames are shown at once and may tear. */
+    KE_GPU_PRESENT_MODE_IMMEDIATE = 2,
+} ke_gpu_present_mode;
+
+
+/// The values a render target presenting to a window is created with, whatever its implementation, each applied as given.
+typedef struct ke_gpu_render_target_window_config
+{
+    /// How presented frames reach the screen.
+    ke_gpu_present_mode present_mode;
+} ke_gpu_render_target_window_config;
+
 #ifdef __cplusplus
 }
 #endif

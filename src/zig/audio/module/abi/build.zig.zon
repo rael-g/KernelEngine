@@ -8,7 +8,7 @@
         .abi_ecs = .{ .path = "../../../abi/ecs" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_result = .{ .path = "../../../abi/result" },
-        .abi_runtime = .{ .path = "../../../abi/runtime" },
+        .abi_schedule = .{ .path = "../../../abi/schedule" },
     },
     .paths = .{"."},
 }

@@ -70,4 +70,5 @@ pub const Window = struct {
 
 };
 
+pub const WindowConfig = c.ke_window_config;
 pub const WindowHandle = c.ke_window_handle;

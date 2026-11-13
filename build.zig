@@ -8,7 +8,6 @@ const ToolTree = @import("scripts/tool_tree.zig").ToolTree;
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
-    const debug = optimize == .Debug;
 
     const root = b.build_root.path orelse @panic("build.zig must run from the repo root");
 
@@ -99,8 +98,8 @@ pub fn build(b: *std.Build) void {
     };
 
     const vcpkg_include = b.pathJoin(&.{ vcpkg_installed, triplet, "include" });
-    const vcpkg_lib_release = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
-    const vcpkg_lib = if (debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib_release;
+    const vcpkg_lib = b.pathJoin(&.{ vcpkg_installed, triplet, "lib" });
+    const flecs_lib = if (optimize == .Debug) b.pathJoin(&.{ vcpkg_installed, triplet, "debug", "lib" }) else vcpkg_lib;
 
     const src_c = b.pathJoin(&.{ root, "src/c" });
     const src_zig = b.pathJoin(&.{ root, "src/zig" });
@@ -153,7 +152,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"flecs-include" = vcpkg_include,
-        .@"flecs-lib" = b.pathJoin(&.{ vcpkg_lib, "libflecs_static.a" }),
+        .@"flecs-lib" = b.pathJoin(&.{ flecs_lib, "libflecs_static.a" }),
     }, &.{}, .has_tests);
 
     _ = ctx.member("ke_input_default", .{
@@ -181,6 +180,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
         .@"enki-lib" = vcpkg_lib,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_scheduler", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_schedule", .{
+        .target = target,
+        .optimize = optimize,
     }, &.{}, .has_tests);
 
     const runtime = ctx.member("ke_runtime", .{
@@ -225,20 +234,17 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
         .@"box2d-include" = vcpkg_include,
-        .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, if (debug) "libbox2dd.a" else "libbox2d.a" }),
+        .@"box2d-lib" = b.pathJoin(&.{ vcpkg_lib, "libbox2d.a" }),
     }, &.{}, .has_tests);
 
     const is_windows = target.result.os.tag == .windows;
     const assimp_libs = b.fmt("{s}|{s}|{s}|{s}|{s}|{s}", .{
-        b.pathJoin(&.{ vcpkg_lib, if (debug) "libassimpd.a" else "libassimp.a" }),
+        b.pathJoin(&.{ vcpkg_lib, "libassimp.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpolyclipping.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpoly2tri.a" }),
         b.pathJoin(&.{ vcpkg_lib, "libpugixml.a" }),
-        b.pathJoin(&.{ vcpkg_lib_release, if (is_windows) "libzs.a" else "libz.a" }),
-        b.pathJoin(&.{ vcpkg_lib, if (is_windows)
-            (if (debug) "libminizipsd.a" else "libminizips.a")
-        else
-            "libminizip.a" }),
+        b.pathJoin(&.{ vcpkg_lib, if (is_windows) "libzs.a" else "libz.a" }),
+        b.pathJoin(&.{ vcpkg_lib, if (is_windows) "libminizips.a" else "libminizip.a" }),
     });
     _ = ctx.member("ke_asset_assimp", .{
         .target = target,
@@ -520,6 +526,10 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
+            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "schedule" }),
+            b.pathJoin(&.{ src_zig, "scheduler/include" }),
+            b.pathJoin(&.{ src_zig, "schedule/include" }),
             b.pathJoin(&.{ src_c, "asset" }),
             b.pathJoin(&.{ src_c, "framework" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
@@ -574,6 +584,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "resource_cache" }),
             b.pathJoin(&.{ src_c, "result" }),
             b.pathJoin(&.{ src_c, "runtime" }),
+            b.pathJoin(&.{ src_c, "scheduler" }),
+            b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "text" }),
@@ -587,6 +599,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
             b.pathJoin(&.{ src_zig, "runtime/include" }),
+            b.pathJoin(&.{ src_zig, "scheduler/include" }),
+            b.pathJoin(&.{ src_zig, "schedule/include" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
             b.pathJoin(&.{ src_zig, "configuration/include" }),
             b.pathJoin(&.{ src_zig, "configuration/toml/include" }),
@@ -620,6 +634,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_schedule") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration_toml") }),

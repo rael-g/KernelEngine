@@ -42,6 +42,8 @@ pub fn build(b: *std.Build) void {
         "abi_runtime",
         "abi_scene_files",
         "abi_scene_tree",
+        "abi_schedule",
+        "abi_scheduler",
         "abi_spatial",
         "abi_spatial_contract",
         "abi_task_pool",
