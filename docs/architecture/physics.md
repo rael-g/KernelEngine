@@ -11,7 +11,7 @@ plugins under `src/zig/physics/`.
 | world | `ke_physics_2d` | box2d | gravity, body and fixture requests | body ids, body state after a step |
 | components | `ke_body2d_component`, `ke_collider2d_component` | none | scene fields, script writes | the description of a body and of a shape |
 | module | `ke_module`; `ke_physics_body2d_create` | body2d | `ke_ecs`, `ke_physics_2d`, `ke_scene_tree`, then the standard schedules at attach | two systems, and both components registered with their field tables |
-| managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, made by the SDK's `EngineBuilder.DefaultPhysics` |
+| managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, registered by `DefaultCore.AddDefaultCore` |
 
 **Game code edits components, never handles.** A body is an entity with a `ke_body2d_component`
 and a transform; a shape is its own entity, a descendant of the body's entity, with a
@@ -35,7 +35,7 @@ a body only once the scene tree's hierarchy generation, the set of bodies or the
 colliders has changed.
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
-plus one, with `KE_BODY_2D_INVALID` as zero. The SDK's `EngineBuilder.DefaultPhysics` creates it with the gravity of
+plus one, with `KE_BODY_2D_INVALID` as zero. `DefaultCore.AddDefaultCore` registers it with the gravity of
 "runtime.physics_2d", beside the `PhysicsBody2DModule` that syncs the bodies.
 
 ## What the parts agree on without a contract
