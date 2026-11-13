@@ -169,6 +169,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_CANCELLED",
+          "value": 9,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null

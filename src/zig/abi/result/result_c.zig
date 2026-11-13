@@ -36,4 +36,5 @@ pub const KE_RESULT_INVALID_ARGUMENT: ke_result = 5;
 pub const KE_RESULT_NOT_INITIALIZED: ke_result = 6;
 pub const KE_RESULT_NOT_SUPPORTED: ke_result = 7;
 pub const KE_RESULT_ALREADY_EXISTS: ke_result = 8;
+pub const KE_RESULT_CANCELLED: ke_result = 9;
 pub const KE_RESULT_MAX_ENUM: ke_result = 2147483647;

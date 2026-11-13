@@ -17,6 +17,7 @@ pub fn Result(comptime domain: anytype) type {
         .{ error.NotInitialized, c.KE_RESULT_NOT_INITIALIZED },
         .{ error.NotSupported, c.KE_RESULT_NOT_SUPPORTED },
         .{ error.AlreadyExists, c.KE_RESULT_ALREADY_EXISTS },
+        .{ error.Cancelled, c.KE_RESULT_CANCELLED },
     };
     const pairs = general ++ domain;
 

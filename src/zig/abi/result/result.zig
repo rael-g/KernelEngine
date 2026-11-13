@@ -4,7 +4,7 @@
 pub const c = @import("result_c.zig");
 
 /// The results of ke_result other than success; Failed is a value the header does not declare.
-pub const Error = error{ ResultGeneral, ResultNotFound, ResultIo, ResultOutOfMemory, ResultInvalidArgument, ResultNotInitialized, ResultNotSupported, ResultAlreadyExists, ResultMaxEnum, Failed };
+pub const Error = error{ ResultGeneral, ResultNotFound, ResultIo, ResultOutOfMemory, ResultInvalidArgument, ResultNotInitialized, ResultNotSupported, ResultAlreadyExists, ResultCancelled, ResultMaxEnum, Failed };
 
 pub fn checkResult(code: c.ke_result) Error!void {
     if (code == c.KE_OK) return;
@@ -16,6 +16,7 @@ pub fn checkResult(code: c.ke_result) Error!void {
     if (code == c.KE_RESULT_NOT_INITIALIZED) return error.ResultNotInitialized;
     if (code == c.KE_RESULT_NOT_SUPPORTED) return error.ResultNotSupported;
     if (code == c.KE_RESULT_ALREADY_EXISTS) return error.ResultAlreadyExists;
+    if (code == c.KE_RESULT_CANCELLED) return error.ResultCancelled;
     if (code == c.KE_RESULT_MAX_ENUM) return error.ResultMaxEnum;
     return error.Failed;
 }
@@ -31,6 +32,7 @@ pub fn resultOf(failure: Error) c.ke_result {
         error.ResultNotInitialized => c.KE_RESULT_NOT_INITIALIZED,
         error.ResultNotSupported => c.KE_RESULT_NOT_SUPPORTED,
         error.ResultAlreadyExists => c.KE_RESULT_ALREADY_EXISTS,
+        error.ResultCancelled => c.KE_RESULT_CANCELLED,
         error.ResultMaxEnum => c.KE_RESULT_MAX_ENUM,
         error.Failed => c.KE_RESULT_GENERAL,
     };
@@ -68,6 +70,7 @@ pub const Result = enum(c.ke_result) {
     result_not_initialized = 6,
     result_not_supported = 7,
     result_already_exists = 8,
+    result_cancelled = 9,
     result_max_enum = 2147483647,
     _,
 };
