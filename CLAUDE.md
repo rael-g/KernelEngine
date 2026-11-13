@@ -134,7 +134,7 @@ partial class Paddle : Body2D
 
 A complete game is [`examples/csharp/games/pong/`](examples/csharp/games/pong/Program.cs) — copy that, not these snippets.
 
-A service locator is forbidden: injection happens in the orchestration area, never by asking a container for a dependency from inside engine code.
+A service locator is forbidden: no global object that engine code asks for its dependencies. A container used by inversion of control in the host and the SDK is not one: each plugin receives its dependencies through its factory and never sees the container. Each plugin carries its own registration in each language's idiom (a C# `AddXxx()` on the host's `IServiceCollection`, a C SDK header), and the SDK of a language knows no plugin.
 
 ---
 
