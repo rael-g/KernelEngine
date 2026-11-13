@@ -195,7 +195,9 @@ public sealed class EngineBuilder
             GravityX = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
             GravityY = (float)p.Configuration.GetDouble("runtime.physics_2d", "gravity_y", 0.0),
         });
-        return [world, new Physics.PhysicsBody2DModule(p.Logging, p.Schedules.Fixed, p.Ecs, world, p.Tree, new() { Set = p.Sets.FixedPostUpdate })];
+        var bodies = new Physics.PhysicsBody2DModule(p.Logging, p.Ecs, world, p.Tree);
+        p.Schedules.Attach(bodies, p.Sets);
+        return [world, bodies];
     }
 
     /// <summary>The default audio: miniaudio, and the module playing the sound components.</summary>

@@ -34,6 +34,7 @@
     <Project Path="src/csharp/schedule/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
     <Project Path="src/csharp/task_pool/KernelEngine.TaskPool/KernelEngine.TaskPool.csproj" />
     <Project Path="src/csharp/completion/KernelEngine.Completion/KernelEngine.Completion.csproj" />
+    <Project Path="src/csharp/module/KernelEngine.Module/KernelEngine.Module.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job/KernelEngine.Job.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job.Enki/KernelEngine.Job.Enki.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job.Inline/KernelEngine.Job.Inline.csproj" />

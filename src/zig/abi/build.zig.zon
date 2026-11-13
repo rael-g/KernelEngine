@@ -27,6 +27,7 @@
         .abi_math = .{ .path = "math" },
         .abi_mesh = .{ .path = "mesh" },
         .abi_mesh_data = .{ .path = "mesh_data" },
+        .abi_module = .{ .path = "module" },
         .abi_node_types = .{ .path = "node_types" },
         .abi_physics = .{ .path = "physics" },
         .abi_physics_components = .{ .path = "physics_components" },

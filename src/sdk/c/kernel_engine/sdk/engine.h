@@ -137,7 +137,7 @@ typedef struct ke_sdk_engine
     ke_scene_tree_handle           scene_tree;
     ke_sdk_renderer                renderer;
     ke_physics_2d_handle           physics;
-    ke_physics_body2d_module_handle bodies;
+    ke_module_handle               bodies;
     ke_audio_handle                audio;
     ke_sound_module_handle         sounds;
     ke_input_actions_handle        actions;
@@ -431,6 +431,25 @@ static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
     return ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
 }
 
+/** The standard schedules of @p e and their sets, as a module attaches to them. */
+static inline ke_module_targets ke_sdk_targets(ke_sdk_engine *e)
+{
+    return (ke_module_targets){
+        .startup = e->schedules.startup.ref, .pre_update = e->schedules.pre_update.ref, .fixed = e->schedules.fixed.ref,
+        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref,
+        .startup_set = e->sets.startup, .pre_update_set = e->sets.pre_update, .fixed_pre_update_set = e->sets.fixed_pre_update,
+        .fixed_update_set = e->sets.fixed_update, .fixed_post_update_set = e->sets.fixed_post_update,
+        .update_set = e->sets.update, .post_update_set = e->sets.post_update, .shutdown_set = e->sets.shutdown,
+    };
+}
+
+/** Attaches @p module to the standard schedules of @p e. */
+static inline ke_result ke_sdk_attach(ke_sdk_engine *e, ke_module *module)
+{
+    ke_module_targets targets = ke_sdk_targets(e);
+    return module->attach(module, &targets);
+}
+
 /** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
 static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
@@ -440,7 +459,8 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
         .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
     };
     ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
-    if (made == KE_OK) made = ke_physics_body2d_module_create(e->schedules.fixed.ref, e->ecs.ref, e->physics.ref, e->scene_tree.ref, &(ke_physics_body2d_module_config){ .set = e->sets.fixed_post_update }, &e->bodies);
+    if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->bodies.ref);
     return made;
 }
 

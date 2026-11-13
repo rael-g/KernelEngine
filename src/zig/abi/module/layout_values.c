@@ -1,0 +1,26 @@
+#include <stddef.h>
+#include <kernel_engine/module/module.h>
+const unsigned long long layout_values[] = {
+    sizeof(ke_module_targets),
+    offsetof(ke_module_targets, startup),
+    offsetof(ke_module_targets, pre_update),
+    offsetof(ke_module_targets, fixed),
+    offsetof(ke_module_targets, update),
+    offsetof(ke_module_targets, shutdown),
+    offsetof(ke_module_targets, startup_set),
+    offsetof(ke_module_targets, pre_update_set),
+    offsetof(ke_module_targets, fixed_pre_update_set),
+    offsetof(ke_module_targets, fixed_update_set),
+    offsetof(ke_module_targets, fixed_post_update_set),
+    offsetof(ke_module_targets, update_set),
+    offsetof(ke_module_targets, post_update_set),
+    offsetof(ke_module_targets, shutdown_set),
+    sizeof(ke_module),
+    offsetof(ke_module, handle),
+    offsetof(ke_module, attach),
+    offsetof(ke_module, detach),
+    sizeof(ke_module_handle),
+    offsetof(ke_module_handle, ref),
+    offsetof(ke_module_handle, destroy),
+    0,
+};

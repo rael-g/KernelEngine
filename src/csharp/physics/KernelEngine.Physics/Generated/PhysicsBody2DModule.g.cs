@@ -5,57 +5,27 @@
 
 namespace KernelEngine.Physics;
 
-/// <summary>Registers, in the config's set, the systems that create, step, and sync 2D bodies.</summary>
-public sealed unsafe partial class PhysicsBody2DModule : IDisposable
+/// <summary>Creates the module that creates, steps and syncs 2D bodies; attaching it registers its two systems in the fixed schedule's fixed_post_update set.</summary>
+public sealed unsafe partial class PhysicsBody2DModule : KernelEngine.Module.Module
 {
-    /// <summary>Registers, in the config's set, the systems that create, step, and sync 2D bodies.</summary>
-    /// <param name="schedule">Registers the systems; borrowed, must outlive the module.</param>
+    /// <summary>Creates the module that creates, steps and syncs 2D bodies; attaching it registers its two systems in the fixed schedule's fixed_post_update set.</summary>
     /// <param name="ecs">Resolves the component ids; borrowed.</param>
-    /// <param name="physics">The world to drive; borrowed.</param>
+    /// <param name="physics">The world to drive; borrowed, must outlive the module.</param>
     /// <param name="sceneTree">Tells when a collider's ancestors may have changed; borrowed, must outlive the module.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public PhysicsBody2DModule(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, in KernelEngine.Physics.PhysicsBody2DModuleConfig config) : this(Create(schedule, ecs, physics, sceneTree, config))
+    public PhysicsBody2DModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : base(Create(ecs, physics, sceneTree))
     {
-        Hold(schedule.Owner);
         Hold(ecs.Owner);
         Hold(physics.Owner);
         Hold(sceneTree.Owner);
     }
 
-    private KernelEngine.Physics.Native.ke_physics_body2d_module_handle _handle;
-
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
-
-    private PhysicsBody2DModule(KernelEngine.Physics.Native.ke_physics_body2d_module_handle handle) => _handle = handle;
-
-    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree)
     {
-        if (owner is null) return;
-        var added = false;
-        owner.DangerousAddRef(ref added);
-        _held.Add(owner);
-    }
-
-    /// <summary>Releases the native object, then what it held.</summary>
-    public void Dispose()
-    {
-        if (_handle.@ref == null) return;
-        _handle.destroy(_handle.@ref);
-        _handle = default;
-        foreach (var held in _held) held.DangerousRelease();
-        _held.Clear();
-    }
-
-    private static KernelEngine.Physics.Native.ke_physics_body2d_module_handle Create(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, in KernelEngine.Physics.PhysicsBody2DModuleConfig config)
-    {
-        ArgumentNullException.ThrowIfNull(schedule);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(physics);
         ArgumentNullException.ThrowIfNull(sceneTree);
-        KernelEngine.Physics.Native.ke_physics_body2d_module_config nativeConfig = default;
-        nativeConfig.set = config.Set;
-        KernelEngine.Physics.Native.ke_physics_body2d_module_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_body2d_module_create(schedule.Native, ecs.Native, physics.Native, sceneTree.Native, &nativeConfig, &handle), "ke_physics_body2d_module_create");
+        KernelEngine.Module.Native.ke_module_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Native.NativeMethods.physics_body2d_create(ecs.Native, physics.Native, sceneTree.Native, &handle), "ke_physics_body2d_create");
         return handle;
     }
 }

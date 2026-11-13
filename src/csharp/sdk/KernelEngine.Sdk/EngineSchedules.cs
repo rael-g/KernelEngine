@@ -35,6 +35,14 @@ public sealed class EngineSchedules
         Add(scheduler, Shutdown, SchedulerCadence.Shutdown);
     }
 
+    /// <summary>Attaches <paramref name="module"/> to these schedules and the standard <paramref name="sets"/> registered in them.</summary>
+    /// <param name="module">The module whose systems join the schedules.</param>
+    /// <param name="sets">The sets the schedules hold.</param>
+    public unsafe void Attach(KernelEngine.Module.Module module, EngineSets sets) =>
+        module.Attach((nint)((INativeSchedule)Startup).Native, (nint)((INativeSchedule)PreUpdate).Native, (nint)((INativeSchedule)Fixed).Native,
+            (nint)((INativeSchedule)Update).Native, (nint)((INativeSchedule)Shutdown).Native, sets.Startup, sets.PreUpdate, sets.FixedPreUpdate,
+            sets.FixedUpdate, sets.FixedPostUpdate, sets.Update, sets.PostUpdate, sets.Shutdown);
+
     /// <summary>Adds <paramref name="schedule"/> to <paramref name="scheduler"/> as an executable whose user is the schedule, run by its own native run slot.</summary>
     /// <param name="scheduler">The scheduler that runs it.</param>
     /// <param name="schedule">The schedule it runs.</param>

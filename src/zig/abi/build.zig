@@ -28,6 +28,7 @@ pub fn build(b: *std.Build) void {
         "abi_math",
         "abi_mesh",
         "abi_mesh_data",
+        "abi_module",
         "abi_node_types",
         "abi_physics",
         "abi_physics_components",

@@ -1291,6 +1291,29 @@ ke_transform size=40 align=4
   rotation 12
   scale 28
 
+[module]
+ke_module_targets size=72 align=8
+  startup 0
+  pre_update 8
+  fixed 16
+  update 24
+  shutdown 32
+  startup_set 40
+  pre_update_set 44
+  fixed_pre_update_set 48
+  fixed_update_set 52
+  fixed_post_update_set 56
+  update_set 60
+  post_update_set 64
+  shutdown_set 68
+ke_module size=24 align=8
+  handle 0
+  attach 8
+  detach 16
+ke_module_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [completion]
 ke_completion size=32 align=8
   handle 0
