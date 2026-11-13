@@ -549,9 +549,9 @@ fn componentRegister(
 
 /// Moves a component to a new layout under the same component id: a new flecs component takes the
 /// name, every holder and the singleton get it seeded with the new defaults and the fields of the
-/// same name, type and size copied from the old one, which is then removed and deleted; the field
-/// table, the cached query, the registered queries and the removal observers that name the
-/// component are rebuilt on the new flecs id.
+/// same name, type and size copied from the old one, which is then removed; the field table, the
+/// cached query, the registered queries and the removal observers that name the component are
+/// rebuilt on the new flecs id, and only then is the old component deleted.
 fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]const u8, size: usize, alignment: usize, inc: []const abi_ecs.c.ke_component_field) error{ OutOfMemory, InvalidArgument }!void {
     const old_id = idOf(s, cid);
     const old_fields = try copyFields(layoutOf(s, cid).?);
@@ -606,7 +606,6 @@ fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]cons
         }
         c.ecs_remove_id(s.world, e, old_id);
     }
-    c.ecs_delete(s.world, old_id);
 
     s.ids.items[cid - 1] = new_id;
     _ = s.cids.remove(old_id);
@@ -634,6 +633,7 @@ fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]cons
         }
     };
     for (s.trackers.items) |t| if (t.cid == cid) try observe(s, t);
+    c.ecs_delete(s.world, old_id);
 }
 
 fn namesComponent(rq: *const RegisteredQuery, cid: abi_asset_resolver.c.ke_component_id) bool {
