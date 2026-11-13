@@ -4,10 +4,9 @@ const std = @import("std");
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
+const abi_module = @import("module");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
-
-pub const ke_sound_module = opaque {};
 
 pub const ke_audio_sound = u32;
 pub const ke_audio_voice = u32;
@@ -40,22 +39,16 @@ pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx,
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// The values the sound module is created with.
-pub const ke_sound_module_config = extern struct {
+pub const ke_sound_config = extern struct {
     /// Directory a clip's path is joined to; copied. NULL uses the path as written.
     root: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The set the system joins.
-    set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-};
-
-pub const ke_sound_module_handle = extern struct {
-    ref: ?*ke_sound_module = std.mem.zeroes(?*ke_sound_module),
-    destroy: ?*const fn (?*ke_sound_module) callconv(.c) void = null,
 };
 
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_audio_module_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Registers, in the config's set, the system that loads, plays and releases the clip of every
-/// ke_sound_component. Destroying the module stops every voice and releases every clip it holds.
-pub extern fn ke_sound_module_create(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const ke_sound_module_config, out_module: ?*ke_sound_module_handle) abi_result.c.ke_result;
+/// Creates the module that loads, plays and releases the clip of every ke_sound_component;
+/// attaching it registers its system in the update schedule's post_update set. Destroying the
+/// module stops every voice and releases every clip it holds.
+pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const ke_sound_config, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;

@@ -9,17 +9,16 @@ public sealed unsafe partial class SoundModule
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="schedule">Registers the system; must outlive the module.</param>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
     /// <param name="config">Required; every field is read as given.</param>
-    public SoundModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config) : this(CreateLogged(loggerFactory, schedule, ecs, audio, config))
+    public SoundModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config) : base(CreateLogged(loggerFactory, ecs, audio, config))
     {
     }
 
-    private static KernelEngine.Audio.Native.ke_sound_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config)
+    private static KernelEngine.Module.Native.ke_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(schedule, ecs, audio, config);
+        return Create(ecs, audio, config);
     }
 }
