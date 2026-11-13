@@ -31,6 +31,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_module_load_fn")) try expectSameLayout(abi.c.ke_module_load_fn, c.ke_module_load_fn);
     if (@hasDecl(c, "ke_module_unload_fn")) try expectSameLayout(abi.c.ke_module_unload_fn, c.ke_module_unload_fn);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
+    if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
     if (@hasDecl(c, "ke_system_execute_fn")) try expectSameLayout(abi.c.ke_system_execute_fn, c.ke_system_execute_fn);
     if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
     if (@hasDecl(c, "ke_task_func")) try expectSameLayout(abi.c.ke_task_func, c.ke_task_func);

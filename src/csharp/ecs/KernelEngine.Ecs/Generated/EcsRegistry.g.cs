@@ -84,7 +84,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_destroy(Handle, entity), "entity_destroy");
     }
 
-    /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With `fields` the layouts are compared field by field; without them, only the size and the alignment are compared.</summary>
+    /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name with the same size, alignment and layout answers the same id. A repeated name with another layout and a field table on both registrations migrates the data of every entity and singleton by field name: a field of the same name and type is copied, a new field takes the default of the table, a field that is gone is dropped; the id stays. Without field tables a different size or alignment is refused.</summary>
     /// <param name="name">Unique component name.</param>
     /// <param name="size">Bytes per entity; 0 registers a tag (no storage).</param>
     /// <param name="alignment">A power of two for a sized component; ignored for a tag of size 0.</param>
@@ -216,18 +216,19 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <summary>Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave; afterwards the segments are plain memory touching no backend state.</summary>
     /// <param name="outSegments">Receives the matched segments.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public (nint OutColumns, nuint OutCount) QueryResolve(ulong query, Span<ke_ecs_segment> outSegments)
+    public (nint OutColumns, ComponentId OutMatched, nuint OutCount) QueryResolve(ulong query, Span<ke_ecs_segment> outSegments)
     {
         fixed (ke_ecs_segment* outSegmentsPtr = outSegments)
         {
             nint outColumns;
+            ComponentId outMatched;
             nuint outCount;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&outColumns, &outCount), "query_resolve");
-            return (outColumns, outCount);
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&outColumns, &outMatched, &outCount), "query_resolve");
+            return (outColumns, outMatched, outCount);
         }
     }
 
-    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.</summary>
+    /// <summary>Reserves an entity id, callable concurrently from any wave thread — the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded. The implementation may replace a reserved id when the commands recorded with it are applied, rewriting every ENTITY field that holds it; a caller does not rely on the number before then.</summary>
     /// <returns>Receives the id; the null entity on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public Entity EntityReserve()
@@ -242,13 +243,6 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public void EntityMaterialize(Entity entity)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_materialize(Handle, entity), "entity_materialize");
-    }
-
-    /// <summary>Marks an entity's component changed, for a writer that reached it by component_get.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void EntityMarkChanged(Entity entity, ComponentId component)
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_mark_changed(Handle, entity, component), "entity_mark_changed");
     }
 
     /// <summary>Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component's field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.</summary>
@@ -272,6 +266,109 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public void SingletonRemove(ComponentId component)
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->singleton_remove(Handle, component), "singleton_remove");
+    }
+
+    /// <summary>The component id of a pair: relation applied to target. A pair is added, removed, read and queried as any component, holding the relation's storage. With KE_ENTITY_WILDCARD as target the id matches every pair of the relation, in a query term, a with or a without alone.</summary>
+    /// <returns>Receives the pair's id; KE_COMPONENT_INVALID on failure.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public ComponentId Pair(ComponentId relation, Entity target)
+    {
+        ComponentId resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->pair(Handle, relation, target, &resultOut), "pair");
+        return resultOut;
+    }
+
+    /// <summary>The relation and the target of a pair's id.</summary>
+    /// <param name="outRelation">Receives the relation.</param>
+    /// <param name="outTarget">Receives the target, KE_ENTITY_WILDCARD for a wildcard pair.</param>
+    /// <returns>false for an id that is not a pair.</returns>
+    public bool TryPairParts(ComponentId pair, out ComponentId outRelation, out Entity outTarget)
+    {
+        ComponentId outRelationLocal;
+        Entity outTargetLocal;
+        var found = Handle->pair_parts(Handle, pair, &outRelationLocal, &outTargetLocal);
+        outRelation = outRelationLocal;
+        outTarget = outTargetLocal;
+        return found;
+    }
+
+    /// <summary>Starts remembering the entities that lose component, by removal or by being destroyed. Single-threaded.</summary>
+    /// <returns>Receives the tracker.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public RemovalTracker RemovalTrack(ComponentId component)
+    {
+        RemovalTracker resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->removal_track(Handle, component, &resultOut), "removal_track");
+        return resultOut;
+    }
+
+    /// <summary>Hands out the entities that lost the tracker's component since the previous call, and forgets them. Single-threaded.</summary>
+    /// <param name="outEntities">Receives the entities.</param>
+    /// <returns>Receives how many were lost; above capacity, the rest stay for the next call.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public nuint Removals(RemovalTracker tracker, Span<Entity> outEntities)
+    {
+        fixed (Entity* outEntitiesPtr = outEntities)
+        {
+            nuint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->removals(Handle, tracker, outEntitiesPtr, (nuint)outEntities.Length, &resultOut), "removals");
+            return resultOut;
+        }
+    }
+
+    /// <summary>The components an entity has, pairs included.</summary>
+    /// <param name="outCids">Receives the components.</param>
+    /// <returns>Receives how many it has; above capacity only the first fit.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public nuint EntityComponents(Entity entity, Span<ComponentId> outCids)
+    {
+        fixed (ComponentId* outCidsPtr = outCids)
+        {
+            nuint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_components(Handle, entity, outCidsPtr, (nuint)outCids.Length, &resultOut), "entity_components");
+            return resultOut;
+        }
+    }
+
+    /// <summary>The components registered in the world.</summary>
+    /// <param name="outCids">Receives the components.</param>
+    /// <returns>Receives how many are registered; above capacity only the first fit.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public nuint Components(Span<ComponentId> outCids)
+    {
+        fixed (ComponentId* outCidsPtr = outCids)
+        {
+            nuint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->components(Handle, outCidsPtr, (nuint)outCids.Length, &resultOut), "components");
+            return resultOut;
+        }
+    }
+
+    /// <summary>Captures the world's entities and the values of the listed components and of their singletons. Single-threaded.</summary>
+    /// <param name="components">What the snapshot holds the values of.</param>
+    /// <returns>Receives the snapshot, freed with snapshot_free.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public EcsSnapshot Snapshot(ReadOnlySpan<ComponentId> components)
+    {
+        fixed (ComponentId* componentsPtr = components)
+        {
+            nint resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->snapshot(Handle, componentsPtr, (uint)components.Length, (ke_ecs_snapshot**)&resultOut), "snapshot");
+            return new EcsSnapshot(resultOut);
+        }
+    }
+
+    /// <summary>Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken for its entities, the ids later creations receive, and the components and singletons the snapshot lists, and for nothing else. A handle a component holds comes back as the number it was. Structural; single-threaded.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void Restore(EcsSnapshot snapshot)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->restore(Handle, (ke_ecs_snapshot*)snapshot.Address), "restore");
+    }
+
+    /// <summary>Frees a snapshot; a null one is ignored.</summary>
+    public void SnapshotFree(EcsSnapshot snapshot)
+    {
+        Handle->snapshot_free(Handle, (ke_ecs_snapshot*)snapshot.Address);
     }
 
     /// <summary>Releases the native ecsregistry.</summary>

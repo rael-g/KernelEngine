@@ -40,6 +40,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_VARIANT_VEC4), @as(i64, abi.c.KE_VARIANT_VEC4));
     try std.testing.expectEqual(@as(i64, c.KE_VARIANT_QUAT), @as(i64, abi.c.KE_VARIANT_QUAT));
     try std.testing.expectEqual(@as(i64, c.KE_VARIANT_TABLE), @as(i64, abi.c.KE_VARIANT_TABLE));
+    try std.testing.expectEqual(@as(i64, c.KE_VARIANT_ENTITY), @as(i64, abi.c.KE_VARIANT_ENTITY));
 }
 
 extern const layout_values: [10]c_ulonglong;

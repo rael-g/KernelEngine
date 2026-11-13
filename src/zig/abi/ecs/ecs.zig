@@ -100,9 +100,9 @@ pub const Ecs = struct {
                 }
             }.call,
             .query_resolve = &struct {
-                fn call(self: ?*c.ke_ecs, a0: c.ke_query_id, a1: ?[*]c.ke_ecs_segment, a2: usize, a3: ?*?*anyopaque, a4: ?*usize) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_query_id, a1: ?[*]c.ke_ecs_segment, a2: usize, a3: ?*?*anyopaque, a4: ?*c.ke_component_id, a5: ?*usize) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.queryResolve(state, a0, a1, a2, a3, a4) catch |failure| return resultOf(failure);
+                    T.queryResolve(state, a0, a1, a2, a3, a4, a5) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -118,13 +118,6 @@ pub const Ecs = struct {
                 fn call(self: ?*c.ke_ecs, a0: c.ke_entity) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     T.entityMaterialize(state, a0) catch |failure| return resultOf(failure);
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .entity_mark_changed = &struct {
-                fn call(self: ?*c.ke_ecs, a0: c.ke_entity, a1: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.entityMarkChanged(state, a0, a1) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -149,6 +142,70 @@ pub const Ecs = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
+            .pair = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id, a1: c.ke_entity, a2: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.pair(state, a0, a1) catch |failure| return resultOf(failure);
+                    (a2 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .pair_parts = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id, a1: ?*c.ke_component_id, a2: ?*c.ke_entity) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.pairParts(state, a0, a1, a2);
+                }
+            }.call,
+            .removal_track = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id, a1: ?*c.ke_removal_tracker) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.removalTrack(state, a0) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .removals = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_removal_tracker, a1: ?[*]c.ke_entity, a2: usize, a3: ?*usize) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.removals(state, a0, a1, a2, a3) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .entity_components = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_entity, a1: ?[*]c.ke_component_id, a2: usize, a3: ?*usize) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.entityComponents(state, a0, a1, a2, a3) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .components = &struct {
+                fn call(self: ?*c.ke_ecs, a0: ?[*]c.ke_component_id, a1: usize, a2: ?*usize) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.components(state, a0, a1, a2) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .snapshot = &struct {
+                fn call(self: ?*c.ke_ecs, a0: ?[*]const c.ke_component_id, a1: u32, a2: ?*?*c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.snapshot(state, if (a0) |items| items[0..a1] else &.{}) catch |failure| return resultOf(failure);
+                    (a2 orelse return resultOf(error.Failed)).* = value.ptr;
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .restore = &struct {
+                fn call(self: ?*c.ke_ecs, a0: ?*const c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.restore(state, EcsSnapshot{ .ptr = a0 orelse return resultOf(error.Failed) }) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
+            .snapshot_free = &struct {
+                fn call(self: ?*c.ke_ecs, a0: ?*c.ke_ecs_snapshot) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.snapshotFree(state, EcsSnapshot{ .ptr = a0 orelse return });
+                }
+            }.call,
         };
     }
 
@@ -166,9 +223,11 @@ pub const Ecs = struct {
     }
 
     /// Registers a component type by name, or returns the existing id if already registered. A
-    /// repeated name must describe the same size, alignment and layout as its first registration.
-    /// With `fields` the layouts are compared field by field; without them, only the size and the
-    /// alignment are compared.
+    /// repeated name with the same size, alignment and layout answers the same id. A repeated name
+    /// with another layout and a field table on both registrations migrates the data of every entity
+    /// and singleton by field name: a field of the same name and type is copied, a new field takes
+    /// the default of the table, a field that is gone is dropped; the id stays. Without field tables
+    /// a different size or alignment is refused.
     pub fn componentRegister(self: Ecs, params: ?*const c.ke_component_params) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.component_register.?(self.ptr, params, &written));
@@ -223,14 +282,16 @@ pub const Ecs = struct {
 
     /// Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave;
     /// afterwards the segments are plain memory touching no backend state.
-    pub fn queryResolve(self: Ecs, query: c.ke_query_id, out_segments: ?[*]c.ke_ecs_segment, max_segments: usize, out_columns: ?*?*anyopaque, out_count: ?*usize) Error!void {
-        try checkResult(self.ptr.query_resolve.?(self.ptr, query, out_segments, max_segments, out_columns, out_count));
+    pub fn queryResolve(self: Ecs, query: c.ke_query_id, out_segments: ?[*]c.ke_ecs_segment, max_segments: usize, out_columns: ?*?*anyopaque, out_matched: ?*c.ke_component_id, out_count: ?*usize) Error!void {
+        try checkResult(self.ptr.query_resolve.?(self.ptr, query, out_segments, max_segments, out_columns, out_matched, out_count));
     }
 
     /// Reserves an entity id, callable concurrently from any wave thread — the one entity operation
     /// that is. The id is usable immediately as a reference; the entity itself appears in the world
     /// when component_add first runs for it, at the wave barrier. An implementation may not satisfy
-    /// this by forwarding to entity_create, which is single-threaded.
+    /// this by forwarding to entity_create, which is single-threaded. The implementation may replace
+    /// a reserved id when the commands recorded with it are applied, rewriting every ENTITY field
+    /// that holds it; a caller does not rely on the number before then.
     pub fn entityReserve(self: Ecs) Error!c.ke_entity {
         var written: c.ke_entity = undefined;
         try checkResult(self.ptr.entity_reserve.?(self.ptr, &written));
@@ -242,11 +303,6 @@ pub const Ecs = struct {
     /// reserved.
     pub fn entityMaterialize(self: Ecs, entity: c.ke_entity) Error!void {
         try checkResult(self.ptr.entity_materialize.?(self.ptr, entity));
-    }
-
-    /// Marks an entity's component changed, for a writer that reached it by component_get.
-    pub fn entityMarkChanged(self: Ecs, entity: c.ke_entity, component: c.ke_component_id) Error!void {
-        try checkResult(self.ptr.entity_mark_changed.?(self.ptr, entity, component));
     }
 
     /// Gives the world one value of a component, matched by no query: its storage is zeroed, then
@@ -268,6 +324,65 @@ pub const Ecs = struct {
     /// single-threaded.
     pub fn singletonRemove(self: Ecs, component: c.ke_component_id) Error!void {
         try checkResult(self.ptr.singleton_remove.?(self.ptr, component));
+    }
+
+    /// The component id of a pair: relation applied to target. A pair is added, removed, read and
+    /// queried as any component, holding the relation's storage. With KE_ENTITY_WILDCARD as target
+    /// the id matches every pair of the relation, in a query term, a with or a without alone.
+    pub fn pair(self: Ecs, relation: c.ke_component_id, target: c.ke_entity) Error!c.ke_component_id {
+        var written: c.ke_component_id = undefined;
+        try checkResult(self.ptr.pair.?(self.ptr, relation, target, &written));
+        return written;
+    }
+
+    /// The relation and the target of a pair's id.
+    pub fn pairParts(self: Ecs, pair_: c.ke_component_id, out_relation: ?*c.ke_component_id, out_target: ?*c.ke_entity) bool {
+        return self.ptr.pair_parts.?(self.ptr, pair_, out_relation, out_target);
+    }
+
+    /// Starts remembering the entities that lose component, by removal or by being destroyed.
+    /// Single-threaded.
+    pub fn removalTrack(self: Ecs, component: c.ke_component_id) Error!c.ke_removal_tracker {
+        var written: c.ke_removal_tracker = undefined;
+        try checkResult(self.ptr.removal_track.?(self.ptr, component, &written));
+        return written;
+    }
+
+    /// Hands out the entities that lost the tracker's component since the previous call, and forgets
+    /// them. Single-threaded.
+    pub fn removals(self: Ecs, tracker: c.ke_removal_tracker, out_entities: ?[*]c.ke_entity, capacity: usize, out_count: ?*usize) Error!void {
+        try checkResult(self.ptr.removals.?(self.ptr, tracker, out_entities, capacity, out_count));
+    }
+
+    /// The components an entity has, pairs included.
+    pub fn entityComponents(self: Ecs, entity: c.ke_entity, out_cids: ?[*]c.ke_component_id, capacity: usize, out_count: ?*usize) Error!void {
+        try checkResult(self.ptr.entity_components.?(self.ptr, entity, out_cids, capacity, out_count));
+    }
+
+    /// The components registered in the world.
+    pub fn components(self: Ecs, out_cids: ?[*]c.ke_component_id, capacity: usize, out_count: ?*usize) Error!void {
+        try checkResult(self.ptr.components.?(self.ptr, out_cids, capacity, out_count));
+    }
+
+    /// Captures the world's entities and the values of the listed components and of their
+    /// singletons. Single-threaded.
+    pub fn snapshot(self: Ecs, components_: []const c.ke_component_id) Error!EcsSnapshot {
+        var written: ?*c.ke_ecs_snapshot = undefined;
+        try checkResult(self.ptr.snapshot.?(self.ptr, components_.ptr, @intCast(components_.len), &written));
+        return .{ .ptr = written orelse return error.Failed };
+    }
+
+    /// Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken for
+    /// its entities, the ids later creations receive, and the components and singletons the snapshot
+    /// lists, and for nothing else. A handle a component holds comes back as the number it was.
+    /// Structural; single-threaded.
+    pub fn restore(self: Ecs, snapshot_: EcsSnapshot) Error!void {
+        try checkResult(self.ptr.restore.?(self.ptr, snapshot_.ptr));
+    }
+
+    /// Frees a snapshot; a null one is ignored.
+    pub fn snapshotFree(self: Ecs, snapshot_: EcsSnapshot) void {
+        return self.ptr.snapshot_free.?(self.ptr, snapshot_.ptr);
     }
 
 };
@@ -349,6 +464,11 @@ pub const EcsCommands = struct {
     pub fn @"defer"(self: EcsCommands, @"fn": c.ke_defer_fn, user: ?*const anyopaque, user_size: usize) Error!void {
         try checkResult(self.ptr.@"defer".?(self.ptr, @"fn", user, user_size));
     }
+
+};
+
+pub const EcsSnapshot = struct {
+    ptr: *c.ke_ecs_snapshot,
 
 };
 

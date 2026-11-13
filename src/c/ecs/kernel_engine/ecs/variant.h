@@ -22,6 +22,8 @@ extern "C"
         KE_VARIANT_VEC4   = 7,
         KE_VARIANT_QUAT   = 8,
         KE_VARIANT_TABLE  = 9,
+        /// An entity of the world the component lives in: the only place a component holds one.
+        KE_VARIANT_ENTITY = 10,
     } ke_variant_type;
 
     struct ke_variant_table;
@@ -40,6 +42,7 @@ extern "C"
             ke_vec4    v4;
             ke_quat    q;
             const struct ke_variant_table *t;
+            uint64_t   e;
         };
     } ke_variant;
 

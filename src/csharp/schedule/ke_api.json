@@ -212,13 +212,18 @@
           "name": "KE_VARIANT_TABLE",
           "value": 9,
           "doc": null
+        },
+        {
+          "name": "KE_VARIANT_ENTITY",
+          "value": 10,
+          "doc": "An entity of the world the component lives in: the only place a component holds one."
         }
       ],
       "external": true
     },
     {
       "name": "ke_ecs_access",
-      "doc": "How a query term\u0027s column is used. Resolving a query marks the columns of its written terms changed in every table it hands out.",
+      "doc": "How a query term\u0027s column is used.",
       "values": [
         {
           "name": "KE_ECS_ACCESS_READ",
@@ -471,6 +476,12 @@
                 "type": "const struct ke_variant_table *",
                 "tags": [],
                 "doc": null
+              },
+              {
+                "name": "e",
+                "type": "uint64_t",
+                "tags": [],
+                "doc": null
               }
             ],
             "union": true
@@ -706,7 +717,15 @@
           "name": "changed",
           "type": "_Bool",
           "tags": [],
-          "doc": "For a query tracking changes: since its previous resolve, the segment\u0027s archetype gained or lost entities, or a column of one of the query\u0027s terms was marked changed; true on the first resolve. False for a query that does not track changes."
+          "doc": "For a query tracking changes: never false when, since the query\u0027s previous resolve, an entity of the segment gained a component of one of its terms or had one written through a resolve or a command; it may be true without that, and is true on the first resolve. False for a query that does not track changes."
+        },
+        {
+          "name": "matched",
+          "type": "const ke_component_id *",
+          "tags": [
+            "array_of:column_count"
+          ],
+          "doc": "Per term, the component it matched: the pair a wildcard pair term matched, the term\u0027s own component otherwise."
         }
       ],
       "external": true
@@ -948,8 +967,8 @@
           "name": "component_register",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name must describe the same size, alignment and layout as its first registration. With \u0060fields\u0060 the layouts are compared field by field; without them, only the size and the alignment are compared.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type conflicts with the name\u0027s prior registration, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
+          "doc": "Registers a component type by name, or returns the existing id if already registered. A repeated name with the same size, alignment and layout answers the same id. A repeated name with another layout and a field table on both registrations migrates the data of every entity and singleton by field name: a field of the same name and type is copied, a new field takes the default of the table, a field that is gone is dropped; the id stays. Without field tables a different size or alignment is refused.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when the params are missing, the alignment is not a power of two, or the type differs from the name\u0027s prior registration with no field table to migrate by, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "params",
@@ -1175,7 +1194,7 @@
               "name": "max_segments",
               "type": "size_t",
               "tags": [],
-              "doc": "Capacity of out_segments. Marks the columns of the query\u0027s written terms changed in the segments it writes."
+              "doc": "Capacity of out_segments. Counts the columns of the query\u0027s written terms as written, for change tracking."
             },
             {
               "name": "out_columns",
@@ -1184,6 +1203,14 @@
                 "out"
               ],
               "doc": "Backing store of the segments\u0027 columns: segment i\u0027s columns are the term_count entries starting at index i * term_count, term_count being that of the description the query was registered with."
+            },
+            {
+              "name": "out_matched",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Backing store of the segments\u0027 matched components, laid out as out_columns."
             },
             {
               "name": "out_count",
@@ -1200,7 +1227,7 @@
           "name": "entity_reserve",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded.",
+          "doc": "Reserves an entity id, callable concurrently from any wave thread \u2014 the one entity operation that is. The id is usable immediately as a reference; the entity itself appears in the world when component_add first runs for it, at the wave barrier. An implementation may not satisfy this by forwarding to entity_create, which is single-threaded. The implementation may replace a reserved id when the commands recorded with it are applied, rewriting every ENTITY field that holds it; a caller does not rely on the number before then.",
           "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY when every id the implementation can reserve was handed out.",
           "params": [
             {
@@ -1224,28 +1251,6 @@
             {
               "name": "entity",
               "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_ecs *"
-        },
-        {
-          "name": "entity_mark_changed",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Marks an entity\u0027s component changed, for a writer that reached it by component_get.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive or lacks the component, its reason logged.",
-          "params": [
-            {
-              "name": "entity",
-              "type": "ke_entity",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "component",
-              "type": "ke_component_id",
               "tags": [],
               "doc": null
             }
@@ -1302,6 +1307,270 @@
             {
               "name": "component",
               "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "pair",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The component id of a pair: relation applied to target. A pair is added, removed, read and queried as any component, holding the relation\u0027s storage. With KE_ENTITY_WILDCARD as target the id matches every pair of the relation, in a query term, a with or a without alone.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown relation or the null target; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "relation",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "target",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cid",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the pair\u0027s id; KE_COMPONENT_INVALID on failure."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "pair_parts",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "The relation and the target of a pair\u0027s id.",
+          "return_doc": "false for an id that is not a pair.",
+          "params": [
+            {
+              "name": "pair",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_relation",
+              "type": "ke_component_id *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the relation."
+            },
+            {
+              "name": "out_target",
+              "type": "ke_entity *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the target, KE_ENTITY_WILDCARD for a wildcard pair."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "removal_track",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Starts remembering the entities that lose component, by removal or by being destroyed. Single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for the null or an unknown component; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_tracker",
+              "type": "ke_removal_tracker *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the tracker."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "removals",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Hands out the entities that lost the tracker\u0027s component since the previous call, and forgets them. Single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown tracker or a null output.",
+          "params": [
+            {
+              "name": "tracker",
+              "type": "ke_removal_tracker",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_entities",
+              "type": "ke_entity *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the entities."
+            },
+            {
+              "name": "capacity",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many were lost; above capacity, the rest stay for the next call."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "entity_components",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The components an entity has, pairs included.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an entity that is not alive or a null output.",
+          "params": [
+            {
+              "name": "entity",
+              "type": "ke_entity",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_cids",
+              "type": "ke_component_id *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the components."
+            },
+            {
+              "name": "capacity",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many it has; above capacity only the first fit."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "components",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "The components registered in the world.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null output.",
+          "params": [
+            {
+              "name": "out_cids",
+              "type": "ke_component_id *",
+              "tags": [
+                "out",
+                "array_of:capacity"
+              ],
+              "doc": "Receives the components."
+            },
+            {
+              "name": "capacity",
+              "type": "size_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_count",
+              "type": "size_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives how many are registered; above capacity only the first fit."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "snapshot",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Captures the world\u0027s entities and the values of the listed components and of their singletons. Single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "components",
+              "type": "const ke_component_id *",
+              "tags": [
+                "borrowed",
+                "array_of:component_count"
+              ],
+              "doc": "What the snapshot holds the values of."
+            },
+            {
+              "name": "component_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_snapshot",
+              "type": "ke_ecs_snapshot **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the snapshot, freed with snapshot_free."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "restore",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken for its entities, the ids later creations receive, and the components and singletons the snapshot lists, and for nothing else. A handle a component holds comes back as the number it was. Structural; single-threaded.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a snapshot of another world; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "const ke_ecs_snapshot *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
+          "name": "snapshot_free",
+          "returns": "void",
+          "tags": [],
+          "doc": "Frees a snapshot; a null one is ignored.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "snapshot",
+              "type": "ke_ecs_snapshot *",
               "tags": [],
               "doc": null
             }
@@ -2094,12 +2363,14 @@
   "id_types": [],
   "foreign_id_types": [
     "ke_entity",
-    "ke_component_id"
+    "ke_component_id",
+    "ke_removal_tracker"
   ],
   "type_aliases": {
     "ke_entity": "uint64_t",
     "ke_component_id": "uint32_t",
     "ke_query_id": "uint64_t",
+    "ke_removal_tracker": "uint64_t",
     "ke_defer_fn": "ke_result (*)(ke_ecs *, void *)",
     "ke_schedule_set_id": "uint32_t",
     "ke_schedule_system_id": "uint64_t",

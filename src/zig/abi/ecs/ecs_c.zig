@@ -4,16 +4,20 @@ const std = @import("std");
 const abi_ecs_variant = @import("ecs_variant");
 const abi_result = @import("result");
 
+pub const ke_ecs_snapshot = opaque {};
+
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
+pub const ke_removal_tracker = u64;
 
 pub const KE_QUERY_INVALID: ke_query_id = 0;
 pub const KE_ENTITY_INVALID = 0;
+/// The target of a pair that matches every target of its relation, in a query alone.
+pub const KE_ENTITY_WILDCARD = 18446744073709551615;
 pub const KE_COMPONENT_INVALID = 0;
 
-/// How a query term's column is used. Resolving a query marks the columns of its written terms
-/// changed in every table it hands out.
+/// How a query term's column is used.
 pub const ke_ecs_access = c_uint;
 pub const KE_ECS_ACCESS_READ: ke_ecs_access = 1;
 pub const KE_ECS_ACCESS_WRITE: ke_ecs_access = 2;
@@ -98,10 +102,14 @@ pub const ke_ecs_segment = extern struct {
     /// One base pointer per query term.
     columns: ?[*]?*anyopaque = std.mem.zeroes(?[*]?*anyopaque),
     column_count: u32 = std.mem.zeroes(u32),
-    /// For a query tracking changes: since its previous resolve, the segment's archetype gained or
-    /// lost entities, or a column of one of the query's terms was marked changed; true on the first
-    /// resolve. False for a query that does not track changes.
+    /// For a query tracking changes: never false when, since the query's previous resolve, an entity
+    /// of the segment gained a component of one of its terms or had one written through a resolve or
+    /// a command; it may be true without that, and is true on the first resolve. False for a query
+    /// that does not track changes.
     changed: bool = std.mem.zeroes(bool),
+    /// Per term, the component it matched: the pair a wildcard pair term matched, the term's own
+    /// component otherwise.
+    matched: ?[*]const ke_component_id = std.mem.zeroes(?[*]const ke_component_id),
 };
 
 /// The values an ECS is created with, whatever its implementation, each applied as given.
@@ -122,9 +130,11 @@ pub const ke_ecs = extern struct {
     /// Structural; single-threaded.
     entity_destroy: ?*const fn (?*ke_ecs, ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Registers a component type by name, or returns the existing id if already registered. A
-    /// repeated name must describe the same size, alignment and layout as its first registration.
-    /// With `fields` the layouts are compared field by field; without them, only the size and the
-    /// alignment are compared.
+    /// repeated name with the same size, alignment and layout answers the same id. A repeated name
+    /// with another layout and a field table on both registrations migrates the data of every entity
+    /// and singleton by field name: a field of the same name and type is copied, a new field takes
+    /// the default of the table, a field that is gone is dropped; the id stays. Without field tables
+    /// a different size or alignment is refused.
     component_register: ?*const fn (?*ke_ecs, ?*const ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Looks up a previously registered component by name.
     component_lookup: ?*const fn (?*ke_ecs, ?[*:0]const u8, ?*ke_component_meta) callconv(.c) bool = null,
@@ -149,18 +159,18 @@ pub const ke_ecs = extern struct {
     query_register: ?*const fn (?*ke_ecs, ?*const ke_ecs_query_desc, ?*ke_query_id) callconv(.c) abi_result.c.ke_result = null,
     /// Resolves a query into archetype segments. MUST run single-threaded, before a parallel wave;
     /// afterwards the segments are plain memory touching no backend state.
-    query_resolve: ?*const fn (?*ke_ecs, ke_query_id, ?[*]ke_ecs_segment, usize, ?*?*anyopaque, ?*usize) callconv(.c) abi_result.c.ke_result = null,
+    query_resolve: ?*const fn (?*ke_ecs, ke_query_id, ?[*]ke_ecs_segment, usize, ?*?*anyopaque, ?*ke_component_id, ?*usize) callconv(.c) abi_result.c.ke_result = null,
     /// Reserves an entity id, callable concurrently from any wave thread — the one entity operation
     /// that is. The id is usable immediately as a reference; the entity itself appears in the world
     /// when component_add first runs for it, at the wave barrier. An implementation may not satisfy
-    /// this by forwarding to entity_create, which is single-threaded.
+    /// this by forwarding to entity_create, which is single-threaded. The implementation may replace
+    /// a reserved id when the commands recorded with it are applied, rewriting every ENTITY field
+    /// that holds it; a caller does not rely on the number before then.
     entity_reserve: ?*const fn (?*ke_ecs, ?*ke_entity) callconv(.c) abi_result.c.ke_result = null,
     /// Brings a reserved id into the world, so an entity that never receives a component still
     /// exists. Structural; single-threaded. A no-op for an id that is already alive or was never
     /// reserved.
     entity_materialize: ?*const fn (?*ke_ecs, ke_entity) callconv(.c) abi_result.c.ke_result = null,
-    /// Marks an entity's component changed, for a writer that reached it by component_get.
-    entity_mark_changed: ?*const fn (?*ke_ecs, ke_entity, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Gives the world one value of a component, matched by no query: its storage is zeroed, then
     /// seeded with the defaults of the component's field table, the first time; a singleton that
     /// exists keeps its storage. Structural; single-threaded.
@@ -171,6 +181,32 @@ pub const ke_ecs = extern struct {
     /// Takes a component's value from the world; a component without one is left alone. Structural;
     /// single-threaded.
     singleton_remove: ?*const fn (?*ke_ecs, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// The component id of a pair: relation applied to target. A pair is added, removed, read and
+    /// queried as any component, holding the relation's storage. With KE_ENTITY_WILDCARD as target
+    /// the id matches every pair of the relation, in a query term, a with or a without alone.
+    pair: ?*const fn (?*ke_ecs, ke_component_id, ke_entity, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    /// The relation and the target of a pair's id.
+    pair_parts: ?*const fn (?*ke_ecs, ke_component_id, ?*ke_component_id, ?*ke_entity) callconv(.c) bool = null,
+    /// Starts remembering the entities that lose component, by removal or by being destroyed.
+    /// Single-threaded.
+    removal_track: ?*const fn (?*ke_ecs, ke_component_id, ?*ke_removal_tracker) callconv(.c) abi_result.c.ke_result = null,
+    /// Hands out the entities that lost the tracker's component since the previous call, and forgets
+    /// them. Single-threaded.
+    removals: ?*const fn (?*ke_ecs, ke_removal_tracker, ?[*]ke_entity, usize, ?*usize) callconv(.c) abi_result.c.ke_result = null,
+    /// The components an entity has, pairs included.
+    entity_components: ?*const fn (?*ke_ecs, ke_entity, ?[*]ke_component_id, usize, ?*usize) callconv(.c) abi_result.c.ke_result = null,
+    /// The components registered in the world.
+    components: ?*const fn (?*ke_ecs, ?[*]ke_component_id, usize, ?*usize) callconv(.c) abi_result.c.ke_result = null,
+    /// Captures the world's entities and the values of the listed components and of their
+    /// singletons. Single-threaded.
+    snapshot: ?*const fn (?*ke_ecs, ?[*]const ke_component_id, u32, ?*?*ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result = null,
+    /// Brings the world back to a snapshot: afterwards it behaves as when the snapshot was taken for
+    /// its entities, the ids later creations receive, and the components and singletons the snapshot
+    /// lists, and for nothing else. A handle a component holds comes back as the number it was.
+    /// Structural; single-threaded.
+    restore: ?*const fn (?*ke_ecs, ?*const ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result = null,
+    /// Frees a snapshot; a null one is ignored.
+    snapshot_free: ?*const fn (?*ke_ecs, ?*ke_ecs_snapshot) callconv(.c) void = null,
 };
 
 pub const ke_ecs_handle = extern struct {

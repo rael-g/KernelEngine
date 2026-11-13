@@ -21,4 +21,7 @@ public unsafe partial struct ke_ecs_segment
     public uint column_count;
 
     public bool changed;
+
+    [NativeTypeName("const ke_component_id *")]
+    public global::KernelEngine.Ecs.ComponentId* matched;
 }

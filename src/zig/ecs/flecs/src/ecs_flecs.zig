@@ -198,7 +198,67 @@ const State = struct {
     layouts: ?[*]LayoutEntry,
     layout_count: usize,
     layout_capacity: usize,
+
+    ids: std.ArrayListUnmanaged(c.ecs_id_t) = .empty,
+    cids: std.AutoHashMapUnmanaged(c.ecs_id_t, abi_asset_resolver.c.ke_component_id) = .empty,
+    trackers: std.ArrayListUnmanaged(*Tracker) = .empty,
+    next_user: u32 = 0,
+    user_start: u32 = 0,
+    own_range: ?*const c.ecs_entity_range_t = null,
+    user_range: ?*const c.ecs_entity_range_t = null,
 };
+
+/// Makes an entity of the created band alive under the band's range, flecs's own range active again
+/// afterwards.
+fn makeUserAlive(s: *State, e: c.ecs_entity_t) void {
+    c.ecs_entity_range_set(s.world, s.user_range);
+    _ = c.ecs_make_alive(s.world, e);
+    c.ecs_entity_range_set(s.world, s.own_range);
+}
+
+const user_id_start: u32 = 1 << 28;
+const user_id_end: u32 = std.math.maxInt(u32);
+
+/// The entities that lost one component since the last `removals` call, filled by a flecs
+/// observer of `OnRemove` on the component's flecs id.
+const Tracker = struct {
+    cid: abi_asset_resolver.c.ke_component_id,
+    singletons: c.ecs_entity_t,
+    observer: c.ecs_entity_t = 0,
+    lost: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty,
+};
+
+/// The flecs id behind a component id, zero for an unknown one.
+fn idOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) c.ecs_id_t {
+    if (cid == 0 or cid > s.ids.items.len) return 0;
+    return s.ids.items[cid - 1];
+}
+
+/// The component id of a flecs id, given the next free one the first time the id is seen.
+fn cidFor(s: *State, id: c.ecs_id_t) error{OutOfMemory}!abi_asset_resolver.c.ke_component_id {
+    if (s.cids.get(id)) |cid| return cid;
+    try s.ids.append(heap.gpa, id);
+    errdefer _ = s.ids.pop();
+    const cid: abi_asset_resolver.c.ke_component_id = @intCast(s.ids.items.len);
+    try s.cids.put(heap.gpa, id, cid);
+    return cid;
+}
+
+fn pairFirst(id: c.ecs_id_t) c.ecs_entity_t {
+    return (id & 0x00FF_FFFF_FFFF_FFFF) >> 32;
+}
+
+fn pairSecond(id: c.ecs_id_t) c.ecs_entity_t {
+    return id & 0xFFFF_FFFF;
+}
+
+/// The component whose storage and field table a component id uses: the relation of a pair, the
+/// component itself otherwise.
+fn storageOf(s: *State, cid: abi_asset_resolver.c.ke_component_id) abi_asset_resolver.c.ke_component_id {
+    const id = idOf(s, cid);
+    if (id == 0 or !c.ecs_id_is_pair(id)) return cid;
+    return s.cids.get(pairFirst(id)) orelse cid;
+}
 
 fn stateOf(self: *abi_ecs.c.ke_ecs) *State {
     return @ptrCast(@alignCast(self.handle));
@@ -226,7 +286,7 @@ fn findOrCreateQuery(s: *State, cid: abi_asset_resolver.c.ke_component_id) ?*Que
     }
 
     var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
-    desc.terms[0].id = @intCast(cid);
+    desc.terms[0].id = idOf(s, cid);
     const q = c.ecs_query_init(s.world, &desc) orelse return null;
 
     const entry = &s.queries.?[s.query_count];
@@ -302,18 +362,26 @@ fn rememberLayout(
     return true;
 }
 
-/// Slot `entity_create`. Ids come from flecs's own allocator, which stays at or above
-/// `reserved_id_capacity`, so they never coincide with a reserved id.
+/// Slot `entity_create`. Ids come from `next_user`, counted up from `user_id_start`, the first id
+/// flecs never gives a component, and never reused, so a snapshot restores them by restoring the
+/// counter; flecs's own allocator serves its internal entities between `reserved_id_capacity` and
+/// `user_id_start`.
 fn entityCreate(self_in: ?*abi_ecs.c.ke_ecs, out_entity: ?*abi_asset_resolver.c.ke_entity) callconv(.c) abi_result.c.ke_result {
     const out = out_entity orelse return R.code(error.InvalidArgument);
     out.* = 0;
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null) return R.code(error.InvalidArgument);
     const s = stateOf(self);
+    if (s.next_user >= user_id_end) {
+        log.warn("every entity id below {d} was created", .{user_id_end});
+        return R.code(error.OutOfMemory);
+    }
+    const e: c.ecs_entity_t = s.next_user;
     begin();
-    const e = c.ecs_new(s.world);
+    makeUserAlive(s, e);
     const rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
+    s.next_user += 1;
     out.* = @intCast(e);
     return R.ok;
 }
@@ -417,25 +485,27 @@ fn componentRegister(
 
     const existing = c.ecs_lookup(s.world, name);
     if (existing != 0) {
-        const cid: abi_asset_resolver.c.ke_component_id = @truncate(existing);
+        const cid = cidFor(s, existing) catch return R.code(error.OutOfMemory);
         const ti = c.ecs_get_type_info(s.world, @intCast(existing));
         const existing_size: usize = if (ti != null) @intCast(ti.*.size) else 0;
-        if (existing_size != size) {
-            return refuse("component '{s}' already registered as {d} bytes, now {d}", .{ name, existing_size, size });
-        }
         const existing_alignment: usize = if (ti != null and size != 0) @intCast(ti.*.alignment) else alignment;
-        if (size != 0 and existing_alignment != alignment) {
-            return refuse("component '{s}' already registered with alignment {d}, now {d}", .{ name, existing_alignment, alignment });
-        }
+        const same_shape = existing_size == size and (size == 0 or existing_alignment == alignment);
         if (incoming) |inc| {
             if (layoutOf(s, cid)) |prev| {
-                if (firstLayoutDiff(prev, inc)) |i| {
-                    return refuse("component '{s}': field {d} differs from the registered layout", .{ name, i });
+                if (!same_shape or firstLayoutDiff(prev, inc) != null) {
+                    migrate(s, cid, name, size, alignment, inc) catch |err| {
+                        log.warn("migrating component '{s}' to its new layout failed: {t}", .{ name, err });
+                        return R.code(err);
+                    };
                 }
+            } else if (!same_shape) {
+                return refuse("component '{s}' already registered as {d} bytes aligned to {d}, now {d} aligned to {d}, with no field table to migrate by", .{ name, existing_size, existing_alignment, size, alignment });
             } else if (!rememberLayout(s, cid, inc.ptr, field_count)) {
                 log.warn("registering component '{s}' failed: out of memory", .{name});
                 return R.code(error.OutOfMemory);
             }
+        } else if (!same_shape) {
+            return refuse("component '{s}' already registered as {d} bytes aligned to {d}, now {d} aligned to {d}, with no field table to migrate by", .{ name, existing_size, existing_alignment, size, alignment });
         }
         _ = findOrCreateQuery(s, cid);
         out.* = cid;
@@ -450,8 +520,9 @@ fn componentRegister(
     if (rc != abi_result.c.KE_OK) return rc;
 
     if (size == 0) {
-        _ = findOrCreateQuery(s, @truncate(e));
-        out.* = @truncate(e);
+        const tag = cidFor(s, e) catch return R.code(error.OutOfMemory);
+        _ = findOrCreateQuery(s, tag);
+        out.* = tag;
         return R.ok;
     }
 
@@ -459,9 +530,10 @@ fn componentRegister(
     cdesc.entity = e;
     cdesc.type.size = @intCast(size);
     cdesc.type.alignment = @intCast(alignment);
-    const cid: abi_asset_resolver.c.ke_component_id = @truncate(c.ecs_component_init(s.world, &cdesc));
+    const created_id = c.ecs_component_init(s.world, &cdesc);
     rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
+    const cid = cidFor(s, created_id) catch return R.code(error.OutOfMemory);
 
     if (incoming) |inc| {
         if (!rememberLayout(s, cid, inc.ptr, field_count)) {
@@ -473,6 +545,120 @@ fn componentRegister(
     _ = findOrCreateQuery(s, cid);
     out.* = cid;
     return R.ok;
+}
+
+/// Moves a component to a new layout under the same component id: a new flecs component takes the
+/// name, every holder and the singleton get it seeded with the new defaults and the fields of the
+/// same name, type and size copied from the old one, which is then removed and deleted; the field
+/// table, the cached query, the registered queries and the removal observers that name the
+/// component are rebuilt on the new flecs id.
+fn migrate(s: *State, cid: abi_asset_resolver.c.ke_component_id, name: [*:0]const u8, size: usize, alignment: usize, inc: []const abi_ecs.c.ke_component_field) error{ OutOfMemory, InvalidArgument }!void {
+    const old_id = idOf(s, cid);
+    const old_fields = try copyFields(layoutOf(s, cid).?);
+    defer freeFields(old_fields);
+    const new_fields = try copyFields(inc);
+    errdefer freeFields(new_fields);
+    const old_ti = c.ecs_get_type_info(s.world, old_id);
+    const old_size: usize = if (old_ti != null) @intCast(old_ti.*.size) else 0;
+
+    begin();
+    _ = c.ecs_set_name(s.world, old_id, null);
+    var edesc: c.ecs_entity_desc_t = std.mem.zeroes(c.ecs_entity_desc_t);
+    edesc.name = name;
+    var new_id = c.ecs_entity_init(s.world, &edesc);
+    if (size != 0) {
+        var cdesc: c.ecs_component_desc_t = std.mem.zeroes(c.ecs_component_desc_t);
+        cdesc.entity = new_id;
+        cdesc.type.size = @intCast(size);
+        cdesc.type.alignment = @intCast(alignment);
+        new_id = c.ecs_component_init(s.world, &cdesc);
+    }
+    if (outcome() != abi_result.c.KE_OK or new_id == 0) return error.InvalidArgument;
+
+    for (s.trackers.items) |t| if (t.cid == cid and t.observer != 0) {
+        c.ecs_delete(s.world, t.observer);
+        t.observer = 0;
+    };
+
+    var holders: std.ArrayListUnmanaged(c.ecs_entity_t) = .empty;
+    defer holders.deinit(heap.gpa);
+    var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    desc.terms[0].id = old_id;
+    const q = c.ecs_query_init(s.world, &desc) orelse return error.InvalidArgument;
+    var it = c.ecs_query_iter(s.world, q);
+    while (c.ecs_query_next(&it)) for (it.entities[0..@intCast(it.count)]) |e| try holders.append(heap.gpa, e);
+    c.ecs_query_fini(q);
+    if (c.ecs_has_id(s.world, s.singletons, old_id)) try holders.append(heap.gpa, s.singletons);
+
+    const scratch = try heap.gpa.alloc(u8, @max(old_size, 1));
+    defer heap.gpa.free(scratch);
+    for (holders.items) |e| {
+        if (old_size != 0) @memcpy(scratch[0..old_size], @as([*]const u8, @ptrCast(c.ecs_get_id(s.world, e, old_id)))[0..old_size]);
+        c.ecs_add_id(s.world, e, new_id);
+        if (size != 0) {
+            const dst: [*]u8 = @ptrCast(c.ecs_get_mut_id(s.world, e, new_id));
+            @memset(dst[0..size], 0);
+            field_write.seedDefaults(dst, new_fields.ptr, @intCast(new_fields.len));
+            for (new_fields) |nf| for (old_fields) |of| {
+                if (!nameEquals(nf.name, of.name) or nf.type != of.type or nf.size != of.size) continue;
+                @memcpy(dst[nf.offset..][0..nf.size], scratch[of.offset..][0..of.size]);
+            };
+        }
+        c.ecs_remove_id(s.world, e, old_id);
+    }
+    c.ecs_delete(s.world, old_id);
+
+    s.ids.items[cid - 1] = new_id;
+    _ = s.cids.remove(old_id);
+    try s.cids.put(heap.gpa, new_id, cid);
+    const ls = s.layouts.?;
+    for (ls[0..s.layout_count]) |*l| if (l.cid == cid) {
+        freeFields(@constCast(l.fields[0..l.field_count]));
+        l.fields = new_fields.ptr;
+        l.field_count = @intCast(new_fields.len);
+    };
+
+    if (s.queries) |qs| for (qs[0..s.query_count]) |*entry| if (entry.cid == cid) {
+        if (entry.query) |old| c.ecs_query_fini(old);
+        var d: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+        d.terms[0].id = new_id;
+        entry.query = c.ecs_query_init(s.world, &d);
+    };
+    if (s.rqueries) |rqs| for (rqs[0..s.rquery_count]) |*rq| {
+        if (!namesComponent(rq, cid)) continue;
+        if (rq.query) |old| c.ecs_query_fini(old);
+        rq.query = buildQuery(s, rq.terms, rq.with, rq.without, rq.track_changes);
+        for (rq.terms, rq.elem_sizes) |t, *elem| {
+            const ti = c.ecs_get_type_info(s.world, idOf(s, t.component));
+            elem.* = if (ti != null) @intCast(ti.*.size) else 0;
+        }
+    };
+    for (s.trackers.items) |t| if (t.cid == cid) try observe(s, t);
+}
+
+fn namesComponent(rq: *const RegisteredQuery, cid: abi_asset_resolver.c.ke_component_id) bool {
+    for (rq.terms) |t| if (t.component == cid) return true;
+    for (rq.with) |w| if (w == cid) return true;
+    for (rq.without) |w| if (w == cid) return true;
+    return false;
+}
+
+fn buildQuery(s: *State, terms: []const abi_ecs.c.ke_ecs_query_term, with: []const abi_asset_resolver.c.ke_component_id, without: []const abi_asset_resolver.c.ke_component_id, track_changes: bool) ?*c.ecs_query_t {
+    var fdesc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    for (terms, 0..) |t, i| {
+        fdesc.terms[i].id = idOf(s, t.component);
+        fdesc.terms[i].inout = if ((@as(c_uint, @intCast(t.access)) & abi_ecs.c.KE_ECS_ACCESS_WRITE) != 0) c.EcsInOut else c.EcsIn;
+    }
+    for (with, terms.len..) |cid, i| {
+        fdesc.terms[i].id = idOf(s, cid);
+        fdesc.terms[i].inout = c.EcsInOutNone;
+    }
+    for (without, terms.len + with.len..) |cid, i| {
+        fdesc.terms[i].id = idOf(s, cid);
+        fdesc.terms[i].oper = c.EcsNot;
+    }
+    if (track_changes) fdesc.flags = c.EcsQueryDetectChanges;
+    return c.ecs_query_init(s.world, &fdesc);
 }
 
 /// Logs why a registration was refused and returns the invalid-argument code.
@@ -498,7 +684,7 @@ fn componentLookup(
     const e = c.ecs_lookup(s.world, name);
     if (e == 0) return false;
 
-    const cid: abi_asset_resolver.c.ke_component_id = @truncate(e);
+    const cid = s.cids.get(e) orelse return false;
     const ti = c.ecs_get_type_info(s.world, @intCast(e));
     if (ti == null and !isRegistered(s, cid)) return false;
 
@@ -544,20 +730,25 @@ fn componentAdd(
 /// Adds a component to a living entity, zeroing and seeding it with the remembered defaults only
 /// when the entity did not hold it, and writes its bytes, or null for a zero-size component.
 fn attachTo(s: *State, entity: c.ecs_entity_t, component: abi_asset_resolver.c.ke_component_id, out: *?*anyopaque) abi_result.c.ke_result {
-    const already_had = c.ecs_has_id(s.world, entity, @intCast(component));
-    c.ecs_add_id(s.world, entity, @intCast(component));
+    const id = idOf(s, component);
+    if (id == 0) {
+        log.warn("no component has id {d}", .{component});
+        return R.code(error.InvalidArgument);
+    }
+    const already_had = c.ecs_has_id(s.world, entity, id);
+    c.ecs_add_id(s.world, entity, id);
     var rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
-    const ti = c.ecs_get_type_info(s.world, @intCast(component));
+    const ti = c.ecs_get_type_info(s.world, id);
     if (ti == null or ti.*.size <= 0) return R.ok;
 
-    const slot = c.ecs_get_mut_id(s.world, entity, @intCast(component));
+    const slot = c.ecs_get_mut_id(s.world, entity, id);
     rc = outcome();
     if (rc != abi_result.c.KE_OK) return rc;
     if (!already_had) {
         const bytes: [*]u8 = @ptrCast(slot);
         @memset(bytes[0..@intCast(ti.*.size)], 0);
-        if (layoutOf(s, component)) |fields| {
+        if (layoutOf(s, storageOf(s, component))) |fields| {
             field_write.seedDefaults(slot, fields.ptr, @intCast(fields.len));
         }
     }
@@ -572,7 +763,8 @@ fn componentRemove(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_
     if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     begin();
-    if (c.ecs_is_alive(s.world, @intCast(entity))) c.ecs_remove_id(s.world, @intCast(entity), @intCast(component));
+    const id = idOf(s, component);
+    if (id != 0 and c.ecs_is_alive(s.world, @intCast(entity))) c.ecs_remove_id(s.world, @intCast(entity), id);
     return outcome();
 }
 
@@ -583,8 +775,9 @@ fn componentGet(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_ent
     if (self.handle == null or entity == 0 or component == 0) return null;
     const s = stateOf(self);
     if (!c.ecs_is_alive(s.world, @intCast(entity))) return null;
-    if (!c.ecs_has_id(s.world, @intCast(entity), @intCast(component))) return null;
-    return @constCast(c.ecs_get_id(s.world, @intCast(entity), @intCast(component)));
+    const id = idOf(s, component);
+    if (id == 0 or !c.ecs_has_id(s.world, @intCast(entity), id)) return null;
+    return @constCast(c.ecs_get_id(s.world, @intCast(entity), id));
 }
 
 /// Slot `component_size`. The byte size flecs holds for a component id, zero for an unknown id or
@@ -593,7 +786,9 @@ fn componentSize(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_compo
     const self = self_in orelse return 0;
     if (self.handle == null or cid == 0) return 0;
     const s = stateOf(self);
-    const ti = c.ecs_get_type_info(s.world, @intCast(cid));
+    const id = idOf(s, cid);
+    if (id == 0) return 0;
+    const ti = c.ecs_get_type_info(s.world, id);
     if (ti == null) return 0;
     return @intCast(ti.*.size);
 }
@@ -635,7 +830,7 @@ fn queryRegister(
             return R.code(error.InvalidArgument);
         }
     }
-    var fdesc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    const fdesc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
     const total = terms.len + with.len + without.len;
     if (total > fdesc.terms.len) {
         log.warn("a query of {d} terms and filters is more than the {d} a flecs query holds", .{ total, fdesc.terms.len });
@@ -654,21 +849,8 @@ fn queryRegister(
         }
     };
 
-    for (terms, 0..) |t, i| {
-        fdesc.terms[i].id = @intCast(t.component);
-        fdesc.terms[i].inout = if ((@as(c_uint, @intCast(t.access)) & abi_ecs.c.KE_ECS_ACCESS_WRITE) != 0) c.EcsInOut else c.EcsIn;
-    }
-    for (with, terms.len..) |cid, i| {
-        fdesc.terms[i].id = @intCast(cid);
-        fdesc.terms[i].inout = c.EcsInOutNone;
-    }
-    for (without, terms.len + with.len..) |cid, i| {
-        fdesc.terms[i].id = @intCast(cid);
-        fdesc.terms[i].oper = c.EcsNot;
-    }
-    if (d.track_changes) fdesc.flags = c.EcsQueryDetectChanges;
     begin();
-    const query = c.ecs_query_init(s.world, &fdesc);
+    const query = buildQuery(s, terms, with, without, d.track_changes);
     const rc = outcome();
     const q = query orelse {
         if (rc == abi_result.c.KE_OK) log.warn("flecs refused the query", .{});
@@ -685,7 +867,7 @@ fn queryRegister(
         return R.code(error.OutOfMemory);
     };
     for (terms, rq.elem_sizes) |t, *size| {
-        const ti = c.ecs_get_type_info(s.world, @intCast(t.component));
+        const ti = c.ecs_get_type_info(s.world, idOf(s, t.component));
         size.* = if (ti != null) @intCast(ti.*.size) else 0;
     }
 
@@ -736,12 +918,13 @@ fn queryResolve(
     out_segments: [*c]abi_ecs.c.ke_ecs_segment,
     max_segments: usize,
     out_columns: [*c]?*anyopaque,
+    out_matched: [*c]abi_asset_resolver.c.ke_component_id,
     out_count: [*c]usize,
 ) callconv(.c) abi_result.c.ke_result {
     if (out_count == null) return R.code(error.InvalidArgument);
     out_count.* = 0;
     const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or query == abi_ecs.c.KE_QUERY_INVALID or out_segments == null or out_columns == null or max_segments == 0)
+    if (self.handle == null or query == abi_ecs.c.KE_QUERY_INVALID or out_segments == null or out_columns == null or out_matched == null or max_segments == 0)
         return R.code(error.InvalidArgument);
     const s = stateOf(self);
     const idx: usize = @intCast(query - 1);
@@ -769,6 +952,9 @@ fn queryResolve(
             cols[t] = if (rq.elem_sizes[t] != 0) c.ecs_field_w_size(&it, rq.elem_sizes[t], @intCast(t)) else null;
         dst.columns = cols;
         dst.column_count = @intCast(rq.term_count);
+        const matched = out_matched + seg * rq.term_count;
+        for (0..rq.term_count) |t| matched[t] = if (c.ecs_id_is_wildcard(idOf(s, rq.terms[t].component))) (cidFor(s, it.ids[t]) catch rq.terms[t].component) else rq.terms[t].component;
+        dst.matched = matched;
         dst.changed = rq.track_changes and c.ecs_iter_changed(&it);
         seg += 1;
     }
@@ -776,21 +962,6 @@ fn queryResolve(
     if (rc != abi_result.c.KE_OK) return rc;
     out_count.* = seg;
     return R.ok;
-}
-
-/// Slot `entity_mark_changed`. Marks the component's column changed in the entity's table through
-/// `ecs_modified_id`.
-fn entityMarkChanged(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, component: abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-    const self = self_in orelse return R.code(error.InvalidArgument);
-    if (self.handle == null or entity == 0 or component == 0) return R.code(error.InvalidArgument);
-    const s = stateOf(self);
-    if (!c.ecs_is_alive(s.world, @intCast(entity)) or !c.ecs_has_id(s.world, @intCast(entity), @intCast(component))) {
-        log.warn("marking component {d} of entity {d} changed, which does not hold it", .{ component, entity });
-        return R.code(error.InvalidArgument);
-    }
-    begin();
-    c.ecs_modified_id(s.world, @intCast(entity), @intCast(component));
-    return outcome();
 }
 
 /// Slot `singleton_add`. Attaches the component to the disabled singleton entity, as `component_add`
@@ -814,8 +985,9 @@ fn singletonGet(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_
     const self = self_in orelse return null;
     if (self.handle == null or component == 0) return null;
     const s = stateOf(self);
-    if (!c.ecs_has_id(s.world, s.singletons, @intCast(component))) return null;
-    return @constCast(c.ecs_get_id(s.world, s.singletons, @intCast(component)));
+    const id = idOf(s, component);
+    if (id == 0 or !c.ecs_has_id(s.world, s.singletons, id)) return null;
+    return @constCast(c.ecs_get_id(s.world, s.singletons, id));
 }
 
 /// Slot `singleton_remove`. Removes the component from the singleton entity.
@@ -824,7 +996,8 @@ fn singletonRemove(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.
     if (self.handle == null or component == 0) return R.code(error.InvalidArgument);
     const s = stateOf(self);
     begin();
-    c.ecs_remove_id(s.world, s.singletons, @intCast(component));
+    const id = idOf(s, component);
+    if (id != 0) c.ecs_remove_id(s.world, s.singletons, id);
     return outcome();
 }
 
@@ -855,12 +1028,317 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
     }
     if (s.materialized) |m| heap.gpa.free(m);
     if (s.world) |w| _ = c.ecs_fini(w);
+    for (s.trackers.items) |t| {
+        t.lost.deinit(heap.gpa);
+        heap.gpa.destroy(t);
+    }
+    s.trackers.deinit(heap.gpa);
+    s.ids.deinit(heap.gpa);
+    s.cids.deinit(heap.gpa);
 
     heap.gpa.destroy(s);
 }
 
 /// The factory the plugin exports. A null config takes the header's defaults. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
+
+/// Slot `pair`. A pair id is flecs's own pair of the relation's component entity and the target, or
+/// flecs's wildcard for KE_ENTITY_WILDCARD.
+fn pair(self_in: ?*abi_ecs.c.ke_ecs, relation: abi_asset_resolver.c.ke_component_id, target: abi_asset_resolver.c.ke_entity, out_cid: ?*abi_asset_resolver.c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+    const out = out_cid orelse return R.code(error.InvalidArgument);
+    out.* = 0;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    const rel = idOf(s, relation);
+    if (rel == 0 or c.ecs_id_is_pair(rel) or target == 0) {
+        log.warn("a pair needs a registered relation and a target, given {d} and {d}", .{ relation, target });
+        return R.code(error.InvalidArgument);
+    }
+    const second: c.ecs_entity_t = if (target == abi_ecs.c.KE_ENTITY_WILDCARD) c.EcsWildcard else @intCast(target);
+    out.* = cidFor(s, c.ecs_make_pair(rel, second)) catch return R.code(error.OutOfMemory);
+    return R.ok;
+}
+
+/// Slot `pair_parts`.
+fn pairParts(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_component_id, out_relation: ?*abi_asset_resolver.c.ke_component_id, out_target: ?*abi_asset_resolver.c.ke_entity) callconv(.c) bool {
+    const s = stateOf(self_in orelse return false);
+    const id = idOf(s, cid);
+    if (id == 0 or !c.ecs_id_is_pair(id)) return false;
+    const relation = s.cids.get(pairFirst(id)) orelse return false;
+    const second = pairSecond(id);
+    if (out_relation) |r| r.* = relation;
+    if (out_target) |t| t.* = if (second == c.EcsWildcard) abi_ecs.c.KE_ENTITY_WILDCARD else second;
+    return true;
+}
+
+fn onRemove(it: [*c]c.ecs_iter_t) callconv(.c) void {
+    const t: *Tracker = @ptrCast(@alignCast(it.*.ctx));
+    for (0..@intCast(it.*.count)) |i| {
+        const e = it.*.entities[i];
+        if (e == t.singletons) continue;
+        t.lost.append(heap.gpa, @intCast(e)) catch log.warn("an entity that lost component {d} was not remembered: out of memory", .{t.cid});
+    }
+}
+
+fn observe(s: *State, t: *Tracker) error{InvalidArgument}!void {
+    var desc: c.ecs_observer_desc_t = std.mem.zeroes(c.ecs_observer_desc_t);
+    desc.query.terms[0].id = idOf(s, t.cid);
+    desc.events[0] = c.EcsOnRemove;
+    desc.callback = onRemove;
+    desc.ctx = t;
+    begin();
+    t.observer = c.ecs_observer_init(s.world, &desc);
+    if (outcome() != abi_result.c.KE_OK or t.observer == 0) return error.InvalidArgument;
+}
+
+/// Slot `removal_track`. The tracker id is its index plus one.
+fn removalTrack(self_in: ?*abi_ecs.c.ke_ecs, component: abi_asset_resolver.c.ke_component_id, out_tracker: ?*abi_ecs.c.ke_removal_tracker) callconv(.c) abi_result.c.ke_result {
+    const out = out_tracker orelse return R.code(error.InvalidArgument);
+    out.* = 0;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    if (idOf(s, component) == 0) {
+        log.warn("no component has id {d}", .{component});
+        return R.code(error.InvalidArgument);
+    }
+    const t = heap.gpa.create(Tracker) catch return R.code(error.OutOfMemory);
+    t.* = .{ .cid = component, .singletons = s.singletons };
+    s.trackers.append(heap.gpa, t) catch {
+        heap.gpa.destroy(t);
+        return R.code(error.OutOfMemory);
+    };
+    observe(s, t) catch return R.code(error.InvalidArgument);
+    out.* = s.trackers.items.len;
+    return R.ok;
+}
+
+/// Slot `removals`.
+fn removals(self_in: ?*abi_ecs.c.ke_ecs, tracker: abi_ecs.c.ke_removal_tracker, out_entities: [*c]abi_asset_resolver.c.ke_entity, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+    const count = out_count orelse return R.code(error.InvalidArgument);
+    count.* = 0;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    if (tracker == 0 or tracker > s.trackers.items.len or (out_entities == null and capacity != 0)) return R.code(error.InvalidArgument);
+    const t = s.trackers.items[tracker - 1];
+    const n = @min(capacity, t.lost.items.len);
+    for (0..n) |i| out_entities[i] = t.lost.items[i];
+    count.* = t.lost.items.len;
+    t.lost.replaceRangeAssumeCapacity(0, n, &.{});
+    return R.ok;
+}
+
+/// Slot `entity_components`. Pairs of a registered relation get their component id on first sight;
+/// flecs's own ids are left out.
+fn entityComponents(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_entity, out_cids: [*c]abi_asset_resolver.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+    const count = out_count orelse return R.code(error.InvalidArgument);
+    count.* = 0;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    if (entity == 0 or (out_cids == null and capacity != 0) or !c.ecs_is_alive(s.world, @intCast(entity))) return R.code(error.InvalidArgument);
+    const type_ = c.ecs_get_type(s.world, @intCast(entity)) orelse return R.ok;
+    var n: usize = 0;
+    for (type_.*.array[0..@intCast(type_.*.count)]) |id| {
+        const cid = s.cids.get(id) orelse blk: {
+            if (!c.ecs_id_is_pair(id) or !s.cids.contains(pairFirst(id))) continue;
+            break :blk cidFor(s, id) catch return R.code(error.OutOfMemory);
+        };
+        if (n < capacity) out_cids[n] = cid;
+        n += 1;
+    }
+    count.* = n;
+    return R.ok;
+}
+
+/// Slot `components`: every component id that is not a pair.
+fn components(self_in: ?*abi_ecs.c.ke_ecs, out_cids: [*c]abi_asset_resolver.c.ke_component_id, capacity: usize, out_count: ?*usize) callconv(.c) abi_result.c.ke_result {
+    const count = out_count orelse return R.code(error.InvalidArgument);
+    count.* = 0;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    if (out_cids == null and capacity != 0) return R.code(error.InvalidArgument);
+    var n: usize = 0;
+    for (s.ids.items, 1..) |id, cid| {
+        if (c.ecs_id_is_pair(id)) continue;
+        if (n < capacity) out_cids[n] = @intCast(cid);
+        n += 1;
+    }
+    count.* = n;
+    return R.ok;
+}
+
+/// The values of one component a snapshot holds: its holders and their bytes, and the singleton's.
+const Column = struct {
+    cid: abi_asset_resolver.c.ke_component_id,
+    size: usize,
+    holders: []abi_asset_resolver.c.ke_entity,
+    bytes: []u8,
+    singleton: ?[]u8,
+};
+
+/// What `snapshot` captured: the world it came from, the id counters, the reserve bitmap, the
+/// living entities and one column per listed component.
+const Snapshot = struct {
+    state: *State,
+    next_user: u32,
+    reserve_next: u32,
+    materialized: ?[]u8,
+    alive: []abi_asset_resolver.c.ke_entity,
+    columns: []Column,
+};
+
+fn freeSnapshot(snap: *Snapshot) void {
+    for (snap.columns) |col| {
+        heap.gpa.free(col.holders);
+        heap.gpa.free(col.bytes);
+        if (col.singleton) |b| heap.gpa.free(b);
+    }
+    heap.gpa.free(snap.columns);
+    heap.gpa.free(snap.alive);
+    if (snap.materialized) |m| heap.gpa.free(m);
+    heap.gpa.destroy(snap);
+}
+
+fn livingEntities(s: *State) error{OutOfMemory}![]abi_asset_resolver.c.ke_entity {
+    var list: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty;
+    errdefer list.deinit(heap.gpa);
+    const reserved = @min(s.reserve_next.load(.monotonic), s.reserve_end - s.reserve_low);
+    for (s.reserve_low..s.reserve_low + reserved) |e| if (c.ecs_is_alive(s.world, e)) try list.append(heap.gpa, e);
+    for (s.user_start..s.next_user) |e| if (c.ecs_is_alive(s.world, e)) try list.append(heap.gpa, e);
+    return list.toOwnedSlice(heap.gpa);
+}
+
+fn capture(s: *State, cid: abi_asset_resolver.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!Column {
+    const id = idOf(s, cid);
+    if (id == 0) return error.InvalidArgument;
+    const ti = c.ecs_get_type_info(s.world, id);
+    const size: usize = if (ti != null) @intCast(ti.*.size) else 0;
+    var holders: std.ArrayListUnmanaged(abi_asset_resolver.c.ke_entity) = .empty;
+    errdefer holders.deinit(heap.gpa);
+    var bytes: std.ArrayListUnmanaged(u8) = .empty;
+    errdefer bytes.deinit(heap.gpa);
+    var desc: c.ecs_query_desc_t = std.mem.zeroes(c.ecs_query_desc_t);
+    desc.terms[0].id = id;
+    const q = c.ecs_query_init(s.world, &desc) orelse return error.InvalidArgument;
+    defer c.ecs_query_fini(q);
+    var it = c.ecs_query_iter(s.world, q);
+    while (c.ecs_query_next(&it)) {
+        const n: usize = @intCast(it.count);
+        for (it.entities[0..n]) |e| try holders.append(heap.gpa, @intCast(e));
+        if (size != 0) {
+            const col: [*]const u8 = @ptrCast(c.ecs_field_w_size(&it, size, 0));
+            try bytes.appendSlice(heap.gpa, col[0 .. n * size]);
+        }
+    }
+    var singleton: ?[]u8 = null;
+    if (size != 0 and c.ecs_has_id(s.world, s.singletons, id)) {
+        const src: [*]const u8 = @ptrCast(c.ecs_get_id(s.world, s.singletons, id));
+        singleton = try heap.gpa.dupe(u8, src[0..size]);
+    } else if (size == 0 and c.ecs_has_id(s.world, s.singletons, id)) singleton = try heap.gpa.alloc(u8, 0);
+    errdefer if (singleton) |b| heap.gpa.free(b);
+    const h = try holders.toOwnedSlice(heap.gpa);
+    errdefer heap.gpa.free(h);
+    return .{ .cid = cid, .size = size, .holders = h, .bytes = try bytes.toOwnedSlice(heap.gpa), .singleton = singleton };
+}
+
+/// Slot `snapshot`.
+fn snapshot(self_in: ?*abi_ecs.c.ke_ecs, listed: [*c]const abi_asset_resolver.c.ke_component_id, listed_count: u32, out_snapshot: ?*?*abi_ecs.c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
+    const out = out_snapshot orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    if (listed == null and listed_count != 0) return R.code(error.InvalidArgument);
+    const snap = heap.gpa.create(Snapshot) catch return R.code(error.OutOfMemory);
+    snap.* = .{ .state = s, .next_user = s.next_user, .reserve_next = s.reserve_next.load(.monotonic), .materialized = null, .alive = &.{}, .columns = &.{} };
+    fill(s, snap, if (listed_count == 0) &.{} else listed[0..listed_count]) catch |err| {
+        freeSnapshot(snap);
+        if (err == error.InvalidArgument) log.warn("a snapshot lists a component that is not registered", .{});
+        return R.code(err);
+    };
+    out.* = @ptrCast(snap);
+    return R.ok;
+}
+
+fn fill(s: *State, snap: *Snapshot, listed: []const abi_asset_resolver.c.ke_component_id) error{ OutOfMemory, InvalidArgument }!void {
+    if (s.materialized) |m| snap.materialized = try heap.gpa.dupe(u8, m);
+    snap.alive = try livingEntities(s);
+    const columns = try heap.gpa.alloc(Column, listed.len);
+    var filled: usize = 0;
+    errdefer {
+        for (columns[0..filled]) |col| {
+            heap.gpa.free(col.holders);
+            heap.gpa.free(col.bytes);
+            if (col.singleton) |b| heap.gpa.free(b);
+        }
+        heap.gpa.free(columns);
+    }
+    for (listed, columns) |cid, *col| {
+        col.* = try capture(s, cid);
+        filled += 1;
+    }
+    snap.columns = columns;
+}
+
+fn contains(sorted: []const abi_asset_resolver.c.ke_entity, e: abi_asset_resolver.c.ke_entity) bool {
+    return std.sort.binarySearch(abi_asset_resolver.c.ke_entity, sorted, e, struct {
+        fn order(key: abi_asset_resolver.c.ke_entity, item: abi_asset_resolver.c.ke_entity) std.math.Order {
+            return std.math.order(key, item);
+        }
+    }.order) != null;
+}
+
+/// Slot `restore`. Entities alive now and not then are deleted, entities alive then are made alive
+/// with their ids, and every listed component is taken from those that did not hold it and given
+/// back, with its bytes, to those that did; then the id counters and the reserve bitmap return.
+fn restore(self_in: ?*abi_ecs.c.ke_ecs, snap_in: ?*const abi_ecs.c.ke_ecs_snapshot) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self_in orelse return R.code(error.InvalidArgument));
+    const snap: *const Snapshot = @ptrCast(@alignCast(snap_in orelse return R.code(error.InvalidArgument)));
+    if (snap.state != s) {
+        log.warn("restoring a snapshot of another world", .{});
+        return R.code(error.InvalidArgument);
+    }
+    const now = livingEntities(s) catch return R.code(error.OutOfMemory);
+    defer heap.gpa.free(now);
+    begin();
+    for (now) |e| if (!contains(snap.alive, e)) c.ecs_delete(s.world, e);
+    for (snap.alive) |e| if (!c.ecs_is_alive(s.world, e)) {
+        if (e >= s.user_start) makeUserAlive(s, e) else _ = c.ecs_make_alive(s.world, e);
+    };
+    for (snap.columns) |col| {
+        const id = idOf(s, col.cid);
+        const current = capture(s, col.cid) catch |err| return R.code(err);
+        defer {
+            heap.gpa.free(current.holders);
+            heap.gpa.free(current.bytes);
+            if (current.singleton) |b| heap.gpa.free(b);
+        }
+        var held: std.AutoHashMapUnmanaged(abi_asset_resolver.c.ke_entity, void) = .empty;
+        defer held.deinit(heap.gpa);
+        for (col.holders) |e| held.put(heap.gpa, e, {}) catch return R.code(error.OutOfMemory);
+        for (current.holders) |e| if (!held.contains(e) and c.ecs_is_alive(s.world, e)) c.ecs_remove_id(s.world, e, id);
+        for (col.holders, 0..) |e, i| {
+            c.ecs_add_id(s.world, e, id);
+            if (col.size != 0) {
+                const dst: [*]u8 = @ptrCast(c.ecs_get_mut_id(s.world, e, id));
+                @memcpy(dst[0..col.size], col.bytes[i * col.size ..][0..col.size]);
+                c.ecs_modified_id(s.world, e, id);
+            }
+        }
+        if (col.singleton) |b| {
+            c.ecs_add_id(s.world, s.singletons, id);
+            if (col.size != 0) {
+                const dst: [*]u8 = @ptrCast(c.ecs_get_mut_id(s.world, s.singletons, id));
+                @memcpy(dst[0..col.size], b);
+            }
+        } else c.ecs_remove_id(s.world, s.singletons, id);
+    }
+    s.next_user = snap.next_user;
+    s.reserve_next.store(snap.reserve_next, .monotonic);
+    if (snap.materialized) |m| {
+        if (s.materialized) |cur| @memcpy(cur, m);
+    } else if (s.materialized) |cur| @memset(cur, 0);
+    return outcome();
+}
+
+/// Slot `snapshot_free`.
+fn snapshotFree(self_in: ?*abi_ecs.c.ke_ecs, snap_in: ?*abi_ecs.c.ke_ecs_snapshot) callconv(.c) void {
+    _ = self_in;
+    freeSnapshot(@ptrCast(@alignCast(snap_in orelse return)));
+}
+
 export fn ke_ecs_flecs_create(
     config: ?*const abi_ecs.c.ke_ecs_config,
     out_ecs: ?*abi_ecs.c.ke_ecs_handle,
@@ -916,7 +1394,18 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
         log.warn("reserved_id_capacity {d} leaves no room below it for the reserve pool", .{reserved_id_capacity});
         return error.InvalidArgument;
     }
-    if (c.ecs_entity_range_new(s.world, reserved_id_capacity, 0)) |range| {
+    s.next_user = user_id_start;
+    s.user_start = user_id_start;
+    if (reserved_id_capacity >= user_id_start) {
+        log.warn("reserved_id_capacity {d} leaves no room below {d} for flecs's own entities", .{ reserved_id_capacity, user_id_start });
+        return error.InvalidArgument;
+    }
+    if (c.ecs_entity_range_new(s.world, reserved_id_capacity, user_id_start - 1)) |range| {
+        s.own_range = range;
+        s.user_range = c.ecs_entity_range_new(s.world, user_id_start, 0) orelse {
+            log.warn("flecs would not keep its ids clear of the created entities", .{});
+            return error.NotInitialized;
+        };
         c.ecs_entity_range_set(s.world, range);
     } else {
         log.warn("flecs would not keep its ids clear of the reserve pool", .{});
@@ -939,10 +1428,18 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
     s.api.component_field_write = componentFieldWrite;
     s.api.query_register = queryRegister;
     s.api.query_resolve = queryResolve;
-    s.api.entity_mark_changed = entityMarkChanged;
     s.api.singleton_add = singletonAdd;
     s.api.singleton_get = singletonGet;
     s.api.singleton_remove = singletonRemove;
+    s.api.pair = pair;
+    s.api.pair_parts = pairParts;
+    s.api.removal_track = removalTrack;
+    s.api.removals = removals;
+    s.api.entity_components = entityComponents;
+    s.api.components = components;
+    s.api.snapshot = snapshot;
+    s.api.restore = restore;
+    s.api.snapshot_free = snapshotFree;
 
     return .{ .ref = &s.api, .destroy = destroy };
 }
@@ -1010,6 +1507,7 @@ fn tracking(h: abi_ecs.c.ke_ecs_handle, terms: []const abi_ecs.c.ke_ecs_query_te
 const Resolved = struct {
     segs: [4]abi_ecs.c.ke_ecs_segment = undefined,
     columns: [16]?*anyopaque = undefined,
+    matched: [16]abi_asset_resolver.c.ke_component_id = undefined,
     count: usize = 0,
 
     fn changedCount(r: *const Resolved) usize {
@@ -1021,7 +1519,7 @@ const Resolved = struct {
 
 fn resolveInto(h: abi_ecs.c.ke_ecs_handle, query: abi_ecs.c.ke_query_id, capacity: usize) R.Error!Resolved {
     var r: Resolved = .{};
-    try R.check(h.ref.?.query_resolve.?(h.ref, query, &r.segs, capacity, &r.columns[0], &r.count));
+    try R.check(h.ref.?.query_resolve.?(h.ref, query, &r.segs, capacity, &r.columns[0], &r.matched[0], &r.count));
     return r;
 }
 
@@ -1155,14 +1653,14 @@ test "a table reaching past the component's size belongs to another type" {
     try testing.expect(layoutFitsSize(&swapped_a, 16));
 }
 
-test "componentRegister rejects a second layout the size check cannot tell apart" {
+test "componentRegister migrates a second layout the size check cannot tell apart, keeping the id" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
     const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
     try testing.expect(first != 0);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_b, .field_count = swapped_b.len }));
+    try testing.expectEqual(first, try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_b, .field_count = swapped_b.len }));
 }
 
 test "componentRegister accepts a second registration describing the same layout" {
@@ -1267,7 +1765,7 @@ test "a check flecs fails is answered as an invalid argument instead of an abort
     _ = try attach(handle, entity, tag);
 
     begin();
-    _ = c.ecs_get_mut_id(stateOf(handle.ref.?).world, @intCast(entity), @intCast(tag));
+    c.ecs_add_id(stateOf(handle.ref.?).world, @intCast(entity), 0);
     try testing.expectError(error.InvalidArgument, R.check(outcome()));
     try testing.expect(!flecs_refused);
 }
@@ -1592,13 +2090,15 @@ test "resolving a query into too small an array reports every segment it matches
 
     var small: [4]abi_ecs.c.ke_ecs_segment = undefined;
     var small_columns: [4]?*anyopaque = undefined;
+    var small_matched: [4]abi_asset_resolver.c.ke_component_id = undefined;
     var count: usize = 0;
-    try R.check(e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns[0], &count));
+    try R.check(e.query_resolve.?(handle.ref, query, &small, small.len, &small_columns[0], &small_matched[0], &count));
     try testing.expectEqual(@as(usize, 16), count);
 
     var roomy: [32]abi_ecs.c.ke_ecs_segment = undefined;
     var roomy_columns: [32]?*anyopaque = undefined;
-    try R.check(e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns[0], &count));
+    var roomy_matched: [32]abi_asset_resolver.c.ke_component_id = undefined;
+    try R.check(e.query_resolve.?(handle.ref, query, &roomy, roomy.len, &roomy_columns[0], &roomy_matched[0], &count));
     try testing.expectEqual(@as(usize, 16), count);
 }
 
@@ -1619,8 +2119,9 @@ test "a query over twelve components resolves with a column for each" {
 
     var segs: [4]abi_ecs.c.ke_ecs_segment = undefined;
     var columns: [4 * cids.len]?*anyopaque = undefined;
+    var matched: [4 * cids.len]abi_asset_resolver.c.ke_component_id = undefined;
     var count: usize = 0;
-    try R.check(e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns[0], &count));
+    try R.check(e.query_resolve.?(handle.ref, query, &segs, segs.len, &columns[0], &matched[0], &count));
 
     try testing.expectEqual(@as(usize, 1), count);
     try testing.expectEqual(@as(u32, 12), segs[0].column_count);
@@ -1696,21 +2197,6 @@ test "a tracking query sees a table changed on its first resolve, then only afte
     try testing.expectEqual(0, (try resolveInto(h, observer, 4)).changedCount());
 }
 
-test "marking an entity's component changed is seen by a tracking query, and a component it does not hold is refused" {
-    const h = try made();
-    defer h.destroy.?(h.ref);
-    const pos = try sized(h, "mark_pos");
-    const other = try sized(h, "mark_other");
-    const entity = try spawn(h);
-    _ = try attach(h, entity, pos);
-    const watch = [_]abi_ecs.c.ke_ecs_query_term{term(pos, abi_ecs.c.KE_ECS_ACCESS_READ)};
-    const observer = try tracking(h, &watch);
-    _ = try resolveInto(h, observer, 4);
-    try R.check(h.ref.?.entity_mark_changed.?(h.ref, entity, pos));
-    try testing.expectEqual(1, (try resolveInto(h, observer, 4)).changedCount());
-    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.entity_mark_changed.?(h.ref, entity, other));
-}
-
 test "a segment beyond the resolve's capacity keeps its change for the next resolve" {
     const h = try made();
     defer h.destroy.?(h.ref);
@@ -1767,7 +2253,148 @@ test "two worlds share no component, entity or query" {
     try testing.expect(!b.ref.?.component_lookup.?(b.ref, "world_pos", &meta));
     try testing.expectEqual(null, b.ref.?.component_get.?(b.ref, entity, pos));
     var r: Resolved = .{};
-    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, b.ref.?.query_resolve.?(b.ref, 1, &r.segs, 4, &r.columns[0], &r.count));
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, b.ref.?.query_resolve.?(b.ref, 1, &r.segs, 4, &r.columns[0], &r.matched[0], &r.count));
+}
+
+test "a pair is a component of its own, and a wildcard query reports the pair each segment matched" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const likes = try sized(h, "likes");
+    const a = try spawn(h);
+    const b = try spawn(h);
+    const fan = try spawn(h);
+    var likes_a: abi_asset_resolver.c.ke_component_id = 0;
+    var likes_b: abi_asset_resolver.c.ke_component_id = 0;
+    var likes_any: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(h.ref.?.pair.?(h.ref, likes, a, &likes_a));
+    try R.check(h.ref.?.pair.?(h.ref, likes, b, &likes_b));
+    try R.check(h.ref.?.pair.?(h.ref, likes, abi_ecs.c.KE_ENTITY_WILDCARD, &likes_any));
+    try testing.expect(likes_a != likes_b);
+    const stored: *i32 = @ptrCast(@alignCast((try attach(h, fan, likes_a)).?));
+    stored.* = 7;
+    try testing.expectEqual(@as(i32, 7), @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, fan, likes_a).?))).*);
+    try testing.expect(h.ref.?.component_get.?(h.ref, fan, likes_b) == null);
+
+    var relation: abi_asset_resolver.c.ke_component_id = 0;
+    var target: abi_asset_resolver.c.ke_entity = 0;
+    try testing.expect(h.ref.?.pair_parts.?(h.ref, likes_a, &relation, &target));
+    try testing.expectEqual(likes, relation);
+    try testing.expectEqual(a, target);
+    try testing.expect(!h.ref.?.pair_parts.?(h.ref, likes, &relation, &target));
+
+    const terms = [_]abi_ecs.c.ke_ecs_query_term{term(likes_any, abi_ecs.c.KE_ECS_ACCESS_READ)};
+    const q = try registerDesc(h, .{ .terms = &terms, .term_count = 1, .with = null, .with_count = 0, .without = null, .without_count = 0, .track_changes = false });
+    var segs: [4]abi_ecs.c.ke_ecs_segment = undefined;
+    var columns: [4]?*anyopaque = undefined;
+    var matched: [4]abi_asset_resolver.c.ke_component_id = undefined;
+    var count: usize = 0;
+    try R.check(h.ref.?.query_resolve.?(h.ref, q, &segs, segs.len, &columns[0], &matched[0], &count));
+    try testing.expectEqual(@as(usize, 1), count);
+    try testing.expectEqual(likes_a, segs[0].matched.?[0]);
+}
+
+test "a removal tracker reports each entity that lost the component once, destroyed ones included" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "tracked_pos");
+    const kept = try spawn(h);
+    const stripped = try spawn(h);
+    const destroyed = try spawn(h);
+    for ([_]abi_asset_resolver.c.ke_entity{ kept, stripped, destroyed }) |e| _ = try attach(h, e, pos);
+    var tracker: abi_ecs.c.ke_removal_tracker = 0;
+    try R.check(h.ref.?.removal_track.?(h.ref, pos, &tracker));
+    try R.check(h.ref.?.component_remove.?(h.ref, stripped, pos));
+    try R.check(h.ref.?.entity_destroy.?(h.ref, destroyed));
+    var lost: [4]abi_asset_resolver.c.ke_entity = undefined;
+    var n: usize = 0;
+    try R.check(h.ref.?.removals.?(h.ref, tracker, &lost, lost.len, &n));
+    try testing.expectEqual(@as(usize, 2), n);
+    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_entity, lost[0..2], stripped) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_entity, lost[0..2], destroyed) != null);
+    try R.check(h.ref.?.removals.?(h.ref, tracker, &lost, lost.len, &n));
+    try testing.expectEqual(@as(usize, 0), n);
+}
+
+test "an entity lists its components and the world lists what is registered" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "listed_pos");
+    const vel = try sized(h, "listed_vel");
+    const e = try spawn(h);
+    _ = try attach(h, e, pos);
+    _ = try attach(h, e, vel);
+    var cids: [8]abi_asset_resolver.c.ke_component_id = undefined;
+    var n: usize = 0;
+    try R.check(h.ref.?.entity_components.?(h.ref, e, &cids, cids.len, &n));
+    try testing.expectEqual(@as(usize, 2), n);
+    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, cids[0..n], pos) != null);
+    try testing.expect(std.mem.indexOfScalar(abi_asset_resolver.c.ke_component_id, cids[0..n], vel) != null);
+    try R.check(h.ref.?.components.?(h.ref, &cids, cids.len, &n));
+    try testing.expectEqual(@as(usize, 2), n);
+}
+
+test "a restore brings back the entities, the listed values and the ids later creations receive" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const pos = try sized(h, "snap_pos");
+    const untouched = try sized(h, "snap_free");
+    const a = try spawn(h);
+    @as(*i32, @ptrCast(@alignCast((try attach(h, a, pos)).?))).* = 1;
+    @as(*i32, @ptrCast(@alignCast((try attach(h, a, untouched)).?))).* = 10;
+    const listed = [_]abi_asset_resolver.c.ke_component_id{pos};
+    var snap: ?*abi_ecs.c.ke_ecs_snapshot = null;
+    try R.check(h.ref.?.snapshot.?(h.ref, &listed, listed.len, &snap));
+    defer h.ref.?.snapshot_free.?(h.ref, snap);
+    const next_then = try spawn(h);
+
+    @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, a, pos).?))).* = 2;
+    @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, a, untouched).?))).* = 20;
+    const b = try spawn(h);
+    _ = try attach(h, b, pos);
+    try R.check(h.ref.?.restore.?(h.ref, snap));
+
+    try testing.expectEqual(@as(i32, 1), @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, a, pos).?))).*);
+    try testing.expectEqual(@as(i32, 20), @as(*i32, @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, a, untouched).?))).*);
+    try testing.expect(h.ref.?.component_get.?(h.ref, b, pos) == null);
+    try testing.expectEqual(next_then, try spawn(h));
+}
+
+test "registering a name again with another field table moves every value by field name under the same id" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    const V1 = extern struct { hp: i32, speed: f32 };
+    const V2 = extern struct { speed: f32, armor: i32, hp: i32 };
+    const v1 = [_]abi_ecs.c.ke_component_field{
+        .{ .name = "hp", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = @offsetOf(V1, "hp"), .size = 4, .default_value = std.mem.zeroes(abi_ecs_variant.c.ke_variant), .enum_names = null, .enum_count = 0 },
+        .{ .name = "speed", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(V1, "speed"), .size = 4, .default_value = std.mem.zeroes(abi_ecs_variant.c.ke_variant), .enum_names = null, .enum_count = 0 },
+    };
+    var armor_default = std.mem.zeroes(abi_ecs_variant.c.ke_variant);
+    armor_default.type = abi_ecs_variant.c.KE_VARIANT_INT;
+    armor_default.unnamed_0.i = 5;
+    const v2 = [_]abi_ecs.c.ke_component_field{
+        .{ .name = "speed", .type = abi_ecs_variant.c.KE_VARIANT_FLOAT, .offset = @offsetOf(V2, "speed"), .size = 4, .default_value = std.mem.zeroes(abi_ecs_variant.c.ke_variant), .enum_names = null, .enum_count = 0 },
+        .{ .name = "armor", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = @offsetOf(V2, "armor"), .size = 4, .default_value = armor_default, .enum_names = null, .enum_count = 0 },
+        .{ .name = "hp", .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = @offsetOf(V2, "hp"), .size = 4, .default_value = std.mem.zeroes(abi_ecs_variant.c.ke_variant), .enum_names = null, .enum_count = 0 },
+    };
+    const first = try register(h, &.{ .name = "unit", .size = @sizeOf(V1), .alignment = 4, .fields = &v1, .field_count = v1.len });
+    const e = try spawn(h);
+    const old: *V1 = @ptrCast(@alignCast((try attach(h, e, first)).?));
+    old.* = .{ .hp = 30, .speed = 1.5 };
+    const second = try register(h, &.{ .name = "unit", .size = @sizeOf(V2), .alignment = 4, .fields = &v2, .field_count = v2.len });
+    try testing.expectEqual(first, second);
+    const now: *V2 = @ptrCast(@alignCast(h.ref.?.component_get.?(h.ref, e, second).?));
+    try testing.expectEqual(@as(i32, 30), now.hp);
+    try testing.expectEqual(@as(f32, 1.5), now.speed);
+    try testing.expectEqual(@as(i32, 5), now.armor);
+    try testing.expectEqual(@as(usize, @sizeOf(V2)), h.ref.?.component_size.?(h.ref, second));
+}
+
+test "a different size with no field table is still refused" {
+    const h = try made();
+    defer h.destroy.?(h.ref);
+    _ = try sized(h, "bare");
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, h.ref.?.component_register.?(h.ref, &.{ .name = "bare", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
 }
 
 test "creating, filling and destroying an ecs leaves no block allocated" {

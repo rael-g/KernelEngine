@@ -15,6 +15,8 @@ pub const KE_VARIANT_VEC3: ke_variant_type = 6;
 pub const KE_VARIANT_VEC4: ke_variant_type = 7;
 pub const KE_VARIANT_QUAT: ke_variant_type = 8;
 pub const KE_VARIANT_TABLE: ke_variant_type = 9;
+/// An entity of the world the component lives in: the only place a component holds one.
+pub const KE_VARIANT_ENTITY: ke_variant_type = 10;
 
 pub const ke_variant = extern struct {
     @"type": ke_variant_type = std.mem.zeroes(ke_variant_type),
@@ -28,6 +30,7 @@ pub const ke_variant = extern struct {
         v4: abi_math.c.ke_vec4,
         q: abi_math.c.ke_quat,
         t: ?*const ke_variant_table,
+        e: u64,
     } = .{ .b = std.mem.zeroes(bool) },
 };
 

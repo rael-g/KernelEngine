@@ -634,15 +634,16 @@ ke_ecs_query_desc size=48 align=8
   without 32
   without_count 40
   track_changes 44
-ke_ecs_segment size=32 align=8
+ke_ecs_segment size=40 align=8
   entities 0
   count 8
   columns 16
   column_count 24
   changed 28
+  matched 32
 ke_ecs_config size=4 align=4
   reserved_id_capacity 0
-ke_ecs size=144 align=8
+ke_ecs size=208 align=8
   handle 0
   entity_create 8
   entity_destroy 16
@@ -657,10 +658,18 @@ ke_ecs size=144 align=8
   query_resolve 88
   entity_reserve 96
   entity_materialize 104
-  entity_mark_changed 112
-  singleton_add 120
-  singleton_get 128
-  singleton_remove 136
+  singleton_add 112
+  singleton_get 120
+  singleton_remove 128
+  pair 136
+  pair_parts 144
+  removal_track 152
+  removals 160
+  entity_components 168
+  components 176
+  snapshot 184
+  restore 192
+  snapshot_free 200
 ke_ecs_handle size=16 align=8
   ref 0
   destroy 8

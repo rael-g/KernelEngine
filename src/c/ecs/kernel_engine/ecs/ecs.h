@@ -13,6 +13,8 @@ extern "C"
     /// [id]
     typedef uint64_t ke_entity;
 #define KE_ENTITY_INVALID 0
+/** The target of a pair that matches every target of its relation, in a query alone. */
+#define KE_ENTITY_WILDCARD UINT64_MAX
 
     /// [id]
     typedef uint32_t ke_component_id;

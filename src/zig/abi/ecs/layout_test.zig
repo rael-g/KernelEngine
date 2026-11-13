@@ -37,6 +37,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
+    if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
 }
 
 test "every enum value is the header's value" {
@@ -49,10 +50,11 @@ test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_QUERY_INVALID), @as(i128, abi.c.KE_QUERY_INVALID));
     try std.testing.expectEqual(@as(i128, c.KE_ENTITY_INVALID), @as(i128, abi.c.KE_ENTITY_INVALID));
+    try std.testing.expectEqual(@as(i128, c.KE_ENTITY_WILDCARD), @as(i128, abi.c.KE_ENTITY_WILDCARD));
     try std.testing.expectEqual(@as(i128, c.KE_COMPONENT_INVALID), @as(i128, abi.c.KE_COMPONENT_INVALID));
 }
 
-extern const layout_values: [69]c_ulonglong;
+extern const layout_values: [78]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -94,6 +96,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_ecs_segment, "columns"),
         @offsetOf(abi.c.ke_ecs_segment, "column_count"),
         @offsetOf(abi.c.ke_ecs_segment, "changed"),
+        @offsetOf(abi.c.ke_ecs_segment, "matched"),
         @sizeOf(abi.c.ke_ecs_config),
         @offsetOf(abi.c.ke_ecs_config, "reserved_id_capacity"),
         @sizeOf(abi.c.ke_ecs),
@@ -111,10 +114,18 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_ecs, "query_resolve"),
         @offsetOf(abi.c.ke_ecs, "entity_reserve"),
         @offsetOf(abi.c.ke_ecs, "entity_materialize"),
-        @offsetOf(abi.c.ke_ecs, "entity_mark_changed"),
         @offsetOf(abi.c.ke_ecs, "singleton_add"),
         @offsetOf(abi.c.ke_ecs, "singleton_get"),
         @offsetOf(abi.c.ke_ecs, "singleton_remove"),
+        @offsetOf(abi.c.ke_ecs, "pair"),
+        @offsetOf(abi.c.ke_ecs, "pair_parts"),
+        @offsetOf(abi.c.ke_ecs, "removal_track"),
+        @offsetOf(abi.c.ke_ecs, "removals"),
+        @offsetOf(abi.c.ke_ecs, "entity_components"),
+        @offsetOf(abi.c.ke_ecs, "components"),
+        @offsetOf(abi.c.ke_ecs, "snapshot"),
+        @offsetOf(abi.c.ke_ecs, "restore"),
+        @offsetOf(abi.c.ke_ecs, "snapshot_free"),
         @sizeOf(abi.c.ke_ecs_handle),
         @offsetOf(abi.c.ke_ecs_handle, "ref"),
         @offsetOf(abi.c.ke_ecs_handle, "destroy"),

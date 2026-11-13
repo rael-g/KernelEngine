@@ -14,7 +14,7 @@ public unsafe partial struct Variant
     [NativeTypeName("ke_variant_type")]
     public global::KernelEngine.Ecs.VariantType Type;
 
-    [NativeTypeName("__AnonymousRecord_variant_L32_C9")]
+    [NativeTypeName("__AnonymousRecord_variant_L34_C9")]
     public _Anonymous_e__Union Anonymous;
 
     [UnscopedRef]
@@ -98,6 +98,15 @@ public unsafe partial struct Variant
         }
     }
 
+    [UnscopedRef]
+    public ref ulong e
+    {
+        get
+        {
+            return ref Anonymous.e;
+        }
+    }
+
     [StructLayout(LayoutKind.Explicit)]
     public unsafe partial struct _Anonymous_e__Union
     {
@@ -134,5 +143,9 @@ public unsafe partial struct Variant
         [FieldOffset(0)]
         [NativeTypeName("const struct ke_variant_table *")]
         public VariantTable* t;
+
+        [FieldOffset(0)]
+        [NativeTypeName("uint64_t")]
+        public ulong e;
     }
 }

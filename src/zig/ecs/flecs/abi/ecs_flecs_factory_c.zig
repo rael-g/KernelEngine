@@ -7,6 +7,7 @@ const abi_result = @import("result");
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
+pub const ke_removal_tracker = u64;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library

@@ -2069,7 +2069,7 @@ var seen_entities: usize = 0;
 
 var fake_term_count: usize = 1;
 
-fn fakeQueryResolveMany(_: ?*abi_ecs.c.ke_ecs, _: abi_ecs.c.ke_query_id, out: [*c]abi_ecs.c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, out_count: [*c]usize) callconv(.c) abi_result.c.ke_result {
+fn fakeQueryResolveMany(_: ?*abi_ecs.c.ke_ecs, _: abi_ecs.c.ke_query_id, out: [*c]abi_ecs.c.ke_ecs_segment, max: usize, out_columns: [*c]?*anyopaque, _: [*c]abi_asset_resolver.c.ke_component_id, out_count: [*c]usize) callconv(.c) abi_result.c.ke_result {
     for (0..@min(max, many_segments)) |i| {
         const cols = out_columns + i * fake_term_count;
         for (0..fake_term_count) |t| cols[t] = &many_column;
@@ -3236,8 +3236,9 @@ test "a zero size component registers as a usable tag" {
 
     var segs = std.mem.zeroes([8]abi_ecs.c.ke_ecs_segment);
     var columns: [8]?*anyopaque = undefined;
+    var matched: [8]abi_asset_resolver.c.ke_component_id = undefined;
     var seg_count: usize = 0;
-    try R.check(ecs.query_resolve.?(ecs, q, &segs, 8, &columns[0], &seg_count));
+    try R.check(ecs.query_resolve.?(ecs, q, &segs, 8, &columns[0], &matched[0], &seg_count));
 
     var total: usize = 0;
     for (0..seg_count) |i| total += segs[i].count;

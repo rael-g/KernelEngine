@@ -10,6 +10,7 @@ pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_module_id = u64;
 pub const ke_query_id = u64;
+pub const ke_removal_tracker = u64;
 pub const ke_system_id = u64;
 
 /// A structural operation applied when the queue holding it is drained. `user` points at the

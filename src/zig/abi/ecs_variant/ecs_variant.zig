@@ -22,6 +22,7 @@ pub const VariantType = enum(c.ke_variant_type) {
     vec4 = 7,
     quat = 8,
     table = 9,
+    entity = 10,
     _,
 };
 
