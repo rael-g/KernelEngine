@@ -3,16 +3,11 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
-const abi_schedule = @import("schedule");
-
-pub const ke_scene_hierarchy = opaque {};
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
 pub const ke_removal_tracker = u64;
-pub const ke_schedule_set_id = u32;
-pub const ke_schedule_system_id = u64;
 
 pub const KE_ACTION_NAME_MAX = 32;
 /// The longest path a scene slot holds, its terminator included.
@@ -25,26 +20,10 @@ pub const KE_COMPONENT_NAME_SCENE_SLOT = "scene_slot";
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// One call of a system body, once per run of the schedule, or once per slice when the system is
-/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
-/// wave still runs, and no later wave starts.
-pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
-/// on the thread that called run. A failure fails the run before any wave starts.
-pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
-
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// The values the scene hierarchy is created with.
-pub const ke_scene_hierarchy_config = extern struct {
-    /// The set the propagation system joins; its schedule must run after transforms are written and
-    /// before world transforms are read.
-    set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-};
 
 /// A component a spawned node starts with in place of its type's initial value.
 pub const ke_node_component = extern struct {
@@ -117,20 +96,6 @@ pub const ke_node_type_desc = extern struct {
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
 };
 
-/// The values the node types are created with: the set each kind of system joins.
-pub const ke_node_types_config = extern struct {
-    /// The set, in the first schedule, of the ready and exit behaviours and of the systems that
-    /// clear the last tick's events; that schedule must run first in a tick.
-    pre_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the main schedule, of the update behaviours.
-    update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the fixed schedule, of the fixed update behaviours.
-    fixed_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the main schedule, of the event behaviours and of the system that frees the nodes
-    /// that left the tree; it must follow the update set.
-    post_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-};
-
 /// A node whose children are the scene file it names. Writing path replaces them: on the next
 /// update the slot's children are destroyed and the file at path is instantiated under the slot;
 /// an empty path only destroys them. What lies outside a slot outlives the change, and several
@@ -140,12 +105,6 @@ pub const ke_scene_slot_component = extern struct {
     path: [256]u8 = std.mem.zeroes([256]u8),
     /// The path the slot last instantiated. Callers do not write it.
     loaded: [256]u8 = std.mem.zeroes([256]u8),
-};
-
-/// Destroy unregisters the system and releases the ordering buffers.
-pub const ke_scene_hierarchy_handle = extern struct {
-    ref: ?*ke_scene_hierarchy = std.mem.zeroes(?*ke_scene_hierarchy),
-    destroy: ?*const fn (?*ke_scene_hierarchy) callconv(.c) void = null,
 };
 
 /// What a behaviour is given. Behaviours run one at a time, never two at once, so a body may

@@ -27,8 +27,8 @@ skipped.
 **A write calls the subscribers of its section.** They run on the writing thread, after the
 value is stored, and receive the section, not the key. `Configuration` has no subscribe member.
 
-**The file is read once, when the engine is built.** `EngineBuilder.Build` loads the project file
-into one store before it makes any part, and each part reads its keys as it is made and keeps the
+**The file is read once, when the engine is built.** `DefaultCore.AddDefaultCore` loads the project file
+into one store before it makes any part that reads it, and each part reads its keys as it is made and keeps the
 result.
 
 ## What the parts agree on without a contract

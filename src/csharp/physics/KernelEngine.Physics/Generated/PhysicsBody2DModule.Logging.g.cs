@@ -9,18 +9,16 @@ public sealed unsafe partial class PhysicsBody2DModule
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="schedule">Registers the systems; borrowed, must outlive the module.</param>
     /// <param name="ecs">Resolves the component ids; borrowed.</param>
-    /// <param name="physics">The world to drive; borrowed.</param>
+    /// <param name="physics">The world to drive; borrowed, must outlive the module.</param>
     /// <param name="sceneTree">Tells when a collider's ancestors may have changed; borrowed, must outlive the module.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public PhysicsBody2DModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, in KernelEngine.Physics.PhysicsBody2DModuleConfig config) : this(CreateLogged(loggerFactory, schedule, ecs, physics, sceneTree, config))
+    public PhysicsBody2DModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree) : base(CreateLogged(loggerFactory, ecs, physics, sceneTree))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_body2d_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree, in KernelEngine.Physics.PhysicsBody2DModuleConfig config)
+    private static KernelEngine.Module.Native.ke_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Physics.INativePhysics2d physics, KernelEngine.Framework.INativeSceneTree sceneTree)
     {
         if (loggerFactory is not null) KernelEngine.Physics.Native.NativeMethods.physics_body2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(schedule, ecs, physics, sceneTree, config);
+        return Create(ecs, physics, sceneTree);
     }
 }

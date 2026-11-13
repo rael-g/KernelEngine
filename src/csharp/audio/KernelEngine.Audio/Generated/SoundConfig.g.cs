@@ -8,10 +8,8 @@ using System;
 namespace KernelEngine.Audio;
 
 /// <summary>The values the sound module is created with.</summary>
-public partial struct SoundModuleConfig
+public partial struct SoundConfig
 {
     /// <summary>Directory a clip's path is joined to; copied. NULL uses the path as written.</summary>
     public string? Root;
-    /// <summary>The set the system joins.</summary>
-    public uint Set;
 }

@@ -10,20 +10,19 @@ plugins under `src/zig/physics/`.
 |---|---|---|---|---|
 | world | `ke_physics_2d` | box2d | gravity, body and fixture requests | body ids, body state after a step |
 | components | `ke_body2d_component`, `ke_collider2d_component` | none | scene fields, script writes | the description of a body and of a shape |
-| module | none; `ke_physics_body2d_module_create` | body2d | `ke_runtime`, `ke_ecs`, `ke_physics_2d` | two runtime systems, and both components registered with their field tables |
-| managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, made by the SDK's `EngineBuilder.DefaultPhysics` |
+| module | `ke_module`; `ke_physics_body2d_create` | body2d | `ke_ecs`, `ke_physics_2d`, `ke_scene_tree`, then the standard schedules at attach | two systems, and both components registered with their field tables |
+| managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, registered by `DefaultCore.AddDefaultCore` |
 
 **Game code edits components, never handles.** A body is an entity with a `ke_body2d_component`
 and a transform; a shape is its own entity, a descendant of the body's entity, with a
 `ke_collider2d_component` and a transform. The body id the world returns is stored in the `body`
 field of the component and is the only link between the two sides.
 
-**The module is two systems.** `ke_physics_body2d_module_create` registers "physics.body2d" and
-"physics.collider2d", both in `KE_PHASE_FIXED_POST_UPDATE`, after the scripts' fixed update, so the
-world steps by the runtime's fixed step whatever the frame time. The first reads and writes "body2d"
+**The module is two systems.** Attaching the `ke_module` that `ke_physics_body2d_create` returns
+registers "physics.body2d" and "physics.collider2d" in the fixed schedule's fixed_post_update set,
+after the scripts' fixed update, so the world steps by the fixed step whatever the frame time. The first reads and writes "body2d"
 and "transform2d"; the second writes "collider2d" and reads "body2d", "transform2d" and "hierarchy".
-They conflict on "body2d", so the runtime separates them into waves in registration order, body
-first.
+They conflict on "body2d", so the schedule orders them, the writer first.
 
 **The transform is the pose.** "body2d" holds motion only. For each body, "physics.body2d" creates
 the body at the position and rotation of "transform2d" when the component has none, pushes the
@@ -36,7 +35,7 @@ a body only once the scene tree's hierarchy generation, the set of bodies or the
 colliders has changed.
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
-plus one, with `KE_BODY_2D_INVALID` as zero. The SDK's `EngineBuilder.DefaultPhysics` creates it with the gravity of
+plus one, with `KE_BODY_2D_INVALID` as zero. `DefaultCore.AddDefaultCore` registers it with the gravity of
 "runtime.physics_2d", beside the `PhysicsBody2DModule` that syncs the bodies.
 
 ## What the parts agree on without a contract

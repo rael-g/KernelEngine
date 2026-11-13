@@ -10,6 +10,7 @@
   <ItemGroup>
     <ProjectReference Include="..\KernelEngine.Physics.Abstractions\KernelEngine.Physics.Abstractions.csproj" />
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\module\KernelEngine.Module\KernelEngine.Module.csproj" />
     <ProjectReference Include="..\..\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
   </ItemGroup>
 

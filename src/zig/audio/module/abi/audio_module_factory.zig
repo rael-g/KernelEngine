@@ -4,6 +4,7 @@ const std = @import("std");
 const abi_audio = @import("audio");
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
+const abi_module = @import("module");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 
@@ -14,29 +15,19 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const SoundModule = struct {
-    ptr: *c.ke_sound_module,
-    owner: ?c.ke_sound_module_handle = null,
-
-    pub fn deinit(self: SoundModule) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// Registers, in the config's set, the system that loads, plays and releases the clip of every
-    /// ke_sound_component. Destroying the module stops every voice and releases every clip it holds.
-    pub fn create(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const c.ke_sound_module_config) Error!SoundModule {
-        var written: c.ke_sound_module_handle = undefined;
-        try checkResult(c.ke_sound_module_create(schedule, ecs, audio, config, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
-    }
-
-};
-
 /// Sends every line ke_audio_module logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn audioModuleSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_audio_module_set_log_callback(callback, ctx);
 }
 
-pub const SoundModuleConfig = c.ke_sound_module_config;
-pub const SoundModuleHandle = c.ke_sound_module_handle;
+/// Creates the module that loads, plays and releases the clip of every ke_sound_component;
+/// attaching it registers its system in the update schedule's post_update set. Destroying the
+/// module stops every voice and releases every clip it holds.
+pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, config: ?*const c.ke_sound_config) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_sound_create(ecs, audio, config, &written));
+    return written;
+}
+
+pub const SoundConfig = c.ke_sound_config;

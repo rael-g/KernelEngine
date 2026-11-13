@@ -2,7 +2,7 @@ using KernelEngine;
 
 using Pong;
 
-using var engine = Engine.Create(AppContext.BaseDirectory);
+using var engine = DefaultEngine.Create(AppContext.BaseDirectory);
 
 engine.Nodes.RegisterEvent<GoalScored>();
 engine.Nodes.RegisterEvent<ServeRequested>();

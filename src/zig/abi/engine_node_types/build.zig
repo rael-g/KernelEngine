@@ -12,7 +12,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 
@@ -22,16 +21,12 @@ pub fn build(b: *std.Build) void {
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/audio"));
     translated.addIncludePath(b.path("../../common/include"));
-    translated.addIncludePath(b.path("../../../c/completion"));
     translated.addIncludePath(b.path("../../../c/ecs"));
     translated.addIncludePath(b.path("../../../c/framework"));
-    translated.addIncludePath(b.path("../../../c/job"));
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/physics"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/result"));
-    translated.addIncludePath(b.path("../../../c/schedule"));
-    translated.addIncludePath(b.path("../../schedule/include"));
     translated.addIncludePath(b.path("../../../c/spatial"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -46,16 +41,12 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
     tests.root_module.addIncludePath(b.path("../../../c/audio"));
     tests.root_module.addIncludePath(b.path("../../common/include"));
-    tests.root_module.addIncludePath(b.path("../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../../../c/ecs"));
     tests.root_module.addIncludePath(b.path("../../../c/framework"));
-    tests.root_module.addIncludePath(b.path("../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/physics"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../c/schedule"));
-    tests.root_module.addIncludePath(b.path("../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../c/spatial"));
     b.step("test", "Check the engine_node_types ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

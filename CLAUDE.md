@@ -114,10 +114,10 @@ kabic's generic output is the default. A need it does not meet is answered in th
 
 ### Layer 4 — C# managed (`src/csharp/<domain>/`)
 
-Thin wrappers expose the native vtables as managed types, each factory a class. Game code starts from the SDK (`src/csharp/sdk/KernelEngine.Sdk`), which composes the default parts from the project file and lets any of them be replaced, and writes its node types as partial classes the node generator completes:
+Thin wrappers expose the native vtables as managed types, each factory a class. Game code starts from the SDK (`src/csharp/sdk/KernelEngine.Sdk`), which makes the engine in the host's container from the parts registered under their contracts, and from the defaults package (`src/csharp/sdk/KernelEngine.Sdk.Defaults`), whose `AddDefaultCore` registers the common implementation of every part the host has not registered, configured by the project file; it writes its node types as partial classes the node generator completes:
 
 ```csharp
-using var engine = Engine.Create(AppContext.BaseDirectory);
+using var engine = DefaultEngine.Create(AppContext.BaseDirectory);
 engine.Nodes.RegisterEvent<GoalScored>();
 engine.Nodes.Register(new Paddle());
 engine.Run();

@@ -5,26 +5,21 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name components by name (idempotent — if a previous scene_tree on the same ecs already registered them, the existing cids are reused). `schedule` may be NULL, in which case no systems are registered and the caller is responsible for calling propagate_transforms itself. Passing one registers, in the config's set, the hierarchy maintenance that keeps world matrices current, and that schedule must outlive the tree, whose destroy unregisters it.</summary>
+/// <summary>Creates a scene_tree backed by the supplied ecs. Registers the transform, hierarchy and name components by name; when a previous scene_tree on the same ecs already registered them, the existing cids are reused. World transforms are kept current by the scene hierarchy module, or by the caller through propagate_transforms.</summary>
 public sealed unsafe partial class DefaultSceneTree : KernelEngine.Framework.SceneTree
 {
-    /// <summary>Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name components by name (idempotent — if a previous scene_tree on the same ecs already registered them, the existing cids are reused). `schedule` may be NULL, in which case no systems are registered and the caller is responsible for calling propagate_transforms itself. Passing one registers, in the config's set, the hierarchy maintenance that keeps world matrices current, and that schedule must outlive the tree, whose destroy unregisters it.</summary>
+    /// <summary>Creates a scene_tree backed by the supplied ecs. Registers the transform, hierarchy and name components by name; when a previous scene_tree on the same ecs already registered them, the existing cids are reused. World transforms are kept current by the scene hierarchy module, or by the caller through propagate_transforms.</summary>
     /// <param name="ecs"></param>
-    /// <param name="schedule">Registers the hierarchy maintenance; NULL registers none.</param>
-    /// <param name="config">Required with schedule; every field is read as given.</param>
-    public DefaultSceneTree(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule? schedule, in KernelEngine.Framework.SceneTreeConfig config) : base(Create(ecs, schedule, config))
+    public DefaultSceneTree(KernelEngine.Ecs.INativeEcs ecs) : base(Create(ecs))
     {
         Hold(ecs.Owner);
-        Hold(schedule?.Owner);
     }
 
-    private static KernelEngine.Framework.Native.ke_scene_tree_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Schedule.INativeSchedule? schedule, in KernelEngine.Framework.SceneTreeConfig config)
+    private static KernelEngine.Framework.Native.ke_scene_tree_handle Create(KernelEngine.Ecs.INativeEcs ecs)
     {
         ArgumentNullException.ThrowIfNull(ecs);
-        KernelEngine.Framework.Native.ke_scene_tree_config nativeConfig = default;
-        nativeConfig.set = config.Set;
         KernelEngine.Framework.Native.ke_scene_tree_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(ecs.Native, (schedule is null ? null : schedule.Native), &nativeConfig, &handle), "ke_scene_tree_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.scene_tree_create(ecs.Native, &handle), "ke_scene_tree_create");
         return handle;
     }
 }

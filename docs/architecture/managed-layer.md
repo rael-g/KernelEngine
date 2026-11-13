@@ -12,7 +12,8 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | native interface | `INativeRuntime`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
 | idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
 | result translation | `NativeResults` | a `ke_result`, or a managed exception | the matching exception, or a `ke_result` |
-| SDK | `Engine`, `EngineBuilder` | a project directory, optionally a part to replace | every default part made by its constructor, in dependency order |
+| SDK | `Engine`, `AddKernelEngine` | the parts registered under their contracts in the host's container | the standard schedules, the modules attached to them, the loop |
+| defaults | `DefaultCore.AddDefaultCore`, `DefaultEngine` | a project directory | the common implementation of every part the host did not register |
 
 ## What ties the parts together
 
@@ -39,11 +40,11 @@ what was queued, or the exception `NativeResults.FromCode` makes for the code.
 **The task pool has its own channel.** The dispatch methods that are not generated return a
 `Task`, which the body's failure faults.
 
-**A game is composed by constructors.** `EngineBuilder.Build` makes each part from the parts
-before it and keeps them in creation order; `Engine.Dispose` releases them in the reverse order,
-so nothing is released while something that borrows it lives. `AddKernelEngine` registers the
-built engine into a service collection for a host that wants one; no engine part asks a container
-for a dependency.
+**A game is composed in the host's container.** Each part is registered under its contract with
+the constructor the projection generates; `AddDefaultCore` adds the common implementation of every
+part not registered yet. The container makes each part from the parts it takes and releases them in
+the reverse order; `Engine.Dispose` first detaches the modules and releases the schedules it made.
+Only the host and the SDK use the container; no engine part asks it for a dependency.
 
 ## What the parts agree on without a contract
 

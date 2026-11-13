@@ -11,8 +11,8 @@ using KernelEngine.Audio.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Framework.Native;
 using KernelEngine.Io.Native;
+using KernelEngine.Module.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Schedule.Native;
 using KernelEngine.Scheduler.Native;
 
 namespace KernelEngine.Framework.Nodes.Native;
@@ -21,7 +21,11 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_types_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result node_types_create([NativeTypeName("ke_scheduler *")] KernelEngine.Scheduler.Native.ke_scheduler* scheduler, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* first, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* @fixed, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* main, [NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_scene_tree *")] KernelEngine.Framework.Native.ke_scene_tree* scene_tree, [NativeTypeName("ke_input_actions *")] KernelEngine.Framework.Native.ke_input_actions* input_actions, [NativeTypeName("const ke_node_types_config *")] ke_node_types_config* config, ke_node_types_handle* out_types);
+    public static extern KernelEngine.Result.Native.Result node_types_create([NativeTypeName("ke_scheduler *")] KernelEngine.Scheduler.Native.ke_scheduler* scheduler, [NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_scene_tree *")] KernelEngine.Framework.Native.ke_scene_tree* scene_tree, [NativeTypeName("ke_input_actions *")] KernelEngine.Framework.Native.ke_input_actions* input_actions, ke_node_types_handle* out_types);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_node_types_systems_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result node_types_systems_create(ke_node_types* types, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_files_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

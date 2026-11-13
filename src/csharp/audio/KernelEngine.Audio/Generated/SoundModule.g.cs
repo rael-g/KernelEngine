@@ -5,58 +5,30 @@
 
 namespace KernelEngine.Audio;
 
-/// <summary>Registers, in the config's set, the system that loads, plays and releases the clip of every ke_sound_component. Destroying the module stops every voice and releases every clip it holds.</summary>
-public sealed unsafe partial class SoundModule : IDisposable
+/// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component; attaching it registers its system in the update schedule's post_update set. Destroying the module stops every voice and releases every clip it holds.</summary>
+public sealed unsafe partial class SoundModule : KernelEngine.Module.Module
 {
-    /// <summary>Registers, in the config's set, the system that loads, plays and releases the clip of every ke_sound_component. Destroying the module stops every voice and releases every clip it holds.</summary>
-    /// <param name="schedule">Registers the system; must outlive the module.</param>
+    /// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component; attaching it registers its system in the update schedule's post_update set. Destroying the module stops every voice and releases every clip it holds.</summary>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
     /// <param name="config">Required; every field is read as given.</param>
-    public SoundModule(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config) : this(Create(schedule, ecs, audio, config))
+    public SoundModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config) : base(Create(ecs, audio, config))
     {
-        Hold(schedule.Owner);
         Hold(ecs.Owner);
         Hold(audio.Owner);
     }
 
-    private KernelEngine.Audio.Native.ke_sound_module_handle _handle;
-
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
-
-    private SoundModule(KernelEngine.Audio.Native.ke_sound_module_handle handle) => _handle = handle;
-
-    private void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config)
     {
-        if (owner is null) return;
-        var added = false;
-        owner.DangerousAddRef(ref added);
-        _held.Add(owner);
-    }
-
-    /// <summary>Releases the native object, then what it held.</summary>
-    public void Dispose()
-    {
-        if (_handle.@ref == null) return;
-        _handle.destroy(_handle.@ref);
-        _handle = default;
-        foreach (var held in _held) held.DangerousRelease();
-        _held.Clear();
-    }
-
-    private static KernelEngine.Audio.Native.ke_sound_module_handle Create(KernelEngine.Schedule.INativeSchedule schedule, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundModuleConfig config)
-    {
-        ArgumentNullException.ThrowIfNull(schedule);
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(audio);
         var rootConfigBytes = config.Root is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Root + "\0");
         fixed (byte* rootConfigPtr = rootConfigBytes)
         {
-            KernelEngine.Audio.Native.ke_sound_module_config nativeConfig = default;
+            KernelEngine.Audio.Native.ke_sound_config nativeConfig = default;
             nativeConfig.root = (sbyte*)rootConfigPtr;
-            nativeConfig.set = config.Set;
-            KernelEngine.Audio.Native.ke_sound_module_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_module_create(schedule.Native, ecs.Native, audio.Native, &nativeConfig, &handle), "ke_sound_module_create");
+            KernelEngine.Module.Native.ke_module_handle handle;
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_create(ecs.Native, audio.Native, &nativeConfig, &handle), "ke_sound_create");
             return handle;
         }
     }

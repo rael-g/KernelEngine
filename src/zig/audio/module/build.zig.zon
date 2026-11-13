@@ -10,6 +10,7 @@
         .ke_result = .{ .path = "../../result" },
         .abi_audio = .{ .path = "../../abi/audio" },
         .abi_ecs = .{ .path = "../../abi/ecs" },
+        .abi_module = .{ .path = "../../abi/module" },
         .abi_result = .{ .path = "../../abi/result" },
         .ke_build = .{ .path = "../../build" },
         .ke_logger = .{ .path = "../../logger" },

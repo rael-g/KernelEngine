@@ -5,7 +5,6 @@
 #include <kernel_engine/framework/input_actions.h>
 #include <kernel_engine/framework/node_types.h>
 #include <kernel_engine/framework/scene_tree.h>
-#include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/scheduler/scheduler.h>
 
 #ifdef __cplusplus
@@ -30,27 +29,20 @@ extern "C"
 #endif
 
     /// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
-    /// read `input_actions`. Ready and exit behaviours, and the systems that clear the last tick's
-    /// events, run in `first`; fixed update behaviours in `fixed`; update and event behaviours, and
-    /// the system that frees the nodes that left the tree, in `main`; each in the config's set. A
-    /// node's exit request goes to `scheduler`, which runs each of the three schedules as an
-    /// executable whose user is the schedule. Every argument but `input_actions` and `out_types`
-    /// must outlive the node types, whose destroy unregisters every system they registered.
+    /// read `input_actions`. Their systems run once the node types module is attached; a node's exit
+    /// request goes to `scheduler`, which runs each schedule of the module's targets as an executable
+    /// whose user is the schedule. Every argument but `input_actions` and `out_types` must outlive
+    /// the node types.
     /// @param input_actions [borrowed,optional] Without it, axis answers 0 and pressed false.
-    /// @param config [borrowed] Required; every field is read as given.
     /// @param out_types [out] Receives the node types; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p scheduler, schedule, @p ecs,
-    ///         @p scene_tree, @p config or @p out_types, KE_RESULT_OUT_OF_MEMORY, or the code of
-    ///         the ecs or the schedule that refused.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p scheduler, @p ecs, @p scene_tree or
+    ///         @p out_types; KE_RESULT_NOT_FOUND when the scene tree components are not registered;
+    ///         KE_RESULT_OUT_OF_MEMORY, or the code of the ecs that refused.
     KE_FRAMEWORK_API ke_result ke_node_types_create(
         ke_scheduler               *scheduler,
-        ke_schedule                *first,
-        ke_schedule                *fixed,
-        ke_schedule                *main,
         ke_ecs                     *ecs,
         ke_scene_tree              *scene_tree,
         ke_input_actions           *input_actions,
-        const ke_node_types_config *config,
         ke_node_types_handle       *out_types);
 
 #ifdef __cplusplus

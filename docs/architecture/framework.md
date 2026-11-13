@@ -11,10 +11,12 @@ only through its vtable.
 
 | piece | contract | factory | receives | hands on |
 |---|---|---|---|---|
-| input actions | `ke_input_actions` | `ke_input_actions_create` | a runtime, a `ke_input`, a configuration and the section it reads | named actions, evaluated once per tick by the "input.actions" system |
-| scene hierarchy | `ke_scene_hierarchy` | `ke_scene_hierarchy_create` | `ke_runtime`, `ke_ecs` | world matrices, through one runtime system |
-| scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs`, `ke_runtime` | nodes as entities, and the hierarchy it owns |
-| node types | `ke_node_types` | `ke_node_types_create` | `ke_runtime`, `ke_ecs`, `ke_scene_tree`, an optional `ke_input_actions` | node types and event types, each behaviour a system of its phase |
+| input actions | `ke_input_actions` | `ke_input_actions_create` | a configuration and the section it reads | named actions |
+| action evaluation | `ke_module` | `ke_input_actions_evaluation_create` | `ke_input_actions`, `ke_input`, then the standard schedules at attach | the "input.actions" system, evaluating the actions once per tick |
+| scene hierarchy | `ke_module` | `ke_scene_hierarchy_create` | `ke_ecs` holding a scene tree's components, then the standard schedules at attach | world matrices, through one system |
+| scene tree | `ke_scene_tree` | `ke_scene_tree_create` | `ke_ecs` | nodes as entities |
+| node types | `ke_node_types` | `ke_node_types_create` | `ke_scheduler`, `ke_ecs`, `ke_scene_tree`, an optional `ke_input_actions` | node types and event types |
+| node systems | `ke_module` | `ke_node_types_systems_create` | `ke_node_types`, then the standard schedules at attach | each behaviour a system of its schedule, for every type registered before or after |
 | scene files | `ke_scene_files` | `ke_scene_files_create` | `ke_ecs`, `ke_node_types`, `ke_asset_resolver`, `ke_io` | the nodes a scene file describes, the `scene_slot` node type, and `open` for the first slot |
 | asset resolver | `ke_asset_resolver` | `ke_asset_resolver_create` | `ke_image_loader`, `ke_font_loader`, a project root, a `ke_io` | textures, meshes, materials, fonts; render service handles |
 

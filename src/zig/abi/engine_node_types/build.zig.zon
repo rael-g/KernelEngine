@@ -11,7 +11,6 @@
         .abi_render_components = .{ .path = "../render_components" },
         .abi_render_handles = .{ .path = "../render_handles" },
         .abi_result = .{ .path = "../result" },
-        .abi_schedule = .{ .path = "../schedule" },
         .abi_spatial = .{ .path = "../spatial" },
         .abi_ui_components = .{ .path = "../ui_components" },
     },
