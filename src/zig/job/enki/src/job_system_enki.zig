@@ -204,12 +204,13 @@ fn create(config_in: ?*const j.ke_job_system_config) R.Error!j.ke_job_system_han
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(self);
     const ets = c.enkiNewTaskScheduler() orelse return error.General;
-    c.enkiInitTaskSchedulerNumThreads(ets, config.worker_count + 1);
+    const workers: u32 = if (config.worker_count == j.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD) @intCast(@max(std.Thread.getCpuCount() catch 1, 1) - 1) else config.worker_count;
+    c.enkiInitTaskSchedulerNumThreads(ets, workers + 1);
     self.* = .{
         .api = .{ .handle = self, .dispatch = dispatch, .parallel_for = parallelFor, .worker_slots = workerSlots, .drain = drain },
         .ets = ets,
         .host = std.Thread.getCurrentId(),
-        .zero_workers = config.worker_count == 0,
+        .zero_workers = workers == 0,
         .graph = undefined,
     };
     self.graph = Graph.init(self, heap.gpa);
@@ -238,6 +239,12 @@ test "a job system with workers keeps the job system contract" {
 
 test "a job system without workers keeps the job system contract" {
     try @import("job_suite").check(createdWithoutWorkers);
+}
+
+test "one worker per hardware thread besides the creating one gives a slot per hardware thread" {
+    const h = try createdWith(j.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD);
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(@as(u32, @intCast(@max(std.Thread.getCpuCount() catch 1, 1))), h.ref.?.worker_slots.?(h.ref));
 }
 
 test "worker slots count the workers and the creating thread" {

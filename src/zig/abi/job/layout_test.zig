@@ -31,6 +31,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_job_range_fn")) try expectSameLayout(abi.c.ke_job_range_fn, c.ke_job_range_fn);
 }
 
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqual(@as(i128, c.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD), @as(i128, abi.c.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD));
+}
+
 extern const layout_values: [15]c_ulonglong;
 
 test "every size and offset is the one C computes" {

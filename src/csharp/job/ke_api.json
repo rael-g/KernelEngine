@@ -195,7 +195,7 @@
           "name": "worker_count",
           "type": "uint32_t",
           "tags": [],
-          "doc": "Worker threads besides the creating thread; 0 runs every job on the creating thread."
+          "doc": "Worker threads besides the creating thread; 0 runs every job on the creating thread, and KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD one per hardware thread besides it."
         }
       ]
     }
@@ -453,5 +453,13 @@
   "type_aliases": {
     "ke_job_fn": "ke_result (*)(void *, const ke_job_ctx *)",
     "ke_job_range_fn": "ke_result (*)(void *, uint32_t, uint32_t, uint32_t)"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD",
+      "type": "unsigned int",
+      "value": "4294967295",
+      "doc": "The worker_count that takes one worker per hardware thread besides the creating one."
+    }
+  ]
 }

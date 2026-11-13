@@ -5,6 +5,7 @@ using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
 using KernelEngine.Io.Pool;
+using KernelEngine.Job.Enki;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
 using KernelEngine.TaskPool.Enki;
@@ -34,11 +35,11 @@ public class ReadyingTheNodesASlotOpens
         public readonly DefaultScheduler Scheduler;
         public readonly NodeTypesConfig Sets;
 
-        public Loop(FlecsEcsRegistry ecs, EnkiTaskPool pool)
+        public Loop(FlecsEcsRegistry ecs, EnkiJobSystem jobs)
         {
-            First = new DefaultSchedule(null, ecs, pool);
-            Fixed = new DefaultSchedule(null, ecs, pool);
-            Main = new DefaultSchedule(null, ecs, pool);
+            First = new DefaultSchedule(null, ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
+            Fixed = new DefaultSchedule(null, ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
+            Main = new DefaultSchedule(null, ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
             Scheduler = new DefaultScheduler(null, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
             Scheduler.AddSchedule(First, SchedulerCadence.EveryTick);
             Scheduler.AddSchedule(Fixed, SchedulerCadence.Fixed);
@@ -60,12 +61,13 @@ public class ReadyingTheNodesASlotOpens
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
         using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
         using var io = new PoolIo(null, pool, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-        using var loop = new Loop(ecs, pool);
+        using var loop = new Loop(ecs, jobs);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, null, new());
@@ -88,12 +90,13 @@ public class ReadyingTheNodesASlotOpens
     public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
     {
         using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
+        using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
         using var io = new PoolIo(null, pool, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
-        using var loop = new Loop(ecs, pool);
+        using var loop = new Loop(ecs, jobs);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs, null, new());

@@ -4,6 +4,7 @@
     .fingerprint = 0xebbc11606b299d4f,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_completion = .{ .path = "../abi/completion" },
         .abi_result = .{ .path = "../abi/result" },
         .abi_scheduler = .{ .path = "../abi/scheduler" },
         .abi_schedule = .{ .path = "../abi/schedule" },

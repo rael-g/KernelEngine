@@ -5,6 +5,7 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Io.Pool;
+using KernelEngine.Job.Enki;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
@@ -73,6 +74,7 @@ public sealed class EngineBuilder
         }
 
         var pool = Own(new EnkiTaskPool(log, new() { WorkerCount = uint.MaxValue }));
+        var jobs = Own(new EnkiJobSystem(log, new() { WorkerCount = uint.MaxValue }));
         var files = Own(new StdFileSystem(log, new() { Root = "." }));
         var io = Own(new PoolIo(log, pool, files));
         var config = Own(new DefaultConfiguration(log));
@@ -89,11 +91,11 @@ public sealed class EngineBuilder
         var ecs = Own(new FlecsEcsRegistry(log, new() { ReservedIdCapacity = 1048576 }));
         var schedules = new EngineSchedules
         {
-            Startup = Own(new DefaultSchedule(log, ecs, pool)),
-            PreUpdate = Own(new DefaultSchedule(log, ecs, pool)),
-            Fixed = Own(new DefaultSchedule(log, ecs, pool)),
-            Update = Own(new DefaultSchedule(log, ecs, pool)),
-            Shutdown = Own(new DefaultSchedule(log, ecs, pool)),
+            Startup = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
+            PreUpdate = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
+            Fixed = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
+            Update = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
+            Shutdown = Own(new DefaultSchedule(log, ecs, jobs, new() { RefuseAmbiguity = false })),
         };
         var sets = EngineSets.Register(schedules);
         var scheduler = Own(new DefaultScheduler(log, new()

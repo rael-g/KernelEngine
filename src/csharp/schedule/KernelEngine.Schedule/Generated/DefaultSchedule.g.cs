@@ -5,24 +5,26 @@
 
 namespace KernelEngine.Schedule;
 
-/// <summary>Creates a schedule over ecs and task_pool, both borrowed for its lifetime.</summary>
+/// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.</summary>
 public sealed unsafe partial class DefaultSchedule : KernelEngine.Schedule.Schedule
 {
-    /// <summary>Creates a schedule over ecs and task_pool, both borrowed for its lifetime.</summary>
+    /// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.</summary>
     /// <param name="ecs"></param>
-    /// <param name="taskPool"></param>
-    public DefaultSchedule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool) : base(Create(ecs, taskPool))
+    /// <param name="jobSystem"></param>
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultSchedule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config) : base(Create(ecs, jobSystem, config))
     {
         Hold(ecs.Owner);
-        Hold(taskPool.Owner);
+        Hold(jobSystem.Owner);
     }
 
-    private static KernelEngine.Schedule.Native.ke_schedule_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.TaskPool.INativeTaskPool taskPool)
+    private static KernelEngine.Schedule.Native.ke_schedule_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config)
     {
         ArgumentNullException.ThrowIfNull(ecs);
-        ArgumentNullException.ThrowIfNull(taskPool);
+        ArgumentNullException.ThrowIfNull(jobSystem);
+        var nativeConfig = config;
         KernelEngine.Schedule.Native.ke_schedule_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Schedule.Native.NativeMethods.schedule_create(ecs.Native, taskPool.Native, &handle), "ke_schedule_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Schedule.Native.NativeMethods.schedule_create(ecs.Native, jobSystem.Native, &nativeConfig, &handle), "ke_schedule_create");
         return handle;
     }
 }

@@ -8,6 +8,7 @@ int main(void)
 {
     const ke_sdk_engine_desc desc = {
         .task_pool = ke_sdk_task_pool_enki,
+        .job_system = ke_sdk_job_system_enki,
         .file_system = ke_sdk_file_system_std,
         .io = ke_sdk_io_pool,
         .configuration = ke_sdk_configuration_toml,

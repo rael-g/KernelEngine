@@ -1749,29 +1749,17 @@
       "external": true
     },
     {
-      "name": "ke_schedule_system_order",
-      "doc": "One system, as the built order places it.",
+      "name": "ke_schedule_config",
+      "doc": "What a schedule is created with, each field applied as given.",
       "tags": [
         "value"
       ],
       "fields": [
         {
-          "name": "id",
-          "type": "ke_schedule_system_id",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "wave",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "The wave the system runs in; systems of one wave run concurrently."
-        },
-        {
-          "name": "ambiguous",
+          "name": "refuse_ambiguity",
           "type": "_Bool",
           "tags": [],
-          "doc": "The system and one registered before it write a component with nothing else ordering them; the earlier one runs first."
+          "doc": "An ambiguity between two writers fails the run instead of being logged."
         }
       ],
       "external": true
@@ -1802,6 +1790,60 @@
     }
   ],
   "vtables": [
+    {
+      "name": "ke_completion",
+      "doc": "Work that finishes once, with a result: a job, an asynchronous operation, a read, a run, a submission. Whoever received it releases it exactly once; a completion that another call borrowed as a dependency is released only after the work that depends on it completed.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "poll",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether the work finished; callable from any thread.",
+          "return_doc": "true once the work finished.",
+          "params": [
+            {
+              "name": "out_result",
+              "type": "ke_result *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives what the work finished with, when it finished."
+            }
+          ],
+          "receiver": "ke_completion *"
+        },
+        {
+          "name": "wait",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Blocks until the work finishes and returns what it finished with. Callable from the thread that created the system the completion came from, and from inside a job when the completion came from that job system.",
+          "return_doc": "What the work finished with; KE_RESULT_NOT_SUPPORTED, at once, from any other thread, where the completion is passed as a dependency instead.",
+          "params": [],
+          "receiver": "ke_completion *"
+        },
+        {
+          "name": "release",
+          "returns": "void",
+          "tags": [],
+          "doc": "Gives the completion back; the pointer is invalid afterwards. The work itself is not stopped.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_completion *"
+        }
+      ],
+      "external": true
+    },
     {
       "name": "ke_ecs",
       "doc": "One world: entity lifetime, component storage and queries. The ids, components and queries of one ke_ecs mean nothing to another.",
@@ -2637,7 +2679,7 @@
     },
     {
       "name": "ke_schedule",
-      "doc": "Orders the systems of one world by what they touch and the sets they join, and runs them wave by wave across the task pool. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity: queries one of which excludes a component the other requires, or requiring different members of one exclusive group, never do.",
+      "doc": "Orders the systems of one world by what they touch and the sets they join, and runs them on the job system. The systems of a set run after those of the sets it follows, and a writer of a component before its readers. Two systems conflict when they touch the same component, at least one writes it, and their queries can match the same entity; queries one of which excludes a component the other requires never do. Two writers with no other order run in an order this contract leaves open, and are reported as ambiguous in the log; the run order is neither promised nor forbidden to repeat.",
       "tags": [
         "interface"
       ],
@@ -2715,88 +2757,25 @@
           "receiver": "ke_schedule *"
         },
         {
-          "name": "declare_exclusive",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Declares member one of the members of the exclusive group group: no entity holds two members of one group, so queries requiring different members do not conflict.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when group equals member; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
-          "params": [
-            {
-              "name": "group",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "member",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
-          "name": "build",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Builds the order if a registration changed since the last build; run builds the same way. The systems of a set run after those of the sets it follows, a writer of a component before its readers, and of two writers with no other order, the one registered first: an ambiguity.",
-          "return_doc": "KE_OK; KE_RESULT_GENERAL when the order has a cycle or a refused ambiguity, the systems involved named in the log; KE_RESULT_NOT_SUPPORTED from a body; KE_RESULT_OUT_OF_MEMORY.",
-          "params": [
-            {
-              "name": "refuse_ambiguity",
-              "type": "_Bool",
-              "tags": [],
-              "doc": "When true, an ambiguity fails the build."
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
-          "name": "describe",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "The built order, in registration order.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for too small a capacity; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with.",
-          "params": [
-            {
-              "name": "out_systems",
-              "type": "ke_schedule_system_order *",
-              "tags": [
-                "out",
-                "array_of:capacity"
-              ],
-              "doc": "Receives one entry per system."
-            },
-            {
-              "name": "capacity",
-              "type": "uint32_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_count",
-              "type": "uint32_t *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the number of systems."
-            }
-          ],
-          "receiver": "ke_schedule *"
-        },
-        {
           "name": "run",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Applies what bodies registered and removed, then what the caller recorded into commands, then runs the systems whose condition holds, wave by wave, applying what each wave recorded before the next starts.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt; KE_RESULT_NOT_SUPPORTED from a body; the code build fails with; the code a condition, a body or its commands failed with.",
+          "doc": "Applies what bodies registered and removed and what the caller recorded into commands, then starts a run of the systems. A system\u0027s condition is asked once per run, after everything ordered before the system finished; a failing condition fails the run. An exclusive system runs with no other system of the schedule. What a body records is applied before any system ordered after it starts, and at the latest when the run ends. The run ends with the first failure, and a system not yet started then may or may not run.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a negative dt or a null out_completion; KE_RESULT_NOT_SUPPORTED from a body or while a run is in flight; KE_RESULT_GENERAL when the order has a cycle, or an ambiguity the schedule was created to refuse, the systems involved named in the log; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "dt",
               "type": "float",
               "tags": [],
               "doc": null
+            },
+            {
+              "name": "out_completion",
+              "type": "ke_completion **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the run\u0027s completion, which carries the first failure of a condition, a body or its commands, and which the caller releases."
             }
           ],
           "receiver": "ke_schedule *"
@@ -2874,7 +2853,7 @@
           "name": "commands",
           "type": "ke_ecs_commands *",
           "tags": [],
-          "doc": "The queue the body records structural changes into, applied when its wave ends."
+          "doc": "The queue the body records structural changes into, applied before any system ordered after it starts."
         }
       ],
       "slots": [

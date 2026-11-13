@@ -6,6 +6,7 @@ const std = @import("std");
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_scheduler").logFn };
 
 const abi_result = @import("abi_result");
+const abi_completion = @import("abi_completion");
 const abi_schedule = @import("abi_schedule");
 const abi_scheduler = @import("abi_scheduler");
 const heap = @import("heap");
@@ -71,7 +72,14 @@ fn append(s: *State, schedule: *abi_schedule.c.ke_schedule, cadence: c.ke_schedu
 
 fn runEntry(s: *State, entry: *Entry, dt: f32) R.Error!void {
     const number = s.sequence.fetchAdd(1, .acq_rel) + 1;
-    R.check(entry.schedule.run.?(entry.schedule, dt)) catch |err| {
+    var done: ?*abi_completion.c.ke_completion = null;
+    R.check(entry.schedule.run.?(entry.schedule, dt, &done)) catch |err| {
+        log.warn("a schedule could not start: {t}", .{err});
+        return err;
+    };
+    const result = done.?.wait.?(done.?);
+    done.?.release.?(done.?);
+    R.check(result) catch |err| {
         log.warn("a schedule failed: {t}", .{err});
         return err;
     };
@@ -219,6 +227,8 @@ const Fake = struct {
     letter: u8,
     fails: bool = false,
     read: abi_schedule.c.ke_component_id = 0,
+    done: abi_completion.c.ke_completion = undefined,
+    outcome: abi_result.c.ke_result = R.ok,
 
     fn init(f: *Fake, log_to: *Log, letter: u8) void {
         f.* = .{ .api = std.mem.zeroes(abi_schedule.c.ke_schedule), .log = log_to, .letter = letter };
@@ -233,9 +243,26 @@ fn fakeReads(self: ?*abi_schedule.c.ke_schedule, component: abi_schedule.c.ke_co
     return f.read != 0 and f.read == component;
 }
 
-fn fakeRun(self: ?*abi_schedule.c.ke_schedule, dt: f32) callconv(.c) abi_result.c.ke_result {
+fn donePoll(c_in: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
+    if (out) |o| o.* = @as(*Fake, @ptrCast(@alignCast(c_in.?.handle.?))).outcome;
+    return true;
+}
+
+fn doneWait(c_in: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    return @as(*Fake, @ptrCast(@alignCast(c_in.?.handle.?))).outcome;
+}
+
+fn doneRelease(_: ?*abi_completion.c.ke_completion) callconv(.c) void {}
+
+fn fakeRun(self: ?*abi_schedule.c.ke_schedule, dt: f32, out: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
     const f: *Fake = @ptrCast(@alignCast(self.?.handle.?));
-    if (f.fails) return R.code(error.Io);
+    f.done = .{ .handle = f, .poll = &donePoll, .wait = &doneWait, .release = &doneRelease };
+    out.?.* = &f.done;
+    if (f.fails) {
+        f.outcome = R.code(error.Io);
+        return R.ok;
+    }
+    f.outcome = R.ok;
     f.log.letters[f.log.count] = f.letter;
     f.log.dts[f.log.count] = dt;
     f.log.count += 1;
