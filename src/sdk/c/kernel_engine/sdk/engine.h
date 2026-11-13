@@ -38,6 +38,7 @@
 #include <kernel_engine/sdk/paths.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/job/enki/job_system_enki_create.h>
+#include <kernel_engine/async/enki/async_enki_create.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
 #include <kernel_engine/view/space/view_space_rh_create.h>
 #include <kernel_engine/window/glfw/glfw_window.h>
@@ -117,6 +118,7 @@ typedef struct ke_sdk_engine
 
     ke_task_pool_handle            task_pool;
     ke_job_system_handle           job_system;
+    ke_async_handle                async;
     ke_file_system_handle          file_system;
     ke_io_handle                   io;
     ke_configuration_handle        configuration;
@@ -157,6 +159,7 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part file_system;
     ke_sdk_engine_part io;
     ke_sdk_engine_part configuration;
+    ke_sdk_engine_part async;
     ke_sdk_engine_part input;
     ke_sdk_engine_part window;
     ke_sdk_engine_part ecs;
@@ -196,6 +199,17 @@ static inline ke_result ke_sdk_task_pool_enki(ke_sdk_engine *e)
 static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
 {
     return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
+}
+
+/** An enkiTS async system, its workers and the room for submissions from other threads from `async`. */
+static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
+{
+    ke_configuration *c = e->configuration.ref;
+    const ke_async_config config = {
+        .worker_count = c ? (uint32_t)c->get_int(c, "async", "worker_count", 2) : 2u,
+        .submit_capacity = c ? (uint32_t)c->get_int(c, "async", "submit_capacity", 1024) : 1024u,
+    };
+    return ke_async_enki_create(&config, &e->async);
 }
 
 /** The operating system's files, relative to the working directory. */
@@ -256,7 +270,7 @@ static inline ke_result ke_sdk_set(ke_schedule *schedule, const char *name, cons
 static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_scheduler_cadence cadence, ke_schedule_handle *out)
 {
     ke_result made = ke_schedule_create(e->ecs.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, out);
-    if (made == KE_OK) made = e->scheduler.ref->add_schedule(e->scheduler.ref, out->ref, cadence);
+    if (made == KE_OK) made = e->scheduler.ref->add(e->scheduler.ref, (ke_scheduler_run_fn)out->ref->run, out->ref, cadence);
     return made;
 }
 
@@ -268,7 +282,7 @@ static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
         .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
         .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
     };
-    ke_result made = ke_scheduler_create(&config, &e->scheduler);
+    ke_result made = ke_scheduler_create(e->job_system.ref, e->async.ref, &config, &e->scheduler);
     ke_sdk_schedules *sc = &e->schedules;
     ke_sdk_sets *sets = &e->sets;
     if (made == KE_OK) made = ke_sdk_schedule(e, KE_SCHEDULER_CADENCE_STARTUP, &sc->startup);
@@ -518,6 +532,7 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->configuration);
     KE_SDK_ENGINE_RELEASE(engine->io);
     KE_SDK_ENGINE_RELEASE(engine->file_system);
+    KE_SDK_ENGINE_RELEASE(engine->async);
     KE_SDK_ENGINE_RELEASE(engine->job_system);
     KE_SDK_ENGINE_RELEASE(engine->task_pool);
 }
@@ -538,7 +553,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part parts[] = {
-        desc->task_pool, desc->job_system, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
+        desc->task_pool, desc->job_system, desc->file_system, desc->io, desc->configuration, desc->async, desc->input, desc->window, desc->ecs,
         desc->scheduler, desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
         desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,

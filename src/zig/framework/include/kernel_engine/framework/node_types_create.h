@@ -33,7 +33,8 @@ extern "C"
     /// read `input_actions`. Ready and exit behaviours, and the systems that clear the last tick's
     /// events, run in `first`; fixed update behaviours in `fixed`; update and event behaviours, and
     /// the system that frees the nodes that left the tree, in `main`; each in the config's set. A
-    /// node's exit request goes to `scheduler`. Every argument but `input_actions` and `out_types`
+    /// node's exit request goes to `scheduler`, which runs each of the three schedules as an
+    /// executable whose user is the schedule. Every argument but `input_actions` and `out_types`
     /// must outlive the node types, whose destroy unregisters every system they registered.
     /// @param input_actions [borrowed,optional] Without it, axis answers 0 and pressed false.
     /// @param config [borrowed] Required; every field is read as given.

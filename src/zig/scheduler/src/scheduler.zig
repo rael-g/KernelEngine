@@ -1,13 +1,14 @@
-//! The `ke_scheduler` plugin: the frame loop, running the schedules it was given tick by tick, each
-//! when its cadence says, the fixed ones at their own rate.
+//! The `ke_scheduler` plugin: the frame loop, draining the job and async systems and running the
+//! executables it was given tick by tick, each when its cadence says, the fixed ones at their own rate.
 
 const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_scheduler").logFn };
 
 const abi_result = @import("abi_result");
+const abi_async = @import("abi_async");
 const abi_completion = @import("abi_completion");
-const abi_schedule = @import("abi_schedule");
+const abi_job = @import("abi_job");
 const abi_scheduler = @import("abi_scheduler");
 const heap = @import("heap");
 
@@ -17,19 +18,23 @@ const log = std.log.scoped(.scheduler);
 const c = abi_scheduler.c;
 const gpa = heap.gpa;
 
-/// One added schedule. `completed` is the number of its last run that completed, zero before one.
+/// One added executable. `completed` is the number of its last run that completed, zero before one.
 const Entry = struct {
-    schedule: *abi_schedule.c.ke_schedule,
+    run: *const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result,
+    user: ?*anyopaque,
     cadence: c.ke_scheduler_cadence,
     completed: std.atomic.Value(u64) = .init(0),
 };
 
 /// The state behind the `ke_scheduler` handle, whose `api.handle` points back at it. `entries` are
-/// the schedules in the order they were added; `accumulated` is the time fixed steps have not yet
-/// consumed. `sequence` numbers the runs as they start. Bodies read `exit`, `sequence` and each entry's
-/// `completed` while the thread calling tick writes them.
+/// the executables in the order they were added; `accumulated` is the time fixed steps have not yet
+/// consumed. `sequence` numbers the runs as they start. Bodies read `exit`, `sequence`, `alpha` and
+/// each entry's `completed` while the thread calling tick writes them.
 const State = struct {
     api: c.ke_scheduler,
+    jobs: *abi_job.c.ke_job_system,
+    async_system: *abi_async.c.ke_async,
+    alpha: std.atomic.Value(f32) = .init(0),
     entries: std.ArrayList(Entry) = .empty,
     fixed_dt: f32,
     fixed_dt_max_accum: f32,
@@ -54,33 +59,34 @@ fn failed(comptime slot: []const u8, err: R.Error) abi_result.c.ke_result {
     return R.code(err);
 }
 
-/// Slot `add_schedule`.
-fn addSchedule(self: ?*c.ke_scheduler, schedule: ?*abi_schedule.c.ke_schedule, cadence: c.ke_scheduler_cadence) callconv(.c) abi_result.c.ke_result {
-    const s = stateOf(self) orelse return failed("add_schedule", error.InvalidArgument);
-    append(s, schedule orelse return failed("add_schedule", error.InvalidArgument), cadence) catch |err| return failed("add_schedule", err);
+/// Slot `add`.
+fn add(self: ?*c.ke_scheduler, run: c.ke_scheduler_run_fn, user: ?*anyopaque, cadence: c.ke_scheduler_cadence) callconv(.c) abi_result.c.ke_result {
+    const s = stateOf(self) orelse return failed("add", error.InvalidArgument);
+    append(s, run orelse return failed("add", error.InvalidArgument), user, cadence) catch |err| return failed("add", err);
     return R.ok;
 }
 
-fn append(s: *State, schedule: *abi_schedule.c.ke_schedule, cadence: c.ke_scheduler_cadence) R.Error!void {
+fn append(s: *State, run: *const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result, user: ?*anyopaque, cadence: c.ke_scheduler_cadence) R.Error!void {
     if (s.shut_down) return reject(error.NotSupported, "the scheduler was shut down");
     switch (cadence) {
         c.KE_SCHEDULER_CADENCE_EVERY_TICK, c.KE_SCHEDULER_CADENCE_FIXED, c.KE_SCHEDULER_CADENCE_STARTUP, c.KE_SCHEDULER_CADENCE_SHUTDOWN => {},
         else => return reject(error.InvalidArgument, "unknown cadence"),
     }
-    try s.entries.append(gpa, .{ .schedule = schedule, .cadence = cadence });
+    try s.entries.append(gpa, .{ .run = run, .user = user, .cadence = cadence });
 }
 
 fn runEntry(s: *State, entry: *Entry, dt: f32) R.Error!void {
     const number = s.sequence.fetchAdd(1, .acq_rel) + 1;
     var done: ?*abi_completion.c.ke_completion = null;
-    R.check(entry.schedule.run.?(entry.schedule, dt, &done)) catch |err| {
-        log.warn("a schedule could not start: {t}", .{err});
+    R.check(entry.run(entry.user, dt, &done)) catch |err| {
+        log.warn("a run could not start: {t}", .{err});
         return err;
     };
-    const result = done.?.wait.?(done.?);
-    done.?.release.?(done.?);
+    const finished = done orelse return reject(error.General, "a run started without a completion");
+    const result = finished.wait.?(finished);
+    finished.release.?(finished);
     R.check(result) catch |err| {
-        log.warn("a schedule failed: {t}", .{err});
+        log.warn("a run failed: {t}", .{err});
         return err;
     };
     entry.completed.store(number, .release);
@@ -102,6 +108,8 @@ fn tick(self: ?*c.ke_scheduler, dt: f32) callconv(.c) abi_result.c.ke_result {
 fn tickSchedules(s: *State, dt: f32) R.Error!void {
     if (s.shut_down) return reject(error.NotSupported, "the scheduler was shut down");
     if (!(dt >= 0)) return reject(error.InvalidArgument, "a tick needs a dt of zero or more");
+    s.jobs.drain.?(s.jobs);
+    s.async_system.drain.?(s.async_system);
     if (!s.started) {
         s.started = true;
         try runCadence(s, c.KE_SCHEDULER_CADENCE_STARTUP);
@@ -109,6 +117,7 @@ fn tickSchedules(s: *State, dt: f32) R.Error!void {
     s.accumulated = @min(s.accumulated + dt, s.fixed_dt_max_accum);
     var steps: u32 = 0;
     while (s.accumulated >= s.fixed_dt) : (steps += 1) s.accumulated -= s.fixed_dt;
+    s.alpha.store(s.accumulated / s.fixed_dt, .release);
     const entries = s.entries.items;
     var i: usize = 0;
     while (i < entries.len) {
@@ -162,15 +171,20 @@ fn sequence(self: ?*c.ke_scheduler) callconv(.c) u64 {
     return s.sequence.load(.acquire);
 }
 
-/// Slot `expired`. Asks each schedule whether it reads the component; `entries` only grows between
-/// ticks, on the thread calling tick.
-fn expired(self: ?*c.ke_scheduler, component: abi_schedule.c.ke_component_id, stamp: u64) callconv(.c) bool {
+/// Slot `completed_since`. `entries` only grows between ticks, on the thread calling tick.
+fn completedSince(self: ?*c.ke_scheduler, user: ?*const anyopaque, number: u64) callconv(.c) bool {
     const s = stateOf(self) orelse return false;
     for (s.entries.items) |*entry| {
-        if (entry.completed.load(.acquire) >= stamp) continue;
-        if (entry.schedule.reads.?(entry.schedule, component)) return false;
+        if (@as(?*const anyopaque, entry.user) != user) continue;
+        if (entry.completed.load(.acquire) < number) return false;
     }
     return true;
+}
+
+/// Slot `fixed_alpha`.
+fn fixedAlpha(self: ?*c.ke_scheduler) callconv(.c) f32 {
+    const s = stateOf(self) orelse return 0;
+    return s.alpha.load(.acquire);
 }
 
 /// Slot `destroy` of the handle: shuts down for a caller that did not, then frees the state.
@@ -181,23 +195,28 @@ fn destroy(self: ?*c.ke_scheduler) callconv(.c) void {
     gpa.destroy(s);
 }
 
-/// The factory: a scheduler with no schedule.
-export fn ke_scheduler_create(config: ?*const c.ke_scheduler_config, out_scheduler: ?*c.ke_scheduler_handle) callconv(.c) abi_result.c.ke_result {
+/// The factory: a scheduler with no executable, over a job and an async system it borrows.
+export fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async_system: ?*abi_async.c.ke_async, config: ?*const c.ke_scheduler_config, out_scheduler: ?*c.ke_scheduler_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_scheduler orelse return failed("ke_scheduler_create", error.InvalidArgument);
     out.* = .{};
+    const jobs = job_system orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs a job system"));
+    const asyncs = async_system orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs an async system"));
     const cfg = config orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs its config"));
     if (!(cfg.fixed_dt > 0) or !(cfg.fixed_dt_max_accum > 0)) return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs a fixed_dt and a fixed_dt_max_accum greater than zero"));
     const s = gpa.create(State) catch |err| return failed("ke_scheduler_create", err);
     s.* = .{
         .api = .{
-            .add_schedule = &addSchedule,
+            .add = &add,
             .tick = &tick,
             .shutdown = &shutdown,
             .request_exit = &requestExit,
             .exit_requested = &exitRequested,
             .sequence = &sequence,
-            .expired = &expired,
+            .completed_since = &completedSince,
+            .fixed_alpha = &fixedAlpha,
         },
+        .jobs = jobs,
+        .async_system = asyncs,
         .fixed_dt = cfg.fixed_dt,
         .fixed_dt_max_accum = cfg.fixed_dt_max_accum,
     };
@@ -220,28 +239,20 @@ const Log = struct {
     }
 };
 
-/// A schedule that writes its letter and dt into a shared log, or fails when told to.
+const zsub = @import("zsub");
+
+/// An executable that writes its letter and dt into a shared log, or fails when told to.
 const Fake = struct {
-    api: abi_schedule.c.ke_schedule,
     log: *Log,
     letter: u8,
     fails: bool = false,
-    read: abi_schedule.c.ke_component_id = 0,
     done: abi_completion.c.ke_completion = undefined,
     outcome: abi_result.c.ke_result = R.ok,
 
     fn init(f: *Fake, log_to: *Log, letter: u8) void {
-        f.* = .{ .api = std.mem.zeroes(abi_schedule.c.ke_schedule), .log = log_to, .letter = letter };
-        f.api.handle = f;
-        f.api.run = &fakeRun;
-        f.api.reads = &fakeReads;
+        f.* = .{ .log = log_to, .letter = letter };
     }
 };
-
-fn fakeReads(self: ?*abi_schedule.c.ke_schedule, component: abi_schedule.c.ke_component_id) callconv(.c) bool {
-    const f: *Fake = @ptrCast(@alignCast(self.?.handle.?));
-    return f.read != 0 and f.read == component;
-}
 
 fn donePoll(c_in: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
     if (out) |o| o.* = @as(*Fake, @ptrCast(@alignCast(c_in.?.handle.?))).outcome;
@@ -254,8 +265,8 @@ fn doneWait(c_in: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke
 
 fn doneRelease(_: ?*abi_completion.c.ke_completion) callconv(.c) void {}
 
-fn fakeRun(self: ?*abi_schedule.c.ke_schedule, dt: f32, out: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
-    const f: *Fake = @ptrCast(@alignCast(self.?.handle.?));
+fn fakeRun(user: ?*anyopaque, dt: f32, out: ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+    const f: *Fake = @ptrCast(@alignCast(user.?));
     f.done = .{ .handle = f, .poll = &donePoll, .wait = &doneWait, .release = &doneRelease };
     out.?.* = &f.done;
     if (f.fails) {
@@ -272,21 +283,27 @@ fn fakeRun(self: ?*abi_schedule.c.ke_schedule, dt: f32, out: ?*?*abi_completion.
 const Rig = struct {
     handle: c.ke_scheduler_handle,
     sched: *c.ke_scheduler,
+    jobs: zsub.For(abi_job.c.ke_job_system) = undefined,
+    asyncs: zsub.For(abi_async.c.ke_async) = undefined,
     log: Log = .{},
     fakes: [6]Fake = undefined,
 
     fn init(r: *Rig, cadences: []const c.ke_scheduler_cadence) !void {
         r.log = .{};
-        try R.check(ke_scheduler_create(&test_config, &r.handle));
+        try r.jobs.init();
+        try r.asyncs.init();
+        try R.check(ke_scheduler_create(r.jobs.api(), r.asyncs.api(), &test_config, &r.handle));
         r.sched = r.handle.ref.?;
         for (cadences, 0..) |cadence, i| {
             r.fakes[i].init(&r.log, @intCast('a' + i));
-            try R.check(r.sched.add_schedule.?(r.sched, @ptrCast(&r.fakes[i].api), cadence));
+            try R.check(r.sched.add.?(r.sched, &fakeRun, &r.fakes[i], cadence));
         }
     }
 
     fn deinit(r: *Rig) void {
         r.handle.destroy.?(r.sched);
+        r.asyncs.deinit();
+        r.jobs.deinit();
     }
 
     fn tick(r: *Rig, dt: f32) !void {
@@ -299,7 +316,7 @@ const fixed = c.KE_SCHEDULER_CADENCE_FIXED;
 const startup = c.KE_SCHEDULER_CADENCE_STARTUP;
 const shut = c.KE_SCHEDULER_CADENCE_SHUTDOWN;
 
-test "the startup schedules run once, before every other schedule of the first tick, with a dt of zero" {
+test "the startup executables run once, before every other schedule of the first tick, with a dt of zero" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{ every, startup });
     defer rig.deinit();
@@ -310,7 +327,7 @@ test "the startup schedules run once, before every other schedule of the first t
     try testing.expectEqual(0.1, rig.log.dts[1]);
 }
 
-test "consecutive fixed schedules run together, in order, once per fixed step, with the fixed dt" {
+test "consecutive fixed executables run together, in order, once per fixed step, with the fixed dt" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{ every, fixed, fixed, every });
     defer rig.deinit();
@@ -319,7 +336,7 @@ test "consecutive fixed schedules run together, in order, once per fixed step, w
     try testing.expectEqual(0.25, rig.log.dts[1]);
 }
 
-test "the fixed schedules accumulate at their own rate, and a tick shorter than the step takes none" {
+test "the fixed executables accumulate at their own rate, and a tick shorter than the step takes none" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{fixed});
     defer rig.deinit();
@@ -329,7 +346,7 @@ test "the fixed schedules accumulate at their own rate, and a tick shorter than 
     try testing.expectEqualStrings("a", rig.log.text());
 }
 
-test "a huge tick is capped so the fixed schedules cannot spiral" {
+test "a huge tick is capped so the fixed executables cannot spiral" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{fixed});
     defer rig.deinit();
@@ -337,7 +354,7 @@ test "a huge tick is capped so the fixed schedules cannot spiral" {
     try testing.expectEqual(4, rig.log.count);
 }
 
-test "the shutdown schedules run once when the scheduler shuts down after a tick, and a tick after it is refused" {
+test "the shutdown executables run once when the scheduler shuts down after a tick, and a tick after it is refused" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{ every, shut });
     defer rig.deinit();
@@ -348,7 +365,7 @@ test "the shutdown schedules run once when the scheduler shuts down after a tick
     try testing.expectEqual(R.code(error.NotSupported), rig.sched.tick.?(rig.sched, 0));
 }
 
-test "destroying a scheduler that ticked runs its shutdown schedules, and one that never ticked runs none" {
+test "destroying a scheduler that ticked runs its shutdown executables, and one that never ticked runs none" {
     var ticked: Rig = .{ .handle = undefined, .sched = undefined };
     try ticked.init(&.{shut});
     try ticked.tick(0);
@@ -360,7 +377,7 @@ test "destroying a scheduler that ticked runs its shutdown schedules, and one th
     try testing.expectEqualStrings("", idle.log.text());
 }
 
-test "a schedule that fails the tick keeps the later schedules from running" {
+test "an executable that fails the tick keeps the later executables from running" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{ every, every });
     defer rig.deinit();
@@ -369,14 +386,14 @@ test "a schedule that fails the tick keeps the later schedules from running" {
     try testing.expectEqualStrings("", rig.log.text());
 }
 
-test "an unknown cadence, a null schedule and a negative dt are refused" {
+test "an unknown cadence, a null run and a negative dt are refused" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{});
     defer rig.deinit();
     var fake: Fake = undefined;
     fake.init(&rig.log, 'x');
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add_schedule.?(rig.sched, @ptrCast(&fake.api), 9));
-    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add_schedule.?(rig.sched, null, every));
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add.?(rig.sched, &fakeRun, &fake, 9));
+    try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.add.?(rig.sched, null, &fake, every));
     try testing.expectEqual(R.code(error.InvalidArgument), rig.sched.tick.?(rig.sched, -1));
 }
 
@@ -390,23 +407,32 @@ test "each run takes the next number, and a failed run does not complete" {
     rig.fakes[1].fails = true;
     try testing.expectEqual(R.code(error.Io), rig.sched.tick.?(rig.sched, 0));
     try testing.expectEqual(4, rig.sched.sequence.?(rig.sched));
-    rig.fakes[1].read = 9;
-    try testing.expect(!rig.sched.expired.?(rig.sched, 9, 4));
+    try testing.expect(!rig.sched.completed_since.?(rig.sched, &rig.fakes[1], 4));
 }
 
-test "a stamp expires once every schedule reading the component completed a run numbered from it, and at once with no reader" {
+test "an executable completes a sequence once a run numbered from it completed, and one never added already has" {
     var rig: Rig = .{ .handle = undefined, .sched = undefined };
     try rig.init(&.{ every, fixed });
     defer rig.deinit();
-    rig.fakes[1].read = 7;
-    try testing.expect(rig.sched.expired.?(rig.sched, 8, 1));
+    var stranger: u8 = 0;
+    try testing.expect(rig.sched.completed_since.?(rig.sched, &stranger, 1));
     try rig.tick(0);
     const stamp = rig.sched.sequence.?(rig.sched);
-    try testing.expect(!rig.sched.expired.?(rig.sched, 7, stamp));
+    try testing.expect(!rig.sched.completed_since.?(rig.sched, &rig.fakes[1], stamp));
     try rig.tick(0.1);
-    try testing.expect(!rig.sched.expired.?(rig.sched, 7, stamp));
+    try testing.expect(!rig.sched.completed_since.?(rig.sched, &rig.fakes[1], stamp));
     try rig.tick(0.2);
-    try testing.expect(rig.sched.expired.?(rig.sched, 7, stamp));
+    try testing.expect(rig.sched.completed_since.?(rig.sched, &rig.fakes[1], stamp));
+}
+
+test "every tick drains the job and async systems first, and fixed_alpha is what the fixed steps left over" {
+    var rig: Rig = .{ .handle = undefined, .sched = undefined };
+    try rig.init(&.{fixed});
+    defer rig.deinit();
+    try rig.tick(0.375);
+    try rig.jobs.received(.drain).times(1);
+    try rig.asyncs.received(.drain).times(1);
+    try testing.expectEqual(@as(f32, 0.5), rig.sched.fixed_alpha.?(rig.sched));
 }
 
 test "a request to exit is recorded and read back, and a fresh scheduler has none" {
@@ -418,12 +444,20 @@ test "a request to exit is recorded and read back, and a fresh scheduler has non
     try testing.expect(rig.sched.exit_requested.?(rig.sched));
 }
 
-test "a fixed dt or a catch-up budget that is not greater than zero, or no config, is refused and leaves the handle zeroed" {
+test "a fixed dt or a catch-up budget that is not greater than zero, no config, or a missing system is refused and leaves the handle zeroed" {
+    var jobs: zsub.For(abi_job.c.ke_job_system) = undefined;
+    try jobs.init();
+    defer jobs.deinit();
+    var asyncs: zsub.For(abi_async.c.ke_async) = undefined;
+    try asyncs.init();
+    defer asyncs.deinit();
     var handle: c.ke_scheduler_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(&.{ .fixed_dt = 0, .fixed_dt_max_accum = 1 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &.{ .fixed_dt = 0, .fixed_dt_max_accum = 1 }, &handle));
     try testing.expectEqual(null, handle.ref);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(&.{ .fixed_dt = 1, .fixed_dt_max_accum = 0 }, &handle));
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &.{ .fixed_dt = 1, .fixed_dt_max_accum = 0 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), null, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, asyncs.api(), &test_config, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), null, &test_config, &handle));
 }
 
 test "a slot given no scheduler refuses" {

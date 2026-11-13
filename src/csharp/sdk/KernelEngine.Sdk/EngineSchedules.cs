@@ -28,10 +28,21 @@ public sealed class EngineSchedules
     /// <param name="scheduler">The scheduler that runs them.</param>
     public void AddTo(DefaultScheduler scheduler)
     {
-        scheduler.AddSchedule(Startup, SchedulerCadence.Startup);
-        scheduler.AddSchedule(PreUpdate, SchedulerCadence.EveryTick);
-        scheduler.AddSchedule(Fixed, SchedulerCadence.Fixed);
-        scheduler.AddSchedule(Update, SchedulerCadence.EveryTick);
-        scheduler.AddSchedule(Shutdown, SchedulerCadence.Shutdown);
+        Add(scheduler, Startup, SchedulerCadence.Startup);
+        Add(scheduler, PreUpdate, SchedulerCadence.EveryTick);
+        Add(scheduler, Fixed, SchedulerCadence.Fixed);
+        Add(scheduler, Update, SchedulerCadence.EveryTick);
+        Add(scheduler, Shutdown, SchedulerCadence.Shutdown);
+    }
+
+    /// <summary>Adds <paramref name="schedule"/> to <paramref name="scheduler"/> as an executable whose user is the schedule, run by its own native run slot.</summary>
+    /// <param name="scheduler">The scheduler that runs it.</param>
+    /// <param name="schedule">The schedule it runs.</param>
+    /// <param name="cadence">When it runs.</param>
+    public static unsafe void Add(INativeScheduler scheduler, INativeSchedule schedule, SchedulerCadence cadence)
+    {
+        var native = schedule.Native;
+        var run = (delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result>)native->run;
+        NativeResults.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, cadence), "ke_scheduler.add");
     }
 }

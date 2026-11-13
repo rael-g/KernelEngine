@@ -5,20 +5,26 @@
 
 namespace KernelEngine.Scheduler;
 
-/// <summary>Creates a scheduler with no schedule.</summary>
+/// <summary>Creates a scheduler with no executable, which drains job_system and async, both borrowed for its lifetime, at the start of every tick.</summary>
 public sealed unsafe partial class DefaultScheduler : KernelEngine.Scheduler.Scheduler
 {
-    /// <summary>Creates a scheduler with no schedule.</summary>
+    /// <summary>Creates a scheduler with no executable, which drains job_system and async, both borrowed for its lifetime, at the start of every tick.</summary>
+    /// <param name="jobSystem"></param>
+    /// <param name="async"></param>
     /// <param name="config">Required; every field is read as given.</param>
-    public DefaultScheduler(in KernelEngine.Scheduler.SchedulerConfig config) : base(Create(config))
+    public DefaultScheduler(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config) : base(Create(jobSystem, async, config))
     {
+        Hold(jobSystem.Owner);
+        Hold(async.Owner);
     }
 
-    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(in KernelEngine.Scheduler.SchedulerConfig config)
+    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config)
     {
+        ArgumentNullException.ThrowIfNull(jobSystem);
+        ArgumentNullException.ThrowIfNull(async);
         var nativeConfig = config;
         KernelEngine.Scheduler.Native.ke_scheduler_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(&nativeConfig, &handle), "ke_scheduler_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(jobSystem.Native, async.Native, &nativeConfig, &handle), "ke_scheduler_create");
         return handle;
     }
 }

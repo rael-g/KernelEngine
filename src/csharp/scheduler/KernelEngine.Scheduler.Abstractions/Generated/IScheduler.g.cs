@@ -4,30 +4,26 @@
 #nullable enable
 
 using KernelEngine.Common;
-using KernelEngine.Ecs;
-using KernelEngine.Schedule;
 
 namespace KernelEngine.Scheduler;
 
 /// <summary>The scheduler contract game code depends on, so a caller names a capability rather than the <see cref="Scheduler"/> that carries it.</summary>
 public interface IScheduler : IDisposable
 {
-    /// <summary>Adds a schedule; a tick runs the schedules in the order they were added.</summary>
-    /// <param name="schedule">Must outlive the scheduler.</param>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void AddSchedule(INativeSchedule schedule, SchedulerCadence cadence);
-    /// <summary>Runs the schedules: on the first tick the startup ones first, then each every-tick one, and each block of fixed ones once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
+    /// <summary>Drains the job and async systems, then runs the executables: on the first tick the startup ones first, then each every-tick one, and each block of fixed ones once per fixed step the accumulated time covers, the accumulation capped at fixed_dt_max_accum.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Tick(float dt);
-    /// <summary>Runs the shutdown schedules once if a tick ran; a later call does nothing, and a later tick is refused. Destroying the scheduler calls it for a caller that did not.</summary>
+    /// <summary>Runs the shutdown executables once if a tick ran; a later call does nothing, and a later tick is refused. Destroying the scheduler calls it for a caller that did not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Shutdown();
     /// <summary>Records that the program should end; any body or the caller may ask, from any thread.</summary>
     void RequestExit();
     /// <summary>Whether a request to end the program was recorded.</summary>
     bool ExitRequested();
-    /// <summary>The number of the schedule run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
+    /// <summary>The number of the run started last; every run started takes the next number, and zero means none started. Readable from any thread; a body stamps what it writes with it.</summary>
     ulong Sequence();
-    /// <summary>Whether every added schedule that reads component completed a run numbered stamp or later; true when no schedule reads it. Called from a body or between ticks.</summary>
-    bool Expired(ComponentId component, ulong stamp);
+    /// <summary>Whether every executable added with user completed a run numbered sequence or later; true when none was added with it. Called from a body or between ticks.</summary>
+    bool CompletedSince(nint user, ulong sequence);
+    /// <summary>How far the time accumulated toward the next fixed step is, in [0, 1): what the tick's fixed steps left over divided by fixed_dt. Read between ticks or from a body.</summary>
+    float FixedAlpha();
 }

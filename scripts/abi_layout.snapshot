@@ -547,15 +547,16 @@ ke_system_ctx size=32 align=8
 ke_scheduler_config size=8 align=4
   fixed_dt 0
   fixed_dt_max_accum 4
-ke_scheduler size=64 align=8
+ke_scheduler size=72 align=8
   handle 0
-  add_schedule 8
+  add 8
   tick 16
   shutdown 24
   request_exit 32
   exit_requested 40
   sequence 48
-  expired 56
+  completed_since 56
+  fixed_alpha 64
 ke_scheduler_handle size=16 align=8
   ref 0
   destroy 8

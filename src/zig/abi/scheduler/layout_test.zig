@@ -26,15 +26,10 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_scheduler_config, translated("ke_scheduler_config"));
     try expectSameLayout(abi.c.ke_scheduler, translated("ke_scheduler"));
     try expectSameLayout(abi.c.ke_scheduler_handle, translated("ke_scheduler_handle"));
-    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
-    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
-    if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
-    if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
-    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
-    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
-    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
-    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
+    if (@hasDecl(c, "ke_async_fn")) try expectSameLayout(abi.c.ke_async_fn, c.ke_async_fn);
+    if (@hasDecl(c, "ke_job_fn")) try expectSameLayout(abi.c.ke_job_fn, c.ke_job_fn);
+    if (@hasDecl(c, "ke_job_range_fn")) try expectSameLayout(abi.c.ke_job_range_fn, c.ke_job_range_fn);
+    if (@hasDecl(c, "ke_scheduler_run_fn")) try expectSameLayout(abi.c.ke_scheduler_run_fn, c.ke_scheduler_run_fn);
 }
 
 test "every enum value is the header's value" {
@@ -45,7 +40,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SCHEDULER_CADENCE_SHUTDOWN), @as(i64, abi.c.KE_SCHEDULER_CADENCE_SHUTDOWN));
 }
 
-extern const layout_values: [16]c_ulonglong;
+extern const layout_values: [17]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -55,13 +50,14 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_scheduler_config, "fixed_dt_max_accum"),
         @sizeOf(abi.c.ke_scheduler),
         @offsetOf(abi.c.ke_scheduler, "handle"),
-        @offsetOf(abi.c.ke_scheduler, "add_schedule"),
+        @offsetOf(abi.c.ke_scheduler, "add"),
         @offsetOf(abi.c.ke_scheduler, "tick"),
         @offsetOf(abi.c.ke_scheduler, "shutdown"),
         @offsetOf(abi.c.ke_scheduler, "request_exit"),
         @offsetOf(abi.c.ke_scheduler, "exit_requested"),
         @offsetOf(abi.c.ke_scheduler, "sequence"),
-        @offsetOf(abi.c.ke_scheduler, "expired"),
+        @offsetOf(abi.c.ke_scheduler, "completed_since"),
+        @offsetOf(abi.c.ke_scheduler, "fixed_alpha"),
         @sizeOf(abi.c.ke_scheduler_handle),
         @offsetOf(abi.c.ke_scheduler_handle, "ref"),
         @offsetOf(abi.c.ke_scheduler_handle, "destroy"),
