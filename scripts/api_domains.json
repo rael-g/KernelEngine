@@ -888,6 +888,74 @@
       "outDir": "src/csharp/common/KernelEngine.Common/Generated",
       "abstractionsOutDir": "src/csharp/common/KernelEngine.Common/Generated/Contract",
       "usings": []
+    },
+    {
+      "name": "completion",
+      "headers": [
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "includeDirs": [
+        "src/c/completion",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/completion/ke_api.json",
+      "namespace": "KernelEngine.Completion",
+      "nativeNamespace": "KernelEngine.Completion.Native",
+      "outDir": "src/csharp/completion/KernelEngine.Completion/Generated",
+      "abstractionsOutDir": "src/csharp/completion/KernelEngine.Completion/Generated/Abstractions",
+      "usings": []
+    },
+    {
+      "name": "job",
+      "headers": [
+        "src/c/job/kernel_engine/job/job_system.h"
+      ],
+      "auxHeaders": [
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "includeDirs": [
+        "src/c/job",
+        "src/c/completion",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/job/ke_api.json",
+      "namespace": "KernelEngine.Job",
+      "nativeNamespace": "KernelEngine.Job.Native",
+      "outDir": "src/csharp/job/KernelEngine.Job/Generated",
+      "abstractionsOutDir": "src/csharp/job/KernelEngine.Job/Generated/Abstractions",
+      "usings": [
+        "KernelEngine.Completion",
+        "KernelEngine.Completion.Native"
+      ]
+    },
+    {
+      "name": "async",
+      "headers": [
+        "src/c/async/kernel_engine/async/async.h"
+      ],
+      "providers": [
+        "ke_async_ctx"
+      ],
+      "auxHeaders": [
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "includeDirs": [
+        "src/c/async",
+        "src/c/completion",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/async/ke_api.json",
+      "namespace": "KernelEngine.Async",
+      "nativeNamespace": "KernelEngine.Async.Native",
+      "outDir": "src/csharp/async/KernelEngine.Async/Generated",
+      "abstractionsOutDir": "src/csharp/async/KernelEngine.Async/Generated/Abstractions",
+      "usings": [
+        "KernelEngine.Completion",
+        "KernelEngine.Completion.Native"
+      ]
     }
   ],
   "zig": [
@@ -939,7 +1007,11 @@
     { "name": "result", "headers": [ "src/c/result/kernel_engine/result/result.h" ], "includeDirs": [ "src/c/result", "src/zig/common/include" ] },
     { "name": "render_handles", "headers": [ "src/c/render/kernel_engine/render/handles.h" ], "includeDirs": [ "src/c/render", "src/c/result", "src/zig/common/include" ] },
     { "name": "render_material", "headers": [ "src/c/render/kernel_engine/render/material_file.h" ], "includeDirs": [ "src/c/render", "src/c/math", "src/c/result", "src/zig/common/include" ] },
-    { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] }
+    { "name": "ecs_variant", "headers": [ "src/c/ecs/kernel_engine/ecs/variant.h" ], "includeDirs": [ "src/c/ecs", "src/c/result", "src/c/math", "src/zig/common/include" ] },
+    { "name": "job_system_enki_factory", "packageDir": "src/zig/job/enki/abi", "headers": ["src/zig/job/enki/include/kernel_engine/job/enki/job_system_enki_create.h", "src/zig/job/enki/include/kernel_engine/job/enki/job_system_enki_log.h"], "includeDirs": ["src/c/job", "src/c/completion", "src/c/result", "src/c/logger", "src/zig/common/include", "src/zig/job/enki/include"] },
+    { "name": "job_system_inline_factory", "packageDir": "src/zig/job/inline/abi", "headers": ["src/zig/job/inline/include/kernel_engine/job/inline/job_system_inline_create.h", "src/zig/job/inline/include/kernel_engine/job/inline/job_system_inline_log.h"], "includeDirs": ["src/c/job", "src/c/completion", "src/c/result", "src/c/logger", "src/zig/common/include", "src/zig/job/inline/include"] },
+    { "name": "async_enki_factory", "packageDir": "src/zig/async/enki/abi", "headers": ["src/zig/async/enki/include/kernel_engine/async/enki/async_enki_create.h", "src/zig/async/enki/include/kernel_engine/async/enki/async_enki_log.h"], "includeDirs": ["src/c/async", "src/c/completion", "src/c/result", "src/c/logger", "src/zig/common/include", "src/zig/async/enki/include"] },
+    { "name": "async_inline_factory", "packageDir": "src/zig/async/inline/abi", "headers": ["src/zig/async/inline/include/kernel_engine/async/inline/async_inline_create.h", "src/zig/async/inline/include/kernel_engine/async/inline/async_inline_log.h"], "includeDirs": ["src/c/async", "src/c/completion", "src/c/result", "src/c/logger", "src/zig/common/include", "src/zig/async/inline/include"] }
   ],
   "coverageExclusions": {
       "common/export.h": "visibility macros, no declarations",
@@ -1603,6 +1675,80 @@
       ],
       "library": "ke_window_glfw",
       "output": "Generated/Window/"
+    },
+    {
+      "name": "Completion",
+      "project": "src/csharp/completion/KernelEngine.Completion",
+      "namespace": "KernelEngine.Completion.Native",
+      "headers": [
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "library": "ke_job_system_enki",
+      "output": "Generated/Completion/"
+    },
+    {
+      "name": "Job",
+      "project": "src/csharp/job/KernelEngine.Job",
+      "namespace": "KernelEngine.Job.Native",
+      "headers": [
+        "src/c/job/kernel_engine/job/job_system.h"
+      ],
+      "library": "ke_job_system_enki",
+      "output": "Generated/Job/"
+    },
+    {
+      "name": "Async",
+      "project": "src/csharp/async/KernelEngine.Async",
+      "namespace": "KernelEngine.Async.Native",
+      "headers": [
+        "src/c/async/kernel_engine/async/async.h"
+      ],
+      "library": "ke_async_enki",
+      "output": "Generated/Async/"
+    },
+    {
+      "name": "JobEnki",
+      "project": "src/csharp/job/KernelEngine.Job.Enki",
+      "namespace": "KernelEngine.Job.Enki.Native",
+      "headers": [
+        "src/zig/job/enki/include/kernel_engine/job/enki/job_system_enki_create.h",
+        "src/zig/job/enki/include/kernel_engine/job/enki/job_system_enki_log.h"
+      ],
+      "library": "ke_job_system_enki",
+      "output": "Generated/"
+    },
+    {
+      "name": "JobInline",
+      "project": "src/csharp/job/KernelEngine.Job.Inline",
+      "namespace": "KernelEngine.Job.Inline.Native",
+      "headers": [
+        "src/zig/job/inline/include/kernel_engine/job/inline/job_system_inline_create.h",
+        "src/zig/job/inline/include/kernel_engine/job/inline/job_system_inline_log.h"
+      ],
+      "library": "ke_job_system_inline",
+      "output": "Generated/"
+    },
+    {
+      "name": "AsyncEnki",
+      "project": "src/csharp/async/KernelEngine.Async.Enki",
+      "namespace": "KernelEngine.Async.Enki.Native",
+      "headers": [
+        "src/zig/async/enki/include/kernel_engine/async/enki/async_enki_create.h",
+        "src/zig/async/enki/include/kernel_engine/async/enki/async_enki_log.h"
+      ],
+      "library": "ke_async_enki",
+      "output": "Generated/"
+    },
+    {
+      "name": "AsyncInline",
+      "project": "src/csharp/async/KernelEngine.Async.Inline",
+      "namespace": "KernelEngine.Async.Inline.Native",
+      "headers": [
+        "src/zig/async/inline/include/kernel_engine/async/inline/async_inline_create.h",
+        "src/zig/async/inline/include/kernel_engine/async/inline/async_inline_log.h"
+      ],
+      "library": "ke_async_inline",
+      "output": "Generated/"
     }
   ]
 }

@@ -1,0 +1,12 @@
+.{
+    .name = .abi_job_system_inline_factory,
+    .version = "0.1.0",
+    .fingerprint = 0xeb192401d49c15e7,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_job = .{ .path = "../../../abi/job" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

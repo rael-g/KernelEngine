@@ -1,0 +1,12 @@
+.{
+    .name = .abi_async_enki_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x7d395c6759204729,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_async = .{ .path = "../../../abi/async" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

@@ -1,0 +1,12 @@
+.{
+    .name = .ke_async_suite,
+    .version = "0.1.0",
+    .fingerprint = 0xceb02e364f3b532d,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_async = .{ .path = "../../abi/async" },
+        .abi_completion = .{ .path = "../../abi/completion" },
+        .abi_result = .{ .path = "../../abi/result" },
+    },
+    .paths = .{"."},
+}

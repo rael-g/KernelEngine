@@ -1,0 +1,12 @@
+.{
+    .name = .abi_job_system_enki_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x65f927b6e73d6859,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_job = .{ .path = "../../../abi/job" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+    },
+    .paths = .{"."},
+}

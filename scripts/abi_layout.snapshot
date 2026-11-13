@@ -1285,3 +1285,44 @@ ke_transform size=40 align=4
   position 0
   rotation 12
   scale 28
+
+[completion]
+ke_completion size=32 align=8
+  handle 0
+  poll 8
+  wait 16
+  release 24
+
+[job]
+ke_job_ctx size=16 align=8
+  dep_results 0
+  dep_count 8
+ke_job_system_config size=4 align=4
+  worker_count 0
+ke_job_system size=40 align=8
+  handle 0
+  dispatch 8
+  parallel_for 16
+  worker_slots 24
+  drain 32
+ke_job_system_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[async]
+ke_async_config size=8 align=4
+  worker_count 0
+  submit_capacity 4
+ke_async_ctx size=32 align=8
+  handle 0
+  dep_results 8
+  dep_count 16
+  cancelled 24
+ke_async size=32 align=8
+  handle 0
+  submit 8
+  cancel 16
+  drain 24
+ke_async_handle size=16 align=8
+  ref 0
+  destroy 8

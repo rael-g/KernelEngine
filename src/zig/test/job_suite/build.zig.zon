@@ -1,0 +1,12 @@
+.{
+    .name = .ke_job_suite,
+    .version = "0.1.0",
+    .fingerprint = 0xb9e0a42ebee61bc4,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_job = .{ .path = "../../abi/job" },
+        .abi_completion = .{ .path = "../../abi/completion" },
+        .abi_result = .{ .path = "../../abi/result" },
+    },
+    .paths = .{"."},
+}
