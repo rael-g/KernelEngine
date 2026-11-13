@@ -1,0 +1,11 @@
+.{
+    .name = .ke_completion_graph,
+    .version = "0.1.0",
+    .fingerprint = 0xf07f56cb14fed523,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../../abi/completion" },
+        .abi_result = .{ .path = "../../abi/result" },
+    },
+    .paths = .{"."},
+}

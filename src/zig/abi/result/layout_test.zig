@@ -54,6 +54,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_NOT_INITIALIZED), @as(i64, abi.c.KE_RESULT_NOT_INITIALIZED));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_NOT_SUPPORTED), @as(i64, abi.c.KE_RESULT_NOT_SUPPORTED));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_ALREADY_EXISTS), @as(i64, abi.c.KE_RESULT_ALREADY_EXISTS));
+    try std.testing.expectEqual(@as(i64, c.KE_RESULT_CANCELLED), @as(i64, abi.c.KE_RESULT_CANCELLED));
     try std.testing.expectEqual(@as(i64, c.KE_RESULT_MAX_ENUM), @as(i64, abi.c.KE_RESULT_MAX_ENUM));
 }
 

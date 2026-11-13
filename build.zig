@@ -182,6 +182,30 @@ pub fn build(b: *std.Build) void {
         .@"enki-lib" = vcpkg_lib,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_job_system_enki", .{
+        .target = target,
+        .optimize = optimize,
+        .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
+        .@"enki-lib" = vcpkg_lib,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_job_system_inline", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_async_enki", .{
+        .target = target,
+        .optimize = optimize,
+        .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
+        .@"enki-lib" = vcpkg_lib,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_async_inline", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     _ = ctx.member("ke_scheduler", .{
         .target = target,
         .optimize = optimize,

@@ -16,5 +16,6 @@ public enum Result : uint
     NotInitialized = unchecked((uint)((int)(((uint)(KE_RESULT_DOMAIN_GENERAL) << 16) | (uint)(6)))),
     NotSupported = unchecked((uint)((int)(((uint)(KE_RESULT_DOMAIN_GENERAL) << 16) | (uint)(7)))),
     AlreadyExists = unchecked((uint)((int)(((uint)(KE_RESULT_DOMAIN_GENERAL) << 16) | (uint)(8)))),
+    Cancelled = unchecked((uint)((int)(((uint)(KE_RESULT_DOMAIN_GENERAL) << 16) | (uint)(9)))),
     MaxEnum = 0x7fffffff,
 }

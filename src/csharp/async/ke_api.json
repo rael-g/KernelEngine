@@ -1,0 +1,383 @@
+{
+  "enums": [
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_CANCELLED",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_async_config",
+      "doc": "What an async system is created with, each field applied as given.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "worker_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Worker threads besides the creating thread; 0 runs every operation on the creating thread when it drains."
+        },
+        {
+          "name": "submit_capacity",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many submissions from other threads may wait for the next drain; greater than zero."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_async_ctx",
+      "doc": "What an operation sees while it runs.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "dep_results",
+          "type": "const ke_result *",
+          "tags": [
+            "array_of:dep_count"
+          ],
+          "doc": "What each dependency finished with, in the order they were given."
+        },
+        {
+          "name": "dep_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "cancelled",
+          "returns": "_Bool",
+          "tags": [],
+          "doc": "Whether the operation was cancelled; the body returns early when it sees true.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_async_ctx *"
+        }
+      ]
+    },
+    {
+      "name": "ke_async",
+      "doc": "Runs work that tolerates latency and may block, beside the frame.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "submit",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Runs fn once every dependency finished. Callable from any thread.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null fn, out_completion, or a null dependency; KE_RESULT_OUT_OF_MEMORY, also when the queue for other threads is full.",
+          "params": [
+            {
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "utf8",
+                "nullable"
+              ],
+              "doc": "Names the operation in profiles and logs; copied."
+            },
+            {
+              "name": "fn",
+              "type": "ke_async_fn",
+              "tags": [
+                "closure:data"
+              ],
+              "doc": "The body."
+            },
+            {
+              "name": "data",
+              "type": "void *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Forwarded to fn unchanged."
+            },
+            {
+              "name": "deps",
+              "type": "ke_completion *const *",
+              "tags": [
+                "borrowed",
+                "array_of:dep_count"
+              ],
+              "doc": "Completions of any origin."
+            },
+            {
+              "name": "dep_count",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_completion",
+              "type": "ke_completion **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the operation\u0027s completion, which the caller releases."
+            }
+          ],
+          "receiver": "ke_async *"
+        },
+        {
+          "name": "cancel",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Asks the operation behind completion to stop: one not started finishes with KE_RESULT_CANCELLED without running, one running sees cancelled. Callable from any thread.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a completion this system did not give.",
+          "params": [
+            {
+              "name": "completion",
+              "type": "ke_completion *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_async *"
+        },
+        {
+          "name": "drain",
+          "returns": "void",
+          "tags": [],
+          "doc": "Advances the work submitted from other threads and the work that waits on completions of another origin; called by the thread that created the system, which does nothing from any other. Doing nothing is a valid answer.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_async *"
+        }
+      ]
+    },
+    {
+      "name": "ke_async_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_async *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_async *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_async_fn",
+      "returns": "ke_result",
+      "doc": "The body of an operation, run once on a worker that may block in a system call.",
+      "lanes": [
+        {
+          "name": "data",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from submit."
+        },
+        {
+          "name": "ctx",
+          "type": "ke_async_ctx *",
+          "tags": [],
+          "doc": "The dependencies and the cancellation."
+        }
+      ]
+    }
+  ],
+  "id_types": [],
+  "foreign_id_types": [],
+  "type_aliases": {
+    "ke_async_fn": "ke_result (*)(void *, ke_async_ctx *)"
+  }
+}
