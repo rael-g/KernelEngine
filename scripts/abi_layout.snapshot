@@ -1022,8 +1022,6 @@ ke_world_transform_component size=64 align=4
   matrix 0
 
 [scene_tree]
-ke_scene_tree_config size=4 align=4
-  set 0
 ke_scene_tree size=112 align=8
   handle 0
   root 8
@@ -1160,11 +1158,6 @@ ke_node_type_desc size=136 align=8
   event_count 112
   on 120
   user_data 128
-ke_node_types_config size=16 align=4
-  pre_update 0
-  update 4
-  fixed_update 8
-  post_update 12
 ke_node_ctx size=200 align=8
   handle 0
   self 8
@@ -1220,9 +1213,8 @@ ke_scene_files_handle size=16 align=8
 [engine_node_types]
 
 [input_actions]
-ke_input_actions_config size=16 align=8
+ke_input_actions_config size=8 align=8
   section 0
-  set 8
 ke_input_actions size=144 align=8
   handle 0
   add_map 8

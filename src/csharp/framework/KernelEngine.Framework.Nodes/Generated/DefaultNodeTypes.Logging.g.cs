@@ -10,20 +10,16 @@ public sealed unsafe partial class DefaultNodeTypes
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="scheduler"></param>
-    /// <param name="first"></param>
-    /// <param name="@fixed"></param>
-    /// <param name="main"></param>
     /// <param name="ecs"></param>
     /// <param name="sceneTree"></param>
     /// <param name="inputActions">Without it, axis answers 0 and pressed false.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public DefaultNodeTypes(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Schedule.INativeSchedule first, KernelEngine.Schedule.INativeSchedule @fixed, KernelEngine.Schedule.INativeSchedule main, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions, in KernelEngine.Framework.Nodes.NodeTypesConfig config) : base(CreateLogged(loggerFactory, scheduler, first, @fixed, main, ecs, sceneTree, inputActions, config))
+    public DefaultNodeTypes(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions = default) : base(CreateLogged(loggerFactory, scheduler, ecs, sceneTree, inputActions))
     {
     }
 
-    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Schedule.INativeSchedule first, KernelEngine.Schedule.INativeSchedule @fixed, KernelEngine.Schedule.INativeSchedule main, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions, in KernelEngine.Framework.Nodes.NodeTypesConfig config)
+    private static KernelEngine.Framework.Nodes.Native.ke_node_types_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Scheduler.INativeScheduler scheduler, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Framework.INativeSceneTree sceneTree, KernelEngine.Framework.INativeInputActions? inputActions)
     {
         if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(scheduler, first, @fixed, main, ecs, sceneTree, inputActions, config);
+        return Create(scheduler, ecs, sceneTree, inputActions);
     }
 }

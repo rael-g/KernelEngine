@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_scene_tree_config, translated("ke_scene_tree_config"));
     try expectSameLayout(abi.c.ke_scene_tree, translated("ke_scene_tree"));
     try expectSameLayout(abi.c.ke_scene_tree_handle, translated("ke_scene_tree_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
@@ -31,19 +30,13 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
-    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
-    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
-    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
-    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
-extern const layout_values: [21]c_ulonglong;
+extern const layout_values: [19]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_scene_tree_config),
-        @offsetOf(abi.c.ke_scene_tree_config, "set"),
         @sizeOf(abi.c.ke_scene_tree),
         @offsetOf(abi.c.ke_scene_tree, "handle"),
         @offsetOf(abi.c.ke_scene_tree, "root"),

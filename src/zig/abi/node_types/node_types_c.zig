@@ -3,14 +3,11 @@
 const std = @import("std");
 const abi_ecs = @import("ecs");
 const abi_result = @import("result");
-const abi_schedule = @import("schedule");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
 pub const ke_removal_tracker = u64;
-pub const ke_schedule_set_id = u32;
-pub const ke_schedule_system_id = u64;
 
 pub const KE_ACTION_NAME_MAX = 32;
 
@@ -18,15 +15,6 @@ pub const KE_ACTION_NAME_MAX = 32;
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
-
-/// One call of a system body, once per run of the schedule, or once per slice when the system is
-/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
-/// wave still runs, and no later wave starts.
-pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
-
-/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
-/// on the thread that called run. A failure fails the run before any wave starts.
-pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// One call of a behaviour over the nodes of its type. The body walks them with next, which
 /// points self and fields at each node in turn; an on handler walks every pair of a node and an
@@ -102,20 +90,6 @@ pub const ke_node_type_desc = extern struct {
     on: ke_node_behaviour_fn = std.mem.zeroes(ke_node_behaviour_fn),
     /// Forwarded to every behaviour.
     user_data: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-};
-
-/// The values the node types are created with: the set each kind of system joins.
-pub const ke_node_types_config = extern struct {
-    /// The set, in the first schedule, of the ready and exit behaviours and of the systems that
-    /// clear the last tick's events; that schedule must run first in a tick.
-    pre_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the main schedule, of the update behaviours.
-    update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the fixed schedule, of the fixed update behaviours.
-    fixed_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
-    /// The set, in the main schedule, of the event behaviours and of the system that frees the nodes
-    /// that left the tree; it must follow the update set.
-    post_update: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
 };
 
 /// What a behaviour is given. Behaviours run one at a time, never two at once, so a body may

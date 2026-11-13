@@ -10,7 +10,10 @@
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/framework/engine_node_types.h>
 #include <kernel_engine/framework/input_actions_create.h>
+#include <kernel_engine/framework/input_actions_evaluation_create.h>
 #include <kernel_engine/framework/node_types_create.h>
+#include <kernel_engine/framework/node_types_systems_create.h>
+#include <kernel_engine/framework/scene_hierarchy_create.h>
 #include <kernel_engine/framework/scene_files_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/input/default/input_default_create.h>
@@ -135,13 +138,16 @@ typedef struct ke_sdk_engine
     ke_font_loader_handle          fonts;
     ke_asset_resolver_handle       assets;
     ke_scene_tree_handle           scene_tree;
+    ke_module_handle               hierarchy;
     ke_sdk_renderer                renderer;
     ke_physics_2d_handle           physics;
     ke_module_handle               bodies;
     ke_audio_handle                audio;
     ke_module_handle               sounds;
     ke_input_actions_handle        actions;
+    ke_module_handle               action_evaluation;
     ke_node_types_handle           node_types;
+    ke_module_handle               node_systems;
     ke_scene_files_handle          scene_files;
 } ke_sdk_engine;
 
@@ -340,10 +346,32 @@ static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
     return ke_asset_resolver_create(NULL, e->fonts.ref, e->project_dir, e->io.ref, &e->assets);
 }
 
-/** The scene tree. */
+/** The standard schedules of @p e and their sets, as a module attaches to them. */
+static inline ke_module_targets ke_sdk_targets(ke_sdk_engine *e)
+{
+    return (ke_module_targets){
+        .startup = e->schedules.startup.ref, .pre_update = e->schedules.pre_update.ref, .fixed = e->schedules.fixed.ref,
+        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref,
+        .startup_set = e->sets.startup, .pre_update_set = e->sets.pre_update, .fixed_pre_update_set = e->sets.fixed_pre_update,
+        .fixed_update_set = e->sets.fixed_update, .fixed_post_update_set = e->sets.fixed_post_update,
+        .update_set = e->sets.update, .post_update_set = e->sets.post_update, .shutdown_set = e->sets.shutdown,
+    };
+}
+
+/** Attaches @p module to the standard schedules of @p e. */
+static inline ke_result ke_sdk_attach(ke_sdk_engine *e, ke_module *module)
+{
+    ke_module_targets targets = ke_sdk_targets(e);
+    return module->attach(module, &targets);
+}
+
+/** The scene tree, and the module keeping its world transforms current. */
 static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
-    return ke_scene_tree_create(e->ecs.ref, e->schedules.update.ref, &(ke_scene_tree_config){ .set = e->sets.post_update }, &e->scene_tree);
+    ke_result made = ke_scene_tree_create(e->ecs.ref, &e->scene_tree);
+    if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, &e->hierarchy);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->hierarchy.ref);
+    return made;
 }
 
 /** The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on. */
@@ -431,25 +459,6 @@ static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
     return ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
 }
 
-/** The standard schedules of @p e and their sets, as a module attaches to them. */
-static inline ke_module_targets ke_sdk_targets(ke_sdk_engine *e)
-{
-    return (ke_module_targets){
-        .startup = e->schedules.startup.ref, .pre_update = e->schedules.pre_update.ref, .fixed = e->schedules.fixed.ref,
-        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref,
-        .startup_set = e->sets.startup, .pre_update_set = e->sets.pre_update, .fixed_pre_update_set = e->sets.fixed_pre_update,
-        .fixed_update_set = e->sets.fixed_update, .fixed_post_update_set = e->sets.fixed_post_update,
-        .update_set = e->sets.update, .post_update_set = e->sets.post_update, .shutdown_set = e->sets.shutdown,
-    };
-}
-
-/** Attaches @p module to the standard schedules of @p e. */
-static inline ke_result ke_sdk_attach(ke_sdk_engine *e, ke_module *module)
-{
-    ke_module_targets targets = ke_sdk_targets(e);
-    return module->attach(module, &targets);
-}
-
 /** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
 static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
@@ -473,22 +482,22 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
     return made;
 }
 
-/** The action maps of the configuration's `input` section. */
+/** The action maps of the configuration's `input` section, and the module evaluating them each tick. */
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
-    return ke_input_actions_create(e->schedules.pre_update.ref, e->input.ref, e->configuration.ref, &(ke_input_actions_config){ .section = "input", .set = e->sets.pre_update }, &e->actions);
+    ke_result made = ke_input_actions_create(e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
+    if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->action_evaluation.ref);
+    return made;
 }
 
-/** The node types. */
+/** The node types, and the module running their behaviours. */
 static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
-    const ke_node_types_config config = {
-        .pre_update = e->sets.pre_update,
-        .update = e->sets.update,
-        .fixed_update = e->sets.fixed_update,
-        .post_update = e->sets.post_update,
-    };
-    return ke_node_types_create(e->scheduler.ref, e->schedules.pre_update.ref, e->schedules.fixed.ref, e->schedules.update.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &config, &e->node_types);
+    ke_result made = ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
+    if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, &e->node_systems);
+    if (made == KE_OK) made = ke_sdk_attach(e, e->node_systems.ref);
+    return made;
 }
 
 /** The scene files. */
@@ -514,7 +523,9 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     if (engine->scheduler.ref) (void)engine->scheduler.ref->shutdown(engine->scheduler.ref);
     ke_sdk_renderer *r = &engine->renderer;
     KE_SDK_ENGINE_RELEASE(engine->scene_files);
+    KE_SDK_ENGINE_RELEASE(engine->node_systems);
     KE_SDK_ENGINE_RELEASE(engine->node_types);
+    KE_SDK_ENGINE_RELEASE(engine->action_evaluation);
     KE_SDK_ENGINE_RELEASE(engine->actions);
     KE_SDK_ENGINE_RELEASE(engine->sounds);
     KE_SDK_ENGINE_RELEASE(engine->audio);
@@ -534,6 +545,7 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(r->service);
     KE_SDK_ENGINE_RELEASE(r->binder);
     KE_SDK_ENGINE_RELEASE(r->view_space);
+    KE_SDK_ENGINE_RELEASE(engine->hierarchy);
     KE_SDK_ENGINE_RELEASE(engine->scene_tree);
     KE_SDK_ENGINE_RELEASE(engine->assets);
     KE_SDK_ENGINE_RELEASE(engine->fonts);

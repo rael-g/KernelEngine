@@ -10,6 +10,7 @@ const abi_input = @import("input");
 const abi_input_actions = @import("input_actions");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
+const abi_module = @import("module");
 const abi_result = @import("result");
 const abi_scene_tree = @import("scene_tree");
 const abi_schedule = @import("schedule");
@@ -45,48 +46,64 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
 /// Axis1D, Axis2D or Axis3D, default Button); ` <section >.map. <Map >.action. <Action
 /// >.bindings. <n >` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle)
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
-/// key_quad, each a key name such as "Space" or "W". Given a schedule, it registers the
-/// exclusive system "input.actions" in the config's set, which advances input's frame and
-/// evaluates the maps against its snapshot; destroying the maps unregisters it.
-pub fn inputActionsCreate(schedule: ?*abi_schedule.c.ke_schedule, input: ?*abi_input.c.ke_input, configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
+/// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
+/// each tick.
+pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(schedule, input, configuration, config, &written));
+    try checkResult(c.ke_input_actions_create(configuration, config, &written));
     return written;
 }
 
-/// Registers the hierarchy flattening and transform propagation system in the config's set of
-/// `schedule`, reading the scene graph out of `ecs`. The transform/hierarchy components are
-/// resolved by the names a scene_tree already registers them under, so a scene_tree must exist
-/// on this ecs first; creating a hierarchy without one fails as not found. `schedule` must
-/// outlive the hierarchy, whose destroy unregisters what it registered.
-pub fn sceneHierarchyCreate(schedule: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, config: ?*const abi_framework.c.ke_scene_hierarchy_config) Error!abi_framework.c.ke_scene_hierarchy_handle {
-    var written: abi_framework.c.ke_scene_hierarchy_handle = undefined;
-    try checkResult(c.ke_scene_hierarchy_create(schedule, ecs, config, &written));
+/// Creates the module that evaluates actions each tick: attaching it registers the exclusive
+/// system "input.actions" in the pre_update schedule's pre_update set, which advances input's
+/// frame and evaluates the maps against its snapshot.
+pub fn inputActionsEvaluationCreate(actions: ?*abi_input_actions.c.ke_input_actions, input: ?*abi_input.c.ke_input) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_input_actions_evaluation_create(actions, input, &written));
     return written;
 }
 
-/// Creates a scene_tree backed by the supplied ecs. Registers the transform/hierarchy/name
-/// components by name (idempotent — if a previous scene_tree on the same ecs already registered
-/// them, the existing cids are reused). `schedule` may be NULL, in which case no systems are
-/// registered and the caller is responsible for calling propagate_transforms itself. Passing one
-/// registers, in the config's set, the hierarchy maintenance that keeps world matrices current,
-/// and that schedule must outlive the tree, whose destroy unregisters it.
-pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs, schedule: ?*abi_schedule.c.ke_schedule, config: ?*const abi_scene_tree.c.ke_scene_tree_config) Error!abi_scene_tree.c.ke_scene_tree_handle {
+/// Creates the module that keeps every world transform equal to its local transform composed
+/// with its parent's world transform; attaching it registers one system in the update schedule's
+/// post_update set, which orders the entities parents-before-children each tick and walks them
+/// once. The transform and hierarchy components are resolved by the names a scene_tree registers
+/// them under, so a scene_tree must exist on ecs first.
+pub fn sceneHierarchyCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_scene_hierarchy_create(ecs, &written));
+    return written;
+}
+
+/// Creates a scene_tree backed by the supplied ecs. Registers the transform, hierarchy and name
+/// components by name; when a previous scene_tree on the same ecs already registered them, the
+/// existing cids are reused. World transforms are kept current by the scene hierarchy module, or
+/// by the caller through propagate_transforms.
+pub fn sceneTreeCreate(ecs: ?*abi_ecs.c.ke_ecs) Error!abi_scene_tree.c.ke_scene_tree_handle {
     var written: abi_scene_tree.c.ke_scene_tree_handle = undefined;
-    try checkResult(c.ke_scene_tree_create(ecs, schedule, config, &written));
+    try checkResult(c.ke_scene_tree_create(ecs, &written));
     return written;
 }
 
 /// Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed
-/// read `input_actions`. Ready and exit behaviours, and the systems that clear the last tick's
-/// events, run in `first`; fixed update behaviours in `fixed`; update and event behaviours, and
-/// the system that frees the nodes that left the tree, in `main`; each in the config's set. A
-/// node's exit request goes to `scheduler`, which runs each of the three schedules as an
+/// read `input_actions`. Their systems run once the node types module is attached; a node's exit
+/// request goes to `scheduler`, which runs each schedule of the module's targets as an
 /// executable whose user is the schedule. Every argument but `input_actions` and `out_types`
-/// must outlive the node types, whose destroy unregisters every system they registered.
-pub fn nodeTypesCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, first: ?*abi_schedule.c.ke_schedule, fixed: ?*abi_schedule.c.ke_schedule, main: ?*abi_schedule.c.ke_schedule, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions, config: ?*const abi_framework.c.ke_node_types_config) Error!abi_framework.c.ke_node_types_handle {
+/// must outlive the node types.
+pub fn nodeTypesCreate(scheduler: ?*abi_scheduler.c.ke_scheduler, ecs: ?*abi_ecs.c.ke_ecs, scene_tree: ?*abi_scene_tree.c.ke_scene_tree, input_actions: ?*abi_input_actions.c.ke_input_actions) Error!abi_framework.c.ke_node_types_handle {
     var written: abi_framework.c.ke_node_types_handle = undefined;
-    try checkResult(c.ke_node_types_create(scheduler, first, fixed, main, ecs, scene_tree, input_actions, config, &written));
+    try checkResult(c.ke_node_types_create(scheduler, ecs, scene_tree, input_actions, &written));
+    return written;
+}
+
+/// Creates the module of types: attaching it registers the ready and exit behaviours and the
+/// systems that clear the last tick's events in the pre_update schedule's pre_update set, fixed
+/// update behaviours in the fixed schedule's fixed_update set, update behaviours in the update
+/// schedule's update set, and event behaviours and the system that frees the nodes that left the
+/// tree in its post_update set, for every type and event registered before or after. Detaching
+/// removes them all; the types and events stay.
+pub fn nodeTypesSystemsCreate(types: ?*abi_framework.c.ke_node_types) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_node_types_systems_create(types, &written));
     return written;
 }
 

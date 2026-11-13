@@ -122,7 +122,8 @@ public sealed class EngineBuilder
         var target = Own(new WebgpuWindowGpuRenderTarget(log, gpu, window, new() { PresentMode = mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo }));
         var fonts = Own(new StbFontLoader(log, io));
         var assets = Own(new DefaultAssetResolver(log, null, fonts, _projectDir, io));
-        var tree = Own(new DefaultSceneTree(log, ecs, schedules.Update, new() { Set = sets.PostUpdate }));
+        var tree = Own(new DefaultSceneTree(log, ecs));
+        schedules.Attach(Own(new SceneHierarchyModule(log, ecs)), sets);
 
         var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
         var binder = Own(new GroupedRenderResourceBinder(log, gpu, io, new() { ShaderDir = shaderDir }));
@@ -161,8 +162,10 @@ public sealed class EngineBuilder
         owned.AddRange(_physics(parts));
         owned.AddRange(_audio(parts));
 
-        var actions = Own(new DefaultInputActions(log, schedules.PreUpdate, input, config, new() { Section = "input", Set = sets.PreUpdate }));
-        var types = Own(new DefaultNodeTypes(log, scheduler, schedules.PreUpdate, schedules.Fixed, schedules.Update, ecs, tree, actions, new() { PreUpdate = sets.PreUpdate, Update = sets.Update, FixedUpdate = sets.FixedUpdate, PostUpdate = sets.PostUpdate }));
+        var actions = Own(new DefaultInputActions(log, config, new() { Section = "input" }));
+        schedules.Attach(Own(new InputActionsEvaluationModule(log, actions, input)), sets);
+        var types = Own(new DefaultNodeTypes(log, scheduler, ecs, tree, actions));
+        schedules.Attach(Own(new NodeTypesSystemsModule(log, types)), sets);
         Own(new DefaultSceneFiles(log, ecs, types, assets, io));
         types.RegisterEngineNodeTypes();
         return new Engine(parts, owned, types, log);

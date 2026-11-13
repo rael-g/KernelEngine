@@ -9,17 +9,15 @@ public sealed unsafe partial class DefaultInputActions
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="schedule">NULL registers no system; the caller then evaluates.</param>
-    /// <param name="input">The input the system reads; required with schedule.</param>
     /// <param name="configuration">Read during the call only; NULL creates no map.</param>
-    /// <param name="config">Required with configuration or schedule; every field is read as given.</param>
-    public DefaultInputActions(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule? schedule, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(CreateLogged(loggerFactory, schedule, input, configuration, config))
+    /// <param name="config">Required; every field is read as given.</param>
+    public DefaultInputActions(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config) : base(CreateLogged(loggerFactory, configuration, config))
     {
     }
 
-    private static KernelEngine.Framework.Native.ke_input_actions_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Schedule.INativeSchedule? schedule, KernelEngine.Input.INativeInput? input, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
+    private static KernelEngine.Framework.Native.ke_input_actions_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Configuration.INativeConfiguration? configuration, in KernelEngine.Framework.InputActionsConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Framework.Native.NativeMethods.framework_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(schedule, input, configuration, config);
+        return Create(configuration, config);
     }
 }

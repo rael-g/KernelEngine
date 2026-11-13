@@ -9,6 +9,7 @@ const std = @import("std");
 
 const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
+const abi_module = @import("abi_module");
 const abi_schedule = @import("abi_schedule");
 const zsub = @import("zsub");
 const heap = @import("heap");
@@ -200,8 +201,15 @@ const State = struct {
     actions: ?[*]Action = null,
     action_count: u32 = 0,
     action_capacity: u32 = 0,
-    scheduler: ?*abi_schedule.c.ke_schedule = null,
-    input: ?*abi_input.c.ke_input = null,
+};
+
+/// The module `ke_input_actions_evaluation_create` returns, freed by `moduleDestroy`: while attached,
+/// `schedule` holds the system that advances `input` and evaluates `actions`, in `set`.
+const Module = struct {
+    api: abi_module.c.ke_module,
+    actions: *State,
+    input: *abi_input.c.ke_input,
+    schedule: ?*abi_schedule.c.ke_schedule = null,
     system: abi_schedule.c.ke_schedule_system_id = 0,
     set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
 };
@@ -561,7 +569,6 @@ fn vtGetAxis3d(self_in: ?*abi_input_actions.c.ke_input_actions, id: i32, out_x: 
 fn vtDestroy(self_in: ?*abi_input_actions.c.ke_input_actions) callconv(.c) void {
     const self = self_in orelse return;
     const s = stateOf(self);
-    if (s.scheduler) |sched| _ = sched.unregister_system.?(sched, s.system);
     if (s.actions) |actions| {
         for (actions[0..s.action_count]) |*a| {
             if (a.bindings) |b| heap.gpa.free(b[0..a.binding_capacity]);
@@ -683,32 +690,90 @@ fn readBinding(w: *Walk, index: [:0]const u8) void {
     R.check(result) catch |err| r.fail(err, "binding {s} could not be added: {t}", .{ section, err });
 }
 
-/// Factory. Builds an empty set of maps, then adds those the configuration describes through the
-/// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
-/// The system the factory registers when it is given a scheduler: it advances the input's frame and
-/// evaluates the maps against its snapshot.
+/// The system the module registers: it advances the input's frame and evaluates the maps against
+/// its snapshot.
 fn pump(_: ?*abi_schedule.c.ke_schedule_ctx, user_data: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
-    const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
-    const input = s.input orelse return R.code(error.InvalidArgument);
-    input.update.?(input);
+    const m: *Module = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
+    m.input.update.?(m.input);
     var snapshot: abi_input.c.ke_input_snapshot = undefined;
-    input.get_snapshot.?(input, &snapshot);
-    return vtEvaluate(&s.api, &snapshot);
+    m.input.get_snapshot.?(m.input, &snapshot);
+    return vtEvaluate(&m.actions.api, &snapshot);
 }
 
+fn moduleOf(self: ?*abi_module.c.ke_module) ?*Module {
+    return @ptrCast(@alignCast((self orelse return null).handle));
+}
+
+/// Slot `attach`: registers the exclusive system "input.actions" in the pre_update schedule's
+/// pre_update set.
+fn moduleAttach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
+    const m = moduleOf(self) orelse return R.code(error.InvalidArgument);
+    const targets = targets_in orelse return R.code(error.InvalidArgument);
+    if (m.schedule != null) return R.code(error.NotSupported);
+    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.pre_update orelse return R.code(error.InvalidArgument));
+    m.set = .{targets.pre_update_set};
+    const desc: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "input.actions",
+        .user_data = m,
+        .execute = pump,
+        .sets = &m.set,
+        .set_count = 1,
+        .exclusive = true,
+    };
+    const registered = schedule.register_system.?(schedule, &desc, &m.system);
+    if (registered != R.ok) {
+        log.warn("input actions: the schedule refused the system", .{});
+        return registered;
+    }
+    m.schedule = schedule;
+    return R.ok;
+}
+
+/// Slot `detach`: unregisters the system.
+fn moduleDetach(self: ?*abi_module.c.ke_module) callconv(.c) void {
+    const m = moduleOf(self) orelse return;
+    const schedule = m.schedule orelse return;
+    _ = schedule.unregister_system.?(schedule, m.system);
+    m.schedule = null;
+}
+
+/// The module handle's `destroy`: detaches and frees the module.
+fn moduleDestroy(self: ?*abi_module.c.ke_module) callconv(.c) void {
+    const m = moduleOf(self) orelse return;
+    moduleDetach(self);
+    heap.gpa.destroy(m);
+}
+
+/// Factory of the module that evaluates maps this library created against an input each tick.
+export fn ke_input_actions_evaluation_create(
+    actions_in: ?*abi_input_actions.c.ke_input_actions,
+    input_in: ?*abi_input.c.ke_input,
+    out_module: ?*abi_module.c.ke_module_handle,
+) callconv(.c) abi_result.c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+    const actions = actions_in orelse return R.code(error.InvalidArgument);
+    const input = input_in orelse return R.code(error.InvalidArgument);
+    if (actions.evaluate != &vtEvaluate) {
+        log.warn("input actions module: the maps were not created by this library", .{});
+        return R.code(error.InvalidArgument);
+    }
+    const m = heap.gpa.create(Module) catch return R.code(error.OutOfMemory);
+    m.* = .{ .api = .{ .handle = m, .attach = moduleAttach, .detach = moduleDetach }, .actions = stateOf(actions), .input = input };
+    out.* = .{ .ref = &m.api, .destroy = moduleDestroy };
+    return R.ok;
+}
+
+/// Factory. Builds an empty set of maps, then adds those the configuration describes through the
+/// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
 export fn ke_input_actions_create(
-    scheduler: ?*abi_schedule.c.ke_schedule,
-    input: ?*abi_input.c.ke_input,
     configuration: ?*abi_configuration.c.ke_configuration,
-    config: ?*const abi_input_actions.c.ke_input_actions_config,
+    config_in: ?*const abi_input_actions.c.ke_input_actions_config,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-    if (scheduler != null and (input == null or config == null)) {
-        log.warn("input actions: a scheduler is given without the input to read or the config naming its set", .{});
-        return R.code(error.InvalidArgument);
-    }
+    const given = config_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions) };
@@ -732,11 +797,6 @@ export fn ke_input_actions_create(
     s.api.get_axis3d = vtGetAxis3d;
 
     if (configuration) |cfg| {
-        const given = config orelse {
-            log.warn("input actions: a configuration is given without the config naming its section", .{});
-            vtDestroy(&s.api);
-            return R.code(error.InvalidArgument);
-        };
         const section_name: [*:0]const u8 = @ptrCast(given.section orelse {
             log.warn("input actions: the config names no section", .{});
             vtDestroy(&s.api);
@@ -754,25 +814,6 @@ export fn ke_input_actions_create(
             vtDestroy(&s.api);
             return R.code(err);
         }
-    }
-
-    if (scheduler) |sched| {
-        s.set = .{config.?.set};
-        const desc: abi_schedule.c.ke_schedule_system_desc = .{
-            .name = "input.actions",
-            .user_data = s,
-            .execute = pump,
-            .sets = &s.set,
-            .set_count = 1,
-            .exclusive = true,
-        };
-        const registered = sched.register_system.?(sched, &desc, &s.system);
-        if (registered != R.ok) {
-            vtDestroy(&s.api);
-            return registered;
-        }
-        s.scheduler = sched;
-        s.input = input;
     }
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
@@ -850,14 +891,14 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(null, null, null, null, &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(null, &.{ .section = "input" }, &h));
         return .{ .handle = h };
     }
 
     fn from(entries: []const FakeConfig.Entry) !Actions {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try R.check(ke_input_actions_create(null, null, &cfg, &.{ .section = "input" }, &h));
+        try R.check(ke_input_actions_create(&cfg, &.{ .section = "input" }, &h));
         return .{ .handle = h };
     }
 
@@ -1028,7 +1069,7 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     for (cases) |entries| {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(null, null, &cfg, &.{ .section = "input" }, &h)));
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, &.{ .section = "input" }, &h)));
         try testing.expect(h.ref == null);
     }
 }
@@ -1043,7 +1084,7 @@ fn keepSystem(args: zsub.For(abi_schedule.c.ke_schedule).Args(.register_system))
     return R.ok;
 }
 
-test "given a scheduler, the maps register a system in the config's set that advances the input and evaluates them, and unregister it when destroyed" {
+test "attaching the module registers a system in the pre_update set that advances the input and evaluates the maps, and detaching unregisters it" {
     var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
     try rt.init();
     defer rt.deinit();
@@ -1051,8 +1092,15 @@ test "given a scheduler, the maps register a system in the config's set that adv
     try input.init();
     defer input.deinit();
     _ = rt.when(.register_system).does(keepSystem);
-    var h: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try R.check(ke_input_actions_create(rt.api(), input.api(), null, &.{ .section = "input", .set = 3 }, &h));
+    var actions = try Actions.init();
+    defer actions.deinit();
+    var h: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_input_actions_evaluation_create(actions.api(), input.api(), &h));
+    var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
+    targets.pre_update = @ptrCast(rt.api());
+    targets.pre_update_set = 3;
+    try R.check(h.ref.?.attach.?(h.ref, &targets));
+    try testing.expectEqual(R.code(error.NotSupported), h.ref.?.attach.?(h.ref, &targets));
     try testing.expectEqual(3, pumped_set);
     try R.check(pumped.execute.?(null, pumped.user_data, 0));
     try input.received(.update).times(1);
@@ -1061,16 +1109,19 @@ test "given a scheduler, the maps register a system in the config's set that adv
     try rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_schedule.c.ke_schedule_system_id, 7))).times(1);
 }
 
-test "a scheduler without the input to read or the config naming the set is refused" {
-    var rt: zsub.For(abi_schedule.c.ke_schedule) = undefined;
-    try rt.init();
-    defer rt.deinit();
+test "the module refuses maps it did not create and targets without the pre_update schedule" {
     var input: zsub.For(abi_input.c.ke_input) = undefined;
     try input.init();
     defer input.deinit();
-    var h: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), null, null, &.{ .section = "input", .set = 0 }, &h));
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_create(rt.api(), input.api(), null, null, &h));
+    var foreign = std.mem.zeroes(abi_input_actions.c.ke_input_actions);
+    var h: abi_module.c.ke_module_handle = undefined;
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_input_actions_evaluation_create(&foreign, input.api(), &h));
+    var actions = try Actions.init();
+    defer actions.deinit();
+    try R.check(ke_input_actions_evaluation_create(actions.api(), input.api(), &h));
+    defer h.destroy.?(h.ref);
+    const targets = std.mem.zeroes(abi_module.c.ke_module_targets);
+    try testing.expectEqual(R.code(error.InvalidArgument), h.ref.?.attach.?(h.ref, &targets));
 }
 
 test "creating and destroying the action maps leaves no block allocated" {

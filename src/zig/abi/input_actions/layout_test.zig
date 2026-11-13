@@ -26,15 +26,6 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_input_actions_config, translated("ke_input_actions_config"));
     try expectSameLayout(abi.c.ke_input_actions, translated("ke_input_actions"));
     try expectSameLayout(abi.c.ke_input_actions_handle, translated("ke_input_actions_handle"));
-    if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
-    if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
-    if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
-    if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
-    if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
-    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
-    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
-    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
-    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
 test "every enum value is the header's value" {
@@ -45,14 +36,13 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ACTION_TYPE_AXIS3D), @as(i64, abi.c.KE_ACTION_TYPE_AXIS3D));
 }
 
-extern const layout_values: [26]c_ulonglong;
+extern const layout_values: [25]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_input_actions_config),
         @offsetOf(abi.c.ke_input_actions_config, "section"),
-        @offsetOf(abi.c.ke_input_actions_config, "set"),
         @sizeOf(abi.c.ke_input_actions),
         @offsetOf(abi.c.ke_input_actions, "handle"),
         @offsetOf(abi.c.ke_input_actions, "add_map"),

@@ -10,8 +10,8 @@ using KernelEngine.Configuration.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Input.Native;
 using KernelEngine.Io.Native;
+using KernelEngine.Module.Native;
 using KernelEngine.Result.Native;
-using KernelEngine.Schedule.Native;
 using KernelEngine.Text.Native;
 
 namespace KernelEngine.Framework.Native;
@@ -20,11 +20,19 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_tree_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* schedule, [NativeTypeName("const ke_scene_tree_config *")] ke_scene_tree_config* config, ke_scene_tree_handle* out_tree);
+    public static extern KernelEngine.Result.Native.Result scene_tree_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_scene_tree_handle* out_tree);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_schedule *")] KernelEngine.Schedule.Native.ke_schedule* schedule, [NativeTypeName("ke_input *")] KernelEngine.Input.Native.ke_input* input, [NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* configuration, [NativeTypeName("const ke_input_actions_config *")] ke_input_actions_config* config, ke_input_actions_handle* out_actions);
+    public static extern KernelEngine.Result.Native.Result input_actions_create([NativeTypeName("ke_configuration *")] KernelEngine.Configuration.Native.ke_configuration* configuration, [NativeTypeName("const ke_input_actions_config *")] ke_input_actions_config* config, ke_input_actions_handle* out_actions);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_input_actions_evaluation_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result input_actions_evaluation_create(ke_input_actions* actions, [NativeTypeName("ke_input *")] KernelEngine.Input.Native.ke_input* input, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+
+    [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_scene_hierarchy_create", ExactSpelling = true)]
+    [return: NativeTypeName("ke_result")]
+    public static extern KernelEngine.Result.Native.Result scene_hierarchy_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
 
     [DllImport("ke_framework", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_asset_resolver_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
