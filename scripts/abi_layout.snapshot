@@ -1298,6 +1298,73 @@ ke_extraction_handle size=16 align=8
   ref 0
   destroy 8
 
+[render_graph]
+ke_render_graph_texture_desc size=56 align=8
+  name 0
+  format 8
+  size_class 12
+  width 16
+  height 20
+  scale_x 24
+  scale_y 28
+  relative_to 32
+  mip_levels 36
+  array_layers 40
+  samples 44
+  generate_mips 48
+ke_render_graph_buffer_desc size=16 align=8
+  name 0
+  size 8
+ke_render_graph_use size=56 align=4
+  resource 0
+  usage 4
+  base_mip 8
+  mip_count 12
+  base_layer 16
+  layer_count 20
+  view_format 24
+  load 28
+  clear_color 32
+  clear_depth 48
+  clear_stencil 52
+ke_render_graph_pass_desc size=72 align=8
+  name 0
+  type 8
+  queue 12
+  injection_point 16
+  side_effect 20
+  uses 24
+  use_count 32
+  record 40
+  condition 48
+  readback 56
+  user 64
+ke_render_graph_ctx size=56 align=8
+  handle 0
+  encoder 8
+  render_pass 16
+  compute_pass 24
+  texture 32
+  texture_view 40
+  buffer 48
+ke_render_graph size=104 align=8
+  handle 0
+  begin_frame 8
+  create_texture 16
+  create_buffer 24
+  create_token 32
+  import_texture 40
+  import_buffer 48
+  export_resource 56
+  import_export 64
+  release_export 72
+  add_pass 80
+  compile 88
+  execute 96
+ke_render_graph_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [module]
 ke_module_targets size=96 align=8
   startup 0

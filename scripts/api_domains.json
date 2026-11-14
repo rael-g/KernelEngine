@@ -941,6 +941,34 @@
       "usings": ["KernelEngine.Completion", "KernelEngine.Completion.Native", "KernelEngine.Ecs", "KernelEngine.Ecs.Native"]
     },
     {
+      "name": "render_graph",
+      "providers": ["ke_render_graph_ctx"],
+      "headers": [
+        "src/c/render_graph/kernel_engine/render_graph/render_graph.h"
+      ],
+      "auxHeaders": [
+        "src/c/render/kernel_engine/render/gpu/gpu_device.h",
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "composeHeaders": [ "src/c/render/kernel_engine/render/gpu/gpu_enums.h" ],
+      "includeDirs": [
+        "src/c/render_graph",
+        "src/c/completion",
+        "src/c/render",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/render_graph/ke_api.json",
+      "namespace": "KernelEngine.RenderGraph",
+      "nativeNamespace": "KernelEngine.RenderGraph.Native",
+      "outDir": "src/csharp/render_graph/KernelEngine.RenderGraph/Generated",
+      "abstractionsOutDir": "src/csharp/render_graph/KernelEngine.RenderGraph/Generated/Abstractions",
+      "usings": ["KernelEngine.Completion", "KernelEngine.Completion.Native", "KernelEngine.Render", "KernelEngine.Render.Gpu", "KernelEngine.Render.Native"],
+      "library": "ke_render_graph_simple"
+    },
+    {
       "name": "module",
       "headers": [
         "src/c/module/kernel_engine/module/module.h"
@@ -1046,7 +1074,6 @@
     { "name": "framework_factory", "packageDir": "src/zig/framework/abi", "headers": ["src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h", "src/zig/framework/include/kernel_engine/framework/framework_log.h", "src/zig/framework/include/kernel_engine/framework/input_actions_create.h", "src/zig/framework/include/kernel_engine/framework/input_actions_evaluation_create.h", "src/zig/framework/include/kernel_engine/framework/scene_hierarchy_create.h", "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_systems_create.h", "src/zig/framework/include/kernel_engine/framework/scene_files_create.h"], "includeDirs": ["src/c/asset", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/zig/framework/include", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/physics", "src/c/resource_cache", "src/c/view", "src/c/window"] },
     { "name": "input_default_factory", "packageDir": "src/zig/input/default/abi", "headers": ["src/zig/input/default/include/kernel_engine/input/default/input_default_create.h", "src/zig/input/default/include/kernel_engine/input/default/input_default_log.h"], "includeDirs": ["src/c/input", "src/zig/input/default/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "io_pool_factory", "packageDir": "src/zig/io/pool/abi", "headers": ["src/zig/io/pool/include/kernel_engine/io/pool/io_pool_create.h", "src/zig/io/pool/include/kernel_engine/io/pool/io_pool_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/pool/include", "src/c/logger", "src/c/result", "src/c/task_pool", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
-    { "name": "render_graph", "headers": ["src/c/render_graph/kernel_engine/render_graph/render_graph.h"], "includeDirs": ["src/c/render_graph", "src/c/completion", "src/c/render", "src/c/ecs", "src/c/math", "src/zig/common/include", "src/c/result"] },
     { "name": "render_graph_simple_factory", "packageDir": "src/zig/render_graph/simple/abi", "headers": ["src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_create.h", "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_log.h"], "includeDirs": ["src/c/render_graph", "src/c/render", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/render_graph/simple/include", "src/c/result", "src/c/completion", "src/zig/common/include"] },
     { "name": "extraction_default_factory", "packageDir": "src/zig/extraction/default/abi", "headers": ["src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h"], "includeDirs": ["src/c/extraction", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/extraction/default/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/async", "src/zig/common/include"] },
     { "name": "physics_body2d_factory", "packageDir": "src/zig/physics/body2d/abi", "headers": ["src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h", "src/zig/physics/body2d/include/kernel_engine/physics/body2d/physics_body2d_log.h"], "includeDirs": ["src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/physics", "src/zig/physics/body2d/include", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/io", "src/c/render", "src/c/resource_cache", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
@@ -1101,9 +1128,6 @@
       "framework/node_types.h": "projected to C# in its own arc, after the native contract settles",
       "framework/node_types_create.h": "projected to C# in its own arc, after the native contract settles",
       "framework/node_types_systems_create.h": "projected to C# in its own arc, after the native contract settles",
-      "render_graph/render_graph.h": "built by native passes only; projected to C# when a managed pass declares one",
-      "render_graph/simple/render_graph_simple_create.h": "built by native passes only; projected to C# when a managed pass declares one",
-      "render_graph/simple/render_graph_simple_log.h": "log of a library with no managed caller",
       "framework/scene_files.h": "projected to C# in its own arc, after the native contract settles",
       "framework/scene_files_create.h": "projected to C# in its own arc, after the native contract settles",
       "render/cluster/cluster_create.h": "render pass factory, called only by render_module",
@@ -1145,7 +1169,7 @@
     },
 
     "fieldTables": {},
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [
     {
@@ -1621,6 +1645,27 @@
       ],
       "library": "ke_scheduler",
       "output": "Generated/Scheduler/"
+    },
+    {
+      "name": "RenderGraph",
+      "project": "src/csharp/render_graph/KernelEngine.RenderGraph",
+      "namespace": "KernelEngine.RenderGraph.Native",
+      "headers": [
+        "src/c/render_graph/kernel_engine/render_graph/render_graph.h"
+      ],
+      "library": "ke_render_graph_simple",
+      "output": "Generated/RenderGraph/"
+    },
+    {
+      "name": "RenderGraphSimple",
+      "project": "src/csharp/render_graph/KernelEngine.RenderGraph",
+      "namespace": "KernelEngine.RenderGraph.Native",
+      "headers": [
+        "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_create.h",
+        "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_log.h"
+      ],
+      "library": "ke_render_graph_simple",
+      "output": "Generated/RenderGraphSimple/"
     },
     {
       "name": "Schedule",

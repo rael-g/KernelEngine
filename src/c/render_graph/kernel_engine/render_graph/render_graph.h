@@ -114,7 +114,7 @@ typedef enum ke_render_graph_load {
     KE_RENDER_GRAPH_LOAD_DONT_CARE = 2,
 } ke_render_graph_load;
 
-/// [bag] One use of a resource by a pass.
+/// [value] One use of a resource by a pass.
 typedef struct ke_render_graph_use {
     ke_render_graph_resource resource;
     ke_render_graph_usage usage;
