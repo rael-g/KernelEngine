@@ -211,18 +211,18 @@ test "a pass whose writes no later pass reads is dropped, whatever its injection
     try testing.expectEqualSlices(u8, "r", Log.order[0..Log.count]);
 }
 
-test "a writer declared before its reader runs first, and independent passes follow their injection points" {
+test "a use refers to the last write earlier in injection order, whatever the declaration order" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
     Log.reset();
     const target = try f.texture(g.KE_RENDER_GRAPH_SIZE_ABSOLUTE);
-    try f.pass('w', 9, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
-    try f.pass('r', 0, true, &.{use(target, g.KE_RENDER_GRAPH_USAGE_SAMPLED)});
-    try f.pass('b', 5, true, &.{});
-    try f.pass('a', 1, true, &.{});
+    try f.pass('r', 9, true, &.{use(target, g.KE_RENDER_GRAPH_USAGE_SAMPLED)});
+    try f.pass('u', 5, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
+    try f.pass('w', 1, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
+    try f.pass('a', 0, true, &.{});
     try testing.expectEqual(R.ok, try f.run());
-    try testing.expectEqualSlices(u8, "abwr", Log.order[0..Log.count]);
+    try testing.expectEqualSlices(u8, "awur", Log.order[0..Log.count]);
 }
 
 test "a raster pass records into a render pass begun with its cleared attachment, and sees only what it declared" {

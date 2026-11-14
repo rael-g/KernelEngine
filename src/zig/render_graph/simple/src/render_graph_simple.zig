@@ -389,6 +389,10 @@ fn bufferUsageOf(usage: g.ke_render_graph_usage) gpu.ke_gpu_buffer_usage {
     };
 }
 
+fn earlierPoint(s: *State, a: u32, b: u32) bool {
+    return s.passes.items[a].desc.injection_point < s.passes.items[b].desc.injection_point;
+}
+
 fn compileAll(s: *State) R.Error!void {
     s.order.clearRetainingCapacity();
     const count = s.passes.items.len;
@@ -398,13 +402,17 @@ fn compileAll(s: *State) R.Error!void {
         p.root = false;
         p.alive = if (p.desc.condition) |condition| condition(p.desc.user) else true;
     }
+    const sequence = gpa.alloc(u32, count) catch return error.OutOfMemory;
+    defer gpa.free(sequence);
+    for (sequence, 0..) |*slot, i| slot.* = @intCast(i);
+    std.sort.insertion(u32, sequence, s, earlierPoint);
     for (s.resources.items, 1..) |*r, id| {
         var last_writer: ?u32 = null;
         var readers: std.ArrayList(u32) = .empty;
         defer readers.deinit(gpa);
-        for (s.passes.items, 0..) |*p, index| {
+        for (sequence) |i| {
+            const p = &s.passes.items[i];
             if (!p.alive) continue;
-            const i: u32 = @intCast(index);
             var reads_it = false;
             var writes_it = false;
             for (p.uses) |u| if (u.resource == id) {

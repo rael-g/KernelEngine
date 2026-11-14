@@ -173,7 +173,8 @@ typedef struct ke_render_graph_pass_desc {
     const char *name;
     ke_render_graph_pass_type type;
     ke_render_graph_queue queue;
-    /// Orders passes that no dependency orders: a lower point runs first.
+    /// Orders the passes: a use refers to the last write of its resource by a pass earlier in the order of
+    /// injection point, then declaration, and passes no dependency orders run with the lower point first.
     uint32_t injection_point;
     /// Whether the pass runs even when nothing it writes is read.
     bool side_effect;
