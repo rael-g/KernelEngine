@@ -36,6 +36,7 @@ int main(void)
         .actions = ke_sdk_actions,
         .node_types = ke_sdk_node_types,
         .scene_files = ke_sdk_scene_files,
+        .extraction = ke_sdk_extraction,
     };
     ke_sdk_default_engine parts;
     ke_sdk_engine *engine = &parts.engine;

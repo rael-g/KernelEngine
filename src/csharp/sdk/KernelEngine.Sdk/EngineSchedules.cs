@@ -43,6 +43,16 @@ public sealed class EngineSchedules
             (nint)((INativeSchedule)Update).Native, (nint)((INativeSchedule)Shutdown).Native, sets.Startup, sets.PreUpdate, sets.FixedPreUpdate,
             sets.FixedUpdate, sets.FixedPostUpdate, sets.Update, sets.PostUpdate, sets.Shutdown);
 
+    /// <summary>Adds the render stage of <paramref name="extraction"/> to <paramref name="scheduler"/>, ticking every tick, run by its own native run slot.</summary>
+    /// <param name="scheduler">The scheduler that runs it.</param>
+    /// <param name="extraction">The extraction whose stage it runs.</param>
+    public static unsafe void AddRender(INativeScheduler scheduler, KernelEngine.Extraction.INativeExtraction extraction)
+    {
+        var native = extraction.Native;
+        var run = (delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result>)native->run;
+        NativeResults.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, SchedulerCadence.EveryTick), "ke_scheduler.add");
+    }
+
     /// <summary>Adds <paramref name="schedule"/> to <paramref name="scheduler"/> as an executable whose user is the schedule, run by its own native run slot.</summary>
     /// <param name="scheduler">The scheduler that runs it.</param>
     /// <param name="schedule">The schedule it runs.</param>

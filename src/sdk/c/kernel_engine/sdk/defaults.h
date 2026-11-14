@@ -7,6 +7,8 @@
 #include <kernel_engine/configuration/configuration_create.h>
 #include <kernel_engine/configuration/toml/configuration_toml.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/extraction/default/extraction_create.h>
+#include <kernel_engine/extraction/default/extraction_history_create.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/framework/engine_node_types.h>
@@ -393,6 +395,22 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 {
     return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, &e->scene_files);
+}
+
+/**
+ * The render stage: a flecs render world, a schedule over it, and the extraction into it from the engine's world,
+ * added to the scheduler after the standard schedules; and the module keeping the previous value of every
+ * interpolation.
+ */
+static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
+{
+    ke_result made = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->render_world);
+    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
+    if (made == KE_OK) made = ke_extraction_create(e->ecs.ref, e->render_world.ref, e->scheduler.ref, e->render_schedule.ref, &e->extraction);
+    if (made == KE_OK) made = e->scheduler.ref->add(e->scheduler.ref, (ke_scheduler_run_fn)e->extraction.ref->run, e->extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK);
+    if (made == KE_OK) made = ke_extraction_history_create(e->extraction.ref, &e->extraction_history);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->extraction_history.ref);
+    return made;
 }
 
 #endif

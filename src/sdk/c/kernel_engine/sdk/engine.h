@@ -6,6 +6,7 @@
 #include <kernel_engine/configuration/configuration.h>
 #include <kernel_engine/configuration/configuration_source.h>
 #include <kernel_engine/ecs/ke_ecs.h>
+#include <kernel_engine/extraction/extraction.h>
 #include <kernel_engine/file_system/file_system.h>
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/framework/engine_node_types.h>
@@ -109,6 +110,10 @@ typedef struct ke_sdk_engine
     ke_node_types_handle           node_types;
     ke_module_handle               node_systems;
     ke_scene_files_handle          scene_files;
+    ke_ecs_handle                  render_world;
+    ke_schedule_handle             render_schedule;
+    ke_extraction_handle           extraction;
+    ke_module_handle               extraction_history;
 
     /** The modules ke_sdk_engine_run attaches once every completion in pending finished; borrowed. */
     ke_module                     *modules[KE_SDK_ENGINE_LIST_CAPACITY];
@@ -164,6 +169,7 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part actions;
     ke_sdk_engine_part node_types;
     ke_sdk_engine_part scene_files;
+    ke_sdk_engine_part extraction;
 } ke_sdk_engine_desc;
 
 /** The configuration the default parts read their sections from. */
@@ -270,6 +276,10 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     engine->module_count = 0;
     if (engine->release_extra) engine->release_extra(engine);
     engine->release_extra = NULL;
+    KE_SDK_ENGINE_RELEASE(engine->extraction_history);
+    KE_SDK_ENGINE_RELEASE(engine->extraction);
+    KE_SDK_ENGINE_RELEASE(engine->render_schedule);
+    KE_SDK_ENGINE_RELEASE(engine->render_world);
     KE_SDK_ENGINE_RELEASE(engine->scene_files);
     KE_SDK_ENGINE_RELEASE(engine->node_systems);
     KE_SDK_ENGINE_RELEASE(engine->node_types);
@@ -326,7 +336,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     const ke_sdk_engine_part parts[] = {
         desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
-        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
+        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files, desc->extraction,
     };
     ke_result made = KE_OK;
     for (size_t i = 0; made == KE_OK && i < sizeof core / sizeof core[0]; ++i)
