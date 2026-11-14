@@ -10,10 +10,9 @@ namespace KernelEngine;
 
 /// <summary>
 /// A running engine, made by a container from the contracts of its parts: the standard schedules made by the
-/// registered schedule factory and added to the scheduler, every engine part made, and the engine's node types
-/// registered. Running it waits until every registered <see cref="EngineReadiness"/> finished, attaches every
-/// registered module to the schedules in the order it was registered, and ticks until the window closes or a node
-/// asks to exit. Disposing it detaches the modules and releases the schedules; the container releases the parts.
+/// registered schedule factory and added to the scheduler, and the engine's node types registered. Running it waits
+/// until every registered <see cref="EngineReadiness"/> finished, attaches every registered module to the schedules
+/// in the order it was registered, and ticks until the window closes or a node asks to exit. Disposing it detaches the modules and releases the schedules; the container releases the parts.
 /// </summary>
 public sealed class Engine : IDisposable
 {
@@ -33,7 +32,6 @@ public sealed class Engine : IDisposable
         Sets = EngineSets.Register(Schedules);
         Schedules.AddTo(Scheduler);
         if (services.GetService<Extraction.Extraction>() is { } extraction) EngineSchedules.AddRender(Scheduler, extraction);
-        foreach (var _ in services.GetServices<IEnginePart>()) { }
         _modules = [.. services.GetServices<Module.Module>()];
         _pending = [.. services.GetServices<EngineReadiness>()];
         Types = services.GetRequiredService<NodeTypes>();

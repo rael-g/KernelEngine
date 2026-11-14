@@ -320,6 +320,36 @@ test "what this graph does not offer is refused, and executing before compiling 
     try testing.expectEqual(R.code(error.NotSupported), f.ref().execute.?(f.ref(), &done));
 }
 
+var seen_size: u64 = 0;
+
+fn recordSize(user: ?*anyopaque, ctx: ?*g.ke_render_graph_ctx) callconv(.c) Result {
+    const id: g.ke_render_graph_resource = @intCast(@intFromPtr(user));
+    seen_size = ctx.?.buffer_size.?(ctx, id);
+    return R.ok;
+}
+
+test "a pass sees the size of a buffer it declared" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var id: g.ke_render_graph_resource = 0;
+    try R.check(f.ref().import_buffer.?(f.ref(), 77, 256, &id));
+    const uses = [_]g.ke_render_graph_use{use(id, g.KE_RENDER_GRAPH_USAGE_UNIFORM)};
+    var desc = std.mem.zeroes(g.ke_render_graph_pass_desc);
+    desc.name = "sized";
+    desc.type = g.KE_RENDER_GRAPH_PASS_COPY;
+    desc.side_effect = true;
+    desc.uses = &uses;
+    desc.use_count = uses.len;
+    desc.record = recordSize;
+    desc.user = @ptrFromInt(id);
+    var pass: g.ke_render_graph_pass = 0;
+    try R.check(f.ref().add_pass.?(f.ref(), &desc, &pass));
+    seen_size = 0;
+    try testing.expectEqual(R.ok, try f.run());
+    try testing.expectEqual(@as(u64, 256), seen_size);
+}
+
 test "creating and destroying graphs leaves no block allocated" {
     var f: Fixture = .{};
     try f.init();

@@ -1,21 +1,26 @@
 using System.Numerics;
 
 using global::KernelEngine.Ecs;
+using global::KernelEngine.RenderGraph;
 
 using KernelEngine.Ecs.Native;
+using KernelEngine.Extraction.Native;
+using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;
-using KernelEngine.Runtime.Native;
 using KernelEngine.View.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
 public unsafe partial struct RenderContext
 {
-    [NativeTypeName("ke_runtime *")]
-    public KernelEngine.Runtime.Native.ke_runtime* Runtime;
-
     [NativeTypeName("ke_ecs *")]
     public KernelEngine.Ecs.Native.ke_ecs* Ecs;
+
+    [NativeTypeName("ke_ecs *")]
+    public KernelEngine.Ecs.Native.ke_ecs* Main;
+
+    [NativeTypeName("ke_extraction *")]
+    public KernelEngine.Extraction.Native.ke_extraction* Extraction;
 
     [NativeTypeName("ke_render_service *")]
     public KernelEngine.Render.Native.ke_render_service* Service;
@@ -33,5 +38,5 @@ public unsafe partial struct RenderContext
     public KernelEngine.Render.Native.ke_render_scene_resolve* Scene;
 
     [NativeTypeName("ke_render_frame *")]
-    public KernelEngine.Render.Native.ke_render_frame* Frame;
+    public KernelEngine.Render.Frame.Native.ke_render_frame* Frame;
 }

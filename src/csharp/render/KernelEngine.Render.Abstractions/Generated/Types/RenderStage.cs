@@ -6,12 +6,13 @@ namespace KernelEngine.Render;
 
 public enum RenderStage : uint
 {
-    Opaque = 0,
-    Sky = 1,
-    Transparent = 2,
-    HdrPost = 3,
-    Tonemap = 4,
-    LdrPost = 5,
-    Overlay = 6,
-    Count = 7,
+    Prepass = 0,
+    Opaque = 1,
+    Sky = 2,
+    Transparent = 3,
+    HdrPost = 4,
+    Tonemap = 5,
+    LdrPost = 6,
+    Overlay = 7,
+    Count = 8,
 }

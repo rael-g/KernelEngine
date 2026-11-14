@@ -9,17 +9,18 @@ public sealed unsafe partial class DefaultRenderSceneResolve
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
-    /// <param name="ecs">Registers the components; borrowed.</param>
+    /// <param name="main">The main world; borrowed, must outlive it.</param>
+    /// <param name="render">The render world; borrowed, must outlive it.</param>
+    /// <param name="extraction">Copies each component from main into render; borrowed, must outlive it.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
     /// <param name="resolver">Reads the image a sprite names; borrowed. Without it a sprite draws untextured.</param>
-    public DefaultRenderSceneResolve(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(CreateLogged(loggerFactory, runtime, ecs, service, resolver))
+    public DefaultRenderSceneResolve(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(CreateLogged(loggerFactory, main, render, extraction, service, resolver))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
+    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, ecs, service, resolver);
+        return Create(main, render, extraction, service, resolver);
     }
 }

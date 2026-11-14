@@ -23,6 +23,13 @@ pub const Extraction = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_extraction {
         return .{
+            .sync_component = &struct {
+                fn call(self: ?*c.ke_extraction, a0: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.syncComponent(state, a0) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .extract_copy = &struct {
                 fn call(self: ?*c.ke_extraction, a0: c.ke_component_id, a1: c.ke_component_id) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -78,9 +85,17 @@ pub const Extraction = struct {
         };
     }
 
+    /// Pairs every main-world entity carrying main_component as if it were tagged render_synced; the
+    /// pair goes when the entity loses the component and the tag. Registering it again changes
+    /// nothing.
+    pub fn syncComponent(self: Extraction, main_component: c.ke_component_id) Error!void {
+        try checkResult(self.ptr.sync_component.?(self.ptr, main_component));
+    }
+
     /// Registers a copy: at each extraction, the pair carries render_component equal to the entity's
     /// main_component, every ENTITY field holding the entity's pair or the null entity; when the
-    /// entity lost the component, the pair loses it too. Both must have the same size.
+    /// entity lost the component, the pair loses it too. Both must have the same size; registering
+    /// the same pair again changes nothing.
     pub fn extractCopy(self: Extraction, main_component: c.ke_component_id, render_component: c.ke_component_id) Error!void {
         try checkResult(self.ptr.extract_copy.?(self.ptr, main_component, render_component));
     }

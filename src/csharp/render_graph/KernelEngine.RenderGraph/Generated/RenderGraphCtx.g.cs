@@ -11,7 +11,6 @@ using KernelEngine.Common.Native;
 using KernelEngine.Completion;
 using KernelEngine.Completion.Native;
 using KernelEngine.Render;
-using KernelEngine.Render.Gpu;
 using KernelEngine.Render.Native;
 using KernelEngine.RenderGraph.Native;
 
@@ -102,6 +101,13 @@ public unsafe partial class RenderGraphCtx : IDisposable, INativeRenderGraphCtx,
     public ulong Buffer(RenderGraphResource resource)
     {
         return Handle->buffer(Handle, resource);
+    }
+
+    /// <summary>The size in bytes of the buffer behind resource, which the pass declared.</summary>
+    /// <returns>The size; zero for a resource the pass did not declare.</returns>
+    public ulong BufferSize(RenderGraphResource resource)
+    {
+        return Handle->buffer_size(Handle, resource);
     }
 
     /// <summary>Releases the native rendergraphctx.</summary>

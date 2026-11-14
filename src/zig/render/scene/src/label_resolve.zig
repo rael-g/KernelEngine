@@ -7,7 +7,7 @@ const abi_render = @import("abi_render");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const abi_text = @import("abi_text");
 const R = @import("result").Result(.{});
 
@@ -91,7 +91,7 @@ fn bake(st: *State, l: *abi_ui_components.c.ke_label_component, font_path: [*:0]
 /// yields the failed-font handle, which is not retried. Afterwards every label that named a font
 /// and had no handle holds either the registered font or the failed-font handle. It always
 /// succeeds, since each failure is logged by `bake` instead.
-pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+pub fn system(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;

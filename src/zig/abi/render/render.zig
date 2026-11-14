@@ -4,7 +4,6 @@ const std = @import("std");
 const abi_math = @import("math");
 const abi_mesh = @import("mesh");
 const abi_render_components = @import("render_components");
-const abi_render_contract = @import("render_contract");
 const abi_render_gpu = @import("render_gpu");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
@@ -16,41 +15,16 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderResourceType = enum(c.ke_render_resource_type) {
-    texture = 0,
-    buffer = 1,
-    _,
-};
-
-pub const RenderSizeMode = enum(c.ke_render_size_mode) {
-    absolute = 0,
-    relative_to_backbuffer = 1,
-    _,
-};
-
 pub const RenderStage = enum(c.ke_render_stage) {
-    @"opaque" = 0,
-    sky = 1,
-    transparent = 2,
-    hdr_post = 3,
-    tonemap = 4,
-    ldr_post = 5,
-    overlay = 6,
-    count = 7,
-    _,
-};
-
-pub const RenderChainMode = enum(c.ke_render_chain_mode) {
-    draw_over = 0,
-    sample_over = 1,
-    replace = 2,
-    _,
-};
-
-pub const RenderDepthMode = enum(c.ke_render_depth_mode) {
-    none = 0,
-    @"test" = 1,
-    write = 2,
+    prepass = 0,
+    @"opaque" = 1,
+    sky = 2,
+    transparent = 3,
+    hdr_post = 4,
+    tonemap = 5,
+    ldr_post = 6,
+    overlay = 7,
+    count = 8,
     _,
 };
 
@@ -65,67 +39,18 @@ pub const RenderService = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_service {
         return .{
-            .declare = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?*const c.ke_render_resource_params, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.declare(state, a0) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .import_texture = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: c.ke_gpu_texture, a2: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.importTexture(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .import_tag = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.importTag(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .import_buffer = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?[*:0]const u8, a1: c.ke_gpu_buffer, a2: u64, a3: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.importBuffer(state, std.mem.span(a0 orelse return resultOf(error.Failed)), a1, a2) catch |failure| return resultOf(failure);
-                    (a3 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .frame_color = &struct {
-                fn call(self: ?*c.ke_render_service) callconv(.c) c.ke_component_id {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
-                    return T.frameColor(state);
-                }
-            }.call,
-            .frame_depth = &struct {
-                fn call(self: ?*c.ke_render_service) callconv(.c) c.ke_component_id {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
-                    return T.frameDepth(state);
-                }
-            }.call,
-            .begin_pass = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?*const c.ke_render_pass_io) callconv(.c) ?*abi_render_contract.c.ke_render_pass_ctx {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*abi_render_contract.c.ke_render_pass_ctx)));
-                    return T.beginPass(state, a0);
-                }
-            }.call,
-            .end_pass = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?*abi_render_contract.c.ke_render_pass_ctx) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.endPass(state, a0);
-                }
-            }.call,
             .begin_frame = &struct {
-                fn call(self: ?*c.ke_render_service) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_service, a0: ?*c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.beginFrame(state) catch |failure| return resultOf(failure);
+                    const value = T.beginFrame(state) catch |failure| return resultOf(failure);
+                    (a0 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
+                }
+            }.call,
+            .submit_uploads = &struct {
+                fn call(self: ?*c.ke_render_service) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.submitUploads(state);
                 }
             }.call,
             .end_frame = &struct {
@@ -133,6 +58,12 @@ pub const RenderService = struct {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     T.endFrame(state) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
+                }
+            }.call,
+            .blit = &struct {
+                fn call(self: ?*c.ke_render_service, a0: ?*abi_render_gpu.c.ke_gpu_render_pass, a1: c.ke_gpu_texture_view, a2: abi_render_gpu.c.ke_gpu_texture_format) callconv(.c) void {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
+                    return T.blit(state, a0, a1, a2);
                 }
             }.call,
             .upload_mesh = &struct {
@@ -147,12 +78,6 @@ pub const RenderService = struct {
                 fn call(self: ?*c.ke_render_service, a0: abi_render_handles.c.ke_mesh_handle, a1: ?*c.ke_gpu_buffer, a2: ?*c.ke_gpu_buffer, a3: ?*u32) callconv(.c) bool {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
                     return T.meshBuffers(state, a0, a1, a2, a3);
-                }
-            }.call,
-            .set_clear_color = &struct {
-                fn call(self: ?*c.ke_render_service, a0: f32, a1: f32, a2: f32, a3: f32) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.setClearColor(state, a0, a1, a2, a3);
                 }
             }.call,
             .upload_texture = &struct {
@@ -201,30 +126,6 @@ pub const RenderService = struct {
                 fn call(self: ?*c.ke_render_service, a0: abi_render_handles.c.ke_texture_handle) callconv(.c) c.ke_gpu_texture_view {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
                     return T.textureView(state, a0);
-                }
-            }.call,
-            .resource_view = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture_view {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture_view)));
-                    return T.resourceView(state, a0);
-                }
-            }.call,
-            .resource_texture = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_texture {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_texture)));
-                    return T.resourceTexture(state, a0);
-                }
-            }.call,
-            .resource_buffer = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) c.ke_gpu_buffer {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_buffer)));
-                    return T.resourceBuffer(state, a0);
-                }
-            }.call,
-            .resource_buffer_size = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) u64 {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u64)));
-                    return T.resourceBufferSize(state, a0);
                 }
             }.call,
             .backbuffer_size = &struct {
@@ -355,105 +256,31 @@ pub const RenderService = struct {
                     return T.backbufferFormat(state);
                 }
             }.call,
-            .resource_format = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_component_id) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format)));
-                    return T.resourceFormat(state, a0);
-                }
-            }.call,
-            .resource_generation = &struct {
-                fn call(self: ?*c.ke_render_service) callconv(.c) u32 {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u32)));
-                    return T.resourceGeneration(state);
-                }
-            }.call,
-            .join_chain = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_render_stage, a1: c.ke_render_chain_mode, a2: ?*c.ke_render_chain_link) callconv(.c) abi_result.c.ke_result {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.joinChain(state, @enumFromInt(a0), @enumFromInt(a1)) catch |failure| return resultOf(failure);
-                    (a2 orelse return resultOf(error.Failed)).* = value;
-                    return abi_result.c.KE_OK;
-                }
-            }.call,
-            .leave_chain = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_render_chain_link) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.leaveChain(state, a0);
-                }
-            }.call,
-            .chain_format = &struct {
-                fn call(self: ?*c.ke_render_service, a0: c.ke_render_stage) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(abi_render_gpu.c.ke_gpu_texture_format)));
-                    return T.chainFormat(state, @enumFromInt(a0));
-                }
-            }.call,
         };
     }
 
-    /// Declares a transient resource the service allocates and recycles; every call declares a new
-    /// one.
-    pub fn declare(self: RenderService, params: ?*const c.ke_render_resource_params) Error!c.ke_component_id {
-        var written: c.ke_component_id = undefined;
-        try checkResult(self.ptr.declare.?(self.ptr, params, &written));
+    /// Begins a frame: forgets the previous frame's uploads, acquires the service's render target
+    /// and reads its size.
+    pub fn beginFrame(self: RenderService) Error!c.ke_gpu_texture_view {
+        var written: c.ke_gpu_texture_view = undefined;
+        try checkResult(self.ptr.begin_frame.?(self.ptr, &written));
         return written;
     }
 
-    /// Imports an externally-owned texture, labeled `name`.
-    pub fn importTexture(self: RenderService, name: [:0]const u8, tex: c.ke_gpu_texture) Error!c.ke_component_id {
-        var written: c.ke_component_id = undefined;
-        try checkResult(self.ptr.import_texture.?(self.ptr, name.ptr, tex, &written));
-        return written;
+    /// Submits the uploads recorded since the frame began, before the frame's own work is submitted.
+    pub fn submitUploads(self: RenderService) void {
+        return self.ptr.submit_uploads.?(self.ptr);
     }
 
-    /// Mints a resource with no GPU payload, labeled `name`, that passes order on.
-    pub fn importTag(self: RenderService, name: [:0]const u8) Error!c.ke_component_id {
-        var written: c.ke_component_id = undefined;
-        try checkResult(self.ptr.import_tag.?(self.ptr, name.ptr, &written));
-        return written;
-    }
-
-    /// Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.
-    pub fn importBuffer(self: RenderService, name: [:0]const u8, buffer: c.ke_gpu_buffer, size: u64) Error!c.ke_component_id {
-        var written: c.ke_component_id = undefined;
-        try checkResult(self.ptr.import_buffer.?(self.ptr, name.ptr, buffer, size, &written));
-        return written;
-    }
-
-    /// The tag a pass that joined the chain writes in its access list, and that the system ending
-    /// the frame reads.
-    pub fn frameColor(self: RenderService) c.ke_component_id {
-        return self.ptr.frame_color.?(self.ptr);
-    }
-
-    /// The frame's depth texture, cleared when the frame begins.
-    pub fn frameDepth(self: RenderService) c.ke_component_id {
-        return self.ptr.frame_depth.?(self.ptr);
-    }
-
-    /// Opens a pass's recording context, from inside a render system's body.
-    pub fn beginPass(self: RenderService, io: ?*const c.ke_render_pass_io) ?*abi_render_contract.c.ke_render_pass_ctx {
-        return self.ptr.begin_pass.?(self.ptr, io);
-    }
-
-    /// Closes a recording context opened by begin_pass.
-    pub fn endPass(self: RenderService, ctx: ?*abi_render_contract.c.ke_render_pass_ctx) void {
-        return self.ptr.end_pass.?(self.ptr, ctx);
-    }
-
-    /// Acquires the service's render target as the backbuffer, clears the per-pass command slot
-    /// table, and clears the frame's color and depth. When the target has nothing to draw into this
-    /// frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the
-    /// target's code when acquiring failed.
-    pub fn beginFrame(self: RenderService) Error!void {
-        try checkResult(self.ptr.begin_frame.?(self.ptr));
-    }
-
-    /// Submits the passes outside the chain in the order they ended, then the chain in its order,
-    /// then draws the frame's color into the backbuffer and presents the render target. A link whose
-    /// pass recorded nothing still carries the color through it. Succeeds doing nothing when no
-    /// frame began, and fails with the target's code when presenting failed.
+    /// Presents the render target. Succeeds doing nothing when no frame began, and fails with the
+    /// target's code when presenting failed.
     pub fn endFrame(self: RenderService) Error!void {
         try checkResult(self.ptr.end_frame.?(self.ptr));
+    }
+
+    /// Draws source over the whole of pass's colour attachment, whose format is target_format.
+    pub fn blit(self: RenderService, pass: ?*abi_render_gpu.c.ke_gpu_render_pass, source: c.ke_gpu_texture_view, target_format: abi_render_gpu.c.ke_gpu_texture_format) void {
+        return self.ptr.blit.?(self.ptr, pass, source, target_format);
     }
 
     /// Uploads interleaved vertices and 16-bit indices to device buffers.
@@ -467,11 +294,6 @@ pub const RenderService = struct {
     /// uploaded.
     pub fn meshBuffers(self: RenderService, h: abi_render_handles.c.ke_mesh_handle, out_vbo: ?*c.ke_gpu_buffer, out_ibo: ?*c.ke_gpu_buffer, out_index_count: ?*u32) bool {
         return self.ptr.mesh_buffers.?(self.ptr, h, out_vbo, out_ibo, out_index_count);
-    }
-
-    /// The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).
-    pub fn setClearColor(self: RenderService, r: f32, g: f32, b: f32, a: f32) void {
-        return self.ptr.set_clear_color.?(self.ptr, r, g, b, a);
     }
 
     pub fn uploadTexture(self: RenderService, key: [:0]const u8, width: u32, height: u32, rgba: []const u8) Error!abi_render_handles.c.ke_texture_handle {
@@ -513,34 +335,13 @@ pub const RenderService = struct {
         return self.ptr.texture_view.?(self.ptr, h);
     }
 
-    /// The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.
-    pub fn resourceView(self: RenderService, resource: c.ke_component_id) c.ke_gpu_texture_view {
-        return self.ptr.resource_view.?(self.ptr, resource);
-    }
-
-    /// The raw GPU texture behind a declared resource, for the copy operations that take a texture
-    /// rather than a view.
-    pub fn resourceTexture(self: RenderService, resource: c.ke_component_id) c.ke_gpu_texture {
-        return self.ptr.resource_texture.?(self.ptr, resource);
-    }
-
-    /// The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.
-    pub fn resourceBuffer(self: RenderService, resource: c.ke_component_id) c.ke_gpu_buffer {
-        return self.ptr.resource_buffer.?(self.ptr, resource);
-    }
-
-    /// The size (bytes) of the buffer published via import_buffer; 0 for another id.
-    pub fn resourceBufferSize(self: RenderService, resource: c.ke_component_id) u64 {
-        return self.ptr.resource_buffer_size.?(self.ptr, resource);
-    }
-
     /// The backbuffer's pixel size, callable from any phase. Refreshed once per frame at
     /// begin_frame, so a caller earlier in the tick reads the previous frame's size.
     pub fn backbufferSize(self: RenderService, out_w: ?*u32, out_h: ?*u32) void {
         return self.ptr.backbuffer_size.?(self.ptr, out_w, out_h);
     }
 
-    /// Records a buffer upload to be flushed single-threaded at end_frame (before submit).
+    /// Records a buffer upload, submitted by submit_uploads.
     pub fn upload(self: RenderService, buffer: c.ke_gpu_buffer, offset: u64, data: ?*const anyopaque, size: usize) void {
         return self.ptr.upload.?(self.ptr, buffer, offset, data, size);
     }
@@ -646,37 +447,6 @@ pub const RenderService = struct {
         return self.ptr.backbuffer_format.?(self.ptr);
     }
 
-    /// Texel format of a texture resource, the format a pipeline drawing into it declares;
-    /// KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.
-    pub fn resourceFormat(self: RenderService, resource: c.ke_component_id) abi_render_gpu.c.ke_gpu_texture_format {
-        return self.ptr.resource_format.?(self.ptr, resource);
-    }
-
-    /// Counts the times the targets declared relative to the backbuffer were recreated, which
-    /// `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a
-    /// declared target's view, a bind group for instance, rebuilds it when the count changes.
-    pub fn resourceGeneration(self: RenderService) u32 {
-        return self.ptr.resource_generation.?(self.ptr);
-    }
-
-    /// Gives a pass a place in the chain, after every pass that joined the same stage before it. The
-    /// place is kept until leave_chain.
-    pub fn joinChain(self: RenderService, stage: RenderStage, mode: RenderChainMode) Error!c.ke_render_chain_link {
-        var written: c.ke_render_chain_link = undefined;
-        try checkResult(self.ptr.join_chain.?(self.ptr, @intFromEnum(stage), @intFromEnum(mode), &written));
-        return written;
-    }
-
-    /// Gives the place back. An unknown link is ignored.
-    pub fn leaveChain(self: RenderService, link: c.ke_render_chain_link) void {
-        return self.ptr.leave_chain.?(self.ptr, link);
-    }
-
-    /// Texel format of the color a pass of stage draws into, the format its pipeline declares.
-    pub fn chainFormat(self: RenderService, stage: RenderStage) abi_render_gpu.c.ke_gpu_texture_format {
-        return self.ptr.chain_format.?(self.ptr, @intFromEnum(stage));
-    }
-
 };
 
 pub const RenderCamera = struct {
@@ -753,34 +523,6 @@ pub const RenderCamera = struct {
 
 };
 
-pub const RenderFrame = struct {
-    ptr: *c.ke_render_frame,
-    owner: ?c.ke_render_frame_handle = null,
-
-    pub fn deinit(self: RenderFrame) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// The vtable whose slots call the methods of T, which embeds it as the named field.
-    pub fn implement(comptime T: type, comptime field: []const u8) c.ke_render_frame {
-        return .{
-            .frame_cid = &struct {
-                fn call(self: ?*c.ke_render_frame) callconv(.c) c.ke_component_id {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_component_id)));
-                    return T.frameCid(state);
-                }
-            }.call,
-        };
-    }
-
-    /// The tag the system that begins the frame writes and the system that ends it reads. A pass
-    /// that reads it runs inside the frame.
-    pub fn frameCid(self: RenderFrame) c.ke_component_id {
-        return self.ptr.frame_cid.?(self.ptr);
-    }
-
-};
-
 pub const RenderSceneResolve = struct {
     ptr: *c.ke_render_scene_resolve,
     owner: ?c.ke_render_scene_resolve_handle = null,
@@ -798,27 +540,33 @@ pub const RenderSceneResolve = struct {
                     return T.componentIds(state);
                 }
             }.call,
+            .render_component_ids = &struct {
+                fn call(self: ?*c.ke_render_scene_resolve) callconv(.c) ?*const c.ke_render_scene_component_ids {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*const c.ke_render_scene_component_ids)));
+                    return T.renderComponentIds(state);
+                }
+            }.call,
         };
     }
 
-    /// The ids of the components the scene resolve registered; valid while it lives.
+    /// The ids the main world gave the scene's components; valid while the resolve lives.
     pub fn componentIds(self: RenderSceneResolve) ?*const c.ke_render_scene_component_ids {
         return self.ptr.component_ids.?(self.ptr);
     }
 
+    /// The ids the render world gave the same components, which every extraction copies the main
+    /// world's into; valid while the resolve lives.
+    pub fn renderComponentIds(self: RenderSceneResolve) ?*const c.ke_render_scene_component_ids {
+        return self.ptr.render_component_ids.?(self.ptr);
+    }
+
 };
 
-pub const RenderResourceParams = c.ke_render_resource_params;
 pub const RenderFrameGlobals = c.ke_render_frame_globals;
 pub const RenderLighting = c.ke_render_lighting;
-pub const RenderPassIo = c.ke_render_pass_io;
 pub const RenderServiceConfig = c.ke_render_service_config;
 pub const CameraFrustum = c.ke_camera_frustum;
 pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
-pub const RenderGbufferResources = c.ke_render_gbuffer_resources;
-pub const RenderShadowResources = c.ke_render_shadow_resources;
-pub const RenderClusterResources = c.ke_render_cluster_resources;
 pub const RenderServiceHandle = c.ke_render_service_handle;
 pub const RenderCameraHandle = c.ke_render_camera_handle;
-pub const RenderFrameHandle = c.ke_render_frame_handle;
 pub const RenderSceneResolveHandle = c.ke_render_scene_resolve_handle;

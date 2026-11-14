@@ -11,7 +11,6 @@
 #include <kernel_engine/render/handles.h>
 #include <kernel_engine/render/ui/components.h>
 #include <kernel_engine/render/ui/ui.h>
-#include <kernel_engine/runtime/runtime.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_UI_EXPORT
@@ -30,10 +29,12 @@ extern "C"
 {
 #endif
 
-    /// Registers the pass's update-phase label system and render-phase system. A missing
-    /// runtime, ecs, service or device fails as an invalid argument.
+    /// Makes the ui pass and registers its quad and label components in the main and the render world,
+    /// with a copy of each in the extraction. Its systems come from ke_render_ui_systems_create.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
     /// @param out_ui [out] Receives the handle; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context or a part the pass uses is NULL; the
+    ///         code of the world, the extraction or the GPU object that failed.
     KE_RENDER_UI_API ke_result ke_render_ui_create(const ke_render_context *context,
                                                    ke_render_ui_handle *out_ui);
 

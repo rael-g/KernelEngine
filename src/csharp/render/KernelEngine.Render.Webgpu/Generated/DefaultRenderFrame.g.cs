@@ -5,33 +5,38 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which begins the frame and publishes the frame globals and the scene's light, and "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid argument; the handle's ref is NULL on failure.</summary>
-public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.RenderFrame
+/// <summary>Makes the frame and registers the tag "render.frame" in ecs. Its systems come from ke_render_frame_systems_create.</summary>
+public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Frame.RenderFrame
 {
-    /// <summary>Registers the tag "render.frame" and the render-phase systems "render.begin_frame", which begins the frame and publishes the frame globals and the scene's light, and "render.end_frame". A missing runtime, ecs, service, camera or scene fails as an invalid argument; the handle's ref is NULL on failure.</summary>
-    /// <param name="runtime">Registers the frame's systems; borrowed, must outlive it.</param>
-    /// <param name="ecs">Registers the frame tag; borrowed.</param>
-    /// <param name="service">The frame begins and ends on it; borrowed, must outlive it.</param>
+    /// <summary>Makes the frame and registers the tag "render.frame" in ecs. Its systems come from ke_render_frame_systems_create.</summary>
+    /// <param name="ecs">The render world; registers the frame tag; borrowed.</param>
+    /// <param name="graph">The frame is declared into it; borrowed, must outlive it.</param>
+    /// <param name="service">The frame begins, uploads and presents on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
-    /// <param name="scene">Names the components the frame reads; borrowed.</param>
-    public DefaultRenderFrame(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(Create(runtime, ecs, service, camera, scene))
+    /// <param name="scene">Names the components the frame reads; borrowed, must outlive it.</param>
+    /// <param name="config">The frame's values; Required; every field is read as given.</param>
+    public DefaultRenderFrame(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config) : base(Create(ecs, graph, service, camera, scene, config))
     {
-        Hold(runtime.Owner);
         Hold(ecs.Owner);
+        Hold(graph.Owner);
         Hold(service.Owner);
         Hold(camera.Owner);
         Hold(scene.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_frame_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config)
     {
-        ArgumentNullException.ThrowIfNull(runtime);
         ArgumentNullException.ThrowIfNull(ecs);
+        ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
-        KernelEngine.Render.Native.ke_render_frame_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(runtime.Native, ecs.Native, service.Native, camera.Native, scene.Native, &handle), "ke_render_frame_create");
+        KernelEngine.Render.Webgpu.Native.ke_render_frame_config nativeConfig = default;
+        nativeConfig.color_format = config.ColorFormat;
+        nativeConfig.depth_format = config.DepthFormat;
+        nativeConfig.clear_color = config.ClearColor;
+        KernelEngine.Render.Frame.Native.ke_render_frame_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, &nativeConfig, &handle), "ke_render_frame_create");
         return handle;
     }
 }

@@ -98,7 +98,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_GRAPH_RESOURCE_INVALID), @as(i128, abi.c.KE_RENDER_GRAPH_RESOURCE_INVALID));
 }
 
-extern const layout_values: [66]c_ulonglong;
+extern const layout_values: [67]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -151,6 +151,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_graph_ctx, "texture"),
         @offsetOf(abi.c.ke_render_graph_ctx, "texture_view"),
         @offsetOf(abi.c.ke_render_graph_ctx, "buffer"),
+        @offsetOf(abi.c.ke_render_graph_ctx, "buffer_size"),
         @sizeOf(abi.c.ke_render_graph),
         @offsetOf(abi.c.ke_render_graph, "handle"),
         @offsetOf(abi.c.ke_render_graph, "begin_frame"),

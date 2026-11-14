@@ -36,14 +36,21 @@ typedef void (*ke_extraction_interpolate_fn)(void *user, const void *previous, c
 /// @return KE_OK, or the code the extraction fails with.
 typedef ke_result (*ke_extraction_custom_fn)(void *user, ke_extraction *extraction, ke_ecs *main, ke_ecs *render);
 
-/// [interface] Gives every main-world entity tagged render_synced a pair in the render world, and makes the
+/// [interface] Gives every main-world entity tagged render_synced, or carrying a component registered with
+/// sync_component, a pair in the render world, and makes the
 /// registered components of each pair what they are in the main world at the moment of an extraction.
 typedef struct ke_extraction {
     void *handle;
 
+    /// Pairs every main-world entity carrying @p main_component as if it were tagged render_synced; the
+    /// pair goes when the entity loses the component and the tag. Registering it again changes nothing.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component; KE_RESULT_OUT_OF_MEMORY.
+    ke_result (*sync_component)(ke_extraction *self, ke_component_id main_component);
+
     /// Registers a copy: at each extraction, the pair carries @p render_component equal to the entity's
     /// @p main_component, every ENTITY field holding the entity's pair or the null entity; when the entity
-    /// lost the component, the pair loses it too. Both must have the same size.
+    /// lost the component, the pair loses it too. Both must have the same size; registering the same
+    /// pair again changes nothing.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component or different sizes;
     ///         KE_RESULT_OUT_OF_MEMORY.
     ke_result (*extract_copy)(ke_extraction *self, ke_component_id main_component, ke_component_id render_component);

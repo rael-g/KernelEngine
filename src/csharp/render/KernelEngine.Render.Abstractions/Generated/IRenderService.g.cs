@@ -11,36 +11,17 @@ namespace KernelEngine.Render;
 /// <summary>The renderservice contract game code depends on, so a caller names a capability rather than the <see cref="RenderService"/> that carries it.</summary>
 public interface IRenderService : IDisposable
 {
-    /// <summary>Declares a transient resource the service allocates and recycles; every call declares a new one.</summary>
-    /// <param name="name">The label the resource is debugged under; the service makes it unique.</param>
-    /// <param name="width">Read when size_mode is ABSOLUTE.</param>
-    /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
-    /// <param name="clearValue">Per-resource clear color.</param>
-    /// <returns>Receives the resource's id, the tag-component cid to place in a pass's access list.</returns>
+    /// <summary>Begins a frame: forgets the previous frame's uploads, acquires the service's render target and reads its size.</summary>
+    /// <returns>Receives the view the frame is presented from; KE_GPU_INVALID_HANDLE when the target has nothing to draw into this frame, which then begins none.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue);
-    /// <summary>Imports an externally-owned texture, labeled `name`.</summary>
-    /// <returns>Receives its tag-component cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId ImportTexture(string name, ulong tex);
-    /// <summary>Mints a resource with no GPU payload, labeled `name`, that passes order on.</summary>
-    /// <returns>Receives the cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId ImportTag(string name);
-    /// <summary>Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.</summary>
-    /// <returns>Receives its tag-component cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    ComponentId ImportBuffer(string name, ulong buffer, ulong size);
-    /// <summary>The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads.</summary>
-    ComponentId FrameColor();
-    /// <summary>The frame's depth texture, cleared when the frame begins.</summary>
-    ComponentId FrameDepth();
-    /// <summary>Acquires the service's render target as the backbuffer, clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    void BeginFrame();
-    /// <summary>Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame's color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target's code when presenting failed.</summary>
+    ulong BeginFrame();
+    /// <summary>Submits the uploads recorded since the frame began, before the frame's own work is submitted.</summary>
+    void SubmitUploads();
+    /// <summary>Presents the render target. Succeeds doing nothing when no frame began, and fails with the target's code when presenting failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void EndFrame();
+    /// <summary>Draws source over the whole of pass's colour attachment, whose format is target_format.</summary>
+    void Blit(nint pass, ulong source, GpuTextureFormat targetFormat);
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
     /// <param name="key">Dedup cache key; required.</param>
     /// <param name="vertices">Interleaved vertices.</param>
@@ -50,8 +31,6 @@ public interface IRenderService : IDisposable
     MeshHandle UploadMesh(string key, ReadOnlySpan<MeshVertex> vertices, ReadOnlySpan<ushort> indices);
     /// <summary>Resolves a mesh handle to its GPU buffers. Returns false for a handle this service never uploaded.</summary>
     bool TryMeshBuffers(MeshHandle h, out ulong outVbo, out ulong outIbo, out uint outIndexCount);
-    /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>
-    void SetClearColor(float r, float g, float b, float a);
     /// <param name="key">Dedup cache key; required.</param>
     /// <param name="rgba">RGBA8 pixels in row order; width by height by four bytes.</param>
     /// <returns>Receives the handle of the uploaded texture.</returns>
@@ -77,17 +56,9 @@ public interface IRenderService : IDisposable
     TextureHandle UploadCubemap(string key, uint faceSize, ReadOnlySpan<byte> faces);
     /// <summary>The GPU view for a texture/cubemap handle.</summary>
     ulong TextureView(TextureHandle h);
-    /// <summary>The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.</summary>
-    ulong ResourceView(ComponentId resource);
-    /// <summary>The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.</summary>
-    ulong ResourceTexture(ComponentId resource);
-    /// <summary>The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.</summary>
-    ulong ResourceBuffer(ComponentId resource);
-    /// <summary>The size (bytes) of the buffer published via import_buffer; 0 for another id.</summary>
-    ulong ResourceBufferSize(ComponentId resource);
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
     (uint OutW, uint OutH) BackbufferSize();
-    /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit).</summary>
+    /// <summary>Records a buffer upload, submitted by submit_uploads.</summary>
     void Upload(ulong buffer, ulong offset, nint data, nuint size);
     /// <summary>Returns the pipeline for this exact params state, compiling it on first request.</summary>
     ulong GetOrCreatePipeline(nint @params);
@@ -133,12 +104,4 @@ public interface IRenderService : IDisposable
     RenderLighting Lighting();
     /// <summary>The resource binder the service was created with, through which a pass brings its resources to its shaders; the service has given it `ke_frame`, `ke_lighting` and the `ke_samp_*` samplers.</summary>
     nint ResourceBinder();
-    /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>
-    uint ResourceGeneration();
-    /// <summary>Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.</summary>
-    /// <returns>Receives the link; KE_RENDER_CHAIN_NONE on failure.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    uint JoinChain(RenderStage stage, RenderChainMode mode);
-    /// <summary>Gives the place back. An unknown link is ignored.</summary>
-    void LeaveChain(uint link);
 }

@@ -25,7 +25,7 @@ public unsafe interface INativeExtraction
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Gives every main-world entity tagged render_synced a pair in the render world, and makes the registered components of each pair what they are in the main world at the moment of an extraction.</summary>
+/// <summary>Gives every main-world entity tagged render_synced, or carrying a component registered with sync_component, a pair in the render world, and makes the registered components of each pair what they are in the main world at the moment of an extraction.</summary>
 public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtraction
 {
     private ke_extraction* _native;
@@ -81,7 +81,14 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
         _owner = null;
     }
 
-    /// <summary>Registers a copy: at each extraction, the pair carries render_component equal to the entity's main_component, every ENTITY field holding the entity's pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size.</summary>
+    /// <summary>Pairs every main-world entity carrying main_component as if it were tagged render_synced; the pair goes when the entity loses the component and the tag. Registering it again changes nothing.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void SyncComponent(ComponentId mainComponent)
+    {
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->sync_component(Handle, mainComponent), "sync_component");
+    }
+
+    /// <summary>Registers a copy: at each extraction, the pair carries render_component equal to the entity's main_component, every ENTITY field holding the entity's pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size; registering the same pair again changes nothing.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void ExtractCopy(ComponentId mainComponent, ComponentId renderComponent)
     {

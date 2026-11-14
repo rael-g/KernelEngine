@@ -1517,6 +1517,22 @@
             }
           ],
           "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "buffer_size",
+          "returns": "uint64_t",
+          "tags": [],
+          "doc": "The size in bytes of the buffer behind resource, which the pass declared.",
+          "return_doc": "The size; zero for a resource the pass did not declare.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph_ctx *"
         }
       ]
     },

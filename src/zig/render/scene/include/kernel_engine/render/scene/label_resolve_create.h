@@ -9,7 +9,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/ui/ui.h>
 #include <kernel_engine/render/ui/ui_create.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/module/module.h>
 
 #ifndef KE_RENDER_SCENE_API
     #if defined(_WIN32) || defined(__CYGWIN__)
@@ -30,14 +30,7 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_render_label_resolve ke_render_label_resolve;
 
-    /// [owner]
-    typedef struct ke_render_label_resolve_handle
-    {
-        ke_render_label_resolve *ref;
-        void (*destroy)(ke_render_label_resolve *self);
-    } ke_render_label_resolve_handle;
 
     /// [borrowed] The values the label resolve is created with: the font a label that names none draws with.
     typedef struct ke_render_label_resolve_config
@@ -48,18 +41,19 @@ extern "C"
     } ke_render_label_resolve_config;
 
 
-    /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
-    /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
-    /// handle's ref is NULL on failure.
+    /// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the main
+    /// world, in the update set, the font it names.
     /// @param context [borrowed] The parts it is built on; read during the call.
     /// @param ui Registers the font; borrowed, must outlive it.
     /// @param resolver [optional] Reads the font a label names; borrowed. Without it every label is
     ///                 reported.
     /// @param config [borrowed] Its values; Required; every field is read as given.
-    /// @param out_resolve [out] Receives the handle; left zeroed on failure.
+    /// @param out_module [out] Receives the resolve; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL context, scene, service, ui or config;
+    ///         KE_RESULT_OUT_OF_MEMORY.
     KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
         const ke_render_context *context, ke_render_ui *ui, ke_asset_resolver *resolver,
-        const ke_render_label_resolve_config *config, ke_render_label_resolve_handle *out_resolve);
+        const ke_render_label_resolve_config *config, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

@@ -23,7 +23,7 @@ public unsafe interface INativeRenderSceneResolve
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>The scene's render components and the update-phase systems that give a mesh and a sprite the GPU resources they name.</summary>
+/// <summary>The scene's render components, in the main world and paired in the render world, and the systems that give a mesh and a sprite the GPU resources they name.</summary>
 public unsafe partial class RenderSceneResolve : IDisposable, INativeRenderSceneResolve, IRenderSceneResolve
 {
     private ke_render_scene_resolve* _native;
@@ -69,10 +69,16 @@ public unsafe partial class RenderSceneResolve : IDisposable, INativeRenderScene
         _owner = null;
     }
 
-    /// <summary>The ids of the components the scene resolve registered; valid while it lives.</summary>
+    /// <summary>The ids the main world gave the scene's components; valid while the resolve lives.</summary>
     public RenderSceneComponentIds ComponentIds()
     {
         return *(RenderSceneComponentIds*)Handle->component_ids(Handle);
+    }
+
+    /// <summary>The ids the render world gave the same components, which every extraction copies the main world's into; valid while the resolve lives.</summary>
+    public RenderSceneComponentIds RenderComponentIds()
+    {
+        return *(RenderSceneComponentIds*)Handle->render_component_ids(Handle);
     }
 
     /// <summary>Releases the native rendersceneresolve.</summary>

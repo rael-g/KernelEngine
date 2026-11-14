@@ -30,4 +30,7 @@ public unsafe partial struct ke_render_graph_ctx
 
     [NativeTypeName("ke_gpu_buffer (*)(ke_render_graph_ctx *, ke_render_graph_resource)")]
     public delegate* unmanaged[Cdecl]<ke_render_graph_ctx*, global::KernelEngine.RenderGraph.RenderGraphResource, ulong> buffer;
+
+    [NativeTypeName("uint64_t (*)(ke_render_graph_ctx *, ke_render_graph_resource)")]
+    public delegate* unmanaged[Cdecl]<ke_render_graph_ctx*, global::KernelEngine.RenderGraph.RenderGraphResource, ulong> buffer_size;
 }

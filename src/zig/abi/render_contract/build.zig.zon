@@ -7,7 +7,6 @@
         .abi_ecs = .{ .path = "../ecs" },
         .abi_ecs_variant = .{ .path = "../ecs_variant" },
         .abi_render_components = .{ .path = "../render_components" },
-        .abi_render_gpu = .{ .path = "../render_gpu" },
         .abi_result = .{ .path = "../result" },
         .abi_ui_components = .{ .path = "../ui_components" },
     },

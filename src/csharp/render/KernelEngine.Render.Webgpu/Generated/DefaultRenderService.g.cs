@@ -11,24 +11,21 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
     /// <summary>Creates a render service whose frames draw into target.</summary>
     /// <param name="device">Borrowed, must outlive the service.</param>
     /// <param name="target">Borrowed, must outlive the service; every frame acquires and presents it.</param>
-    /// <param name="ecs">Borrowed, must outlive the service.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
     /// <param name="config">The service's values, applied as given.</param>
-    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(Create(device, target, ecs, io, binder, config))
+    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(Create(device, target, io, binder, config))
     {
         Hold(device.Owner);
         Hold(target.Owner);
-        Hold(ecs.Owner);
         Hold(io.Owner);
         Hold(binder.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
+    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(target);
-        ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(io);
         ArgumentNullException.ThrowIfNull(binder);
         var shaderDirConfigBytes = config.ShaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(config.ShaderDir + "\0");
@@ -36,11 +33,8 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
         {
             KernelEngine.Render.Native.ke_render_service_config nativeConfig = default;
             nativeConfig.shader_dir = (sbyte*)shaderDirConfigPtr;
-            nativeConfig.color_format = config.ColorFormat;
-            nativeConfig.depth_format = config.DepthFormat;
-            nativeConfig.clear_color = config.ClearColor;
             KernelEngine.Render.Native.ke_render_service_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, ecs.Native, io.Native, binder.Native, &nativeConfig, &handle), "ke_render_service_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, io.Native, binder.Native, &nativeConfig, &handle), "ke_render_service_create");
             return handle;
         }
     }

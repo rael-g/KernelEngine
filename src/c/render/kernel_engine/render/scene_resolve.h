@@ -23,14 +23,17 @@ extern "C"
         ke_component_id world_transform;
     } ke_render_scene_component_ids;
 
-    /** [interface] The scene's render components and the update-phase systems that give a mesh and a sprite
+    /** [interface] The scene's render components, in the main world and paired in the render world, and the systems that give a mesh and a sprite
      * the GPU resources they name. */
     typedef struct ke_render_scene_resolve
     {
         void *handle;
 
-        /** The ids of the components the scene resolve registered; valid while it lives. */
+        /** The ids the main world gave the scene's components; valid while the resolve lives. */
         const ke_render_scene_component_ids *(*component_ids)(struct ke_render_scene_resolve *self);
+        /** The ids the render world gave the same components, which every extraction copies the main
+         * world's into; valid while the resolve lives. */
+        const ke_render_scene_component_ids *(*render_component_ids)(struct ke_render_scene_resolve *self);
     } ke_render_scene_resolve;
 
     /// [owner]

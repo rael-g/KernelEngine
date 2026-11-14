@@ -12,6 +12,9 @@ public unsafe partial struct ke_extraction
 {
     public void* handle;
 
+    [NativeTypeName("ke_result (*)(ke_extraction *, ke_component_id)")]
+    public delegate* unmanaged[Cdecl]<ke_extraction*, global::KernelEngine.Ecs.ComponentId, KernelEngine.Result.Native.Result> sync_component;
+
     [NativeTypeName("ke_result (*)(ke_extraction *, ke_component_id, ke_component_id)")]
     public delegate* unmanaged[Cdecl]<ke_extraction*, global::KernelEngine.Ecs.ComponentId, global::KernelEngine.Ecs.ComponentId, KernelEngine.Result.Native.Result> extract_copy;
 

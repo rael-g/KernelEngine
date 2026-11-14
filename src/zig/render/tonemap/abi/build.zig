@@ -6,29 +6,37 @@ pub fn build(b: *std.Build) void {
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_tonemap_factory.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
+    abi.addImport("extraction", b.dependency("abi_extraction", .{}).module("abi"));
     abi.addImport("logger", b.dependency("abi_logger", .{}).module("abi"));
+    abi.addImport("module", b.dependency("abi_module", .{}).module("abi"));
     abi.addImport("render", b.dependency("abi_render", .{}).module("abi"));
     abi.addImport("render_context", b.dependency("abi_render_context", .{}).module("abi"));
+    abi.addImport("render_frame", b.dependency("abi_render_frame", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
+    abi.addImport("render_graph", b.dependency("abi_render_graph", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("runtime", b.dependency("abi_runtime", .{}).module("abi"));
+    abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/tonemap/render_tonemap_log.h>
         \\#include <kernel_engine/render/tonemap/tonemap_create.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
+    translated.addIncludePath(b.path("../../../../c/completion"));
     translated.addIncludePath(b.path("../../../../c/ecs"));
+    translated.addIncludePath(b.path("../../../../c/extraction"));
+    translated.addIncludePath(b.path("../../../../c/job"));
     translated.addIncludePath(b.path("../../../../c/logger"));
     translated.addIncludePath(b.path("../../../../c/math"));
     translated.addIncludePath(b.path("../../../../c/render"));
+    translated.addIncludePath(b.path("../../../../c/module"));
+    translated.addIncludePath(b.path("../../../../c/render_graph"));
     translated.addIncludePath(b.path("../include"));
     translated.addIncludePath(b.path("../../../common/include"));
     translated.addIncludePath(b.path("../../../../c/result"));
-    translated.addIncludePath(b.path("../../../../c/runtime"));
-    translated.addIncludePath(b.path("../../../runtime/include"));
+    translated.addIncludePath(b.path("../../../../c/schedule"));
+    translated.addIncludePath(b.path("../../../schedule/include"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
-    translated.addIncludePath(b.path("../../../../c/task_pool"));
     translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
@@ -41,17 +49,21 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../../../../c/ecs"));
+    tests.root_module.addIncludePath(b.path("../../../../c/extraction"));
+    tests.root_module.addIncludePath(b.path("../../../../c/job"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));
     tests.root_module.addIncludePath(b.path("../../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../../c/render"));
+    tests.root_module.addIncludePath(b.path("../../../../c/module"));
+    tests.root_module.addIncludePath(b.path("../../../../c/render_graph"));
     tests.root_module.addIncludePath(b.path("../include"));
     tests.root_module.addIncludePath(b.path("../../../common/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../../c/runtime"));
-    tests.root_module.addIncludePath(b.path("../../../runtime/include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
+    tests.root_module.addIncludePath(b.path("../../../schedule/include"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
-    tests.root_module.addIncludePath(b.path("../../../../c/task_pool"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_tonemap_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

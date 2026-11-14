@@ -213,6 +213,8 @@ pub const ke_render_graph_ctx = extern struct {
     texture_view: ?*const fn (?*ke_render_graph_ctx, ke_render_graph_resource) callconv(.c) ke_gpu_texture_view = null,
     /// The buffer behind resource, which the pass declared.
     buffer: ?*const fn (?*ke_render_graph_ctx, ke_render_graph_resource) callconv(.c) ke_gpu_buffer = null,
+    /// The size in bytes of the buffer behind resource, which the pass declared.
+    buffer_size: ?*const fn (?*ke_render_graph_ctx, ke_render_graph_resource) callconv(.c) u64 = null,
 };
 
 /// The passes of a frame and the resources between them, declared each frame, then compiled into

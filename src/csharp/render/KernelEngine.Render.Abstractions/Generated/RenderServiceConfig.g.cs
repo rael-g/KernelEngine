@@ -5,8 +5,6 @@
 
 using System;
 
-using KernelEngine.Ecs;
-
 namespace KernelEngine.Render;
 
 /// <summary>The values a render service is created with, whatever its implementation, each applied as given.</summary>
@@ -14,10 +12,4 @@ public partial struct RenderServiceConfig
 {
     /// <summary>Directory the shaders are loaded from; copied. Required.</summary>
     public string? ShaderDir;
-    /// <summary>Format of the frame's color up to KE_RENDER_STAGE_HDR_POST.</summary>
-    public GpuTextureFormat ColorFormat;
-    /// <summary>Format of the frame's depth.</summary>
-    public GpuTextureFormat DepthFormat;
-    /// <summary>Color the frame is cleared to.</summary>
-    public System.Numerics.Vector4 ClearColor;
 }

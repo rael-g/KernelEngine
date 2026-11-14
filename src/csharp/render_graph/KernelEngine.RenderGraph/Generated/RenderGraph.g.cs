@@ -11,7 +11,6 @@ using KernelEngine.Common.Native;
 using KernelEngine.Completion;
 using KernelEngine.Completion.Native;
 using KernelEngine.Render;
-using KernelEngine.Render.Gpu;
 using KernelEngine.Render.Native;
 using KernelEngine.RenderGraph.Native;
 

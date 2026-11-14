@@ -38,6 +38,7 @@ pub fn build(b: *std.Build) void {
         "abi_render_components",
         "abi_render_context",
         "abi_render_contract",
+        "abi_render_frame",
         "abi_render_gpu",
         "abi_render_graph",
         "abi_render_handles",

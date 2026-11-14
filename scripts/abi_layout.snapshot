@@ -786,16 +786,6 @@ ke_font_loader_handle size=16 align=8
   destroy 8
 
 [render]
-ke_render_resource_params size=56 align=8
-  name 0
-  type 8
-  format 12
-  size_mode 16
-  width 20
-  height 24
-  scale_x 28
-  scale_y 32
-  clear_value 36
 ke_render_frame_globals size=368 align=4
   view 0
   proj 64
@@ -812,19 +802,8 @@ ke_render_lighting size=48 align=4
   direction 0
   color 16
   ambient 32
-ke_render_pass_io size=48 align=8
-  name 0
-  reads 8
-  reads_count 16
-  writes 24
-  writes_count 32
-  chain 36
-  depth 40
-ke_render_service_config size=32 align=8
+ke_render_service_config size=8 align=8
   shader_dir 0
-  color_format 8
-  depth_format 12
-  clear_color 16
 ke_camera_frustum size=16 align=4
   tan_half_fov_y 0
   aspect 4
@@ -841,74 +820,42 @@ ke_render_scene_component_ids size=40 align=4
   sprite2d 28
   label 32
   world_transform 36
-ke_render_gbuffer_resources size=12 align=4
-  albedo 0
-  normal 4
-  emissive 8
-ke_render_shadow_resources size=8 align=4
-  map 0
-  light 4
-ke_render_cluster_resources size=32 align=4
-  tag 0
-  point_lights 4
-  spot_lights 8
-  point_indices 12
-  point_counts 16
-  spot_indices 20
-  spot_counts 24
-  grid 28
-ke_render_service size=408 align=8
+ke_render_service size=280 align=8
   handle 0
-  declare 8
-  import_texture 16
-  import_tag 24
-  import_buffer 32
-  frame_color 40
-  frame_depth 48
-  begin_pass 56
-  end_pass 64
-  begin_frame 72
-  end_frame 80
-  upload_mesh 88
-  mesh_buffers 96
-  set_clear_color 104
-  upload_texture 112
-  create_material 120
-  material_binding 128
-  material_alpha_mode 136
-  material_alpha_cutoff 144
-  upload_cubemap 152
-  texture_view 160
-  resource_view 168
-  resource_texture 176
-  resource_buffer 184
-  resource_buffer_size 192
-  backbuffer_size 200
-  upload 208
-  get_or_create_pipeline 216
-  material_shader 224
-  retain_mesh 232
-  release_mesh 240
-  retain_texture 248
-  release_texture 256
-  retain_material 264
-  release_material 272
-  try_get_mesh 280
-  try_get_texture 288
-  try_get_material 296
-  white_texture 304
-  load_shader 312
-  set_frame_globals 320
-  frame_globals 328
-  set_lighting 336
-  lighting 344
-  resource_binder 352
-  backbuffer_format 360
-  resource_format 368
-  resource_generation 376
-  join_chain 384
-  leave_chain 392
-  chain_format 400
+  begin_frame 8
+  submit_uploads 16
+  end_frame 24
+  blit 32
+  upload_mesh 40
+  mesh_buffers 48
+  upload_texture 56
+  create_material 64
+  material_binding 72
+  material_alpha_mode 80
+  material_alpha_cutoff 88
+  upload_cubemap 96
+  texture_view 104
+  backbuffer_size 112
+  upload 120
+  get_or_create_pipeline 128
+  material_shader 136
+  retain_mesh 144
+  release_mesh 152
+  retain_texture 160
+  release_texture 168
+  retain_material 176
+  release_material 184
+  try_get_mesh 192
+  try_get_texture 200
+  try_get_material 208
+  white_texture 216
+  load_shader 224
+  set_frame_globals 232
+  frame_globals 240
+  set_lighting 248
+  lighting 256
+  resource_binder 264
+  backbuffer_format 272
 ke_render_service_handle size=16 align=8
   ref 0
   destroy 8
@@ -922,15 +869,10 @@ ke_render_camera size=48 align=8
 ke_render_camera_handle size=16 align=8
   ref 0
   destroy 8
-ke_render_frame size=16 align=8
-  handle 0
-  frame_cid 8
-ke_render_frame_handle size=16 align=8
-  ref 0
-  destroy 8
-ke_render_scene_resolve size=16 align=8
+ke_render_scene_resolve size=24 align=8
   handle 0
   component_ids 8
+  render_component_ids 16
 ke_render_scene_resolve_handle size=16 align=8
   ref 0
   destroy 8
@@ -1285,15 +1227,16 @@ ke_transform size=40 align=4
   scale 28
 
 [extraction]
-ke_extraction size=64 align=8
+ke_extraction size=72 align=8
   handle 0
-  extract_copy 8
-  extract_interpolate 16
-  extract_custom 24
-  render_entity 32
-  main_entity 40
-  extract 48
-  run 56
+  sync_component 8
+  extract_copy 16
+  extract_interpolate 24
+  extract_custom 32
+  render_entity 40
+  main_entity 48
+  extract 56
+  run 64
 ke_extraction_handle size=16 align=8
   ref 0
   destroy 8
@@ -1339,7 +1282,7 @@ ke_render_graph_pass_desc size=72 align=8
   condition 48
   readback 56
   user 64
-ke_render_graph_ctx size=56 align=8
+ke_render_graph_ctx size=64 align=8
   handle 0
   encoder 8
   render_pass 16
@@ -1347,6 +1290,7 @@ ke_render_graph_ctx size=56 align=8
   texture 32
   texture_view 40
   buffer 48
+  buffer_size 56
 ke_render_graph size=104 align=8
   handle 0
   begin_frame 8
@@ -1362,6 +1306,25 @@ ke_render_graph size=104 align=8
   compile 88
   execute 96
 ke_render_graph_handle size=16 align=8
+  ref 0
+  destroy 8
+
+[render_frame]
+ke_render_frame size=104 align=8
+  handle 0
+  frame_cid 8
+  graph 16
+  live 24
+  color 32
+  depth 40
+  output 48
+  claim_output 56
+  publish 64
+  find 72
+  color_format 80
+  depth_format 88
+  output_format 96
+ke_render_frame_handle size=16 align=8
   ref 0
   destroy 8
 

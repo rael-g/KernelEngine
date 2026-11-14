@@ -4,6 +4,9 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
+using KernelEngine.Job.Native;
 
 namespace KernelEngine.Job;
 

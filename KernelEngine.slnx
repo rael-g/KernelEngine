@@ -38,6 +38,8 @@
     <Project Path="src/csharp/module/KernelEngine.Module/KernelEngine.Module.csproj" />
     <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
     <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph/KernelEngine.RenderGraph.csproj" />
+    <Project Path="src/csharp/render_graph/KernelEngine.RenderGraph.Simple/KernelEngine.RenderGraph.Simple.csproj" />
+    <Project Path="src/csharp/render/KernelEngine.Render.Frame/KernelEngine.Render.Frame.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job/KernelEngine.Job.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job.Enki/KernelEngine.Job.Enki.csproj" />
     <Project Path="src/csharp/job/KernelEngine.Job.Inline/KernelEngine.Job.Inline.csproj" />

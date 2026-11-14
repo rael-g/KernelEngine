@@ -159,6 +159,7 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part fonts;
     ke_sdk_engine_part assets;
     ke_sdk_engine_part scene_tree;
+    ke_sdk_engine_part extraction;
     ke_sdk_engine_part render_service;
     ke_sdk_engine_part shadow;
     ke_sdk_engine_part cluster;
@@ -173,7 +174,6 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part actions;
     ke_sdk_engine_part node_types;
     ke_sdk_engine_part scene_files;
-    ke_sdk_engine_part extraction;
 } ke_sdk_engine_desc;
 
 /** The configuration the default parts read their sections from. */
@@ -340,9 +340,9 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
         desc->scheduler,
     };
     const ke_sdk_engine_part parts[] = {
-        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
+        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree, desc->extraction,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
-        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files, desc->extraction,
+        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
     };
     ke_result made = KE_OK;
     for (size_t i = 0; made == KE_OK && i < sizeof core / sizeof core[0]; ++i)

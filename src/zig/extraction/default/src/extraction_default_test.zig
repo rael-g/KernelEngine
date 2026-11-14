@@ -294,6 +294,27 @@ test "a synced entity gets a pair, the pair carries a copy, and the pair goes wh
     try testing.expect(!f.render.alive.contains(pair));
 }
 
+test "an entity carrying a synced component gets a pair without the tag, and loses it with the component" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    try R.check(f.ref().sync_component.?(f.ref(), f.main_position));
+    try R.check(f.ref().sync_component.?(f.ref(), f.main_position));
+    try R.check(f.ref().extract_copy.?(f.ref(), f.main_position, f.render_position));
+    try R.check(f.ref().extract_copy.?(f.ref(), f.main_position, f.render_position));
+    const entity = f.main.spawn();
+    f.main.put(entity, f.main_position, std.mem.asBytes(&Position{ .x = 5, .target = 0 }));
+    try R.check(f.ref().extract.?(f.ref(), 0));
+    const pair = try f.pairOf(entity);
+    try testing.expectEqual(@as(f32, 5), f.render.get(Position, pair, f.render_position).?.x);
+
+    _ = World.componentRemove(&f.main.api, entity, f.main_position);
+    try R.check(f.ref().extract.?(f.ref(), 0));
+    var back: Entity = 0;
+    try testing.expectEqual(R.code(error.NotFound), f.ref().render_entity.?(f.ref(), entity, &back));
+    try testing.expect(!f.render.alive.contains(pair));
+}
+
 test "an entity field of a copy holds the pair of the entity it names, or the null entity" {
     var f: Fixture = .{};
     try f.init();

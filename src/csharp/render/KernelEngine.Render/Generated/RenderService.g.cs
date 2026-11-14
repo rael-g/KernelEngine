@@ -69,124 +69,33 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         _owner = null;
     }
 
-    /// <summary>Declares a transient resource the service allocates and recycles; every call declares a new one.</summary>
-    /// <param name="name">The label the resource is debugged under; the service makes it unique.</param>
-    /// <param name="width">Read when size_mode is ABSOLUTE.</param>
-    /// <param name="scaleX">Read when size_mode is RELATIVE_TO_BACKBUFFER.</param>
-    /// <param name="clearValue">Per-resource clear color.</param>
-    /// <returns>Receives the resource's id, the tag-component cid to place in a pass's access list.</returns>
+    /// <summary>Begins a frame: forgets the previous frame's uploads, acquires the service's render target and reads its size.</summary>
+    /// <returns>Receives the view the frame is presented from; KE_GPU_INVALID_HANDLE when the target has nothing to draw into this frame, which then begins none.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId Declare(string name, RenderResourceType type, GpuTextureFormat format, RenderSizeMode sizeMode, uint width, uint height, float scaleX, float scaleY, System.Numerics.Vector4 clearValue)
+    public ulong BeginFrame()
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            ke_render_resource_params @params = default;
-            @params.name = (sbyte*)namePtr;
-            @params.type = (RenderResourceType)type;
-            @params.format = (GpuTextureFormat)format;
-            @params.size_mode = (RenderSizeMode)sizeMode;
-            @params.width = width;
-            @params.height = height;
-            @params.scale_x = scaleX;
-            @params.scale_y = scaleY;
-            @params.clear_value = clearValue;
-            ComponentId resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->declare(Handle, &@params, &resultOut), "declare");
-            return resultOut;
-        }
+        ulong resultOut = default;
+        KernelEngine.NativeResults.ThrowIfFailed(Handle->begin_frame(Handle, &resultOut), "begin_frame");
+        return resultOut;
     }
 
-    /// <summary>Imports an externally-owned texture, labeled `name`.</summary>
-    /// <returns>Receives its tag-component cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId ImportTexture(string name, ulong tex)
+    /// <summary>Submits the uploads recorded since the frame began, before the frame's own work is submitted.</summary>
+    public void SubmitUploads()
     {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            ComponentId resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_texture(Handle, (sbyte*)namePtr, tex, &resultOut), "import_texture");
-            return resultOut;
-        }
+        Handle->submit_uploads(Handle);
     }
 
-    /// <summary>Mints a resource with no GPU payload, labeled `name`, that passes order on.</summary>
-    /// <returns>Receives the cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId ImportTag(string name)
-    {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            ComponentId resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_tag(Handle, (sbyte*)namePtr, &resultOut), "import_tag");
-            return resultOut;
-        }
-    }
-
-    /// <summary>Publishes an externally-owned GPU buffer, labeled `name`, for another pass to bind by its id.</summary>
-    /// <returns>Receives its tag-component cid.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public ComponentId ImportBuffer(string name, ulong buffer, ulong size)
-    {
-        var nameText = name ?? "";
-        var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
-        Span<byte> nameBytes = nameSize <= 512 ? stackalloc byte[512] : new byte[nameSize];
-        nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
-        fixed (byte* namePtr = nameBytes)
-        {
-            ComponentId resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->import_buffer(Handle, (sbyte*)namePtr, buffer, size, &resultOut), "import_buffer");
-            return resultOut;
-        }
-    }
-
-    /// <summary>The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads.</summary>
-    public ComponentId FrameColor()
-    {
-        return Handle->frame_color(Handle);
-    }
-
-    /// <summary>The frame's depth texture, cleared when the frame begins.</summary>
-    public ComponentId FrameDepth()
-    {
-        return Handle->frame_depth(Handle);
-    }
-
-    /// <summary>Opens a pass's recording context, from inside a render system's body.</summary>
-    public RenderPassCtx BeginPass(RenderPassIo io)
-    {
-        return new RenderPassCtx((nint)Handle->begin_pass(Handle, (RenderPassIo*)&io));
-    }
-
-    /// <summary>Closes a recording context opened by begin_pass.</summary>
-    public void EndPass(RenderPassCtx ctx)
-    {
-        Handle->end_pass(Handle, (ke_render_pass_ctx*)ctx.Address);
-    }
-
-    /// <summary>Acquires the service's render target as the backbuffer, clears the per-pass command slot table, and clears the frame's color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target's code when acquiring failed.</summary>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public void BeginFrame()
-    {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->begin_frame(Handle), "begin_frame");
-    }
-
-    /// <summary>Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame's color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target's code when presenting failed.</summary>
+    /// <summary>Presents the render target. Succeeds doing nothing when no frame began, and fails with the target's code when presenting failed.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void EndFrame()
     {
         KernelEngine.NativeResults.ThrowIfFailed(Handle->end_frame(Handle), "end_frame");
+    }
+
+    /// <summary>Draws source over the whole of pass's colour attachment, whose format is target_format.</summary>
+    public void Blit(nint pass, ulong source, GpuTextureFormat targetFormat)
+    {
+        Handle->blit(Handle, (ke_gpu_render_pass*)pass, source, (GpuTextureFormat)targetFormat);
     }
 
     /// <summary>Uploads interleaved vertices and 16-bit indices to device buffers.</summary>
@@ -226,12 +135,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         outIbo = outIboLocal;
         outIndexCount = outIndexCountLocal;
         return found;
-    }
-
-    /// <summary>The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).</summary>
-    public void SetClearColor(float r, float g, float b, float a)
-    {
-        Handle->set_clear_color(Handle, r, g, b, a);
     }
 
     /// <param name="key">Dedup cache key; required.</param>
@@ -327,30 +230,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         return Handle->texture_view(Handle, h);
     }
 
-    /// <summary>The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.</summary>
-    public ulong ResourceView(ComponentId resource)
-    {
-        return Handle->resource_view(Handle, resource);
-    }
-
-    /// <summary>The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.</summary>
-    public ulong ResourceTexture(ComponentId resource)
-    {
-        return Handle->resource_texture(Handle, resource);
-    }
-
-    /// <summary>The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.</summary>
-    public ulong ResourceBuffer(ComponentId resource)
-    {
-        return Handle->resource_buffer(Handle, resource);
-    }
-
-    /// <summary>The size (bytes) of the buffer published via import_buffer; 0 for another id.</summary>
-    public ulong ResourceBufferSize(ComponentId resource)
-    {
-        return Handle->resource_buffer_size(Handle, resource);
-    }
-
     /// <summary>The backbuffer's pixel size, callable from any phase. Refreshed once per frame at begin_frame, so a caller earlier in the tick reads the previous frame's size.</summary>
     public (uint OutW, uint OutH) BackbufferSize()
     {
@@ -360,7 +239,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         return (outW, outH);
     }
 
-    /// <summary>Records a buffer upload to be flushed single-threaded at end_frame (before submit).</summary>
+    /// <summary>Records a buffer upload, submitted by submit_uploads.</summary>
     public void Upload(ulong buffer, ulong offset, nint data, nuint size)
     {
         Handle->upload(Handle, buffer, offset, (void*)data, size);
@@ -525,40 +404,6 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     public GpuTextureFormat BackbufferFormat()
     {
         return (GpuTextureFormat)Handle->backbuffer_format(Handle);
-    }
-
-    /// <summary>Texel format of a texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.</summary>
-    public GpuTextureFormat ResourceFormat(ComponentId resource)
-    {
-        return (GpuTextureFormat)Handle->resource_format(Handle, resource);
-    }
-
-    /// <summary>Counts the times the targets declared relative to the backbuffer were recreated, which `begin_frame` does when the backbuffer changes size. A pass that keeps something made from a declared target's view, a bind group for instance, rebuilds it when the count changes.</summary>
-    public uint ResourceGeneration()
-    {
-        return Handle->resource_generation(Handle);
-    }
-
-    /// <summary>Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.</summary>
-    /// <returns>Receives the link; KE_RENDER_CHAIN_NONE on failure.</returns>
-    /// <exception cref="Exception">The native call failed.</exception>
-    public uint JoinChain(RenderStage stage, RenderChainMode mode)
-    {
-        uint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->join_chain(Handle, (RenderStage)stage, (RenderChainMode)mode, &resultOut), "join_chain");
-        return resultOut;
-    }
-
-    /// <summary>Gives the place back. An unknown link is ignored.</summary>
-    public void LeaveChain(uint link)
-    {
-        Handle->leave_chain(Handle, link);
-    }
-
-    /// <summary>Texel format of the color a pass of stage draws into, the format its pipeline declares.</summary>
-    public GpuTextureFormat ChainFormat(RenderStage stage)
-    {
-        return (GpuTextureFormat)Handle->chain_format(Handle, (RenderStage)stage);
     }
 
     /// <summary>Releases the native renderservice.</summary>

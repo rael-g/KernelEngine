@@ -50,8 +50,8 @@ pub const Blit = struct {
         self.pipeline = pp;
     }
 
-    /// Releases the sets of the frame that just ended. Called by `beginFrame`, before any pass of
-    /// the new frame runs.
+    /// Releases the sets of the frame that just ended. Called by `beginFrame`, before any draw of
+    /// the new frame.
     pub fn releaseSets(self: *Blit, binder: *abi_render_gpu.c.ke_render_resource_binder) void {
         self.sets.seal();
         var it = self.sets.iterator();
@@ -70,9 +70,9 @@ pub const Blit = struct {
         self.layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
     }
 
-    /// Records on `encoder` a render pass that draws `src` over the whole of `dst`, whose format is
-    /// `dst_format`. False, recording nothing, when no entry of the log or no set can be made.
-    pub fn draw(self: *Blit, service: [*c]abi_render.c.ke_render_service, binder: *abi_render_gpu.c.ke_render_resource_binder, encoder: *abi_render_gpu.c.ke_gpu_command_encoder, src: abi_asset_resolver.c.ke_gpu_texture_view, dst: abi_asset_resolver.c.ke_gpu_texture_view, dst_format: abi_render_gpu.c.ke_gpu_texture_format) bool {
+    /// Draws `src` over the whole of `pass`'s colour attachment, whose format is `dst_format`.
+    /// False, recording nothing, when no entry of the log or no set can be made.
+    pub fn draw(self: *Blit, service: [*c]abi_render.c.ke_render_service, binder: *abi_render_gpu.c.ke_render_resource_binder, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, src: abi_asset_resolver.c.ke_gpu_texture_view, dst_format: abi_render_gpu.c.ke_gpu_texture_format) bool {
         const slot = self.sets.claim() orelse return false;
         const bindings = [1]abi_render_gpu.c.ke_render_shader_binding{
             .{ .name = "t_src", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = src, .sampler = 0 },
@@ -84,23 +84,10 @@ pub const Blit = struct {
 
         var pp = self.pipeline;
         pp.color_target_formats[0] = dst_format;
-        const color = [1]abi_render_gpu.c.ke_gpu_color_attachment{.{
-            .view = dst,
-            .load_op = abi_render_gpu.c.KE_GPU_LOAD_OP_CLEAR,
-            .store_op = abi_render_gpu.c.KE_GPU_STORE_OP_STORE,
-            .clear_value = .{ .color = .{ 0, 0, 0, 0 } },
-        }};
-        const params = abi_render_gpu.c.ke_gpu_render_pass_params{
-            .label = "blit",
-            .color_attachments = &color,
-            .color_attachment_count = 1,
-            .depth_stencil_attachment = null,
-        };
-        const rp = encoder.begin_render_pass.?(encoder, &params);
-        rp.?.set_pipeline.?(rp, service.*.get_or_create_pipeline.?(service, &pp));
+        const rp = pass;
+        rp.*.set_pipeline.?(rp, service.*.get_or_create_pipeline.?(service, &pp));
         binder.bind_render_set.?(binder, rp, set, null, 0);
-        rp.?.draw.?(rp, 3, 1, 0, 0);
-        rp.?.end.?(rp);
+        rp.*.draw.?(rp, 3, 1, 0, 0);
         return true;
     }
 };

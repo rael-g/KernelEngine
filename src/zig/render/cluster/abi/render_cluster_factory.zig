@@ -2,11 +2,13 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
+const abi_module = @import("module");
 const abi_render_context = @import("render_context");
+const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_cluster_factory_c.zig");
@@ -15,20 +17,13 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderCluster = struct {
-    ptr: *c.ke_render_cluster,
-    owner: ?c.ke_render_cluster_handle = null,
-
-    pub fn deinit(self: RenderCluster) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// Creates a light-cluster pass and registers its render-phase system.
-    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_cluster_config, out_resources: ?*abi_render.c.ke_render_cluster_resources, out_cluster: ?*c.ke_render_cluster_handle) Error!void {
-        try checkResult(c.ke_render_cluster_create(context, config, out_resources, out_cluster));
-    }
-
-};
+/// Makes a light-cluster pass. Attached, it publishes the light lists and the grid in the render
+/// prepare set and declares the compute pass that fills them in the render queue set.
+pub fn renderClusterCreate(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_cluster_config) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_render_cluster_create(context, config, &written));
+    return written;
+}
 
 /// Sends every line ke_render_cluster logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
@@ -37,4 +32,3 @@ pub fn renderClusterSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque
 }
 
 pub const RenderClusterConfig = c.ke_render_cluster_config;
-pub const RenderClusterHandle = c.ke_render_cluster_handle;

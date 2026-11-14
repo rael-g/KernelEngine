@@ -1,73 +1,71 @@
 # Render
 
 This is a map: the parts of the render domain, what each receives and what it hands on. How a
-part works inside is on the generated page of its file. Contracts are under `src/c/render/`,
-plugins under `src/zig/render/`.
+part works inside is on the generated page of its file. Contracts are under `src/c/render/` and
+`src/c/render_graph/`, plugins under `src/zig/render/` and `src/zig/render_graph/`.
 
 ## The parts
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| device | `ke_gpu_device` | webgpu | optionally a `ke_task_pool` and a `ke_logger` | GPU objects, command encoders, the clip-space convention |
+| device | `ke_gpu_device` | webgpu | optionally a `ke_task_pool` | GPU objects, command encoders, the clip-space convention |
 | target | `ke_gpu_render_target` | webgpu, texture_target, renderdoc_target | the device, and a `ke_window` for the window target; the capture target wraps another target | the texture a frame ends in, and its presentation |
-| service | `ke_render_service` | service | device, target, `ke_ecs` | named resources, passes, uploads, materials, pipelines |
+| service | `ke_render_service` | service | device, target, `ke_io`, the resource binder | meshes, textures, materials, pipelines, shaders, uploads, the frame globals |
+| graph | `ke_render_graph` | render_graph/simple | the device | the order of a frame's passes, their resources and transitions |
 | camera | `ke_render_camera` | camera | `ke_view_space`, the clip-space convention | view and projection matrices from a camera component |
-| pass | none; a `ke_runtime_system_params` and a `ke_render_pass_io` | one plugin per pass | `ke_runtime`, service, device, component ids | commands recorded into its slot |
-| scene | `ke_render_scene_resolve`, `ke_render_label_resolve` | scene | `ke_runtime`, `ke_ecs`, service; the ui pass for labels | the scene's component ids, and the meshes, sprites and fonts they name |
-| frame | `ke_render_frame` | frame | `ke_runtime`, `ke_ecs`, service, camera, the scene's component ids | the frame tag, and the begin and end of each frame |
+| scene | `ke_render_scene_resolve` | scene | the main and the render world, `ke_extraction`, service | the scene's component ids in both worlds, and the meshes, sprites and fonts they name |
+| frame | `ke_render_frame` | frame | the render world, graph, service, camera, scene | the frame every pass declares into, and its begin and end |
+| pass | `ke_module` | one plugin per pass | `ke_render_context` | the passes it declares into the frame |
 
-No plugin composes the renderer. The host creates the service, the camera, the scene resolve, the
-frame and the passes it wants, and hands each the component ids of the others.
+No plugin composes the renderer. The host creates the service, the graph, the camera, the scene,
+the frame and the passes it wants, and attaches the modules of each.
 
 ## What ties the parts together
 
-**The runtime is the render graph.** There is no graph object. A render resource is a component
-id: a pass declares or imports a resource by name through the service and receives an id, and
-puts that id in the access list of its system. The runtime orders and separates the passes from
-those access lists, as it does for any other system.
+**Passes read the render world.** `ke_extraction` copies the scene's components from the main
+world into the render world at the start of each run of the render schedule; an entity carrying
+a drawable component gets a pair there. The scene's systems run in the main world and resolve
+names into handles before the copy.
 
-**A pass is a system in `KE_PHASE_RENDER`.** Its `ke_render_pass_io` names what it reads and
-writes and the command slot it records into. Between `begin_pass` and `end_pass` it records
-through `ke_gpu_render_pass`; nothing reaches the GPU until the frame closes.
+**A pass is a module of the render schedule.** Attached, it registers its systems in the render
+sets of `ke_module_targets`: what it makes for others in `render_prepare_set`, its passes in
+`render_queue_set`. The frame's systems take `render_begin_set` and `render_submit_set`.
 
-**A frame has two edges, which are systems too.** The module registers "render.begin_frame",
-which acquires the target, and "render.end_frame", which submits the recorded slots in slot
-order and presents. Slot order, not registration order, is the order on the GPU.
+**The graph orders the passes.** A pass declares to `ke_render_graph` the resources it uses and a
+record callback. The graph orders passes by their uses, then by injection point, which is the
+pass's `ke_render_stage`; it drops a pass nothing needs, and records and submits the rest when the
+frame ends.
 
-**Scene data arrives as components.** Systems of the module in `KE_PHASE_UPDATE` turn mesh,
-sprite and label components into handles of the service; the passes read those handles, the
-camera component and the light components in the render phase.
+**Resources between passes are published by name.** A pass that makes something for another
+publishes it in the frame under a name of `resource_groups.h`; the reader finds it there in the
+same frame, or meets the neutral resource when nobody published it.
+
+**The colour and the output are fixed for the frame.** Stages up to `KE_RENDER_STAGE_HDR_POST`
+draw into the frame's colour, later ones into its output. The tonemap pass writes the whole output
+and claims it; otherwise the frame copies the colour there.
 
 **A pipeline is asked for, never waited for.** A pass asks the service for a pipeline each time
 it draws; the first request returns a placeholder and the real one replaces it when compiled.
 
-## The default pipeline
+## The default passes
 
-Created by the module in this order; each is a plugin with one factory header.
-
-| pass | slot | reads | writes |
+| pass | stage | uses | publishes |
 |---|---|---|---|
-| clear (in the module) | 0 | | "backbuffer" |
-| shadow | 1 | | "shadow_map", "shadow_depth" |
-| cluster | 2 | | the "light_clusters" tag |
-| gbuffer | 3 | | "gbuffer_albedo", "gbuffer_normal", "gbuffer_emissive", "depth" |
-| deferred lighting | 4 | the gbuffer names, "depth", "light_clusters", and "shadow_map" when shadows are on | "hdr" |
-| skybox | 5 | "depth" | "hdr" |
-| forward | 6 | "shadow_map" | "hdr", "depth", and "hdr_opaque", its own copy of "hdr" |
-| tonemap | 7 | "hdr" | "backbuffer" |
-| ui | 8 | | "backbuffer" |
+| frame clear | prepass | clears the colour and the depth | |
+| shadow | prepass | the light buffer | the shadow map and light |
+| cluster | prepass | writes the cluster lists | the light lists and the grid |
+| gbuffer | prepass | the depth | the albedo, normal and emissive targets |
+| deferred lighting | opaque | the gbuffer, the depth, the shadow and clusters | |
+| skybox | sky | samples the depth | |
+| forward | transparent | a copy of the colour, the depth, the shadow and clusters | |
+| tonemap | tonemap | reads the colour, writes the output | |
+| ui | overlay | draws over the output | |
 
 Opaque and alpha-masked surfaces go through gbuffer and deferred lighting; blended ones through
 forward, which shades them itself.
 
 ## What the parts agree on without a contract
 
-These are string literals and numbers in the plugins. No header declares them, so a pass added
-by a host has to match them by reading the code.
-
-- The resource names of the table above, and the buffer "shadow_lvp" and the bind group
-  "cluster_lights" that the lighting passes import.
-- The slot numbers of the table above.
 - The layout of the per-frame uniform of each shading pass, between the Zig struct of the pass
   and the `frame` block of its shader.
 - The name a shader is loaded by: the pass name for a pass, the material name followed by the

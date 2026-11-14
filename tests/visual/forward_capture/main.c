@@ -13,6 +13,9 @@
 #include <kernel_engine/render/camera/camera_create.h>
 #include <kernel_engine/render/scene/scene_resolve_create.h>
 #include <kernel_engine/render/frame/frame_create.h>
+#include <kernel_engine/render/frame/frame_systems_create.h>
+#include <kernel_engine/render_graph/simple/render_graph_simple_create.h>
+#include <kernel_engine/extraction/default/extraction_create.h>
 #include <kernel_engine/render/shadow/shadow_create.h>
 #include <kernel_engine/render/cluster/cluster_create.h>
 #include <kernel_engine/render/gbuffer/gbuffer_create.h>
@@ -28,8 +31,10 @@
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/io/pool/io_pool_create.h>
-#include <kernel_engine/runtime/runtime.h>
-#include <kernel_engine/runtime/runtime_create.h>
+#include <kernel_engine/job/inline/job_system_inline_create.h>
+#include <kernel_engine/async/inline/async_inline_create.h>
+#include <kernel_engine/schedule/schedule_create.h>
+#include <kernel_engine/scheduler/scheduler_create.h>
 
 #include <stb_image_write.h>
 
@@ -139,45 +144,51 @@ typedef struct renderer
 {
     ke_render_resource_binder_handle binder;
     ke_render_service_handle service;
+    ke_render_graph_handle graph;
     ke_view_space_handle view_space;
     ke_render_camera_handle camera;
     ke_render_scene_resolve_handle scene;
     ke_render_frame_handle frame;
-    ke_render_shadow_handle shadow;
-    ke_render_cluster_handle cluster;
-    ke_render_gbuffer_handle gbuffer;
-    ke_render_deferred_lighting_handle deferred;
-    ke_render_tonemap_handle tonemap;
+    ke_module_handle frame_systems;
+    ke_module_handle shadow;
+    ke_module_handle cluster;
+    ke_module_handle gbuffer;
+    ke_module_handle deferred;
+    ke_module_handle tonemap;
+    ke_schedule_set_id sets[4];
 } renderer;
 
-static void renderer_compose(renderer *r, ke_runtime *rt, ke_ecs *ecs, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
+static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
     check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = "shaders" }, &r->binder));
-    check("render service", ke_render_service_create(gpu, target, ecs, io, r->binder.ref,
-        &(ke_render_service_config){ .shader_dir = "shaders", .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->service));
+    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, &(ke_render_service_config){ .shader_dir = "shaders" }, &r->service));
     ke_render_service *core = r->service.ref;
-
-    ke_result made_view = ke_view_space_rh_create(&r->view_space);
-    if (made_view != KE_OK) die_result("view space", made_view);
+    check("render graph", ke_render_graph_simple_create(gpu, &r->graph));
+    check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
-
-    check("scene resolve", ke_render_scene_resolve_create(rt, ecs, core, NULL, &r->scene));
-
-    check("frame", ke_render_frame_create(rt, ecs, core, r->camera.ref, r->scene.ref, &r->frame));
+    check("scene resolve", ke_render_scene_resolve_create(main_world, render_world, extraction, core, NULL, &r->scene));
+    check("frame", ke_render_frame_create(render_world, r->graph.ref, core, r->camera.ref, r->scene.ref,
+        &(ke_render_frame_config){ .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->frame));
+    check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
     const ke_render_context context = {
-        .runtime = rt, .ecs = ecs, .service = core, .device = gpu, .view_space = r->view_space.ref,
+        .ecs = render_world, .main = main_world, .extraction = extraction, .service = core, .device = gpu, .view_space = r->view_space.ref,
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
-    ke_render_shadow_resources shadow;
-    ke_render_cluster_resources clusters;
-    ke_render_gbuffer_resources gbuffer;
-    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &shadow, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &clusters, &r->cluster));
-    check("gbuffer pass", ke_render_gbuffer_create(&context, &gbuffer, &r->gbuffer));
-    const ke_render_deferred_lighting_config deferred = { .ibl_enabled = true };
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &gbuffer, &shadow, &clusters, &deferred, &r->deferred));
+    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster));
+    check("gbuffer pass", ke_render_gbuffer_create(&context, &r->gbuffer));
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
+
+    const char *names[4] = { "render_begin", "render_prepare", "render_queue", "render_submit" };
+    for (int i = 0; i < 4; ++i)
+        check("render set", schedule->register_set(schedule, &(ke_schedule_set_desc){ .name = names[i], .after = i ? &r->sets[i - 1] : NULL, .after_count = i ? 1u : 0u }, &r->sets[i]));
+    const ke_module_targets targets = {
+        .render = schedule, .render_begin_set = r->sets[0], .render_prepare_set = r->sets[1], .render_queue_set = r->sets[2], .render_submit_set = r->sets[3],
+    };
+    ke_module *modules[] = { r->frame_systems.ref, r->shadow.ref, r->cluster.ref, r->gbuffer.ref, r->deferred.ref, r->tonemap.ref };
+    for (size_t i = 0; i < sizeof modules / sizeof modules[0]; ++i) check("attach", modules[i]->attach(modules[i], &targets));
 }
 
 static void renderer_destroy(renderer *r)
@@ -187,9 +198,11 @@ static void renderer_destroy(renderer *r)
     r->gbuffer.destroy(r->gbuffer.ref);
     r->cluster.destroy(r->cluster.ref);
     r->shadow.destroy(r->shadow.ref);
+    r->frame_systems.destroy(r->frame_systems.ref);
     r->frame.destroy(r->frame.ref);
     r->scene.destroy(r->scene.ref);
     r->camera.destroy(r->camera.ref);
+    r->graph.destroy(r->graph.ref);
     r->service.destroy(r->service.ref);
     r->binder.destroy(r->binder.ref);
     r->view_space.destroy(r->view_space.ref);
@@ -232,16 +245,26 @@ int main(int argc, char **argv)
     ke_result made = ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &pool);
     if (made != KE_OK) die_result("task pool", made);
 
-    ke_runtime_handle rt = { 0 };
-    ke_result made_runtime = ke_runtime_create(ecs.ref, pool.ref, &(ke_runtime_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f, .max_systems_per_phase = 256 }, &rt);
-    if (made_runtime != KE_OK) die_result("runtime", made_runtime);
+    ke_job_system_handle jobs = { 0 };
+    check("job system", ke_job_system_inline_create(&(ke_job_system_config){ .worker_count = 0 }, &jobs));
+    ke_async_handle async = { 0 };
+    check("async", ke_async_inline_create(&(ke_async_config){ .worker_count = 0, .submit_capacity = 64 }, &async));
+    ke_scheduler_handle scheduler = { 0 };
+    check("scheduler", ke_scheduler_create(jobs.ref, async.ref, &(ke_scheduler_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f }, &scheduler));
+    ke_ecs_handle render_world = { 0 };
+    check("render world", ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &render_world));
+    ke_schedule_handle render_schedule = { 0 };
+    check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &render_schedule));
+    ke_extraction_handle extraction = { 0 };
+    check("extraction", ke_extraction_create(ecs.ref, render_world.ref, scheduler.ref, render_schedule.ref, &extraction));
+    check("render stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)extraction.ref->run, extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));
 
     renderer render;
     ke_file_system_handle files = { 0 };
     check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
-    renderer_compose(&render, rt.ref, ecs.ref, gpu.ref, frame_target, file_io.ref);
+    renderer_compose(&render, ecs.ref, render_world.ref, extraction.ref, render_schedule.ref, gpu.ref, frame_target, file_io.ref);
     ke_render_service *core = render.service.ref;
 
     ke_mesh_handle cube_h = { 0 };
@@ -302,11 +325,10 @@ int main(int argc, char **argv)
     const float dt = 1.0f / 60.0f;
     for (int i = 0; i < FRAMES; ++i)
     {
-        ke_result ticked = rt.ref->tick(rt.ref, dt);
+        ke_result ticked = scheduler.ref->tick(scheduler.ref, dt);
         if (ticked != KE_OK) die_result("tick", ticked);
     }
-    ke_result flushed = rt.ref->flush_render(rt.ref);
-    if (flushed != KE_OK) die_result("flush render", flushed);
+    check("shutdown", scheduler.ref->shutdown(scheduler.ref));
 
     size_t image_bytes = (size_t)WIDTH * HEIGHT * BYTES_PER_TEXEL;
     uint8_t *pixels = malloc(image_bytes);
@@ -327,7 +349,12 @@ int main(int argc, char **argv)
     free(pixels);
 
     renderer_destroy(&render);
-    rt.destroy(rt.ref);
+    extraction.destroy(extraction.ref);
+    render_schedule.destroy(render_schedule.ref);
+    render_world.destroy(render_world.ref);
+    scheduler.destroy(scheduler.ref);
+    async.destroy(async.ref);
+    jobs.destroy(jobs.ref);
     file_io.destroy(file_io.ref);
     files.destroy(files.ref);
     pool.destroy(pool.ref);

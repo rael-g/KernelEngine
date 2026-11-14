@@ -498,7 +498,17 @@ fn make(s: *State, r: *Resource) R.Error!void {
                 .sample_count = @intCast(d.samples),
             };
             try R.check(s.device.create_texture.?(s.device, &params, &r.texture));
-            try R.check(s.device.create_texture_view.?(s.device, r.texture, null, &r.view));
+            const view: gpu.ke_gpu_texture_view_params = .{
+                .label = r.name.ptr,
+                .format = d.format,
+                .dimension = gpu.KE_GPU_TEXTURE_DIM_2D,
+                .aspect = if (isDepth(d.format)) gpu.KE_GPU_TEXTURE_ASPECT_DEPTH else gpu.KE_GPU_TEXTURE_ASPECT_COLOR,
+                .base_mip_level = 0,
+                .mip_level_count = @intCast(d.mip_levels),
+                .base_array_layer = 0,
+                .array_layer_count = @intCast(d.array_layers),
+            };
+            try R.check(s.device.create_texture_view.?(s.device, r.texture, &view, &r.view));
         },
         g.KE_RENDER_GRAPH_RESOURCE_BUFFER => {
             if (r.buffer_usage == 0) return;
@@ -704,6 +714,12 @@ fn ctxBuffer(self: ?*g.ke_render_graph_ctx, id: ResourceId) callconv(.c) u64 {
     return (declared(s, id) orelse return invalid).buffer;
 }
 
+/// Slot `buffer_size` of the context.
+fn ctxBufferSize(self: ?*g.ke_render_graph_ctx, id: ResourceId) callconv(.c) u64 {
+    const s = ctxState(self) orelse return 0;
+    return (declared(s, id) orelse return 0).buffer_size;
+}
+
 /// The handle's `destroy`: frees the frame and every export.
 fn destroy(self: ?*g.ke_render_graph) callconv(.c) void {
     const s = stateOf(self) orelse return;
@@ -741,7 +757,7 @@ export fn ke_render_graph_simple_create(device_in: ?*gpu.ke_gpu_device, out_grap
         .device = device,
     };
     s.api.handle = s;
-    s.ctx = .{ .handle = s, .encoder = ctxEncoder, .render_pass = ctxRenderPass, .compute_pass = ctxComputePass, .texture = ctxTexture, .texture_view = ctxTextureView, .buffer = ctxBuffer };
+    s.ctx = .{ .handle = s, .encoder = ctxEncoder, .render_pass = ctxRenderPass, .compute_pass = ctxComputePass, .texture = ctxTexture, .texture_view = ctxTextureView, .buffer = ctxBuffer, .buffer_size = ctxBufferSize };
     out.* = .{ .ref = &s.api, .destroy = destroy };
     return R.ok;
 }

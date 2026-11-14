@@ -7,8 +7,5 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_cluster_config, grid_y),
     offsetof(ke_render_cluster_config, grid_z),
     offsetof(ke_render_cluster_config, max_lights_per_cluster),
-    sizeof(ke_render_cluster_handle),
-    offsetof(ke_render_cluster_handle, ref),
-    offsetof(ke_render_cluster_handle, destroy),
     0,
 };

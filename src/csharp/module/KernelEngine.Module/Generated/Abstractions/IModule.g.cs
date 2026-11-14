@@ -5,7 +5,10 @@
 
 using KernelEngine.Common;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Module.Native;
 using KernelEngine.Schedule;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Module;
 

@@ -1,8 +1,7 @@
-//! The UI pass: draws the entities carrying a UI quad component or a label component as
-//! alpha-blended textured triangles over the backbuffer, and shapes labels from registered fonts.
-//! It also owns the creation and teardown of that pass, behind the one factory it exports.
+//! The UI pass: draws the render world's entities carrying a UI quad component or a label component
+//! as alpha-blended textured triangles over the frame's output, and shapes labels from registered
+//! fonts. It owns the creation and teardown of that pass and of its module, behind two factories.
 
-const abi_framework = @import("abi_framework");
 const abi_render_contract = @import("abi_render_contract");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_gpu = @import("abi_render_gpu");
@@ -19,13 +18,18 @@ const abi_render_context = @import("abi_render_context");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
+const abi_module = @import("abi_module");
+const abi_render_frame = @import("abi_render_frame");
+const abi_render_graph = @import("abi_render_graph");
+const abi_extraction = @import("abi_extraction");
 const abi_text = @import("abi_text");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_ui);
 
 const heap = @import("heap");
 const gpa = heap.gpa;
+const rg = abi_render_graph.c;
 
 /// One vertex as `system` writes it into the vertex buffer. Declared extern so the offsets
 /// that `setup` gives the pipeline are the offsets of these bytes.
@@ -56,16 +60,20 @@ const UiFont = struct {
 
 /// Everything the pass owns. It is allocated by `ke_render_ui_create` and freed by `destroyHandle`,
 /// or by the create itself when it fails. The handle's reference is `api`, whose `handle` points
-/// back at the state. `io` and `access` are filled once by `setup`. The query declarations are filled by
-/// the create and passed to the registrations by address. `vertices` and `batches` are rewritten by
-/// `system` on every frame. `destroyHandle` unregisters the two systems before it frees the state.
+/// back at the state, as does that of `module`. The query declarations are filled by the create and
+/// passed to the registrations by address. `vertices`, `batches` and `output` are rewritten by
+/// `queueSystem` on every frame, and read by `record` when the graph executes. `destroyHandle`
+/// detaches the module before it frees the state.
 const UiState = struct {
     api: abi_render_ui.c.ke_render_ui = undefined,
-    runtime: *abi_runtime.c.ke_runtime = undefined,
-    systems: [2]abi_runtime.c.ke_system_id = .{ 0, 0 },
+    module: abi_module.c.ke_module = undefined,
+    schedule: ?*abi_schedule.c.ke_schedule = null,
+    systems: [2]abi_schedule.c.ke_schedule_system_id = .{ 0, 0 },
+    sets: [2]abi_schedule.c.ke_schedule_set_id = .{ 0, 0 },
 
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
+    frame: *abi_render_frame.c.ke_render_frame = undefined,
     ndc: abi_render_gpu.c.ke_ndc_convention = undefined,
     pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
@@ -74,6 +82,7 @@ const UiState = struct {
     frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     vbo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     vbo_bytes: usize = 0,
+    output: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
     vertices: std.ArrayList(UiVertex) = .empty,
     batches: std.ArrayList(UiBatch) = .empty,
@@ -81,14 +90,13 @@ const UiState = struct {
 
     fonts: std.ArrayList(UiFont) = .empty,
 
-    io: abi_render.c.ke_render_pass_io = std.mem.zeroes(abi_render.c.ke_render_pass_io),
-    access: [2]abi_runtime.c.ke_component_access = undefined,
-    queries_terms: [2]abi_runtime.c.ke_component_access = undefined,
-    queries: [2]abi_runtime.c.ke_query_decl = undefined,
+    access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries_terms: [2]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries: [2]abi_ecs.c.ke_ecs_query_desc = undefined,
     quad_cid: abi_asset_resolver.c.ke_component_id = 0,
     label_cid: abi_asset_resolver.c.ke_component_id = 0,
-    label_shape_queries_terms: [1]abi_runtime.c.ke_component_access = undefined,
-    label_shape_queries: [1]abi_runtime.c.ke_query_decl = undefined,
+    label_shape_queries_terms: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    label_shape_queries: [1]abi_ecs.c.ke_ecs_query_desc = undefined,
 };
 
 /// Recovers the state from the `handle` of its `api` field, which points back at it.
@@ -269,10 +277,10 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
     ui.vbo_bytes = size;
 }
 
-/// Registered by `ke_render_ui_create` for the update phase, with write access to the label
+/// "render.ui.labels", in the render prepare set, with write access to the render world's label
 /// component only. Shapes every label against the current backbuffer size, so a resize is picked
 /// up on the next frame. It succeeds on every path, including when the view is empty.
-fn labelShapeSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+fn labelShapeSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const ui = moduleOf(user);
 
     var segc: usize = 0;
@@ -294,13 +302,29 @@ fn labelShapeSystem(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f3
     return R.ok;
 }
 
-/// Registered by `ke_render_ui_create` for the render phase, reading quads and labels. Quads with
-/// no area are skipped and glyphs are drawn in the premultiplied label color. With nothing emitted
-/// the pass ends without drawing; otherwise the projection (flipped on Y when the ndc convention
-/// asks) and the vertices are uploaded and each batch is drawn with its texture's set. It
-/// succeeds when the render service yields no pass to draw into, and fails as out of memory when
-/// the vertex list cannot grow and with the device's code when the vertex buffer cannot.
-fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+/// Records the batches `queueSystem` built into the render pass the graph began over the output.
+fn record(user: ?*anyopaque, ctx: ?*rg.ke_render_graph_ctx) callconv(.c) abi_result.c.ke_result {
+    const ui = moduleOf(user);
+    const core = ui.core;
+    const rp: [*c]abi_render_gpu.c.ke_gpu_render_pass = @ptrCast(ctx.?.render_pass.?(ctx));
+    rp.*.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
+    ui.binder.bind_render_set.?(ui.binder, rp, ui.frame_set, null, 0);
+    rp.*.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
+    for (ui.batches.items) |batch| {
+        ui.binder.bind_render_set.?(ui.binder, rp, uiSetFor(ui, batch.texture), null, 0);
+        rp.*.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
+    }
+    return R.ok;
+}
+
+/// "render.ui", in the render queue set, reading the render world's quads and labels. Quads with no
+/// area are skipped and glyphs are drawn in the premultiplied label color. With nothing emitted, or
+/// no frame being declared, it declares nothing; otherwise it uploads the projection (flipped on Y
+/// when the ndc convention asks) and the vertices, and declares at KE_RENDER_STAGE_OVERLAY the pass
+/// drawing each batch over the frame's output with its texture's set. It fails as out of memory
+/// when the vertex list cannot grow, with the device's code when the vertex buffer cannot, and with
+/// the graph's code when it refuses the pass.
+fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const ui = moduleOf(user);
     const core = ui.core;
 
@@ -309,9 +333,8 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
     var label_segc: usize = 0;
     const label_segs = ctx.?.view.?(ctx, 1, &label_segc);
     if (quad_segc == 0 and label_segc == 0) return R.ok;
-
-    const pc = core.*.begin_pass.?(core, &ui.io);
-    if (pc == null) return R.ok;
+    const frame = ui.frame;
+    if (!frame.live.?(frame)) return R.ok;
 
     ui.vertices.clearRetainingCapacity();
     ui.batches.clearRetainingCapacity();
@@ -356,22 +379,15 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 
     if (!emitted) {
         log.warn("ui pass: vertex list allocation failed", .{});
-        core.*.end_pass.?(core, pc);
         return R.code(error.OutOfMemory);
     }
-    if (ui.vertices.items.len == 0) {
-        core.*.end_pass.?(core, pc);
-        return R.ok;
-    }
+    if (ui.vertices.items.len == 0) return R.ok;
     const bytes = std.mem.sliceAsBytes(ui.vertices.items);
-    ensureVertexBuffer(ui, bytes.len) catch |err| {
-        core.*.end_pass.?(core, pc);
-        return R.code(err);
-    };
+    ensureVertexBuffer(ui, bytes.len) catch |err| return R.code(err);
 
     var bw: u32 = 0;
     var bh: u32 = 0;
-    pc.?.backbuffer_size.?(pc, &bw, &bh);
+    core.*.backbuffer_size.?(core, &bw, &bh);
     var proj = zm.orthographicOffCenterLh(0.0, @floatFromInt(bw), 0.0, @floatFromInt(bh), 0.0, 1.0);
     if (ui.ndc.y_flip) proj[1][1] = -proj[1][1];
     var proj_arr: [16]f32 = undefined;
@@ -380,27 +396,27 @@ fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callcon
 
     core.*.upload.?(core, ui.vbo, 0, bytes.ptr, bytes.len);
 
-    const rp = pc.?.begin_render.?(pc);
-    rp.?.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &ui.pipeline_params));
-    ui.binder.bind_render_set.?(ui.binder, rp, ui.frame_set, null, 0);
-    rp.?.set_vertex_buffer.?(rp, 0, ui.vbo, 0);
-
-    for (ui.batches.items) |batch| {
-        ui.binder.bind_render_set.?(ui.binder, rp, uiSetFor(ui, batch.texture), null, 0);
-        rp.?.draw.?(rp, batch.vertex_count, 1, batch.first_vertex, 0);
-    }
-    rp.?.end.?(rp);
-    core.*.end_pass.?(core, pc);
-    return R.ok;
+    ui.output = frame.output.?(frame);
+    var target = std.mem.zeroes(rg.ke_render_graph_use);
+    target.resource = ui.output;
+    target.usage = rg.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT;
+    target.load = rg.KE_RENDER_GRAPH_LOAD_KEEP;
+    var desc = std.mem.zeroes(rg.ke_render_graph_pass_desc);
+    desc.name = "render.ui";
+    desc.type = rg.KE_RENDER_GRAPH_PASS_RASTER;
+    desc.injection_point = abi_render.c.KE_RENDER_STAGE_OVERLAY;
+    desc.uses = (&target)[0..1];
+    desc.use_count = 1;
+    desc.record = record;
+    desc.user = ui;
+    const graph = frame.graph.?(frame).?;
+    var pass: rg.ke_render_graph_pass = 0;
+    return graph.add_pass.?(graph, &desc, &pass);
 }
 
-/// Called once by `ke_render_ui_create`, before anything is registered. It joins the chain at the
-/// overlay stage and builds the pipeline in that stage's format, then stops at the first step that
-/// fails and returns false; what was built before that step stays in the state for `destroyState`
-/// to release. On success `io` and `access` describe the pass that `system` begins and the write it
-/// makes.
-/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
-/// frame's color.
+/// Called once by `ke_render_ui_create`, before anything is registered. It builds the pipeline in
+/// the format of the frame's output, then stops at the first step that fails; what was built before
+/// that step stays in the state for `destroyState` to release.
 fn setup(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
@@ -408,10 +424,8 @@ fn setup(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error
     ui.device = dev;
     ui.ndc = p.device.?.get_ndc_convention.?(p.device);
 
-    ui.io.name = "render.ui";
-    try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_OVERLAY, abi_render.c.KE_RENDER_CHAIN_DRAW_OVER, &ui.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
-    const format = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_OVERLAY);
+    ui.frame = p.frame.?;
+    const format = ui.frame.output_format.?(ui.frame);
 
     var vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "ui", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &vs));
@@ -480,16 +494,12 @@ fn setup(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error
 
     try ensureVertexBuffer(ui, 6 * @sizeOf(UiVertex));
 
-    ui.access = .{
-        .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE },
-        .{ .cid = p.frame.?.frame_cid.?(p.frame), .access = abi_runtime.c.KE_ACCESS_READ },
-    };
+    ui.access = .{.{ .component = ui.frame.frame_cid.?(ui.frame), .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
 }
 
 /// Safe on a partly built state: each GPU object, set and layout is released only if `setup` had
 /// created it.
 fn destroyState(ui: *UiState) void {
-    if (ui.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) ui.core.*.leave_chain.?(ui.core, ui.io.chain);
     const dev = ui.device;
     const invalid = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (ui.frame_uniform != invalid) dev.destroy_buffer.?(dev, ui.frame_uniform);
@@ -512,32 +522,81 @@ fn destroyState(ui: *UiState) void {
     }
 }
 
+/// Slot `attach` of the module: "render.ui.labels" in the render prepare set and "render.ui" in the
+/// render queue set, removing the first when the second is refused.
+fn attach(self: ?*abi_module.c.ke_module, targets_in: ?*const abi_module.c.ke_module_targets) callconv(.c) abi_result.c.ke_result {
+    const ui: *UiState = @ptrCast(@alignCast((self orelse return R.code(error.InvalidArgument)).handle));
+    const targets = targets_in orelse return R.code(error.InvalidArgument);
+    if (ui.schedule != null) return R.code(error.NotSupported);
+    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(targets.render orelse return R.code(error.InvalidArgument));
+    ui.sets = .{ targets.render_prepare_set, targets.render_queue_set };
+    const shape: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "render.ui.labels",
+        .user_data = ui,
+        .execute = labelShapeSystem,
+        .queries = &ui.label_shape_queries,
+        .query_count = ui.label_shape_queries.len,
+        .sets = ui.sets[0..].ptr,
+        .set_count = 1,
+    };
+    const shaped = schedule.register_system.?(schedule, &shape, &ui.systems[0]);
+    if (shaped != R.ok) return shaped;
+    const draw: abi_schedule.c.ke_schedule_system_desc = .{
+        .name = "render.ui",
+        .user_data = ui,
+        .execute = queueSystem,
+        .queries = &ui.queries,
+        .query_count = ui.queries.len,
+        .access = &ui.access,
+        .access_count = ui.access.len,
+        .sets = ui.sets[1..].ptr,
+        .set_count = 1,
+    };
+    const drawn = schedule.register_system.?(schedule, &draw, &ui.systems[1]);
+    if (drawn != R.ok) {
+        _ = schedule.unregister_system.?(schedule, ui.systems[0]);
+        return drawn;
+    }
+    ui.schedule = schedule;
+    return R.ok;
+}
+
+/// Slot `detach` of the module.
+fn detach(self: ?*abi_module.c.ke_module) callconv(.c) void {
+    const ui: *UiState = @ptrCast(@alignCast((self orelse return).handle));
+    const schedule = ui.schedule orelse return;
+    for (ui.systems) |id| _ = schedule.unregister_system.?(schedule, id);
+    ui.schedule = null;
+}
+
+fn destroyModule(self: ?*abi_module.c.ke_module) callconv(.c) void {
+    detach(self);
+}
+
 /// The destroy slot of the handle that `ke_render_ui_create` returns.
 fn destroyHandle(self: ?*abi_render_ui.c.ke_render_ui) callconv(.c) void {
     const ui = stateOf(self orelse return);
-    for (ui.systems) |id| _ = ui.runtime.unregister_system.?(ui.runtime, id);
+    detach(&ui.module);
     destroyState(ui);
     gpa.destroy(ui);
 }
 
-/// A missing runtime, ecs, service, device or output fails as an invalid argument and a state that
-/// cannot be allocated as out of memory. On success it has registered the quad and label components
-/// with the ecs and two systems with the runtime: `labelShapeSystem` in the update phase and
-/// `system` in the render phase. A failing `setup`, component or system registration fails with its
-/// code and leaves the handle zeroed, and a refused second system takes the first back. On success
-/// the returned handle owns the state until its destroy slot runs.
-export fn ke_render_ui_create(context_in: ?*const abi_render_context.c.ke_render_context, out_ui: [*c]abi_render_ui.c.ke_render_ui_handle) callconv(.c) abi_result.c.ke_result {
+/// A missing ecs, main world, extraction, service, device or frame fails as an invalid argument and
+/// a state that cannot be allocated as out of memory. On success it has registered the quad and
+/// label components in both worlds, a copy of each in the extraction, and the quad as synced. A
+/// failing `setup` or registration fails with its code and leaves the handle zeroed. On success the
+/// returned handle owns the state until its destroy slot runs.
+export fn ke_render_ui_create(context_in: ?*const abi_render_context.c.ke_render_context, out_ui: ?*abi_render_ui.c.ke_render_ui_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_ui orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
-    const e: *abi_ecs.c.ke_ecs = p.ecs orelse return R.code(error.InvalidArgument);
-    if (p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
+    if (p.ecs == null or p.main == null or p.extraction == null or p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
 
     const ui = gpa.create(UiState) catch |err| return R.code(err);
     ui.* = .{};
     ui.api = .{ .handle = ui, .load_font = uiLoadFont };
-    register(ui, p, rt, e) catch |err| {
+    ui.module = .{ .handle = ui, .attach = attach, .detach = detach };
+    register(ui, p) catch |err| {
         destroyState(ui);
         gpa.destroy(ui);
         return R.code(err);
@@ -546,71 +605,71 @@ export fn ke_render_ui_create(context_in: ?*const abi_render_context.c.ke_render
     return R.ok;
 }
 
-fn register(ui: *UiState, p: *const abi_render_context.c.ke_render_context, rt: *abi_runtime.c.ke_runtime, e: *abi_ecs.c.ke_ecs) R.Error!void {
+fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_asset_resolver.c.ke_component_id, label: *abi_asset_resolver.c.ke_component_id) R.Error!void {
+    quad.* = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render_contract.c.ke_ui_quad_component_fields, .field_count = abi_render_contract.c.ke_ui_quad_component_fields.len }, quad));
+    label.* = abi_ecs.c.KE_COMPONENT_INVALID;
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, label));
+}
+
+fn register(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error!void {
     try setup(ui, p);
 
-    ui.quad_cid = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render_contract.c.ke_ui_quad_component_fields, .field_count = abi_render_contract.c.ke_ui_quad_component_fields.len }, &ui.quad_cid));
+    var main_quad: abi_asset_resolver.c.ke_component_id = 0;
+    var main_label: abi_asset_resolver.c.ke_component_id = 0;
+    try registerUi(p.main.?, &main_quad, &main_label);
+    try registerUi(p.ecs.?, &ui.quad_cid, &ui.label_cid);
+    const extraction = p.extraction.?;
+    try R.check(extraction.extract_copy.?(extraction, main_quad, ui.quad_cid));
+    try R.check(extraction.extract_copy.?(extraction, main_label, ui.label_cid));
+    try R.check(extraction.sync_component.?(extraction, main_quad));
+    try R.check(extraction.sync_component.?(extraction, main_label));
 
-    ui.label_cid = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, &ui.label_cid));
-    ui.queries_terms = .{ .{ .cid = ui.quad_cid, .access = abi_runtime.c.KE_ACCESS_READ }, .{ .cid = ui.label_cid, .access = abi_runtime.c.KE_ACCESS_READ } };
+    const rd = abi_ecs.c.KE_ECS_ACCESS_READ;
+    ui.queries_terms = .{ .{ .component = ui.quad_cid, .access = rd }, .{ .component = ui.label_cid, .access = rd } };
     ui.queries = .{ .{ .terms = ui.queries_terms[0..].ptr, .term_count = 1 }, .{ .terms = ui.queries_terms[1..].ptr, .term_count = 1 } };
+    ui.label_shape_queries_terms = .{.{ .component = ui.label_cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
+    ui.label_shape_queries = .{.{ .terms = ui.label_shape_queries_terms[0..].ptr, .term_count = 1 }};
+}
 
-    var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    params.name = "render.ui";
-    params.phase = abi_runtime.c.KE_PHASE_RENDER;
-    params.queries = &ui.queries;
-    params.query_count = ui.queries.len;
-    params.access_list = &ui.access;
-    params.access_count = ui.access.len;
-    params.user_data = ui;
-    params.execute = system;
-    var first_system: abi_runtime.c.ke_system_id = 0;
-    try R.check(rt.register_system.?(rt, &params, &first_system));
-    errdefer _ = rt.unregister_system.?(rt, first_system);
-
-    ui.label_shape_queries_terms = .{ .{ .cid = ui.label_cid, .access = abi_runtime.c.KE_ACCESS_WRITE } };
-    ui.label_shape_queries = .{ .{ .terms = ui.label_shape_queries_terms[0..].ptr, .term_count = 1 } };
-
-    var shape_params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    shape_params.name = "render.ui.labels";
-    shape_params.phase = abi_runtime.c.KE_PHASE_UPDATE;
-    shape_params.queries = &ui.label_shape_queries;
-    shape_params.query_count = ui.label_shape_queries.len;
-    shape_params.user_data = ui;
-    shape_params.execute = labelShapeSystem;
-    var system_id: abi_runtime.c.ke_system_id = 0;
-    try R.check(rt.register_system.?(rt, &shape_params, &system_id));
-    ui.runtime = rt;
-    ui.systems = .{ first_system, system_id };
+/// The factory declared in ui_systems_create.h: the module is a view of the pass, destroyed with
+/// it or on its own.
+export fn ke_render_ui_systems_create(ui_in: ?*abi_render_ui.c.ke_render_ui, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
+    const ui = stateOf(ui_in orelse return R.code(error.InvalidArgument));
+    out.* = .{ .ref = &ui.module, .destroy = destroyModule };
+    return R.ok;
 }
 
 const testing = std.testing;
-
-const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
-
-fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
-    return &test_ids;
-}
-
-var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
-
-fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
-    return 11;
-}
-
-var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
-
-
 const zsub = @import("zsub");
 
+fn quadView(_: ?*abi_schedule.c.ke_schedule_ctx, index: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    if (index != 0) {
+        out_count.?.* = 0;
+        return null;
+    }
+    out_count.?.* = 1;
+    return (&quad_segment)[0..1];
+}
+
+var test_quad = std.mem.zeroInit(UiQuadComponent, .{ .dst_w = 10, .dst_h = 10, .color = .{ 1, 1, 1, 1 } });
+var quad_columns = [_]?*anyopaque{@ptrCast(&test_quad)};
+var quad_segment: abi_ecs.c.ke_ecs_segment = .{ .entities = null, .count = 1, .columns = &quad_columns, .column_count = 1 };
+var quad_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = quadView, .slice = null };
+
+/// The parts a ui pass is made of in a test.
 const Rig = struct {
     dev: zsub.For(abi_render_gpu.c.ke_gpu_device),
     binder: zsub.For(abi_render_gpu.c.ke_render_resource_binder),
     core: zsub.For(abi_render.c.ke_render_service),
-    rt: zsub.For(abi_runtime.c.ke_runtime),
-    ecs: zsub.For(abi_ecs.c.ke_ecs),
+    schedule: zsub.For(abi_schedule.c.ke_schedule),
+    main: zsub.For(abi_ecs.c.ke_ecs),
+    render: zsub.For(abi_ecs.c.ke_ecs),
+    extraction: zsub.For(abi_extraction.c.ke_extraction),
+    frame: zsub.For(abi_render_frame.c.ke_render_frame),
+    graph: zsub.For(rg.ke_render_graph),
 
     fn init(self: *Rig) !void {
         try self.dev.init();
@@ -622,59 +681,122 @@ const Rig = struct {
         _ = self.core.when(.resource_binder).returns(self.binder.api());
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.frame_color).returnsFresh();
-        _ = self.core.when(.frame_depth).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
         _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
-        _ = self.core.when(.join_chain).writesFresh(3);
-        _ = self.core.when(.chain_format).does(chainFormat);
-        try self.rt.init();
-        _ = self.rt.when(.register_system).writesFresh(2);
-        try self.ecs.init();
-        _ = self.ecs.when(.component_register).writesFresh(2);
+        try self.schedule.init();
+        _ = self.schedule.when(.register_system).writesFresh(2);
+        try self.main.init();
+        _ = self.main.when(.component_register).writesFresh(2);
+        try self.render.init();
+        _ = self.render.when(.component_register).writesFresh(2);
+        try self.extraction.init();
+        try self.graph.init();
+        try self.frame.init();
+        _ = self.frame.when(.frame_cid).returns(11);
+        _ = self.frame.when(.live).returns(true);
+        _ = self.frame.when(.output).returns(3);
+        _ = self.frame.when(.graph).returns(self.graph.api());
+        _ = self.frame.when(.output_format).returns(abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM);
     }
 
     fn deinit(self: *Rig) void {
-        self.ecs.deinit();
-        self.rt.deinit();
+        self.frame.deinit();
+        self.graph.deinit();
+        self.extraction.deinit();
+        self.render.deinit();
+        self.main.deinit();
+        self.schedule.deinit();
         self.core.deinit();
         self.binder.deinit();
         self.dev.deinit();
+    }
+
+    fn context(self: *Rig) abi_render_context.c.ke_render_context {
+        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .ecs = self.render.api(), .main = self.main.api(), .extraction = self.extraction.api(), .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api() });
+    }
+
+    fn ui(self: *Rig) !abi_render_ui.c.ke_render_ui_handle {
+        var h: abi_render_ui.c.ke_render_ui_handle = undefined;
+        const p = self.context();
+        try R.check(ke_render_ui_create(&p, &h));
+        return h;
+    }
+
+    fn targets(self: *Rig) abi_module.c.ke_module_targets {
+        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
+        t.render = @ptrCast(self.schedule.api());
+        return t;
     }
 
     fn expectReleased(self: *Rig) !void {
         try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render_gpu.c.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
         try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
         try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
-        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
     }
 };
 
-fn chainFormat(args: zsub.For(abi_render.c.ke_render_service).Args(.chain_format)) abi_render_gpu.c.ke_gpu_texture_format {
-    return if (args[1] >= abi_render.c.KE_RENDER_STAGE_TONEMAP) abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
-}
-
-test "creating and destroying the ui pass leaves no block allocated and no GPU resource live" {
+test "the ui pass registers its components in both worlds, copies them into the render world, and leaves nothing live once destroyed" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try R.check(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h));
+    const h = try rig.ui();
+    try rig.main.received(.component_register).times(2);
+    try rig.render.received(.component_register).times(2);
+    try rig.extraction.received(.extract_copy).times(2);
+    try rig.extraction.received(.sync_component).times(2);
     h.destroy.?(h.ref);
     try rig.expectReleased();
-    try heap.expectNoLeaks();
 }
 
-test "destroying the ui pass unregisters every system it registered" {
+test "the ui module attaches its label and draw systems to the render prepare and queue sets, and detaching removes them" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try R.check(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h));
-    h.destroy.?(h.ref);
-    try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
-    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
+    const h = try rig.ui();
+    defer h.destroy.?(h.ref);
+    var m: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_render_ui_systems_create(h.ref, &m));
+    const t = rig.targets();
+    try R.check(m.ref.?.attach.?(m.ref, &t));
+    try rig.schedule.received(.register_system).times(2);
+    m.destroy.?(m.ref);
+    try rig.schedule.received(.unregister_system).sameAs(rig.schedule.received(.register_system));
+}
+
+test "a ui module whose draw system the schedule refuses takes its label system back" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.schedule.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
+    const h = try rig.ui();
+    defer h.destroy.?(h.ref);
+    var m: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_render_ui_systems_create(h.ref, &m));
+    const t = rig.targets();
+    try testing.expect(m.ref.?.attach.?(m.ref, &t) != R.ok);
+    try rig.schedule.received(.unregister_system).times(1);
+}
+
+test "a visible quad is drawn by a pass declared over the frame's output at the overlay stage" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    const h = try rig.ui();
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(R.ok, queueSystem(&quad_ctx, stateOf(h.ref), 0));
+    try rig.graph.received(.add_pass).times(1);
+    try rig.core.received(.upload).atLeast(2);
+}
+
+test "a frame not being declared gets no ui pass" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.frame.when(.live).returns(false);
+    const h = try rig.ui();
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(R.ok, queueSystem(&quad_ctx, stateOf(h.ref), 0));
+    try rig.graph.received(.add_pass).never();
 }
 
 test "a ui pass whose shader fails to load releases what it had created" {
@@ -683,41 +805,22 @@ test "a ui pass whose shader fails to load releases what it had created" {
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h) != R.ok);
+    const p = rig.context();
+    try testing.expect(ke_render_ui_create(&p, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
-    try heap.expectNoLeaks();
 }
 
-test "a ui pass the runtime refuses to register releases what it had created" {
+test "a ui pass missing its frame is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
+    var p = rig.context();
+    p.frame = null;
     var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h) != R.ok);
-    try testing.expect(h.ref == null);
-    try rig.expectReleased();
-    try heap.expectNoLeaks();
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_ui_create(&p, &h)));
 }
 
-test "a missing frame is refused" {
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = null, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h)));
-}
-
-test "a ui pass the runtime refuses its second system takes the first one back" {
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    _ = rig.rt.when(.register_system).returnsSeq(&.{ abi_result.c.KE_OK, abi_result.c.KE_RESULT_OUT_OF_MEMORY });
-    var h: abi_render_ui.c.ke_render_ui_handle = undefined;
-    try testing.expect(ke_render_ui_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .frame = &test_frame, .runtime = rig.rt.api(), .ecs = rig.ecs.api(), .service = rig.core.api(), .device = rig.dev.api() }), &h) != R.ok);
-    try testing.expect(h.ref == null);
-    try rig.rt.received(.unregister_system).times(1);
-    try rig.expectReleased();
+test "creating and destroying ui passes leaves no block allocated" {
     try heap.expectNoLeaks();
 }

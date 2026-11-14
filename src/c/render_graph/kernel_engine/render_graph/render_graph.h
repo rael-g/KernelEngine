@@ -219,6 +219,9 @@ typedef struct ke_render_graph_ctx {
     /// The buffer behind @p resource, which the pass declared.
     /// @return The buffer; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.
     ke_gpu_buffer (*buffer)(ke_render_graph_ctx *self, ke_render_graph_resource resource);
+    /// The size in bytes of the buffer behind @p resource, which the pass declared.
+    /// @return The size; zero for a resource the pass did not declare.
+    uint64_t (*buffer_size)(ke_render_graph_ctx *self, ke_render_graph_resource resource);
 } ke_render_graph_ctx;
 
 /// [interface] The passes of a frame and the resources between them, declared each frame, then compiled

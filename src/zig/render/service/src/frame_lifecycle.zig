@@ -5,195 +5,79 @@ const abi_render_gpu = @import("abi_render_gpu");
 const std = @import("std");
 const heap = @import("heap");
 const rc = @import("render_service.zig");
-const resource_table = @import("resource_table.zig");
-const frame_chain = @import("frame_chain.zig");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const R = rc.R;
-const log = std.log.scoped(.render_service);
 
-/// Opens a frame. The previous frame's ended passes, compute records and upload counters are
-/// cleared, and the logs of ended passes and compute records grown to what it used, before the
-/// target is acquired, so a failed acquire leaves the frame closed and returns the target's code,
-/// and a target with nothing to draw into leaves it closed and succeeds. Once it has a view, the
-/// backbuffer size is read from the target, the "backbuffer" entry holds the acquired view, the chain's links are given
-/// their textures, the clear of the frame's color and depth is recorded and the frame is live.
-pub fn beginFrame(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_result.c.ke_result {
-    if (self == null) return R.code(error.InvalidArgument);
+/// The `begin_frame` slot. It forgets the previous frame's uploads and the blit's sets before it
+/// acquires the target, so a failed acquire leaves the frame closed and returns the target's code,
+/// and a target with nothing to draw into leaves it closed, writes the invalid view and succeeds.
+/// Once it has a view, it reads the target's size and the frame is live.
+pub fn beginFrame(self: [*c]abi_render.c.ke_render_service, out_view: [*c]abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+    if (self == null or out_view == null) return R.code(error.InvalidArgument);
+    out_view.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const st = rc.coreOf(self);
     st.frame_live = false;
-    dropClear(st);
     st.blit.releaseSets(st.binder);
-    st.ended.reset(null);
-    st.compute_records.reset(rc.ComputeRecord.deinit);
-    for (st.compute_records.items) |*r| {
-        r.cmds.clearRetainingCapacity();
-        r.offsets.clearRetainingCapacity();
-        r.labels.clearRetainingCapacity();
-    }
     st.upload_count.store(0, .monotonic);
     st.upload_arena_offset.store(0, .monotonic);
     var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const acquired = st.target.acquire.?(st.target, &view);
     if (acquired != R.ok or view == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return acquired;
     st.target.size.?(st.target, &st.backbuffer_w, &st.backbuffer_h);
-    resource_table.resizeRelative(st);
-    if (st.find("backbuffer")) |bb| bb.view = view;
-    frame_chain.assign(st);
-    st.clear_pass = frame_chain.recordClear(st);
     st.frame_live = true;
+    out_view.* = view;
     return R.ok;
 }
 
-fn dropClear(st: *rc.CoreState) void {
-    const enc = st.clear_pass orelse return;
-    enc.destroy.?(enc.ref);
-    st.clear_pass = null;
+/// The `submit_uploads` slot: writes every upload recorded since the frame began. Does nothing when
+/// no frame is live.
+pub fn submitUploads(self: [*c]abi_render.c.ke_render_service) callconv(.c) void {
+    if (self == null) return;
+    const st = rc.coreOf(self);
+    if (!st.frame_live) return;
+    flushUploads(st);
 }
 
-/// The encoders of one frame in the order they are submitted, in arrays sized for the frame. An
-/// encoder added here is finished and destroyed by `submit`, whether its finish succeeds or not.
-const Submission = struct {
-    encoders: []abi_render_gpu.c.ke_gpu_command_encoder_handle,
-    records: []?*rc.ComputeRecord,
-    finished: []abi_render_gpu.c.ke_gpu_command_buffer_handle,
-    cmds: [][*c]abi_render_gpu.c.ke_gpu_command_buffer,
-    count: usize = 0,
-
-    fn init(capacity: usize) error{OutOfMemory}!Submission {
-        const encoders = try heap.gpa.alloc(abi_render_gpu.c.ke_gpu_command_encoder_handle, capacity);
-        errdefer heap.gpa.free(encoders);
-        const records = try heap.gpa.alloc(?*rc.ComputeRecord, capacity);
-        errdefer heap.gpa.free(records);
-        const finished = try heap.gpa.alloc(abi_render_gpu.c.ke_gpu_command_buffer_handle, capacity);
-        errdefer heap.gpa.free(finished);
-        const cmds = try heap.gpa.alloc([*c]abi_render_gpu.c.ke_gpu_command_buffer, capacity);
-        return .{ .encoders = encoders, .records = records, .finished = finished, .cmds = cmds };
-    }
-
-    fn deinit(self: *Submission) void {
-        heap.gpa.free(self.cmds);
-        heap.gpa.free(self.finished);
-        heap.gpa.free(self.records);
-        heap.gpa.free(self.encoders);
-    }
-
-    fn add(self: *Submission, enc: ?abi_render_gpu.c.ke_gpu_command_encoder_handle, rec: ?*rc.ComputeRecord) void {
-        const e = enc orelse return;
-        self.encoders[self.count] = e;
-        self.records[self.count] = rec;
-        self.count += 1;
-    }
-
-    fn submit(self: *Submission, st: *rc.CoreState) void {
-        var n: u32 = 0;
-        for (self.encoders[0..self.count], self.records[0..self.count]) |enc, rec| {
-            if (rec) |r| replay(enc.ref.?, r);
-            var cmd: abi_render_gpu.c.ke_gpu_command_buffer_handle = .{ .ref = null, .destroy = null };
-            if (enc.ref.?.finish.?(enc.ref, &cmd) != R.ok) continue;
-            self.finished[n] = cmd;
-            self.cmds[n] = cmd.ref;
-            n += 1;
-        }
-        if (n > 0) st.device.queue_submit.?(st.device, st.queue, self.cmds.ptr, n);
-        for (self.finished[0..n]) |cmd| cmd.destroy.?(cmd.ref);
-        for (self.encoders[0..self.count]) |enc| enc.destroy.?(enc.ref);
-    }
-};
-
-/// Closes the frame. The queued uploads are written to their buffers before any command buffer
-/// is finished. The clear of the frame goes first, then each pass outside the chain in the order
-/// the passes ended, then the chain in its order: each link's passes in the order they ended, or,
-/// for a link whose pass recorded nothing and whose target starts from a source, a draw of the
-/// source into the target. Last comes the draw of the frame's color into the backbuffer. A compute
-/// record is replayed on its pass's encoder before it is finished; an encoder whose finish fails
-/// is left out. The command buffers are submitted in one call and destroyed with their encoders,
-/// and the frame stops being live. Returns the code of the present; the queue is polled whatever
-/// it returned. When the submission cannot be allocated the frame's encoders are destroyed
-/// unsubmitted, nothing is presented and it fails as out of memory. Succeeds doing nothing when
-/// no frame is live.
+/// The `end_frame` slot: presents the target and polls the queue whatever the present returned,
+/// and the frame stops being live. Succeeds doing nothing when no frame is live.
 pub fn endFrame(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_result.c.ke_result {
     if (self == null) return R.code(error.InvalidArgument);
     const st = rc.coreOf(self);
     if (!st.frame_live) return R.ok;
-
-    flushUploads(st);
-
-    st.ended.seal();
-    var ended_count: usize = 0;
-    var it = st.ended.iterator();
-    while (it.next()) |_| ended_count += 1;
-    var sub = Submission.init(ended_count + st.chain.links.items.len + 2) catch {
-        dropFrame(st);
-        log.warn("end_frame: the submission could not be allocated", .{});
-        return R.code(error.OutOfMemory);
-    };
-    defer sub.deinit();
-    sub.add(st.clear_pass, null);
-    st.clear_pass = null;
-    it = st.ended.iterator();
-    while (it.next()) |pass| {
-        if (pass.chain == abi_render.c.KE_RENDER_CHAIN_NONE) sub.add(pass.encoder, pass.record);
-    }
-    for (st.chain.links.items) |*link| {
-        var any = false;
-        var link_it = st.ended.iterator();
-        while (link_it.next()) |pass| {
-            if (pass.chain != link.id) continue;
-            sub.add(pass.encoder, pass.record);
-            any = true;
-        }
-        if (!any and link.source != abi_render_gpu.c.KE_GPU_INVALID_HANDLE)
-            sub.add(frame_chain.recordBlit(st, link.source, link.target, link.target_format), null);
-    }
-    it = st.ended.iterator();
-    while (it.next()) |pass| {
-        if (pass.chain != abi_render.c.KE_RENDER_CHAIN_NONE and st.chain.find(pass.chain) == null) sub.add(pass.encoder, pass.record);
-    }
-    if (st.find("backbuffer")) |bb| sub.add(frame_chain.recordBlit(st, st.chain.final, bb.view, bb.format), null);
-    sub.submit(st);
-
     st.frame_live = false;
-    if (st.find("backbuffer")) |bb| bb.view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     const presented = st.target.present.?(st.target);
     st.device.queue_poll.?(st.device, st.queue);
     return presented;
 }
 
-/// Destroys the frame's clear and the encoders of its ended passes unsubmitted, and closes the frame.
-fn dropFrame(st: *rc.CoreState) void {
-    dropClear(st);
-    var it = st.ended.iterator();
-    while (it.next()) |pass| pass.encoder.destroy.?(pass.encoder.ref);
-    st.frame_live = false;
-    if (st.find("backbuffer")) |bb| bb.view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
+/// The `blit` slot.
+pub fn blit(self: [*c]abi_render.c.ke_render_service, pass: [*c]abi_render_gpu.c.ke_gpu_render_pass, source: abi_asset_resolver.c.ke_gpu_texture_view, target_format: abi_render_gpu.c.ke_gpu_texture_format) callconv(.c) void {
+    if (self == null or pass == null) return;
+    const st = rc.coreOf(self);
+    _ = st.blit.draw(self, st.binder, pass, source, target_format);
 }
 
-fn replay(enc: *abi_render_gpu.c.ke_gpu_command_encoder, rec: *const rc.ComputeRecord) void {
-    const cp = enc.*.begin_compute_pass.?(enc, &abi_render_gpu.c.ke_gpu_compute_pass_params{ .label = rec.label(rec.pass_label) });
-    for (rec.cmds.items) |cmd| {
-        switch (cmd) {
-            .set_pipeline => |p| cp.?.set_pipeline.?(cp, p),
-            .set_bind_group => |b| {
-                if (b.count > 0)
-                    cp.?.set_bind_group.?(cp, b.index, b.bg, rec.offsets.items[b.first_offset..].ptr, b.count)
-                else
-                    cp.?.set_bind_group.?(cp, b.index, b.bg, null, 0);
-            },
-            .dispatch => |d| cp.?.dispatch.?(cp, d.x, d.y, d.z),
-            .dispatch_indirect => |d| cp.?.dispatch_indirect.?(cp, d.buf, d.offset),
-            .push_debug_group => |l| cp.?.push_debug_group.?(cp, rec.label(l)),
-            .pop_debug_group => cp.?.pop_debug_group.?(cp),
-            .insert_debug_marker => |l| cp.?.insert_debug_marker.?(cp, rec.label(l)),
-        }
-    }
-    cp.?.end.?(cp);
+/// The `backbuffer_size` slot.
+pub fn backbufferSize(self: [*c]abi_render.c.ke_render_service, out_w: [*c]u32, out_h: [*c]u32) callconv(.c) void {
+    if (self == null) return;
+    const st = rc.coreOf(self);
+    if (out_w != null) out_w.* = st.backbuffer_w;
+    if (out_h != null) out_h.* = st.backbuffer_h;
 }
+
+/// The `backbuffer_format` slot; asks the render target on every call.
+pub fn backbufferFormat(self: [*c]abi_render.c.ke_render_service) callconv(.c) abi_render_gpu.c.ke_gpu_texture_format {
+    if (self == null) return abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID;
+    const st = rc.coreOf(self);
+    return st.target.format.?(st.target);
+}
+
 
 /// Writes the frame's uploads in the order they were reserved, the arena's first and then the
 /// spilled ones, and frees the spilled blocks. When the frame needed more records or arena bytes
 /// than there were, both grow to what it asked for, so the next frame of that size does not spill.
-/// Runs single-threaded, at the end of the frame.
+/// Runs single-threaded, before the frame's work is submitted.
 fn flushUploads(st: *rc.CoreState) void {
     const requested = st.upload_count.load(.monotonic);
     const bytes = st.upload_arena_offset.load(.monotonic);
@@ -224,8 +108,8 @@ fn flushUploads(st: *rc.CoreState) void {
     }
 }
 
-/// Copies the bytes into the upload arena and queues a record for `endFrame` to write them to
-/// the buffer. May be called from any worker between `beginFrame` and `endFrame`: the record and
+/// Copies the bytes into the upload arena and queues a record for `submitUploads` to write them to
+/// the buffer. May be called from any worker between `beginFrame` and `submitUploads`: the record and
 /// the arena range are reserved with atomic counters before the copy. An upload that finds either
 /// full is copied into a block of its own and pushed onto the spill list instead; it is lost only
 /// when that block cannot be allocated. A zero size or null data does nothing.

@@ -17,6 +17,7 @@
     <ProjectReference Include="..\..\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
+    <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph.Simple\KernelEngine.RenderGraph.Simple.csproj" />
     <ProjectReference Include="..\..\physics\KernelEngine.Physics.Box2D\KernelEngine.Physics.Box2D.csproj" />
     <ProjectReference Include="..\..\audio\KernelEngine.Audio.MiniAudio\KernelEngine.Audio.MiniAudio.csproj" />
     <ProjectReference Include="..\..\text\KernelEngine.Text.StbTrueType\KernelEngine.Text.StbTrueType.csproj" />

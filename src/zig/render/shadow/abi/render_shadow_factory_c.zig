@@ -2,13 +2,13 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
+const abi_module = @import("module");
 const abi_render_context = @import("render_context");
+const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
-
-pub const ke_render_shadow = opaque {};
+const abi_schedule = @import("schedule");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -25,14 +25,16 @@ pub const ke_gpu_texture = u64;
 pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
-pub const ke_module_id = u64;
 pub const ke_query_id = u64;
 pub const ke_removal_tracker = u64;
-pub const ke_render_chain_link = u32;
+pub const ke_render_graph_export = u64;
+pub const ke_render_graph_pass = u32;
+pub const ke_render_graph_resource = u32;
 pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
-pub const ke_system_id = u64;
+pub const ke_schedule_set_id = u32;
+pub const ke_schedule_system_id = u64;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -41,30 +43,40 @@ pub const ke_system_id = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Blends one component between two fixed steps.
+pub const ke_extraction_interpolate_fn = ?*const fn (?*anyopaque, ?*const anyopaque, ?*const anyopaque, f32, ?*anyopaque) callconv(.c) void;
+
+/// Extracts what a copy cannot: reads the main world and writes the render world.
+pub const ke_extraction_custom_fn = ?*const fn (?*anyopaque, ?*abi_extraction.c.ke_extraction, ?*abi_ecs.c.ke_ecs, ?*abi_ecs.c.ke_ecs) callconv(.c) abi_result.c.ke_result;
+
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
 
 /// Receives the outcome of mapping a buffer for reading.
 pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu_buffer, ?*anyopaque) callconv(.c) void;
 
+/// Records a pass, possibly on another thread and after add_pass returned, through ctx only.
+pub const ke_render_graph_record_fn = ?*const fn (?*anyopaque, ?*abi_render_graph.c.ke_render_graph_ctx) callconv(.c) abi_result.c.ke_result;
+
+/// Whether a pass runs this frame; asked once, at compile.
+pub const ke_render_graph_condition_fn = ?*const fn (?*anyopaque) callconv(.c) bool;
+
+/// Receives the bytes of a resource the pass declared READBACK, once the frame retires.
+pub const ke_render_graph_readback_fn = ?*const fn (?*anyopaque, ke_render_graph_resource, ?*const anyopaque, usize) callconv(.c) void;
+
 /// A structural operation applied when the queue holding it is drained. `user` points at the
 /// copy of the payload passed to defer; `ecs` is the live world. A failure is returned, and the
 /// queue stops there: the operations recorded after it are dropped.
 pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// Registers the module's components and systems against the runtime it is being loaded into.
-/// Runs inside register_module, before that call returns.
-pub const ke_module_load_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
+/// One call of a system body, once per run of the schedule, or once per slice when the system is
+/// per_entity. A failure is carried to the caller of run, which fails with it; the rest of the
+/// wave still runs, and no later wave starts.
+pub const ke_schedule_execute_fn = ?*const fn (?*abi_schedule.c.ke_schedule_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
 
-/// Releases whatever the matching load acquired, as the modules are unloaded.
-pub const ke_module_unload_fn = ?*const fn (?*abi_runtime.c.ke_runtime, ?*anyopaque) callconv(.c) void;
-
-/// One call of a system body. The runtime calls it once per tick the system's phase runs, or
-/// once per slice when the system declared per_entity. A body runs on a worker thread; the code
-/// it returns is carried to the thread driving the tick, which tick() then fails with, and the
-/// runtime logs the system's name. The remaining bodies of the same wave still run — they were
-/// already dispatched — but no later phase of that tick starts.
-pub const ke_system_execute_fn = ?*const fn (?*abi_runtime.c.ke_system_ctx, ?*anyopaque, f32) callconv(.c) abi_result.c.ke_result;
+/// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
+/// on the thread that called run. A failure fails the run before any wave starts.
+pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
 
 /// The shape of the directional shadow pass's map. A scene larger than `extent` loses shadows
 /// outside it, and a caster farther than `light_distance` stops casting.
@@ -81,15 +93,11 @@ pub const ke_render_shadow_config = extern struct {
     far_plane: f32 = std.mem.zeroes(f32),
 };
 
-pub const ke_render_shadow_handle = extern struct {
-    ref: ?*ke_render_shadow = std.mem.zeroes(?*ke_render_shadow),
-    destroy: ?*const fn (?*ke_render_shadow) callconv(.c) void = null,
-};
-
 /// Sends every line ke_render_shadow logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_render_shadow_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
-/// Registers the pass's render-phase system. A missing runtime, service, device or view space
-/// fails as an invalid argument.
-pub extern fn ke_render_shadow_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_shadow_config, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*ke_render_shadow_handle) abi_result.c.ke_result;
+/// Makes the directional shadow pass. Attached, it publishes the shadow map and the light's
+/// view-projection in the render prepare set, and declares the pass that draws the casters into
+/// the map in the render queue set.
+pub extern fn ke_render_shadow_create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const ke_render_shadow_config, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;

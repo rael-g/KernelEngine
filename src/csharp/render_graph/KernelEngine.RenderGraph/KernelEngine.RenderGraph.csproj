@@ -10,14 +10,8 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
-    <ProjectReference Include="..\..\render\KernelEngine.Render\KernelEngine.Render.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Abstractions\KernelEngine.Render.Abstractions.csproj" />
+    <ProjectReference Include="..\..\render\KernelEngine.Render.Native\KernelEngine.Render.Native.csproj" />
     <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
-    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <NativeDep Include="ke_render_graph_simple" />
-  </ItemGroup>
-
-  <Import Project="../../NativeDependencies.targets" />
 </Project>

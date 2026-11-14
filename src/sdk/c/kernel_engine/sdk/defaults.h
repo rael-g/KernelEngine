@@ -29,13 +29,17 @@
 #include <kernel_engine/render/deferred_lighting/deferred_lighting_create.h>
 #include <kernel_engine/render/forward/forward_create.h>
 #include <kernel_engine/render/frame/frame_create.h>
+#include <kernel_engine/render/frame/frame_systems_create.h>
 #include <kernel_engine/render/gbuffer/gbuffer_create.h>
 #include <kernel_engine/render/scene/label_resolve_create.h>
 #include <kernel_engine/render/scene/scene_resolve_create.h>
+#include <kernel_engine/render/scene/scene_resolve_systems_create.h>
 #include <kernel_engine/render/service/render_service_create.h>
 #include <kernel_engine/render/shadow/shadow_create.h>
 #include <kernel_engine/render/tonemap/tonemap_create.h>
 #include <kernel_engine/render/ui/ui_create.h>
+#include <kernel_engine/render/ui/ui_systems_create.h>
+#include <kernel_engine/render_graph/simple/render_graph_simple_create.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
 #include <kernel_engine/runtime/runtime_create.h>
@@ -58,29 +62,31 @@
  */
 
 /**
- * The render service, the parts every pass is built on, and the passes. The resources a pass writes start
- * as KE_COMPONENT_INVALID, which a pass reading them meets with the neutral one when their pass is not made.
+ * The render service, the parts every pass is built on, and the passes, each pass a module the engine attaches. A
+ * resource a pass hands to others is published in the frame, which a pass reading it meets with the neutral one when
+ * its pass is not made.
  */
 typedef struct ke_sdk_renderer
 {
-    ke_render_resource_binder_handle   binder;
-    ke_render_service_handle           service;
-    ke_view_space_handle               view_space;
-    ke_render_camera_handle            camera;
-    ke_render_scene_resolve_handle     scene;
-    ke_render_frame_handle             frame;
-    ke_render_shadow_handle            shadow;
-    ke_render_cluster_handle           cluster;
-    ke_render_gbuffer_handle           gbuffer;
-    ke_render_deferred_lighting_handle deferred;
-    ke_render_forward_handle           forward;
-    ke_render_tonemap_handle           tonemap;
-    ke_render_ui_handle                ui;
-    ke_render_label_resolve_handle     labels;
-    ke_render_context                  context;
-    ke_render_shadow_resources         shadow_resources;
-    ke_render_cluster_resources        cluster_resources;
-    ke_render_gbuffer_resources        gbuffer_resources;
+    ke_render_resource_binder_handle binder;
+    ke_render_service_handle         service;
+    ke_render_graph_handle           graph;
+    ke_view_space_handle             view_space;
+    ke_render_camera_handle          camera;
+    ke_render_scene_resolve_handle   scene;
+    ke_module_handle                 scene_systems;
+    ke_render_frame_handle           frame;
+    ke_module_handle                 frame_systems;
+    ke_module_handle                 shadow;
+    ke_module_handle                 cluster;
+    ke_module_handle                 gbuffer;
+    ke_module_handle                 deferred;
+    ke_module_handle                 forward;
+    ke_module_handle                 tonemap;
+    ke_render_ui_handle              ui;
+    ke_module_handle                 ui_systems;
+    ke_module_handle                 labels;
+    ke_render_context                context;
 } ke_sdk_renderer;
 
 /** An engine made of the default parts: the parts every engine has, and the renderer these parts make. */
@@ -101,6 +107,7 @@ static inline void ke_sdk_renderer_release(ke_sdk_engine *engine)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(engine);
     KE_SDK_ENGINE_RELEASE(r->labels);
+    KE_SDK_ENGINE_RELEASE(r->ui_systems);
     KE_SDK_ENGINE_RELEASE(r->ui);
     KE_SDK_ENGINE_RELEASE(r->tonemap);
     KE_SDK_ENGINE_RELEASE(r->forward);
@@ -108,9 +115,12 @@ static inline void ke_sdk_renderer_release(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(r->gbuffer);
     KE_SDK_ENGINE_RELEASE(r->cluster);
     KE_SDK_ENGINE_RELEASE(r->shadow);
+    KE_SDK_ENGINE_RELEASE(r->frame_systems);
     KE_SDK_ENGINE_RELEASE(r->frame);
+    KE_SDK_ENGINE_RELEASE(r->scene_systems);
     KE_SDK_ENGINE_RELEASE(r->scene);
     KE_SDK_ENGINE_RELEASE(r->camera);
+    KE_SDK_ENGINE_RELEASE(r->graph);
     KE_SDK_ENGINE_RELEASE(r->service);
     KE_SDK_ENGINE_RELEASE(r->binder);
     KE_SDK_ENGINE_RELEASE(r->view_space);
@@ -261,8 +271,9 @@ static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 }
 
 /**
- * The render service, cleared to `render.clear_color`, and the camera, scene and frame every pass is built on.
- * It starts the renderer of the ke_sdk_default_engine @p e is the engine of, which the engine then releases.
+ * The render service, the render graph, and the camera, scene and frame every pass is built on, the frame cleared to
+ * `render.clear_color`; the scene's systems and the frame's are modules of the engine. It needs the render stage, and
+ * starts the renderer of the ke_sdk_default_engine @p e is the engine of, which the engine then releases.
  */
 static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
 {
@@ -271,8 +282,7 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     memset(r, 0, sizeof *r);
     e->release_extra = ke_sdk_renderer_release;
     ke_gpu_device *gpu = e->gpu_device.ref;
-    const ke_render_service_config service_config = {
-        .shader_dir = e->shader_dir,
+    const ke_render_frame_config frame_config = {
         .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
         .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
         .clear_color = {
@@ -283,15 +293,20 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
         },
     };
     ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, &(ke_render_resource_binder_grouped_config){ .shader_dir = e->shader_dir }, &r->binder);
-    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->ecs.ref, e->io.ref, r->binder.ref, &service_config, &r->service);
+    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, &(ke_render_service_config){ .shader_dir = e->shader_dir }, &r->service);
+    if (made == KE_OK) made = ke_render_graph_simple_create(gpu, &r->graph);
     if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
     if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);
-    if (made == KE_OK) made = ke_render_scene_resolve_create(e->runtime.ref, e->ecs.ref, r->service.ref, NULL, &r->scene);
-    if (made == KE_OK) made = ke_render_frame_create(e->runtime.ref, e->ecs.ref, r->service.ref, r->camera.ref, r->scene.ref, &r->frame);
+    if (made == KE_OK) made = ke_render_scene_resolve_create(e->ecs.ref, e->render_world.ref, e->extraction.ref, r->service.ref, NULL, &r->scene);
+    if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
+    if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
+    if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref, &frame_config, &r->frame);
+    if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
+    if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
     if (made != KE_OK) return made;
     r->context = (ke_render_context){
-        .runtime = e->runtime.ref, .ecs = e->ecs.ref, .service = r->service.ref, .device = gpu, .view_space = r->view_space.ref,
-        .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
+        .ecs = e->render_world.ref, .main = e->ecs.ref, .extraction = e->extraction.ref, .service = r->service.ref, .device = gpu,
+        .view_space = r->view_space.ref, .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
     return KE_OK;
 }
@@ -300,54 +315,65 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
 static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow_resources, &r->shadow);
+    ke_result made = ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow);
+    return made == KE_OK ? ke_sdk_add_module(e, r->shadow.ref) : made;
 }
 
 /** Point and spot lights clustered on a 16 by 9 by 24 grid, 64 to a cluster. */
 static inline ke_result ke_sdk_cluster(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster_resources, &r->cluster);
+    ke_result made = ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster);
+    return made == KE_OK ? ke_sdk_add_module(e, r->cluster.ref) : made;
 }
 
 /** The gbuffer the opaque meshes and sprites are drawn into. */
 static inline ke_result ke_sdk_gbuffer(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_gbuffer_create(&r->context, &r->gbuffer_resources, &r->gbuffer);
+    ke_result made = ke_render_gbuffer_create(&r->context, &r->gbuffer);
+    return made == KE_OK ? ke_sdk_add_module(e, r->gbuffer.ref) : made;
 }
 
 /** The gbuffer lit, with the sky's image-based light, the shadow and the clustered lights there are. */
 static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_deferred_lighting_create(&r->context, &r->gbuffer_resources, &r->shadow_resources, &r->cluster_resources, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+    ke_result made = ke_render_deferred_lighting_create(&r->context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+    return made == KE_OK ? ke_sdk_add_module(e, r->deferred.ref) : made;
 }
 
 /** The transparent meshes, lit as the deferred pass lights the opaque ones. */
 static inline ke_result ke_sdk_forward(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_forward_create(&r->context, &r->shadow_resources, &r->cluster_resources, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+    ke_result made = ke_render_forward_create(&r->context, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+    return made == KE_OK ? ke_sdk_add_module(e, r->forward.ref) : made;
 }
 
 /** The frame's color mapped to the screen's range. */
 static inline ke_result ke_sdk_tonemap(ke_sdk_engine *e)
 {
-    return ke_render_tonemap_create(&ke_sdk_renderer_of(e)->context, &ke_sdk_renderer_of(e)->tonemap);
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    ke_result made = ke_render_tonemap_create(&r->context, &r->tonemap);
+    return made == KE_OK ? ke_sdk_add_module(e, r->tonemap.ref) : made;
 }
 
 /** The UI drawn over the frame. */
 static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
 {
-    return ke_render_ui_create(&ke_sdk_renderer_of(e)->context, &ke_sdk_renderer_of(e)->ui);
+    ke_sdk_renderer *r = ke_sdk_renderer_of(e);
+    ke_result made = ke_render_ui_create(&r->context, &r->ui);
+    if (made == KE_OK) made = ke_render_ui_systems_create(r->ui.ref, &r->ui_systems);
+    return made == KE_OK ? ke_sdk_add_module(e, r->ui_systems.ref) : made;
 }
 
 /** The labels' text, laid out with the project's default font, drawn by the UI. */
 static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    return ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
+    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
+    return made == KE_OK ? ke_sdk_add_module(e, r->labels.ref) : made;
 }
 
 /** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */

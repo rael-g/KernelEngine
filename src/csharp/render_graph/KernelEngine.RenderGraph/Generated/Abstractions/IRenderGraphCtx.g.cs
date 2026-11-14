@@ -4,8 +4,11 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.Render;
-using KernelEngine.Render.Gpu;
+using KernelEngine.Render.Native;
+using KernelEngine.RenderGraph.Native;
 
 namespace KernelEngine.RenderGraph;
 
@@ -30,4 +33,7 @@ public interface IRenderGraphCtx : IDisposable
     /// <summary>The buffer behind resource, which the pass declared.</summary>
     /// <returns>The buffer; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.</returns>
     ulong Buffer(RenderGraphResource resource);
+    /// <summary>The size in bytes of the buffer behind resource, which the pass declared.</summary>
+    /// <returns>The size; zero for a resource the pass did not declare.</returns>
+    ulong BufferSize(RenderGraphResource resource);
 }

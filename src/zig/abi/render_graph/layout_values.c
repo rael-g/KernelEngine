@@ -49,6 +49,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_graph_ctx, texture),
     offsetof(ke_render_graph_ctx, texture_view),
     offsetof(ke_render_graph_ctx, buffer),
+    offsetof(ke_render_graph_ctx, buffer_size),
     sizeof(ke_render_graph),
     offsetof(ke_render_graph, handle),
     offsetof(ke_render_graph, begin_frame),

@@ -4,8 +4,11 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.Render;
-using KernelEngine.Render.Gpu;
+using KernelEngine.Render.Native;
+using KernelEngine.RenderGraph.Native;
 
 namespace KernelEngine.RenderGraph;
 
