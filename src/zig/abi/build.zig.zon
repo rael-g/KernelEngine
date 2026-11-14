@@ -38,6 +38,7 @@
         .abi_render_context = .{ .path = "render_context" },
         .abi_render_contract = .{ .path = "render_contract" },
         .abi_render_gpu = .{ .path = "render_gpu" },
+        .abi_render_graph = .{ .path = "render_graph" },
         .abi_render_handles = .{ .path = "render_handles" },
         .abi_render_material = .{ .path = "render_material" },
         .abi_render_ui = .{ .path = "render_ui" },

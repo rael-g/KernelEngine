@@ -37,6 +37,7 @@
         .ke_render_tonemap = .{ .path = "src/zig/render/tonemap" },
         .ke_physics_body2d = .{ .path = "src/zig/physics/body2d" },
         .ke_extraction_default = .{ .path = "src/zig/extraction/default" },
+        .ke_render_graph_simple = .{ .path = "src/zig/render_graph/simple" },
         .ke_audio_module = .{ .path = "src/zig/audio/module" },
         .ke_render_skybox = .{ .path = "src/zig/render/skybox" },
         .ke_render_ui = .{ .path = "src/zig/render/ui" },

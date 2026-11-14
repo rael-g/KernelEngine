@@ -1,0 +1,12 @@
+.{
+    .name = .abi_render_graph,
+    .version = "0.1.0",
+    .fingerprint = 0x6b4bd758a4a96973,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../completion" },
+        .abi_render_gpu = .{ .path = "../render_gpu" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}
