@@ -25,6 +25,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_text_stb_truetype
     KernelEngine::ke_physics_2d_box2d
     KernelEngine::ke_physics_body2d
+    KernelEngine::ke_extraction_default
     KernelEngine::ke_gpu_device_webgpu
     KernelEngine::ke_render_service
     KernelEngine::ke_render_binder_grouped

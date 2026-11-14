@@ -359,6 +359,16 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_extraction_default", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
+    _ = ctx.member("ke_render_graph_simple", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     _ = ctx.member("ke_audio_module", .{
         .target = target,
         .optimize = optimize,
@@ -507,6 +517,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_c, "completion" }),
             vcpkg_include,
         }),
         .libs = joinPaths(b, &.{
@@ -520,6 +531,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
+            b.pathJoin(&.{ src_c, "completion" }),
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -642,6 +654,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "text/stb_truetype/include" }),
             b.pathJoin(&.{ src_zig, "physics/box2d/include" }),
             b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
+            b.pathJoin(&.{ src_zig, "extraction/default/include" }),
+            b.pathJoin(&.{ src_c, "extraction" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
@@ -679,6 +693,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_text_stb_truetype") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_extraction_default") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),

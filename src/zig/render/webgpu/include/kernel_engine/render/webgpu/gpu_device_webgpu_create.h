@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
+#include <kernel_engine/completion/completion.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -30,13 +31,16 @@ extern "C"
  * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
  *        workers; NULL compiles synchronously, invoking the callback before returning.
  * @param config [borrowed] The device's values; Required; every field is read as given.
+ * @param out_ready [out] Receives the completion that finishes when the device is ready, already
+ *        finished since the device is made before the call returns; the caller releases it. Left
+ *        NULL on failure.
  * @param out_device [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or a failure code; call @c handle.destroy(handle.ref) to release the handle
  *         when done.
  */
 KE_GPU_WEBGPU_API ke_result
 ke_gpu_device_webgpu_create(struct ke_task_pool *task_pool, const ke_gpu_device_config *config,
-                             ke_gpu_device_handle *out_device);
+                             ke_completion **out_ready, ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus
 }

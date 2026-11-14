@@ -23,6 +23,9 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("bool (*)(struct ke_ecs *, const char *, ke_component_meta *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, ComponentMeta*, bool> component_lookup;
 
+    [NativeTypeName("bool (*)(struct ke_ecs *, ke_component_id, ke_component_meta *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.ComponentId, ComponentMeta*, bool> component_meta;
+
     [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_entity, ke_component_id, void **)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.Entity, global::KernelEngine.Ecs.ComponentId, void**, KernelEngine.Result.Native.Result> component_add;
 

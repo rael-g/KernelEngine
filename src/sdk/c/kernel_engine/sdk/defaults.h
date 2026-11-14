@@ -7,6 +7,8 @@
 #include <kernel_engine/configuration/configuration_create.h>
 #include <kernel_engine/configuration/toml/configuration_toml.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
+#include <kernel_engine/extraction/default/extraction_create.h>
+#include <kernel_engine/extraction/default/extraction_history_create.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/framework/asset_resolver_create.h>
 #include <kernel_engine/framework/engine_node_types.h>
@@ -220,7 +222,10 @@ static inline ke_result ke_sdk_runtime(ke_sdk_engine *e)
 /** A WebGPU device. */
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
-    return ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &e->gpu_device);
+    ke_completion *ready = NULL;
+    ke_result made = ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &ready, &e->gpu_device);
+    if (made == KE_OK) made = ke_sdk_await(e, ready);
+    return made;
 }
 
 /** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
@@ -251,7 +256,7 @@ static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
 {
     ke_result made = ke_scene_tree_create(e->ecs.ref, &e->scene_tree);
     if (made == KE_OK) made = ke_scene_hierarchy_create(e->ecs.ref, &e->hierarchy);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->hierarchy.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->hierarchy.ref);
     return made;
 }
 
@@ -355,7 +360,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
     };
     ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
     if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->bodies.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->bodies.ref);
     return made;
 }
 
@@ -364,7 +369,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
     if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &(ke_sound_config){ .root = e->project_dir }, &e->sounds);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->sounds.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
     return made;
 }
 
@@ -373,7 +378,7 @@ static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
     ke_result made = ke_input_actions_create(e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
     if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->action_evaluation.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->action_evaluation.ref);
     return made;
 }
 
@@ -382,7 +387,7 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 {
     ke_result made = ke_node_types_create(e->scheduler.ref, e->ecs.ref, e->scene_tree.ref, e->actions.ref, &e->node_types);
     if (made == KE_OK) made = ke_node_types_systems_create(e->node_types.ref, &e->node_systems);
-    if (made == KE_OK) made = ke_sdk_attach(e, e->node_systems.ref);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->node_systems.ref);
     return made;
 }
 
@@ -390,6 +395,22 @@ static inline ke_result ke_sdk_node_types(ke_sdk_engine *e)
 static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 {
     return ke_scene_files_create(e->ecs.ref, e->node_types.ref, e->assets.ref, e->io.ref, &e->scene_files);
+}
+
+/**
+ * The render stage: a flecs render world, a schedule over it, and the extraction into it from the engine's world,
+ * added to the scheduler after the standard schedules; and the module keeping the previous value of every
+ * interpolation.
+ */
+static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
+{
+    ke_result made = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->render_world);
+    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
+    if (made == KE_OK) made = ke_extraction_create(e->ecs.ref, e->render_world.ref, e->scheduler.ref, e->render_schedule.ref, &e->extraction);
+    if (made == KE_OK) made = e->scheduler.ref->add(e->scheduler.ref, (ke_scheduler_run_fn)e->extraction.ref->run, e->extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK);
+    if (made == KE_OK) made = ke_extraction_history_create(e->extraction.ref, &e->extraction_history);
+    if (made == KE_OK) made = ke_sdk_add_module(e, e->extraction_history.ref);
+    return made;
 }
 
 #endif

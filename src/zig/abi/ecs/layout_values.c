@@ -50,6 +50,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_ecs, entity_destroy),
     offsetof(ke_ecs, component_register),
     offsetof(ke_ecs, component_lookup),
+    offsetof(ke_ecs, component_meta),
     offsetof(ke_ecs, component_add),
     offsetof(ke_ecs, component_remove),
     offsetof(ke_ecs, component_get),

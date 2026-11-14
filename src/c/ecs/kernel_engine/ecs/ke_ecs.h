@@ -127,6 +127,15 @@ extern "C"
                                  ke_component_meta *out_meta);
 
         /**
+         * [try] Looks up a registered component by id.
+         * @param out_meta [out] Receives the component's id, size, and field metadata.
+         * @return false for the null or an unknown component.
+         */
+        bool (*component_meta)(struct ke_ecs     *self,
+                               ke_component_id    component,
+                               ke_component_meta *out_meta);
+
+        /**
          * Attaches a component to an entity: its storage is zeroed, then seeded with the
          * defaults of the field table the component was registered with, on the first
          * attach; an entity that already has the component keeps its storage unchanged.

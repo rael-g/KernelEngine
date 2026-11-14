@@ -138,6 +138,8 @@ pub const ke_ecs = extern struct {
     component_register: ?*const fn (?*ke_ecs, ?*const ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Looks up a previously registered component by name.
     component_lookup: ?*const fn (?*ke_ecs, ?[*:0]const u8, ?*ke_component_meta) callconv(.c) bool = null,
+    /// Looks up a registered component by id.
+    component_meta: ?*const fn (?*ke_ecs, ke_component_id, ?*ke_component_meta) callconv(.c) bool = null,
     /// Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of
     /// the field table the component was registered with, on the first attach; an entity that
     /// already has the component keeps its storage unchanged. Structural; single-threaded.

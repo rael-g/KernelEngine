@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
+    <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
+    <ProjectReference Include="..\..\ecs\KernelEngine.Ecs\KernelEngine.Ecs.csproj" />
+    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
+    <ProjectReference Include="..\..\module\KernelEngine.Module\KernelEngine.Module.csproj" />
+    <ProjectReference Include="..\..\schedule\KernelEngine.Schedule\KernelEngine.Schedule.csproj" />
+    <ProjectReference Include="..\..\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
+    <ProjectReference Include="..\..\logger\KernelEngine.Logger.Interop\KernelEngine.Logger.Interop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <NativeDep Include="ke_extraction_default" />
+  </ItemGroup>
+
+  <Import Project="../../NativeDependencies.targets" />
+</Project>

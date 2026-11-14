@@ -8,6 +8,9 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Registers the pass's render-phase system. A missing runtime, service, device or view space fails as an invalid argument.</summary>
 public sealed unsafe partial class RenderShadow : IDisposable
 {
+    /// <summary>Receives the ids of the map and the light it writes; every id KE_COMPONENT_INVALID on failure.</summary>
+    public KernelEngine.Render.RenderShadowResources Resources { get; }
+
     /// <summary>Registers the pass's render-phase system. A missing runtime, service, device or view space fails as an invalid argument.</summary>
     /// <param name="runtime">Registers the passes' systems.</param>
     /// <param name="ecs">Registers the components the passes own.</param>
@@ -18,9 +21,6 @@ public sealed unsafe partial class RenderShadow : IDisposable
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The passes run inside its frame.</param>
     /// <param name="config">The map's shape; Required; every field is read as given.</param>
-    /// <summary>Receives the ids of the map and the light it writes; every id KE_COMPONENT_INVALID on failure.</summary>
-    public KernelEngine.Render.RenderShadowResources Resources { get; }
-
     public RenderShadow(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.RenderShadowConfig config) : this(Create(runtime, ecs, service, device, viewSpace, camera, scene, frame, config))
     {
         Hold(runtime.Owner);

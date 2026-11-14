@@ -104,7 +104,8 @@ int main(int argc, char **argv)
 
     ke_gpu_device_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
-    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu));
+    ke_completion *gpu_ready = NULL;
+    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
     check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){

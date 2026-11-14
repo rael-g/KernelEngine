@@ -162,6 +162,17 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         }
     }
 
+    /// <summary>Looks up a registered component by id.</summary>
+    /// <param name="outMeta">Receives the component's id, size, and field metadata.</param>
+    /// <returns>false for the null or an unknown component.</returns>
+    public bool TryComponentMeta(ComponentId component, out ComponentMeta outMeta)
+    {
+        ComponentMeta outMetaLocal;
+        var found = Handle->component_meta(Handle, component, &outMetaLocal);
+        outMeta = outMetaLocal;
+        return found;
+    }
+
     /// <summary>Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of the field table the component was registered with, on the first attach; an entity that already has the component keeps its storage unchanged. Structural; single-threaded.</summary>
     /// <returns>Receives the storage, valid until the next structural change on this ecs; NULL for a tag, and on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

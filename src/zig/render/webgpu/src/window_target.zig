@@ -12,6 +12,7 @@ const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_window = @import("abi_window");
 const gpa = dev_impl.gpa;
+var device_ready: ?*@import("abi_completion").c.ke_completion = null;
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
 
@@ -335,7 +336,7 @@ test "a window target refuses a device it did not come from, a missing window an
     try std.testing.expect(target.ref == null);
 
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (dev_impl.ke_gpu_device_webgpu_create(null, null, &handle) != R.ok) return error.SkipZigTest;
+    if (dev_impl.ke_gpu_device_webgpu_create(null, null, &device_ready, &handle) != R.ok) return error.SkipZigTest;
     const dev = handle.ref;
     defer handle.destroy.?(dev);
     try std.testing.expectEqual(R.code(error.InvalidArgument), ke_gpu_render_target_webgpu_window_create(dev, null, null, &target));
