@@ -178,7 +178,9 @@ pub const ke_render_graph_pass_desc = extern struct {
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     @"type": ke_render_graph_pass_type = std.mem.zeroes(ke_render_graph_pass_type),
     queue: ke_render_graph_queue = std.mem.zeroes(ke_render_graph_queue),
-    /// Orders passes that no dependency orders: a lower point runs first.
+    /// Orders the passes: a use refers to the last write of its resource by a pass earlier in the
+    /// order of injection point, then declaration, and passes no dependency orders run with the
+    /// lower point first.
     injection_point: u32 = std.mem.zeroes(u32),
     /// Whether the pass runs even when nothing it writes is read.
     side_effect: bool = std.mem.zeroes(bool),
