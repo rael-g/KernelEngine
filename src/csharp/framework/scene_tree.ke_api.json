@@ -901,6 +901,32 @@
           "receiver": "struct ke_ecs *"
         },
         {
+          "name": "component_meta",
+          "returns": "_Bool",
+          "tags": [
+            "try"
+          ],
+          "doc": "Looks up a registered component by id.",
+          "return_doc": "false for the null or an unknown component.",
+          "params": [
+            {
+              "name": "component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_meta",
+              "type": "ke_component_meta *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the component\u0027s id, size, and field metadata."
+            }
+          ],
+          "receiver": "struct ke_ecs *"
+        },
+        {
           "name": "component_add",
           "returns": "ke_result",
           "tags": [],

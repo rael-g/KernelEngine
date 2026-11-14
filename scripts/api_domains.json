@@ -2,7 +2,7 @@
   "convention": {
     "format": { "csharp": "../.editorconfig" },
     "unprojected": [ "ke_scheduler.add", "ke_gpu_command_encoder.finish", "ke_asset_resolver.resolve_texture_into", "ke_asset_resolver.resolve_mesh_into", "ke_asset_resolver.resolve_material_into", "ke_ecs.component_field_write" ],
-    "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_register", "ke_ecs.component_lookup" ],
+    "deferred": [ "ke_render_service.begin_pass", "ke_render_service.end_pass", "ke_render_service.backbuffer_format", "ke_render_service.resource_format", "ke_render_service.chain_format", "ke_ecs.query_resolve", "ke_ecs.component_register", "ke_ecs.component_lookup", "ke_ecs.component_meta" ],
     "names": { "factory": [ { "match": "^(.*)_create$", "replace": "$1" } ], "csharp-type": [ { "match": "^ke_task$", "replace": "NativeTask" }, { "match": "^ke_action_type$", "replace": "NativeActionType" }, { "match": "^ke_ecs$", "replace": "EcsRegistry" }, { "match": "^ke_physics_2d$", "replace": "Physics2D" }, { "match": "^ke_body_type_2d$", "replace": "BodyType2D" }, { "match": "^ke_phase$", "replace": "RuntimePhase" }, { "match": "^ke_access$", "replace": "RuntimeAccess" } ] },
     "types": { "csharp": { "ke_vec2": "System.Numerics.Vector2", "ke_vec3": "System.Numerics.Vector3", "ke_vec4": "System.Numerics.Vector4", "ke_quat": "System.Numerics.Quaternion", "ke_mat4": "System.Numerics.Matrix4x4" } },
     "symbolPrefix": "ke_",
@@ -917,6 +917,30 @@
       "usings": []
     },
     {
+      "name": "extraction",
+      "headers": [
+        "src/c/extraction/kernel_engine/extraction/extraction.h"
+      ],
+      "auxHeaders": [
+        "src/c/ecs/kernel_engine/ecs/ecs.h",
+        "src/c/completion/kernel_engine/completion/completion.h"
+      ],
+      "includeDirs": [
+        "src/c/extraction",
+        "src/c/completion",
+        "src/c/ecs",
+        "src/c/math",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/extraction/ke_api.json",
+      "namespace": "KernelEngine.Extraction",
+      "nativeNamespace": "KernelEngine.Extraction.Native",
+      "outDir": "src/csharp/extraction/KernelEngine.Extraction/Generated",
+      "abstractionsOutDir": "src/csharp/extraction/KernelEngine.Extraction/Generated/Abstractions",
+      "usings": ["KernelEngine.Completion", "KernelEngine.Completion.Native", "KernelEngine.Ecs", "KernelEngine.Ecs.Native"]
+    },
+    {
       "name": "module",
       "headers": [
         "src/c/module/kernel_engine/module/module.h"
@@ -1022,6 +1046,7 @@
     { "name": "framework_factory", "packageDir": "src/zig/framework/abi", "headers": ["src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h", "src/zig/framework/include/kernel_engine/framework/framework_log.h", "src/zig/framework/include/kernel_engine/framework/input_actions_create.h", "src/zig/framework/include/kernel_engine/framework/input_actions_evaluation_create.h", "src/zig/framework/include/kernel_engine/framework/scene_hierarchy_create.h", "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_systems_create.h", "src/zig/framework/include/kernel_engine/framework/scene_files_create.h"], "includeDirs": ["src/c/asset", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/zig/framework/include", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/physics", "src/c/resource_cache", "src/c/view", "src/c/window"] },
     { "name": "input_default_factory", "packageDir": "src/zig/input/default/abi", "headers": ["src/zig/input/default/include/kernel_engine/input/default/input_default_create.h", "src/zig/input/default/include/kernel_engine/input/default/input_default_log.h"], "includeDirs": ["src/c/input", "src/zig/input/default/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "io_pool_factory", "packageDir": "src/zig/io/pool/abi", "headers": ["src/zig/io/pool/include/kernel_engine/io/pool/io_pool_create.h", "src/zig/io/pool/include/kernel_engine/io/pool/io_pool_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/pool/include", "src/c/logger", "src/c/result", "src/c/task_pool", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window"] },
+    { "name": "extraction_default_factory", "packageDir": "src/zig/extraction/default/abi", "headers": ["src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h"], "includeDirs": ["src/c/extraction", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/extraction/default/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/async", "src/zig/common/include"] },
     { "name": "physics_body2d_factory", "packageDir": "src/zig/physics/body2d/abi", "headers": ["src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h", "src/zig/physics/body2d/include/kernel_engine/physics/body2d/physics_body2d_log.h"], "includeDirs": ["src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/physics", "src/zig/physics/body2d/include", "src/c/result", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/io", "src/c/render", "src/c/resource_cache", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "physics_2d_box2d_factory", "packageDir": "src/zig/physics/box2d/abi", "headers": ["src/zig/physics/box2d/include/kernel_engine/physics/box2d/box2d_physics.h", "src/zig/physics/box2d/include/kernel_engine/physics/box2d/physics_2d_box2d_log.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/physics", "src/zig/physics/box2d/include", "src/c/result", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/render", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
     { "name": "render_binder_grouped_factory", "packageDir": "src/zig/render/binder_grouped/abi", "headers": ["src/zig/render/binder_grouped/include/kernel_engine/render/binder_grouped/render_binder_grouped_log.h", "src/zig/render/binder_grouped/include/kernel_engine/render/binder_grouped/resource_binder_grouped_create.h"], "includeDirs": ["src/c/ecs", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/zig/render/binder_grouped/include", "src/c/result", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/framework", "src/c/input", "src/c/physics", "src/c/resource_cache", "src/c/runtime", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/task_pool", "src/c/text", "src/c/view", "src/c/window"] },
@@ -1115,7 +1140,7 @@
     },
 
     "fieldTables": {},
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "Enki", "MiniAudio", "FileSystemStd", "IoPool", "StbImage", "StbTrueType", "Store", "Toml", "Runtime", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [
     {
@@ -1730,6 +1755,28 @@
       ],
       "library": "ke_window_glfw",
       "output": "Generated/Window/"
+    },
+    {
+      "name": "Extraction",
+      "project": "src/csharp/extraction/KernelEngine.Extraction",
+      "namespace": "KernelEngine.Extraction.Native",
+      "headers": [
+        "src/c/extraction/kernel_engine/extraction/extraction.h"
+      ],
+      "library": "ke_extraction_default",
+      "output": "Generated/Extraction/"
+    },
+    {
+      "name": "ExtractionDefault",
+      "project": "src/csharp/extraction/KernelEngine.Extraction",
+      "namespace": "KernelEngine.Extraction.Native",
+      "headers": [
+        "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h",
+        "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h",
+        "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h"
+      ],
+      "library": "ke_extraction_default",
+      "output": "Generated/ExtractionDefault/"
     },
     {
       "name": "Module",

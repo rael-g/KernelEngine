@@ -57,6 +57,12 @@ pub const Ecs = struct {
                     return T.componentLookup(state, std.mem.span(a0 orelse return std.mem.zeroes(bool)), a1);
                 }
             }.call,
+            .component_meta = &struct {
+                fn call(self: ?*c.ke_ecs, a0: c.ke_component_id, a1: ?*c.ke_component_meta) callconv(.c) bool {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(bool)));
+                    return T.componentMeta(state, a0, a1);
+                }
+            }.call,
             .component_add = &struct {
                 fn call(self: ?*c.ke_ecs, a0: c.ke_entity, a1: c.ke_component_id, a2: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -237,6 +243,11 @@ pub const Ecs = struct {
     /// Looks up a previously registered component by name.
     pub fn componentLookup(self: Ecs, name: [:0]const u8, out_meta: ?*c.ke_component_meta) bool {
         return self.ptr.component_lookup.?(self.ptr, name.ptr, out_meta);
+    }
+
+    /// Looks up a registered component by id.
+    pub fn componentMeta(self: Ecs, component: c.ke_component_id, out_meta: ?*c.ke_component_meta) bool {
+        return self.ptr.component_meta.?(self.ptr, component, out_meta);
     }
 
     /// Attaches a component to an entity: its storage is zeroed, then seeded with the defaults of

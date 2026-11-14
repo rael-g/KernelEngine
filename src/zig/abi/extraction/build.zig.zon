@@ -1,0 +1,12 @@
+.{
+    .name = .abi_extraction,
+    .version = "0.1.0",
+    .fingerprint = 0x292dda566ad3fd6b,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../completion" },
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_result = .{ .path = "../result" },
+    },
+    .paths = .{"."},
+}

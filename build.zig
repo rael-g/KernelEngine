@@ -359,6 +359,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_extraction_default", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
     _ = ctx.member("ke_audio_module", .{
         .target = target,
         .optimize = optimize,

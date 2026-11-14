@@ -703,6 +703,26 @@ fn componentLookup(
     return true;
 }
 
+/// Slot `component_meta`. Answers from the flecs type info and the remembered field table of the cid.
+fn componentMeta(self_in: ?*abi_ecs.c.ke_ecs, cid: abi_asset_resolver.c.ke_component_id, out_meta: ?*abi_ecs.c.ke_component_meta) callconv(.c) bool {
+    const self = self_in orelse return false;
+    if (self.handle == null or cid == 0) return false;
+    const s = stateOf(self);
+    const id = idOf(s, cid);
+    if (id == 0) return false;
+    const ti = c.ecs_get_type_info(s.world, id);
+    if (ti == null and !isRegistered(s, cid)) return false;
+    if (out_meta) |meta| {
+        meta.cid = cid;
+        meta.size = if (ti != null) @intCast(ti.*.size) else 0;
+        meta.alignment = if (ti != null) @intCast(ti.*.alignment) else 0;
+        const fields = layoutOf(s, cid);
+        meta.fields = if (fields) |f| f.ptr else null;
+        meta.field_count = if (fields) |f| @intCast(f.len) else 0;
+    }
+    return true;
+}
+
 /// Slot `component_add`. The bytes are zeroed and seeded with the remembered defaults only on the
 /// attach that adds the component; attaching a component the entity already holds returns its bytes
 /// unchanged. A zero-size component is added and yields null. A reserved id is materialized first,
@@ -1421,6 +1441,7 @@ fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_hand
     s.api.entity_destroy = entityDestroy;
     s.api.component_register = componentRegister;
     s.api.component_lookup = componentLookup;
+    s.api.component_meta = componentMeta;
     s.api.component_add = componentAdd;
     s.api.component_remove = componentRemove;
     s.api.component_get = componentGet;
@@ -1565,6 +1586,20 @@ test "a component keeps the alignment it was registered with, and a lookup repor
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "aligned4", &meta));
     try testing.expectEqual(@as(usize, 4), meta.alignment);
+}
+
+test "a component's meta is found by its id, and an unknown id finds none" {
+    const handle = try made();
+    defer handle.destroy.?(handle.ref);
+
+    var cid: abi_asset_resolver.c.ke_component_id = 0;
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "by_id", .size = 8, .alignment = 8, .fields = null, .field_count = 0 }, &cid));
+    var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
+    try testing.expect(handle.ref.?.component_meta.?(handle.ref, cid, &meta));
+    try testing.expectEqual(cid, meta.cid);
+    try testing.expectEqual(@as(usize, 8), meta.size);
+    try testing.expect(!handle.ref.?.component_meta.?(handle.ref, cid + 1000, &meta));
+    try testing.expect(!handle.ref.?.component_meta.?(handle.ref, 0, &meta));
 }
 
 test "a tag registered with size zero is found by lookup with size zero" {

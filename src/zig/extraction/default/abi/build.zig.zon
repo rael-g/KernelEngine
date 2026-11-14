@@ -1,0 +1,17 @@
+.{
+    .name = .abi_extraction_default_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x06c429d14f92ebad,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_completion = .{ .path = "../../../abi/completion" },
+        .abi_ecs = .{ .path = "../../../abi/ecs" },
+        .abi_extraction = .{ .path = "../../../abi/extraction" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_module = .{ .path = "../../../abi/module" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_schedule = .{ .path = "../../../abi/schedule" },
+        .abi_scheduler = .{ .path = "../../../abi/scheduler" },
+    },
+    .paths = .{"."},
+}

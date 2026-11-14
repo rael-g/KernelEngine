@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
         "abi_ecs",
         "abi_ecs_variant",
         "abi_engine_node_types",
+        "abi_extraction",
         "abi_file_system",
         "abi_framework",
         "abi_framework_components",

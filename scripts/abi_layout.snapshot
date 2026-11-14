@@ -639,33 +639,34 @@ ke_ecs_segment size=40 align=8
   matched 32
 ke_ecs_config size=4 align=4
   reserved_id_capacity 0
-ke_ecs size=208 align=8
+ke_ecs size=216 align=8
   handle 0
   entity_create 8
   entity_destroy 16
   component_register 24
   component_lookup 32
-  component_add 40
-  component_remove 48
-  component_get 56
-  component_size 64
-  component_field_write 72
-  query_register 80
-  query_resolve 88
-  entity_reserve 96
-  entity_materialize 104
-  singleton_add 112
-  singleton_get 120
-  singleton_remove 128
-  pair 136
-  pair_parts 144
-  removal_track 152
-  removals 160
-  entity_components 168
-  components 176
-  snapshot 184
-  restore 192
-  snapshot_free 200
+  component_meta 40
+  component_add 48
+  component_remove 56
+  component_get 64
+  component_size 72
+  component_field_write 80
+  query_register 88
+  query_resolve 96
+  entity_reserve 104
+  entity_materialize 112
+  singleton_add 120
+  singleton_get 128
+  singleton_remove 136
+  pair 144
+  pair_parts 152
+  removal_track 160
+  removals 168
+  entity_components 176
+  components 184
+  snapshot 192
+  restore 200
+  snapshot_free 208
 ke_ecs_handle size=16 align=8
   ref 0
   destroy 8
@@ -1282,6 +1283,20 @@ ke_transform size=40 align=4
   position 0
   rotation 12
   scale 28
+
+[extraction]
+ke_extraction size=64 align=8
+  handle 0
+  extract_copy 8
+  extract_interpolate 16
+  extract_custom 24
+  render_entity 32
+  main_entity 40
+  extract 48
+  run 56
+ke_extraction_handle size=16 align=8
+  ref 0
+  destroy 8
 
 [module]
 ke_module_targets size=72 align=8
