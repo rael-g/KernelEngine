@@ -66,6 +66,10 @@ typedef struct ke_sdk_sets
     ke_schedule_set_id update;            ///< In the update schedule.
     ke_schedule_set_id post_update;       ///< In the update schedule, after update.
     ke_schedule_set_id shutdown;          ///< In the shutdown schedule.
+    ke_schedule_set_id render_begin;      ///< In the render schedule.
+    ke_schedule_set_id render_prepare;    ///< In the render schedule, after render_begin.
+    ke_schedule_set_id render_queue;      ///< In the render schedule, after render_prepare.
+    ke_schedule_set_id render_submit;     ///< In the render schedule, after render_queue.
 } ke_sdk_sets;
 
 /**
@@ -215,10 +219,12 @@ static inline ke_module_targets ke_sdk_targets(ke_sdk_engine *e)
 {
     return (ke_module_targets){
         .startup = e->schedules.startup.ref, .pre_update = e->schedules.pre_update.ref, .fixed = e->schedules.fixed.ref,
-        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref,
+        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref, .render = e->render_schedule.ref,
         .startup_set = e->sets.startup, .pre_update_set = e->sets.pre_update, .fixed_pre_update_set = e->sets.fixed_pre_update,
         .fixed_update_set = e->sets.fixed_update, .fixed_post_update_set = e->sets.fixed_post_update,
         .update_set = e->sets.update, .post_update_set = e->sets.post_update, .shutdown_set = e->sets.shutdown,
+        .render_begin_set = e->sets.render_begin, .render_prepare_set = e->sets.render_prepare,
+        .render_queue_set = e->sets.render_queue, .render_submit_set = e->sets.render_submit,
     };
 }
 

@@ -1299,20 +1299,25 @@ ke_extraction_handle size=16 align=8
   destroy 8
 
 [module]
-ke_module_targets size=72 align=8
+ke_module_targets size=96 align=8
   startup 0
   pre_update 8
   fixed 16
   update 24
   shutdown 32
-  startup_set 40
-  pre_update_set 44
-  fixed_pre_update_set 48
-  fixed_update_set 52
-  fixed_post_update_set 56
-  update_set 60
-  post_update_set 64
-  shutdown_set 68
+  render 40
+  startup_set 48
+  pre_update_set 52
+  fixed_pre_update_set 56
+  fixed_update_set 60
+  fixed_post_update_set 64
+  update_set 68
+  post_update_set 72
+  shutdown_set 76
+  render_begin_set 80
+  render_prepare_set 84
+  render_queue_set 88
+  render_submit_set 92
 ke_module size=24 align=8
   handle 0
   attach 8

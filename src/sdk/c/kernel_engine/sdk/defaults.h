@@ -398,7 +398,7 @@ static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 }
 
 /**
- * The render stage: a flecs render world, a schedule over it, and the extraction into it from the engine's world,
+ * The render stage: a flecs render world, a schedule over it with the render sets, and the extraction into it from the engine's world,
  * added to the scheduler after the standard schedules; and the module keeping the previous value of every
  * interpolation.
  */
@@ -406,6 +406,11 @@ static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
 {
     ke_result made = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->render_world);
     if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
+    ke_sdk_sets *sets = &e->sets;
+    if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_begin", NULL, &sets->render_begin);
+    if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_prepare", &sets->render_begin, &sets->render_prepare);
+    if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_queue", &sets->render_prepare, &sets->render_queue);
+    if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_submit", &sets->render_queue, &sets->render_submit);
     if (made == KE_OK) made = ke_extraction_create(e->ecs.ref, e->render_world.ref, e->scheduler.ref, e->render_schedule.ref, &e->extraction);
     if (made == KE_OK) made = e->scheduler.ref->add(e->scheduler.ref, (ke_scheduler_run_fn)e->extraction.ref->run, e->extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK);
     if (made == KE_OK) made = ke_extraction_history_create(e->extraction.ref, &e->extraction_history);

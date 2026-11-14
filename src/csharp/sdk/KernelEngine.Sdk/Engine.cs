@@ -29,7 +29,7 @@ public sealed class Engine : IDisposable
         Scheduler = services.GetRequiredService<Scheduler.Scheduler>();
         Runtime = services.GetRequiredService<Runtime.Runtime>();
         var make = services.GetRequiredService<Func<Schedule.Schedule>>();
-        Schedules = new EngineSchedules { Startup = make(), PreUpdate = make(), Fixed = make(), Update = make(), Shutdown = make() };
+        Schedules = new EngineSchedules { Startup = make(), PreUpdate = make(), Fixed = make(), Update = make(), Shutdown = make(), Render = services.GetKeyedService<Schedule.Schedule>("render") };
         Sets = EngineSets.Register(Schedules);
         Schedules.AddTo(Scheduler);
         if (services.GetService<Extraction.Extraction>() is { } extraction) EngineSchedules.AddRender(Scheduler, extraction);

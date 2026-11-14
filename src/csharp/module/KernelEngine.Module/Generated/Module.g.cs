@@ -77,6 +77,7 @@ public unsafe partial class Module : IDisposable, INativeModule, IModule
     /// <param name="@fixed">Runs once per fixed step.</param>
     /// <param name="update">Runs after the fixed steps in every tick.</param>
     /// <param name="shutdown">Runs once, when the loop shuts down.</param>
+    /// <param name="render">Runs over the render world once per extraction; NULL where there is none.</param>
     /// <param name="startupSet">In startup.</param>
     /// <param name="preUpdateSet">In pre_update.</param>
     /// <param name="fixedPreUpdateSet">In fixed, first.</param>
@@ -85,8 +86,12 @@ public unsafe partial class Module : IDisposable, INativeModule, IModule
     /// <param name="updateSet">In update, first.</param>
     /// <param name="postUpdateSet">In update, after update_set.</param>
     /// <param name="shutdownSet">In shutdown.</param>
+    /// <param name="renderBeginSet">In render, first: where the frame begins.</param>
+    /// <param name="renderPrepareSet">In render, after render_begin_set: where uploads run and passes make what they hand to others.</param>
+    /// <param name="renderQueueSet">In render, after render_prepare_set: where passes are declared.</param>
+    /// <param name="renderSubmitSet">In render, after render_queue_set: where the frame is executed and presented.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    public void Attach(nint startup, nint preUpdate, nint @fixed, nint update, nint shutdown, uint startupSet, uint preUpdateSet, uint fixedPreUpdateSet, uint fixedUpdateSet, uint fixedPostUpdateSet, uint updateSet, uint postUpdateSet, uint shutdownSet)
+    public void Attach(nint startup, nint preUpdate, nint @fixed, nint update, nint shutdown, nint render, uint startupSet, uint preUpdateSet, uint fixedPreUpdateSet, uint fixedUpdateSet, uint fixedPostUpdateSet, uint updateSet, uint postUpdateSet, uint shutdownSet, uint renderBeginSet, uint renderPrepareSet, uint renderQueueSet, uint renderSubmitSet)
     {
         ke_module_targets targets = default;
         targets.startup = (ke_schedule*)startup;
@@ -94,6 +99,7 @@ public unsafe partial class Module : IDisposable, INativeModule, IModule
         targets.@fixed = (ke_schedule*)@fixed;
         targets.update = (ke_schedule*)update;
         targets.shutdown = (ke_schedule*)shutdown;
+        targets.render = (ke_schedule*)render;
         targets.startup_set = startupSet;
         targets.pre_update_set = preUpdateSet;
         targets.fixed_pre_update_set = fixedPreUpdateSet;
@@ -102,6 +108,10 @@ public unsafe partial class Module : IDisposable, INativeModule, IModule
         targets.update_set = updateSet;
         targets.post_update_set = postUpdateSet;
         targets.shutdown_set = shutdownSet;
+        targets.render_begin_set = renderBeginSet;
+        targets.render_prepare_set = renderPrepareSet;
+        targets.render_queue_set = renderQueueSet;
+        targets.render_submit_set = renderSubmitSet;
         KernelEngine.NativeResults.ThrowIfFailed(Handle->attach(Handle, &targets), "attach");
     }
 
