@@ -27,8 +27,6 @@
 #include <kernel_engine/spatial/component_fields.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/ecs/ke_ecs_flecs.h>
-#include <kernel_engine/task_pool/task_pool.h>
-#include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
 #include <kernel_engine/io/async/io_async_create.h>
 #include <kernel_engine/job/inline/job_system_inline_create.h>
@@ -241,9 +239,6 @@ int main(int argc, char **argv)
     ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
-    ke_task_pool_handle pool = { 0 };
-    ke_result made = ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &pool);
-    if (made != KE_OK) die_result("task pool", made);
 
     ke_job_system_handle jobs = { 0 };
     check("job system", ke_job_system_inline_create(&(ke_job_system_config){ .worker_count = 0 }, &jobs));
@@ -357,7 +352,6 @@ int main(int argc, char **argv)
     jobs.destroy(jobs.ref);
     file_io.destroy(file_io.ref);
     files.destroy(files.ref);
-    pool.destroy(pool.ref);
     ecs.destroy(ecs.ref);
     if (captured.ref) captured.destroy(captured.ref);
     target.destroy(target.ref);

@@ -176,12 +176,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const task_pool_enki = ctx.member("ke_task_pool_enki", .{
-        .target = target,
-        .optimize = optimize,
-        .@"enki-include" = b.pathJoin(&.{ vcpkg_include, "enkiTS" }),
-        .@"enki-lib" = vcpkg_lib,
-    }, &.{}, .has_tests);
 
     _ = ctx.member("ke_job_system_enki", .{
         .target = target,
@@ -217,11 +211,6 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const runtime = ctx.member("ke_runtime", .{
-        .@"ke-lib-dir" = b.pathJoin(&.{ ctx.prefix, "lib" }),
-        .target = target,
-        .optimize = optimize,
-    }, &.{}, .has_tests);
 
     _ = ctx.member("ke_framework", .{
         .target = target,
@@ -536,7 +525,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
-            b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "math" }),
             b.pathJoin(&.{ src_zig, "common/include" }),
             b.pathJoin(&.{ src_c, "result" }),
@@ -567,9 +555,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_c, "logger" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
-            b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
@@ -602,7 +587,6 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_deferred_lighting") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_inline") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_async_inline") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),
@@ -615,7 +599,7 @@ pub fn build(b: *std.Build) void {
         .@"link-m" = true,
     }, &.{
         &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step, &file_system_std.step, &io_async.step });
+        &ecs_flecs.step,                 &file_system_std.step, &io_async.step });
 
     const pong = ctx.example("c_pong", .{
         .target = target,
@@ -635,14 +619,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "resource_cache" }),
             b.pathJoin(&.{ src_c, "result" }),
-            b.pathJoin(&.{ src_c, "runtime" }),
             b.pathJoin(&.{ src_c, "scheduler" }),
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
             b.pathJoin(&.{ src_c, "completion" }),
             b.pathJoin(&.{ src_c, "job" }),
             b.pathJoin(&.{ src_c, "spatial" }),
-            b.pathJoin(&.{ src_c, "task_pool" }),
             b.pathJoin(&.{ src_c, "text" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_c, "window" }),
@@ -651,12 +633,10 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "input/default/include" }),
             b.pathJoin(&.{ src_zig, "io/async/include" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_zig, "job/enki/include" }),
             b.pathJoin(&.{ src_zig, "async/enki/include" }),
             b.pathJoin(&.{ src_c, "async" }),
             b.pathJoin(&.{ src_zig, "ecs/flecs/include" }),
-            b.pathJoin(&.{ src_zig, "runtime/include" }),
             b.pathJoin(&.{ src_zig, "scheduler/include" }),
             b.pathJoin(&.{ src_zig, "schedule/include" }),
             b.pathJoin(&.{ src_zig, "framework/include" }),
@@ -693,11 +673,9 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_async_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_schedule") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_framework") }),

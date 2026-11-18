@@ -745,16 +745,6 @@
           "doc": null
         },
         {
-          "name": "KE_RESULT_DOMAIN_RUNTIME",
-          "value": 12,
-          "doc": null
-        },
-        {
-          "name": "KE_RESULT_DOMAIN_TASK_POOL",
-          "value": 13,
-          "doc": null
-        },
-        {
           "name": "KE_RESULT_DOMAIN_SPATIAL",
           "value": 14,
           "doc": null

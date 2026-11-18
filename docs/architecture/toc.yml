@@ -6,8 +6,6 @@
   href: abi.md
 - name: "Managed layer"
   href: managed-layer.md
-- name: "Runtime"
-  href: runtime.md
 - name: "Threading"
   href: threading.md
 - name: "ECS"

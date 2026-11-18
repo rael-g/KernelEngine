@@ -9,15 +9,15 @@ public sealed unsafe partial class WebgpuGpuDevice
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
+    /// <param name="async">Runs the compile of create_render_pipeline_async as one of its operations; NULL compiles synchronously, invoking the callback before returning.</param>
     /// <param name="config">The device's values; Required; every field is read as given.</param>
-    public WebgpuGpuDevice(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config) : this(CreateLogged(loggerFactory, taskPool, config))
+    public WebgpuGpuDevice(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config) : this(CreateLogged(loggerFactory, async, config))
     {
     }
 
-    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config)
+    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(taskPool, config);
+        return Create(async, config);
     }
 }

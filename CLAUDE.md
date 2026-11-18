@@ -74,22 +74,22 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty domains: `asset`, `audio`, `configuration`, `ecs`, `file_system`, `framework`, `input`, `io`, `logger`, `math`, `physics`, `render`, `resource_cache`, `result`, `runtime`, `spatial`, `task_pool`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty-six domains: `asset`, `async`, `audio`, `completion`, `configuration`, `ecs`, `extraction`, `file_system`, `framework`, `input`, `io`, `job`, `logger`, `math`, `module`, `physics`, `render`, `render_graph`, `resource_cache`, `result`, `schedule`, `scheduler`, `spatial`, `text`, `view`, `window`.
 
-One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `task_pool`? include `task_pool`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
+One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `job`? include `job`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
 Contracts worth knowing by name:
 - `ke_log_callback` — where a plugin library's `std.log` lines go, set by the host through the library's `<library>_set_log_callback`
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
-- `ke_runtime` — phase loop, parallel waves, defer queue, fixed timestep
+- `ke_schedule` / `ke_scheduler` — systems ordered by component access, run as jobs; the frame loop over the schedules, with the fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_task_pool` — a worker pool; every parallel subsystem routes through the one the host hands it
+- `ke_job_system` / `ke_async` / `ke_completion` — jobs of the frame, operations beside it that may block, and the completion both hand back
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Thirty-five plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Forty-one plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 The libraries plugins compile come from vcpkg (stb, miniaudio, assimp) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
@@ -106,7 +106,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (28 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
+Generated P/Invoke, one `Native/` directory per managed project (41 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
 Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, five `kabic check` commands and five `scripts/check_*.cs`, keep both honest against the headers.
 
@@ -140,11 +140,11 @@ A service locator is forbidden: no global object that engine code asks for its d
 
 ## Threading model
 
-Every thread is a worker of a `ke_task_pool`. The host may create several pools and hands each consumer the pool it runs on; nothing else starts a thread, and no foreign pool (Zig's, .NET's, a library's own) runs engine work. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a task to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+Every thread is a worker of a `ke_job_system` or a `ke_async`. The host creates them and hands each consumer the one it runs on; nothing else starts a thread, and no foreign pool (Zig's, .NET's, a library's own) runs engine work. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a job to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
-**Sim ↔ render boundary**: the mechanism is `runtimeTick` in `src/zig/runtime/src/runtime.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
+**Sim ↔ render boundary**: the mechanism is the extraction into the render world, in `src/zig/extraction/default/src/extraction_default.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker pools**: `ke_task_pool` (enkiTS), as many as the host creates, each injected into the consumers that run on it. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
+**Worker systems**: `ke_job_system` and `ke_async` (enkiTS, or inline), each injected into the consumers that run on it. A completion is waited on only on the thread its contract allows; elsewhere it is passed as a dependency, and a read during a frame answers `KE_RESULT_PENDING` instead of waiting. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
 
 ---
 
@@ -203,7 +203,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex, condition variable or raw thread in a plugin.** The task pool is the synchronisation layer: work is dispatched to `ke_task_pool` and waited on through it, and a producer and a consumer are ordered by phases.
+5. **No mutex, condition variable or raw thread in a plugin.** The job and async systems are the synchronisation layer: work is submitted to them and waited on through its `ke_completion`, and a producer and a consumer are ordered by component access and dependencies.
 
 6. **A caller's failure is a `ke_result`; an internal invariant is a debug assert.** A failure the caller can cause (a bad argument, a missing file, a refused registration) is a `ke_result` code returned by the call, with the reason logged; `abort` and `@panic` never appear. A condition only a bug in the plugin itself can break is `std.debug.assert` (or `assert` in C), checked in debug builds.
 
@@ -232,7 +232,7 @@ Where to look when this file is not enough:
 |---|---|
 | what does a contract require? | the header in `src/c/<domain>/` — it is the API, not a description of one |
 | what is this symbol or file for, and where is an idea explained? | `build/native/bin/docir query <name> src`, then the code at the location it gives |
-| how does sim hand off to render? | `src/zig/runtime/src/runtime.zig` |
+| how does sim hand off to render? | `src/zig/extraction/default/src/extraction_default.zig` |
 | which plugins exist? | `grep 'ctx.member("' build.zig` |
 | what does a generated projection look like, and why? | the kabic repository, plus the `scripts/check_*.cs` gate that pins it |
 | what is being worked on? | `docs/kanban/` — unversioned, and the only place status is allowed |

@@ -30,10 +30,8 @@
     <Project Path="src/csharp/render/KernelEngine.Render.Native/KernelEngine.Render.Native.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Webgpu/KernelEngine.Render.Webgpu.csproj" />
     <Project Path="src/csharp/result/KernelEngine.Result/KernelEngine.Result.csproj" />
-    <Project Path="src/csharp/runtime/KernelEngine.Runtime/KernelEngine.Runtime.csproj" />
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler/KernelEngine.Scheduler.csproj" />
     <Project Path="src/csharp/schedule/KernelEngine.Schedule/KernelEngine.Schedule.csproj" />
-    <Project Path="src/csharp/task_pool/KernelEngine.TaskPool/KernelEngine.TaskPool.csproj" />
     <Project Path="src/csharp/completion/KernelEngine.Completion/KernelEngine.Completion.csproj" />
     <Project Path="src/csharp/module/KernelEngine.Module/KernelEngine.Module.csproj" />
     <Project Path="src/csharp/extraction/KernelEngine.Extraction/KernelEngine.Extraction.csproj" />
@@ -46,7 +44,6 @@
     <Project Path="src/csharp/async/KernelEngine.Async/KernelEngine.Async.csproj" />
     <Project Path="src/csharp/async/KernelEngine.Async.Enki/KernelEngine.Async.Enki.csproj" />
     <Project Path="src/csharp/async/KernelEngine.Async.Inline/KernelEngine.Async.Inline.csproj" />
-    <Project Path="src/csharp/task_pool/KernelEngine.TaskPool.Enki/KernelEngine.TaskPool.Enki.csproj" />
     <Project Path="src/csharp/file_system/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
     <Project Path="src/csharp/file_system/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
     <Project Path="src/csharp/io/KernelEngine.Io/KernelEngine.Io.csproj" />
@@ -61,7 +58,6 @@
     <Project Path="src/csharp/logger/KernelEngine.Logger.Interop/KernelEngine.Logger.Interop.csproj" />
     <Project Path="src/csharp/physics/KernelEngine.Physics.Abstractions/KernelEngine.Physics.Abstractions.csproj" />
     <Project Path="src/csharp/render/KernelEngine.Render.Abstractions/KernelEngine.Render.Abstractions.csproj" />
-    <Project Path="src/csharp/runtime/KernelEngine.Runtime.Abstractions/KernelEngine.Runtime.Abstractions.csproj" />
     <Project Path="src/csharp/scheduler/KernelEngine.Scheduler.Abstractions/KernelEngine.Scheduler.Abstractions.csproj" />
     <Project Path="src/csharp/schedule/KernelEngine.Schedule.Abstractions/KernelEngine.Schedule.Abstractions.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text.StbTrueType/KernelEngine.Text.StbTrueType.csproj" />
@@ -69,7 +65,6 @@
   <Folder Name="/tests/">
     <Project Path="tests/csharp/KernelEngine.Kernel.Tests/KernelEngine.Kernel.Tests.csproj" />
     <Project Path="tests/csharp/KernelEngine.Configuration.Tests/KernelEngine.Configuration.Tests.csproj" />
-    <Project Path="tests/csharp/KernelEngine.Runtime.Tests/KernelEngine.Runtime.Tests.csproj" />
     <Project Path="tests/integration/KernelEngine.Integration.Tests/KernelEngine.Integration.Tests.csproj" />
     <Project Path="tests/stress/node_stress/node_stress.csproj" />
   </Folder>

@@ -21,11 +21,9 @@
 #include <kernel_engine/physics/physics_2d.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
-#include <kernel_engine/runtime/runtime.h>
 #include <kernel_engine/schedule/schedule.h>
 #include <kernel_engine/scheduler/scheduler.h>
 #include <kernel_engine/sdk/paths.h>
-#include <kernel_engine/task_pool/task_pool.h>
 #include <kernel_engine/text/font.h>
 #include <kernel_engine/window/window.h>
 
@@ -85,7 +83,6 @@ typedef struct ke_sdk_engine
     /** Releases the parts a package of parts keeps outside these fields; NULL when there are none. */
     void (*release_extra)(struct ke_sdk_engine *engine);
 
-    ke_task_pool_handle            task_pool;
     ke_job_system_handle           job_system;
     ke_async_handle                async;
     ke_file_system_handle          file_system;
@@ -98,7 +95,6 @@ typedef struct ke_sdk_engine
     ke_scheduler_handle            scheduler;
     ke_sdk_schedules               schedules;
     ke_sdk_sets                    sets;
-    ke_runtime_handle              runtime;
     ke_gpu_device_handle           gpu_device;
     ke_gpu_render_target_handle    render_target;
     ke_font_loader_handle          fonts;
@@ -142,7 +138,6 @@ typedef ke_result (*ke_sdk_engine_schedule)(ke_sdk_engine *engine, ke_schedule_h
 /** The function each part of an engine is made by, in the order they are made; NULL leaves the part out. */
 typedef struct ke_sdk_engine_desc
 {
-    ke_sdk_engine_part task_pool;
     ke_sdk_engine_part job_system;
     ke_sdk_engine_part async;
     ke_sdk_engine_part file_system;
@@ -153,7 +148,6 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part ecs;
     ke_sdk_engine_part scheduler;
     ke_sdk_engine_schedule schedule;
-    ke_sdk_engine_part runtime;
     ke_sdk_engine_part gpu_device;
     ke_sdk_engine_part render_target;
     ke_sdk_engine_part fonts;
@@ -266,16 +260,11 @@ static inline ke_result ke_sdk_await(ke_sdk_engine *e, ke_completion *ready)
 #define KE_SDK_ENGINE_RELEASE(handle) do { if ((handle).ref) (handle).destroy((handle).ref); (handle).ref = NULL; } while (0)
 
 /**
- * Releases every part of @p engine that was made, the last made first, after flushing the frame in
- * flight and unloading the runtime's modules. Safe on an engine ke_sdk_engine_create left half made.
+ * Releases every part of @p engine that was made, the last made first, after shutting the scheduler
+ * down. Safe on an engine ke_sdk_engine_create left half made.
  */
 static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
 {
-    if (engine->runtime.ref)
-    {
-        (void)engine->runtime.ref->flush_render(engine->runtime.ref);
-        engine->runtime.ref->unload_modules(engine->runtime.ref);
-    }
     if (engine->scheduler.ref) (void)engine->scheduler.ref->shutdown(engine->scheduler.ref);
     for (size_t i = 0; i < engine->pending_count; ++i) engine->pending[i]->release(engine->pending[i]);
     engine->pending_count = 0;
@@ -299,7 +288,6 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->scene_tree);
     KE_SDK_ENGINE_RELEASE(engine->assets);
     KE_SDK_ENGINE_RELEASE(engine->fonts);
-    KE_SDK_ENGINE_RELEASE(engine->runtime);
     KE_SDK_ENGINE_RELEASE(engine->scheduler);
     KE_SDK_ENGINE_RELEASE(engine->schedules.shutdown);
     KE_SDK_ENGINE_RELEASE(engine->schedules.update);
@@ -317,7 +305,6 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->file_system);
     KE_SDK_ENGINE_RELEASE(engine->async);
     KE_SDK_ENGINE_RELEASE(engine->job_system);
-    KE_SDK_ENGINE_RELEASE(engine->task_pool);
 }
 
 /**
@@ -336,11 +323,11 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part core[] = {
-        desc->task_pool, desc->job_system, desc->async, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
+        desc->job_system, desc->async, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
         desc->scheduler,
     };
     const ke_sdk_engine_part parts[] = {
-        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree, desc->extraction,
+        desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree, desc->extraction,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
         desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
     };
@@ -407,17 +394,16 @@ static inline ke_result ke_sdk_engine_attach(ke_sdk_engine *engine)
  * scene file at @p first_scene, or the one of the project's scenes directory `project.default_scene` names; and ticks
  * until the window closes or a node asks to exit.
  * @param first_scene [utf8,optional] A `res://` path; NULL takes the project's default scene.
- * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a scheduler,
- *         a runtime or scene files, or the code of the completion, the attach, the open or the tick that failed.
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for an engine without a configuration, a window, a scheduler
+ *         or scene files, or the code of the completion, the attach, the open or the tick that failed.
  */
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
-    if (!engine->configuration.ref || !engine->window.ref || !engine->scheduler.ref || !engine->runtime.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
+    if (!engine->configuration.ref || !engine->window.ref || !engine->scheduler.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
     ke_configuration *c = ke_sdk_engine_config(engine);
     char scene[KE_SDK_ENGINE_PATH_CAPACITY];
     if (first_scene) snprintf(scene, sizeof scene, "%s", first_scene);
     else snprintf(scene, sizeof scene, "res://scenes/%s.scene.toml", c->get_string(c, "project", "default_scene", "Main"));
-    ke_runtime *rt = engine->runtime.ref;
     ke_scheduler *sched = engine->scheduler.ref;
     ke_window *window = engine->window.ref;
     ke_schedule *first = engine->schedules.pre_update.ref;
@@ -425,12 +411,11 @@ static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *fir
     if (made == KE_OK) made = ke_sdk_engine_attach(engine);
     if (made == KE_OK) made = engine->scene_files.ref->open(engine->scene_files.ref, first->commands(first), scene, NULL);
     double previous = ke_sdk_engine_now();
-    while (made == KE_OK && !window->should_close(window) && !rt->exit_requested(rt) && !sched->exit_requested(sched))
+    while (made == KE_OK && !window->should_close(window) && !sched->exit_requested(sched))
     {
         window->poll_events(window);
         double current = ke_sdk_engine_now();
         made = sched->tick(sched, (float)(current - previous));
-        if (made == KE_OK) made = rt->tick(rt, (float)(current - previous));
         previous = current;
     }
     return made;

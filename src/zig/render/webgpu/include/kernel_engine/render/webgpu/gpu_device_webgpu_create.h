@@ -5,7 +5,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
-struct ke_task_pool;
+struct ke_async;
 
 #ifndef KE_GPU_WEBGPU_API
 #if defined(_WIN32) || defined(__CYGWIN__)
@@ -28,8 +28,8 @@ extern "C"
 
 /**
  * @brief Creates a ke_gpu_device backed by WebGPU.
- * @param task_pool [borrowed,optional] Runs the compile of create_render_pipeline_async on its
- *        workers; NULL compiles synchronously, invoking the callback before returning.
+ * @param async [borrowed,optional] Runs the compile of create_render_pipeline_async as one of
+ *        its operations; NULL compiles synchronously, invoking the callback before returning.
  * @param config [borrowed] The device's values; Required; every field is read as given.
  * @param out_ready [out] Receives the completion that finishes when the device is ready, already
  *        finished since the device is made before the call returns; the caller releases it. Left
@@ -39,7 +39,7 @@ extern "C"
  *         when done.
  */
 KE_GPU_WEBGPU_API ke_result
-ke_gpu_device_webgpu_create(struct ke_task_pool *task_pool, const ke_gpu_device_config *config,
+ke_gpu_device_webgpu_create(struct ke_async *async, const ke_gpu_device_config *config,
                              ke_completion **out_ready, ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus

@@ -31,10 +31,10 @@ takes no lock: sinks, `update` and `get_snapshot` must not overlap.
 
 ## One tick
 
-The host calls `PollEvents` on the window, then `Tick` on the runtime. The window module registers
+The host calls `PollEvents` on the window, then `Tick` on the scheduler. The window module registers
 no system, so the sink calls of a poll never interleave with a tick. Inside the tick, the system
-"input.actions" runs exclusive in `KE_PHASE_PRE_UPDATE`: it calls `update` on the `ke_input`,
-takes a snapshot with `get_snapshot` and evaluates the maps against it. Systems of later phases read actions, never keys, so every read in the rest
+"input.actions" runs in the pre-update schedule: it calls `update` on the `ke_input`,
+takes a snapshot with `get_snapshot` and evaluates the maps against it. Systems of later schedules read actions, never keys, so every read in the rest
 of the tick sees the values of one evaluation.
 
 **Actions are derived, not read from the edges.** The action layer reads only the `keys_down` and

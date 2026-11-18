@@ -27,13 +27,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\csharp\common\KernelEngine.Common\KernelEngine.Common.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\runtime\KernelEngine.Runtime\KernelEngine.Runtime.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\window\KernelEngine.Window\KernelEngine.Window.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\render\KernelEngine.Render\KernelEngine.Render.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\task_pool\KernelEngine.TaskPool\KernelEngine.TaskPool.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\audio\KernelEngine.Audio\KernelEngine.Audio.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\physics\KernelEngine.Physics\KernelEngine.Physics.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\text\KernelEngine.Text\KernelEngine.Text.csproj" />

@@ -3,7 +3,6 @@
 const std = @import("std");
 const abi_mesh_data = @import("mesh_data");
 const abi_result = @import("result");
-const abi_task_pool = @import("task_pool");
 
 /// The ABI as the headers declare it.
 pub const c = @import("asset_loader_c.zig");
@@ -37,12 +36,6 @@ pub const AssetLoader = struct {
                     return T.freeModel(state, a0);
                 }
             }.call,
-            .load_model_async = &struct {
-                fn call(self: ?*c.ke_asset_loader, a0: ?*abi_task_pool.c.ke_task_pool, a1: ?[*:0]const u8, a2: c.ke_load_model_complete_func, a3: ?*anyopaque) callconv(.c) ?*abi_task_pool.c.ke_task {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*abi_task_pool.c.ke_task)));
-                    return T.loadModelAsync(state, a0, std.mem.span(a1 orelse return std.mem.zeroes(?*abi_task_pool.c.ke_task)), a2, a3);
-                }
-            }.call,
         };
     }
 
@@ -53,17 +46,11 @@ pub const AssetLoader = struct {
         return written;
     }
 
-    /// Frees a ke_model_data previously returned by load_model or the async variant. The model must
-    /// be given back to the same loader that produced it. A foreign or hand-built ke_model_data is
-    /// not a valid argument. A null data is ignored.
+    /// Frees a ke_model_data previously returned by load_model. The model must be given back to the
+    /// same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument.
+    /// A null data is ignored.
     pub fn freeModel(self: AssetLoader, data: ?*abi_mesh_data.c.ke_model_data) void {
         return self.ptr.free_model.?(self.ptr, data);
-    }
-
-    /// Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has
-    /// finished or failed.
-    pub fn loadModelAsync(self: AssetLoader, task_pool: ?*abi_task_pool.c.ke_task_pool, path: [:0]const u8, on_complete: c.ke_load_model_complete_func, user_data: ?*anyopaque) ?*abi_task_pool.c.ke_task {
-        return self.ptr.load_model_async.?(self.ptr, task_pool, path.ptr, on_complete, user_data);
     }
 
 };

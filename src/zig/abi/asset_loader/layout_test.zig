@@ -25,12 +25,9 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_asset_loader, translated("ke_asset_loader"));
     try expectSameLayout(abi.c.ke_asset_loader_handle, translated("ke_asset_loader_handle"));
-    if (@hasDecl(c, "ke_load_model_complete_func")) try expectSameLayout(abi.c.ke_load_model_complete_func, c.ke_load_model_complete_func);
-    if (@hasDecl(c, "ke_task_func")) try expectSameLayout(abi.c.ke_task_func, c.ke_task_func);
-    if (@hasDecl(c, "ke_task_on_complete_func")) try expectSameLayout(abi.c.ke_task_on_complete_func, c.ke_task_on_complete_func);
 }
 
-extern const layout_values: [9]c_ulonglong;
+extern const layout_values: [8]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -39,7 +36,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_asset_loader, "handle"),
         @offsetOf(abi.c.ke_asset_loader, "load_model"),
         @offsetOf(abi.c.ke_asset_loader, "free_model"),
-        @offsetOf(abi.c.ke_asset_loader, "load_model_async"),
         @sizeOf(abi.c.ke_asset_loader_handle),
         @offsetOf(abi.c.ke_asset_loader_handle, "ref"),
         @offsetOf(abi.c.ke_asset_loader_handle, "destroy"),

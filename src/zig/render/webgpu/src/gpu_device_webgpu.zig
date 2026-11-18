@@ -16,7 +16,7 @@ const abi_gpu_device_webgpu_factory = @import("abi_gpu_device_webgpu_factory");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
 const abi_completion = @import("abi_completion");
-const abi_task_pool = @import("abi_task_pool");
+const abi_async = @import("abi_async");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.gpu_webgpu);
 
@@ -27,15 +27,15 @@ const GpuError = error{
 };
 
 /// Created by `createDeviceState`, reached from the vtable through its handle, and freed by
-/// `deviceDestroy`. `task_pool` is borrowed and never freed here. Only the first
+/// `deviceDestroy`. `async` is borrowed and never freed here. Only the first
 /// `pending_compiles_count` entries of `pending_compiles` are live.
 pub const DeviceState = struct {
     instance: wgpu.WGPUInstance,
     adapter: wgpu.WGPUAdapter,
     device: wgpu.WGPUDevice,
     queue: wgpu.WGPUQueue,
-    task_pool: ?*abi_task_pool.c.ke_task_pool,
-    pending_compiles: [MAX_PENDING_COMPILES]?*abi_task_pool.c.ke_task,
+    async: ?*abi_async.c.ke_async,
+    pending_compiles: [MAX_PENDING_COMPILES]?*abi_completion.c.ke_completion,
     pending_compiles_count: u32,
 };
 
@@ -263,8 +263,8 @@ pub const gpa = heap.gpa;
 fn createDeviceState(instance_flags: wgpu.WGPUInstanceFlag) GpuError!*DeviceState {
     const s = gpa.create(DeviceState) catch return GpuError.OutOfMemory;
     errdefer gpa.destroy(s);
-    s.task_pool = null;
-    s.pending_compiles = [_]?*abi_task_pool.c.ke_task{null} ** MAX_PENDING_COMPILES;
+    s.async = null;
+    s.pending_compiles = [_]?*abi_completion.c.ke_completion{null} ** MAX_PENDING_COMPILES;
     s.pending_compiles_count = 0;
 
     var extras = std.mem.zeroes(wgpu.WGPUInstanceExtras);
@@ -351,14 +351,14 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
     return dev;
 }
 
-/// Applies `config` as given, or the defaults of every field when it is null; `task_pool` is
+/// Applies `config` as given, or the defaults of every field when it is null; `async` is
 /// borrowed, kept by the state and never freed here. Creates the wgpu instance, adapter, device and
 /// queue, then the vtable whose handle is the `DeviceState`. A failed creation fails as not
 /// initialised or out of memory, logging why, and leaves the handle zeroed, with every object
 /// created on the way already released. The written `destroy` releases the wgpu objects and the
 /// state without waiting for compiles still listed.
 pub export fn ke_gpu_device_webgpu_create(
-    task_pool: ?*abi_task_pool.c.ke_task_pool,
+    async: ?*abi_async.c.ke_async,
     config: ?*const abi_render_gpu.c.ke_gpu_device_config,
     out_ready: ?*?*abi_completion.c.ke_completion,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
@@ -378,7 +378,7 @@ pub export fn ke_gpu_device_webgpu_create(
         log.warn("webgpu: device initialisation failed: {s}", .{@errorName(err)});
         return codeOf(err);
     };
-    s.task_pool = task_pool;
+    s.async = async;
 
     const dev = createDeviceVtable(s) catch |err| {
         wgpu.wgpuQueueRelease(s.queue);
@@ -471,15 +471,15 @@ fn queueSubmit(
 }
 
 /// Called by `queuePoll` and by `createRenderPipelineAsync` before it checks the pending list. A
-/// completed task is waited on and removed; removal moves the last pending entry into the freed
-/// slot, so pending tasks are not kept in dispatch order.
+/// finished compile is released and removed; removal moves the last pending entry into the freed
+/// slot, so pending compiles are not kept in submission order.
 fn reapCompletedCompiles(s: *DeviceState) void {
-    const pool = s.task_pool orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) {
-        const task = s.pending_compiles[i].?;
-        if (pool.is_completed.?(pool, task)) {
-            _ = pool.wait.?(pool, task);
+        const completion = s.pending_compiles[i].?;
+        var code: abi_result.c.ke_result = R.ok;
+        if (completion.poll.?(completion, &code)) {
+            completion.release.?(completion);
             s.pending_compiles_count -= 1;
             s.pending_compiles[i] = s.pending_compiles[s.pending_compiles_count];
             continue;
@@ -1004,7 +1004,7 @@ fn colorTargetsDeclared(p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_par
     return true;
 }
 
-/// Compiles on the calling thread and never touches the task pool. A fragment target with no
+/// Compiles on the calling thread and never submits to the async system. A fragment target with no
 /// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
 /// `createBuffer`.
 fn createRenderPipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
@@ -1076,7 +1076,7 @@ fn debugSleepMs(ms: u64) void {
 
 /// Runs on a task pool worker as the task body. It calls `on_ready` once, then frees the job and
 /// its copies.
-fn runAsyncCompileJob(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+fn runAsyncCompileJob(data: ?*anyopaque, _: ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result {
     const job: *AsyncCompileJob = @ptrCast(@alignCast(data.?));
     debugSleepMs(debugAsyncDelayMs(&job.build));
     const pipeline = wgpu.wgpuDeviceCreateRenderPipeline(job.device, &job.build.desc);
@@ -1107,11 +1107,11 @@ fn freeAsyncCompileJob(job: *AsyncCompileJob) void {
 }
 
 /// Compiles a render pipeline off the caller's thread and reports it through `on_ready`, which
-/// receives the pipeline or the invalid handle when it did not compile. With a task pool and room
-/// in `pending_compiles`, the parameters are copied into an `AsyncCompileJob`, dispatched to the
-/// task pool and listed, and the callback comes later from the worker that compiled; a dispatch the
-/// pool refuses calls back at once with the invalid handle. With no
-/// task pool, with the list full, or when a fragment target has no mappable format, the compile
+/// receives the pipeline or the invalid handle when it did not compile. With an async system and room
+/// in `pending_compiles`, the parameters are copied into an `AsyncCompileJob`, submitted as an
+/// operation and listed, and the callback comes later from the worker that compiled; a submission
+/// the system refuses calls back at once with the invalid handle. With no
+/// async system, with the list full, or when a fragment target has no mappable format, the compile
 /// runs inline or fails inline and the callback has fired before this returns. A job that cannot
 /// be allocated calls back at once with the invalid handle. A null `on_ready` does nothing.
 fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, on_ready: abi_render_gpu.c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) callconv(.c) void {
@@ -1122,7 +1122,7 @@ fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]con
         return;
     }
 
-    const pool = s.task_pool orelse {
+    const async = s.async orelse {
         var build: RenderPipelineDescBuild = undefined;
         buildRenderPipelineDescriptor(dev, p, &build);
         defer if (build.pipeline_layout != null) wgpu.wgpuPipelineLayoutRelease(build.pipeline_layout);
@@ -1157,25 +1157,27 @@ fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]con
     if (job.fragment_entry) |e| job.build.frag_state.entryPoint.data = e.ptr;
     if (job.build.desc.vertex.module) |m| wgpu.wgpuShaderModuleAddRef(m);
     if (job.build.frag_state.module) |m| wgpu.wgpuShaderModuleAddRef(m);
-    var task: ?*abi_task_pool.c.ke_task = null;
-    R.check(pool.dispatch.?(pool, runAsyncCompileJob, job, &task)) catch |err| {
-        log.warn("compiling a render pipeline was refused by the task pool: {t}", .{err});
+    var completion: ?*abi_completion.c.ke_completion = null;
+    R.check(async.submit.?(async, "gpu.compile_render_pipeline", runAsyncCompileJob, job, null, 0, &completion)) catch |err| {
+        log.warn("compiling a render pipeline was refused by the async system: {t}", .{err});
         freeAsyncCompileJob(job);
         cb(R.code(err), abi_render_gpu.c.KE_GPU_INVALID_HANDLE, user);
         return;
     };
-    s.pending_compiles[s.pending_compiles_count] = task;
+    s.pending_compiles[s.pending_compiles_count] = completion;
     s.pending_compiles_count += 1;
 }
 
-/// Waits for every task still listed in `pending_compiles`, so every callback has run when it
-/// returns, and then empties the list.
+/// Waits for every compile still listed in `pending_compiles`, so every callback has run when it
+/// returns, and then releases them and empties the list. Called on the thread that created the
+/// async system.
 fn flushPipelineCompiles(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) void {
     const s = state(dev);
-    const pool = s.task_pool orelse return;
     var i: u32 = 0;
     while (i < s.pending_compiles_count) : (i += 1) {
-        _ = pool.wait.?(pool, s.pending_compiles[i].?);
+        const completion = s.pending_compiles[i].?;
+        _ = completion.wait.?(completion);
+        completion.release.?(completion);
     }
     s.pending_compiles_count = 0;
 }

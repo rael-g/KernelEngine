@@ -17,8 +17,6 @@ public enum ResultDomain : uint
     Physics = 9,
     Render = 10,
     ResourceCache = 11,
-    Runtime = 12,
-    TaskPool = 13,
     Spatial = 14,
     Text = 15,
     View = 16,

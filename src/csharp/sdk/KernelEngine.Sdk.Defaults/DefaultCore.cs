@@ -11,10 +11,8 @@ using KernelEngine.Physics.Box2D;
 using KernelEngine.Render;
 using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
-using KernelEngine.Runtime;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
-using KernelEngine.TaskPool.Enki;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
 using KernelEngine.Window.Glfw;
@@ -40,7 +38,6 @@ public static class DefaultCore
         static ILoggerFactory? Log(IServiceProvider sp) => sp.GetService<ILoggerFactory>();
         static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-        services.TryAddSingleton<TaskPool.TaskPool>(sp => new EnkiTaskPool(Log(sp), new() { WorkerCount = uint.MaxValue }));
         services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Log(sp), new() { WorkerCount = uint.MaxValue }));
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(Log(sp), new() { Root = "." }));
         services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Log(sp), new() { WorkerCount = 2, SubmitCapacity = 1024 }));
@@ -76,16 +73,6 @@ public static class DefaultCore
             {
                 FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
                 FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
-            });
-        });
-        services.TryAddSingleton<Runtime.Runtime>(sp =>
-        {
-            var config = Get<Configuration.Configuration>(sp);
-            return new DefaultRuntime(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<TaskPool.TaskPool>(sp), new()
-            {
-                FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
-                FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
-                MaxSystemsPerPhase = (uint)config.GetInt("runtime", "max_systems_per_phase", 256),
             });
         });
 

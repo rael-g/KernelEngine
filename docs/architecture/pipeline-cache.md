@@ -11,7 +11,7 @@ cache works inside is on the generated page of its file.
 | service | `get_or_create_pipeline` of `ke_render_service` | the params of the pass | the current pipeline of that request |
 | cache | `PipelineCache` in `pipeline_cache.zig` of the service plugin | the params, reduced to a `PsoKey` | the fallback, then the real pipeline |
 | device | `create_render_pipeline_async` and `flush_pipeline_compiles` of `ke_gpu_device` | the params and a completion callback | the compiled pipeline, to the callback |
-| task pool | `ke_task_pool`, handed to the device at creation | the compile job | the worker the job runs on |
+| async system | `ke_async`, handed to the device at creation | the compile operation | the worker the operation runs on |
 
 ## What ties the parts together
 
