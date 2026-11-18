@@ -5,6 +5,7 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
+const abi_settings = @import("settings");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -12,6 +13,9 @@ pub const ke_query_id = u64;
 pub const ke_removal_tracker = u64;
 pub const ke_schedule_set_id = u32;
 pub const ke_schedule_system_id = u64;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// The body of a job, run once on a worker after every dependency finished, whatever each
 /// finished with.
@@ -42,7 +46,7 @@ pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
-pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const abi_schedule.c.ke_schedule_config, out_schedule: ?*abi_schedule.c.ke_schedule_handle) abi_result.c.ke_result;
+pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_schedule: ?*abi_schedule.c.ke_schedule_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_schedule logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

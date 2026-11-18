@@ -8,7 +8,7 @@ consume it. How a part works inside is on the generated page of its file. Plugin
 
 | part | plugin | receives | hands on |
 |---|---|---|---|
-| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_config` | the map and the light buffer, published in the frame |
+| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, the settings of the map's shape | the map and the light buffer, published in the frame |
 | cluster | cluster | point and spot lights, the camera, `ke_view_space` | its light buffers and grid, published in the frame |
 | skybox | skybox | the `ke_skybox_component`, the frame's depth | the background, drawn into the frame's color |
 | deferred lighting | deferred_lighting | the published gbuffer, the frame's depth, the hand-offs above, the directional and ambient lights | the frame's color |
@@ -28,8 +28,8 @@ the same order. Forward alone also calls `refraction_contribution`
 **A feature that is off is a neutral resource, not another shader.** The shadow function reads a
 white texture when no shadow map was published, the environment is a black cube when image-based light
 is disabled or no skybox exists, and a cluster with no lights has a zero count. A host without
-shadows creates no shadow pass, and nothing is published under the shadow's names; `ibl_enabled` of
-`ke_render_deferred_lighting_config` and `ke_render_forward_config` turns image-based light off.
+shadows creates no shadow pass, and nothing is published under the shadow's names; the `ibl_enabled`
+setting of the deferred lighting and forward passes turns image-based light off.
 
 **The directional light and the ambient light are the first of their kind.** Both shading passes
 and the shadow pass read only the first directional light; the first ambient light replaces the

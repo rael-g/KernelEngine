@@ -26,7 +26,6 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_body_2d, translated("ke_body_2d"));
     try expectSameLayout(abi.c.ke_collision_filter_2d, translated("ke_collision_filter_2d"));
     try expectSameLayout(abi.c.ke_body_state_2d, translated("ke_body_state_2d"));
-    try expectSameLayout(abi.c.ke_physics_2d_config, translated("ke_physics_2d_config"));
     try expectSameLayout(abi.c.ke_physics_2d, translated("ke_physics_2d"));
     try expectSameLayout(abi.c.ke_physics_2d_handle, translated("ke_physics_2d_handle"));
 }
@@ -41,9 +40,11 @@ test "every enum value is the header's value" {
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(std.mem.toBytes(c.KE_BODY_2D_INVALID), std.mem.toBytes(abi.c.KE_BODY_2D_INVALID));
+    try std.testing.expectEqualStrings(c.KE_PHYSICS_2D_SETTING_GRAVITY_X, abi.c.KE_PHYSICS_2D_SETTING_GRAVITY_X);
+    try std.testing.expectEqualStrings(c.KE_PHYSICS_2D_SETTING_GRAVITY_Y, abi.c.KE_PHYSICS_2D_SETTING_GRAVITY_Y);
 }
 
-extern const layout_values: [33]c_ulonglong;
+extern const layout_values: [30]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -60,9 +61,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_body_state_2d, "velocity_x"),
         @offsetOf(abi.c.ke_body_state_2d, "velocity_y"),
         @offsetOf(abi.c.ke_body_state_2d, "angular_velocity"),
-        @sizeOf(abi.c.ke_physics_2d_config),
-        @offsetOf(abi.c.ke_physics_2d_config, "gravity_x"),
-        @offsetOf(abi.c.ke_physics_2d_config, "gravity_y"),
         @sizeOf(abi.c.ke_physics_2d),
         @offsetOf(abi.c.ke_physics_2d, "handle"),
         @offsetOf(abi.c.ke_physics_2d, "set_gravity"),

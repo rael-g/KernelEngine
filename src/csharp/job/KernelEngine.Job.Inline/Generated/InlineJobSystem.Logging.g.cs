@@ -9,14 +9,14 @@ public sealed unsafe partial class InlineJobSystem
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public InlineJobSystem(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Job.JobSystemConfig config) : base(CreateLogged(loggerFactory, config))
+    /// <param name="settings">Read once. KE_JOB_SYSTEM_SETTING_WORKER_COUNT, default 0, the only value it accepts.</param>
+    public InlineJobSystem(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, settings))
     {
     }
 
-    private static KernelEngine.Job.Native.ke_job_system_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Job.JobSystemConfig config)
+    private static KernelEngine.Job.Native.ke_job_system_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Job.Inline.Native.NativeMethods.job_system_inline_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(config);
+        return Create(settings);
     }
 }

@@ -26,32 +26,28 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_ndc_convention, translated("ke_ndc_convention"));
     try expectSameLayout(abi.c.ke_gpu_clear_value, translated("ke_gpu_clear_value"));
     try expectSameLayout(abi.c.ke_gpu_capabilities, translated("ke_gpu_capabilities"));
-    try expectSameLayout(abi.c.ke_gpu_buffer_params, translated("ke_gpu_buffer_params"));
-    try expectSameLayout(abi.c.ke_gpu_texture_params, translated("ke_gpu_texture_params"));
-    try expectSameLayout(abi.c.ke_gpu_texture_view_params, translated("ke_gpu_texture_view_params"));
-    try expectSameLayout(abi.c.ke_gpu_sampler_params, translated("ke_gpu_sampler_params"));
-    try expectSameLayout(abi.c.ke_gpu_shader_module_params, translated("ke_gpu_shader_module_params"));
+    try expectSameLayout(abi.c.ke_gpu_buffer_desc, translated("ke_gpu_buffer_desc"));
+    try expectSameLayout(abi.c.ke_gpu_texture_desc, translated("ke_gpu_texture_desc"));
+    try expectSameLayout(abi.c.ke_gpu_texture_view_desc, translated("ke_gpu_texture_view_desc"));
+    try expectSameLayout(abi.c.ke_gpu_sampler_desc, translated("ke_gpu_sampler_desc"));
+    try expectSameLayout(abi.c.ke_gpu_shader_module_desc, translated("ke_gpu_shader_module_desc"));
     try expectSameLayout(abi.c.ke_gpu_vertex_attribute, translated("ke_gpu_vertex_attribute"));
     try expectSameLayout(abi.c.ke_gpu_vertex_buffer_layout, translated("ke_gpu_vertex_buffer_layout"));
     try expectSameLayout(abi.c.ke_gpu_blend_state, translated("ke_gpu_blend_state"));
     try expectSameLayout(abi.c.ke_gpu_depth_stencil_state, translated("ke_gpu_depth_stencil_state"));
     try expectSameLayout(abi.c.ke_gpu_bind_group_layout_entry, translated("ke_gpu_bind_group_layout_entry"));
-    try expectSameLayout(abi.c.ke_gpu_bind_group_layout_params, translated("ke_gpu_bind_group_layout_params"));
+    try expectSameLayout(abi.c.ke_gpu_bind_group_layout_desc, translated("ke_gpu_bind_group_layout_desc"));
     try expectSameLayout(abi.c.ke_gpu_bind_group_entry, translated("ke_gpu_bind_group_entry"));
-    try expectSameLayout(abi.c.ke_gpu_bind_group_params, translated("ke_gpu_bind_group_params"));
-    try expectSameLayout(abi.c.ke_gpu_render_pipeline_params, translated("ke_gpu_render_pipeline_params"));
-    try expectSameLayout(abi.c.ke_gpu_compute_pipeline_params, translated("ke_gpu_compute_pipeline_params"));
+    try expectSameLayout(abi.c.ke_gpu_bind_group_desc, translated("ke_gpu_bind_group_desc"));
+    try expectSameLayout(abi.c.ke_gpu_render_pipeline_desc, translated("ke_gpu_render_pipeline_desc"));
+    try expectSameLayout(abi.c.ke_gpu_compute_pipeline_desc, translated("ke_gpu_compute_pipeline_desc"));
     try expectSameLayout(abi.c.ke_gpu_color_attachment, translated("ke_gpu_color_attachment"));
     try expectSameLayout(abi.c.ke_gpu_depth_stencil_attachment, translated("ke_gpu_depth_stencil_attachment"));
-    try expectSameLayout(abi.c.ke_gpu_render_pass_params, translated("ke_gpu_render_pass_params"));
-    try expectSameLayout(abi.c.ke_gpu_command_encoder_params, translated("ke_gpu_command_encoder_params"));
-    try expectSameLayout(abi.c.ke_gpu_compute_pass_params, translated("ke_gpu_compute_pass_params"));
-    try expectSameLayout(abi.c.ke_gpu_device_config, translated("ke_gpu_device_config"));
+    try expectSameLayout(abi.c.ke_gpu_render_pass_desc, translated("ke_gpu_render_pass_desc"));
     try expectSameLayout(abi.c.ke_gpu_command_buffer, translated("ke_gpu_command_buffer"));
-    try expectSameLayout(abi.c.ke_gpu_render_target_window_config, translated("ke_gpu_render_target_window_config"));
     try expectSameLayout(abi.c.ke_render_binding_hint, translated("ke_render_binding_hint"));
     try expectSameLayout(abi.c.ke_render_shader_binding, translated("ke_render_shader_binding"));
-    try expectSameLayout(abi.c.ke_render_shader_layout_params, translated("ke_render_shader_layout_params"));
+    try expectSameLayout(abi.c.ke_render_shader_layout_desc, translated("ke_render_shader_layout_desc"));
     try expectSameLayout(abi.c.ke_render_material_data, translated("ke_render_material_data"));
     try expectSameLayout(abi.c.ke_gpu_command_encoder_handle, translated("ke_gpu_command_encoder_handle"));
     try expectSameLayout(abi.c.ke_gpu_command_buffer_handle, translated("ke_gpu_command_buffer_handle"));
@@ -214,10 +210,13 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_FRAGMENT), @as(i128, abi.c.KE_GPU_SHADER_STAGE_FRAGMENT));
     try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_COMPUTE), @as(i128, abi.c.KE_GPU_SHADER_STAGE_COMPUTE));
     try std.testing.expectEqual(@as(i128, c.KE_GPU_INVALID_HANDLE), @as(i128, abi.c.KE_GPU_INVALID_HANDLE));
+    try std.testing.expectEqualStrings(c.KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION, abi.c.KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION);
+    try std.testing.expectEqualStrings(c.KE_GPU_DEVICE_SETTING_DEBUG_LABELS, abi.c.KE_GPU_DEVICE_SETTING_DEBUG_LABELS);
+    try std.testing.expectEqualStrings(c.KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE, abi.c.KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE);
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_BINDING_INVALID), @as(i128, abi.c.KE_RENDER_BINDING_INVALID));
 }
 
-extern const layout_values: [304]c_ulonglong;
+extern const layout_values: [295]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -241,49 +240,49 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_capabilities, "supports_mesh_shaders"),
         @offsetOf(abi.c.ke_gpu_capabilities, "supports_ray_tracing"),
         @offsetOf(abi.c.ke_gpu_capabilities, "copy_bytes_per_row_alignment"),
-        @sizeOf(abi.c.ke_gpu_buffer_params),
-        @offsetOf(abi.c.ke_gpu_buffer_params, "label"),
-        @offsetOf(abi.c.ke_gpu_buffer_params, "initial_data"),
-        @offsetOf(abi.c.ke_gpu_buffer_params, "size"),
-        @offsetOf(abi.c.ke_gpu_buffer_params, "usage"),
-        @offsetOf(abi.c.ke_gpu_buffer_params, "mapped_at_creation"),
-        @sizeOf(abi.c.ke_gpu_texture_params),
-        @offsetOf(abi.c.ke_gpu_texture_params, "label"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "width"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "height"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "depth_or_array_layers"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "format"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "dimension"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "usage"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "mip_level_count"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "sample_count"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "initial_data"),
-        @offsetOf(abi.c.ke_gpu_texture_params, "initial_data_size"),
-        @sizeOf(abi.c.ke_gpu_texture_view_params),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "label"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "format"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "dimension"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "aspect"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "base_mip_level"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "mip_level_count"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "base_array_layer"),
-        @offsetOf(abi.c.ke_gpu_texture_view_params, "array_layer_count"),
-        @sizeOf(abi.c.ke_gpu_sampler_params),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "label"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "min_filter"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "mag_filter"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "mipmap_filter"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "address_mode_u"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "address_mode_v"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "address_mode_w"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "lod_min_clamp"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "lod_max_clamp"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "compare"),
-        @offsetOf(abi.c.ke_gpu_sampler_params, "max_anisotropy"),
-        @sizeOf(abi.c.ke_gpu_shader_module_params),
-        @offsetOf(abi.c.ke_gpu_shader_module_params, "label"),
-        @offsetOf(abi.c.ke_gpu_shader_module_params, "code"),
-        @offsetOf(abi.c.ke_gpu_shader_module_params, "byte_size"),
+        @sizeOf(abi.c.ke_gpu_buffer_desc),
+        @offsetOf(abi.c.ke_gpu_buffer_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_buffer_desc, "initial_data"),
+        @offsetOf(abi.c.ke_gpu_buffer_desc, "size"),
+        @offsetOf(abi.c.ke_gpu_buffer_desc, "usage"),
+        @offsetOf(abi.c.ke_gpu_buffer_desc, "mapped_at_creation"),
+        @sizeOf(abi.c.ke_gpu_texture_desc),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "width"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "height"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "depth_or_array_layers"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "format"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "dimension"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "usage"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "mip_level_count"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "sample_count"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "initial_data"),
+        @offsetOf(abi.c.ke_gpu_texture_desc, "initial_data_size"),
+        @sizeOf(abi.c.ke_gpu_texture_view_desc),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "format"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "dimension"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "aspect"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "base_mip_level"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "mip_level_count"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "base_array_layer"),
+        @offsetOf(abi.c.ke_gpu_texture_view_desc, "array_layer_count"),
+        @sizeOf(abi.c.ke_gpu_sampler_desc),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "min_filter"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "mag_filter"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "mipmap_filter"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "address_mode_u"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "address_mode_v"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "address_mode_w"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "lod_min_clamp"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "lod_max_clamp"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "compare"),
+        @offsetOf(abi.c.ke_gpu_sampler_desc, "max_anisotropy"),
+        @sizeOf(abi.c.ke_gpu_shader_module_desc),
+        @offsetOf(abi.c.ke_gpu_shader_module_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_shader_module_desc, "code"),
+        @offsetOf(abi.c.ke_gpu_shader_module_desc, "byte_size"),
         @sizeOf(abi.c.ke_gpu_vertex_attribute),
         @offsetOf(abi.c.ke_gpu_vertex_attribute, "shader_location"),
         @offsetOf(abi.c.ke_gpu_vertex_attribute, "format"),
@@ -323,10 +322,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_bind_group_layout_entry, "type"),
         @offsetOf(abi.c.ke_gpu_bind_group_layout_entry, "has_dynamic_offset"),
         @offsetOf(abi.c.ke_gpu_bind_group_layout_entry, "view_dimension"),
-        @sizeOf(abi.c.ke_gpu_bind_group_layout_params),
-        @offsetOf(abi.c.ke_gpu_bind_group_layout_params, "label"),
-        @offsetOf(abi.c.ke_gpu_bind_group_layout_params, "entry_count"),
-        @offsetOf(abi.c.ke_gpu_bind_group_layout_params, "entries"),
+        @sizeOf(abi.c.ke_gpu_bind_group_layout_desc),
+        @offsetOf(abi.c.ke_gpu_bind_group_layout_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_bind_group_layout_desc, "entry_count"),
+        @offsetOf(abi.c.ke_gpu_bind_group_layout_desc, "entries"),
         @sizeOf(abi.c.ke_gpu_bind_group_entry),
         @offsetOf(abi.c.ke_gpu_bind_group_entry, "binding"),
         @offsetOf(abi.c.ke_gpu_bind_group_entry, "type"),
@@ -335,35 +334,35 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_bind_group_entry, "buffer_size"),
         @offsetOf(abi.c.ke_gpu_bind_group_entry, "texture_view"),
         @offsetOf(abi.c.ke_gpu_bind_group_entry, "sampler"),
-        @sizeOf(abi.c.ke_gpu_bind_group_params),
-        @offsetOf(abi.c.ke_gpu_bind_group_params, "label"),
-        @offsetOf(abi.c.ke_gpu_bind_group_params, "layout"),
-        @offsetOf(abi.c.ke_gpu_bind_group_params, "entry_count"),
-        @offsetOf(abi.c.ke_gpu_bind_group_params, "entries"),
-        @sizeOf(abi.c.ke_gpu_render_pipeline_params),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "label"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "vertex_module"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "fragment_module"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "vertex_entry"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "fragment_entry"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "primitive_topology"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "cull_mode"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "front_face"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "vertex_buffer_count"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "vertex_buffers"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "blend_state"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "depth_stencil"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "bind_group_layouts"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "bind_group_layout_count"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "alpha_to_coverage_enabled"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "color_target_formats"),
-        @offsetOf(abi.c.ke_gpu_render_pipeline_params, "color_target_count"),
-        @sizeOf(abi.c.ke_gpu_compute_pipeline_params),
-        @offsetOf(abi.c.ke_gpu_compute_pipeline_params, "label"),
-        @offsetOf(abi.c.ke_gpu_compute_pipeline_params, "compute_module"),
-        @offsetOf(abi.c.ke_gpu_compute_pipeline_params, "compute_entry"),
-        @offsetOf(abi.c.ke_gpu_compute_pipeline_params, "bind_group_layouts"),
-        @offsetOf(abi.c.ke_gpu_compute_pipeline_params, "bind_group_layout_count"),
+        @sizeOf(abi.c.ke_gpu_bind_group_desc),
+        @offsetOf(abi.c.ke_gpu_bind_group_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_bind_group_desc, "layout"),
+        @offsetOf(abi.c.ke_gpu_bind_group_desc, "entry_count"),
+        @offsetOf(abi.c.ke_gpu_bind_group_desc, "entries"),
+        @sizeOf(abi.c.ke_gpu_render_pipeline_desc),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "vertex_module"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "fragment_module"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "vertex_entry"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "fragment_entry"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "primitive_topology"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "cull_mode"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "front_face"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "vertex_buffer_count"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "vertex_buffers"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "blend_state"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "depth_stencil"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "bind_group_layouts"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "bind_group_layout_count"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "alpha_to_coverage_enabled"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "color_target_formats"),
+        @offsetOf(abi.c.ke_gpu_render_pipeline_desc, "color_target_count"),
+        @sizeOf(abi.c.ke_gpu_compute_pipeline_desc),
+        @offsetOf(abi.c.ke_gpu_compute_pipeline_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_compute_pipeline_desc, "compute_module"),
+        @offsetOf(abi.c.ke_gpu_compute_pipeline_desc, "compute_entry"),
+        @offsetOf(abi.c.ke_gpu_compute_pipeline_desc, "bind_group_layouts"),
+        @offsetOf(abi.c.ke_gpu_compute_pipeline_desc, "bind_group_layout_count"),
         @sizeOf(abi.c.ke_gpu_color_attachment),
         @offsetOf(abi.c.ke_gpu_color_attachment, "view"),
         @offsetOf(abi.c.ke_gpu_color_attachment, "load_op"),
@@ -378,22 +377,13 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_depth_stencil_attachment, "clear_stencil"),
         @offsetOf(abi.c.ke_gpu_depth_stencil_attachment, "depth_read_only"),
         @offsetOf(abi.c.ke_gpu_depth_stencil_attachment, "stencil_read_only"),
-        @sizeOf(abi.c.ke_gpu_render_pass_params),
-        @offsetOf(abi.c.ke_gpu_render_pass_params, "label"),
-        @offsetOf(abi.c.ke_gpu_render_pass_params, "color_attachments"),
-        @offsetOf(abi.c.ke_gpu_render_pass_params, "color_attachment_count"),
-        @offsetOf(abi.c.ke_gpu_render_pass_params, "depth_stencil_attachment"),
-        @sizeOf(abi.c.ke_gpu_command_encoder_params),
-        @offsetOf(abi.c.ke_gpu_command_encoder_params, "label"),
-        @sizeOf(abi.c.ke_gpu_compute_pass_params),
-        @offsetOf(abi.c.ke_gpu_compute_pass_params, "label"),
-        @sizeOf(abi.c.ke_gpu_device_config),
-        @offsetOf(abi.c.ke_gpu_device_config, "enable_validation"),
-        @offsetOf(abi.c.ke_gpu_device_config, "debug_labels"),
+        @sizeOf(abi.c.ke_gpu_render_pass_desc),
+        @offsetOf(abi.c.ke_gpu_render_pass_desc, "label"),
+        @offsetOf(abi.c.ke_gpu_render_pass_desc, "color_attachments"),
+        @offsetOf(abi.c.ke_gpu_render_pass_desc, "color_attachment_count"),
+        @offsetOf(abi.c.ke_gpu_render_pass_desc, "depth_stencil_attachment"),
         @sizeOf(abi.c.ke_gpu_command_buffer),
         @offsetOf(abi.c.ke_gpu_command_buffer, "handle"),
-        @sizeOf(abi.c.ke_gpu_render_target_window_config),
-        @offsetOf(abi.c.ke_gpu_render_target_window_config, "present_mode"),
         @sizeOf(abi.c.ke_render_binding_hint),
         @offsetOf(abi.c.ke_render_binding_hint, "name"),
         @offsetOf(abi.c.ke_render_binding_hint, "flags"),
@@ -404,11 +394,11 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_render_shader_binding, "buffer_size"),
         @offsetOf(abi.c.ke_render_shader_binding, "texture_view"),
         @offsetOf(abi.c.ke_render_shader_binding, "sampler"),
-        @sizeOf(abi.c.ke_render_shader_layout_params),
-        @offsetOf(abi.c.ke_render_shader_layout_params, "shader"),
-        @offsetOf(abi.c.ke_render_shader_layout_params, "stages"),
-        @offsetOf(abi.c.ke_render_shader_layout_params, "hints"),
-        @offsetOf(abi.c.ke_render_shader_layout_params, "hint_count"),
+        @sizeOf(abi.c.ke_render_shader_layout_desc),
+        @offsetOf(abi.c.ke_render_shader_layout_desc, "shader"),
+        @offsetOf(abi.c.ke_render_shader_layout_desc, "stages"),
+        @offsetOf(abi.c.ke_render_shader_layout_desc, "hints"),
+        @offsetOf(abi.c.ke_render_shader_layout_desc, "hint_count"),
         @sizeOf(abi.c.ke_render_material_data),
         @offsetOf(abi.c.ke_render_material_data, "base_color"),
         @offsetOf(abi.c.ke_render_material_data, "metallic"),

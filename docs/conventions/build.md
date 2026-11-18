@@ -1,9 +1,8 @@
 # Build
 
-`zig build`, run at the repository root (`build.zig:12` refuses any other directory), is the only
-native entry point. The root `build.zig` fetches toolchains, runs vcpkg, and takes every plugin and
+`zig build`, run at the repository root, is the only native entry point. The root `build.zig` fetches toolchains, runs vcpkg, and takes every plugin and
 every C example into its own build graph as a path dependency (`build.zig.zon`; `Ctx.member` and
-`Ctx.example`, `build.zig:1206-1244`). One `zig build` process compiles all of them, with one cache.
+`Ctx.example` in `build.zig`). One `zig build` process compiles all of them, with one cache.
 
 ## What the build needs from the machine
 
@@ -63,8 +62,8 @@ Everything a build fetches or produces is under `build/`, apart from the `zig-pk
 | `<--prefix>/lib`, `/bin`, `/gen` | plugin libraries, executables, generated shader output |
 
 `--prefix` is the install root the caller picks. The root installs every plugin's library under
-`lib` (`build.zig:1212`) and every example's executable under `bin`, named after the example
-(`build.zig:1239-1242`), so all of them converge in one tree.
+`lib` and every example's executable under `bin`, named after the example
+so all of them converge in one tree.
 
 A Zig package is declared by URL and hash in a `build.zig.zon`: `docir` in the root's, `zmath` in
 that of each plugin that imports it. Zig 0.16 unpacks every package of a build into `zig-pkg/` beside
@@ -93,15 +92,15 @@ not importable. Its options are only the paths of the third-party libraries it w
 `build.zig` still runs alone from its directory, given the same options as `-D` flags.
 
 A plugin that links another plugin's library takes it from `<--prefix>/lib`, so the root makes its
-compile step wait for the steps listed in the `deps` argument of `Ctx.member` (`build.zig:1211`):
+compile step wait for the steps listed in the `deps` argument of `Ctx.member`:
 the install steps of the plugins it links, and the fetch or shader steps it reads the output of.
 
 ## Tests
 
-`Ctx.member` takes a required `Tests` argument, `.has_tests` or `.no_tests` (`build.zig:1078`), so a
+`Ctx.member` takes a required `Tests` argument, `.has_tests` or `.no_tests`, so a
 plugin cannot be declared without answering the question. For a `.has_tests` plugin the root hangs
 the plugin's own `test` step off its `test` step, and makes every test run wait for the installed
-libraries, since a test may load one (`build.zig:1217-1221`). The plugin's test module is built
+libraries, since a test may load one. The plugin's test module is built
 with the options its library was given, because both come from the one `b.dependency` call.
 
 ## Fetched tools
@@ -109,7 +108,7 @@ with the options its library was given, because both come from the one `b.depend
 | tool | pinned at | fetched by |
 |---|---|---|
 | vcpkg | `2026-07-13` | the bundle as `vcpkg_bundle` in `build.zig.zon`; the binary by `fetchFile`, with a SHA-256 |
-| slangc | `2025.17.2` | `slang_linux`, `slang_windows` in `build.zig.zon` |
+| slangc | `2026.19` | `slang_linux`, `slang_windows` in `build.zig.zon` |
 | wgpu-native | `v24.0.3.1` | `wgpu_linux`, `wgpu_windows` in `build.zig.zon` |
 | RenderDoc | `1.46` | `renderdoc_linux`, `renderdoc_windows` in `build.zig.zon` |
 
@@ -143,7 +142,7 @@ once, at the path it has there: the contracts under `c/`, each plugin under `zig
 header and its implementation files apart. `kabic` is the kabic repository, one page per namespace
 and per type. Every `build.zig` and every `third_party` directory is left out, and so are
 `src/csharp` and `src/shaders` from the first. The steps come from `docir`, a dependency of the
-root `build.zig.zon` whose `build.zig` the root imports (`build.zig:3`).
+root `build.zig.zon` whose `build.zig` the root imports.
 
 The same program is installed as `<--prefix>/bin/docir` by the default build and by `zig build
 docs`. `docir query <name> src` answers from the sources directly, with no document made first.
@@ -178,18 +177,18 @@ toolchain files include `vcpkg-triplets/zig-common.cmake`, which names `zig` as 
 with `cc` and `c++` as its leading argument and archives with `zig ar`, so there is no wrapper script
 per command and none per shell; they add only the target system and, for Windows, `-target
 x86_64-windows-gnu`. Static archives keep the GNU `lib*.a` naming; assimp's `zlib` and
-`minizip` archives are named `libzs.a` and `libminizips[d].a` there (`build.zig:219-230`).
+`minizip` archives are named `libzs.a` and `libminizips[d].a` there.
 
 A plugin library is installed under Zig's own per-target name: `<name>.dll` on Windows, with no `lib`
-prefix, and `lib<name>.so` elsewhere (`build.zig:977-981`). After every plugin and the wgpu-native
+prefix, and `lib<name>.so` elsewhere. After every plugin and the wgpu-native
 copy are built, the root copies every `*.dll` from `lib/` into `bin/` as well, so that an executable
-in `bin/` finds its libraries beside it (`build.zig:546-554`). On other targets nothing is copied to
+in `bin/` finds its libraries beside it. On other targets nothing is copied to
 `bin/`.
 
 ## Where the managed build takes the libraries from
 
 The C# projects do not run any of this. Each one that calls a native library copies it from
 `<repo>/build/native/lib` into its own output directory, using the platform's prefix and extension
-(`src/csharp/NativeDependencies.targets:35-57`); on Windows that is `<name>.dll` from `lib/`, not
+(`src/csharp/NativeDependencies.targets`); on Windows that is `<name>.dll` from `lib/`, not
 from `bin/`. How a project names what it needs, and what happens when the copy is stale, is in
 `docs/conventions/managed-build.md`.

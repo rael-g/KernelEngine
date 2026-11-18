@@ -32,14 +32,14 @@ extern "C"
  * @param io [provider] Borrowed, must outlive the service; the shaders are read through it.
  * @param binder Borrowed, must outlive the service; it holds the service's materials and is given
  *        the parameters every shader shares.
- * @param config [borrowed] The service's values, applied as given.
+ * @param shader_dir [borrowed,utf8] Directory the shaders are loaded from; copied.
  * @param out_service [out] Receives the handle; left zeroed on failure.
  * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p device, @p target,
- *         @p io, @p binder, @p config or its shader_dir is NULL.
+ *         @p io, @p binder or @p shader_dir is NULL.
  */
 KE_RENDER_CORE_API ke_result
 ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_io *io,
-                         ke_render_resource_binder *binder, const ke_render_service_config *config,
+                         ke_render_resource_binder *binder, const char *shader_dir,
                          ke_render_service_handle *out_service);
 
 #ifdef __cplusplus

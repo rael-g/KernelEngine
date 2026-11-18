@@ -5,7 +5,15 @@ const abi_async = @import("async");
 const abi_completion = @import("completion");
 const abi_job = @import("job");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
+
+/// Setting every scheduler reads, a number: the dt of a fixed step, in seconds; greater than
+/// zero.
+pub const KE_SCHEDULER_SETTING_FIXED_DT = "fixed_dt";
+/// Setting every scheduler reads, a number: the most time a tick may accumulate for fixed steps,
+/// in seconds, the excess dropped; greater than zero.
+pub const KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM = "fixed_dt_max_accum";
 
 /// When an executable runs within the ticks of a scheduler.
 pub const ke_scheduler_cadence = c_uint;
@@ -22,6 +30,9 @@ pub const KE_SCHEDULER_CADENCE_SHUTDOWN: ke_scheduler_cadence = 3;
 /// One run of an executable: a schedule, a render, a script, a test.
 pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// The body of an operation, run once on a worker that may block in a system call.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result;
 
@@ -31,15 +42,6 @@ pub const ke_job_fn = ?*const fn (?*anyopaque, ?*const abi_job.c.ke_job_ctx) cal
 
 /// One range of a parallel_for, run on a worker; ranges cover [0, item_count) without overlap.
 pub const ke_job_range_fn = ?*const fn (?*anyopaque, u32, u32, u32) callconv(.c) abi_result.c.ke_result;
-
-/// What a scheduler is created with, each field applied as given.
-pub const ke_scheduler_config = extern struct {
-    /// The dt of a fixed step, in seconds; greater than zero.
-    fixed_dt: f32 = std.mem.zeroes(f32),
-    /// The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped;
-    /// greater than zero.
-    fixed_dt_max_accum: f32 = std.mem.zeroes(f32),
-};
 
 /// The frame loop: runs the executables it was given, each when its cadence says, tick by tick,
 /// waiting on each run before the next starts. It knows no schedule, render, event or component.
@@ -76,4 +78,4 @@ pub const ke_scheduler_handle = extern struct {
 
 /// Creates a scheduler with no executable, which drains job_system and async, both borrowed for
 /// its lifetime, at the start of every tick.
-pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, config: ?*const ke_scheduler_config, out_scheduler: ?*ke_scheduler_handle) abi_result.c.ke_result;
+pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_scheduler: ?*ke_scheduler_handle) abi_result.c.ke_result;

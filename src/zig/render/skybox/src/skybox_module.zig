@@ -36,7 +36,7 @@ const SkyFrame = extern struct { inv_sky_view_proj: [16]f32 };
 
 const depth_hint = [_]abi_render_gpu.c.ke_render_binding_hint{.{ .name = "g_depth", .flags = abi_render_gpu.c.KE_RENDER_BINDING_HINT_DEPTH }};
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "skybox",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = &depth_hint,
@@ -61,7 +61,7 @@ const SkyboxModule = struct {
     world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
     skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
 
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
@@ -185,7 +185,7 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_context.c.ke_render_context) R.
     var sky_fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "skybox", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &sky_fs));
 
-    var skp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var skp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     skp.label = "skybox.pipeline";
     skp.vertex_module = sky_vs;
     skp.fragment_module = sky_fs;
@@ -207,7 +207,7 @@ fn setup(sm: *SkyboxModule, p: *const abi_render_context.c.ke_render_context) R.
         return error.NotInitialized;
     }
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "skybox.frame_uniform",
         .initial_data = null,
         .size = @sizeOf(SkyFrame),

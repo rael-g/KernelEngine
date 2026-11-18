@@ -67,7 +67,7 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
         .store_op    = KE_GPU_STORE_OP_STORE,
         .clear_value = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } },
     };
-    ke_gpu_render_pass_params rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
+    ke_gpu_render_pass_desc rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
 
     ke_gpu_command_encoder_handle enc_handle = { 0 };
     check("create_command_encoder", gpu->create_command_encoder(gpu, NULL, &enc_handle));
@@ -98,17 +98,34 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     gpu->unmap_buffer(gpu, staging);
 }
 
+static ke_result validation_bool(ke_settings *self, const char *key, bool *out)
+{
+    (void)self;
+    if (strcmp(key, KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION) != 0) return KE_RESULT_NOT_FOUND;
+    *out = true;
+    return KE_OK;
+}
+static ke_result validation_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_double(ke_settings *self, const char *key, double *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_string(ke_settings *self, const char *key, const char **out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_keys(ke_settings *self, ke_settings_key_func each, void *ctx)
+{
+    (void)self;
+    each(KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION, ctx);
+    return KE_OK;
+}
+static ke_settings validated = { NULL, validation_bool, validation_int, validation_double, validation_string, validation_keys };
+
 int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
-    ke_gpu_device_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
     ke_completion *gpu_ready = NULL;
-    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu_ready, &gpu));
+    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &validated, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
-    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
+    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_desc){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
@@ -124,18 +141,18 @@ int main(int argc, char **argv)
     uint32_t padded_row = (WIDTH * BYTES_PER_TEXEL + align - 1) / align * align;
 
     ke_gpu_buffer staging = { 0 };
-    check("staging buffer create", gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
+    check("staging buffer create", gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_desc){
         .size = (size_t)padded_row * HEIGHT,
         .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &staging));
 
     ke_gpu_shader_module vs = { 0 };
-    check("vertex shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+    check("vertex shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_desc){
         .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .label = "vs_main" }, &vs));
     ke_gpu_shader_module fs = { 0 };
-    check("fragment shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+    check("fragment shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_desc){
         .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .label = "fs_main" }, &fs));
 
-    ke_gpu_render_pipeline_params pp = {
+    ke_gpu_render_pipeline_desc pp = {
         .color_target_formats = { target.ref->format(target.ref) },
         .color_target_count = 1,
         .vertex_module = vs, .fragment_module = fs,

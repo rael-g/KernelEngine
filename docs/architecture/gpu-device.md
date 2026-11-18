@@ -8,7 +8,7 @@ inside is on the generated page of its file.
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| device | `ke_gpu_device` | webgpu | optionally a `ke_async`, and its values (`ke_gpu_device_config`) | buffers, textures, views, samplers, shader modules, pipelines, bind groups |
+| device | `ke_gpu_device` | webgpu | optionally a `ke_async`, and its settings (`KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION`, `KE_GPU_DEVICE_SETTING_DEBUG_LABELS`) | buffers, textures, views, samplers, shader modules, pipelines, bind groups |
 | recording | `ke_gpu_command_encoder`, `ke_gpu_render_pass`, `ke_gpu_compute_pass`, `ke_gpu_command_buffer` | webgpu | the device | command buffers, for `queue_submit` |
 | window target | `ke_gpu_render_target` | webgpu | the device, a `ke_window` | the surface texture of a frame, and its presentation |
 | texture target | `ke_gpu_render_target` | texture_target | the device, a texture | that texture as the frame |
@@ -47,7 +47,7 @@ them is in [pipeline-cache.md](pipeline-cache.md).
 - The window target accepts only a device made by the webgpu plugin, and refuses any other.
 - A creation the device rejects returns `KE_RESULT_GENERAL`, and the backend's reason goes to
   the log.
-- Labels reach a capture tool only when the device was created with `debug_labels` set in
-  `ke_gpu_device_config`.
+- Labels reach a capture tool only when the device was created with the setting
+  `KE_GPU_DEVICE_SETTING_DEBUG_LABELS` true.
 - Texture-to-buffer and buffer-to-texture copies require a row pitch that is a multiple of
   the alignment `get_capabilities` reports in `copy_bytes_per_row_alignment`.

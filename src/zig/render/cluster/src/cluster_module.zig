@@ -19,12 +19,22 @@ const abi_render_cluster_factory = @import("abi_render_cluster_factory");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const abi_view = @import("abi_view");
 const pass_systems = @import("pass_systems");
 const R = @import("result").Result(.{});
-const Config = abi_render_cluster_factory.c.ke_render_cluster_config;
+/// The pass's settings, with this implementation's defaults.
+const Config = struct {
+    grid_x: u32 = 16,
+    grid_y: u32 = 9,
+    grid_z: u32 = 24,
+    max_lights_per_cluster: u32 = 64,
+
+    pub const ranges = .{ .grid_x = .{ 1, 4096 }, .grid_y = .{ 1, 4096 }, .grid_z = .{ 1, 4096 }, .max_lights_per_cluster = .{ 1, 65536 } };
+};
 
 const heap = @import("heap");
 const gpa = heap.gpa;
@@ -68,7 +78,7 @@ const ClusterParams = extern struct {
     depth: [4]f32,
 };
 
-const cull_layout_params = abi_render_gpu.c.ke_render_shader_layout_params{
+const cull_layout_params = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "cluster_cull",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_COMPUTE,
     .hints = null,
@@ -253,7 +263,7 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
     core.*.backbuffer_size.?(core, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
+    const depth_from_view_z = cm.view_space.depth_from_view_z.?(cm.view_space);
     var frustum: abi_render.c.ke_camera_frustum = undefined;
     cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
     var params: ClusterParams = .{
@@ -289,13 +299,13 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     const grid_data = ClusterGridUniform{
         .cluster_grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), near, far },
-        .view_space = .{ cm.view_space.params.?(cm.view_space).depth_from_view_z, 0.0, 0.0, 0.0 },
+        .view_space = .{ cm.view_space.depth_from_view_z.?(cm.view_space), 0.0, 0.0, 0.0 },
     };
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
 
 fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_asset_resolver.c.ke_gpu_buffer) R.Error!void {
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = label,
         .initial_data = null,
         .size = size,
@@ -309,7 +319,6 @@ fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, 
 /// over the render world. A failed step fails with its code, and the objects created before it stay
 /// set for `destroyModule` to release.
 fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, config: *const Config) R.Error!void {
-    if (config.grid_x == 0 or config.grid_y == 0 or config.grid_z == 0 or config.max_lights_per_cluster == 0) return error.InvalidArgument;
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const ids = p.scene.?.render_component_ids.?(p.scene).?;
@@ -336,7 +345,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     try makeStorageBuffer(dev, "cluster.spot_indices_sb", indices_bytes, &cm.spot_indices_sb);
     try makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, &cm.spot_counts_sb);
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
@@ -355,7 +364,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     cm.binder = core.*.resource_binder.?(core).?;
     try R.check(cm.binder.create_shader_layout.?(cm.binder, &cull_layout_params, &cm.cull_layout));
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "cluster.cull_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
@@ -376,7 +385,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     var cs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "cluster_cull", abi_render_gpu.c.KE_GPU_SHADER_STAGE_COMPUTE, &cs));
 
-    var cull_pipeline_params = abi_render_gpu.c.ke_gpu_compute_pipeline_params{
+    var cull_pipeline_params = abi_render_gpu.c.ke_gpu_compute_pipeline_desc{
         .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
@@ -424,19 +433,20 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
     gpa.destroy(cm);
 }
 
-/// The factory declared in cluster_create.h. A missing part of the context or config, or a zero
-/// field of `config`, fails as an invalid argument and a module that cannot be allocated as out of
+/// The factory declared in cluster_create.h. A missing part of the context or settings, or a setting
+/// the schema refuses, fails as an invalid argument and a module that cannot be allocated as out of
 /// memory. The handle stays zeroed when `setup` fails, and the objects created so far are released
 /// then.
-export fn ke_render_cluster_create(context_in: ?*const abi_render_context.c.ke_render_context, config: ?*const Config, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_cluster_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
     if (p.service == null or p.device == null or p.view_space == null or p.camera == null or p.scene == null or p.frame == null) return R.code(error.InvalidArgument);
-    const given = config orelse {
-        log.warn("cluster pass: no config", .{});
+    const values = settings_schema.read(Config, settings orelse {
+        log.warn("cluster pass: no settings", .{});
         return R.code(error.InvalidArgument);
-    };
+    }) catch |err| return R.code(err);
+    const given = &values;
     const cm = gpa.create(ClusterModule) catch |err| return R.code(err);
     cm.* = .{};
     setup(cm, p, given) catch |err| {
@@ -475,8 +485,8 @@ fn cameraView(_: ?*abi_schedule.c.ke_schedule_ctx, index: u32, out_count: ?*usiz
 var camera_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = cameraView, .slice = null };
 var empty_ctx: abi_schedule.c.ke_schedule_ctx = std.mem.zeroes(abi_schedule.c.ke_schedule_ctx);
 
-fn viewParams(_: ?*abi_view.c.ke_view_space) callconv(.c) abi_view.c.ke_view_space_params {
-    return std.mem.zeroes(abi_view.c.ke_view_space_params);
+fn viewDepthFromViewZ(_: ?*abi_view.c.ke_view_space) callconv(.c) f32 {
+    return 0.0;
 }
 
 /// The parts a pass is made of in a test.
@@ -506,7 +516,7 @@ const Rig = struct {
         _ = self.graph.when(.import_buffer).writesFresh(3);
         try self.camera.init();
         self.view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-        self.view_space.params = viewParams;
+        self.view_space.depth_from_view_z = viewDepthFromViewZ;
         try self.frame.init();
         _ = self.frame.when(.frame_cid).returns(11);
         _ = self.frame.when(.live).returns(true);
@@ -541,7 +551,7 @@ const Rig = struct {
     }
 };
 
-const test_config: Config = .{ .grid_x = 4, .grid_y = 4, .grid_z = 4, .max_lights_per_cluster = 8 };
+var test_settings = settings_schema.Fixed.init(&.{ .{ .key = "grid_x", .value = .{ .int = 4 } }, .{ .key = "grid_y", .value = .{ .int = 4 } }, .{ .key = "grid_z", .value = .{ .int = 4 } }, .{ .key = "max_lights_per_cluster", .value = .{ .int = 8 } } });
 
 fn passOf(h: abi_module.c.ke_module_handle) *ClusterModule {
     const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast(h.ref.?.handle));
@@ -554,7 +564,7 @@ test "the cluster module attaches its two systems to the render schedule, and de
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_cluster_create(&p, &test_config, &h));
+    try R.check(ke_render_cluster_create(&p, &test_settings.api, &h));
     const t = rig.targets();
     try R.check(h.ref.?.attach.?(h.ref, &t));
     try rig.schedule.received(.register_system).times(2);
@@ -569,7 +579,7 @@ test "the cluster publishes every buffer of its result, and declares the cull at
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_cluster_create(&p, &test_config, &h));
+    try R.check(ke_render_cluster_create(&p, &test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try rig.frame.received(.publish).times(cluster_buffers.len);
@@ -577,15 +587,14 @@ test "the cluster publishes every buffer of its result, and declares the cull at
     try rig.graph.received(.add_pass).times(1);
 }
 
-test "a cluster config with a zero field is refused and releases what it had created" {
+test "a cluster setting of zero is refused and releases what it had created" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     const p = rig.context();
-    var bad = test_config;
-    bad.grid_z = 0;
+    var bad = settings_schema.Fixed.init(&.{.{ .key = "grid_z", .value = .{ .int = 0 } }});
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &bad, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &bad.api, &h)));
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -597,7 +606,7 @@ test "a cluster pass missing its camera is refused as an invalid argument" {
     var p = rig.context();
     p.camera = null;
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &test_config, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_cluster_create(&p, &test_settings.api, &h)));
 }
 
 test "creating and destroying cluster passes leaves no block allocated" {

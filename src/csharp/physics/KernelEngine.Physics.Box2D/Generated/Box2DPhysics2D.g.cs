@@ -10,18 +10,17 @@ public sealed unsafe partial class Box2DPhysics2D : KernelEngine.Physics.Physics
 {
     /// <summary>Creates a 2D physics world whose solver runs its tasks on job_system, borrowed for the world's lifetime, one Box2D worker per worker slot.</summary>
     /// <param name="jobSystem"></param>
-    /// <param name="config">The world's values; Required; every field is read as given.</param>
-    public Box2DPhysics2D(KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Physics.Physics2dConfig config) : base(Create(jobSystem, config))
+    /// <param name="settings">Read once. KE_PHYSICS_2D_SETTING_GRAVITY_X and KE_PHYSICS_2D_SETTING_GRAVITY_Y, each default 0.</param>
+    public Box2DPhysics2D(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings) : base(Create(jobSystem, settings))
     {
         Hold(jobSystem.Owner);
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Physics.Physics2dConfig config)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle Create(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(jobSystem);
-        var nativeConfig = config;
         KernelEngine.Physics.Native.ke_physics_2d_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(jobSystem.Native, &nativeConfig, &handle), "ke_physics_2d_box2d_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(jobSystem.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_physics_2d_box2d_create");
         return handle;
     }
 }

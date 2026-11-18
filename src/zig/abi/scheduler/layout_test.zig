@@ -23,13 +23,13 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_scheduler_config, translated("ke_scheduler_config"));
     try expectSameLayout(abi.c.ke_scheduler, translated("ke_scheduler"));
     try expectSameLayout(abi.c.ke_scheduler_handle, translated("ke_scheduler_handle"));
     if (@hasDecl(c, "ke_async_fn")) try expectSameLayout(abi.c.ke_async_fn, c.ke_async_fn);
     if (@hasDecl(c, "ke_job_fn")) try expectSameLayout(abi.c.ke_job_fn, c.ke_job_fn);
     if (@hasDecl(c, "ke_job_range_fn")) try expectSameLayout(abi.c.ke_job_range_fn, c.ke_job_range_fn);
     if (@hasDecl(c, "ke_scheduler_run_fn")) try expectSameLayout(abi.c.ke_scheduler_run_fn, c.ke_scheduler_run_fn);
+    if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
 test "every enum value is the header's value" {
@@ -40,14 +40,17 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SCHEDULER_CADENCE_SHUTDOWN), @as(i64, abi.c.KE_SCHEDULER_CADENCE_SHUTDOWN));
 }
 
-extern const layout_values: [17]c_ulonglong;
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_SCHEDULER_SETTING_FIXED_DT, abi.c.KE_SCHEDULER_SETTING_FIXED_DT);
+    try std.testing.expectEqualStrings(c.KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM, abi.c.KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM);
+}
+
+extern const layout_values: [14]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_scheduler_config),
-        @offsetOf(abi.c.ke_scheduler_config, "fixed_dt"),
-        @offsetOf(abi.c.ke_scheduler_config, "fixed_dt_max_accum"),
         @sizeOf(abi.c.ke_scheduler),
         @offsetOf(abi.c.ke_scheduler, "handle"),
         @offsetOf(abi.c.ke_scheduler, "add"),

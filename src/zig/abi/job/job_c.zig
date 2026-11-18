@@ -5,8 +5,9 @@ const abi_completion = @import("completion");
 const abi_result = @import("result");
 
 
-/// The worker_count that takes one worker per hardware thread besides the creating one.
-pub const KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD = 4294967295;
+/// Setting every job system reads, an integer: the worker threads besides the creating thread; 0
+/// runs every job on the creating thread.
+pub const KE_JOB_SYSTEM_SETTING_WORKER_COUNT = "worker_count";
 
 /// The body of a job, run once on a worker after every dependency finished, whatever each
 /// finished with.
@@ -20,13 +21,6 @@ pub const ke_job_ctx = extern struct {
     /// What each dependency finished with, in the order they were given.
     dep_results: ?[*]const abi_result.c.ke_result = std.mem.zeroes(?[*]const abi_result.c.ke_result),
     dep_count: u32 = std.mem.zeroes(u32),
-};
-
-/// What a job system is created with, each field applied as given.
-pub const ke_job_system_config = extern struct {
-    /// Worker threads besides the creating thread; 0 runs every job on the creating thread, and
-    /// KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD one per hardware thread besides it.
-    worker_count: u32 = std.mem.zeroes(u32),
 };
 
 /// Runs the work of a frame on workers, each piece after the completions it depends on. Work

@@ -17,8 +17,8 @@ public unsafe partial struct ke_ecs
     [NativeTypeName("ke_result (*)(struct ke_ecs *, ke_entity)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, global::KernelEngine.Ecs.Entity, KernelEngine.Result.Native.Result> entity_destroy;
 
-    [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_component_params *, ke_component_id *)")]
-    public delegate* unmanaged[Cdecl]<ke_ecs*, ke_component_params*, global::KernelEngine.Ecs.ComponentId*, KernelEngine.Result.Native.Result> component_register;
+    [NativeTypeName("ke_result (*)(struct ke_ecs *, const ke_component_desc *, ke_component_id *)")]
+    public delegate* unmanaged[Cdecl]<ke_ecs*, ke_component_desc*, global::KernelEngine.Ecs.ComponentId*, KernelEngine.Result.Native.Result> component_register;
 
     [NativeTypeName("bool (*)(struct ke_ecs *, const char *, ke_component_meta *)")]
     public delegate* unmanaged[Cdecl]<ke_ecs*, sbyte*, ComponentMeta*, bool> component_lookup;

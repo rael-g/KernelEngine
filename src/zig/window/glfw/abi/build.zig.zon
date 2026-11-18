@@ -7,6 +7,7 @@
         .abi_input = .{ .path = "../../../abi/input" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_result = .{ .path = "../../../abi/result" },
+        .abi_settings = .{ .path = "../../../abi/settings" },
         .abi_window = .{ .path = "../../../abi/window" },
     },
     .paths = .{"."},

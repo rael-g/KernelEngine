@@ -52,7 +52,7 @@ typedef struct ke_render_shader_binding
 } ke_render_shader_binding;
 
 /// [bag] The compiled shader a layout is built for.
-typedef struct ke_render_shader_layout_params
+typedef struct ke_render_shader_layout_desc
 {
     /// Logical name the shader was compiled under, as a render service's load_shader takes it.
     const char                   *shader;
@@ -60,7 +60,7 @@ typedef struct ke_render_shader_layout_params
     uint32_t                      stages;
     const ke_render_binding_hint *hints; ///< [array_of:hint_count]
     uint32_t                      hint_count;
-} ke_render_shader_layout_params;
+} ke_render_shader_layout_desc;
 
 /// The data of one material, as the `mat` parameter block of a material shader reads it.
 typedef struct ke_render_material_data
@@ -102,7 +102,7 @@ typedef struct ke_render_resource_binder
      * shader, the reason logged.
      */
     ke_result (*create_shader_layout)(struct ke_render_resource_binder *self,
-                                      const ke_render_shader_layout_params *params,
+                                      const ke_render_shader_layout_desc *params,
                                       ke_render_shader_layout *out_layout);
     /// Destroys a layout; the invalid one is ignored. A set created against it must be destroyed first.
     void (*destroy_shader_layout)(struct ke_render_resource_binder *self, ke_render_shader_layout layout);

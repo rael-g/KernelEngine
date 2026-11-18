@@ -5,6 +5,7 @@ const abi_completion = @import("completion");
 const abi_ecs = @import("ecs");
 const abi_job = @import("job");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -26,6 +27,9 @@ pub const ke_schedule_execute_fn = ?*const fn (?*ke_schedule_ctx, ?*anyopaque, f
 /// Whether a system runs in this run of its schedule; asked once per run, before the first wave,
 /// on the thread that called run. A failure fails the run before any wave starts.
 pub const ke_schedule_condition_fn = ?*const fn (?*anyopaque, ?*bool) callconv(.c) abi_result.c.ke_result;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// The body of a job, run once on a worker after every dependency finished, whatever each
 /// finished with.
@@ -68,12 +72,6 @@ pub const ke_schedule_system_desc = extern struct {
     /// The body runs alone at the start of the run, and what it records is applied before the other
     /// systems run. Its access does not order it.
     exclusive: bool = std.mem.zeroes(bool),
-};
-
-/// What a schedule is created with, each field applied as given.
-pub const ke_schedule_config = extern struct {
-    /// An ambiguity between two writers fails the run instead of being logged.
-    refuse_ambiguity: bool = std.mem.zeroes(bool),
 };
 
 /// Orders the systems of one world by what they touch and the sets they join, and runs them on
@@ -126,4 +124,4 @@ pub const ke_schedule_ctx = extern struct {
 };
 
 /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
-pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const ke_schedule_config, out_schedule: ?*ke_schedule_handle) abi_result.c.ke_result;
+pub extern fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_schedule: ?*ke_schedule_handle) abi_result.c.ke_result;

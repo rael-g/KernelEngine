@@ -83,14 +83,11 @@ typedef struct ke_scheduler_handle {
     void (*destroy)(ke_scheduler *self);
 } ke_scheduler_handle;
 
-/// [value] What a scheduler is created with, each field applied as given.
-typedef struct ke_scheduler_config {
-    /// The dt of a fixed step, in seconds; greater than zero.
-    float fixed_dt;
-    /// The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped;
-    /// greater than zero.
-    float fixed_dt_max_accum;
-} ke_scheduler_config;
+/// Setting every scheduler reads, a number: the dt of a fixed step, in seconds; greater than zero.
+#define KE_SCHEDULER_SETTING_FIXED_DT "fixed_dt"
+/// Setting every scheduler reads, a number: the most time a tick may accumulate for fixed steps, in
+/// seconds, the excess dropped; greater than zero.
+#define KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM "fixed_dt_max_accum"
 
 #ifdef __cplusplus
 }

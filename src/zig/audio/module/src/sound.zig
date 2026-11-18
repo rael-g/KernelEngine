@@ -205,31 +205,31 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 export fn ke_sound_create(
     ecs: ?*abi_ecs.c.ke_ecs,
     audio: ?*abi_audio.c.ke_audio,
-    config: ?*const abi_audio_module_factory.c.ke_sound_config,
+    root_in: ?[*:0]const u8,
     out_module: ?*abi_module.c.ke_module_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const given = config orelse {
-        log.warn("creating the sound module failed: no config", .{});
+    const root = root_in orelse {
+        log.warn("creating the sound module failed: no root", .{});
         return R.code(error.InvalidArgument);
     };
-    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), given.root) catch |err| {
+    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), root) catch |err| {
         log.warn("creating the sound module failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: ?[*:0]const u8) R.Error!abi_module.c.ke_module_handle {
+fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: [*:0]const u8) R.Error!abi_module.c.ke_module_handle {
     const m = try gpa.create(Module);
     m.* = .{ .audio = audio };
     m.api = .{ .handle = m, .attach = attach, .detach = detach };
     errdefer destroyModule(m);
-    if (root) |r| m.root = try gpa.dupe(u8, std.mem.span(r));
+    m.root = try gpa.dupe(u8, std.mem.span(root));
 
     var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
 
     m.terms = .{.{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     m.queries = .{.{ .terms = &m.terms, .term_count = 1 }};
@@ -493,10 +493,10 @@ test "a sound module missing its ecs or audio is refused, and a whole one attach
 
     var h: abi_module.c.ke_module_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), &audio, null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, &.{ .root = "base" }, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, &.{ .root = "base" }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, "base", &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, "base", &h)));
     try testing.expect(h.ref == null);
-    try R.check(ke_sound_create(ecs.api(), &audio, &.{ .root = "base" }, &h));
+    try R.check(ke_sound_create(ecs.api(), &audio, "base", &h));
     var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.attach.?(h.ref, &targets)));
     targets.update = @ptrCast(rt.api());

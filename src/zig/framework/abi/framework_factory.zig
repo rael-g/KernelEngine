@@ -48,9 +48,9 @@ pub fn frameworkSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) vo
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
 /// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
 /// each tick.
-pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config) Error!abi_input_actions.c.ke_input_actions_handle {
+pub fn inputActionsCreate(configuration: ?*abi_configuration.c.ke_configuration, section: [:0]const u8) Error!abi_input_actions.c.ke_input_actions_handle {
     var written: abi_input_actions.c.ke_input_actions_handle = undefined;
-    try checkResult(c.ke_input_actions_create(configuration, config, &written));
+    try checkResult(c.ke_input_actions_create(configuration, section.ptr, &written));
     return written;
 }
 

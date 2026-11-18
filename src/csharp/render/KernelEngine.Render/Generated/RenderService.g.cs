@@ -248,7 +248,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
     /// <summary>Returns the pipeline for this exact params state, compiling it on first request.</summary>
     public ulong GetOrCreatePipeline(nint @params)
     {
-        return Handle->get_or_create_pipeline(Handle, (ke_gpu_render_pipeline_params*)@params);
+        return Handle->get_or_create_pipeline(Handle, (ke_gpu_render_pipeline_desc*)@params);
     }
 
     /// <summary>The authored-material shader name a material handle was created with (see create_material's `shader`).</summary>

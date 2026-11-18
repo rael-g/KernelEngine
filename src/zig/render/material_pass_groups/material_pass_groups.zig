@@ -16,7 +16,7 @@ layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDE
 /// fragment. On failure it returns the binder's code.
 pub fn init(self: *Self, binder: *abi_render_gpu.c.ke_render_resource_binder, shader: [*c]const u8) abi_result.c.ke_result {
     self.binder = binder;
-    return binder.create_shader_layout.?(binder, &abi_render_gpu.c.ke_render_shader_layout_params{
+    return binder.create_shader_layout.?(binder, &abi_render_gpu.c.ke_render_shader_layout_desc{
         .shader = shader,
         .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
         .hints = &object_hint,
@@ -26,7 +26,7 @@ pub fn init(self: *Self, binder: *abi_render_gpu.c.ke_render_resource_binder, sh
 
 /// Fills the bind group layouts of `pp` with the ones the shader's pipeline declares; on
 /// failure it returns the binder's code.
-pub fn place(self: *const Self, pp: *abi_render_gpu.c.ke_gpu_render_pipeline_params) abi_result.c.ke_result {
+pub fn place(self: *const Self, pp: *abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_result.c.ke_result {
     return self.binder.pipeline_layouts.?(self.binder, self.layout, &pp.bind_group_layouts, pp.bind_group_layouts.len, &pp.bind_group_layout_count);
 }
 

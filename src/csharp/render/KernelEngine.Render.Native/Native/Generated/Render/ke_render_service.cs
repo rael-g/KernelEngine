@@ -57,8 +57,8 @@ public unsafe partial struct ke_render_service
     [NativeTypeName("void (*)(struct ke_render_service *, ke_gpu_buffer, uint64_t, const void *, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, ulong, ulong, void*, nuint, void> upload;
 
-    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_render_service *, const ke_gpu_render_pipeline_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_gpu_render_pipeline_params*, ulong> get_or_create_pipeline;
+    [NativeTypeName("ke_gpu_pipeline (*)(struct ke_render_service *, const ke_gpu_render_pipeline_desc *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_service*, ke_gpu_render_pipeline_desc*, ulong> get_or_create_pipeline;
 
     [NativeTypeName("const char *(*)(struct ke_render_service *, ke_material_handle)")]
     public delegate* unmanaged[Cdecl]<ke_render_service*, global::KernelEngine.Render.MaterialHandle, sbyte*> material_shader;

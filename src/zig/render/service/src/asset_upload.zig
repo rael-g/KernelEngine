@@ -52,7 +52,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_
     if (cached != abi_render_handles.c.KE_HANDLE_NONE) return cached;
 
     var vbo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "mesh.vertices",
         .initial_data = vertices,
         .size = @as(usize, vertex_count) * @sizeOf(abi_mesh.c.ke_mesh_vertex),
@@ -62,7 +62,7 @@ fn mesh(st: *rc.CoreState, key: [*c]const u8, vertices: [*c]const abi_mesh.c.ke_
     errdefer st.device.destroy_buffer.?(st.device, vbo);
 
     var ibo: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "mesh.indices",
         .initial_data = @ptrCast(indices),
         .size = index_count * @sizeOf(u16),
@@ -120,7 +120,7 @@ fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers
     if (cached != abi_render_handles.c.KE_HANDLE_NONE) return cached;
 
     var tex: abi_asset_resolver.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_texture.?(st.device, &abi_render_gpu.c.ke_gpu_texture_params{
+    try R.check(st.device.create_texture.?(st.device, &abi_render_gpu.c.ke_gpu_texture_desc{
         .label = key,
         .width = width,
         .height = height,
@@ -136,7 +136,7 @@ fn texture(st: *rc.CoreState, key: [*c]const u8, width: u32, height: u32, layers
     errdefer st.device.destroy_texture.?(st.device, tex);
 
     var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_texture_view.?(st.device, tex, &abi_render_gpu.c.ke_gpu_texture_view_params{
+    try R.check(st.device.create_texture_view.?(st.device, tex, &abi_render_gpu.c.ke_gpu_texture_view_desc{
         .label = key,
         .format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM,
         .dimension = dimension,

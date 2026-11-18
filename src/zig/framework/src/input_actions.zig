@@ -768,12 +768,12 @@ export fn ke_input_actions_evaluation_create(
 /// vtable's own slots; any failure frees what was built and leaves the handle zeroed.
 export fn ke_input_actions_create(
     configuration: ?*abi_configuration.c.ke_configuration,
-    config_in: ?*const abi_input_actions.c.ke_input_actions_config,
+    section_in: ?[*:0]const u8,
     out_actions: ?*abi_input_actions.c.ke_input_actions_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_actions orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-    const given = config_in orelse return R.code(error.InvalidArgument);
+    const section = section_in orelse return R.code(error.InvalidArgument);
 
     const s = heap.gpa.create(State) catch |err| return R.code(err);
     s.* = .{ .api = std.mem.zeroes(abi_input_actions.c.ke_input_actions) };
@@ -797,11 +797,7 @@ export fn ke_input_actions_create(
     s.api.get_axis3d = vtGetAxis3d;
 
     if (configuration) |cfg| {
-        const section_name: [*:0]const u8 = @ptrCast(given.section orelse {
-            log.warn("input actions: the config names no section", .{});
-            vtDestroy(&s.api);
-            return R.code(error.InvalidArgument);
-        });
+        const section_name: [*:0]const u8 = section;
         const maps = std.fmt.allocPrintSentinel(heap.gpa, "{s}.map", .{std.mem.span(section_name)}, 0) catch {
             vtDestroy(&s.api);
             return R.code(error.OutOfMemory);
@@ -891,14 +887,14 @@ const Actions = struct {
 
     fn init() !Actions {
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectEqual(R.ok, ke_input_actions_create(null, &.{ .section = "input" }, &h));
+        try testing.expectEqual(R.ok, ke_input_actions_create(null, "input", &h));
         return .{ .handle = h };
     }
 
     fn from(entries: []const FakeConfig.Entry) !Actions {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try R.check(ke_input_actions_create(&cfg, &.{ .section = "input" }, &h));
+        try R.check(ke_input_actions_create(&cfg, "input", &h));
         return .{ .handle = h };
     }
 
@@ -1069,7 +1065,7 @@ test "a misspelt key, an unknown kind or type, or a binding missing a key fails 
     for (cases) |entries| {
         var cfg = FakeConfig.api(entries);
         var h = std.mem.zeroes(abi_input_actions.c.ke_input_actions_handle);
-        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, &.{ .section = "input" }, &h)));
+        try testing.expectError(error.InvalidArgument, R.check(ke_input_actions_create(&cfg, "input", &h)));
         try testing.expect(h.ref == null);
     }
 }

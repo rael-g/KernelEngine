@@ -1,0 +1,26 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+
+using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
+
+namespace KernelEngine.Ecs.Native;
+
+public unsafe partial struct ke_component_desc
+{
+    [NativeTypeName("const char *")]
+    public sbyte* name;
+
+    [NativeTypeName("size_t")]
+    public nuint size;
+
+    [NativeTypeName("size_t")]
+    public nuint alignment;
+
+    [NativeTypeName("const ke_component_field *")]
+    public ke_component_field* fields;
+
+    [NativeTypeName("uint32_t")]
+    public uint field_count;
+}

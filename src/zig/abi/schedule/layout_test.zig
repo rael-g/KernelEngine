@@ -25,7 +25,6 @@ test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_schedule_set_desc, translated("ke_schedule_set_desc"));
     try expectSameLayout(abi.c.ke_schedule_system_desc, translated("ke_schedule_system_desc"));
-    try expectSameLayout(abi.c.ke_schedule_config, translated("ke_schedule_config"));
     try expectSameLayout(abi.c.ke_schedule, translated("ke_schedule"));
     try expectSameLayout(abi.c.ke_schedule_handle, translated("ke_schedule_handle"));
     try expectSameLayout(abi.c.ke_schedule_ctx, translated("ke_schedule_ctx"));
@@ -40,9 +39,10 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
     if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
     if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
+    if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
-extern const layout_values: [36]c_ulonglong;
+extern const layout_values: [34]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -64,8 +64,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_schedule_system_desc, "set_count"),
         @offsetOf(abi.c.ke_schedule_system_desc, "per_entity"),
         @offsetOf(abi.c.ke_schedule_system_desc, "exclusive"),
-        @sizeOf(abi.c.ke_schedule_config),
-        @offsetOf(abi.c.ke_schedule_config, "refuse_ambiguity"),
         @sizeOf(abi.c.ke_schedule),
         @offsetOf(abi.c.ke_schedule, "handle"),
         @offsetOf(abi.c.ke_schedule, "register_set"),

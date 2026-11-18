@@ -11,6 +11,8 @@ const abi_result = @import("abi_result");
 const completion_graph = @import("completion_graph");
 const heap = @import("heap");
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.job_system_inline);
 
@@ -150,22 +152,25 @@ fn destroy(self_in: ?*j.ke_job_system) callconv(.c) void {
     heap.gpa.destroy(self);
 }
 
-export fn ke_job_system_inline_create(config_in: ?*const j.ke_job_system_config, out_job_system: ?*j.ke_job_system_handle) callconv(.c) Result {
+/// The job system's settings: the contract's worker count, which only zero satisfies.
+const Settings = struct {
+    worker_count: u32 = 0,
+
+    pub const ranges = .{ .worker_count = .{ 0, 0 } };
+};
+
+export fn ke_job_system_inline_create(settings: ?*abi_settings.c.ke_settings, out_job_system: ?*j.ke_job_system_handle) callconv(.c) Result {
     const out = out_job_system orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(j.ke_job_system_handle);
-    out.* = create(config_in) catch |err| {
+    out.* = create(settings) catch |err| {
         log.warn("creating the job system failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(config_in: ?*const j.ke_job_system_config) R.Error!j.ke_job_system_handle {
-    const config = config_in orelse return error.InvalidArgument;
-    if (config.worker_count != 0) {
-        log.warn("worker_count must be zero: an inline job system has no worker", .{});
-        return error.InvalidArgument;
-    }
+fn create(settings: ?*abi_settings.c.ke_settings) R.Error!j.ke_job_system_handle {
+    _ = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
     self.* = .{
         .api = .{ .handle = self, .dispatch = dispatch, .parallel_for = parallelFor, .worker_slots = workerSlots, .drain = drain },
@@ -180,7 +185,8 @@ const testing = std.testing;
 
 fn created() anyerror!j.ke_job_system_handle {
     var h: j.ke_job_system_handle = undefined;
-    try R.check(ke_job_system_inline_create(&.{ .worker_count = 0 }, &h));
+    var none = settings_schema.Fixed.init(&.{});
+    try R.check(ke_job_system_inline_create(&none.api, &h));
     return h;
 }
 
@@ -207,7 +213,8 @@ fn countRun(data: ?*anyopaque, _: ?*const j.ke_job_ctx) callconv(.c) Result {
 
 test "a worker count other than zero is refused" {
     var h: j.ke_job_system_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_job_system_inline_create(&.{ .worker_count = 1 }, &h)));
+    var one = settings_schema.Fixed.init(&.{.{ .key = "worker_count", .value = .{ .int = 1 } }});
+    try testing.expectError(error.InvalidArgument, R.check(ke_job_system_inline_create(&one.api, &h)));
 }
 
 test "creating and destroying job systems leaves no block allocated" {

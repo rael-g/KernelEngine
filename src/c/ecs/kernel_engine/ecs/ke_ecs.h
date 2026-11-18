@@ -113,7 +113,7 @@ extern "C"
          *         no field table to migrate by, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*component_register)(struct ke_ecs              *self,
-                                        const ke_component_params  *params,
+                                        const ke_component_desc  *params,
                                         ke_component_id            *out_cid);
 
         /**
@@ -365,13 +365,6 @@ extern "C"
         void (*destroy)(ke_ecs *self);
     } ke_ecs_handle;
 
-/// The values an ECS is created with, whatever its implementation, each applied as given.
-typedef struct ke_ecs_config
-{
-    /// How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve
-    /// fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily.
-    uint32_t reserved_id_capacity;
-} ke_ecs_config;
 
 #ifdef __cplusplus
 }

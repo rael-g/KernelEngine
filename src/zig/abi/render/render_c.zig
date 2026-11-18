@@ -111,13 +111,6 @@ pub const ke_render_lighting = extern struct {
     ambient: [4]f32 = std.mem.zeroes([4]f32),
 };
 
-/// The values a render service is created with, whatever its implementation, each applied as
-/// given.
-pub const ke_render_service_config = extern struct {
-    /// Directory the shaders are loaded from; copied. Required.
-    shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
 /// The perspective frustum a camera's field of view describes.
 pub const ke_camera_frustum = extern struct {
     /// Tangent of half the vertical field of view.
@@ -176,7 +169,7 @@ pub const ke_render_service = extern struct {
     /// Records a buffer upload, submitted by submit_uploads.
     upload: ?*const fn (?*ke_render_service, ke_gpu_buffer, u64, ?*const anyopaque, usize) callconv(.c) void = null,
     /// Returns the pipeline for this exact params state, compiling it on first request.
-    get_or_create_pipeline: ?*const fn (?*ke_render_service, ?*const abi_render_gpu.c.ke_gpu_render_pipeline_params) callconv(.c) ke_gpu_pipeline = null,
+    get_or_create_pipeline: ?*const fn (?*ke_render_service, ?*const abi_render_gpu.c.ke_gpu_render_pipeline_desc) callconv(.c) ke_gpu_pipeline = null,
     /// The authored-material shader name a material handle was created with (see create_material's
     /// `shader`).
     material_shader: ?*const fn (?*ke_render_service, abi_render_handles.c.ke_material_handle) callconv(.c) ?[*:0]const u8 = null,

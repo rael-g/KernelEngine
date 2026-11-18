@@ -4,7 +4,11 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// The body of a job, run once on a worker after every dependency finished, whatever each
 /// finished with.
@@ -22,7 +26,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Creates a 2D physics world whose solver runs its tasks on job_system, borrowed for the
 /// world's lifetime, one Box2D worker per worker slot.
-pub extern fn ke_physics_2d_box2d_create(job_system: ?*abi_job.c.ke_job_system, config: ?*const abi_physics.c.ke_physics_2d_config, out_world: ?*abi_physics.c.ke_physics_2d_handle) abi_result.c.ke_result;
+pub extern fn ke_physics_2d_box2d_create(job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_world: ?*abi_physics.c.ke_physics_2d_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_physics_2d_box2d logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

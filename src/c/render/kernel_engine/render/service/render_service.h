@@ -166,7 +166,7 @@ struct ke_render_service
     /// Returns the pipeline for this exact params state, compiling it on first
     /// request.
     ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_service *self,
-                                              const ke_gpu_render_pipeline_params *params);
+                                              const ke_gpu_render_pipeline_desc *params);
 
     /// The authored-material shader name a material handle was created with
     /// (see create_material's `shader`).
@@ -243,13 +243,6 @@ typedef struct ke_render_service_handle
     ke_render_service *ref;
     void (*destroy)(ke_render_service *self);
 } ke_render_service_handle;
-
-/// [borrowed] The values a render service is created with, whatever its implementation, each applied as given.
-typedef struct ke_render_service_config
-{
-    /// [utf8] Directory the shaders are loaded from; copied. Required.
-    const char           *shader_dir;
-} ke_render_service_config;
 
 #ifdef __cplusplus
 }

@@ -72,10 +72,11 @@ struct ke_gpu_command_encoder
     void *handle;
 
     struct ke_gpu_render_pass  *(*begin_render_pass)(struct ke_gpu_command_encoder *self,
-                                                     const ke_gpu_render_pass_params *p);
-    /// Begins a compute pass. p may be NULL, which begins it unlabeled.
+                                                     const ke_gpu_render_pass_desc *p);
+    /// Begins a compute pass.
+    /// @param label [borrowed,optional,utf8] Name shown by capture and validation tools; copied by the call.
     struct ke_gpu_compute_pass *(*begin_compute_pass)(struct ke_gpu_command_encoder *self,
-                                                      const ke_gpu_compute_pass_params *p);
+                                                      const char *label);
     void (*copy_buffer_to_buffer)(struct ke_gpu_command_encoder *self,
                                   ke_gpu_buffer src, size_t src_offset,
                                   ke_gpu_buffer dst, size_t dst_offset, size_t size);

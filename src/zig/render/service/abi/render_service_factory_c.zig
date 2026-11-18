@@ -39,7 +39,7 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a render service whose frames draw into target.
-pub extern fn ke_render_service_create(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, config: ?*const abi_render.c.ke_render_service_config, out_service: ?*abi_render.c.ke_render_service_handle) abi_result.c.ke_result;
+pub extern fn ke_render_service_create(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: ?[*:0]const u8, out_service: ?*abi_render.c.ke_render_service_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_service logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

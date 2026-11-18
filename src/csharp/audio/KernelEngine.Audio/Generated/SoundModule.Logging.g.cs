@@ -11,14 +11,14 @@ public sealed unsafe partial class SoundModule
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public SoundModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config) : base(CreateLogged(loggerFactory, ecs, audio, config))
+    /// <param name="root">Directory a clip's path is joined to; copied.</param>
+    public SoundModule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root = default) : base(CreateLogged(loggerFactory, ecs, audio, root))
     {
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, in KernelEngine.Audio.SoundConfig config)
+    private static KernelEngine.Module.Native.ke_module_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root)
     {
         if (loggerFactory is not null) KernelEngine.Audio.Native.NativeMethods.audio_module_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(ecs, audio, config);
+        return Create(ecs, audio, root);
     }
 }

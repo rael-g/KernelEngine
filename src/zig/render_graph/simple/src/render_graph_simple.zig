@@ -486,7 +486,7 @@ fn make(s: *State, r: *Resource) R.Error!void {
         g.KE_RENDER_GRAPH_RESOURCE_TEXTURE => {
             if (r.texture_usage == 0) return;
             const d = r.texture_desc;
-            const params: gpu.ke_gpu_texture_params = .{
+            const params: gpu.ke_gpu_texture_desc = .{
                 .label = r.name.ptr,
                 .width = r.width,
                 .height = r.height,
@@ -498,7 +498,7 @@ fn make(s: *State, r: *Resource) R.Error!void {
                 .sample_count = @intCast(d.samples),
             };
             try R.check(s.device.create_texture.?(s.device, &params, &r.texture));
-            const view: gpu.ke_gpu_texture_view_params = .{
+            const view: gpu.ke_gpu_texture_view_desc = .{
                 .label = r.name.ptr,
                 .format = d.format,
                 .dimension = gpu.KE_GPU_TEXTURE_DIM_2D,
@@ -512,7 +512,7 @@ fn make(s: *State, r: *Resource) R.Error!void {
         },
         g.KE_RENDER_GRAPH_RESOURCE_BUFFER => {
             if (r.buffer_usage == 0) return;
-            const params: gpu.ke_gpu_buffer_params = .{ .label = r.name.ptr, .size = @intCast(r.buffer_size), .usage = r.buffer_usage };
+            const params: gpu.ke_gpu_buffer_desc = .{ .label = r.name.ptr, .size = @intCast(r.buffer_size), .usage = r.buffer_usage };
             try R.check(s.device.create_buffer.?(s.device, &params, &r.buffer));
         },
         else => {},
@@ -527,7 +527,7 @@ fn isDepth(format: gpu.ke_gpu_texture_format) bool {
 fn viewOf(s: *State, r: *Resource, u: g.ke_render_graph_use) R.Error!u64 {
     if (u.base_mip == 0 and u.mip_count == 0 and u.base_layer == 0 and u.layer_count == 0 and u.view_format == gpu.KE_GPU_TEXTURE_FORMAT_INVALID) return r.view;
     if (r.texture == invalid) return r.view;
-    const params: gpu.ke_gpu_texture_view_params = .{
+    const params: gpu.ke_gpu_texture_view_desc = .{
         .label = r.name.ptr,
         .format = if (u.view_format == gpu.KE_GPU_TEXTURE_FORMAT_INVALID) r.texture_desc.format else u.view_format,
         .dimension = gpu.KE_GPU_TEXTURE_DIM_2D,
@@ -577,7 +577,7 @@ fn recordRaster(s: *State, p: *Pass, encoder: *gpu.ke_gpu_command_encoder) R.Err
             else => {},
         }
     }
-    const params: gpu.ke_gpu_render_pass_params = .{ .label = p.name.ptr, .color_attachments = &colors, .color_attachment_count = color_count, .depth_stencil_attachment = if (has_depth) &depth else null };
+    const params: gpu.ke_gpu_render_pass_desc = .{ .label = p.name.ptr, .color_attachments = &colors, .color_attachment_count = color_count, .depth_stencil_attachment = if (has_depth) &depth else null };
     const pass = encoder.begin_render_pass.?(encoder, &params) orelse return error.General;
     s.render_pass = pass;
     defer s.render_pass = null;
@@ -592,8 +592,7 @@ fn recordOne(s: *State, p: *Pass, encoder: *gpu.ke_gpu_command_encoder) R.Error!
     switch (p.desc.type) {
         g.KE_RENDER_GRAPH_PASS_RASTER => return recordRaster(s, p, encoder),
         g.KE_RENDER_GRAPH_PASS_COMPUTE => {
-            const params: gpu.ke_gpu_compute_pass_params = .{ .label = p.name.ptr };
-            const pass = encoder.begin_compute_pass.?(encoder, &params) orelse return error.General;
+            const pass = encoder.begin_compute_pass.?(encoder, p.name.ptr) orelse return error.General;
             s.compute_pass = pass;
             defer s.compute_pass = null;
             const result = p.desc.record.?(p.desc.user, &s.ctx);

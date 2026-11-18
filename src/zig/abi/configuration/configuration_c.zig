@@ -2,20 +2,16 @@
 
 const std = @import("std");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
-pub const ke_configuration_subscription = u32;
 
-pub const KE_CONFIGURATION_SUBSCRIPTION_NONE = 4294967295;
-
-/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
-/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
-/// section changed and does nothing else.
-pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// A typed (section, key) to value store.
+/// A typed (section, key) to value store, holding what a part is created with.
 pub const ke_configuration = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     get_int: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, i64) callconv(.c) i64 = null,
@@ -24,9 +20,9 @@ pub const ke_configuration = extern struct {
     /// Returned pointer is owned by the store and valid until the same key is overwritten or the
     /// store is destroyed. Copy it if you need to retain.
     get_string: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) ?[*:0]const u8 = null,
-    /// Stores value under section and key, replacing what the key held, then runs the section's
-    /// subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and
-    /// KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.
+    /// Stores value under section and key, replacing what the key held. Returns
+    /// KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the
+    /// entry cannot be stored; the store is then unchanged.
     set_int: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, i64) callconv(.c) abi_result.c.ke_result = null,
     /// As set_int, for a double.
     set_double: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, f64) callconv(.c) abi_result.c.ke_result = null,
@@ -34,11 +30,9 @@ pub const ke_configuration = extern struct {
     set_bool: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, bool) callconv(.c) abi_result.c.ke_result = null,
     /// As set_int, for a string, copied; a null value is also an invalid argument.
     set_string: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
-    /// Subscribes to writes on `section`. Returns a subscription id, or
-    /// KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.
-    subscribe: ?*const fn (?*ke_configuration, ?[*:0]const u8, ke_configuration_change_func, ?*anyopaque) callconv(.c) ke_configuration_subscription = null,
-    /// Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.
-    unsubscribe: ?*const fn (?*ke_configuration, ke_configuration_subscription) callconv(.c) void = null,
+    /// The keys directly in section as the settings a part is created with. Each read looks the
+    /// store up at the time it is made; keys of sections under section are not included.
+    section: ?*const fn (?*ke_configuration, ?[*:0]const u8, ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result = null,
     /// Lists the sections directly under section, once each, in the order their first key was
     /// stored. A section is under another when its name is the other's followed by a dot and one
     /// more name; it is listed when it or any section under it holds a key.

@@ -83,5 +83,4 @@ pub const JobSystem = struct {
 };
 
 pub const JobCtx = c.ke_job_ctx;
-pub const JobSystemConfig = c.ke_job_system_config;
 pub const JobSystemHandle = c.ke_job_system_handle;

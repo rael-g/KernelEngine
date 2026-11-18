@@ -273,7 +273,7 @@ pub const NodeTypes = struct {
                 }
             }.call,
             .register_event = &struct {
-                fn call(self: ?*c.ke_node_types, a0: ?*const abi_ecs.c.ke_component_params, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_node_types, a0: ?*const abi_ecs.c.ke_component_desc, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.registerEvent(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -327,7 +327,7 @@ pub const NodeTypes = struct {
     }
 
     /// Registers an event type.
-    pub fn registerEvent(self: NodeTypes, event: ?*const abi_ecs.c.ke_component_params) Error!c.ke_component_id {
+    pub fn registerEvent(self: NodeTypes, event: ?*const abi_ecs.c.ke_component_desc) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.register_event.?(self.ptr, event, &written));
         return written;

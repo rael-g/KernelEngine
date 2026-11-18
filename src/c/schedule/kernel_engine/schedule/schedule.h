@@ -120,11 +120,6 @@ typedef struct ke_schedule {
     bool (*reads)(ke_schedule *self, ke_component_id component);
 } ke_schedule;
 
-/// [value] What a schedule is created with, each field applied as given.
-typedef struct ke_schedule_config {
-    /// An ambiguity between two writers fails the run instead of being logged.
-    bool refuse_ambiguity;
-} ke_schedule_config;
 
 /// [owner]
 typedef struct ke_schedule_handle {

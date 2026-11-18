@@ -49,6 +49,7 @@
         .abi_scene_tree = .{ .path = "scene_tree" },
         .abi_schedule = .{ .path = "schedule" },
         .abi_scheduler = .{ .path = "scheduler" },
+        .abi_settings = .{ .path = "settings" },
         .abi_spatial = .{ .path = "spatial" },
         .abi_spatial_contract = .{ .path = "spatial_contract" },
         .abi_text = .{ .path = "text" },

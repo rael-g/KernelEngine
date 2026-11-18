@@ -124,7 +124,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
                 }
                 fixed (ke_component_field* fieldsPtr = fieldsNative)
                 {
-                    ke_component_params @params = default;
+                    ke_component_desc @params = default;
                     @params.name = (sbyte*)namePtr;
                     @params.size = size;
                     @params.alignment = alignment;

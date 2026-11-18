@@ -145,11 +145,12 @@ extern "C"
         void (*destroy)(ke_physics_2d *self);
     } ke_physics_2d_handle;
 
-/// The values a 2D physics world is created with, whatever its implementation, each applied as given.
-typedef struct ke_physics_2d_config {
-    float gravity_x; /**< Horizontal gravity, in metres per second squared. */
-    float gravity_y; /**< Vertical gravity, in metres per second squared. */
-} ke_physics_2d_config;
+/// Setting every 2D physics world reads, a number: the horizontal gravity it starts with, in metres per
+/// second squared; set_gravity changes it later.
+#define KE_PHYSICS_2D_SETTING_GRAVITY_X "gravity_x"
+/// Setting every 2D physics world reads, a number: the vertical gravity it starts with, in metres per
+/// second squared; set_gravity changes it later.
+#define KE_PHYSICS_2D_SETTING_GRAVITY_Y "gravity_y"
 
 #ifdef __cplusplus
 }

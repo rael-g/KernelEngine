@@ -48,13 +48,13 @@ fn store(out: [*c]abi_math.c.ke_mat4, m: zm.Mat) void {
 
 /// Reports the factor that turns a view-space z into a distance in front of the camera: negative
 /// for right-handed, positive for left-handed. Returns zero when self or its handle is null.
-fn viewSpaceParams(self_in: ?*abi_view.c.ke_view_space) callconv(.c) abi_view.c.ke_view_space_params {
-    const self = self_in orelse return .{ .depth_from_view_z = 0.0 };
-    if (self.handle == null) return .{ .depth_from_view_z = 0.0 };
-    return .{ .depth_from_view_z = switch (stateOf(self).hand) {
+fn depthFromViewZ(self_in: ?*abi_view.c.ke_view_space) callconv(.c) f32 {
+    const self = self_in orelse return 0.0;
+    if (self.handle == null) return 0.0;
+    return switch (stateOf(self).hand) {
         .right => -1.0,
         .left => 1.0,
-    } };
+    };
 }
 
 /// Builds a view matrix from an eye point, a forward direction and an up direction, with the
@@ -225,7 +225,7 @@ fn create(hand: Handedness, out_view_space: ?*abi_view.c.ke_view_space_handle) a
     };
     s.* = .{ .api = std.mem.zeroes(abi_view.c.ke_view_space), .hand = hand };
     s.api.handle = s;
-    s.api.params = viewSpaceParams;
+    s.api.depth_from_view_z = depthFromViewZ;
     s.api.look_to = viewSpaceLookTo;
     s.api.look_at = viewSpaceLookAt;
     s.api.view_from_transform = viewSpaceFromTransform;
@@ -263,7 +263,7 @@ fn viewDepthOf(h: abi_view.c.ke_view_space_handle, world: abi_math.c.ke_vec3, ey
     h.ref.?.look_at.?(h.ref, &eye, &target, &up, &view);
     const m = zm.loadMat(&view.m);
     const p = zm.mul(zm.f32x4(world.x, world.y, world.z, 1.0), m);
-    return p[2] * h.ref.?.params.?(h.ref).depth_from_view_z;
+    return p[2] * h.ref.?.depth_from_view_z.?(h.ref);
 }
 
 test "both view spaces report a surface in front of the camera as positive depth" {
@@ -289,8 +289,8 @@ test "the two view spaces disagree on the sign of view z and only there" {
     const lh = try made(ke_view_space_lh_create);
     defer lh.destroy.?(lh.ref);
 
-    try testing.expectEqual(@as(f32, -1.0), rh.ref.?.params.?(rh.ref).depth_from_view_z);
-    try testing.expectEqual(@as(f32, 1.0), lh.ref.?.params.?(lh.ref).depth_from_view_z);
+    try testing.expectEqual(@as(f32, -1.0), rh.ref.?.depth_from_view_z.?(rh.ref));
+    try testing.expectEqual(@as(f32, 1.0), lh.ref.?.depth_from_view_z.?(lh.ref));
 
     const eye = abi_math.c.ke_vec3{ .x = 1, .y = 2, .z = 7 };
     const point = abi_math.c.ke_vec3{ .x = -3, .y = 1, .z = 0.5 };
@@ -324,7 +324,7 @@ test "a perspective projection puts the near plane at clip zero and the far plan
         h.ref.?.perspective.?(h.ref, 1.0, 1.0, 0.5, 50.0, &webgpu_clip, &proj);
         const p = zm.loadMat(&proj.m);
 
-        const sign = h.ref.?.params.?(h.ref).depth_from_view_z;
+        const sign = h.ref.?.depth_from_view_z.?(h.ref);
         const near_v = zm.f32x4(0, 0, 0.5 / sign, 1.0);
         const far_v = zm.f32x4(0, 0, 50.0 / sign, 1.0);
         const near_clip = zm.mul(near_v, p);
@@ -345,7 +345,7 @@ test "every slot tolerates a null self instead of faulting on it" {
     viewSpacePerspective(null, 1.0, 1.0, 0.1, 10.0, &webgpu_clip, &out);
     viewSpaceOrthographic(null, 1.0, 1.0, 0.1, 10.0, &webgpu_clip, &out);
 
-    try testing.expectEqual(@as(f32, 0.0), viewSpaceParams(null).depth_from_view_z);
+    try testing.expectEqual(@as(f32, 0.0), depthFromViewZ(null));
     try testing.expectEqual(@as(f32, 0.0), out.m[0]);
 }
 
@@ -407,9 +407,9 @@ test "the same camera basis faces opposite ways under the two view spaces" {
     lh.ref.?.view_from_transform.?(lh.ref, &world, &lh_view);
 
     const rh_depth = zm.mul(toward_plus_x, zm.loadMat(&rh_view.m))[2] *
-        rh.ref.?.params.?(rh.ref).depth_from_view_z;
+        rh.ref.?.depth_from_view_z.?(rh.ref);
     const lh_depth = zm.mul(toward_plus_x, zm.loadMat(&lh_view.m))[2] *
-        lh.ref.?.params.?(lh.ref).depth_from_view_z;
+        lh.ref.?.depth_from_view_z.?(lh.ref);
 
     try testing.expect(lh_depth > 0.0);
     try testing.expect(rh_depth < 0.0);
@@ -425,7 +425,7 @@ test "turning a camera around swaps which side of it is visible" {
     inline for (.{ ke_view_space_rh_create, ke_view_space_lh_create }) |factory| {
         const h = try made(factory);
         defer h.destroy.?(h.ref);
-        const sign = h.ref.?.params.?(h.ref).depth_from_view_z;
+        const sign = h.ref.?.depth_from_view_z.?(h.ref);
 
         const facing = cameraLookingDown(local_z, at_origin);
         const turned = cameraLookingDown(flipped_z, at_origin);
@@ -456,7 +456,7 @@ test "an unrotated camera basis aims at the world origin rather than at nothing"
         var view: abi_math.c.ke_mat4 = undefined;
         h.ref.?.view_from_transform.?(h.ref, &world, &view);
         const m = zm.loadMat(&view.m);
-        const sign = h.ref.?.params.?(h.ref).depth_from_view_z;
+        const sign = h.ref.?.depth_from_view_z.?(h.ref);
 
         const origin_depth = zm.mul(zm.f32x4(0, 0, 0, 1), m)[2] * sign;
         try testing.expectApproxEqAbs(@as(f32, 8.0), origin_depth, 1e-3);

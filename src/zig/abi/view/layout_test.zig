@@ -23,21 +23,18 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_view_space_params, translated("ke_view_space_params"));
     try expectSameLayout(abi.c.ke_view_space, translated("ke_view_space"));
     try expectSameLayout(abi.c.ke_view_space_handle, translated("ke_view_space_handle"));
 }
 
-extern const layout_values: [14]c_ulonglong;
+extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_view_space_params),
-        @offsetOf(abi.c.ke_view_space_params, "depth_from_view_z"),
         @sizeOf(abi.c.ke_view_space),
         @offsetOf(abi.c.ke_view_space, "handle"),
-        @offsetOf(abi.c.ke_view_space, "params"),
+        @offsetOf(abi.c.ke_view_space, "depth_from_view_z"),
         @offsetOf(abi.c.ke_view_space, "look_to"),
         @offsetOf(abi.c.ke_view_space, "look_at"),
         @offsetOf(abi.c.ke_view_space, "view_from_transform"),

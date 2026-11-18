@@ -5,6 +5,7 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("schedule_factory_c.zig");
@@ -14,9 +15,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
-pub fn scheduleCreate(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const abi_schedule.c.ke_schedule_config) Error!abi_schedule.c.ke_schedule_handle {
+pub fn scheduleCreate(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings) Error!abi_schedule.c.ke_schedule_handle {
     var written: abi_schedule.c.ke_schedule_handle = undefined;
-    try checkResult(c.ke_schedule_create(ecs, job_system, config, &written));
+    try checkResult(c.ke_schedule_create(ecs, job_system, settings, &written));
     return written;
 }
 

@@ -33,6 +33,7 @@
 #include <kernel_engine/async/inline/async_inline_create.h>
 #include <kernel_engine/schedule/schedule_create.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
+#include <kernel_engine/configuration/configuration_create.h>
 
 #include <stb_image_write.h>
 
@@ -109,7 +110,7 @@ static void read_texture(ke_gpu_device *gpu, ke_gpu_texture texture, uint8_t *ou
     uint32_t padded_row = (WIDTH * BYTES_PER_TEXEL + align - 1) / align * align;
 
     ke_gpu_buffer staging = { 0 };
-    check("staging buffer create", gpu->create_buffer(gpu, &(ke_gpu_buffer_params){
+    check("staging buffer create", gpu->create_buffer(gpu, &(ke_gpu_buffer_desc){
         .size = (size_t)padded_row * HEIGHT,
         .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &staging));
 
@@ -156,27 +157,30 @@ typedef struct renderer
     ke_schedule_set_id sets[4];
 } renderer;
 
+static ke_settings *unset;
+static ke_settings *clear;
+
 static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = "shaders" }, &r->binder));
-    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, &(ke_render_service_config){ .shader_dir = "shaders" }, &r->service));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, "shaders", &r->binder));
+    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, "shaders", &r->service));
     ke_render_service *core = r->service.ref;
     check("render graph", ke_render_graph_simple_create(gpu, &r->graph));
     check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
     check("scene resolve", ke_render_scene_resolve_create(main_world, render_world, extraction, core, NULL, &r->scene));
     check("frame", ke_render_frame_create(render_world, r->graph.ref, core, r->camera.ref, r->scene.ref,
-        &(ke_render_frame_config){ .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->frame));
+        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, clear, &r->frame));
     check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
     const ke_render_context context = {
         .ecs = render_world, .main = main_world, .extraction = extraction, .service = core, .device = gpu, .view_space = r->view_space.ref,
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
-    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster));
+    check("shadow pass", ke_render_shadow_create(&context, unset, &r->shadow));
+    check("cluster pass", ke_render_cluster_create(&context, unset, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred));
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, unset, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
 
     const char *names[4] = { "render_begin", "render_prepare", "render_queue", "render_submit" };
@@ -211,13 +215,24 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
-    ke_gpu_device_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
+    ke_configuration_handle configuration = { 0 };
+    check("configuration", ke_configuration_create(&configuration));
+    check("unset settings", configuration.ref->section(configuration.ref, "unset", &unset));
+    const double clear_color[4] = { 0.10, 0.15, 0.30, 1.0 };
+    const char *clear_keys[4] = { "clear_color.0", "clear_color.1", "clear_color.2", "clear_color.3" };
+    for (int i = 0; i < 4; ++i) check("clear colour", configuration.ref->set_double(configuration.ref, "render", clear_keys[i], clear_color[i]));
+    check("frame settings", configuration.ref->section(configuration.ref, "render", &clear));
+
+    check("device settings", configuration.ref->set_bool(configuration.ref, "device", "enable_validation", true));
+    check("device settings", configuration.ref->set_bool(configuration.ref, "device", "debug_labels", renderdoc));
+    ke_settings *dp = NULL;
+    check("device settings", configuration.ref->section(configuration.ref, "device", &dp));
     ke_gpu_device_handle gpu = { 0 };
     ke_completion *gpu_ready = NULL;
-    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu_ready, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, dp, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
-    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
+    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_desc){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
@@ -236,27 +251,27 @@ int main(int argc, char **argv)
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(unset, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
 
     ke_job_system_handle jobs = { 0 };
-    check("job system", ke_job_system_inline_create(&(ke_job_system_config){ .worker_count = 0 }, &jobs));
+    check("job system", ke_job_system_inline_create(unset, &jobs));
     ke_async_handle async = { 0 };
-    check("async", ke_async_inline_create(&(ke_async_config){ .worker_count = 0, .submit_capacity = 64 }, &async));
+    check("async", ke_async_inline_create(unset, &async));
     ke_scheduler_handle scheduler = { 0 };
-    check("scheduler", ke_scheduler_create(jobs.ref, async.ref, &(ke_scheduler_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f }, &scheduler));
+    check("scheduler", ke_scheduler_create(jobs.ref, async.ref, unset, &scheduler));
     ke_ecs_handle render_world = { 0 };
-    check("render world", ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &render_world));
+    check("render world", ke_ecs_flecs_create(unset, &render_world));
     ke_schedule_handle render_schedule = { 0 };
-    check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &render_schedule));
+    check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, unset, &render_schedule));
     ke_extraction_handle extraction = { 0 };
     check("extraction", ke_extraction_create(ecs.ref, render_world.ref, scheduler.ref, render_schedule.ref, &extraction));
     check("render stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)extraction.ref->run, extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));
 
     renderer render;
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(".", &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_async_create(async.ref, files.ref, &file_io));
     renderer_compose(&render, ecs.ref, render_world.ref, extraction.ref, render_schedule.ref, gpu.ref, frame_target, file_io.ref);
@@ -272,19 +287,19 @@ int main(int argc, char **argv)
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &mat));
 
     ke_component_id transform_cid = KE_COMPONENT_INVALID;
-    ke_result registered_transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, &transform_cid);
+    ke_result registered_transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, &transform_cid);
     if (registered_transform_cid != KE_OK) die_result("component_register", registered_transform_cid);
     ke_component_id world_cid = KE_COMPONENT_INVALID;
-    ke_result registered_world_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = sizeof(ke_world_transform_component), .alignment = _Alignof(ke_world_transform_component) }, &world_cid);
+    ke_result registered_world_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = sizeof(ke_world_transform_component), .alignment = _Alignof(ke_world_transform_component) }, &world_cid);
     if (registered_world_cid != KE_OK) die_result("component_register", registered_world_cid);
     ke_component_id camera_cid = KE_COMPONENT_INVALID;
-    ke_result registered_camera_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_CAMERA, .size = sizeof(ke_camera_component), .alignment = _Alignof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields) }, &camera_cid);
+    ke_result registered_camera_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_CAMERA, .size = sizeof(ke_camera_component), .alignment = _Alignof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields) }, &camera_cid);
     if (registered_camera_cid != KE_OK) die_result("component_register", registered_camera_cid);
     ke_component_id mesh_cid = KE_COMPONENT_INVALID;
-    ke_result registered_mesh_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_MESH, .size = sizeof(ke_mesh_component), .alignment = _Alignof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields) }, &mesh_cid);
+    ke_result registered_mesh_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_MESH, .size = sizeof(ke_mesh_component), .alignment = _Alignof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields) }, &mesh_cid);
     if (registered_mesh_cid != KE_OK) die_result("component_register", registered_mesh_cid);
     ke_component_id light_cid = KE_COMPONENT_INVALID;
-    ke_result registered_light_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = sizeof(ke_directional_light_component), .alignment = _Alignof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields) }, &light_cid);
+    ke_result registered_light_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = sizeof(ke_directional_light_component), .alignment = _Alignof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields) }, &light_cid);
     if (registered_light_cid != KE_OK) die_result("component_register", registered_light_cid);
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };
@@ -357,6 +372,7 @@ int main(int argc, char **argv)
     target.destroy(target.ref);
     gpu.ref->destroy_texture(gpu.ref, texture);
     gpu.destroy(gpu.ref);
+    configuration.destroy(configuration.ref);
 
     printf("--- Done ---\n");
     return lit > 0 && written ? 0 : 1;

@@ -41,13 +41,14 @@ extern "C"
         void (*destroy)(ke_window *self);
     } ke_window_handle;
 
-/// [borrowed] The values a window is created with, whatever its implementation, each applied as given.
-typedef struct ke_window_config {
-    const char *title;  /**< [borrowed,utf8] Window title. */
-    int32_t     width;      /**< Client width in pixels. */
-    int32_t     height;     /**< Client height in pixels. */
-    bool        fullscreen; /**< Whether the window covers the primary monitor. */
-} ke_window_config;
+/// Setting every window implementation reads, a string: the window's title.
+#define KE_WINDOW_SETTING_TITLE "title"
+/// Setting every window implementation reads, an integer: the client width in pixels.
+#define KE_WINDOW_SETTING_WIDTH "width"
+/// Setting every window implementation reads, an integer: the client height in pixels.
+#define KE_WINDOW_SETTING_HEIGHT "height"
+/// Setting every window implementation reads, a boolean: whether the window covers the primary monitor.
+#define KE_WINDOW_SETTING_FULLSCREEN "fullscreen"
 
 #ifdef __cplusplus
 }

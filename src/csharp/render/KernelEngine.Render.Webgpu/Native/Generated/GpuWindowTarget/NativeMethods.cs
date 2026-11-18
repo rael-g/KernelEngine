@@ -1,10 +1,9 @@
 using System.Numerics;
 using System.Runtime.InteropServices;
 
-using global::KernelEngine.Render;
-
 using KernelEngine.Render.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Settings.Native;
 using KernelEngine.Window.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
@@ -13,5 +12,5 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_gpu_device_webgpu", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_gpu_render_target_webgpu_window_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result gpu_render_target_webgpu_window_create([NativeTypeName("ke_gpu_device *")] KernelEngine.Render.Native.ke_gpu_device* device, [NativeTypeName("struct ke_window *")] KernelEngine.Window.Native.ke_window* window, [NativeTypeName("const ke_gpu_render_target_window_config *")] global::KernelEngine.Render.GpuRenderTargetWindowConfig* config, [NativeTypeName("ke_gpu_render_target_handle *")] KernelEngine.Render.Native.ke_gpu_render_target_handle* out_target);
+    public static extern KernelEngine.Result.Native.Result gpu_render_target_webgpu_window_create([NativeTypeName("ke_gpu_device *")] KernelEngine.Render.Native.ke_gpu_device* device, [NativeTypeName("struct ke_window *")] KernelEngine.Window.Native.ke_window* window, [NativeTypeName("ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, [NativeTypeName("ke_gpu_render_target_handle *")] KernelEngine.Render.Native.ke_gpu_render_target_handle* out_target);
 }

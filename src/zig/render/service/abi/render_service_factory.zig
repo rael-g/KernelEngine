@@ -14,9 +14,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a render service whose frames draw into target.
-pub fn renderServiceCreate(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, config: ?*const abi_render.c.ke_render_service_config) Error!abi_render.c.ke_render_service_handle {
+pub fn renderServiceCreate(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [:0]const u8) Error!abi_render.c.ke_render_service_handle {
     var written: abi_render.c.ke_render_service_handle = undefined;
-    try checkResult(c.ke_render_service_create(device, target, io, binder, config, &written));
+    try checkResult(c.ke_render_service_create(device, target, io, binder, shader_dir.ptr, &written));
     return written;
 }
 

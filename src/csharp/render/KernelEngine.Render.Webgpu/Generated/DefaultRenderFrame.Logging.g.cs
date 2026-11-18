@@ -14,14 +14,16 @@ public sealed unsafe partial class DefaultRenderFrame
     /// <param name="service">The frame begins, uploads and presents on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
     /// <param name="scene">Names the components the frame reads; borrowed, must outlive it.</param>
-    /// <param name="config">The frame's values; Required; every field is read as given.</param>
-    public DefaultRenderFrame(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config) : base(CreateLogged(loggerFactory, ecs, graph, service, camera, scene, config))
+    /// <param name="colorFormat">Format of the colour the frame begins with, up to KE_RENDER_STAGE_HDR_POST.</param>
+    /// <param name="depthFormat">Format of the frame's depth.</param>
+    /// <param name="settings">Read once. `clear_color`, four numbers from 0 to 1 under `clear_color.0` to `clear_color.3`, default 0, 0, 0, 1: the colour the frame's colour is cleared to.</param>
+    public DefaultRenderFrame(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, ecs, graph, service, camera, scene, colorFormat, depthFormat, settings))
     {
     }
 
-    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config)
+    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(ecs, graph, service, camera, scene, config);
+        return Create(ecs, graph, service, camera, scene, colorFormat, depthFormat, settings);
     }
 }

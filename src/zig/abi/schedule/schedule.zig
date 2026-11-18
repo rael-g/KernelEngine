@@ -5,6 +5,7 @@ const abi_completion = @import("completion");
 const abi_ecs = @import("ecs");
 const abi_job = @import("job");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("schedule_c.zig");
@@ -114,9 +115,9 @@ pub const Schedule = struct {
     }
 
     /// Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.
-    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const c.ke_schedule_config) Error!Schedule {
+    pub fn create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings) Error!Schedule {
         var written: c.ke_schedule_handle = undefined;
-        try checkResult(c.ke_schedule_create(ecs, job_system, config, &written));
+        try checkResult(c.ke_schedule_create(ecs, job_system, settings, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -158,5 +159,4 @@ pub const ScheduleCtx = struct {
 
 pub const ScheduleSetDesc = c.ke_schedule_set_desc;
 pub const ScheduleSystemDesc = c.ke_schedule_system_desc;
-pub const ScheduleConfig = c.ke_schedule_config;
 pub const ScheduleHandle = c.ke_schedule_handle;

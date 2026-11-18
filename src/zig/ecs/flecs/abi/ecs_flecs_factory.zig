@@ -3,6 +3,7 @@
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("ecs_flecs_factory_c.zig");
@@ -21,8 +22,8 @@ pub fn ecsFlecsSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) voi
 /// and abort handlers: a check flecs fails makes the slot that called it return
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
-pub fn ecsFlecsCreate(config: ?*const abi_ecs.c.ke_ecs_config) Error!abi_ecs.c.ke_ecs_handle {
+pub fn ecsFlecsCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_ecs.c.ke_ecs_handle {
     var written: abi_ecs.c.ke_ecs_handle = undefined;
-    try checkResult(c.ke_ecs_flecs_create(config, &written));
+    try checkResult(c.ke_ecs_flecs_create(settings, &written));
     return written;
 }

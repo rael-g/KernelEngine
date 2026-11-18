@@ -5,6 +5,12 @@ const abi_math = @import("math");
 const abi_result = @import("result");
 
 pub const KE_BODY_2D_INVALID: ke_body_2d = .{ .bits = 0 };
+/// Setting every 2D physics world reads, a number: the horizontal gravity it starts with, in
+/// metres per second squared; set_gravity changes it later.
+pub const KE_PHYSICS_2D_SETTING_GRAVITY_X = "gravity_x";
+/// Setting every 2D physics world reads, a number: the vertical gravity it starts with, in
+/// metres per second squared; set_gravity changes it later.
+pub const KE_PHYSICS_2D_SETTING_GRAVITY_Y = "gravity_y";
 
 pub const ke_body_type_2d = c_uint;
 /// Never moves; infinite mass. Floors, walls.
@@ -38,15 +44,6 @@ pub const ke_body_state_2d = extern struct {
     velocity_y: f32 = std.mem.zeroes(f32),
     /// radians per second
     angular_velocity: f32 = std.mem.zeroes(f32),
-};
-
-/// The values a 2D physics world is created with, whatever its implementation, each applied as
-/// given.
-pub const ke_physics_2d_config = extern struct {
-    /// Horizontal gravity, in metres per second squared.
-    gravity_x: f32 = std.mem.zeroes(f32),
-    /// Vertical gravity, in metres per second squared.
-    gravity_y: f32 = std.mem.zeroes(f32),
 };
 
 /// A 2D rigid-body physics world. One instance is one world; several worlds take several

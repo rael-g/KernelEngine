@@ -50,6 +50,7 @@ pub fn build(b: *std.Build) void {
         "abi_scene_tree",
         "abi_schedule",
         "abi_scheduler",
+        "abi_settings",
         "abi_spatial",
         "abi_spatial_contract",
         "abi_text",

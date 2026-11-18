@@ -18,8 +18,8 @@ public sealed unsafe partial class RenderClusterModule : KernelEngine.Module.Mod
     /// <param name="camera">Answers the camera's matrices.</param>
     /// <param name="scene">Names the components the passes read.</param>
     /// <param name="frame">The frame the passes declare into.</param>
-    /// <param name="config">The pass's values; Required; every field is read as given.</param>
-    public RenderClusterModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config) : base(Create(ecs, main, extraction, service, device, viewSpace, camera, scene, frame, config))
+    /// <param name="settings">Read once; each absent key takes its default, each an integer of 1 or more: `grid_x` 16 and `grid_y` 9, clusters across and down the screen; `grid_z` 24, depth slices; `max_lights_per_cluster` 64, the lights one cluster can list.</param>
+    public RenderClusterModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, main, extraction, service, device, viewSpace, camera, scene, frame, settings))
     {
         Hold(ecs.Owner);
         Hold(main.Owner);
@@ -32,7 +32,7 @@ public sealed unsafe partial class RenderClusterModule : KernelEngine.Module.Mod
         Hold(frame.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame, in KernelEngine.Render.Webgpu.Native.RenderClusterConfig config)
+    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Ecs.INativeEcs main, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.View.INativeViewSpace viewSpace, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Render.Frame.INativeRenderFrame frame, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(main);
@@ -43,7 +43,6 @@ public sealed unsafe partial class RenderClusterModule : KernelEngine.Module.Mod
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         ArgumentNullException.ThrowIfNull(frame);
-        var nativeConfig = config;
         KernelEngine.Render.Webgpu.Native.RenderContext context = default;
         context.Ecs = ecs.Native;
         context.Main = main.Native;
@@ -55,7 +54,7 @@ public sealed unsafe partial class RenderClusterModule : KernelEngine.Module.Mod
         context.Scene = scene.Native;
         context.Frame = frame.Native;
         KernelEngine.Module.Native.ke_module_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&context, &nativeConfig, &handle), "ke_render_cluster_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_cluster_create(&context, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_cluster_create");
         return handle;
     }
 }

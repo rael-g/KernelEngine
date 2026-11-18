@@ -4,6 +4,8 @@
     .fingerprint = 0xc41e9e601da8ef0a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_settings = .{ .path = "../../abi/settings" },
+        .ke_settings_schema = .{ .path = "../../settings/schema" },
         .abi_completion = .{ .path = "../../abi/completion" },
         .abi_job = .{ .path = "../../abi/job" },
         .abi_job_system_enki_factory = .{ .path = "abi" },

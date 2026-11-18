@@ -230,7 +230,7 @@ pub fn createLayout(dev: *abi_render_gpu.c.ke_gpu_device, group: *const Group, l
         };
     }
     var layout: abi_asset_resolver.c.ke_gpu_bind_group_layout = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(dev.create_bind_group_layout.?(dev, &abi_render_gpu.c.ke_gpu_bind_group_layout_params{
+    try R.check(dev.create_bind_group_layout.?(dev, &abi_render_gpu.c.ke_gpu_bind_group_layout_desc{
         .label = label,
         .entry_count = @intCast(entries.len),
         .entries = entries.ptr,

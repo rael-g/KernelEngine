@@ -155,29 +155,7 @@
       "external": true
     }
   ],
-  "structs": [
-    {
-      "name": "ke_async_config",
-      "doc": "What an async system is created with, each field applied as given.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "worker_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "Worker threads besides the creating thread; 0 runs every operation on the creating thread when it drains."
-        },
-        {
-          "name": "submit_capacity",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "How many submissions from other threads may wait for the next drain; greater than zero."
-        }
-      ]
-    }
-  ],
+  "structs": [],
   "vtables": [
     {
       "name": "ke_async_ctx",
@@ -210,7 +188,7 @@
       "slots": [
         {
           "name": "cancelled",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Whether the operation was cancelled; the body returns early when it sees true.",
           "return_doc": null,
@@ -374,5 +352,13 @@
   "foreign_id_types": [],
   "type_aliases": {
     "ke_async_fn": "ke_result (*)(void *, ke_async_ctx *)"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_ASYNC_SETTING_WORKER_COUNT",
+      "type": "const char *",
+      "value": "\u0022worker_count\u0022",
+      "doc": "Setting every async system reads, an integer: the worker threads besides the creating thread; 0 runs every operation on the creating thread when it drains."
+    }
+  ]
 }

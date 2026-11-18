@@ -5,6 +5,7 @@ const abi_completion = @import("completion");
 const abi_logger = @import("logger");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 const abi_window = @import("window");
 
 
@@ -22,6 +23,9 @@ pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
 
@@ -36,11 +40,11 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a ke_gpu_device backed by WebGPU.
-pub extern fn ke_gpu_device_webgpu_create(async: ?*abi_async.c.ke_async, config: ?*const abi_render_gpu.c.ke_gpu_device_config, out_ready: ?*?*abi_completion.c.ke_completion, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) abi_result.c.ke_result;
+pub extern fn ke_gpu_device_webgpu_create(async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_ready: ?*?*abi_completion.c.ke_completion, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_gpu_device_webgpu logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_gpu_device_webgpu_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
 
 /// Creates a render target presenting into a window, sized to the window's client area.
-pub extern fn ke_gpu_render_target_webgpu_window_create(device: ?*abi_render_gpu.c.ke_gpu_device, window: ?*abi_window.c.ke_window, config: ?*const abi_render_gpu.c.ke_gpu_render_target_window_config, out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result;
+pub extern fn ke_gpu_render_target_webgpu_window_create(device: ?*abi_render_gpu.c.ke_gpu_device, window: ?*abi_window.c.ke_window, settings: ?*abi_settings.c.ke_settings, out_target: ?*abi_render_gpu.c.ke_gpu_render_target_handle) abi_result.c.ke_result;

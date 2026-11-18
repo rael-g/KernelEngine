@@ -9,16 +9,15 @@ namespace KernelEngine.Async.Inline;
 public sealed unsafe partial class InlineAsync : KernelEngine.Async.Async
 {
     /// <summary>Creates an async system that runs every operation on the creating thread, when it is waited on or drained.</summary>
-    /// <param name="config">Required; every field is read as given.</param>
-    public InlineAsync(in KernelEngine.Async.AsyncConfig config) : base(Create(config))
+    /// <param name="settings">Read once. KE_ASYNC_SETTING_WORKER_COUNT, default 0, the only value it accepts; `submit_capacity`, an integer, default 1024: how many submissions from other threads may wait for the next drain.</param>
+    public InlineAsync(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
     {
     }
 
-    private static KernelEngine.Async.Native.ke_async_handle Create(in KernelEngine.Async.AsyncConfig config)
+    private static KernelEngine.Async.Native.ke_async_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
-        var nativeConfig = config;
         KernelEngine.Async.Native.ke_async_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Async.Inline.Native.NativeMethods.async_inline_create(&nativeConfig, &handle), "ke_async_inline_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Async.Inline.Native.NativeMethods.async_inline_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_async_inline_create");
         return handle;
     }
 }

@@ -46,7 +46,7 @@ pub const ke_component_field = extern struct {
 };
 
 /// What a component type is registered with.
-pub const ke_component_params = extern struct {
+pub const ke_component_desc = extern struct {
     /// Unique component name.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// Bytes per entity; 0 registers a tag (no storage).
@@ -112,14 +112,6 @@ pub const ke_ecs_segment = extern struct {
     matched: ?[*]const ke_component_id = std.mem.zeroes(?[*]const ke_component_id),
 };
 
-/// The values an ECS is created with, whatever its implementation, each applied as given.
-pub const ke_ecs_config = extern struct {
-    /// How many ids entity_reserve may hand out before the world issues any of its own;
-    /// entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems
-    /// spawn heavily.
-    reserved_id_capacity: u32 = std.mem.zeroes(u32),
-};
-
 /// One world: entity lifetime, component storage and queries. The ids, components and queries of
 /// one ke_ecs mean nothing to another.
 pub const ke_ecs = extern struct {
@@ -135,7 +127,7 @@ pub const ke_ecs = extern struct {
     /// and singleton by field name: a field of the same name and type is copied, a new field takes
     /// the default of the table, a field that is gone is dropped; the id stays. Without field tables
     /// a different size or alignment is refused.
-    component_register: ?*const fn (?*ke_ecs, ?*const ke_component_params, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
+    component_register: ?*const fn (?*ke_ecs, ?*const ke_component_desc, ?*ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Looks up a previously registered component by name.
     component_lookup: ?*const fn (?*ke_ecs, ?[*:0]const u8, ?*ke_component_meta) callconv(.c) bool = null,
     /// Looks up a registered component by id.

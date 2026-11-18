@@ -14,6 +14,8 @@ const abi_result = @import("abi_result");
 const completion_graph = @import("completion_graph");
 const heap = @import("heap");
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.async_enki);
 
@@ -180,22 +182,26 @@ fn destroy(self_in: ?*a.ke_async) callconv(.c) void {
     heap.gpa.destroy(self);
 }
 
-export fn ke_async_enki_create(config_in: ?*const a.ke_async_config, out_async: ?*a.ke_async_handle) callconv(.c) Result {
+/// The async system's settings, with this implementation's defaults.
+const Settings = struct {
+    worker_count: u32 = 2,
+    submit_capacity: u32 = 1024,
+
+    pub const ranges = .{ .worker_count = .{ 0, std.math.maxInt(u32) }, .submit_capacity = .{ 1, std.math.maxInt(u32) } };
+};
+
+export fn ke_async_enki_create(settings: ?*abi_settings.c.ke_settings, out_async: ?*a.ke_async_handle) callconv(.c) Result {
     const out = out_async orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(a.ke_async_handle);
-    out.* = create(config_in) catch |err| {
+    out.* = create(settings) catch |err| {
         log.warn("creating the async system failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(config_in: ?*const a.ke_async_config) R.Error!a.ke_async_handle {
-    const config = config_in orelse return error.InvalidArgument;
-    if (config.submit_capacity == 0) {
-        log.warn("submit_capacity must be greater than zero", .{});
-        return error.InvalidArgument;
-    }
+fn create(settings: ?*abi_settings.c.ke_settings) R.Error!a.ke_async_handle {
+    const config = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(self);
     var outside = completion_graph.Ring(*Node).init(heap.gpa, config.submit_capacity) catch return error.OutOfMemory;
@@ -217,8 +223,9 @@ fn create(config_in: ?*const a.ke_async_config) R.Error!a.ke_async_handle {
 const testing = std.testing;
 
 fn createdWith(workers: u32) !a.ke_async_handle {
+    var settings = settings_schema.Fixed.init(&.{ .{ .key = "worker_count", .value = .{ .int = workers } }, .{ .key = "submit_capacity", .value = .{ .int = 1 } } });
     var h: a.ke_async_handle = undefined;
-    try R.check(ke_async_enki_create(&.{ .worker_count = workers, .submit_capacity = 1 }, &h));
+    try R.check(ke_async_enki_create(&settings.api, &h));
     return h;
 }
 
@@ -241,8 +248,10 @@ test "an async system without workers keeps the async contract" {
 test "a null config, a null handle or a submit_capacity of zero is refused" {
     var h: a.ke_async_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&.{ .worker_count = 0, .submit_capacity = 1 }, null)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&.{ .worker_count = 0, .submit_capacity = 0 }, &h)));
+    var none = settings_schema.Fixed.init(&.{});
+    try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&none.api, null)));
+    var empty = settings_schema.Fixed.init(&.{.{ .key = "submit_capacity", .value = .{ .int = 0 } }});
+    try testing.expectError(error.InvalidArgument, R.check(ke_async_enki_create(&empty.api, &h)));
 }
 
 test "creating and destroying async systems leaves no block allocated" {

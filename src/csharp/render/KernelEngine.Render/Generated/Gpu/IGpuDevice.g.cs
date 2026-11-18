@@ -77,8 +77,8 @@ public interface IGpuDevice : IDisposable
     void DestroyPipeline(ulong h);
     void DestroyBindGroupLayout(ulong h);
     void DestroyBindGroup(ulong h);
-    /// <summary>Creates a command encoder. p may be NULL, which creates it unlabeled.</summary>
-    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <summary>Creates a command encoder.</summary>
+    /// <param name="label">Name shown by capture and validation tools; copied by the call.</param>
     /// <returns>Receives the encoder; left zeroed on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     IGpuCommandEncoder CreateCommandEncoder(string label);

@@ -4,12 +4,9 @@ const abi_configuration = @import("configuration");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 
-pub const ke_configuration_subscription = u32;
 
-/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
-/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
-/// section changed and does nothing else.
-pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;

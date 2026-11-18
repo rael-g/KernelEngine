@@ -363,7 +363,7 @@ public unsafe partial class NodeTypes : IDisposable, INativeNodeTypes, INodeType
                 }
                 fixed (ke_component_field* fieldsPtr = fieldsNative)
                 {
-                    ke_component_params @event = default;
+                    ke_component_desc @event = default;
                     @event.name = (sbyte*)namePtr;
                     @event.size = size;
                     @event.alignment = alignment;

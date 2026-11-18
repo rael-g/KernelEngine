@@ -7,7 +7,7 @@ This is a map of the four layers and of the files that cross them. How the bound
 
 | layer | where | holds |
 |---|---|---|
-| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, `_config` and `_desc` structs, components, enums; headers only |
+| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, descriptor structs, components, enums; headers only |
 | 2, plugins | `src/zig/<domain>/<plugin>/` | every implementation, one shared library each |
 | 3, bindings | `src/csharp/<domain>/*/Native/Generated/` | P/Invoke surface generated from layers 1 and 2 |
 | 4, managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, the C# node SDK, game code |
@@ -31,8 +31,9 @@ surface; kabic (the kabic repository) produces the idiomatic projection from the
 same headers, driven by `scripts/api_domains.json`. Neither output is edited by hand.
 
 **Layer 4 reaches native code through layer 3.** The managed projects copy the plugin libraries
-from `build/native/lib` (`NativeDependencies.targets`); game code starts from the SDK
-(`Engine.Create`), which makes every part by its constructor.
+from `build/native/lib` (`NativeDependencies.targets`); game code starts from the SDK: the host's
+container makes `Engine` from the parts registered under their contracts, and `DefaultEngine.Create`
+registers the default part of every contract first.
 
 ## Source the plugins share
 

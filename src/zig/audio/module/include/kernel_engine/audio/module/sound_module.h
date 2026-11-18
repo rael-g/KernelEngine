@@ -24,28 +24,21 @@
 extern "C" {
 #endif
 
-/// [borrowed] The values the sound module is created with.
-typedef struct ke_sound_config
-{
-    /// [borrowed,utf8] Directory a clip's path is joined to; copied. NULL uses the path as written.
-    const char *root;
-} ke_sound_config;
-
 /**
  * @brief Creates the module that loads, plays and releases the clip of every ke_sound_component;
  *        attaching it registers its system in the update schedule's post_update set. Destroying the
  *        module stops every voice and releases every clip it holds.
  * @param ecs [borrowed] Resolves the component id.
  * @param audio [borrowed] Loads the clips and plays their voices; must outlive the module.
- * @param config [borrowed] Required; every field is read as given.
+ * @param root [borrowed,utf8] Directory a clip's path is joined to; copied.
  * @param out_module [out] Receives the module; left zeroed on failure.
- * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p audio, @p config or
+ * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p ecs, @p audio, @p root or
  *         @p out_module; KE_RESULT_OUT_OF_MEMORY; the ECS's code when it refuses the component.
  */
 KE_AUDIO_MODULE_API ke_result ke_sound_create(
     ke_ecs *ecs, ke_audio *audio,
-    const ke_sound_config *config,
-    ke_module_handle      *out_module);
+    const char *root,
+    ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

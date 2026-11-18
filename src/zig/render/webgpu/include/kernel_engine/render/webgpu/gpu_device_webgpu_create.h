@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 #define KERNEL_ENGINE_RENDER_WEBGPU_GPU_DEVICE_WEBGPU_CREATE_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/completion/completion.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
@@ -30,7 +31,8 @@ extern "C"
  * @brief Creates a ke_gpu_device backed by WebGPU.
  * @param async [borrowed,optional] Runs the compile of create_render_pipeline_async as one of
  *        its operations; NULL compiles synchronously, invoking the callback before returning.
- * @param config [borrowed] The device's values; Required; every field is read as given.
+ * @param settings [borrowed] Read once. KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION and
+ *        KE_GPU_DEVICE_SETTING_DEBUG_LABELS, each default false.
  * @param out_ready [out] Receives the completion that finishes when the device is ready, already
  *        finished since the device is made before the call returns; the caller releases it. Left
  *        NULL on failure.
@@ -39,7 +41,7 @@ extern "C"
  *         when done.
  */
 KE_GPU_WEBGPU_API ke_result
-ke_gpu_device_webgpu_create(struct ke_async *async, const ke_gpu_device_config *config,
+ke_gpu_device_webgpu_create(struct ke_async *async, ke_settings *settings,
                              ke_completion **out_ready, ke_gpu_device_handle *out_device);
 
 #ifdef __cplusplus

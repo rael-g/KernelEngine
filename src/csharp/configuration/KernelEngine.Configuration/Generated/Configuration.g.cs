@@ -9,6 +9,8 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Configuration.Native;
+using KernelEngine.Settings;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Configuration;
 
@@ -21,7 +23,7 @@ public unsafe interface INativeConfiguration
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>A typed (section, key) to value store.</summary>
+/// <summary>A typed (section, key) to value store, holding what a part is created with.</summary>
 public unsafe partial class Configuration : IDisposable, INativeConfiguration, IConfiguration
 {
     private ke_configuration* _native;
@@ -164,7 +166,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         }
     }
 
-    /// <summary>Stores value under section and key, replacing what the key held, then runs the section's subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.</summary>
+    /// <summary>Stores value under section and key, replacing what the key held. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void SetInt(string section, string key, long @value)
     {
@@ -255,8 +257,11 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         }
     }
 
-    /// <summary>Subscribes to writes on `section`. Returns a subscription id, or KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.</summary>
-    public uint Subscribe(string section, nint cb, nint ctx)
+    /// <summary>The keys directly in section as the settings a part is created with. Each read looks the store up at the time it is made; keys of sections under section are not included.</summary>
+    /// <param name="section">The section; one that holds nothing gives empty settings.</param>
+    /// <returns>Receives the settings, borrowed for the lifetime of the store.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public IPartSettings Section(string section)
     {
         var sectionText = section ?? "";
         var sectionSize = System.Text.Encoding.UTF8.GetMaxByteCount(sectionText.Length) + 1;
@@ -264,14 +269,10 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         sectionBytes[System.Text.Encoding.UTF8.GetBytes(sectionText, sectionBytes)] = 0;
         fixed (byte* sectionPtr = sectionBytes)
         {
-            return Handle->subscribe(Handle, (sbyte*)sectionPtr, (delegate* unmanaged[Cdecl]<sbyte*, void*, void>)cb, (void*)ctx);
+            ke_settings* resultOut = default;
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->section(Handle, (sbyte*)sectionPtr, &resultOut), "section");
+            return PartSettings.Borrow((ke_settings*)resultOut);
         }
-    }
-
-    /// <summary>Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.</summary>
-    public void Unsubscribe(uint sub)
-    {
-        Handle->unsubscribe(Handle, sub);
     }
 
     /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>

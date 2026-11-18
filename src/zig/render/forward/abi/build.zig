@@ -16,6 +16,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_graph", b.dependency("abi_render_graph", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
+    abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/forward/forward_create.h>
@@ -36,6 +37,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../../c/result"));
     translated.addIncludePath(b.path("../../../../c/schedule"));
     translated.addIncludePath(b.path("../../../schedule/include"));
+    translated.addIncludePath(b.path("../../../../c/settings"));
     translated.addIncludePath(b.path("../../../../c/spatial"));
     translated.addIncludePath(b.path("../../../../c/view"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
@@ -63,6 +65,7 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../../c/result"));
     tests.root_module.addIncludePath(b.path("../../../../c/schedule"));
     tests.root_module.addIncludePath(b.path("../../../schedule/include"));
+    tests.root_module.addIncludePath(b.path("../../../../c/settings"));
     tests.root_module.addIncludePath(b.path("../../../../c/spatial"));
     tests.root_module.addIncludePath(b.path("../../../../c/view"));
     b.step("test", "Check the render_forward_factory ABI against its headers").dependOn(&b.addRunArtifact(tests).step);

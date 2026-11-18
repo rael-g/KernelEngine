@@ -74,7 +74,7 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty-six domains: `asset`, `async`, `audio`, `completion`, `configuration`, `ecs`, `extraction`, `file_system`, `framework`, `input`, `io`, `job`, `logger`, `math`, `module`, `physics`, `render`, `render_graph`, `resource_cache`, `result`, `schedule`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty-seven domains: `asset`, `async`, `audio`, `completion`, `configuration`, `ecs`, `extraction`, `file_system`, `framework`, `input`, `io`, `job`, `logger`, `math`, `module`, `physics`, `render`, `render_graph`, `resource_cache`, `result`, `schedule`, `scheduler`, `settings`, `spatial`, `text`, `view`, `window`.
 
 One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `job`? include `job`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
@@ -86,6 +86,7 @@ Contracts worth knowing by name:
 - `ke_job_system` / `ke_async` / `ke_completion` — jobs of the frame, operations beside it that may block, and the completion both hand back
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
+- `ke_settings` — the values a factory reads by name at creation; `ke_configuration.section` hands one section of the project file as one
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
@@ -106,7 +107,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (41 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
+Generated P/Invoke, one `Native/` directory per managed project (42 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
 Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, five `kabic check` commands and five `scripts/check_*.cs`, keep both honest against the headers.
 
@@ -162,13 +163,13 @@ Every thread is a worker of a `ke_job_system` or a `ke_async`. The host creates 
 - **Headers**: an `#ifndef` include guard named after the path, `KERNEL_ENGINE_<DOMAIN>_<NAME>_H_`. Public API in a contract directory or a plugin's `include/`; nothing under `src/` is includable from outside the plugin.
 - **Error handling**: a call that can fail returns `ke_result` (`KE_OK` or the code of the failure), writes its value through a last `out_` parameter, and logs the reason with `log.warn`. All callers check the code.
 - **Memory**: each plugin owns its allocation, and the factory functions do **not** take an allocator parameter. Raw pointers are non-owning unless documented otherwise.
-- **Structs as arguments**: a struct is justified by reuse or by describing an object, never by the number of arguments. A struct that describes an object or a type to be created or registered is a descriptor, suffixed `_desc`. Every other argument is positional. A factory takes its dependencies positionally and its configurable values as the contract's `_config` struct, which the caller fills completely: a contract declares no defaults, and the plugin validates every field, refusing one that has no meaning with a `ke_result` and a warning naming it — zero is a value, never a sentinel for "use the default". How a node of a type is born is the type's `initial`, stated by its author; defaults as a convenience belong to each language's layer (a C SDK helper, a C# optional parameter), never to the contract.
+- **Structs as arguments**: a struct is justified by reuse or by describing an object, never by the number of arguments. A struct that describes an object or a type to be created or registered is a descriptor, suffixed `_desc`. Every other argument is positional. A factory takes its dependencies positionally, then what the host computes (a path, a format, a handle) positionally, then a `ke_settings *` holding what a person writes in the project file, read once at creation; a value that changes afterwards is a slot of the part's contract (`set_gravity`), never a setting. A key every implementation of a contract reads is declared by the contract as a `KE_<DOMAIN>_SETTING_*` macro; a key only one implementation has is declared by it. The implementation publishes its settings with their defaults and ranges, the struct `settings_schema` reads (`src/zig/settings/schema/`), and refuses an unknown key, a value of another type or out of range with a `ke_result` and a warning naming the key; a contract declares no defaults, and zero is a value, never a sentinel for "use the default". How a node of a type is born is the type's `initial`, stated by its author.
 - **Shape of a plugin**, where the language is silent:
   - The entry file is named after the domain and the plugin; a render pass ends in `module`.
   - The state is a struct named `State`, embedding the vtable as the field `api`, whose handle points back at it; one function named `stateOf` recovers it from a slot's first argument.
   - A slot function is a camelCase verb named after its slot, prefixed only in a file that implements several vtables. No `impl_`, `Impl` or `_impl` in a name.
   - A slot refuses a null first argument: silently without a result, as an invalid argument with one.
-  - A factory is `export` without `pub`, takes its dependencies positionally, then a `const ke_<x>_config *`, and on failure frees what it took and returns the zeroed handle.
+  - A factory is `export` without `pub`, takes its dependencies and the host's values positionally, then a `ke_settings *` read through `settings_schema`, and on failure frees what it took and returns the zeroed handle.
   - Contract types reach a plugin through the ABI packages kabic generates (`src/zig/abi/<domain>/`, `<plugin>/abi/`), imported under their package name, and only a third-party header is translated; shared Zig source comes by module name from `ke_common` or from a package named after its concept, declared in the plugin's `build.zig.zon` (`src/zig/render/object_uniforms/`).
   - A test is named by a sentence stating the behaviour, substitutes the contracts it runs against with zsub (`build.zig.zon`) and configures them in the test, and the last test of a plugin checks that nothing leaked.
   - A managed module is named in PascalCase with no dot; a command line tool exits 0, 1 on a failure, 2 when it could not run.
@@ -209,7 +210,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached only through its contracts in `src/c/framework/` and its factory headers.
 
-8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a field of a `_config` struct or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
+8. **No magic numbers.** A number stays a bare constant only when the algorithm implies it; any other is a setting the implementation declares, or an argument of the factory, with the current value as the default. Only what was shown to matter is promoted.
 
 9. **The correct shape beats the easy one.** An idea is judged by whether it is the right shape, never by how much existing code would change; a design shown to be wrong is refactored all the way. A local workaround for a narrow problem is allowed and named as one.
 

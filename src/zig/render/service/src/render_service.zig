@@ -314,7 +314,7 @@ export fn ke_render_service_create(
     target: ?*abi_render_gpu.c.ke_gpu_render_target,
     io: ?*abi_io.c.ke_io,
     binder: ?*abi_render_gpu.c.ke_render_resource_binder,
-    config: ?*const Config,
+    shader_dir_in: ?[*:0]const u8,
     out_service: [*c]abi_render.c.ke_render_service_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_service orelse return R.code(error.InvalidArgument);
@@ -323,8 +323,7 @@ export fn ke_render_service_create(
     const tgt = target orelse return R.code(error.InvalidArgument);
     const files = io orelse return R.code(error.InvalidArgument);
     const bnd = binder orelse return R.code(error.InvalidArgument);
-    const given = config orelse return R.code(error.InvalidArgument);
-    const shader_dir = given.shader_dir orelse return R.code(error.InvalidArgument);
+    const shader_dir = shader_dir_in orelse return R.code(error.InvalidArgument);
 
     const core = assemble(dev, tgt, bnd, std.mem.span(shader_dir), files) catch |err| return R.code(err);
     prepare(core) catch |err| {
@@ -334,8 +333,6 @@ export fn ke_render_service_create(
     out.* = .{ .ref = core, .destroy = destroyCore };
     return R.ok;
 }
-
-const Config = abi_render.c.ke_render_service_config;
 
 fn prepare(core: *abi_render.c.ke_render_service) R.Error!void {
     const st = coreOf(core);
@@ -474,7 +471,7 @@ const Gpu = struct {
     }
 
     fn beginComputePass(self: *Gpu, args: zsub.For(abi_render_gpu.c.ke_gpu_command_encoder).Args(.begin_compute_pass)) ?*abi_render_gpu.c.ke_gpu_compute_pass {
-        self.compute_pass_label = if (args[1]) |p| p.label else null;
+        self.compute_pass_label = args[1];
         return self.compute_pass.api();
     }
 
@@ -568,7 +565,7 @@ const Target = struct {
 
 fn serviceOf(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [*c]const u8) abi_render.c.ke_render_service_handle {
     var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
-    _ = ke_render_service_create(device, target, io, binder, &.{ .shader_dir = shader_dir }, &h);
+    _ = ke_render_service_create(device, target, io, binder, shader_dir, &h);
     return h;
 }
 
@@ -668,7 +665,7 @@ test "a render service created without a render target is refused and leaves not
     try gpu.init();
     defer gpu.deinit();
     var h: abi_render.c.ke_render_service_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(gpu.dev.api(), null, sd.api(), gpu.binder.api(), &.{ .shader_dir = sd.path() }, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(gpu.dev.api(), null, sd.api(), gpu.binder.api(), sd.path(), &h)));
     try testing.expect(h.ref == null);
     try gpu.expectReleased();
     try heap.expectNoLeaks();
@@ -792,7 +789,7 @@ const stress_rounds = 4;
 
 const Stress = struct {
     svc: *abi_render.c.ke_render_service,
-    params: *[stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_params,
+    params: *[stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_desc,
 
     fn run(self: *const Stress) void {
         for (0..stress_rounds) |_| {
@@ -813,9 +810,9 @@ test "pipelines requested from several threads at once settle on one answer per 
     const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
     try testing.expect(h.ref != null);
 
-    var params: [stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined;
+    var params: [stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined;
     for (&params, 0..) |*p, i| {
-        p.* = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+        p.* = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
         p.vertex_module = i + 1;
         p.fragment_module = i + 1000;
         p.color_target_count = 1;
@@ -849,7 +846,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
     try testing.expect(h.ref != null);
 
-    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     p.vertex_module = 5;
     p.fragment_module = 6;
     p.color_target_count = 1;
@@ -881,7 +878,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     var first_layout = [_]abi_render_gpu.c.ke_gpu_vertex_buffer_layout{.{ .stride = 12, .step_mode = 0, .attribute_count = 1, .attributes = &attrs }};
     var copy_layout = first_layout;
 
-    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     p.vertex_module = 5;
     p.fragment_module = 6;
     p.color_target_count = 1;

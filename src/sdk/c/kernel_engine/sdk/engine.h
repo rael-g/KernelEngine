@@ -171,7 +171,27 @@ typedef struct ke_sdk_engine_desc
 } ke_sdk_engine_desc;
 
 /** The configuration the default parts read their sections from. */
-static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return e->configuration.ref; }
+static inline ke_configuration *ke_sdk_engine_configuration(ke_sdk_engine *e) { return e->configuration.ref; }
+
+static inline ke_result ke_sdk_no_bool(ke_settings *self, const char *key, bool *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_double(ke_settings *self, const char *key, double *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_string(ke_settings *self, const char *key, const char **out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_keys(ke_settings *self, ke_settings_key_func each, void *ctx) { (void)self; (void)ctx; return each ? KE_OK : KE_RESULT_INVALID_ARGUMENT; }
+
+/** Settings that hold nothing, so a part takes its implementation's defaults. */
+static ke_settings ke_sdk_empty_settings = { NULL, ke_sdk_no_bool, ke_sdk_no_int, ke_sdk_no_double, ke_sdk_no_string, ke_sdk_no_keys };
+
+/** The section @p section of the engine's configuration as the settings a part is created with; empty settings while the
+ * engine has no configuration yet, as for the job and async systems the configuration is read through; NULL when the section
+ * cannot be viewed, which the part refuses. */
+static inline ke_settings *ke_sdk_settings(ke_sdk_engine *e, const char *section)
+{
+    if (!e->configuration.ref) return &ke_sdk_empty_settings;
+    ke_settings *settings = NULL;
+    if (e->configuration.ref->section(e->configuration.ref, section, &settings) != KE_OK) settings = NULL;
+    return settings;
+}
 
 /** Registers the set @p name in @p schedule, after @p after when it is not NULL, written to @p out_set. */
 static inline ke_result ke_sdk_set(ke_schedule *schedule, const char *name, const ke_schedule_set_id *after, ke_schedule_set_id *out_set)
@@ -400,7 +420,7 @@ static inline ke_result ke_sdk_engine_attach(ke_sdk_engine *engine)
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
     if (!engine->configuration.ref || !engine->window.ref || !engine->scheduler.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
-    ke_configuration *c = ke_sdk_engine_config(engine);
+    ke_configuration *c = ke_sdk_engine_configuration(engine);
     char scene[KE_SDK_ENGINE_PATH_CAPACITY];
     if (first_scene) snprintf(scene, sizeof scene, "%s", first_scene);
     else snprintf(scene, sizeof scene, "res://scenes/%s.scene.toml", c->get_string(c, "project", "default_scene", "Main"));

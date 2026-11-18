@@ -11,20 +11,19 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget : KernelEngine.Re
     /// <summary>Creates a render target presenting into a window, sized to the window's client area.</summary>
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">The window presented into; must outlive the target.</param>
-    /// <param name="config">The target's values; Required; every field is read as given.</param>
-    public WebgpuWindowGpuRenderTarget(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, in KernelEngine.Render.GpuRenderTargetWindowConfig config) : base(Create(device, window, config))
+    /// <param name="settings">Read once. KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE, default "fifo".</param>
+    public WebgpuWindowGpuRenderTarget(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Settings.IPartSettings settings) : base(Create(device, window, settings))
     {
         Hold(device.Owner);
         Hold(window.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_render_target_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, in KernelEngine.Render.GpuRenderTargetWindowConfig config)
+    private static KernelEngine.Render.Native.ke_gpu_render_target_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(window);
-        var nativeConfig = config;
         KernelEngine.Render.Native.ke_gpu_render_target_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(device.Native, window.Native, &nativeConfig, &handle), "ke_gpu_render_target_webgpu_window_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_render_target_webgpu_window_create(device.Native, window.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_gpu_render_target_webgpu_window_create");
         return handle;
     }
 }

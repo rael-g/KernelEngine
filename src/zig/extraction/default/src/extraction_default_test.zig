@@ -114,7 +114,7 @@ const World = struct {
         return R.ok;
     }
 
-    fn componentRegister(self: ?*e.ke_ecs, params: ?*const e.ke_component_params, out: ?*Cid) callconv(.c) Result {
+    fn componentRegister(self: ?*e.ke_ecs, params: ?*const e.ke_component_desc, out: ?*Cid) callconv(.c) Result {
         const w = of(self);
         out.?.* = w.register(std.mem.span(params.?.name.?), params.?.size, &.{});
         return R.ok;

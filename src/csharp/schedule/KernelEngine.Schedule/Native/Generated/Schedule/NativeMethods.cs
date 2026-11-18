@@ -3,12 +3,12 @@ using System.Runtime.InteropServices;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
-using global::KernelEngine.Schedule;
 
 using KernelEngine.Completion.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Job.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Schedule.Native;
 
@@ -16,7 +16,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_schedule", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_schedule_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result schedule_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_job_system *")] KernelEngine.Job.Native.ke_job_system* job_system, [NativeTypeName("const ke_schedule_config *")] global::KernelEngine.Schedule.ScheduleConfig* config, ke_schedule_handle* out_schedule);
+    public static extern KernelEngine.Result.Native.Result schedule_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_job_system *")] KernelEngine.Job.Native.ke_job_system* job_system, [NativeTypeName("ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, ke_schedule_handle* out_schedule);
 
     [DllImport("ke_schedule", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_schedule_set_log_callback", ExactSpelling = true)]
     public static extern void schedule_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);

@@ -104,7 +104,7 @@ export fn ke_gpu_render_target_texture_create(
     if (p.texture == abi_render_gpu.c.KE_GPU_INVALID_HANDLE or p.format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID or p.width == 0 or p.height == 0)
         return R.code(error.InvalidArgument);
     var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const made = dev.create_texture_view.?(dev, p.texture, &abi_render_gpu.c.ke_gpu_texture_view_params{
+    const made = dev.create_texture_view.?(dev, p.texture, &abi_render_gpu.c.ke_gpu_texture_view_desc{
         .label = "texture_target.view",
         .format = p.format,
         .dimension = abi_render_gpu.c.KE_GPU_TEXTURE_DIM_2D,

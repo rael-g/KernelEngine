@@ -23,7 +23,7 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 const rg = abi_render_graph.c;
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "tonemap",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = null,
@@ -39,7 +39,7 @@ const TonemapModule = struct {
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
 
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
@@ -126,7 +126,7 @@ fn setup(tm: *TonemapModule, p: *const abi_render_context.c.ke_render_context) R
 
     tm.binder = core.*.resource_binder.?(core).?;
     try R.check(tm.binder.create_shader_layout.?(tm.binder, &shader_layout, &tm.layout));
-    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     pp.label = "tonemap.pipeline";
     pp.vertex_module   = vs;
     pp.vertex_entry    = "vs_main";

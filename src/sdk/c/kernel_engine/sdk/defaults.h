@@ -127,36 +127,31 @@ static inline void ke_sdk_renderer_release(ke_sdk_engine *engine)
 /** A schedule over the engine's world, running on its job system. */
 static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_schedule_handle *out)
 {
-    return ke_schedule_create(e->ecs.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, out);
+    return ke_schedule_create(e->ecs.ref, e->job_system.ref, ke_sdk_settings(e, "schedule"), out);
 }
 
-/** The scheduler, its timestep from `runtime`. */
+/** The scheduler with the settings of `scheduler`. */
 static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_scheduler_config config = {
-        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
-        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
-    };
-    return ke_scheduler_create(e->job_system.ref, e->async.ref, &config, &e->scheduler);
+    return ke_scheduler_create(e->job_system.ref, e->async.ref, ke_sdk_settings(e, "scheduler"), &e->scheduler);
 }
 
-/** An enkiTS job system with one worker per hardware thread besides the calling one. */
+/** An enkiTS job system with its defaults: one worker per hardware thread besides the calling one. */
 static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
 {
-    return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
+    return ke_job_system_enki_create(ke_sdk_settings(e, "job"), &e->job_system);
 }
 
-/** An enkiTS async system with two workers and room for 1024 submissions from other threads. */
+/** An enkiTS async system with its defaults: two workers and room for 1024 submissions from other threads. */
 static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
 {
-    return ke_async_enki_create(&(ke_async_config){ .worker_count = 2, .submit_capacity = 1024 }, &e->async);
+    return ke_async_enki_create(ke_sdk_settings(e, "async"), &e->async);
 }
 
 /** The operating system's files, relative to the working directory. */
 static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
 {
-    return ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &e->file_system);
+    return ke_file_system_std_create(".", &e->file_system);
 }
 
 /** Reads as operations of the async system. */
@@ -182,45 +177,35 @@ static inline ke_result ke_sdk_input(ke_sdk_engine *e)
     return ke_input_create(&e->input);
 }
 
-/** A GLFW window titled and sized by `runtime.window`. */
+/** A GLFW window with the settings of `runtime.window`. */
 static inline ke_result ke_sdk_window_glfw(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_window_config config = {
-        .title = c->get_string(c, "runtime.window", "title", "KernelEngine"),
-        .width = (int32_t)c->get_int(c, "runtime.window", "width", 1280),
-        .height = (int32_t)c->get_int(c, "runtime.window", "height", 720),
-        .fullscreen = c->get_bool(c, "runtime.window", "fullscreen", false),
-    };
-    return ke_window_glfw_create(e->input.ref, &config, &e->window);
+    return ke_window_glfw_create(e->input.ref, ke_sdk_settings(e, "runtime.window"), &e->window);
 }
 
-/** A flecs world. */
+/** A flecs world with the settings of `ecs`. */
 static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 {
-    return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
+    return ke_ecs_flecs_create(ke_sdk_settings(e, "ecs"), &e->ecs);
 }
 
 
 
 
 
-/** A WebGPU device. */
+/** A WebGPU device with the settings of `runtime.renderer.device`. */
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
     ke_completion *ready = NULL;
-    ke_result made = ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &ready, &e->gpu_device);
+    ke_result made = ke_gpu_device_webgpu_create(NULL, ke_sdk_settings(e, "runtime.renderer.device"), &ready, &e->gpu_device);
     if (made == KE_OK) made = ke_sdk_await(e, ready);
     return made;
 }
 
-/** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
+/** The window's swapchain, with the settings of `runtime.renderer`. */
 static inline ke_result ke_sdk_render_target_webgpu_window(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const bool mailbox = strcmp(c->get_string(c, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
-    const ke_gpu_render_target_window_config config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
-    return ke_gpu_render_target_webgpu_window_create(e->gpu_device.ref, e->window.ref, &config, &e->render_target);
+    return ke_gpu_render_target_webgpu_window_create(e->gpu_device.ref, e->window.ref, ke_sdk_settings(e, "runtime.renderer"), &e->render_target);
 }
 
 /** stb_truetype fonts. */
@@ -253,30 +238,20 @@ static inline ke_result ke_sdk_scene_tree(ke_sdk_engine *e)
  */
 static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
     memset(r, 0, sizeof *r);
     e->release_extra = ke_sdk_renderer_release;
     ke_gpu_device *gpu = e->gpu_device.ref;
-    const ke_render_frame_config frame_config = {
-        .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT,
-        .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT,
-        .clear_color = {
-            (float)c->get_double(c, "render", "clear_color.0", 0.0),
-            (float)c->get_double(c, "render", "clear_color.1", 0.0),
-            (float)c->get_double(c, "render", "clear_color.2", 0.0),
-            (float)c->get_double(c, "render", "clear_color.3", 1.0),
-        },
-    };
-    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, &(ke_render_resource_binder_grouped_config){ .shader_dir = e->shader_dir }, &r->binder);
-    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, &(ke_render_service_config){ .shader_dir = e->shader_dir }, &r->service);
+    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, e->shader_dir, &r->binder);
+    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, e->shader_dir, &r->service);
     if (made == KE_OK) made = ke_render_graph_simple_create(gpu, &r->graph);
     if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
     if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);
     if (made == KE_OK) made = ke_render_scene_resolve_create(e->ecs.ref, e->render_world.ref, e->extraction.ref, r->service.ref, NULL, &r->scene);
     if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
-    if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref, &frame_config, &r->frame);
+    if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref,
+        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, ke_sdk_settings(e, "render"), &r->frame);
     if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
     if (made != KE_OK) return made;
@@ -287,11 +262,11 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     return KE_OK;
 }
 
-/** A directional shadow map 1024 texels wide over a 20-unit area. */
+/** A directional shadow map with the settings of `render.shadow`. */
 static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow);
+    ke_result made = ke_render_shadow_create(&r->context, ke_sdk_settings(e, "render.shadow"), &r->shadow);
     return made == KE_OK ? ke_sdk_add_module(e, r->shadow.ref) : made;
 }
 
@@ -299,7 +274,7 @@ static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
 static inline ke_result ke_sdk_cluster(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster);
+    ke_result made = ke_render_cluster_create(&r->context, ke_sdk_settings(e, "render.cluster"), &r->cluster);
     return made == KE_OK ? ke_sdk_add_module(e, r->cluster.ref) : made;
 }
 
@@ -315,7 +290,7 @@ static inline ke_result ke_sdk_gbuffer(ke_sdk_engine *e)
 static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_deferred_lighting_create(&r->context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+    ke_result made = ke_render_deferred_lighting_create(&r->context, ke_sdk_settings(e, "render.deferred_lighting"), &r->deferred);
     return made == KE_OK ? ke_sdk_add_module(e, r->deferred.ref) : made;
 }
 
@@ -323,7 +298,7 @@ static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
 static inline ke_result ke_sdk_forward(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_forward_create(&r->context, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+    ke_result made = ke_render_forward_create(&r->context, ke_sdk_settings(e, "render.forward"), &r->forward);
     return made == KE_OK ? ke_sdk_add_module(e, r->forward.ref) : made;
 }
 
@@ -348,19 +323,14 @@ static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
 static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, &(ke_render_label_resolve_config){ .default_font = e->default_font }, &r->labels);
+    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, e->default_font, &r->labels);
     return made == KE_OK ? ke_sdk_add_module(e, r->labels.ref) : made;
 }
 
-/** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
+/** A Box2D world with the settings of `runtime.physics_2d`, and the module syncing bodies. */
 static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_physics_2d_config config = {
-        .gravity_x = (float)c->get_double(c, "runtime.physics_2d", "gravity_x", 0.0),
-        .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
-    };
-    ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
+    ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, ke_sdk_settings(e, "runtime.physics_2d"), &e->physics);
     if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->bodies.ref);
     return made;
@@ -370,7 +340,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
-    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &(ke_sound_config){ .root = e->project_dir }, &e->sounds);
+    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, e->project_dir, &e->sounds);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
     return made;
 }
@@ -378,7 +348,7 @@ static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 /** The action maps of the configuration's `input` section, and the module evaluating them each tick. */
 static inline ke_result ke_sdk_actions(ke_sdk_engine *e)
 {
-    ke_result made = ke_input_actions_create(e->configuration.ref, &(ke_input_actions_config){ .section = "input" }, &e->actions);
+    ke_result made = ke_input_actions_create(e->configuration.ref, "input", &e->actions);
     if (made == KE_OK) made = ke_input_actions_evaluation_create(e->actions.ref, e->input.ref, &e->action_evaluation);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->action_evaluation.ref);
     return made;
@@ -406,8 +376,8 @@ static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
  */
 static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
 {
-    ke_result made = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->render_world);
-    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
+    ke_result made = ke_ecs_flecs_create(ke_sdk_settings(e, "ecs"), &e->render_world);
+    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, ke_sdk_settings(e, "schedule"), &e->render_schedule);
     ke_sdk_sets *sets = &e->sets;
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_begin", NULL, &sets->render_begin);
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_prepare", &sets->render_begin, &sets->render_prepare);

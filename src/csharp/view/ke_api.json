@@ -182,21 +182,6 @@
         }
       ],
       "external": true
-    },
-    {
-      "name": "ke_view_space_params",
-      "doc": "The view space as plain data, for consumers that cannot call this interface.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "depth_from_view_z",
-          "type": "float",
-          "tags": [],
-          "doc": "Multiplies a view-space z into a distance in front of the camera."
-        }
-      ]
     }
   ],
   "vtables": [
@@ -216,10 +201,10 @@
       ],
       "slots": [
         {
-          "name": "params",
-          "returns": "ke_view_space_params",
+          "name": "depth_from_view_z",
+          "returns": "float",
           "tags": [],
-          "doc": "The numbers to hand to consumers that cannot call this interface.",
+          "doc": "Multiplies a view-space z into a distance in front of the camera.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_view_space *"

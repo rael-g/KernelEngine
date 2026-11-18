@@ -68,10 +68,10 @@ public unsafe partial class ViewSpace : IDisposable, INativeViewSpace, IViewSpac
         _owner = null;
     }
 
-    /// <summary>The numbers to hand to consumers that cannot call this interface.</summary>
-    public ViewSpaceParams Params()
+    /// <summary>Multiplies a view-space z into a distance in front of the camera.</summary>
+    public float DepthFromViewZ()
     {
-        return Handle->@params(Handle);
+        return Handle->depth_from_view_z(Handle);
     }
 
     /// <summary>World-to-view for a camera at `eye` facing `forward` with `up` above.</summary>

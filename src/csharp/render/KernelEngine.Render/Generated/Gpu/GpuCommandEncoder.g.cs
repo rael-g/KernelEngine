@@ -78,7 +78,7 @@ public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEn
         {
             fixed (GpuColorAttachment* colorAttachmentsPtr = colorAttachments)
             {
-                ke_gpu_render_pass_params p = default;
+                ke_gpu_render_pass_desc p = default;
                 p.label = (sbyte*)labelPtr;
                 p.color_attachments = colorAttachmentsPtr;
                 p.color_attachment_count = (uint)colorAttachments.Length;
@@ -88,8 +88,8 @@ public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEn
         }
     }
 
-    /// <summary>Begins a compute pass. p may be NULL, which begins it unlabeled.</summary>
-    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <summary>Begins a compute pass.</summary>
+    /// <param name="label">Name shown by capture and validation tools; copied by the call.</param>
     public nint BeginComputePass(string label)
     {
         var labelText = label ?? "";
@@ -98,9 +98,7 @@ public unsafe partial class GpuCommandEncoder : IDisposable, INativeGpuCommandEn
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_compute_pass_params p = default;
-            p.label = (sbyte*)labelPtr;
-            return (nint)Handle->begin_compute_pass(Handle, &p);
+            return (nint)Handle->begin_compute_pass(Handle, (sbyte*)labelPtr);
         }
     }
 

@@ -5,6 +5,7 @@ const abi_completion = @import("completion");
 const abi_logger = @import("logger");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 const abi_window = @import("window");
 
 /// The ABI as the headers declare it.
@@ -15,8 +16,8 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a ke_gpu_device backed by WebGPU.
-pub fn gpuDeviceWebgpuCreate(async: ?*abi_async.c.ke_async, config: ?*const abi_render_gpu.c.ke_gpu_device_config, out_ready: ?*?*abi_completion.c.ke_completion, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) Error!void {
-    try checkResult(c.ke_gpu_device_webgpu_create(async, config, out_ready, out_device));
+pub fn gpuDeviceWebgpuCreate(async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_ready: ?*?*abi_completion.c.ke_completion, out_device: ?*abi_render_gpu.c.ke_gpu_device_handle) Error!void {
+    try checkResult(c.ke_gpu_device_webgpu_create(async, settings, out_ready, out_device));
 }
 
 /// Sends every line ke_gpu_device_webgpu logs to callback, with ctx; a NULL callback sends them
@@ -26,8 +27,8 @@ pub fn gpuDeviceWebgpuSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaq
 }
 
 /// Creates a render target presenting into a window, sized to the window's client area.
-pub fn gpuRenderTargetWebgpuWindowCreate(device: ?*abi_render_gpu.c.ke_gpu_device, window: ?*abi_window.c.ke_window, config: ?*const abi_render_gpu.c.ke_gpu_render_target_window_config) Error!abi_render_gpu.c.ke_gpu_render_target_handle {
+pub fn gpuRenderTargetWebgpuWindowCreate(device: ?*abi_render_gpu.c.ke_gpu_device, window: ?*abi_window.c.ke_window, settings: ?*abi_settings.c.ke_settings) Error!abi_render_gpu.c.ke_gpu_render_target_handle {
     var written: abi_render_gpu.c.ke_gpu_render_target_handle = undefined;
-    try checkResult(c.ke_gpu_render_target_webgpu_window_create(device, window, config, &written));
+    try checkResult(c.ke_gpu_render_target_webgpu_window_create(device, window, settings, &written));
     return written;
 }

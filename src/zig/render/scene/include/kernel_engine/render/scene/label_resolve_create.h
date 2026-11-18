@@ -32,14 +32,6 @@ extern "C"
 
 
 
-    /// [borrowed] The values the label resolve is created with: the font a label that names none draws with.
-    typedef struct ke_render_label_resolve_config
-    {
-        /// [optional,utf8] The font a label that names none draws with; copied. NULL leaves such a
-        /// label without text.
-        const char *default_font;
-    } ke_render_label_resolve_config;
-
 
     /// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the main
     /// world, in the update set, the font it names.
@@ -47,13 +39,14 @@ extern "C"
     /// @param ui Registers the font; borrowed, must outlive it.
     /// @param resolver [optional] Reads the font a label names; borrowed. Without it every label is
     ///                 reported.
-    /// @param config [borrowed] Its values; Required; every field is read as given.
+    /// @param default_font [borrowed,optional,utf8] The font a label that names none draws with;
+    ///        copied. NULL leaves such a label without text.
     /// @param out_module [out] Receives the resolve; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL context, scene, service, ui or config;
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL context, scene, service or ui;
     ///         KE_RESULT_OUT_OF_MEMORY.
     KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
         const ke_render_context *context, ke_render_ui *ui, ke_asset_resolver *resolver,
-        const ke_render_label_resolve_config *config, ke_module_handle *out_module);
+        const char *default_font, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

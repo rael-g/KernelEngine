@@ -726,20 +726,6 @@
       "external": true
     },
     {
-      "name": "ke_ecs_config",
-      "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "reserved_id_capacity",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily."
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_schedule_set_desc",
       "doc": "An ordering set: a named anchor that systems join and that is ordered against other sets.",
       "tags": [
@@ -867,21 +853,6 @@
           "doc": "The body runs alone at the start of the run, and what it records is applied before the other systems run. Its access does not order it."
         }
       ]
-    },
-    {
-      "name": "ke_schedule_config",
-      "doc": "What a schedule is created with, each field applied as given.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "refuse_ambiguity",
-          "type": "_Bool",
-          "tags": [],
-          "doc": "An ambiguity between two writers fails the run instead of being logged."
-        }
-      ]
     }
   ],
   "vtables": [
@@ -941,7 +912,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_component_params *",
+              "type": "const ke_component_desc *",
               "tags": [
                 "borrowed"
               ],
@@ -1976,6 +1947,153 @@
           "receiver": "ke_schedule_ctx *"
         }
       ]
+    },
+    {
+      "name": "ke_settings",
+      "doc": "The values one part is created with, each under a key and of one type. A part reads them once, when it is created; a value that changes afterwards is a slot of the part\u0027s own contract.",
+      "tags": [
+        "lent"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "get_bool",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a boolean.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no value is under key; KE_RESULT_INVALID_ARGUMENT for a null argument or when the value under key is of another type.",
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "_Bool *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_int",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads an integer, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "int64_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_double",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a floating-point number, as get_bool. An integer value is read as its number.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "double *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_string",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a string, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "const char **",
+              "tags": [
+                "out",
+                "utf8"
+              ],
+              "doc": "Receives the string, borrowed while the settings live and the key is not written again."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "for_each_key",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Calls each once for every key that holds a value, in no particular order.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null each.",
+          "params": [
+            {
+              "name": "each",
+              "type": "ke_settings_key_func",
+              "tags": [
+                "closure:ctx"
+              ],
+              "doc": "Called once per key."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_settings *"
+        }
+      ],
+      "external": true
     }
   ],
   "functions": [
@@ -1983,7 +2101,7 @@
       "name": "ke_schedule_create",
       "returns": "ke_result",
       "doc": "Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.",
-      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, job_system, config or out_schedule; KE_RESULT_OUT_OF_MEMORY.",
+      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null ecs, job_system, settings or out_schedule, or a setting refused; KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
           "name": "ecs",
@@ -1998,12 +2116,12 @@
           "doc": null
         },
         {
-          "name": "config",
-          "type": "const ke_schedule_config *",
+          "name": "settings",
+          "type": "ke_settings *",
           "tags": [
             "borrowed"
           ],
-          "doc": "Required; every field is read as given."
+          "doc": "Read once. \u0060refuse_ambiguity\u0060, a boolean, default false: an ambiguity between two writers fails the run instead of being logged."
         },
         {
           "name": "out_schedule",
@@ -2087,6 +2205,30 @@
       ]
     },
     {
+      "name": "ke_settings_key_func",
+      "returns": "void",
+      "doc": "Receives one key the settings hold.",
+      "lanes": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The key; valid only during the call."
+        },
+        {
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from for_each_key."
+        }
+      ]
+    },
+    {
       "name": "ke_job_fn",
       "returns": "ke_result",
       "doc": "The body of a job, run once on a worker after every dependency finished, whatever each finished with.",
@@ -2157,6 +2299,7 @@
     "ke_schedule_system_id": "uint64_t",
     "ke_schedule_execute_fn": "ke_result (*)(ke_schedule_ctx *, void *, float)",
     "ke_schedule_condition_fn": "ke_result (*)(void *, _Bool *)",
+    "ke_settings_key_func": "void (*)(const char *, void *)",
     "ke_job_fn": "ke_result (*)(void *, const ke_job_ctx *)",
     "ke_job_range_fn": "ke_result (*)(void *, uint32_t, uint32_t, uint32_t)"
   }

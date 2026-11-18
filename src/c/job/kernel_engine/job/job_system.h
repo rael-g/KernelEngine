@@ -79,15 +79,9 @@ typedef struct ke_job_system_handle {
     void (*destroy)(ke_job_system *self);
 } ke_job_system_handle;
 
-/** The worker_count that takes one worker per hardware thread besides the creating one. */
-#define KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD UINT32_MAX
-
-/// [value] What a job system is created with, each field applied as given.
-typedef struct ke_job_system_config {
-    /// Worker threads besides the creating thread; 0 runs every job on the creating thread, and
-    /// KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD one per hardware thread besides it.
-    uint32_t worker_count;
-} ke_job_system_config;
+/// Setting every job system reads, an integer: the worker threads besides the creating thread; 0 runs
+/// every job on the creating thread.
+#define KE_JOB_SYSTEM_SETTING_WORKER_COUNT "worker_count"
 
 #ifdef __cplusplus
 }

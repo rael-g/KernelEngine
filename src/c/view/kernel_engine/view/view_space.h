@@ -9,13 +9,6 @@ extern "C"
 {
 #endif
 
-    /** [value] The view space as plain data, for consumers that cannot call this interface. */
-    typedef struct ke_view_space_params
-    {
-        /// Multiplies a view-space z into a distance in front of the camera.
-        float depth_from_view_z;
-    } ke_view_space_params;
-
     /** [interface]
      * How the engine lays out view space: which way the camera faces along z,
      * and with it the shape of the view and projection matrices. Independent of
@@ -28,8 +21,8 @@ extern "C"
     {
         void *handle;
 
-        /** The numbers to hand to consumers that cannot call this interface. */
-        ke_view_space_params (*params)(struct ke_view_space *self);
+        /** Multiplies a view-space z into a distance in front of the camera. */
+        float (*depth_from_view_z)(struct ke_view_space *self);
 
         /**
          * World-to-view for a camera at `eye` facing `forward` with `up` above.

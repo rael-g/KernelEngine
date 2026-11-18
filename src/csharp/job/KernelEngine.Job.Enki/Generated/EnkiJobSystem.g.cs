@@ -9,16 +9,15 @@ namespace KernelEngine.Job.Enki;
 public sealed unsafe partial class EnkiJobSystem : KernelEngine.Job.JobSystem
 {
     /// <summary>Creates a job system on enkiTS, its workers started.</summary>
-    /// <param name="config">Required; every field is read as given.</param>
-    public EnkiJobSystem(in KernelEngine.Job.JobSystemConfig config) : base(Create(config))
+    /// <param name="settings">Read once. KE_JOB_SYSTEM_SETTING_WORKER_COUNT, default one worker per hardware thread besides the creating one.</param>
+    public EnkiJobSystem(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
     {
     }
 
-    private static KernelEngine.Job.Native.ke_job_system_handle Create(in KernelEngine.Job.JobSystemConfig config)
+    private static KernelEngine.Job.Native.ke_job_system_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
-        var nativeConfig = config;
         KernelEngine.Job.Native.ke_job_system_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Job.Enki.Native.NativeMethods.job_system_enki_create(&nativeConfig, &handle), "ke_job_system_enki_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Job.Enki.Native.NativeMethods.job_system_enki_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_job_system_enki_create");
         return handle;
     }
 }

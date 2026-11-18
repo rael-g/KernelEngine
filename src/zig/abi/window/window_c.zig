@@ -3,17 +3,15 @@
 const std = @import("std");
 const abi_result = @import("result");
 
-/// The values a window is created with, whatever its implementation, each applied as given.
-pub const ke_window_config = extern struct {
-    /// Window title.
-    title: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// Client width in pixels.
-    width: i32 = std.mem.zeroes(i32),
-    /// Client height in pixels.
-    height: i32 = std.mem.zeroes(i32),
-    /// Whether the window covers the primary monitor.
-    fullscreen: bool = std.mem.zeroes(bool),
-};
+/// Setting every window implementation reads, a string: the window's title.
+pub const KE_WINDOW_SETTING_TITLE = "title";
+/// Setting every window implementation reads, an integer: the client width in pixels.
+pub const KE_WINDOW_SETTING_WIDTH = "width";
+/// Setting every window implementation reads, an integer: the client height in pixels.
+pub const KE_WINDOW_SETTING_HEIGHT = "height";
+/// Setting every window implementation reads, a boolean: whether the window covers the primary
+/// monitor.
+pub const KE_WINDOW_SETTING_FULLSCREEN = "fullscreen";
 
 /// OS-level window abstraction.
 pub const ke_window = extern struct {

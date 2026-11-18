@@ -4,8 +4,6 @@ const unsigned long long layout_values[] = {
     sizeof(ke_job_ctx),
     offsetof(ke_job_ctx, dep_results),
     offsetof(ke_job_ctx, dep_count),
-    sizeof(ke_job_system_config),
-    offsetof(ke_job_system_config, worker_count),
     sizeof(ke_job_system),
     offsetof(ke_job_system, handle),
     offsetof(ke_job_system, dispatch),

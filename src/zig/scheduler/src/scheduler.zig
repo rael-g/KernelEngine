@@ -12,6 +12,8 @@ const abi_job = @import("abi_job");
 const abi_scheduler = @import("abi_scheduler");
 const heap = @import("heap");
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.scheduler);
 
@@ -195,14 +197,21 @@ fn destroy(self: ?*c.ke_scheduler) callconv(.c) void {
     gpa.destroy(s);
 }
 
+/// The scheduler's settings: the contract's keys, with this implementation's defaults.
+const Settings = struct {
+    fixed_dt: f32 = 1.0 / 60.0,
+    fixed_dt_max_accum: f32 = 0.25,
+
+    pub const ranges = .{ .fixed_dt = .{ std.math.floatMin(f64), std.math.floatMax(f64) }, .fixed_dt_max_accum = .{ std.math.floatMin(f64), std.math.floatMax(f64) } };
+};
+
 /// The factory: a scheduler with no executable, over a job and an async system it borrows.
-export fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async_system: ?*abi_async.c.ke_async, config: ?*const c.ke_scheduler_config, out_scheduler: ?*c.ke_scheduler_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async_system: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_scheduler: ?*c.ke_scheduler_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_scheduler orelse return failed("ke_scheduler_create", error.InvalidArgument);
     out.* = .{};
     const jobs = job_system orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs a job system"));
     const asyncs = async_system orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs an async system"));
-    const cfg = config orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs its config"));
-    if (!(cfg.fixed_dt > 0) or !(cfg.fixed_dt_max_accum > 0)) return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs a fixed_dt and a fixed_dt_max_accum greater than zero"));
+    const cfg = settings_schema.read(Settings, settings orelse return failed("ke_scheduler_create", reject(error.InvalidArgument, "a scheduler needs its settings"))) catch |err| return failed("ke_scheduler_create", err);
     const s = gpa.create(State) catch |err| return failed("ke_scheduler_create", err);
     s.* = .{
         .api = .{
@@ -227,7 +236,9 @@ export fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async_syste
 
 const testing = std.testing;
 
-const test_config: c.ke_scheduler_config = .{ .fixed_dt = 0.25, .fixed_dt_max_accum = 1.0 };
+var zero_dt = settings_schema.Fixed.init(&.{.{ .key = "fixed_dt", .value = .{ .double = 0 } }});
+var zero_accum = settings_schema.Fixed.init(&.{.{ .key = "fixed_dt_max_accum", .value = .{ .double = 0 } }});
+var test_settings = settings_schema.Fixed.init(&.{ .{ .key = "fixed_dt", .value = .{ .double = 0.25 } }, .{ .key = "fixed_dt_max_accum", .value = .{ .double = 1.0 } } });
 
 const Log = struct {
     letters: [32]u8 = undefined,
@@ -292,7 +303,7 @@ const Rig = struct {
         r.log = .{};
         try r.jobs.init();
         try r.asyncs.init();
-        try R.check(ke_scheduler_create(r.jobs.api(), r.asyncs.api(), &test_config, &r.handle));
+        try R.check(ke_scheduler_create(r.jobs.api(), r.asyncs.api(), &test_settings.api, &r.handle));
         r.sched = r.handle.ref.?;
         for (cadences, 0..) |cadence, i| {
             r.fakes[i].init(&r.log, @intCast('a' + i));
@@ -452,12 +463,12 @@ test "a fixed dt or a catch-up budget that is not greater than zero, no config, 
     try asyncs.init();
     defer asyncs.deinit();
     var handle: c.ke_scheduler_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &.{ .fixed_dt = 0, .fixed_dt_max_accum = 1 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &zero_dt.api, &handle));
     try testing.expectEqual(null, handle.ref);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &.{ .fixed_dt = 1, .fixed_dt_max_accum = 0 }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), &zero_accum.api, &handle));
     try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), asyncs.api(), null, &handle));
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, asyncs.api(), &test_config, &handle));
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), null, &test_config, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(null, asyncs.api(), &test_settings.api, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_scheduler_create(jobs.api(), null, &test_settings.api, &handle));
 }
 
 test "a slot given no scheduler refuses" {

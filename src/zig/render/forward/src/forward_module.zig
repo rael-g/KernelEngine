@@ -20,6 +20,8 @@ const abi_render_forward_factory = @import("abi_render_forward_factory");
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const pass_systems = @import("pass_systems");
@@ -104,7 +106,7 @@ const ForwardModule = struct {
 
     ibl_enabled: bool = true,
 
-    pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     attrs: [4]abi_render_gpu.c.ke_gpu_vertex_attribute = undefined,
     vbl: abi_render_gpu.c.ke_gpu_vertex_buffer_layout = undefined,
     groups: Groups = .{},
@@ -306,7 +308,12 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// material shader and requests one pipeline from it, creates the uniform buffers, and fills the
 /// access list and the queries over the render world. On failure it leaves the handles it had
 /// already made in the module, where `destroyModule` finds and releases them.
-fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_forward_factory.c.ke_render_forward_config) R.Error!void {
+/// The pass's settings, with this implementation's defaults.
+const Settings = struct {
+    ibl_enabled: bool = true,
+};
+
+fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, config: *const Settings) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const ids = p.scene.?.render_component_ids.?(p.scene).?;
@@ -330,7 +337,7 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, 
         .attributes = &fwd.attrs,
     };
 
-    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     pp.label = "forward.pipeline";
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";
@@ -394,17 +401,18 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
     gpa.destroy(fwd);
 }
 
-/// Factory declared in the plugin's forward_create.h. A missing config, scene, frame, service or
+/// Factory declared in the plugin's forward_create.h. A missing settings, scene, frame, service or
 /// device fails as an invalid argument; a failure in `setup` fails with its code, the module and its
 /// GPU objects released.
-export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, config_in: ?*const abi_render_forward_factory.c.ke_render_forward_config, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const config = config_in orelse {
-        log.warn("transparent-forward: no config", .{});
+    const values = settings_schema.read(Settings, settings orelse {
+        log.warn("transparent-forward: no settings", .{});
         return R.code(error.InvalidArgument);
-    };
+    }) catch |err| return R.code(err);
+    const config = &values;
     if (p.scene == null or p.frame == null or p.service == null or p.device == null)
         return R.code(error.InvalidArgument);
 
@@ -753,7 +761,7 @@ const Rig = struct {
     }
 };
 
-const test_config: abi_render_forward_factory.c.ke_render_forward_config = .{ .ibl_enabled = true };
+var test_settings = settings_schema.Fixed.init(&.{});
 
 fn passOf(h: abi_module.c.ke_module_handle) *ForwardModule {
     const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast(h.ref.?.handle));
@@ -766,7 +774,7 @@ test "the forward module attaches its system to the render schedule, and destroy
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
     const t = rig.targets();
     try R.check(h.ref.?.attach.?(h.ref, &t));
     try rig.schedule.received(.register_system).times(1);
@@ -781,7 +789,7 @@ test "a blended mesh in view gets a copy of the frame's color and a transparent 
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
     try rig.graph.received(.create_texture).times(1);
@@ -795,7 +803,7 @@ test "a frame not being declared gets no transparent pass" {
     _ = rig.frame.when(.live).returns(false);
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    try R.check(ke_render_forward_create(&p, &test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).never();
@@ -808,7 +816,7 @@ test "a forward pass whose shader fails to load releases what it had created" {
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_forward_create(&p, &test_config, &h) != R.ok);
+    try testing.expect(ke_render_forward_create(&p, &test_settings.api, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -820,7 +828,7 @@ test "a forward pass missing its scene is refused" {
     var p = rig.context();
     p.scene = null;
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&p, &test_config, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&p, &test_settings.api, &h)));
 }
 
 test "creating and destroying forward passes leaves no block allocated" {

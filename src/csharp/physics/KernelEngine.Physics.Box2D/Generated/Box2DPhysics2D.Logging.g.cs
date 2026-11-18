@@ -10,14 +10,14 @@ public sealed unsafe partial class Box2DPhysics2D
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="jobSystem"></param>
-    /// <param name="config">The world's values; Required; every field is read as given.</param>
-    public Box2DPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Physics.Physics2dConfig config) : base(CreateLogged(loggerFactory, jobSystem, config))
+    /// <param name="settings">Read once. KE_PHYSICS_2D_SETTING_GRAVITY_X and KE_PHYSICS_2D_SETTING_GRAVITY_Y, each default 0.</param>
+    public Box2DPhysics2D(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, jobSystem, settings))
     {
     }
 
-    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Physics.Physics2dConfig config)
+    private static KernelEngine.Physics.Native.ke_physics_2d_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(jobSystem, config);
+        return Create(jobSystem, settings);
     }
 }

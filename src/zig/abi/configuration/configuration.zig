@@ -2,6 +2,7 @@
 
 const std = @import("std");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("configuration_c.zig");
@@ -73,16 +74,12 @@ pub const Configuration = struct {
                     return abi_result.c.KE_OK;
                 }
             }.call,
-            .subscribe = &struct {
-                fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: c.ke_configuration_change_func, a2: ?*anyopaque) callconv(.c) c.ke_configuration_subscription {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_configuration_subscription)));
-                    return T.subscribe(state, std.mem.span(a0 orelse return std.mem.zeroes(c.ke_configuration_subscription)), a1, a2);
-                }
-            }.call,
-            .unsubscribe = &struct {
-                fn call(self: ?*c.ke_configuration, a0: c.ke_configuration_subscription) callconv(.c) void {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
-                    return T.unsubscribe(state, a0);
+            .section = &struct {
+                fn call(self: ?*c.ke_configuration, a0: ?[*:0]const u8, a1: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    const value = T.section(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    return abi_result.c.KE_OK;
                 }
             }.call,
             .for_each_child = &struct {
@@ -95,62 +92,59 @@ pub const Configuration = struct {
         };
     }
 
-    pub fn getInt(self: Configuration, section: [:0]const u8, key: [:0]const u8, fallback: i64) i64 {
-        return self.ptr.get_int.?(self.ptr, section.ptr, key.ptr, fallback);
+    pub fn getInt(self: Configuration, section_: [:0]const u8, key: [:0]const u8, fallback: i64) i64 {
+        return self.ptr.get_int.?(self.ptr, section_.ptr, key.ptr, fallback);
     }
 
-    pub fn getDouble(self: Configuration, section: [:0]const u8, key: [:0]const u8, fallback: f64) f64 {
-        return self.ptr.get_double.?(self.ptr, section.ptr, key.ptr, fallback);
+    pub fn getDouble(self: Configuration, section_: [:0]const u8, key: [:0]const u8, fallback: f64) f64 {
+        return self.ptr.get_double.?(self.ptr, section_.ptr, key.ptr, fallback);
     }
 
-    pub fn getBool(self: Configuration, section: [:0]const u8, key: [:0]const u8, fallback: bool) bool {
-        return self.ptr.get_bool.?(self.ptr, section.ptr, key.ptr, fallback);
+    pub fn getBool(self: Configuration, section_: [:0]const u8, key: [:0]const u8, fallback: bool) bool {
+        return self.ptr.get_bool.?(self.ptr, section_.ptr, key.ptr, fallback);
     }
 
     /// Returned pointer is owned by the store and valid until the same key is overwritten or the
     /// store is destroyed. Copy it if you need to retain.
-    pub fn getString(self: Configuration, section: [:0]const u8, key: [:0]const u8, fallback: [:0]const u8) ?[*:0]const u8 {
-        return self.ptr.get_string.?(self.ptr, section.ptr, key.ptr, fallback.ptr);
+    pub fn getString(self: Configuration, section_: [:0]const u8, key: [:0]const u8, fallback: [:0]const u8) ?[*:0]const u8 {
+        return self.ptr.get_string.?(self.ptr, section_.ptr, key.ptr, fallback.ptr);
     }
 
-    /// Stores value under section and key, replacing what the key held, then runs the section's
-    /// subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and
-    /// KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.
-    pub fn setInt(self: Configuration, section: [:0]const u8, key: [:0]const u8, value: i64) Error!void {
-        try checkResult(self.ptr.set_int.?(self.ptr, section.ptr, key.ptr, value));
+    /// Stores value under section and key, replacing what the key held. Returns
+    /// KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the
+    /// entry cannot be stored; the store is then unchanged.
+    pub fn setInt(self: Configuration, section_: [:0]const u8, key: [:0]const u8, value: i64) Error!void {
+        try checkResult(self.ptr.set_int.?(self.ptr, section_.ptr, key.ptr, value));
     }
 
     /// As set_int, for a double.
-    pub fn setDouble(self: Configuration, section: [:0]const u8, key: [:0]const u8, value: f64) Error!void {
-        try checkResult(self.ptr.set_double.?(self.ptr, section.ptr, key.ptr, value));
+    pub fn setDouble(self: Configuration, section_: [:0]const u8, key: [:0]const u8, value: f64) Error!void {
+        try checkResult(self.ptr.set_double.?(self.ptr, section_.ptr, key.ptr, value));
     }
 
     /// As set_int, for a boolean.
-    pub fn setBool(self: Configuration, section: [:0]const u8, key: [:0]const u8, value: bool) Error!void {
-        try checkResult(self.ptr.set_bool.?(self.ptr, section.ptr, key.ptr, value));
+    pub fn setBool(self: Configuration, section_: [:0]const u8, key: [:0]const u8, value: bool) Error!void {
+        try checkResult(self.ptr.set_bool.?(self.ptr, section_.ptr, key.ptr, value));
     }
 
     /// As set_int, for a string, copied; a null value is also an invalid argument.
-    pub fn setString(self: Configuration, section: [:0]const u8, key: [:0]const u8, value: [:0]const u8) Error!void {
-        try checkResult(self.ptr.set_string.?(self.ptr, section.ptr, key.ptr, value.ptr));
+    pub fn setString(self: Configuration, section_: [:0]const u8, key: [:0]const u8, value: [:0]const u8) Error!void {
+        try checkResult(self.ptr.set_string.?(self.ptr, section_.ptr, key.ptr, value.ptr));
     }
 
-    /// Subscribes to writes on `section`. Returns a subscription id, or
-    /// KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.
-    pub fn subscribe(self: Configuration, section: [:0]const u8, cb: c.ke_configuration_change_func, ctx: ?*anyopaque) c.ke_configuration_subscription {
-        return self.ptr.subscribe.?(self.ptr, section.ptr, cb, ctx);
-    }
-
-    /// Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.
-    pub fn unsubscribe(self: Configuration, sub: c.ke_configuration_subscription) void {
-        return self.ptr.unsubscribe.?(self.ptr, sub);
+    /// The keys directly in section as the settings a part is created with. Each read looks the
+    /// store up at the time it is made; keys of sections under section are not included.
+    pub fn section(self: Configuration, section_: [:0]const u8) Error!?*abi_settings.c.ke_settings {
+        var written: ?*abi_settings.c.ke_settings = undefined;
+        try checkResult(self.ptr.section.?(self.ptr, section_.ptr, &written));
+        return written;
     }
 
     /// Lists the sections directly under section, once each, in the order their first key was
     /// stored. A section is under another when its name is the other's followed by a dot and one
     /// more name; it is listed when it or any section under it holds a key.
-    pub fn forEachChild(self: Configuration, section: [:0]const u8, each: c.ke_configuration_child_func, ctx: ?*anyopaque) Error!void {
-        try checkResult(self.ptr.for_each_child.?(self.ptr, section.ptr, each, ctx));
+    pub fn forEachChild(self: Configuration, section_: [:0]const u8, each: c.ke_configuration_child_func, ctx: ?*anyopaque) Error!void {
+        try checkResult(self.ptr.for_each_child.?(self.ptr, section_.ptr, each, ctx));
     }
 
 };

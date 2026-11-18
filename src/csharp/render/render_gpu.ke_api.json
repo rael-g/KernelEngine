@@ -942,7 +942,7 @@
       ]
     },
     {
-      "name": "ke_gpu_buffer_params",
+      "name": "ke_gpu_buffer_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -981,7 +981,7 @@
       ]
     },
     {
-      "name": "ke_gpu_texture_params",
+      "name": "ke_gpu_texture_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1056,7 +1056,7 @@
       ]
     },
     {
-      "name": "ke_gpu_texture_view_params",
+      "name": "ke_gpu_texture_view_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1113,7 +1113,7 @@
       ]
     },
     {
-      "name": "ke_gpu_sampler_params",
+      "name": "ke_gpu_sampler_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1188,7 +1188,7 @@
       ]
     },
     {
-      "name": "ke_gpu_shader_module_params",
+      "name": "ke_gpu_shader_module_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1458,7 +1458,7 @@
       ]
     },
     {
-      "name": "ke_gpu_bind_group_layout_params",
+      "name": "ke_gpu_bind_group_layout_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1536,7 +1536,7 @@
       ]
     },
     {
-      "name": "ke_gpu_bind_group_params",
+      "name": "ke_gpu_bind_group_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1571,7 +1571,7 @@
       ]
     },
     {
-      "name": "ke_gpu_render_pipeline_params",
+      "name": "ke_gpu_render_pipeline_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1688,7 +1688,7 @@
       ]
     },
     {
-      "name": "ke_gpu_compute_pipeline_params",
+      "name": "ke_gpu_compute_pipeline_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1815,7 +1815,7 @@
       ]
     },
     {
-      "name": "ke_gpu_render_pass_params",
+      "name": "ke_gpu_render_pass_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1850,55 +1850,6 @@
       ]
     },
     {
-      "name": "ke_gpu_command_encoder_params",
-      "doc": null,
-      "tags": [
-        "bag"
-      ],
-      "fields": [
-        {
-          "name": "label",
-          "type": "const char *",
-          "tags": [],
-          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
-        }
-      ]
-    },
-    {
-      "name": "ke_gpu_compute_pass_params",
-      "doc": null,
-      "tags": [
-        "bag"
-      ],
-      "fields": [
-        {
-          "name": "label",
-          "type": "const char *",
-          "tags": [],
-          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
-        }
-      ]
-    },
-    {
-      "name": "ke_gpu_device_config",
-      "doc": "The values a GPU device is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "enable_validation",
-          "type": "bool",
-          "tags": [],
-          "doc": "Asks the underlying graphics API to validate every call, which takes effect only where that API\u0027s validation layers are installed."
-        },
-        {
-          "name": "debug_labels",
-          "type": "bool",
-          "tags": [],
-          "doc": "The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them."
-        }
-      ]
-    },
-    {
       "name": "ke_gpu_command_buffer",
       "doc": "Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.",
       "tags": [],
@@ -1908,19 +1859,6 @@
           "type": "void *",
           "tags": [],
           "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_gpu_render_target_window_config",
-      "doc": "The values a render target presenting to a window is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "present_mode",
-          "type": "ke_gpu_present_mode",
-          "tags": [],
-          "doc": "How presented frames reach the screen."
         }
       ]
     },
@@ -1987,7 +1925,7 @@
       ]
     },
     {
-      "name": "ke_render_shader_layout_params",
+      "name": "ke_render_shader_layout_desc",
       "doc": "The compiled shader a layout is built for.",
       "tags": [
         "bag"
@@ -2223,7 +2161,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_buffer_params *",
+              "type": "const ke_gpu_buffer_desc *",
               "tags": [],
               "doc": null
             },
@@ -2247,7 +2185,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_texture_params *",
+              "type": "const ke_gpu_texture_desc *",
               "tags": [],
               "doc": null
             },
@@ -2277,7 +2215,7 @@
             },
             {
               "name": "p",
-              "type": "const ke_gpu_texture_view_params *",
+              "type": "const ke_gpu_texture_view_desc *",
               "tags": [],
               "doc": null
             },
@@ -2301,7 +2239,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_sampler_params *",
+              "type": "const ke_gpu_sampler_desc *",
               "tags": [],
               "doc": null
             },
@@ -2325,7 +2263,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_shader_module_params *",
+              "type": "const ke_gpu_shader_module_desc *",
               "tags": [],
               "doc": null
             },
@@ -2349,7 +2287,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pipeline_params *",
+              "type": "const ke_gpu_render_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -2373,7 +2311,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_compute_pipeline_params *",
+              "type": "const ke_gpu_compute_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -2397,7 +2335,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_bind_group_layout_params *",
+              "type": "const ke_gpu_bind_group_layout_desc *",
               "tags": [],
               "doc": null
             },
@@ -2421,7 +2359,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_bind_group_params *",
+              "type": "const ke_gpu_bind_group_desc *",
               "tags": [],
               "doc": null
             },
@@ -2568,14 +2506,18 @@
           "name": "create_command_encoder",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Creates a command encoder. p may be NULL, which creates it unlabeled.",
+          "doc": "Creates a command encoder.",
           "return_doc": null,
           "params": [
             {
-              "name": "p",
-              "type": "const ke_gpu_command_encoder_params *",
-              "tags": [],
-              "doc": null
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "optional",
+                "utf8"
+              ],
+              "doc": "Name shown by capture and validation tools; copied by the call."
             },
             {
               "name": "out_encoder",
@@ -2753,7 +2695,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pipeline_params *",
+              "type": "const ke_gpu_render_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -3407,7 +3349,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pass_params *",
+              "type": "const ke_gpu_render_pass_desc *",
               "tags": [],
               "doc": null
             }
@@ -3418,14 +3360,18 @@
           "name": "begin_compute_pass",
           "returns": "struct ke_gpu_compute_pass *",
           "tags": [],
-          "doc": "Begins a compute pass. p may be NULL, which begins it unlabeled.",
+          "doc": "Begins a compute pass.",
           "return_doc": null,
           "params": [
             {
-              "name": "p",
-              "type": "const ke_gpu_compute_pass_params *",
-              "tags": [],
-              "doc": null
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "optional",
+                "utf8"
+              ],
+              "doc": "Name shown by capture and validation tools; copied by the call."
             }
           ],
           "receiver": "struct ke_gpu_command_encoder *"
@@ -3830,7 +3776,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_render_shader_layout_params *",
+              "type": "const ke_render_shader_layout_desc *",
               "tags": [],
               "doc": null
             },
@@ -4332,6 +4278,24 @@
       "name": "KE_GPU_INVALID_HANDLE",
       "type": "unsigned long",
       "value": "18446744073709551615"
+    },
+    {
+      "name": "KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION",
+      "type": "const char *",
+      "value": "\u0022enable_validation\u0022",
+      "doc": "Setting every GPU device reads, a boolean: asks the underlying graphics API to validate every call, which takes effect only where that API\u0027s validation layers are installed."
+    },
+    {
+      "name": "KE_GPU_DEVICE_SETTING_DEBUG_LABELS",
+      "type": "const char *",
+      "value": "\u0022debug_labels\u0022",
+      "doc": "Setting every GPU device reads, a boolean: the labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them."
+    },
+    {
+      "name": "KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE",
+      "type": "const char *",
+      "value": "\u0022present_mode\u0022",
+      "doc": "Setting every render target presenting to a window reads, a string: how presented frames reach the screen, \u0022fifo\u0022, \u0022mailbox\u0022 or \u0022immediate\u0022, as ke_gpu_present_mode names them."
     },
     {
       "name": "KE_RENDER_BINDING_INVALID",

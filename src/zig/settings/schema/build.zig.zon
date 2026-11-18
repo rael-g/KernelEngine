@@ -1,0 +1,12 @@
+.{
+    .name = .ke_settings_schema,
+    .version = "0.1.0",
+    .fingerprint = 0xdc1a0268d0acc9c1,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_result = .{ .path = "../../abi/result" },
+        .abi_settings = .{ .path = "../../abi/settings" },
+        .ke_result = .{ .path = "../../result" },
+    },
+    .paths = .{"."},
+}

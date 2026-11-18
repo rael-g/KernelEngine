@@ -18,7 +18,6 @@ const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
-pub const ke_configuration_subscription = u32;
 pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
@@ -54,10 +53,8 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
-/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
-/// section changed and does nothing else.
-pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
@@ -102,7 +99,7 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
 /// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
 /// each tick.
-pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, section: ?[*:0]const u8, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Creates the module that evaluates actions each tick: attaching it registers the exclusive
 /// system "input.actions" in the pre_update schedule's pre_update set, which advances input's

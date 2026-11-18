@@ -14,6 +14,8 @@ const heap = @import("heap");
 const order = @import("schedule_order.zig");
 const body = @import("schedule_commands.zig");
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.schedule);
 
@@ -616,11 +618,17 @@ fn destroy(self: ?*c.ke_schedule) callconv(.c) void {
     gpa.destroy(s);
 }
 
+/// The schedule's settings, with this implementation's defaults.
+const Settings = struct {
+    refuse_ambiguity: bool = false,
+};
+
 /// The factory: a schedule over an ecs and a job system it borrows and never frees.
-export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, config: ?*const c.ke_schedule_config, out_schedule: ?*c.ke_schedule_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings, out_schedule: ?*c.ke_schedule_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_schedule orelse return failed("ke_schedule_create", error.InvalidArgument);
     out.* = .{};
-    if (ecs == null or job_system == null or config == null) return failed("ke_schedule_create", reject(error.InvalidArgument, "a schedule needs an ecs, a job system and its config"));
+    if (ecs == null or job_system == null or settings == null) return failed("ke_schedule_create", reject(error.InvalidArgument, "a schedule needs an ecs, a job system and its settings"));
+    const values = settings_schema.read(Settings, settings.?) catch |err| return failed("ke_schedule_create", err);
     const s = gpa.create(State) catch |err| return failed("ke_schedule_create", err);
     s.* = .{
         .api = .{
@@ -633,7 +641,7 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke
         },
         .ecs = ecs.?,
         .jobs = job_system.?,
-        .refuse_ambiguity = config.?.refuse_ambiguity,
+        .refuse_ambiguity = values.refuse_ambiguity,
         .host = .{ .ecs = ecs.?, .queue = undefined },
     };
     s.api.handle = s;
@@ -644,6 +652,8 @@ export fn ke_schedule_create(ecs: ?*abi_ecs.c.ke_ecs, job_system: ?*abi_job.c.ke
 }
 
 const testing = std.testing;
+
+var no_settings = settings_schema.Fixed.init(&.{});
 const zsub = @import("zsub");
 
 const Done = struct {
@@ -700,7 +710,7 @@ const Rig = struct {
         try self.jobs.init();
         _ = self.jobs.when(.dispatch).does(&inlineDispatch);
         _ = self.jobs.when(.worker_slots).returns(workers);
-        try R.check(ke_schedule_create(self.ecs.api(), self.jobs.api(), &.{ .refuse_ambiguity = false }, &self.handle));
+        try R.check(ke_schedule_create(self.ecs.api(), self.jobs.api(), &no_settings.api, &self.handle));
         self.sched = self.handle.ref.?;
         self.set = .{try self.addSet("update", &.{})};
     }
@@ -1323,9 +1333,9 @@ test "creating a schedule without an ecs, a job system or a config is refused an
     try jobs.init();
     defer jobs.deinit();
     var handle: c.ke_schedule_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(null, jobs.api(), &.{ .refuse_ambiguity = false }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(null, jobs.api(), &no_settings.api, &handle));
     try testing.expectEqual(null, handle.ref);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), null, &.{ .refuse_ambiguity = false }, &handle));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), null, &no_settings.api, &handle));
     try testing.expectEqual(R.code(error.InvalidArgument), ke_schedule_create(ecs.api(), jobs.api(), null, &handle));
 }
 

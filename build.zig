@@ -148,8 +148,9 @@ pub fn build(b: *std.Build) void {
     ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize });
+    ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize });
 
-    const ecs_flecs = ctx.member("ke_ecs_flecs", .{
+    _ = ctx.member("ke_ecs_flecs", .{
         .target = target,
         .optimize = optimize,
         .@"flecs-include" = vcpkg_include,
@@ -166,12 +167,12 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const file_system_std = ctx.member("ke_file_system_std", .{
+    _ = ctx.member("ke_file_system_std", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const io_async = ctx.member("ke_io_async", .{
+    _ = ctx.member("ke_io_async", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -295,12 +296,12 @@ pub fn build(b: *std.Build) void {
 
     const lib_dir = b.pathJoin(&.{ ctx.prefix, "lib" });
 
-    const view_space = ctx.member("ke_view_space", .{
+    _ = ctx.member("ke_view_space", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const render_camera = ctx.member("ke_render_camera", .{
+    _ = ctx.member("ke_render_camera", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -327,7 +328,7 @@ pub fn build(b: *std.Build) void {
         }},
     });
 
-    const gpu_render_target_renderdoc = ctx.member("ke_gpu_render_target_renderdoc", .{
+    _ = ctx.member("ke_gpu_render_target_renderdoc", .{
         .target = target,
         .optimize = optimize,
         .@"renderdoc-include" = renderdoc_include,
@@ -339,7 +340,7 @@ pub fn build(b: *std.Build) void {
 
     const tonemap_vs = ctx.shader("tonemap", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const tonemap_fs = ctx.shader("tonemap", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/tonemap/shaders/tonemap.slang" }), shaders_out, &.{shader_lib_dir}, null);
-    const tonemap = ctx.member("ke_render_tonemap", .{
+    _ = ctx.member("ke_render_tonemap", .{
         .target = target,
         .optimize = optimize,
     }, &.{ &tonemap_vs.step, &tonemap_fs.step }, .has_tests);
@@ -380,13 +381,13 @@ pub fn build(b: *std.Build) void {
 
     const shadow_vs = ctx.shader("shadow", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
     const shadow_fs = ctx.shader("shadow", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/shadow/shaders/shadow.slang" }), shaders_out, &.{}, null);
-    const shadow = ctx.member("ke_render_shadow", .{
+    _ = ctx.member("ke_render_shadow", .{
         .target = target,
         .optimize = optimize,
     }, &.{ &shadow_vs.step, &shadow_fs.step }, .has_tests);
 
     const cluster_cs = ctx.shader("cluster_cull", "compute", "cs_main", b.pathJoin(&.{ src_zig, "render/cluster/shaders/cluster_cull.slang" }), shaders_out, &.{shader_lib_dir}, null);
-    const cluster = ctx.member("ke_render_cluster", .{
+    _ = ctx.member("ke_render_cluster", .{
         .target = target,
         .optimize = optimize,
     }, &.{&cluster_cs.step}, .has_tests);
@@ -394,7 +395,7 @@ pub fn build(b: *std.Build) void {
     const dl_includes = [_][]const u8{ shader_lib_dir, b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders" }) };
     const deferred_lighting_vs = ctx.shader("deferred_lighting", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
     const deferred_lighting_fs = ctx.shader("deferred_lighting", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/deferred_lighting/shaders/deferred_lighting.slang" }), shaders_out, &dl_includes, null);
-    const deferred_lighting = ctx.member("ke_render_deferred_lighting", .{
+    _ = ctx.member("ke_render_deferred_lighting", .{
         .target = target,
         .optimize = optimize,
     }, &.{ &deferred_lighting_vs.step, &deferred_lighting_fs.step }, .has_tests);
@@ -441,7 +442,7 @@ pub fn build(b: *std.Build) void {
     const material_params = ctx.reflection("material_params", b.pathJoin(&.{ binder_shader_dir, "material_params.slang" }), binder_gen_dir, &.{shader_lib_dir});
     const material_params_json = b.pathJoin(&.{ binder_gen_dir, "material_params.json" });
 
-    const binder_grouped = ctx.member("ke_render_binder_grouped", .{
+    _ = ctx.member("ke_render_binder_grouped", .{
         .target = target,
         .optimize = optimize,
         .@"material-params-json" = material_params_json,
@@ -449,18 +450,18 @@ pub fn build(b: *std.Build) void {
 
     const blit_vs = ctx.shader("blit", "vertex", "vs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
     const blit_fs = ctx.shader("blit", "fragment", "fs_main", b.pathJoin(&.{ src_zig, "render/service/shaders/blit.slang" }), shaders_out, &.{shader_lib_dir}, null);
-    const render_service = ctx.member("ke_render_service", .{
+    _ = ctx.member("ke_render_service", .{
         .@"ke-lib-dir" = lib_dir,
         .target = target,
         .optimize = optimize,
     }, &.{ &resource_cache_default.step, &blit_vs.step, &blit_fs.step }, .has_tests);
 
-    const render_frame = ctx.member("ke_render_frame", .{
+    _ = ctx.member("ke_render_frame", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const render_scene = ctx.member("ke_render_scene", .{
+    _ = ctx.member("ke_render_scene", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -508,6 +509,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             vcpkg_include,
         }),
         .libs = joinPaths(b, &.{
@@ -522,6 +524,7 @@ pub fn build(b: *std.Build) void {
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -559,6 +562,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "job" }),
             b.pathJoin(&.{ src_zig, "scheduler/include" }),
             b.pathJoin(&.{ src_zig, "schedule/include" }),
@@ -570,6 +574,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
             b.pathJoin(&.{ src_zig, "io/async/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/include" }),
         }),
         .libs = joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
@@ -595,11 +600,10 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_graph_simple") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
         }),
         .@"link-m" = true,
-    }, &.{
-        &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,                 &file_system_std.step, &io_async.step });
+    }, &.{ctx.plugins_step});
 
     const pong = ctx.example("c_pong", .{
         .target = target,
@@ -623,6 +627,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "job" }),
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "text" }),

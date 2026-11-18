@@ -13,7 +13,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 | managed input | `IInput`, `IInputReader` | `Input` in `KernelEngine.Input` | the native `ke_input` | an `IInputReader` over one snapshot |
 | action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
 | node field | `ke_action_ref` | framework | an action name, written by a scene or by code | the action's value through `axis` and `pressed` of `ke_node_ctx` |
-| system | the "input.actions" system `ke_input_actions_create` registers when given a runtime | framework | the `ke_input` it was given | the actions evaluated for the tick |
+| system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the standard schedules at attach | the actions evaluated for the tick |
 
 **The window feeds the sinks.** `ke_window_glfw_create` takes a borrowed, nullable `ke_input`.
 While the window polls, each key, button, cursor and scroll event becomes a call to `on_key`,
@@ -33,7 +33,7 @@ takes no lock: sinks, `update` and `get_snapshot` must not overlap.
 
 The host calls `PollEvents` on the window, then `Tick` on the scheduler. The window module registers
 no system, so the sink calls of a poll never interleave with a tick. Inside the tick, the system
-"input.actions" runs in the pre-update schedule: it calls `update` on the `ke_input`,
+"input.actions" runs in the pre-update set: it calls `update` on the `ke_input`,
 takes a snapshot with `get_snapshot` and evaluates the maps against it. Systems of later schedules read actions, never keys, so every read in the rest
 of the tick sees the values of one evaluation.
 
@@ -56,5 +56,5 @@ slots a program calls; with no configuration the maps are whatever the program a
 - `KE_INPUT_MAX_KEYS` (512) and `KE_INPUT_MAX_MOUSE_BUTTONS` (32) bound the codes both sides send;
   a code outside them is ignored. The capacity of the event queue is private to the plugin.
 - The system name "input.actions" is a literal of `src/zig/framework/src/input_actions.zig`.
-- The window reads "runtime.window" in the configuration: "width", "height", "title",
-  "fullscreen".
+- The window is created with the settings `KE_WINDOW_SETTING_TITLE`, `KE_WINDOW_SETTING_WIDTH`,
+  `KE_WINDOW_SETTING_HEIGHT` and `KE_WINDOW_SETTING_FULLSCREEN`; the SDKs hand it the "runtime.window" section of the project file.

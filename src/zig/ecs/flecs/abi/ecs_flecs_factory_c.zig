@@ -3,6 +3,7 @@
 const abi_ecs = @import("ecs");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -16,6 +17,9 @@ pub const ke_removal_tracker = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Sends every line ke_ecs_flecs logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
 pub extern fn ke_ecs_flecs_set_log_callback(callback: ke_log_callback, ctx: ?*anyopaque) void;
@@ -24,4 +28,4 @@ pub extern fn ke_ecs_flecs_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// and abort handlers: a check flecs fails makes the slot that called it return
 /// KE_RESULT_INVALID_ARGUMENT, and an internal failure of flecs logs flecs's message and the
 /// stack before flecs ends the process.
-pub extern fn ke_ecs_flecs_create(config: ?*const abi_ecs.c.ke_ecs_config, out_ecs: ?*abi_ecs.c.ke_ecs_handle) abi_result.c.ke_result;
+pub extern fn ke_ecs_flecs_create(settings: ?*abi_settings.c.ke_settings, out_ecs: ?*abi_ecs.c.ke_ecs_handle) abi_result.c.ke_result;

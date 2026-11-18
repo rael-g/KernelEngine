@@ -9,6 +9,8 @@ using System.Runtime.InteropServices;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Configuration.Native;
+using KernelEngine.Settings;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Configuration;
 

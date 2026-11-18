@@ -11,20 +11,19 @@ public sealed unsafe partial class DefaultSchedule : KernelEngine.Schedule.Sched
     /// <summary>Creates a schedule over ecs whose runs go to job_system, both borrowed for its lifetime.</summary>
     /// <param name="ecs"></param>
     /// <param name="jobSystem"></param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public DefaultSchedule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config) : base(Create(ecs, jobSystem, config))
+    /// <param name="settings">Read once. `refuse_ambiguity`, a boolean, default false: an ambiguity between two writers fails the run instead of being logged.</param>
+    public DefaultSchedule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, jobSystem, settings))
     {
         Hold(ecs.Owner);
         Hold(jobSystem.Owner);
     }
 
-    private static KernelEngine.Schedule.Native.ke_schedule_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config)
+    private static KernelEngine.Schedule.Native.ke_schedule_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(jobSystem);
-        var nativeConfig = config;
         KernelEngine.Schedule.Native.ke_schedule_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Schedule.Native.NativeMethods.schedule_create(ecs.Native, jobSystem.Native, &nativeConfig, &handle), "ke_schedule_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Schedule.Native.NativeMethods.schedule_create(ecs.Native, jobSystem.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_schedule_create");
         return handle;
     }
 }

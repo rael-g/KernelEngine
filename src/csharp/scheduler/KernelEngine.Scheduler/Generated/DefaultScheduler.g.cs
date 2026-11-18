@@ -11,20 +11,19 @@ public sealed unsafe partial class DefaultScheduler : KernelEngine.Scheduler.Sch
     /// <summary>Creates a scheduler with no executable, which drains job_system and async, both borrowed for its lifetime, at the start of every tick.</summary>
     /// <param name="jobSystem"></param>
     /// <param name="async"></param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public DefaultScheduler(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config) : base(Create(jobSystem, async, config))
+    /// <param name="settings">Read once. KE_SCHEDULER_SETTING_FIXED_DT, default 1/60; KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM, default 0.25.</param>
+    public DefaultScheduler(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, KernelEngine.Settings.IPartSettings settings) : base(Create(jobSystem, async, settings))
     {
         Hold(jobSystem.Owner);
         Hold(async.Owner);
     }
 
-    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config)
+    private static KernelEngine.Scheduler.Native.ke_scheduler_handle Create(KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(jobSystem);
         ArgumentNullException.ThrowIfNull(async);
-        var nativeConfig = config;
         KernelEngine.Scheduler.Native.ke_scheduler_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(jobSystem.Native, async.Native, &nativeConfig, &handle), "ke_scheduler_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Scheduler.Native.NativeMethods.scheduler_create(jobSystem.Native, async.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_scheduler_create");
         return handle;
     }
 }

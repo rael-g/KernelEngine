@@ -34,7 +34,7 @@ pub fn ObjectUniforms(comptime Record: type) type {
             const slots = @import("std").math.ceilPowerOfTwoAssert(u32, @max(count, 1));
             const dev = self.device;
             var buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-            const made = dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+            const made = dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
                 .label = self.buffer_label,
                 .initial_data = null,
                 .size = @as(u64, stride) * slots,

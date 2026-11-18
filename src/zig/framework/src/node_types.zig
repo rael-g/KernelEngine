@@ -725,10 +725,10 @@ fn registerType(s: *State, desc: *const abi_framework.c.ke_node_type_desc) R.Err
     }
     const tag_name = std.fmt.allocPrintSentinel(heap.gpa, "node.{s}", .{name}, 0) catch return error.OutOfMemory;
     defer heap.gpa.free(tag_name);
-    const tag: abi_ecs.c.ke_component_params = .{ .name = tag_name.ptr, .size = 0, .alignment = 0 };
+    const tag: abi_ecs.c.ke_component_desc = .{ .name = tag_name.ptr, .size = 0, .alignment = 0 };
     try R.check(s.ecs.component_register.?(s.ecs, &tag, &t.tag));
     if (desc.fields_size != 0) {
-        const fields: abi_ecs.c.ke_component_params = .{ .name = name, .size = desc.fields_size, .alignment = desc.fields_alignment, .fields = desc.fields, .field_count = desc.field_count };
+        const fields: abi_ecs.c.ke_component_desc = .{ .name = name, .size = desc.fields_size, .alignment = desc.fields_alignment, .fields = desc.fields, .field_count = desc.field_count };
         try R.check(s.ecs.component_register.?(s.ecs, &fields, &t.columns[0]));
         t.sizes[0] = desc.fields_size;
         t.prototypes[0] = try prototypeOf(desc.fields_size, desc.initial, desc.initial_size, name);
@@ -755,7 +755,7 @@ fn vtRegisterType(self: ?*abi_framework.c.ke_node_types, desc_in: ?*const abi_fr
     return R.ok;
 }
 
-fn registerEvent(s: *State, params: *const abi_ecs.c.ke_component_params) R.Error!Cid {
+fn registerEvent(s: *State, params: *const abi_ecs.c.ke_component_desc) R.Error!Cid {
     const name = params.name orelse return error.InvalidArgument;
     const e = heap.gpa.create(Event) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(e);
@@ -786,7 +786,7 @@ fn registerClear(s: *State, e: *Event) R.Error!void {
 }
 
 /// Slot `register_event`.
-fn vtRegisterEvent(self: ?*abi_framework.c.ke_node_types, params_in: ?*const abi_ecs.c.ke_component_params, out_event: ?*Cid) callconv(.c) abi_result.c.ke_result {
+fn vtRegisterEvent(self: ?*abi_framework.c.ke_node_types, params_in: ?*const abi_ecs.c.ke_component_desc, out_event: ?*Cid) callconv(.c) abi_result.c.ke_result {
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
     const params = params_in orelse return R.code(error.InvalidArgument);
     const out = out_event orelse return R.code(error.InvalidArgument);
@@ -955,7 +955,7 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
     if (ecs.component_lookup.?(ecs, status_name, &status_meta)) {
         status_cid = status_meta.cid;
     } else {
-        const params: abi_ecs.c.ke_component_params = .{ .name = status_name, .size = @sizeOf(NodeStatus), .alignment = @alignOf(NodeStatus) };
+        const params: abi_ecs.c.ke_component_desc = .{ .name = status_name, .size = @sizeOf(NodeStatus), .alignment = @alignOf(NodeStatus) };
         try R.check(ecs.component_register.?(ecs, &params, &status_cid));
     }
     var stamp_cid: Cid = 0;
@@ -963,7 +963,7 @@ fn create(loop: *abi_scheduler.c.ke_scheduler, ecs: *abi_ecs.c.ke_ecs, tree: *ab
     if (ecs.component_lookup.?(ecs, stamp_name, &stamp_meta)) {
         stamp_cid = stamp_meta.cid;
     } else {
-        const params: abi_ecs.c.ke_component_params = .{ .name = stamp_name, .size = @sizeOf(EventStamp), .alignment = @alignOf(EventStamp) };
+        const params: abi_ecs.c.ke_component_desc = .{ .name = stamp_name, .size = @sizeOf(EventStamp), .alignment = @alignOf(EventStamp) };
         try R.check(ecs.component_register.?(ecs, &params, &stamp_cid));
     }
 
@@ -1472,7 +1472,7 @@ test "an on handler visits each pair of a node and an event raised this tick" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
+    const goal: abi_ecs.c.ke_component_desc = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
     const events = [_]Cid{goal_cid};
@@ -1504,7 +1504,7 @@ test "raise records an entity carrying the event and refuses a size that is not 
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
-    const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
+    const goal: abi_ecs.c.ke_component_desc = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
     var d = paddleDesc();
@@ -1556,7 +1556,7 @@ test "clearing despawns only the events every reading schedule has seen" {
     defer f.deinit();
     _ = f.loop.when(.completed_since).does(&completedBelowFive);
     _ = f.rt.when(.reads).returns(true);
-    const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
+    const goal: abi_ecs.c.ke_component_desc = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
     const clear = registered[0];
@@ -1754,7 +1754,7 @@ test "a node type carrying an unregistered component is refused and registers no
 test "destroying the node types unregisters every system they registered" {
     var f: Fixture = .{};
     try f.init();
-    const goal: abi_ecs.c.ke_component_params = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
+    const goal: abi_ecs.c.ke_component_desc = .{ .name = "pong.goal", .size = @sizeOf(Goal), .alignment = 1 };
     var goal_cid: Cid = 0;
     try R.check(f.types.ref.?.register_event.?(f.types.ref, &goal, &goal_cid));
     var d = paddleDesc();

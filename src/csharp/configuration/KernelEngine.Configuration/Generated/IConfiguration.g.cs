@@ -5,6 +5,8 @@
 
 using KernelEngine.Common;
 using KernelEngine.Configuration.Native;
+using KernelEngine.Settings;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Configuration;
 
@@ -20,7 +22,7 @@ public interface IConfiguration : IDisposable
     bool GetBool(string section, string key, bool fallback);
     /// <summary>Returned pointer is owned by the store and valid until the same key is overwritten or the store is destroyed. Copy it if you need to retain.</summary>
     string GetString(string section, string key, string fallback);
-    /// <summary>Stores value under section and key, replacing what the key held, then runs the section's subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.</summary>
+    /// <summary>Stores value under section and key, replacing what the key held. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void SetInt(string section, string key, long @value);
     /// <summary>As set_int, for a double.</summary>
@@ -32,10 +34,11 @@ public interface IConfiguration : IDisposable
     /// <summary>As set_int, for a string, copied; a null value is also an invalid argument.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void SetString(string section, string key, string @value);
-    /// <summary>Subscribes to writes on `section`. Returns a subscription id, or KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.</summary>
-    uint Subscribe(string section, nint cb, nint ctx);
-    /// <summary>Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.</summary>
-    void Unsubscribe(uint sub);
+    /// <summary>The keys directly in section as the settings a part is created with. Each read looks the store up at the time it is made; keys of sections under section are not included.</summary>
+    /// <param name="section">The section; one that holds nothing gives empty settings.</param>
+    /// <returns>Receives the settings, borrowed for the lifetime of the store.</returns>
+    /// <exception cref="Exception">The native call failed.</exception>
+    IPartSettings Section(string section);
     /// <summary>Lists the sections directly under section, once each, in the order their first key was stored. A section is under another when its name is the other's followed by a dot and one more name; it is listed when it or any section under it holds a key.</summary>
     /// <param name="section">The parent; "" lists the top-level sections.</param>
     /// <param name="each">Called once per child section.</param>

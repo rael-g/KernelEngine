@@ -44,7 +44,7 @@ pub const Ecs = struct {
                 }
             }.call,
             .component_register = &struct {
-                fn call(self: ?*c.ke_ecs, a0: ?*const c.ke_component_params, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_ecs, a0: ?*const c.ke_component_desc, a1: ?*c.ke_component_id) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.componentRegister(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -234,7 +234,7 @@ pub const Ecs = struct {
     /// and singleton by field name: a field of the same name and type is copied, a new field takes
     /// the default of the table, a field that is gone is dropped; the id stays. Without field tables
     /// a different size or alignment is refused.
-    pub fn componentRegister(self: Ecs, params: ?*const c.ke_component_params) Error!c.ke_component_id {
+    pub fn componentRegister(self: Ecs, params: ?*const c.ke_component_desc) Error!c.ke_component_id {
         var written: c.ke_component_id = undefined;
         try checkResult(self.ptr.component_register.?(self.ptr, params, &written));
         return written;
@@ -484,10 +484,9 @@ pub const EcsSnapshot = struct {
 };
 
 pub const ComponentField = c.ke_component_field;
-pub const ComponentParams = c.ke_component_params;
+pub const ComponentDesc = c.ke_component_desc;
 pub const ComponentMeta = c.ke_component_meta;
 pub const EcsQueryTerm = c.ke_ecs_query_term;
 pub const EcsQueryDesc = c.ke_ecs_query_desc;
 pub const EcsSegment = c.ke_ecs_segment;
-pub const EcsConfig = c.ke_ecs_config;
 pub const EcsHandle = c.ke_ecs_handle;

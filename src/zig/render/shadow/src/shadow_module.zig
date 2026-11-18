@@ -19,6 +19,8 @@ const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_render_shadow_factory = @import("abi_render_shadow_factory");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
 const abi_view = @import("abi_view");
@@ -30,22 +32,25 @@ const heap = @import("heap");
 const gpa = heap.gpa;
 const rg = abi_render_graph.c;
 
-/// The shape of the shadow map, copied from the config's fields of the same names.
+/// The shape of the shadow map: the pass's settings, with this implementation's defaults.
 const Shape = struct {
-    resolution: u32,
-    light_distance: f32,
-    extent: f32,
-    near_plane: f32,
-    far_plane: f32,
+    resolution: u32 = 1024,
+    light_distance: f32 = 25.0,
+    extent: f32 = 20.0,
+    near_plane: f32 = 0.1,
+    far_plane: f32 = 50.0,
+
+    pub const ranges = .{ .resolution = .{ 1, 16384 }, .extent = .{ std.math.floatMin(f64), std.math.floatMax(f64) }, .near_plane = .{ 0.0, std.math.floatMax(f64) } };
 };
 
-/// A map without texels, an empty area or a near plane not before the far one is refused.
-fn shapeOf(p: *const abi_render_shadow_factory.c.ke_render_shadow_config) R.Error!Shape {
-    if (p.resolution == 0 or !(p.extent > 0.0) or !(p.near_plane < p.far_plane)) {
-        log.warn("shadow pass: resolution {d}, extent {d}, near {d} and far {d} describe no shadow map", .{ p.resolution, p.extent, p.near_plane, p.far_plane });
+/// A near plane not before the far one is refused, beside what the schema refuses.
+fn shapeOf(settings: *abi_settings.c.ke_settings) R.Error!Shape {
+    const shape = try settings_schema.read(Shape, settings);
+    if (!(shape.near_plane < shape.far_plane)) {
+        log.warn("shadow pass: near plane {d} is not before far plane {d}", .{ shape.near_plane, shape.far_plane });
         return error.InvalidArgument;
     }
-    return .{ .resolution = p.resolution, .light_distance = p.light_distance, .extent = p.extent, .near_plane = p.near_plane, .far_plane = p.far_plane };
+    return shape;
 }
 
 const ShadowObj = extern struct { model: [16]f32 };
@@ -54,7 +59,7 @@ const Objects = @import("object_uniforms").ObjectUniforms(ShadowObj);
 
 const object_hint = [_]abi_render_gpu.c.ke_render_binding_hint{.{ .name = "object", .flags = abi_render_gpu.c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "shadow",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = &object_hint,
@@ -81,7 +86,7 @@ const ShadowModule = struct {
     depth: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
     light: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     lvp_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
@@ -251,7 +256,7 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// list and the queries over the render world. A step that fails fails with the code of the render
 /// service or the device, and leaves the handles created before it stored in the module, for
 /// `destroyModule` to release; a pipeline that cannot be created fails as not initialized.
-fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_shadow_factory.c.ke_render_shadow_config) R.Error!void {
+fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, settings: *abi_settings.c.ke_settings) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
     const ids = p.scene.?.render_component_ids.?(p.scene).?;
@@ -260,9 +265,9 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, co
     sh.frame = p.frame.?;
     sh.ndc = dev.get_ndc_convention.?(dev);
     sh.view_space = p.view_space.?;
-    sh.params = try shapeOf(config);
+    sh.params = try shapeOf(settings);
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
 
     var sh_vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "shadow", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &sh_vs));
@@ -274,7 +279,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, co
 
     const sh_attr = abi_render_gpu.c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = abi_render_gpu.c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = abi_render_gpu.c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = abi_render_gpu.c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = (&sh_attr)[0..1] };
-    var shp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var shp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     shp.label = "shadow.pipeline";
     shp.vertex_module = sh_vs;
     shp.fragment_module = sh_fs;
@@ -335,16 +340,16 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 }
 
 /// The factory declared in shadow_create.h. A missing scene, frame, service, device, view space or
-/// config fails as an invalid argument and a module that cannot be allocated as out of memory; a
+/// settings fails as an invalid argument and a module that cannot be allocated as out of memory; a
 /// failing `setup` fails with its code and leaves the handle zeroed, and every such path frees the
 /// module.
-export fn ke_render_shadow_create(context_in: ?*const abi_render_context.c.ke_render_context, config: ?*const abi_render_shadow_factory.c.ke_render_shadow_config, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_shadow_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null or p.view_space == null) return R.code(error.InvalidArgument);
-    const given = config orelse {
-        log.warn("shadow pass: no config", .{});
+    const given = settings orelse {
+        log.warn("shadow pass: no settings", .{});
         return R.code(error.InvalidArgument);
     };
     const sh = gpa.create(ShadowModule) catch |err| return R.code(err);
@@ -449,7 +454,7 @@ const Rig = struct {
     }
 };
 
-const test_config: abi_render_shadow_factory.c.ke_render_shadow_config = .{ .resolution = 1024, .light_distance = 25.0, .extent = 20.0, .near_plane = 0.1, .far_plane = 50.0 };
+var no_settings = settings_schema.Fixed.init(&.{});
 
 fn passOf(h: abi_module.c.ke_module_handle) *ShadowModule {
     const systems: *pass_systems.Systems(2) = @ptrCast(@alignCast(h.ref.?.handle));
@@ -462,7 +467,7 @@ test "the shadow module attaches its two systems to the render schedule, and des
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &test_config, &h));
+    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
     const t = rig.targets();
     try R.check(h.ref.?.attach.?(h.ref, &t));
     try rig.schedule.received(.register_system).times(2);
@@ -477,7 +482,7 @@ test "a directional light gets a published map and light, and a shadow pass at t
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &test_config, &h));
+    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&light_ctx, passOf(h), 0));
     try rig.frame.received(.publish).times(2);
@@ -491,7 +496,7 @@ test "a frame without a directional light publishes no shadow and declares no pa
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_shadow_create(&p, &test_config, &h));
+    try R.check(ke_render_shadow_create(&p, &no_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, prepareSystem(&empty_ctx, passOf(h), 0));
     try testing.expectEqual(R.ok, queueSystem(&empty_ctx, passOf(h), 0));
@@ -504,10 +509,9 @@ test "a shadow map with no texels is refused as an invalid argument" {
     try rig.init();
     defer rig.deinit();
     const p = rig.context();
-    var bad = test_config;
-    bad.resolution = 0;
+    var bad = settings_schema.Fixed.init(&.{.{ .key = "resolution", .value = .{ .int = 0 } }});
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&p, &bad, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_shadow_create(&p, &bad.api, &h)));
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }
@@ -519,7 +523,7 @@ test "a shadow pass whose shader fails to load releases what it had created" {
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_shadow_create(&p, &test_config, &h) != R.ok);
+    try testing.expect(ke_render_shadow_create(&p, &no_settings.api, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }

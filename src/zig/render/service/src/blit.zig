@@ -8,7 +8,7 @@ const FrameLog = @import("frame_log.zig").FrameLog;
 const abi_render = @import("abi_render");
 const R = rc.R;
 
-const layout_params = abi_render_gpu.c.ke_render_shader_layout_params{
+const layout_params = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "blit",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = null,
@@ -22,7 +22,7 @@ const layout_params = abi_render_gpu.c.ke_render_shader_layout_params{
 /// draws a frame makes.
 pub const Blit = struct {
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
-    pipeline: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     sets: FrameLog(abi_asset_resolver.c.ke_render_resource_set) = .{ .items = &.{}, .blank = abi_render_gpu.c.KE_RENDER_BINDING_INVALID },
 
     /// Loads the "blit" shaders and creates their layout. When either fails nothing is left to
@@ -36,7 +36,7 @@ pub const Blit = struct {
         try R.check(binder.create_shader_layout.?(binder, &layout_params, &layout));
         errdefer binder.destroy_shader_layout.?(binder, layout);
 
-        var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+        var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
         pp.label = "blit.pipeline";
         pp.vertex_module = vs;
         pp.vertex_entry = "vs_main";

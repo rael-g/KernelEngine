@@ -19,8 +19,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_schedule_system_desc, set_count),
     offsetof(ke_schedule_system_desc, per_entity),
     offsetof(ke_schedule_system_desc, exclusive),
-    sizeof(ke_schedule_config),
-    offsetof(ke_schedule_config, refuse_ambiguity),
     sizeof(ke_schedule),
     offsetof(ke_schedule, handle),
     offsetof(ke_schedule, register_set),

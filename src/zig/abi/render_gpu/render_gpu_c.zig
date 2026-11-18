@@ -46,6 +46,15 @@ pub const KE_GPU_SHADER_STAGE_VERTEX = 1;
 pub const KE_GPU_SHADER_STAGE_FRAGMENT = 2;
 pub const KE_GPU_SHADER_STAGE_COMPUTE = 4;
 pub const KE_GPU_INVALID_HANDLE = 18446744073709551615;
+/// Setting every GPU device reads, a boolean: asks the underlying graphics API to validate every
+/// call, which takes effect only where that API's validation layers are installed.
+pub const KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION = "enable_validation";
+/// Setting every GPU device reads, a boolean: the labels and debug groups given through
+/// ke_gpu_device reach the underlying graphics API, where capture tools read them.
+pub const KE_GPU_DEVICE_SETTING_DEBUG_LABELS = "debug_labels";
+/// Setting every render target presenting to a window reads, a string: how presented frames
+/// reach the screen, "fifo", "mailbox" or "immediate", as ke_gpu_present_mode names them.
+pub const KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE = "present_mode";
 /// The value no shader layout, resource set or material binding takes.
 pub const KE_RENDER_BINDING_INVALID = 0;
 
@@ -245,7 +254,7 @@ pub const ke_gpu_capabilities = extern struct {
     copy_bytes_per_row_alignment: u32 = std.mem.zeroes(u32),
 };
 
-pub const ke_gpu_buffer_params = extern struct {
+pub const ke_gpu_buffer_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     initial_data: ?*const anyopaque = std.mem.zeroes(?*const anyopaque),
@@ -254,7 +263,7 @@ pub const ke_gpu_buffer_params = extern struct {
     mapped_at_creation: bool = std.mem.zeroes(bool),
 };
 
-pub const ke_gpu_texture_params = extern struct {
+pub const ke_gpu_texture_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     width: u32 = std.mem.zeroes(u32),
@@ -271,7 +280,7 @@ pub const ke_gpu_texture_params = extern struct {
     initial_data_size: u32 = std.mem.zeroes(u32),
 };
 
-pub const ke_gpu_texture_view_params = extern struct {
+pub const ke_gpu_texture_view_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     format: ke_gpu_texture_format = std.mem.zeroes(ke_gpu_texture_format),
@@ -283,7 +292,7 @@ pub const ke_gpu_texture_view_params = extern struct {
     array_layer_count: u8 = std.mem.zeroes(u8),
 };
 
-pub const ke_gpu_sampler_params = extern struct {
+pub const ke_gpu_sampler_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     min_filter: ke_gpu_filter = std.mem.zeroes(ke_gpu_filter),
@@ -298,7 +307,7 @@ pub const ke_gpu_sampler_params = extern struct {
     max_anisotropy: u16 = std.mem.zeroes(u16),
 };
 
-pub const ke_gpu_shader_module_params = extern struct {
+pub const ke_gpu_shader_module_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// shader bytes in the device's accepted language (query ke_gpu_device::shader_language); WGSL
@@ -361,7 +370,7 @@ pub const ke_gpu_bind_group_layout_entry = extern struct {
     view_dimension: ke_gpu_texture_dimension = std.mem.zeroes(ke_gpu_texture_dimension),
 };
 
-pub const ke_gpu_bind_group_layout_params = extern struct {
+pub const ke_gpu_bind_group_layout_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     entry_count: u32 = std.mem.zeroes(u32),
@@ -378,7 +387,7 @@ pub const ke_gpu_bind_group_entry = extern struct {
     sampler: ke_gpu_sampler = std.mem.zeroes(ke_gpu_sampler),
 };
 
-pub const ke_gpu_bind_group_params = extern struct {
+pub const ke_gpu_bind_group_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     layout: ke_gpu_bind_group_layout = std.mem.zeroes(ke_gpu_bind_group_layout),
@@ -386,7 +395,7 @@ pub const ke_gpu_bind_group_params = extern struct {
     entries: ?[*]const ke_gpu_bind_group_entry = std.mem.zeroes(?[*]const ke_gpu_bind_group_entry),
 };
 
-pub const ke_gpu_render_pipeline_params = extern struct {
+pub const ke_gpu_render_pipeline_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     vertex_module: ke_gpu_shader_module = std.mem.zeroes(ke_gpu_shader_module),
@@ -409,7 +418,7 @@ pub const ke_gpu_render_pipeline_params = extern struct {
     color_target_count: u32 = std.mem.zeroes(u32),
 };
 
-pub const ke_gpu_compute_pipeline_params = extern struct {
+pub const ke_gpu_compute_pipeline_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     compute_module: ke_gpu_shader_module = std.mem.zeroes(ke_gpu_shader_module),
@@ -436,7 +445,7 @@ pub const ke_gpu_depth_stencil_attachment = extern struct {
     stencil_read_only: bool = std.mem.zeroes(bool),
 };
 
-pub const ke_gpu_render_pass_params = extern struct {
+pub const ke_gpu_render_pass_desc = extern struct {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     color_attachments: ?[*]const ke_gpu_color_attachment = std.mem.zeroes(?[*]const ke_gpu_color_attachment),
@@ -444,36 +453,9 @@ pub const ke_gpu_render_pass_params = extern struct {
     depth_stencil_attachment: ?*const ke_gpu_depth_stencil_attachment = std.mem.zeroes(?*const ke_gpu_depth_stencil_attachment),
 };
 
-pub const ke_gpu_command_encoder_params = extern struct {
-    /// Optional name shown for this object by capture and validation tools; copied by the call.
-    label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
-pub const ke_gpu_compute_pass_params = extern struct {
-    /// Optional name shown for this object by capture and validation tools; copied by the call.
-    label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
-/// The values a GPU device is created with, whatever its implementation, each applied as given.
-pub const ke_gpu_device_config = extern struct {
-    /// Asks the underlying graphics API to validate every call, which takes effect only where that
-    /// API's validation layers are installed.
-    enable_validation: bool = std.mem.zeroes(bool),
-    /// The labels and debug groups given through ke_gpu_device reach the underlying graphics API,
-    /// where capture tools read them.
-    debug_labels: bool = std.mem.zeroes(bool),
-};
-
 /// Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.
 pub const ke_gpu_command_buffer = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-};
-
-/// The values a render target presenting to a window is created with, whatever its
-/// implementation, each applied as given.
-pub const ke_gpu_render_target_window_config = extern struct {
-    /// How presented frames reach the screen.
-    present_mode: ke_gpu_present_mode = std.mem.zeroes(ke_gpu_present_mode),
 };
 
 /// A hint for the binding a shader declares under `name`.
@@ -496,7 +478,7 @@ pub const ke_render_shader_binding = extern struct {
 };
 
 /// The compiled shader a layout is built for.
-pub const ke_render_shader_layout_params = extern struct {
+pub const ke_render_shader_layout_desc = extern struct {
     /// Logical name the shader was compiled under, as a render service's load_shader takes it.
     shader: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
     /// Bitwise OR of the KE_GPU_SHADER_STAGE_* stages the shader is compiled for.
@@ -541,23 +523,23 @@ pub const ke_gpu_device = extern struct {
     queue_poll: ?*const fn (?*ke_gpu_device, ke_gpu_queue) callconv(.c) void = null,
     queue_wait_idle: ?*const fn (?*ke_gpu_device, ke_gpu_queue) callconv(.c) void = null,
     /// Creates a buffer. The backend's reason for a rejection is logged.
-    create_buffer: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_buffer_params, ?*ke_gpu_buffer) callconv(.c) abi_result.c.ke_result = null,
+    create_buffer: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_buffer_desc, ?*ke_gpu_buffer) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a texture. The backend's reason for a rejection is logged.
-    create_texture: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_texture_params, ?*ke_gpu_texture) callconv(.c) abi_result.c.ke_result = null,
+    create_texture: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_texture_desc, ?*ke_gpu_texture) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a view of `tex`. The backend's reason for a rejection is logged.
-    create_texture_view: ?*const fn (?*ke_gpu_device, ke_gpu_texture, ?*const ke_gpu_texture_view_params, ?*ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result = null,
+    create_texture_view: ?*const fn (?*ke_gpu_device, ke_gpu_texture, ?*const ke_gpu_texture_view_desc, ?*ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a sampler. The backend's reason for a rejection is logged.
-    create_sampler: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_sampler_params, ?*ke_gpu_sampler) callconv(.c) abi_result.c.ke_result = null,
+    create_sampler: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_sampler_desc, ?*ke_gpu_sampler) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a shader module. The backend's reason for rejecting the source is logged.
-    create_shader_module: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_shader_module_params, ?*ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result = null,
+    create_shader_module: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_shader_module_desc, ?*ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a render pipeline. The backend's reason for a rejection is logged.
-    create_render_pipeline: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_params, ?*ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result = null,
+    create_render_pipeline: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_desc, ?*ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a compute pipeline. The backend's reason for a rejection is logged.
-    create_compute_pipeline: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_compute_pipeline_params, ?*ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result = null,
+    create_compute_pipeline: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_compute_pipeline_desc, ?*ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a bind group layout. The backend's reason for a rejection is logged.
-    create_bind_group_layout: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_bind_group_layout_params, ?*ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result = null,
+    create_bind_group_layout: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_bind_group_layout_desc, ?*ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result = null,
     /// Creates a bind group. The backend's reason for a rejection is logged.
-    create_bind_group: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_bind_group_params, ?*ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result = null,
+    create_bind_group: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_bind_group_desc, ?*ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result = null,
     destroy_buffer: ?*const fn (?*ke_gpu_device, ke_gpu_buffer) callconv(.c) void = null,
     destroy_texture: ?*const fn (?*ke_gpu_device, ke_gpu_texture) callconv(.c) void = null,
     destroy_texture_view: ?*const fn (?*ke_gpu_device, ke_gpu_texture_view) callconv(.c) void = null,
@@ -567,8 +549,8 @@ pub const ke_gpu_device = extern struct {
     destroy_pipeline: ?*const fn (?*ke_gpu_device, ke_gpu_pipeline) callconv(.c) void = null,
     destroy_bind_group_layout: ?*const fn (?*ke_gpu_device, ke_gpu_bind_group_layout) callconv(.c) void = null,
     destroy_bind_group: ?*const fn (?*ke_gpu_device, ke_gpu_bind_group) callconv(.c) void = null,
-    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
-    create_command_encoder: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_command_encoder_params, ?*ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result = null,
+    /// Creates a command encoder.
+    create_command_encoder: ?*const fn (?*ke_gpu_device, ?[*:0]const u8, ?*ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result = null,
     write_buffer: ?*const fn (?*ke_gpu_device, ke_gpu_buffer, u64, ?*const anyopaque, usize) callconv(.c) void = null,
     map_buffer: ?*const fn (?*ke_gpu_device, ke_gpu_buffer, usize, usize) callconv(.c) ?*anyopaque = null,
     map_buffer_write: ?*const fn (?*ke_gpu_device, ke_gpu_buffer, usize, usize) callconv(.c) ?*anyopaque = null,
@@ -583,7 +565,7 @@ pub const ke_gpu_device = extern struct {
     /// Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready`
     /// fires later (during this device's normal event pump, e.g. at queue_poll) with the finished
     /// pipeline, or a failure code and KE_GPU_INVALID_HANDLE. No caching and no fallback.
-    create_render_pipeline_async: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_params, ke_gpu_pipeline_ready_func, ?*anyopaque) callconv(.c) void = null,
+    create_render_pipeline_async: ?*const fn (?*ke_gpu_device, ?*const ke_gpu_render_pipeline_desc, ke_gpu_pipeline_ready_func, ?*anyopaque) callconv(.c) void = null,
     /// Blocks until every pipeline compile kicked via create_render_pipeline_async has invoked its
     /// on_ready callback. Call before destroying anything an in-flight callback might still write
     /// into. A no-op if nothing is pending.
@@ -641,9 +623,9 @@ pub const ke_gpu_compute_pass = extern struct {
 
 pub const ke_gpu_command_encoder = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    begin_render_pass: ?*const fn (?*ke_gpu_command_encoder, ?*const ke_gpu_render_pass_params) callconv(.c) ?*ke_gpu_render_pass = null,
-    /// Begins a compute pass. p may be NULL, which begins it unlabeled.
-    begin_compute_pass: ?*const fn (?*ke_gpu_command_encoder, ?*const ke_gpu_compute_pass_params) callconv(.c) ?*ke_gpu_compute_pass = null,
+    begin_render_pass: ?*const fn (?*ke_gpu_command_encoder, ?*const ke_gpu_render_pass_desc) callconv(.c) ?*ke_gpu_render_pass = null,
+    /// Begins a compute pass.
+    begin_compute_pass: ?*const fn (?*ke_gpu_command_encoder, ?[*:0]const u8) callconv(.c) ?*ke_gpu_compute_pass = null,
     copy_buffer_to_buffer: ?*const fn (?*ke_gpu_command_encoder, ke_gpu_buffer, usize, ke_gpu_buffer, usize, usize) callconv(.c) void = null,
     /// Copies tightly described rows of texels from a buffer into a texture. Fails with
     /// KE_RESULT_INVALID_ARGUMENT when bytes_per_row is not a multiple of
@@ -697,7 +679,7 @@ pub const ke_render_resource_binder = extern struct {
     /// out. The name is copied.
     provide: ?*const fn (?*ke_render_resource_binder, ?*const ke_render_shader_binding) callconv(.c) abi_result.c.ke_result = null,
     /// Builds the layout of a compiled shader from what the build recorded about it.
-    create_shader_layout: ?*const fn (?*ke_render_resource_binder, ?*const ke_render_shader_layout_params, ?*ke_render_shader_layout) callconv(.c) abi_result.c.ke_result = null,
+    create_shader_layout: ?*const fn (?*ke_render_resource_binder, ?*const ke_render_shader_layout_desc, ?*ke_render_shader_layout) callconv(.c) abi_result.c.ke_result = null,
     /// Destroys a layout; the invalid one is ignored. A set created against it must be destroyed
     /// first.
     destroy_shader_layout: ?*const fn (?*ke_render_resource_binder, ke_render_shader_layout) callconv(.c) void = null,

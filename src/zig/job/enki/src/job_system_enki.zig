@@ -14,6 +14,8 @@ const abi_result = @import("abi_result");
 const completion_graph = @import("completion_graph");
 const heap = @import("heap");
 
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.job_system_enki);
 
@@ -189,22 +191,28 @@ fn destroy(self_in: ?*j.ke_job_system) callconv(.c) void {
     heap.gpa.destroy(self);
 }
 
-export fn ke_job_system_enki_create(config_in: ?*const j.ke_job_system_config, out_job_system: ?*j.ke_job_system_handle) callconv(.c) Result {
+/// The job system's settings: the contract's worker count, absent for one per hardware thread
+/// besides the creating one.
+const Settings = struct {
+    worker_count: ?u32 = null,
+};
+
+export fn ke_job_system_enki_create(settings: ?*abi_settings.c.ke_settings, out_job_system: ?*j.ke_job_system_handle) callconv(.c) Result {
     const out = out_job_system orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(j.ke_job_system_handle);
-    out.* = create(config_in) catch |err| {
+    out.* = create(settings) catch |err| {
         log.warn("creating the job system failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(config_in: ?*const j.ke_job_system_config) R.Error!j.ke_job_system_handle {
-    const config = config_in orelse return error.InvalidArgument;
+fn create(settings: ?*abi_settings.c.ke_settings) R.Error!j.ke_job_system_handle {
+    const config = try settings_schema.read(Settings, settings orelse return error.InvalidArgument);
     const self = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(self);
     const ets = c.enkiNewTaskScheduler() orelse return error.General;
-    const workers: u32 = if (config.worker_count == j.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD) @intCast(@max(std.Thread.getCpuCount() catch 1, 1) - 1) else config.worker_count;
+    const workers: u32 = config.worker_count orelse @intCast(@max(std.Thread.getCpuCount() catch 1, 1) - 1);
     c.enkiInitTaskSchedulerNumThreads(ets, workers + 1);
     self.* = .{
         .api = .{ .handle = self, .dispatch = dispatch, .parallel_for = parallelFor, .worker_slots = workerSlots, .drain = drain },
@@ -219,9 +227,13 @@ fn create(config_in: ?*const j.ke_job_system_config) R.Error!j.ke_job_system_han
 
 const testing = std.testing;
 
-fn createdWith(workers: u32) !j.ke_job_system_handle {
+var no_settings = settings_schema.Fixed.init(&.{});
+
+fn createdWith(workers: ?u32) !j.ke_job_system_handle {
+    var pairs = [_]settings_schema.Pair{.{ .key = "worker_count", .value = .{ .int = workers orelse 0 } }};
+    var settings = settings_schema.Fixed.init(if (workers == null) &.{} else &pairs);
     var h: j.ke_job_system_handle = undefined;
-    try R.check(ke_job_system_enki_create(&.{ .worker_count = workers }, &h));
+    try R.check(ke_job_system_enki_create(&settings.api, &h));
     return h;
 }
 
@@ -241,8 +253,8 @@ test "a job system without workers keeps the job system contract" {
     try @import("job_suite").check(createdWithoutWorkers);
 }
 
-test "one worker per hardware thread besides the creating one gives a slot per hardware thread" {
-    const h = try createdWith(j.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD);
+test "settings that write no worker count give a slot per hardware thread" {
+    const h = try createdWith(null);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(@as(u32, @intCast(@max(std.Thread.getCpuCount() catch 1, 1))), h.ref.?.worker_slots.?(h.ref));
 }
@@ -253,10 +265,10 @@ test "worker slots count the workers and the creating thread" {
     try testing.expectEqual(@as(u32, 4), h.ref.?.worker_slots.?(h.ref));
 }
 
-test "a null config or handle is refused as an invalid argument" {
+test "null settings or a null handle are refused as an invalid argument" {
     var h: j.ke_job_system_handle = undefined;
     try testing.expectError(error.InvalidArgument, R.check(ke_job_system_enki_create(null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_job_system_enki_create(&.{ .worker_count = 0 }, null)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_job_system_enki_create(&no_settings.api, null)));
 }
 
 test "creating and destroying job systems leaves no block allocated" {

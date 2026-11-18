@@ -6,7 +6,11 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_scheduler = @import("scheduler");
+const abi_settings = @import("settings");
 
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// The body of an operation, run once on a worker that may block in a system call.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result;
@@ -30,7 +34,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Creates a scheduler with no executable, which drains job_system and async, both borrowed for
 /// its lifetime, at the start of every tick.
-pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, config: ?*const abi_scheduler.c.ke_scheduler_config, out_scheduler: ?*abi_scheduler.c.ke_scheduler_handle) abi_result.c.ke_result;
+pub extern fn ke_scheduler_create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings, out_scheduler: ?*abi_scheduler.c.ke_scheduler_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_scheduler logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.
