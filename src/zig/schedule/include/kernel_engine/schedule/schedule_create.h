@@ -30,7 +30,7 @@ extern "C" {
  */
 KE_SCHEDULE_CREATE_API ke_result ke_schedule_create(ke_ecs                   *ecs,
                                                     ke_job_system            *job_system,
-                                                    struct ke_settings       *settings,
+                                                    ke_settings              *settings,
                                                     ke_schedule_handle       *out_schedule);
 
 #ifdef __cplusplus

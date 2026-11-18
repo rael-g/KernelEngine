@@ -510,7 +510,7 @@
         },
         {
           "name": "settings",
-          "type": "struct ke_settings *",
+          "type": "ke_settings *",
           "tags": [
             "borrowed"
           ],
