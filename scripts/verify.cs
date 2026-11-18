@@ -68,7 +68,7 @@ List<Step> ManagedWindowsTests()
     var prefix = Path.Combine(rootDir, "build", "cross-windows");
     var artifacts = Path.Combine(rootDir, "build", "artifacts-windows");
     var steps = new List<Step>();
-    foreach (var project in Directory.EnumerateFiles(Path.Combine(rootDir, "tests", "csharp"), "*.csproj", SearchOption.AllDirectories).Order())
+    foreach (var project in new[] { "csharp", "integration" }.SelectMany(dir => Directory.EnumerateFiles(Path.Combine(rootDir, "tests", dir), "*.csproj", SearchOption.AllDirectories)).Order())
     {
         var name = Path.GetFileNameWithoutExtension(project);
         var assembly = Path.Combine(artifacts, "bin", name, "debug", name + ".dll");
