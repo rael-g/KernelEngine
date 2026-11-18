@@ -7,7 +7,8 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 
 
-/// The body of an operation, run once on a worker that may block in a system call.
+/// The body of an operation, run once on a worker: CPU work that may span frames. It does not
+/// block in a system call; reading or writing a file is `ke_io`'s.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library

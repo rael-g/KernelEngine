@@ -9,7 +9,8 @@ const abi_settings = @import("settings");
 /// Receives one key the settings hold.
 pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
-/// The body of an operation, run once on a worker that may block in a system call.
+/// The body of an operation, run once on a worker: CPU work that may span frames. It does not
+/// block in a system call; reading or writing a file is `ke_io`'s.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
