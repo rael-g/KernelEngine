@@ -83,7 +83,8 @@ Contracts worth knowing by name:
 - `ke_ecs` — entity lifetime + component storage + query, language-agnostic
 - `ke_schedule` / `ke_scheduler` — systems ordered by component access, run as jobs; the frame loop over the schedules, with the fixed timestep
 - `ke_system_ctx` — the only doorway to component memory inside a system body; `ke_ecs_commands` — the queue its structural changes are recorded into
-- `ke_job_system` / `ke_async` / `ke_completion` — jobs of the frame, operations beside it that may block, and the completion both hand back
+- `ke_job_system` / `ke_async` / `ke_completion` — jobs of the frame, CPU work that spans frames, and the completion both hand back
+- `ke_io` — file reads and writes, completed by the mechanism its implementation owns
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
 - `ke_settings` — the values a factory reads by name at creation; `ke_configuration.section` hands one section of the project file as one
@@ -141,11 +142,11 @@ A service locator is forbidden: no global object that engine code asks for its d
 
 ## Threading model
 
-Every thread is a worker of a `ke_job_system` or a `ke_async`. The host creates them and hands each consumer the one it runs on; nothing else starts a thread, and no foreign pool (Zig's, .NET's, a library's own) runs engine work. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a job to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
+Every thread belongs to one of three parts the host creates and hands to their consumers: the job system runs the frame, the async system runs CPU work that spans frames, and an I/O implementation runs its own mechanism. Each one starts its threads from a ceiling its settings fix, never past it, and nothing else starts a thread: no other plugin, and no library a plugin wraps, which is configured not to. Only the job system's workers are sized to the cores; the async system and the I/O are sized small, and an I/O thread spends its time blocked in the system, so neither competes with the frame for the CPU. Workers are addressed by index, never by name: no contract or plugin defines a "sim" or a "render" thread. A system body runs on whichever worker takes it; nothing pins a system or a job to a worker, and an order between systems is stated as component access. What runs where is in [`docs/architecture/threading.md`](docs/architecture/threading.md).
 
 **Sim ↔ render boundary**: the mechanism is the extraction into the render world, in `src/zig/extraction/default/src/extraction_default.zig`. Read it there. Do not trust a prose description of it — not this file's, not any document's. Any design decision that turns on how sim and render are decoupled must cite that source, because this paragraph cannot stay true on its own.
 
-**Worker systems**: `ke_job_system` and `ke_async` (enkiTS, or inline), each injected into the consumers that run on it. A completion is waited on only on the thread its contract allows; elsewhere it is passed as a dependency, and a read during a frame answers `KE_RESULT_PENDING` instead of waiting. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
+**Worker systems**: `ke_job_system` and `ke_async` (enkiTS, or inline), each injected into the consumers that run on it; work on either never blocks on I/O, which is `ke_io`'s. A completion is waited on only on the thread its contract allows; elsewhere it is passed as a dependency, and a read during a frame answers `KE_RESULT_PENDING` instead of waiting. A library that brings threads of its own is configured not to start them: the flecs plugin asks flecs for none (`ecs_init()` only).
 
 ---
 
@@ -204,7 +205,7 @@ The rules below and the conventions above that a machine can check are checked b
 
 4. **Consult legacy before rewriting.** When porting a concept off legacy code into a new framework/runtime, read the legacy implementation first, then design the replacement consciously. Refazer (rewriting from scratch) is sometimes correct; refazer-blind (without consulting what was there) is never correct. Legacy code carries hard-won lessons (edge cases, conventions, lifecycle hooks); skipping it means re-discovering them as regressions.
 
-5. **No mutex, condition variable or raw thread in a plugin.** The job and async systems are the synchronisation layer: work is submitted to them and waited on through its `ke_completion`, and a producer and a consumer are ordered by component access and dependencies.
+5. **No mutex, condition variable or raw thread in a plugin.** Only the job system, the async system and an I/O implementation start threads, from the ceiling their settings fix. The job and async systems are the synchronisation layer: work is submitted to them and waited on through its `ke_completion`, and a producer and a consumer are ordered by component access and dependencies.
 
 6. **A caller's failure is a `ke_result`; an internal invariant is a debug assert.** A failure the caller can cause (a bad argument, a missing file, a refused registration) is a `ke_result` code returned by the call, with the reason logged; `abort` and `@panic` never appear. A condition only a bug in the plugin itself can break is `std.debug.assert` (or `assert` in C), checked in debug builds.
 
