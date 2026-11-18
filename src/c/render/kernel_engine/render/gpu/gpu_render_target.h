@@ -51,12 +51,9 @@ typedef enum ke_gpu_present_mode
 } ke_gpu_present_mode;
 
 
-/// The values a render target presenting to a window is created with, whatever its implementation, each applied as given.
-typedef struct ke_gpu_render_target_window_config
-{
-    /// How presented frames reach the screen.
-    ke_gpu_present_mode present_mode;
-} ke_gpu_render_target_window_config;
+/// Setting every render target presenting to a window reads, a string: how presented frames reach the
+/// screen, "fifo", "mailbox" or "immediate", as ke_gpu_present_mode names them.
+#define KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE "present_mode"
 
 #ifdef __cplusplus
 }

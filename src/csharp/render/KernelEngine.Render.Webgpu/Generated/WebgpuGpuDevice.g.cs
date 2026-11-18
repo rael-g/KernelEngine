@@ -13,8 +13,8 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
 
     /// <summary>Creates a ke_gpu_device backed by WebGPU.</summary>
     /// <param name="async">Runs the compile of create_render_pipeline_async as one of its operations; NULL compiles synchronously, invoking the callback before returning.</param>
-    /// <param name="config">The device's values; Required; every field is read as given.</param>
-    public WebgpuGpuDevice(KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config) : this(Create(async, config))
+    /// <param name="settings">Read once. KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION and KE_GPU_DEVICE_SETTING_DEBUG_LABELS, each default false.</param>
+    public WebgpuGpuDevice(KernelEngine.Async.INativeAsync? async, KernelEngine.Settings.IPartSettings settings) : this(Create(async, settings))
     {
         Hold(async?.Owner);
     }
@@ -24,12 +24,11 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
         Ready = made.Ready;
     }
 
-    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) Create(KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config)
+    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) Create(KernelEngine.Async.INativeAsync? async, KernelEngine.Settings.IPartSettings settings)
     {
-        var nativeConfig = config;
         KernelEngine.Render.Native.ke_gpu_device_handle handle;
         nint ready = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((async is null ? null : async.Native), &nativeConfig, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((async is null ? null : async.Native), ((KernelEngine.Settings.INativeSettings)settings).Native, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
         return (handle, ready);
     }
 }

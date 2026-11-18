@@ -438,16 +438,12 @@ typedef struct ke_gpu_device_handle
     void (*destroy)(ke_gpu_device *self);
 } ke_gpu_device_handle;
 
-/// The values a GPU device is created with, whatever its implementation, each applied as given.
-typedef struct ke_gpu_device_config
-{
-    /// Asks the underlying graphics API to validate every call, which takes effect
-    /// only where that API's validation layers are installed.
-    bool enable_validation;
-    /// The labels and debug groups given through ke_gpu_device reach the
-    /// underlying graphics API, where capture tools read them.
-    bool debug_labels;
-} ke_gpu_device_config;
+/// Setting every GPU device reads, a boolean: asks the underlying graphics API to validate every call,
+/// which takes effect only where that API's validation layers are installed.
+#define KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION "enable_validation"
+/// Setting every GPU device reads, a boolean: the labels and debug groups given through ke_gpu_device
+/// reach the underlying graphics API, where capture tools read them.
+#define KE_GPU_DEVICE_SETTING_DEBUG_LABELS "debug_labels"
 
 #ifdef __cplusplus
 }

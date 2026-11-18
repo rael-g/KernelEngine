@@ -46,9 +46,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_gpu_render_pass_params, translated("ke_gpu_render_pass_params"));
     try expectSameLayout(abi.c.ke_gpu_command_encoder_params, translated("ke_gpu_command_encoder_params"));
     try expectSameLayout(abi.c.ke_gpu_compute_pass_params, translated("ke_gpu_compute_pass_params"));
-    try expectSameLayout(abi.c.ke_gpu_device_config, translated("ke_gpu_device_config"));
     try expectSameLayout(abi.c.ke_gpu_command_buffer, translated("ke_gpu_command_buffer"));
-    try expectSameLayout(abi.c.ke_gpu_render_target_window_config, translated("ke_gpu_render_target_window_config"));
     try expectSameLayout(abi.c.ke_render_binding_hint, translated("ke_render_binding_hint"));
     try expectSameLayout(abi.c.ke_render_shader_binding, translated("ke_render_shader_binding"));
     try expectSameLayout(abi.c.ke_render_shader_layout_params, translated("ke_render_shader_layout_params"));
@@ -214,10 +212,13 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_FRAGMENT), @as(i128, abi.c.KE_GPU_SHADER_STAGE_FRAGMENT));
     try std.testing.expectEqual(@as(i128, c.KE_GPU_SHADER_STAGE_COMPUTE), @as(i128, abi.c.KE_GPU_SHADER_STAGE_COMPUTE));
     try std.testing.expectEqual(@as(i128, c.KE_GPU_INVALID_HANDLE), @as(i128, abi.c.KE_GPU_INVALID_HANDLE));
+    try std.testing.expectEqualStrings(c.KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION, abi.c.KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION);
+    try std.testing.expectEqualStrings(c.KE_GPU_DEVICE_SETTING_DEBUG_LABELS, abi.c.KE_GPU_DEVICE_SETTING_DEBUG_LABELS);
+    try std.testing.expectEqualStrings(c.KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE, abi.c.KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE);
     try std.testing.expectEqual(@as(i128, c.KE_RENDER_BINDING_INVALID), @as(i128, abi.c.KE_RENDER_BINDING_INVALID));
 }
 
-extern const layout_values: [304]c_ulonglong;
+extern const layout_values: [299]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -387,13 +388,8 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_gpu_command_encoder_params, "label"),
         @sizeOf(abi.c.ke_gpu_compute_pass_params),
         @offsetOf(abi.c.ke_gpu_compute_pass_params, "label"),
-        @sizeOf(abi.c.ke_gpu_device_config),
-        @offsetOf(abi.c.ke_gpu_device_config, "enable_validation"),
-        @offsetOf(abi.c.ke_gpu_device_config, "debug_labels"),
         @sizeOf(abi.c.ke_gpu_command_buffer),
         @offsetOf(abi.c.ke_gpu_command_buffer, "handle"),
-        @sizeOf(abi.c.ke_gpu_render_target_window_config),
-        @offsetOf(abi.c.ke_gpu_render_target_window_config, "present_mode"),
         @sizeOf(abi.c.ke_render_binding_hint),
         @offsetOf(abi.c.ke_render_binding_hint, "name"),
         @offsetOf(abi.c.ke_render_binding_hint, "flags"),

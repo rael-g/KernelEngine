@@ -4,6 +4,7 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("physics_2d_box2d_factory_c.zig");
@@ -14,9 +15,9 @@ const resultOf = abi_result.resultOf;
 
 /// Creates a 2D physics world whose solver runs its tasks on job_system, borrowed for the
 /// world's lifetime, one Box2D worker per worker slot.
-pub fn physics2dBox2dCreate(job_system: ?*abi_job.c.ke_job_system, config: ?*const abi_physics.c.ke_physics_2d_config) Error!abi_physics.c.ke_physics_2d_handle {
+pub fn physics2dBox2dCreate(job_system: ?*abi_job.c.ke_job_system, settings: ?*abi_settings.c.ke_settings) Error!abi_physics.c.ke_physics_2d_handle {
     var written: abi_physics.c.ke_physics_2d_handle = undefined;
-    try checkResult(c.ke_physics_2d_box2d_create(job_system, config, &written));
+    try checkResult(c.ke_physics_2d_box2d_create(job_system, settings, &written));
     return written;
 }
 

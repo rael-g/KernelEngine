@@ -8,6 +8,7 @@
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_physics = .{ .path = "../../../abi/physics" },
         .abi_result = .{ .path = "../../../abi/result" },
+        .abi_settings = .{ .path = "../../../abi/settings" },
     },
     .paths = .{"."},
 }

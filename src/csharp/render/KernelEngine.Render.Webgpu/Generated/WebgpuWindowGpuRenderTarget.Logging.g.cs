@@ -11,14 +11,14 @@ public sealed unsafe partial class WebgpuWindowGpuRenderTarget
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="device">A device created by ke_gpu_device_webgpu_create; borrowed, must outlive the target.</param>
     /// <param name="window">The window presented into; must outlive the target.</param>
-    /// <param name="config">The target's values; Required; every field is read as given.</param>
-    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, in KernelEngine.Render.GpuRenderTargetWindowConfig config) : base(CreateLogged(loggerFactory, device, window, config))
+    /// <param name="settings">Read once. KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE, default "fifo".</param>
+    public WebgpuWindowGpuRenderTarget(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, device, window, settings))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, in KernelEngine.Render.GpuRenderTargetWindowConfig config)
+    private static KernelEngine.Render.Native.ke_gpu_render_target_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Window.INativeWindow window, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(device, window, config);
+        return Create(device, window, settings);
     }
 }

@@ -178,9 +178,9 @@ static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_wor
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
     check("shadow pass", ke_render_shadow_create(&context, unset, &r->shadow));
-    check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster));
+    check("cluster pass", ke_render_cluster_create(&context, unset, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &r->gbuffer));
-    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred));
+    check("deferred lighting pass", ke_render_deferred_lighting_create(&context, unset, &r->deferred));
     check("tonemap pass", ke_render_tonemap_create(&context, &r->tonemap));
 
     const char *names[4] = { "render_begin", "render_prepare", "render_queue", "render_submit" };
@@ -223,10 +223,13 @@ int main(int argc, char **argv)
     for (int i = 0; i < 4; ++i) check("clear colour", configuration.ref->set_double(configuration.ref, "render", clear_keys[i], clear_color[i]));
     check("frame settings", configuration.ref->section(configuration.ref, "render", &clear));
 
-    ke_gpu_device_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
+    check("device settings", configuration.ref->set_bool(configuration.ref, "device", "enable_validation", true));
+    check("device settings", configuration.ref->set_bool(configuration.ref, "device", "debug_labels", renderdoc));
+    ke_settings *dp = NULL;
+    check("device settings", configuration.ref->section(configuration.ref, "device", &dp));
     ke_gpu_device_handle gpu = { 0 };
     ke_completion *gpu_ready = NULL;
-    check("gpu device", ke_gpu_device_webgpu_create(NULL, &dp, &gpu_ready, &gpu));
+    check("gpu device", ke_gpu_device_webgpu_create(NULL, dp, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
     check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){

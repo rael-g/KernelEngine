@@ -61,28 +61,16 @@ public static class DefaultCore
         services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
         services.TryAddSingleton<Scheduler.Scheduler>(sp => new DefaultScheduler(Log(sp), Get<Job.JobSystem>(sp), Get<Async.Async>(sp), Get<Configuration.Configuration>(sp).Section("scheduler")));
 
-        services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(Log(sp), null, new() { EnableValidation = false, DebugLabels = false }));
+        services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(Log(sp), null, Get<Configuration.Configuration>(sp).Section("runtime.renderer.device")));
         services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));
-        services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp =>
-        {
-            var mailbox = Get<Configuration.Configuration>(sp).GetString("runtime.renderer", "present_mode", "fifo") == "mailbox";
-            return new WebgpuWindowGpuRenderTarget(Log(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Window.Window>(sp), new() { PresentMode = mailbox ? GpuPresentMode.Mailbox : GpuPresentMode.Fifo });
-        });
+        services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp => new WebgpuWindowGpuRenderTarget(Log(sp), Get<Render.Gpu.GpuDevice>(sp), Get<Window.Window>(sp), Get<Configuration.Configuration>(sp).Section("runtime.renderer")));
         services.TryAddSingleton<Text.FontLoader>(sp => new StbFontLoader(Log(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(Log(sp), null, Get<Text.FontLoader>(sp), root, Get<Io.Io>(sp)));
         services.TryAddSingleton<SceneTree>(sp => new DefaultSceneTree(Log(sp), Get<Ecs.EcsRegistry>(sp)));
         services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Log(sp), Get<Configuration.Configuration>(sp), "input"));
         services.TryAddSingleton<NodeTypes>(sp => new DefaultNodeTypes(Log(sp), Get<Scheduler.Scheduler>(sp), Get<Ecs.EcsRegistry>(sp), Get<SceneTree>(sp), Get<InputActions>(sp)));
         services.TryAddSingleton<SceneFiles>(sp => new DefaultSceneFiles(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<NodeTypes>(sp), Get<AssetResolver>(sp), Get<Io.Io>(sp)));
-        services.TryAddSingleton<Physics.Physics2D>(sp =>
-        {
-            var config = Get<Configuration.Configuration>(sp);
-            return new Box2DPhysics2D(Log(sp), Get<Job.JobSystem>(sp), new()
-            {
-                GravityX = (float)config.GetDouble("runtime.physics_2d", "gravity_x", 0.0),
-                GravityY = (float)config.GetDouble("runtime.physics_2d", "gravity_y", 0.0),
-            });
-        });
+        services.TryAddSingleton<Physics.Physics2D>(sp => new Box2DPhysics2D(Log(sp), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("runtime.physics_2d")));
         services.TryAddSingleton<Audio.Audio>(sp => new MiniaudioAudio(Log(sp), Get<Io.Io>(sp)));
 
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, SceneHierarchyModule>(sp =>
@@ -113,10 +101,10 @@ public static class DefaultCore
         Pass(sp => new RenderSceneResolveSystemsModule(Log(sp), Get<RenderSceneResolve>(sp)));
         Pass(sp => new RenderFrameSystemsModule(Log(sp), Get<Render.Frame.RenderFrame>(sp)));
         Pass(sp => new RenderShadowModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.shadow")));
-        Pass(sp => new RenderClusterModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { GridX = 16, GridY = 9, GridZ = 24, MaxLightsPerCluster = 64 }));
+        Pass(sp => new RenderClusterModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.cluster")));
         Pass(sp => new RenderGbufferModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
-        Pass(sp => new RenderDeferredLightingModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { IblEnabled = true }));
-        Pass(sp => new RenderForwardModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { IblEnabled = true }));
+        Pass(sp => new RenderDeferredLightingModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.deferred_lighting")));
+        Pass(sp => new RenderForwardModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.forward")));
         Pass(sp => new RenderTonemapModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
         Pass(sp => new RenderUiSystemsModule(Log(sp), Get<RenderUi>(sp)));
         Pass(sp => new RenderLabelResolveModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), defaultFont));

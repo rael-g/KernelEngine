@@ -46,6 +46,15 @@ pub const KE_GPU_SHADER_STAGE_VERTEX = 1;
 pub const KE_GPU_SHADER_STAGE_FRAGMENT = 2;
 pub const KE_GPU_SHADER_STAGE_COMPUTE = 4;
 pub const KE_GPU_INVALID_HANDLE = 18446744073709551615;
+/// Setting every GPU device reads, a boolean: asks the underlying graphics API to validate every
+/// call, which takes effect only where that API's validation layers are installed.
+pub const KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION = "enable_validation";
+/// Setting every GPU device reads, a boolean: the labels and debug groups given through
+/// ke_gpu_device reach the underlying graphics API, where capture tools read them.
+pub const KE_GPU_DEVICE_SETTING_DEBUG_LABELS = "debug_labels";
+/// Setting every render target presenting to a window reads, a string: how presented frames
+/// reach the screen, "fifo", "mailbox" or "immediate", as ke_gpu_present_mode names them.
+pub const KE_GPU_RENDER_TARGET_SETTING_PRESENT_MODE = "present_mode";
 /// The value no shader layout, resource set or material binding takes.
 pub const KE_RENDER_BINDING_INVALID = 0;
 
@@ -454,26 +463,9 @@ pub const ke_gpu_compute_pass_params = extern struct {
     label: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
-/// The values a GPU device is created with, whatever its implementation, each applied as given.
-pub const ke_gpu_device_config = extern struct {
-    /// Asks the underlying graphics API to validate every call, which takes effect only where that
-    /// API's validation layers are installed.
-    enable_validation: bool = std.mem.zeroes(bool),
-    /// The labels and debug groups given through ke_gpu_device reach the underlying graphics API,
-    /// where capture tools read them.
-    debug_labels: bool = std.mem.zeroes(bool),
-};
-
 /// Recorded commands, submitted with ke_gpu_device::queue_submit and released by their handle.
 pub const ke_gpu_command_buffer = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-};
-
-/// The values a render target presenting to a window is created with, whatever its
-/// implementation, each applied as given.
-pub const ke_gpu_render_target_window_config = extern struct {
-    /// How presented frames reach the screen.
-    present_mode: ke_gpu_present_mode = std.mem.zeroes(ke_gpu_present_mode),
 };
 
 /// A hint for the binding a shader declares under `name`.

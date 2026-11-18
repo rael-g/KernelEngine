@@ -15,6 +15,8 @@ pub const wgpu = @import("c");
 const abi_gpu_device_webgpu_factory = @import("abi_gpu_device_webgpu_factory");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_completion = @import("abi_completion");
 const abi_async = @import("abi_async");
 const R = @import("result").Result(.{});
@@ -357,9 +359,15 @@ fn createDeviceVtable(s: *DeviceState) GpuError!*abi_render_gpu.c.ke_gpu_device 
 /// initialised or out of memory, logging why, and leaves the handle zeroed, with every object
 /// created on the way already released. The written `destroy` releases the wgpu objects and the
 /// state without waiting for compiles still listed.
+/// The device's settings: the contract's keys, with this implementation's defaults.
+const DeviceSettings = struct {
+    enable_validation: bool = false,
+    debug_labels: bool = false,
+};
+
 pub export fn ke_gpu_device_webgpu_create(
     async: ?*abi_async.c.ke_async,
-    config: ?*const abi_render_gpu.c.ke_gpu_device_config,
+    settings: ?*abi_settings.c.ke_settings,
     out_ready: ?*?*abi_completion.c.ke_completion,
     out_device: ?*abi_render_gpu.c.ke_gpu_device_handle,
 ) abi_result.c.ke_result {
@@ -367,10 +375,10 @@ pub export fn ke_gpu_device_webgpu_create(
     out.* = .{ .ref = null, .destroy = null };
     const ready = out_ready orelse return R.code(error.InvalidArgument);
     ready.* = null;
-    const given = config orelse {
-        log.warn("gpu device: no config", .{});
+    const given = settings_schema.read(DeviceSettings, settings orelse {
+        log.warn("gpu device: no settings", .{});
         return R.code(error.InvalidArgument);
-    };
+    }) catch |err| return R.code(err);
     var instance_flags: wgpu.WGPUInstanceFlag = wgpu.WGPUInstanceFlag_Default;
     if (given.enable_validation) instance_flags |= wgpu.WGPUInstanceFlag_Validation;
     if (given.debug_labels) instance_flags |= wgpu.WGPUInstanceFlag_Debug;
@@ -1764,13 +1772,13 @@ fn queryExtension(_: [*c]abi_render_gpu.c.ke_gpu_device, _: [*c]const u8) callco
     return null;
 }
 
-const test_device_config: abi_render_gpu.c.ke_gpu_device_config = .{ .enable_validation = true, .debug_labels = false };
+var test_device_settings = settings_schema.Fixed.init(&.{.{ .key = "enable_validation", .value = .{ .boolean = true } }});
 var test_ready: ?*abi_completion.c.ke_completion = null;
 
 test "the device is ready as soon as the factory returns" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
     var ready: ?*abi_completion.c.ke_completion = null;
-    if (ke_gpu_device_webgpu_create(null, &test_device_config, &ready, &handle) != R.ok) return error.SkipZigTest;
+    if (ke_gpu_device_webgpu_create(null, &test_device_settings.api, &ready, &handle) != R.ok) return error.SkipZigTest;
     defer handle.destroy.?(handle.ref);
     var result: abi_result.c.ke_result = R.code(error.General);
     try std.testing.expect(ready.?.poll.?(ready, &result));
@@ -1788,7 +1796,7 @@ test "a sampler's filters and address modes reach wgpu as the modes they name" {
 
 test "creating the device and destroying it, or failing to create it, leaves no block allocated" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &test_device_config, &test_ready, &handle) == R.ok) handle.destroy.?(handle.ref);
+    if (ke_gpu_device_webgpu_create(null, &test_device_settings.api, &test_ready, &handle) == R.ok) handle.destroy.?(handle.ref);
     try heap.expectNoLeaks();
 }
 
@@ -1805,7 +1813,7 @@ fn readbackProbeDone(result: abi_result.c.ke_result, _: abi_asset_resolver.c.ke_
 
 test "a texture's pixels are read back through a copy to a buffer and an asynchronous map" {
     var handle: abi_render_gpu.c.ke_gpu_device_handle = undefined;
-    if (ke_gpu_device_webgpu_create(null, &test_device_config, &test_ready, &handle) != R.ok) return error.SkipZigTest;
+    if (ke_gpu_device_webgpu_create(null, &test_device_settings.api, &test_ready, &handle) != R.ok) return error.SkipZigTest;
     defer handle.destroy.?(handle.ref);
     const dev = handle.ref;
 

@@ -10,13 +10,19 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const abi_math = @import("abi_math");
 const abi_physics = @import("abi_physics");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_completion = @import("abi_completion");
 const abi_job = @import("abi_job");
 const abi_factory = @import("abi_physics_2d_box2d_factory");
 const b2 = @import("box2d");
 const heap = @import("heap");
 
-const Config = abi_physics.c.ke_physics_2d_config;
+/// The world's settings: the contract's keys, with this implementation's defaults.
+const Config = struct {
+    gravity_x: f32 = 0.0,
+    gravity_y: f32 = 0.0,
+};
 
 /// Error reporter bound to this file's C error types; every failure in this file is reported
 /// through it.
@@ -281,13 +287,13 @@ fn destroy(self_in: ?*abi_physics.c.ke_physics_2d) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// Writes the world's handle, or a zeroed one on failure, created with `config` applied as given,
+/// Writes the world's handle, or a zeroed one on failure, created with its settings read once,
 /// its solver's tasks run on `job_system` with one Box2D worker per worker slot; a gravity that is
 /// not finite fails with invalid argument. A failure after the state exists frees the state first.
 /// On success the handle's destroy slot releases the world and everything the state owns.
 export fn ke_physics_2d_box2d_create(
     job_system: ?*abi_job.c.ke_job_system,
-    config: ?*const Config,
+    settings: ?*abi_settings.c.ke_settings,
     out_world: ?*abi_physics.c.ke_physics_2d_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_world orelse return R.code(error.InvalidArgument);
@@ -296,11 +302,11 @@ export fn ke_physics_2d_box2d_create(
         log.warn("creating the physics world failed: no job system", .{});
         return R.code(error.InvalidArgument);
     };
-    const given = config orelse {
-        log.warn("creating the physics world failed: no config", .{});
+    const given = settings_schema.read(Config, settings orelse {
+        log.warn("creating the physics world failed: no settings", .{});
         return R.code(error.InvalidArgument);
-    };
-    out.* = create(jobs, given) catch |err| {
+    }) catch |err| return R.code(err);
+    out.* = create(jobs, &given) catch |err| {
         log.warn("creating the physics world failed: {t}", .{err});
         return R.code(err);
     };
@@ -433,14 +439,16 @@ fn jobsForTests() !*abi_job.c.ke_job_system {
 fn makeWorld(gravity_x: f32, gravity_y: f32) abi_physics.c.ke_physics_2d_handle {
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
     const jobs = jobsForTests() catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
-    R.check(ke_physics_2d_box2d_create(jobs, &.{ .gravity_x = gravity_x, .gravity_y = gravity_y }, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
+    var settings = settings_schema.Fixed.init(&.{ .{ .key = "gravity_x", .value = .{ .double = gravity_x } }, .{ .key = "gravity_y", .value = .{ .double = gravity_y } } });
+    R.check(ke_physics_2d_box2d_create(jobs, &settings.api, &h)) catch return std.mem.zeroes(abi_physics.c.ke_physics_2d_handle);
     return h;
 }
 
-test "a null config or job system is refused" {
+test "null settings or a null job system are refused" {
+    var no_settings = settings_schema.Fixed.init(&.{});
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
     try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), null, &h));
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(null, &.{ .gravity_x = 0, .gravity_y = 0 }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(null, &no_settings.api, &h));
 }
 
 fn newBody(h: abi_physics.c.ke_physics_2d_handle, body_type: abi_physics.c.ke_body_type_2d, x: f32, y: f32) !abi_physics.c.ke_body_2d {
@@ -702,10 +710,12 @@ test "a zero gravity is applied as given and leaves a dynamic body where it was"
 }
 
 test "a gravity that is not finite is refused and leaves the handle zeroed" {
+    var nan_gravity = settings_schema.Fixed.init(&.{.{ .key = "gravity_y", .value = .{ .double = std.math.nan(f64) } }});
+    var inf_gravity = settings_schema.Fixed.init(&.{.{ .key = "gravity_x", .value = .{ .double = std.math.inf(f64) } }});
     var h: abi_physics.c.ke_physics_2d_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &.{ .gravity_y = std.math.nan(f32) }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &nan_gravity.api, &h));
     try testing.expect(h.ref == null);
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &.{ .gravity_x = std.math.inf(f32) }, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_physics_2d_box2d_create(try jobsForTests(), &inf_gravity.api, &h));
     try testing.expect(h.ref == null);
 }
 

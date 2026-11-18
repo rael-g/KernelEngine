@@ -98,14 +98,31 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
     gpu->unmap_buffer(gpu, staging);
 }
 
+static ke_result validation_bool(ke_settings *self, const char *key, bool *out)
+{
+    (void)self;
+    if (strcmp(key, KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION) != 0) return KE_RESULT_NOT_FOUND;
+    *out = true;
+    return KE_OK;
+}
+static ke_result validation_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_double(ke_settings *self, const char *key, double *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_string(ke_settings *self, const char *key, const char **out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static ke_result validation_keys(ke_settings *self, ke_settings_key_func each, void *ctx)
+{
+    (void)self;
+    each(KE_GPU_DEVICE_SETTING_ENABLE_VALIDATION, ctx);
+    return KE_OK;
+}
+static ke_settings validated = { NULL, validation_bool, validation_int, validation_double, validation_string, validation_keys };
+
 int main(int argc, char **argv)
 {
     printf("--- c_demo_15: offscreen capture ---\n");
 
-    ke_gpu_device_config dp = { .enable_validation = 1 };
     ke_gpu_device_handle gpu = { 0 };
     ke_completion *gpu_ready = NULL;
-    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &dp, &gpu_ready, &gpu));
+    check("gpu device create", ke_gpu_device_webgpu_create(NULL, &validated, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
     check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){

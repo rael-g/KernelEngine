@@ -19,6 +19,8 @@ const abi_render_deferred_lighting_factory = @import("abi_render_deferred_lighti
 const abi_render_frame = @import("abi_render_frame");
 const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const pass_systems = @import("pass_systems");
 const R = @import("result").Result(.{});
@@ -160,7 +162,12 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
 /// when every object it creates exists, the pipeline included, and the access list and queries are
 /// filled over the render world. On failure, the objects already created stay in the block for the
 /// caller to release through `destroyModule`.
-fn setup(dl: *DeferredLightingModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config) R.Error!void {
+/// The pass's settings, with this implementation's defaults.
+const Settings = struct {
+    ibl_enabled: bool = true,
+};
+
+fn setup(dl: *DeferredLightingModule, p: *const abi_render_context.c.ke_render_context, config: *const Settings) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const ids = p.scene.?.render_component_ids.?(p.scene).?;
     dl.core = core;
@@ -225,17 +232,18 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
     gpa.destroy(dl);
 }
 
-/// The factory declared in deferred_lighting_create.h. A missing config, scene, frame, service or
+/// The factory declared in deferred_lighting_create.h. A missing settings, scene, frame, service or
 /// device fails as an invalid argument. A failed setup fails with its code and leaves the handle
 /// zeroed, after the block is released.
-export fn ke_render_deferred_lighting_create(context_in: ?*const abi_render_context.c.ke_render_context, config_in: ?*const abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_deferred_lighting_create(context_in: ?*const abi_render_context.c.ke_render_context, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
-    const config = config_in orelse {
-        log.warn("deferred lighting: no config", .{});
+    const values = settings_schema.read(Settings, settings orelse {
+        log.warn("deferred lighting: no settings", .{});
         return R.code(error.InvalidArgument);
-    };
+    }) catch |err| return R.code(err);
+    const config = &values;
     if (p.scene == null or p.frame == null or p.service == null or p.device == null) return R.code(error.InvalidArgument);
 
     const dl = gpa.create(DeferredLightingModule) catch |err| return R.code(err);
@@ -334,7 +342,7 @@ const Rig = struct {
     }
 };
 
-const test_config: abi_render_deferred_lighting_factory.c.ke_render_deferred_lighting_config = .{ .ibl_enabled = true };
+var test_settings = settings_schema.Fixed.init(&.{});
 
 fn passOf(h: abi_module.c.ke_module_handle) *DeferredLightingModule {
     const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast(h.ref.?.handle));
@@ -347,7 +355,7 @@ test "the deferred lighting module attaches its system to the render schedule, a
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&p, &test_config, &h));
+    try R.check(ke_render_deferred_lighting_create(&p, &test_settings.api, &h));
     const t = rig.targets();
     try R.check(h.ref.?.attach.?(h.ref, &t));
     try rig.schedule.received(.register_system).times(1);
@@ -362,7 +370,7 @@ test "a camera and a published gbuffer get a lighting pass at the opaque stage" 
     defer rig.deinit();
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&p, &test_config, &h));
+    try R.check(ke_render_deferred_lighting_create(&p, &test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&camera_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).times(1);
@@ -375,7 +383,7 @@ test "a frame with no published gbuffer gets no lighting pass" {
     _ = rig.frame.when(.find).returns(rg.KE_RENDER_GRAPH_RESOURCE_INVALID);
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_deferred_lighting_create(&p, &test_config, &h));
+    try R.check(ke_render_deferred_lighting_create(&p, &test_settings.api, &h));
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, queueSystem(&camera_ctx, passOf(h), 0));
     try rig.graph.received(.add_pass).never();
@@ -388,7 +396,7 @@ test "a deferred lighting pass whose shader fails to load releases what it had c
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
     const p = rig.context();
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expect(ke_render_deferred_lighting_create(&p, &test_config, &h) != R.ok);
+    try testing.expect(ke_render_deferred_lighting_create(&p, &test_settings.api, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
 }

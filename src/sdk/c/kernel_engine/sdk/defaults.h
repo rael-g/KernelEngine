@@ -193,22 +193,19 @@ static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 
 
 
-/** A WebGPU device. */
+/** A WebGPU device with the settings of `runtime.renderer.device`. */
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)
 {
     ke_completion *ready = NULL;
-    ke_result made = ke_gpu_device_webgpu_create(NULL, &(ke_gpu_device_config){ .enable_validation = false, .debug_labels = false }, &ready, &e->gpu_device);
+    ke_result made = ke_gpu_device_webgpu_create(NULL, ke_sdk_settings(e, "runtime.renderer.device"), &ready, &e->gpu_device);
     if (made == KE_OK) made = ke_sdk_await(e, ready);
     return made;
 }
 
-/** The window's swapchain, presenting as `runtime.renderer.present_mode` says. */
+/** The window's swapchain, with the settings of `runtime.renderer`. */
 static inline ke_result ke_sdk_render_target_webgpu_window(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const bool mailbox = strcmp(c->get_string(c, "runtime.renderer", "present_mode", "fifo"), "mailbox") == 0;
-    const ke_gpu_render_target_window_config config = { .present_mode = mailbox ? KE_GPU_PRESENT_MODE_MAILBOX : KE_GPU_PRESENT_MODE_FIFO };
-    return ke_gpu_render_target_webgpu_window_create(e->gpu_device.ref, e->window.ref, &config, &e->render_target);
+    return ke_gpu_render_target_webgpu_window_create(e->gpu_device.ref, e->window.ref, ke_sdk_settings(e, "runtime.renderer"), &e->render_target);
 }
 
 /** stb_truetype fonts. */
@@ -277,7 +274,7 @@ static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
 static inline ke_result ke_sdk_cluster(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_cluster_create(&r->context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster);
+    ke_result made = ke_render_cluster_create(&r->context, ke_sdk_settings(e, "render.cluster"), &r->cluster);
     return made == KE_OK ? ke_sdk_add_module(e, r->cluster.ref) : made;
 }
 
@@ -293,7 +290,7 @@ static inline ke_result ke_sdk_gbuffer(ke_sdk_engine *e)
 static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_deferred_lighting_create(&r->context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred);
+    ke_result made = ke_render_deferred_lighting_create(&r->context, ke_sdk_settings(e, "render.deferred_lighting"), &r->deferred);
     return made == KE_OK ? ke_sdk_add_module(e, r->deferred.ref) : made;
 }
 
@@ -301,7 +298,7 @@ static inline ke_result ke_sdk_deferred_lighting(ke_sdk_engine *e)
 static inline ke_result ke_sdk_forward(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_forward_create(&r->context, &(ke_render_forward_config){ .ibl_enabled = true }, &r->forward);
+    ke_result made = ke_render_forward_create(&r->context, ke_sdk_settings(e, "render.forward"), &r->forward);
     return made == KE_OK ? ke_sdk_add_module(e, r->forward.ref) : made;
 }
 
@@ -330,15 +327,10 @@ static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
     return made == KE_OK ? ke_sdk_add_module(e, r->labels.ref) : made;
 }
 
-/** A Box2D world with the gravity of `runtime.physics_2d`, and the module syncing bodies. */
+/** A Box2D world with the settings of `runtime.physics_2d`, and the module syncing bodies. */
 static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_physics_2d_config config = {
-        .gravity_x = (float)c->get_double(c, "runtime.physics_2d", "gravity_x", 0.0),
-        .gravity_y = (float)c->get_double(c, "runtime.physics_2d", "gravity_y", 0.0),
-    };
-    ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, &config, &e->physics);
+    ke_result made = ke_physics_2d_box2d_create(e->job_system.ref, ke_sdk_settings(e, "runtime.physics_2d"), &e->physics);
     if (made == KE_OK) made = ke_physics_body2d_create(e->ecs.ref, e->physics.ref, e->scene_tree.ref, &e->bodies);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->bodies.ref);
     return made;

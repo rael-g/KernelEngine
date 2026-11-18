@@ -28,8 +28,8 @@ the same order. Forward alone also calls `refraction_contribution`
 **A feature that is off is a neutral resource, not another shader.** The shadow function reads a
 white texture when no shadow map was published, the environment is a black cube when image-based light
 is disabled or no skybox exists, and a cluster with no lights has a zero count. A host without
-shadows creates no shadow pass, and nothing is published under the shadow's names; `ibl_enabled` of
-`ke_render_deferred_lighting_config` and `ke_render_forward_config` turns image-based light off.
+shadows creates no shadow pass, and nothing is published under the shadow's names; the `ibl_enabled`
+setting of the deferred lighting and forward passes turns image-based light off.
 
 **The directional light and the ambient light are the first of their kind.** Both shading passes
 and the shadow pass read only the first directional light; the first ambient light replaces the

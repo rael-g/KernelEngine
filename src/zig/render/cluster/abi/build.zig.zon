@@ -15,6 +15,7 @@
         .abi_render_graph = .{ .path = "../../../abi/render_graph" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_schedule = .{ .path = "../../../abi/schedule" },
+        .abi_settings = .{ .path = "../../../abi/settings" },
         .abi_view = .{ .path = "../../../abi/view" },
     },
     .paths = .{"."},

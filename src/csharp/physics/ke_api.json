@@ -413,25 +413,6 @@
           "doc": "radians per second"
         }
       ]
-    },
-    {
-      "name": "ke_physics_2d_config",
-      "doc": "The values a 2D physics world is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "gravity_x",
-          "type": "float",
-          "tags": [],
-          "doc": "Horizontal gravity, in metres per second squared."
-        },
-        {
-          "name": "gravity_y",
-          "type": "float",
-          "tags": [],
-          "doc": "Vertical gravity, in metres per second squared."
-        }
-      ]
     }
   ],
   "vtables": [
@@ -824,6 +805,18 @@
           "value": "0"
         }
       ]
+    },
+    {
+      "name": "KE_PHYSICS_2D_SETTING_GRAVITY_X",
+      "type": "const char *",
+      "value": "\u0022gravity_x\u0022",
+      "doc": "Setting every 2D physics world reads, a number: the horizontal gravity it starts with, in metres per second squared; set_gravity changes it later."
+    },
+    {
+      "name": "KE_PHYSICS_2D_SETTING_GRAVITY_Y",
+      "type": "const char *",
+      "value": "\u0022gravity_y\u0022",
+      "doc": "Setting every 2D physics world reads, a number: the vertical gravity it starts with, in metres per second squared; set_gravity changes it later."
     }
   ]
 }

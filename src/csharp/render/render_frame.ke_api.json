@@ -2301,26 +2301,6 @@
         }
       ],
       "external": true
-    },
-    {
-      "name": "ke_gpu_device_config",
-      "doc": "The values a GPU device is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "enable_validation",
-          "type": "_Bool",
-          "tags": [],
-          "doc": "Asks the underlying graphics API to validate every call, which takes effect only where that API\u0027s validation layers are installed."
-        },
-        {
-          "name": "debug_labels",
-          "type": "_Bool",
-          "tags": [],
-          "doc": "The labels and debug groups given through ke_gpu_device reach the underlying graphics API, where capture tools read them."
-        }
-      ],
-      "external": true
     }
   ],
   "vtables": [

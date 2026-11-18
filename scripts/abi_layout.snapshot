@@ -264,13 +264,8 @@ ke_gpu_command_encoder_params size=8 align=8
   label 0
 ke_gpu_compute_pass_params size=8 align=8
   label 0
-ke_gpu_device_config size=2 align=1
-  enable_validation 0
-  debug_labels 1
 ke_gpu_command_buffer size=8 align=8
   handle 0
-ke_gpu_render_target_window_config size=4 align=4
-  present_mode 0
 ke_render_binding_hint size=16 align=8
   name 0
   flags 8
@@ -615,9 +610,6 @@ ke_body_state_2d size=24 align=4
   velocity_x 12
   velocity_y 16
   angular_velocity 20
-ke_physics_2d_config size=8 align=4
-  gravity_x 0
-  gravity_y 4
 ke_physics_2d size=104 align=8
   handle 0
   set_gravity 8
