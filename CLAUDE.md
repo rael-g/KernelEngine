@@ -74,7 +74,7 @@ Layer 1 — C contracts         src/c/<domain>/kernel_engine/<domain>/   ABI-sta
 
 ### Layer 1 — C contracts (`src/c/<domain>/`)
 
-Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty-six domains: `asset`, `async`, `audio`, `completion`, `configuration`, `ecs`, `extraction`, `file_system`, `framework`, `input`, `io`, `job`, `logger`, `math`, `module`, `physics`, `render`, `render_graph`, `resource_cache`, `result`, `schedule`, `scheduler`, `spatial`, `text`, `view`, `window`.
+Pure C, ABI-stable (`extern "C"`). All public surface is vtable-shaped: a struct of function pointers, obtained from a factory. Twenty-seven domains: `asset`, `async`, `audio`, `completion`, `configuration`, `ecs`, `extraction`, `file_system`, `framework`, `input`, `io`, `job`, `logger`, `math`, `module`, `physics`, `render`, `render_graph`, `resource_cache`, `result`, `schedule`, `scheduler`, `settings`, `spatial`, `text`, `view`, `window`.
 
 One `-I src/c/<domain>` per domain, so a consumer only ever sees the domains it asked for — want `job`? include `job`. There is no meta-target and no umbrella header; consumers link the specific plugin `.so`s they use (`ke_resource_cache_default`, `ke_physics_2d_box2d`, …).
 
@@ -86,6 +86,7 @@ Contracts worth knowing by name:
 - `ke_job_system` / `ke_async` / `ke_completion` — jobs of the frame, operations beside it that may block, and the completion both hand back
 - `ke_render` / `ke_window` — renderer and window backends
 - `ke_resource_cache` — refcount + path-keyed dedup
+- `ke_settings` — the values a factory reads by name at creation; `ke_configuration.section` hands one section of the project file as one
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
@@ -106,7 +107,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (41 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
+Generated P/Invoke, one `Native/` directory per managed project (42 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
 Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, five `kabic check` commands and five `scripts/check_*.cs`, keep both honest against the headers.
 

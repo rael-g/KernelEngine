@@ -37,9 +37,6 @@ written to the result code, queued on the wrapper, or held for the call that ret
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
 what was queued, or the exception `NativeResults.FromCode` makes for the code.
 
-**The task pool has its own channel.** The dispatch methods that are not generated return a
-`Task`, which the body's failure faults.
-
 **A game is composed in the host's container.** Each part is registered under its contract with
 the constructor the projection generates; `AddDefaultCore` adds the common implementation of every
 part not registered yet. The container makes each part from the parts it takes and releases them in

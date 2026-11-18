@@ -8,8 +8,7 @@ names it and has MSBuild copy it next to its own assembly. The shared definition
 ## Where managed output goes
 
 `src/csharp/Directory.Build.props` turns on `UseArtifactsOutput` and sets `ArtifactsPath` to
-`<repo>/build/artifacts` (`Directory.Build.props:4-5`); `tests/csharp/Directory.Build.props` does the
-same (`:4-5`). A project's build output is therefore `build/artifacts/bin/<ProjectName>/<config>/`,
+`<repo>/build/artifacts`; `tests/csharp/Directory.Build.props` does the same. A project's build output is therefore `build/artifacts/bin/<ProjectName>/<config>/`,
 for example `build/artifacts/bin/pong/debug/`.
 
 ## How a project names its libraries
@@ -19,53 +18,51 @@ and imports the targets file:
 
 ```xml
 <ItemGroup>
-  <NativeDep Include="ke_logger_simple" />
+  <NativeDep Include="ke_resource_cache_default" />
 </ItemGroup>
 <Import Project="../../NativeDependencies.targets" />
 ```
 
-(`src/csharp/logger/KernelEngine.Logger/KernelEngine.Logger.csproj:10-14`). A project with a single
-library may set the property `<NativeTarget>` instead, which the targets file turns into one
-`NativeDep` (`NativeDependencies.targets:59-61`; `KernelEngine.Window.Glfw.csproj:8`). The declaration
-comes before the `Import`, because the copy item is built from `@(NativeDep)` at the point the file
-is evaluated (`NativeDependencies.targets:63-64`).
+(`src/csharp/audio/KernelEngine.Audio.MiniAudio/KernelEngine.Audio.MiniAudio.csproj`). A project with a
+single library may set the property `<NativeTarget>` instead, which the targets file turns into one
+`NativeDep` (`KernelEngine.Window.Glfw.csproj`). The declaration comes before the `Import`, because
+the copy item is built from `@(NativeDep)` at the point the file is evaluated.
 
 ## What the targets file computes
 
-| value | rule | lines |
-|---|---|---|
-| `NativeOS` | `linux`, `osx` or `win` from the host OS | `3-13` |
-| extension and prefix | `so` / `lib` on Linux, `dylib` / `lib` on macOS, `dll` / none on Windows | `35-48` |
-| `NativeArch` | `x64`, or `arm64` when `Platform` is `arm64` | `23-28` |
-| `NativeRID` | `$(NativeOS)-$(NativeArch)` | `30-33` |
-| `NativeFinalDir` | `<repo>/build/native/lib` | `50-57` |
+| value | rule |
+|---|---|
+| `NativeOS` | `linux`, `osx` or `win` from the host OS |
+| extension and prefix | `so` / `lib` on Linux, `dylib` / `lib` on macOS, `dll` / none on Windows |
+| `NativeArch` | `x64`, or `arm64` when `Platform` is `arm64` |
+| `NativeRID` | `$(NativeOS)-$(NativeArch)` |
+| `NativeFinalDir` | `$(NativePrefix)/lib`, where `NativePrefix` is `<repo>/build/native` unless the build sets it |
 
 Each `NativeDep` becomes a `None` item pointing at
 `$(NativeFinalDir)/$(NativePre)<name>.$(NativeExt)`, linked by file name alone, with
 `CopyToOutputDirectory` set to `PreserveNewest` and `Pack` set to `true` with package path
-`runtimes/$(NativeRID)/native` (`NativeDependencies.targets:63-71`).
+`runtimes/$(NativeRID)/native`.
 
-`NativeFinalDir` is `build/native/lib` in the file itself. The managed side reads that directory
-whatever `--prefix` the native build was given, so the two agree only when the native build ran with
-`--prefix build/native`.
+The managed side reads `build/native/lib` unless `NativePrefix` is given to the build, so the two agree
+when the native build ran with `--prefix build/native` or `NativePrefix` names the prefix it ran with.
 
 ## What reaches an executable
 
 The copy is an item of the library project, and an executable that references that project through
 `ProjectReference` receives it in its own output directory: the example `pong` imports
-no targets file, and its output directory holds `libke_ecs_flecs.so`,
-`libke_input_default.so` and the other libraries of the projects it references
+no targets file, and its output directory holds `libke_async_enki.so`,
+`libke_audio_miniaudio.so` and the other libraries of the projects it references
 (`ls build/artifacts/bin/pong/debug`). A library a project does not declare is not
 copied.
 
-On a Linux build the plugin libraries carry an absolute `RUNPATH` naming `<prefix>/lib`
-(`readelf -d build/native/lib/libke_framework.so`), so a library that one plugin links against
-resolves from the native prefix whether or not a copy sits beside the assembly.
+A plugin that links another library carries an `$ORIGIN` `RUNPATH` (`readelf -d
+build/native/lib/libke_audio_miniaudio.so`), so the library it links resolves from the directory the
+plugin is in, the native prefix or the assembly's output directory.
 
 ## The stale-library trap
 
 The copy is part of an MSBuild build: the `None` item with `CopyToOutputDirectory`
-(`NativeDependencies.targets:66`) is processed when the project builds, and at no other time.
+(`NativeDependencies.targets`) is processed when the project builds, and at no other time.
 `dotnet run --no-build` and `dotnet test --no-build` run no build target, so they run whatever native
 library is already in the output directory, even after `zig build` has replaced the one in
 `build/native/lib`. A plain `dotnet run` or `dotnet build` runs the copy and refreshes it.

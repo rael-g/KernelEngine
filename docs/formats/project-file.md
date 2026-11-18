@@ -1,9 +1,9 @@
 # Project file
 
 The Project file is a TOML file named `Project`, with no extension, in the project directory the
-SDK is built from (`EngineBuilder.Build`).
+SDK is given (`DefaultEngine.Create`, `DefaultCore.AddDefaultCore`).
 The engine loads it into the `ke_configuration` store; how that works is in
-`architecture/configuration.md`. This document says how a key is addressed and which code reads it.
+`architecture/configuration.md`. This document says how a key is addressed and which part reads it.
 
 ## How a key is addressed
 
@@ -13,21 +13,31 @@ the element's index; an array of values becomes one key per element in the same 
 same way, so `clear_color = [0.04, 0.04, 0.08, 1.0]` is the keys `clear_color.0` to `clear_color.3`
 (`walkArrayOfTables`, `walkArrayOfValues`, `src/zig/configuration/toml/src/configuration_toml.zig`).
 
-An unknown key is not an error. The store accepts whatever the file says, and nothing checks the
-file against a list of keys.
+The store accepts whatever the file says. A part checks its own section when it is made: a key it
+does not know, a value of another type or out of range refuses the creation, with a warning naming
+the key (`settings_schema`, `src/zig/settings/schema/settings_schema.zig`).
 
-## Which code reads a section
+## Which part reads a section
 
-No plugin reads the store. A factory takes its values as its `_config` struct, filled completely by
-the host. The C# SDK fills them from the store as it makes each part, and the C Pong does the same
-by hand; the keys the SDK reads are:
+Each part is made with its section as `ke_settings` and reads the keys its contract declares
+(`KE_<DOMAIN>_SETTING_*`) and those its plugin declares in its settings struct, with the plugin's
+default for an absent key. The sections the SDKs hand to the default parts:
 
-| section | keys | read for |
+| section | part | keys |
 |---|---|---|
-| `runtime.window` | `title`, `width`, `height`, `fullscreen` | the window |
-| `runtime` | `fixed_dt`, `fixed_dt_max_accum`, `max_systems_per_phase` | the runtime |
-| `runtime.renderer` | `present_mode` (`fifo` or `mailbox`) | the window render target |
-| `runtime.physics_2d` | `gravity_x`, `gravity_y` | the 2D physics world |
-| `render` | `clear_color` | the render service |
-| `project` | `default_scene` | the scene `Engine.Run` opens without an argument |
-| `input` | the maps, actions and bindings under `input.map` | the input actions |
+| `runtime.window` | the window | `title`, `width`, `height`, `fullscreen` |
+| `runtime.renderer.device` | the GPU device | `enable_validation`, `debug_labels` |
+| `runtime.renderer` | the window render target | `present_mode` (`fifo`, `mailbox` or `immediate`) |
+| `runtime.physics_2d` | the 2D physics world | `gravity_x`, `gravity_y` |
+| `ecs` | each ecs world | `reserved_id_capacity` |
+| `schedule` | each schedule | `refuse_ambiguity` |
+| `scheduler` | the scheduler | `fixed_dt`, `fixed_dt_max_accum` |
+| `render` | the render frame | `clear_color` |
+| `render.shadow` | the shadow pass | `resolution`, `light_distance`, `extent`, `near_plane`, `far_plane` |
+| `render.cluster` | the cluster pass | `grid_x`, `grid_y`, `grid_z`, `max_lights_per_cluster` |
+| `render.deferred_lighting`, `render.forward` | the lighting passes | `ibl_enabled` |
+| `input` | the input actions | the maps, actions and bindings under `input.map` |
+| `project` | `Engine.Run` | `default_scene`, the scene it opens without an argument |
+
+The job and async systems are made before the file is loaded, so the SDKs do not give them a section
+of it.

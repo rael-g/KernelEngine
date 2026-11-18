@@ -27,8 +27,8 @@ SDK over `ke_node_types` is mapped in `node-types.md`.
 ## What ties the pieces together
 
 **The tree is a view over the ecs.** A node is an entity carrying the hierarchy, name and world
-transform components. The scene tree creates the hierarchy piece itself when it is given a
-runtime, and owns it; the hierarchy is destroyed only after the runtime has finished ticking.
+transform components. The hierarchy piece is a separate module the host makes over the same ecs and
+attaches to the standard schedules; its system computes the world transforms the tree's nodes carry.
 
 **The tree is made of nodes.** A node is an entity of one node type, and the type says which
 components it carries: its own fields and the components it names in `with`. A node's children

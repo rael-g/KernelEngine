@@ -31,8 +31,9 @@ surface; kabic (the kabic repository) produces the idiomatic projection from the
 same headers, driven by `scripts/api_domains.json`. Neither output is edited by hand.
 
 **Layer 4 reaches native code through layer 3.** The managed projects copy the plugin libraries
-from `build/native/lib` (`NativeDependencies.targets`); game code starts from the SDK
-(`Engine.Create`), which makes every part by its constructor.
+from `build/native/lib` (`NativeDependencies.targets`); game code starts from the SDK: the host's
+container makes `Engine` from the parts registered under their contracts, and `DefaultEngine.Create`
+registers the default part of every contract first.
 
 ## Source the plugins share
 

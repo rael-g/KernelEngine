@@ -1,7 +1,7 @@
 # Continuous integration
 
-One workflow, `.github/workflows/ci.yml`, with three jobs: `build-and-test` and `visual`, which run on a push to any
-branch and on every pull request, and `main-history`, which runs on a push to `main` only. A newer run for the same workflow and ref cancels the older one,
+One workflow, `.github/workflows/ci.yml`, with four jobs: `build-and-test` and `visual`, which run on a push to any
+branch and on every pull request, and `publish-docs` and `main-history`, which run on a push to `main` only. A newer run for the same workflow and ref cancels the older one,
 and a job is stopped after 45 minutes.
 
 ## Where it runs
@@ -18,12 +18,13 @@ written once and a path or binary name never differs by runner. The Windows leg 
 
 | step | command | platforms |
 |---|---|---|
-| checkout | `actions/checkout@v4` with `lfs: true`, so LFS-tracked fixtures are files and not pointers | both |
+| checkout | `actions/checkout@v4` with `lfs: true`, so LFS-tracked fixtures are files and not pointers, and `submodules: true`, which brings kabic into `external/kabic` | both |
 | windowing headers | `apt-get install xorg-dev libgl1-mesa-dev libglu1-mesa-dev pkg-config`; vcpkg builds glfw3 from source and needs the system's development headers, which Windows takes from the SDK the runner has | Linux |
 | Zig | `mlugg/setup-zig@v2`, version `0.16.0` | both |
 | .NET | `actions/setup-dotnet@v4`, `10.0.x` | both |
 | vcpkg cache | restores `build/tools` and `build/vcpkg-installed`, keyed on `vcpkg.json`, `vcpkg-configuration.json` and `vcpkg-triplets/**` | both |
-| clang headers cache | `build/cache`, keyed on `Kabic.Bindings/ClangResourceDir.cs` | Linux |
+| clang headers cache | `build/cache`, keyed on `external/kabic/src/Kabic.Bindings/ClangResourceDir.cs` | Linux |
+| Zig cache | restores `build/zig-global` from the latest run of the same OS, and saves it after the build, even when the build failed | both |
 | NuGet cache | `~/.nuget/packages`, keyed on every `.csproj`, with the OS prefix as fallback | both |
 | native build | `dotnet run scripts/verify.cs -- build` | both |
 | save vcpkg | saves the vcpkg cache after the build, even when the build failed, unless the restore was a hit | both |
@@ -31,22 +32,25 @@ written once and a path or binary name never differs by runner. The Windows leg 
 | native tests | `dotnet run scripts/verify.cs -- test-native` | both |
 | managed tests | `dotnet run scripts/verify.cs -- test-managed` | both |
 | smoke test | `dotnet run scripts/verify.cs -- smoke` | both |
+| SDK | `dotnet run scripts/verify.cs -- sdk`, the C Pong built with CMake against the install | Linux only |
 | gates | `dotnet run scripts/verify.cs -- gates` | Linux only |
+| documentation site | `dotnet run scripts/verify.cs -- docs` | Linux only |
 
-All three caches are for speed and never for correctness: a miss costs the vcpkg ports' build time or
+All four caches are for speed and never for correctness: a miss costs the vcpkg ports' build time or
 the download, and is repopulated by the build itself. The clang headers are fetched by
 `kabic check bindings` into `build/cache` on its first run, and that cache is Linux-only because the gates
 are. A vcpkg cache that is restored but whose ports are rebuilt anyway means a package's ABI hash
 changed; the triplets pass `PATH` through as untracked for that reason, so a runner-specific `PATH`
 does not enter the hash.
 
-`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `smoke` runs `tests/stress/node_stress`, which needs no display and fails when its nodes lose a borrow or a signal, `gates` runs the `kabic check` commands, every `scripts/check_*.cs` it finds and `dotnet format --verify-no-changes`, which holds the C# to `.editorconfig`, generated files included, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
-a warning such as a link to a section that does not exist, and `visual` is described below. With no stage it runs those seven in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
+`scripts/verify.cs` is the one entry point the local run shares with this workflow: `build` is `zig build --prefix build/native` followed by `dotnet build KernelEngine.slnx`, `test-native` the same with `test`, `test-managed` is `dotnet test KernelEngine.slnx`, `smoke` runs `tests/stress/node_stress`, which needs no display and fails when its nodes lose a borrow or a signal, `sdk` runs `scripts/check_sdk.cs`, `gates` runs the `kabic check` commands, every `scripts/check_*.cs` it finds and `dotnet format --verify-no-changes`, which holds the C# to `.editorconfig`, generated files included, `docs` generates the reference pages and builds the site with DocFX into `build/docs-site`, failing on
+a warning such as a link to a section that does not exist, and `visual` is described below. With no stage it runs those eight in that order and prints each step's time. `--keep-going` does not stop at the first failing step. Each stage runs alone when it is the only one named.
 
 Three more stages exist for the Windows target and are run only when named: `cross-windows` builds it, `test-windows` runs its Zig tests under Wine, and `test-managed-windows` builds each project under `tests/csharp/` against the Windows libraries and runs its assembly under Wine with the Windows .NET SDK. `scripts/ci_local.cs -- --windows` runs the three inside the image `scripts/ci/Dockerfile.wine` describes, which is where Wine and that SDK come from.
 
 `dotnet test KernelEngine.slnx` builds every project the solution lists, so each C# example is
-compiled, and runs the four projects under `tests/csharp/` (`Configuration`, `Kernel`, `Runtime`, and `Kabic`, whose cases pin the shape each backend emits for a synthetic header).
+compiled, and runs the test projects it lists: `Configuration` and `Kernel` under `tests/csharp/`, and `Integration` under
+`tests/integration/`, which composes real plugins. kabic's own tests live in its repository.
 It runs with no `LD_LIBRARY_PATH` set; no step in the workflow sets one.
 
 The ten gates are the `kabic check` commands `drift`, `bindings`, `api-coverage`, `reconstruction` and `zig`,
@@ -102,5 +106,5 @@ and does not prevent one.
 - **Coverage.** `scripts/coverage.cs` is not called.
 - **Artifacts.** The libraries it builds are discarded with the runner; the only upload is the images of
   a failed `visual`.
-- **Zig generation.** Nothing calls `kabic write zig`; the Zig shape tests of `Kabic.Tests` exercise the Zig
-  backend on synthetic shapes only.
+- **Zig generation.** Nothing calls `kabic write zig`; `kabic check zig` compares the Zig packages against the
+  headers, and kabic's own tests exercise the Zig backend on synthetic shapes.

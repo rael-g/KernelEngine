@@ -8,7 +8,7 @@ plugins under `src/zig/physics/`.
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| world | `ke_physics_2d` | box2d | gravity, body and fixture requests | body ids, body state after a step |
+| world | `ke_physics_2d` | box2d | a `ke_job_system` and its settings (`KE_PHYSICS_2D_SETTING_GRAVITY_X`, `KE_PHYSICS_2D_SETTING_GRAVITY_Y`), then body and fixture requests and `set_gravity` | body ids, body state after a step |
 | components | `ke_body2d_component`, `ke_collider2d_component` | none | scene fields, script writes | the description of a body and of a shape |
 | module | `ke_module`; `ke_physics_body2d_create` | body2d | `ke_ecs`, `ke_physics_2d`, `ke_scene_tree`, then the standard schedules at attach | two systems, and both components registered with their field tables |
 | managed | `Box2DPhysics2D`, `PhysicsBody2DModule` | `KernelEngine.Physics` | what their factories take | the world and the module, registered by `DefaultCore.AddDefaultCore` |
@@ -35,14 +35,14 @@ a body only once the scene tree's hierarchy generation, the set of bodies or the
 colliders has changed.
 
 **The world is one thread's.** One `ke_physics_2d` is one world; its handles are the body's index
-plus one, with `KE_BODY_2D_INVALID` as zero. `DefaultCore.AddDefaultCore` registers it with the gravity of
-"runtime.physics_2d", beside the `PhysicsBody2DModule` that syncs the bodies.
+plus one, with `KE_BODY_2D_INVALID` as zero. `DefaultCore.AddDefaultCore` registers it with the section
+"runtime.physics_2d" as its settings, beside the `PhysicsBody2DModule` that syncs the bodies.
 
 ## What the parts agree on without a contract
 
 - The system names "physics.body2d" and "physics.collider2d", and the log tags "box2d" and
   "physics.body2d".
-- The keys "gravity_x" and "gravity_y" under "runtime.physics_2d".
+- The section "runtime.physics_2d", which the SDKs hand to the world.
 - Two fixtures touch only when each one's `layer` bit is in the other's `mask`; the module builds
   the `ke_collision_filter_2d` from those two fields of the collider.
 - Which fields of the body component are read only when the body is created is a rule of the

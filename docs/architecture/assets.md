@@ -35,8 +35,8 @@ every hit owes one `release`; `cache_insert` takes no reference. The audio backe
 miniaudio) keeps its own cache the same way, keyed by sound id and path.
 
 **Loaders own what they return.** The data a loader returns is freed through the same loader
-(`free_image`, `free_font`, `free_model`). The model loader has a synchronous and an
-asynchronous slot, and its records never refer to the imported scene.
+(`free_image`, `free_font`, `free_model`). The model loader has one slot, `load_model`,
+and its records never refer to the imported scene.
 
 ## Who asks
 
