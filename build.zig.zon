@@ -13,6 +13,7 @@
         .ke_input_default = .{ .path = "src/zig/input/default" },
         .ke_file_system_std = .{ .path = "src/zig/file_system/std" },
         .ke_io_std = .{ .path = "src/zig/io/std" },
+        .ke_io_inline = .{ .path = "src/zig/io/inline" },
         .ke_resource_cache_default = .{ .path = "src/zig/resource_cache/default" },
         .ke_job_system_enki = .{ .path = "src/zig/job/enki" },
         .ke_job_system_inline = .{ .path = "src/zig/job/inline" },

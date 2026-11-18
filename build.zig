@@ -177,6 +177,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
+    _ = ctx.member("ke_io_inline", .{
+        .target = target,
+        .optimize = optimize,
+    }, &.{}, .has_tests);
+
 
     _ = ctx.member("ke_job_system_enki", .{
         .target = target,

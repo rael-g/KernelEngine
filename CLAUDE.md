@@ -91,7 +91,7 @@ Contracts worth knowing by name:
 
 ### Layer 2 — Plugins (`src/zig/<domain>/<plugin>/`)
 
-Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Forty-one plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
+Implemented in Zig, behind the C ABI. Each plugin is a shared library that exports **exactly one symbol per factory header** — the create function — plus its log-callback setter, declared in its `<library>_log.h`. Everything else it exposes is a vtable returned by that factory. A plugin logs with `std.log` and is given no logger: nothing links anything, and the host injects every dependency, the destination of each library's log included. Forty-two plugins are declared in the root `build.zig`; `grep 'ctx.member("' build.zig` is the authoritative list, since a plugin that is not declared there is not built.
 
 The libraries plugins compile come from vcpkg (stb, miniaudio, assimp) or from the root `build.zig.zon` (tomlc99); nothing is vendored.
 
@@ -108,7 +108,7 @@ Vendoring rule: when no package manager carries a pure-C library and it cannot b
 
 ### Layer 3 — C# bindings
 
-Generated P/Invoke, one `Native/` directory per managed project (42 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
+Generated P/Invoke, one `Native/` directory per managed project (43 of them), each configured from the `bindings` array of `scripts/api_domains.json`. **Never edit `Generated/` by hand** — `kabic bindings` derives the ClangSharp configuration from the manifest and the headers and writes it.
 
 Two generators feed this layer and they are not interchangeable: **ClangSharp** produces the raw struct/function surface, and **kabic** (the kabic repository) produces the idiomatic projection from the same headers' doc tags, driven by `scripts/api_domains.json`. Ten gates, five `kabic check` commands and five `scripts/check_*.cs`, keep both honest against the headers.
 
