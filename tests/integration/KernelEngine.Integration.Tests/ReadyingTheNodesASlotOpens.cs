@@ -5,7 +5,7 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
-using KernelEngine.Io.Async;
+using KernelEngine.Io.Std;
 using KernelEngine.Job.Enki;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
@@ -62,7 +62,7 @@ public class ReadyingTheNodesASlotOpens
         using var jobs = new EnkiJobSystem(null, config.Section("job"));
         using var asyncs = new EnkiAsync(null, config.Section("async"));
         using var files = new StdFileSystem(null, ".");
-        using var io = new AsyncIo(null, asyncs, files);
+        using var io = new StdIo(null, files, config.Section("io"));
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs, config);
@@ -94,7 +94,7 @@ public class ReadyingTheNodesASlotOpens
         using var jobs = new EnkiJobSystem(null, config.Section("job"));
         using var asyncs = new EnkiAsync(null, config.Section("async"));
         using var files = new StdFileSystem(null, ".");
-        using var io = new AsyncIo(null, asyncs, files);
+        using var io = new StdIo(null, files, config.Section("io"));
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs, config);

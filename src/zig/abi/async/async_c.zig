@@ -9,7 +9,8 @@ const abi_result = @import("result");
 /// 0 runs every operation on the creating thread when it drains.
 pub const KE_ASYNC_SETTING_WORKER_COUNT = "worker_count";
 
-/// The body of an operation, run once on a worker that may block in a system call.
+/// The body of an operation, run once on a worker: CPU work that may span frames. It does not
+/// block in a system call; reading or writing a file is `ke_io`'s.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*ke_async_ctx) callconv(.c) abi_result.c.ke_result;
 
 /// What an operation sees while it runs.
@@ -22,7 +23,7 @@ pub const ke_async_ctx = extern struct {
     cancelled: ?*const fn (?*ke_async_ctx) callconv(.c) bool = null,
 };
 
-/// Runs work that tolerates latency and may block, beside the frame.
+/// Runs CPU work that tolerates latency and may span frames, beside the frame.
 pub const ke_async = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Runs fn once every dependency finished. Callable from any thread.

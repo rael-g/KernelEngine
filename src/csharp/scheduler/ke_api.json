@@ -584,7 +584,7 @@
     {
       "name": "ke_async_fn",
       "returns": "ke_result",
-      "doc": "The body of an operation, run once on a worker that may block in a system call.",
+      "doc": "The body of an operation, run once on a worker: CPU work that may span frames. It does not block in a system call; reading or writing a file is \u0060ke_io\u0060\u0027s.",
       "lanes": [
         {
           "name": "data",

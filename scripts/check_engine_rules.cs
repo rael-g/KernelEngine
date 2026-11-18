@@ -22,7 +22,10 @@ var sources = tracked.ToDictionary(p => p, p => File.ReadAllLines(Path.Combine(r
 
 var abort = new Regex(@"@panic\(|process\.abort|std\.debug\.panic|\babort\(");
 var crashOnFailure = new Regex(@"\b(catch|orelse) unreachable\b");
-var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent|spawn)|pthread_");
+var threading = new Regex(@"std\.Thread\.(Mutex|Condition|RwLock|Semaphore|ResetEvent)|pthread_");
+var threadStart = new Regex(@"std\.Thread\.spawn|Io\.Threaded\.init");
+var unboundedPool = new Regex(@"\.unlimited\b");
+string[] threadOwners = ["src/zig/job/", "src/zig/async/", "src/zig/io/"];
 var exportMacro = new Regex(@"\bKE_[A-Z_]*API\b");
 var errorLane = new Regex(@"\bke_error\s*\*\s*\*");
 var plainFunction = new Regex(@"^(?!typedef)[A-Za-z_][A-Za-z0-9_ \*]*\bke_[a-z0-9_]+\s*\(.*\)\s*;");
@@ -62,8 +65,12 @@ var rules = new List<Rule>
         Lines(zig, l => abort.IsMatch(l), outsideTests: true).Concat(Lines(native, l => abort.IsMatch(l)))),
     new("no failure turned into a crash with `catch unreachable` or `orelse unreachable`", 4,
         Lines(zig, l => crashOnFailure.IsMatch(l), outsideTests: true)),
-    new("no mutex, condition variable or raw thread in a plugin; the task pool synchronises", 0,
+    new("no mutex or condition variable in a plugin; the job and async systems synchronise", 0,
         Lines(zig, l => threading.IsMatch(l), outsideTests: true)),
+    new("only the job system, the async system and an I/O implementation start threads", 0,
+        Lines(zig.Where(f => !threadOwners.Any(o => f.Key.StartsWith(o, StringComparison.Ordinal))), l => threadStart.IsMatch(l), outsideTests: true)),
+    new("a thread owner starts its threads from a ceiling, never an unlimited pool", 0,
+        Lines(zig.Where(f => threadOwners.Any(o => f.Key.StartsWith(o, StringComparison.Ordinal))), l => unboundedPool.IsMatch(l), outsideTests: true)),
     new("a plugin's root file turns off the per-thread signal stack with std_options", 0,
         tracked.Where(p => p.StartsWith("src/zig/", StringComparison.Ordinal) && IsBuildFile(p)
                 && !p.StartsWith("src/zig/result/", StringComparison.Ordinal))

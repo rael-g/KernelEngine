@@ -10,7 +10,7 @@ using KernelEngine.Completion.Native;
 
 namespace KernelEngine.Async;
 
-/// <summary>The body of an operation, run once on a worker that may block in a system call.</summary>
+/// <summary>The body of an operation, run once on a worker: CPU work that may span frames. It does not block in a system call; reading or writing a file is `ke_io`'s.</summary>
 /// <param name="ctx">The dependencies and the cancellation.</param>
 public delegate void AsyncCallback(IAsyncCtx ctx);
 

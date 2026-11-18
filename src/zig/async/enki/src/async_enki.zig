@@ -182,9 +182,10 @@ fn destroy(self_in: ?*a.ke_async) callconv(.c) void {
     heap.gpa.destroy(self);
 }
 
-/// The async system's settings, with this implementation's defaults.
+/// The async system's settings, with this implementation's defaults: an absent worker count is a
+/// quarter of the hardware threads, at least one, so the frame keeps the cores.
 const Settings = struct {
-    worker_count: u32 = 2,
+    worker_count: ?u32 = null,
     submit_capacity: u32 = 1024,
 
     pub const ranges = .{ .worker_count = .{ 0, std.math.maxInt(u32) }, .submit_capacity = .{ 1, std.math.maxInt(u32) } };
@@ -207,12 +208,13 @@ fn create(settings: ?*abi_settings.c.ke_settings) R.Error!a.ke_async_handle {
     var outside = completion_graph.Ring(*Node).init(heap.gpa, config.submit_capacity) catch return error.OutOfMemory;
     errdefer outside.deinit();
     const ets = c.enkiNewTaskScheduler() orelse return error.General;
-    c.enkiInitTaskSchedulerNumThreads(ets, config.worker_count + 1);
+    const workers: u32 = config.worker_count orelse @intCast(@max(1, (std.Thread.getCpuCount() catch 1) / 4));
+    c.enkiInitTaskSchedulerNumThreads(ets, workers + 1);
     self.* = .{
         .api = .{ .handle = self, .submit = submit, .cancel = cancel, .drain = drain },
         .ets = ets,
         .host = std.Thread.getCurrentId(),
-        .zero_workers = config.worker_count == 0,
+        .zero_workers = workers == 0,
         .graph = undefined,
         .outside = outside,
     };

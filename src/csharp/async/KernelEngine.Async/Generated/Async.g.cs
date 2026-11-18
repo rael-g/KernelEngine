@@ -23,7 +23,7 @@ public unsafe interface INativeAsync
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Runs work that tolerates latency and may block, beside the frame.</summary>
+/// <summary>Runs CPU work that tolerates latency and may span frames, beside the frame.</summary>
 public unsafe partial class Async : IDisposable, INativeAsync, IAsync
 {
     private ke_async* _native;

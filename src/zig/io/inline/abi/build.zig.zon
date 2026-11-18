@@ -1,0 +1,14 @@
+.{
+    .name = .abi_io_inline_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x1393c6ebbe2b2e18,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_file_system = .{ .path = "../../../abi/file_system" },
+        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_settings = .{ .path = "../../../abi/settings" },
+    },
+    .paths = .{"."},
+}

@@ -39,5 +39,5 @@ default for an absent key. The sections the SDKs hand to the default parts:
 | `input` | the input actions | the maps, actions and bindings under `input.map` |
 | `project` | `Engine.Run` | `default_scene`, the scene it opens without an argument |
 
-The job and async systems are made before the file is loaded, so the SDKs do not give them a section
+The job and async systems and the io are made before the file is loaded, so the SDKs do not give them a section
 of it.

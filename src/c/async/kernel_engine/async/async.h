@@ -24,13 +24,14 @@ typedef struct ke_async_ctx {
     bool (*cancelled)(ke_async_ctx *self);
 } ke_async_ctx;
 
-/// The body of an operation, run once on a worker that may block in a system call.
+/// The body of an operation, run once on a worker: CPU work that may span frames. It does not block
+/// in a system call; reading or writing a file is `ke_io`'s.
 /// @param data [context] Forwarded from submit.
 /// @param ctx  The dependencies and the cancellation.
 /// @return KE_OK, or the code the operation failed with, which its completion carries.
 typedef ke_result (*ke_async_fn)(void *data, ke_async_ctx *ctx);
 
-/// [interface] Runs work that tolerates latency and may block, beside the frame.
+/// [interface] Runs CPU work that tolerates latency and may span frames, beside the frame.
 typedef struct ke_async {
     void *handle;
 

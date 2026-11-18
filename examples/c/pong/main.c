@@ -9,7 +9,7 @@ int main(void)
     const ke_sdk_engine_desc desc = {
         .job_system = ke_sdk_job_system_enki,
         .file_system = ke_sdk_file_system_std,
-        .io = ke_sdk_io_async,
+        .io = ke_sdk_io_std,
         .configuration = ke_sdk_configuration_toml,
         .async = ke_sdk_async_enki,
         .input = ke_sdk_input,
