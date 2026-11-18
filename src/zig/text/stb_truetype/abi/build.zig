@@ -15,6 +15,7 @@ pub fn build(b: *std.Build) void {
         \\#include <kernel_engine/text/stb_truetype/text_stb_truetype_log.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
+    translated.addIncludePath(b.path("../../../../c/completion"));
     translated.addIncludePath(b.path("../../../../c/file_system"));
     translated.addIncludePath(b.path("../../../../c/io"));
     translated.addIncludePath(b.path("../../../../c/logger"));
@@ -33,6 +34,7 @@ pub fn build(b: *std.Build) void {
         },
     }) });
     tests.root_module.addCSourceFile(.{ .file = b.path("layout_values.c") });
+    tests.root_module.addIncludePath(b.path("../../../../c/completion"));
     tests.root_module.addIncludePath(b.path("../../../../c/file_system"));
     tests.root_module.addIncludePath(b.path("../../../../c/io"));
     tests.root_module.addIncludePath(b.path("../../../../c/logger"));

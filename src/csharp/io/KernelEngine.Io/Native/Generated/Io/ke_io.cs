@@ -1,5 +1,6 @@
 using System.Numerics;
 
+using KernelEngine.Completion.Native;
 using KernelEngine.FileSystem.Native;
 using KernelEngine.Result.Native;
 
@@ -44,6 +45,9 @@ public unsafe partial struct ke_io
 
     [NativeTypeName("bool (*)(struct ke_io *, ke_io_request *)")]
     public delegate* unmanaged[Cdecl]<ke_io*, ke_io_request*, bool> is_completed;
+
+    [NativeTypeName("ke_completion *(*)(struct ke_io *, ke_io_request *)")]
+    public delegate* unmanaged[Cdecl]<ke_io*, ke_io_request*, KernelEngine.Completion.Native.ke_completion*> completion;
 
     [NativeTypeName("ke_result (*)(struct ke_io *, ke_io_request *, ke_io_result *)")]
     public delegate* unmanaged[Cdecl]<ke_io*, ke_io_request*, IoResult*, KernelEngine.Result.Native.Result> wait;

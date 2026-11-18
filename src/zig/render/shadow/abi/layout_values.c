@@ -8,8 +8,5 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_shadow_config, extent),
     offsetof(ke_render_shadow_config, near_plane),
     offsetof(ke_render_shadow_config, far_plane),
-    sizeof(ke_render_shadow_handle),
-    offsetof(ke_render_shadow_handle, ref),
-    offsetof(ke_render_shadow_handle, destroy),
     0,
 };

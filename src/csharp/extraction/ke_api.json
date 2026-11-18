@@ -152,6 +152,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -1465,7 +1470,7 @@
     },
     {
       "name": "ke_extraction",
-      "doc": "Gives every main-world entity tagged render_synced a pair in the render world, and makes the registered components of each pair what they are in the main world at the moment of an extraction.",
+      "doc": "Gives every main-world entity tagged render_synced, or carrying a component registered with sync_component, a pair in the render world, and makes the registered components of each pair what they are in the main world at the moment of an extraction.",
       "tags": [
         "interface"
       ],
@@ -1479,10 +1484,26 @@
       ],
       "slots": [
         {
+          "name": "sync_component",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Pairs every main-world entity carrying main_component as if it were tagged render_synced; the pair goes when the entity loses the component and the tag. Registering it again changes nothing.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "main_component",
+              "type": "ke_component_id",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_extraction *"
+        },
+        {
           "name": "extract_copy",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Registers a copy: at each extraction, the pair carries render_component equal to the entity\u0027s main_component, every ENTITY field holding the entity\u0027s pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size.",
+          "doc": "Registers a copy: at each extraction, the pair carries render_component equal to the entity\u0027s main_component, every ENTITY field holding the entity\u0027s pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size; registering the same pair again changes nothing.",
           "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an unknown component or different sizes; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {

@@ -3,7 +3,6 @@
 
 #include <kernel_engine/math/math.h>
 #include <kernel_engine/result/result.h>
-#include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/io/io.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/gpu/gpu_render_target.h>
@@ -30,18 +29,16 @@ extern "C"
  * @brief Creates a render service whose frames draw into @p target.
  * @param device Borrowed, must outlive the service.
  * @param target Borrowed, must outlive the service; every frame acquires and presents it.
- * @param ecs Borrowed, must outlive the service.
  * @param io [provider] Borrowed, must outlive the service; the shaders are read through it.
  * @param binder Borrowed, must outlive the service; it holds the service's materials and is given
  *        the parameters every shader shares.
  * @param config [borrowed] The service's values, applied as given.
  * @param out_service [out] Receives the handle; left zeroed on failure.
- * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p device, @p target, @p ecs,
- *         @p io, @p binder, @p config or its shader_dir is NULL, or a format is
- *         KE_GPU_TEXTURE_FORMAT_INVALID.
+ * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when @p device, @p target,
+ *         @p io, @p binder, @p config or its shader_dir is NULL.
  */
 KE_RENDER_CORE_API ke_result
-ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_ecs *ecs, ke_io *io,
+ke_render_service_create(ke_gpu_device *device, ke_gpu_render_target *target, ke_io *io,
                          ke_render_resource_binder *binder, const ke_render_service_config *config,
                          ke_render_service_handle *out_service);
 

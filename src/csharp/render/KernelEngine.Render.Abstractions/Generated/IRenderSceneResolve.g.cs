@@ -11,6 +11,8 @@ namespace KernelEngine.Render;
 /// <summary>The rendersceneresolve contract game code depends on, so a caller names a capability rather than the <see cref="RenderSceneResolve"/> that carries it.</summary>
 public interface IRenderSceneResolve : IDisposable
 {
-    /// <summary>The ids of the components the scene resolve registered; valid while it lives.</summary>
+    /// <summary>The ids the main world gave the scene's components; valid while the resolve lives.</summary>
     RenderSceneComponentIds ComponentIds();
+    /// <summary>The ids the render world gave the same components, which every extraction copies the main world's into; valid while the resolve lives.</summary>
+    RenderSceneComponentIds RenderComponentIds();
 }

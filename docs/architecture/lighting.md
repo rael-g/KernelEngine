@@ -8,10 +8,10 @@ consume it. How a part works inside is on the generated page of its file. Plugin
 
 | part | plugin | receives | hands on |
 |---|---|---|---|
-| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_config` | the map and the light buffer, as `ke_render_shadow_resources` |
-| cluster | cluster | point and spot lights, the camera, `ke_view_space` | its tag and its light buffers, as `ke_render_cluster_resources` |
+| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_config` | the map and the light buffer, published in the frame |
+| cluster | cluster | point and spot lights, the camera, `ke_view_space` | its light buffers and grid, published in the frame |
 | skybox | skybox | the `ke_skybox_component`, the frame's depth | the background, drawn into the frame's color |
-| deferred lighting | deferred_lighting | `ke_render_gbuffer_resources`, the frame's depth, the hand-offs above, the directional and ambient lights | the frame's color |
+| deferred lighting | deferred_lighting | the published gbuffer, the frame's depth, the hand-offs above, the directional and ambient lights | the frame's color |
 | forward | forward | blended meshes, the frame's color, the hand-offs above, the lights | the frame's color |
 
 Deferred lighting shades every opaque and alpha-masked surface, forward every blended one. They
@@ -26,9 +26,9 @@ the same order. Forward alone also calls `refraction_contribution`
 (`refraction_feature.slang`), because only it has a copy of the frame behind the surface.
 
 **A feature that is off is a neutral resource, not another shader.** The shadow function reads a
-white texture when the shadow map's id is invalid, the environment is a black cube when image-based light
+white texture when no shadow map was published, the environment is a black cube when image-based light
 is disabled or no skybox exists, and a cluster with no lights has a zero count. A host without
-shadows creates no shadow pass and gives the shading passes invalid shadow ids; `ibl_enabled` of
+shadows creates no shadow pass, and nothing is published under the shadow's names; `ibl_enabled` of
 `ke_render_deferred_lighting_config` and `ke_render_forward_config` turns image-based light off.
 
 **The directional light and the ambient light are the first of their kind.** Both shading passes
@@ -36,9 +36,9 @@ and the shadow pass read only the first directional light; the first ambient lig
 ambient field of the directional one. Point and spot lights reach a surface only through the
 clusters and cast no shadow.
 
-**Clusters are ordered before shading by their access lists.** The cluster pass writes the tag of
-`ke_render_cluster_resources` and publishes its light buffers; the shading passes read the tag and
-bind the buffers, so the runtime runs them in that order.
+**Clusters are ordered before shading by the graph.** The cluster pass publishes its light buffers
+and writes them at the prepass stage; the shading passes declare them as read, so the graph runs
+the cull first.
 
 **The view space is the only thing that knows which way the camera faces.** The cluster pass and
 the shadow pass take `ke_view_space`; the cluster pass hands its `depth_from_view_z` on to the

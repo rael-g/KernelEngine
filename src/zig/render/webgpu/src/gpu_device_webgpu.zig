@@ -112,7 +112,7 @@ fn toWgpuLoadOp(op: abi_render_gpu.c.ke_gpu_load_op) wgpu.WGPULoadOp {
     return switch (op) {
         abi_render_gpu.c.KE_GPU_LOAD_OP_LOAD => wgpu.WGPULoadOp_Load,
         abi_render_gpu.c.KE_GPU_LOAD_OP_CLEAR => wgpu.WGPULoadOp_Clear,
-        abi_render_gpu.c.KE_GPU_LOAD_OP_DONT_CARE => wgpu.WGPULoadOp_Undefined,
+        abi_render_gpu.c.KE_GPU_LOAD_OP_DONT_CARE => wgpu.WGPULoadOp_Clear,
         else => wgpu.WGPULoadOp_Undefined,
     };
 }

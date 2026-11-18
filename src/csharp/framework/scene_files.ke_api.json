@@ -152,6 +152,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -833,7 +838,7 @@
     },
     {
       "name": "ke_scene_slot_component",
-      "doc": "A node whose children are the scene file it names. Writing path replaces them: on the next update the slot\u0027s children are destroyed and the file at path is instantiated under the slot; an empty path only destroys them. What lies outside a slot outlives the change, and several slots hold several scenes at once.",
+      "doc": "A node whose children are the scene file it names. Writing path replaces them: on the first update once its files are read, the slot\u0027s children are destroyed and the file at path is instantiated under the slot; an empty path only destroys them. What lies outside a slot outlives the change, and several slots hold several scenes at once.",
       "tags": [],
       "fields": [
         {
@@ -1733,7 +1738,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Records into commands every node the scene file at path declares, each one without a parent of its own under parent, each spawned as a node of its type with the values its blocks write. The nodes exist once commands is applied.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or commands, or a fault in what the file says; KE_RESULT_NOT_FOUND for a missing file or a type never registered; KE_RESULT_IO for a file that does not parse, or the queue\u0027s code. On a failure commands may hold part of the scene.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or commands, or a fault in what the file says; KE_RESULT_NOT_FOUND for a missing file or a type never registered; KE_RESULT_IO for a file that does not parse; KE_RESULT_PENDING, with nothing recorded, while a file it reads is still being read on a thread that may not wait for it; or the queue\u0027s code. On a failure commands may hold part of the scene.",
           "params": [
             {
               "name": "path",

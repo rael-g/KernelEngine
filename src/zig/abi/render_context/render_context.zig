@@ -2,10 +2,12 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_render = @import("render");
+const abi_render_frame = @import("render_frame");
 const abi_render_gpu = @import("render_gpu");
+const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
 const abi_view = @import("view");
 
 /// The ABI as the headers declare it.

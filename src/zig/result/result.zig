@@ -18,6 +18,7 @@ pub fn Result(comptime domain: anytype) type {
         .{ error.NotSupported, c.KE_RESULT_NOT_SUPPORTED },
         .{ error.AlreadyExists, c.KE_RESULT_ALREADY_EXISTS },
         .{ error.Cancelled, c.KE_RESULT_CANCELLED },
+        .{ error.Pending, c.KE_RESULT_PENDING },
     };
     const pairs = general ++ domain;
 

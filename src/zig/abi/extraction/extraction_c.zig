@@ -27,14 +27,19 @@ pub const ke_extraction_interpolate_fn = ?*const fn (?*anyopaque, ?*const anyopa
 /// Extracts what a copy cannot: reads the main world and writes the render world.
 pub const ke_extraction_custom_fn = ?*const fn (?*anyopaque, ?*ke_extraction, ?*abi_ecs.c.ke_ecs, ?*abi_ecs.c.ke_ecs) callconv(.c) abi_result.c.ke_result;
 
-/// Gives every main-world entity tagged render_synced a pair in the render world, and makes the
-/// registered components of each pair what they are in the main world at the moment of an
-/// extraction.
+/// Gives every main-world entity tagged render_synced, or carrying a component registered with
+/// sync_component, a pair in the render world, and makes the registered components of each pair
+/// what they are in the main world at the moment of an extraction.
 pub const ke_extraction = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// Pairs every main-world entity carrying main_component as if it were tagged render_synced; the
+    /// pair goes when the entity loses the component and the tag. Registering it again changes
+    /// nothing.
+    sync_component: ?*const fn (?*ke_extraction, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Registers a copy: at each extraction, the pair carries render_component equal to the entity's
     /// main_component, every ENTITY field holding the entity's pair or the null entity; when the
-    /// entity lost the component, the pair loses it too. Both must have the same size.
+    /// entity lost the component, the pair loses it too. Both must have the same size; registering
+    /// the same pair again changes nothing.
     extract_copy: ?*const fn (?*ke_extraction, ke_component_id, ke_component_id) callconv(.c) abi_result.c.ke_result = null,
     /// Registers an interpolation: like a copy, except that for an entity tagged interpolated the
     /// pair receives blend of previous_component and main_component at the loop's alpha. An entity

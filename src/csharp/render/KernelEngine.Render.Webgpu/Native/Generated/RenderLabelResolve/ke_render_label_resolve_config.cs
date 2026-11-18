@@ -2,8 +2,10 @@ using System.Numerics;
 
 using global::KernelEngine.Ecs;
 using global::KernelEngine.Logger;
+using global::KernelEngine.RenderGraph;
 
 using KernelEngine.Asset.Native;
+using KernelEngine.Module.Native;
 using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;

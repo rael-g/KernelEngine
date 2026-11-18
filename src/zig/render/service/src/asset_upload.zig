@@ -88,12 +88,6 @@ pub fn meshBuffers(self: [*c]abi_render.c.ke_render_service, h: abi_render_handl
     return true;
 }
 
-/// Sets the color a color attachment is cleared to when its resource carries no clear value of
-/// its own.
-pub fn setClearColor(self: [*c]abi_render.c.ke_render_service, r: f32, g: f32, b: f32, a: f32) callconv(.c) void {
-    rc.coreOf(self).clear_color = .{ r, g, b, a };
-}
-
 /// Creates a sampled RGBA 2D texture and its view for the key, from the pixels given. A cache hit
 /// writes the cached handle. An empty or null key fails as an invalid argument. A texture or view
 /// the device cannot create fails with the device's code, and a full store as out of memory,

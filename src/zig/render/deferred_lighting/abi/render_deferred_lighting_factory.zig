@@ -2,11 +2,13 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
+const abi_module = @import("module");
 const abi_render_context = @import("render_context");
+const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_deferred_lighting_factory_c.zig");
@@ -15,23 +17,15 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderDeferredLighting = struct {
-    ptr: *c.ke_render_deferred_lighting,
-    owner: ?c.ke_render_deferred_lighting_handle = null,
-
-    pub fn deinit(self: RenderDeferredLighting) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// Registers the pass's render-phase system. A missing runtime, service, device, gbuffer, shadow
-    /// or clusters, or a gbuffer with an invalid id, fails as an invalid argument.
-    pub fn create(context: ?*const abi_render_context.c.ke_render_context, gbuffer: ?*const abi_render.c.ke_render_gbuffer_resources, shadow: ?*const abi_render.c.ke_render_shadow_resources, clusters: ?*const abi_render.c.ke_render_cluster_resources, config: ?*const c.ke_render_deferred_lighting_config) Error!RenderDeferredLighting {
-        var written: c.ke_render_deferred_lighting_handle = undefined;
-        try checkResult(c.ke_render_deferred_lighting_create(context, gbuffer, shadow, clusters, config, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
-    }
-
-};
+/// Makes the deferred lighting pass. Attached, it declares in the render queue set the pass that
+/// lights the published gbuffer over the frame's color, sampling the frame's depth, the
+/// published shadow (the neutral one when none is) and the published clusters (none added when
+/// none are).
+pub fn renderDeferredLightingCreate(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_deferred_lighting_config) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_render_deferred_lighting_create(context, config, &written));
+    return written;
+}
 
 /// Sends every line ke_render_deferred_lighting logs to callback, with ctx; a NULL callback
 /// sends them back to stderr, where they go until this is called. Called once, before the
@@ -41,4 +35,3 @@ pub fn renderDeferredLightingSetLogCallback(callback: c.ke_log_callback, ctx: ?*
 }
 
 pub const RenderDeferredLightingConfig = c.ke_render_deferred_lighting_config;
-pub const RenderDeferredLightingHandle = c.ke_render_deferred_lighting_handle;

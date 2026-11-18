@@ -26,7 +26,8 @@ extern "C"
          * @param out [out] Receives the decoded texture data on success.
          * @return KE_OK; KE_RESULT_NOT_FOUND when the file is missing or the extension is
          *         unsupported; KE_RESULT_INVALID_ARGUMENT when no image loader was injected
-         *         at construction time; the image loader's code otherwise.
+         *         at construction time; the image loader's code otherwise, KE_RESULT_PENDING
+         *         among them while the file is still being read.
          */
         ke_result (*resolve_texture)(struct ke_asset_resolver *self,
                                      const char               *path,
@@ -74,8 +75,8 @@ extern "C"
          * @param path [utf8]
          * @param out [out] Receives the baked font atlas + glyph metrics on success.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT when no font loader was injected at
-         *         construction time; KE_RESULT_NOT_FOUND when the file is missing; the font
-         *         loader's code otherwise.
+         *         construction time; the font loader's code otherwise, KE_RESULT_PENDING among
+         *         them while the file is still being read.
          */
         ke_result (*resolve_font)(struct ke_asset_resolver *self,
                                   const char               *path,

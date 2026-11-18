@@ -1,5 +1,4 @@
-//! Reads whole files and asks whether a path names a file, through the ke_io a framework object
-//! was given.
+//! Reads whole files through the ke_io a framework object was given.
 
 const std = @import("std");
 const abi_io = @import("abi_io");
@@ -17,13 +16,4 @@ pub fn readText(io: *abi_io.c.ke_io, path: [*:0]const u8) R.Error![:0]u8 {
     defer io.free_bytes.?(io, result.bytes);
     const bytes: []const u8 = if (result.bytes) |b| @as([*]const u8, @ptrCast(b))[0..@intCast(result.size)] else "";
     return heap.gpa.dupeZ(u8, bytes);
-}
-
-/// Whether `path` names a regular file; any failure to ask reads as no.
-pub fn isFile(io: *abi_io.c.ke_io, path: [*:0]const u8) bool {
-    var request: ?*abi_io.c.ke_io_request = null;
-    if (io.file_exists.?(io, path, &request) != R.ok) return false;
-    var result: abi_io.c.ke_io_result = undefined;
-    if (io.wait.?(io, request, &result) != R.ok) return false;
-    return result.exists;
 }

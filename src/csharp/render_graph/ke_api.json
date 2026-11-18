@@ -1,0 +1,2056 @@
+{
+  "enums": [
+    {
+      "name": "ke_result_domain",
+      "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
+      "values": [
+        {
+          "name": "KE_RESULT_DOMAIN_GENERAL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ASSET",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_AUDIO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_CONFIGURATION",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_ECS",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_FRAMEWORK",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_INPUT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_LOGGER",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_MATH",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_PHYSICS",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RENDER",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RESOURCE_CACHE",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_RUNTIME",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TASK_POOL",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_SPATIAL",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_TEXT",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_VIEW",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_DOMAIN_WINDOW",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_result",
+      "doc": "What a fallible call returns: \u0060KE_OK\u0060, or the code of the failure. The detail of a failure goes to the failing library\u0027s log, never into the code. A caller treats a code it does not know as \u0060KE_RESULT_GENERAL\u0060. Ignoring the result of a call is a compiler warning where the compiler supports it.",
+      "values": [
+        {
+          "name": "KE_OK",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_GENERAL",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_FOUND",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_IO",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_OUT_OF_MEMORY",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_INVALID_ARGUMENT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_INITIALIZED",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_NOT_SUPPORTED",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_ALREADY_EXISTS",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_CANCELLED",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_RESULT_MAX_ENUM",
+          "value": 2147483647,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_index_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT16",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_INDEX_FORMAT_UINT32",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_INVALID",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA8_SRGB",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BGRA8_UNORM",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R32_FLOAT",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R16_FLOAT",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D16_UNORM",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D24_UNORM_S8_UINT",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT",
+          "value": 9,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_D32_FLOAT_S8_UINT",
+          "value": 10,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RGBA32_FLOAT",
+          "value": 11,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_RG32_FLOAT",
+          "value": 12,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_R8_UNORM",
+          "value": 13,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC1_RGBA_UNORM",
+          "value": 14,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC3_RGBA_UNORM",
+          "value": 15,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC5_RG_UNORM",
+          "value": 16,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_FORMAT_BC7_RGBA_UNORM",
+          "value": 17,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_texture_dimension",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_TEXTURE_DIM_1D",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_2D",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_3D",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_TEXTURE_DIM_CUBE",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_load_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_LOAD_OP_LOAD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_CLEAR",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_LOAD_OP_DONT_CARE",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_store_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STORE_OP_STORE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STORE_OP_DONT_CARE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FILTER_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FILTER_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_sampler_mipmap_filter",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_NEAREST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SAMPLER_MIPMAP_LINEAR",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_address_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_ADDRESS_MODE_REPEAT",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_MIRRORED_REPEAT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_EDGE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_ADDRESS_MODE_CLAMP_TO_BORDER",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_compare_function",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_COMPARE_UNDEFINED",
+          "value": 0,
+          "doc": "No comparison (default for samplers without shadow compare)"
+        },
+        {
+          "name": "KE_GPU_COMPARE_NEVER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_EQUAL",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_LESS_EQUAL",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_NOT_EQUAL",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_GREATER_EQUAL",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_COMPARE_ALWAYS",
+          "value": 8,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_primitive_topology",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_LIST",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_LINE_STRIP",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_PRIMITIVE_TOPOLOGY_POINT_LIST",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_cull_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_CULL_MODE_NONE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_FRONT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_CULL_MODE_BACK",
+          "value": 2,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_front_face",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_FRONT_FACE_CCW",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_FRONT_FACE_CW",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_factor",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ZERO",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_ALPHA",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_ALPHA",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_ALPHA",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_SRC_COLOR",
+          "value": 6,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_SRC_COLOR",
+          "value": 7,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_DST_COLOR",
+          "value": 8,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_FACTOR_ONE_MINUS_DST_COLOR",
+          "value": 9,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_blend_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BLEND_OP_ADD",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_SUBTRACT",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_REVERSE_SUBTRACT",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MIN",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BLEND_OP_MAX",
+          "value": 4,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_stencil_op",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_STENCIL_OP_KEEP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_ZERO",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_REPLACE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INVERT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_INCREMENT_CLAMP",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_STENCIL_OP_DECREMENT_CLAMP",
+          "value": 5,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_step_mode",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_VERTEX",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_STEP_MODE_INSTANCE",
+          "value": 1,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_vertex_format",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X2",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X3",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_FLOAT32X4",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X2",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_SINT16X4",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4_UNORM",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_VERTEX_FORMAT_UINT8X4",
+          "value": 6,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_binding_type",
+      "doc": null,
+      "values": [
+        {
+          "name": "KE_GPU_BINDING_TYPE_BUFFER",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_SAMPLER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_TEXTURE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_BUFFER",
+          "value": 3,
+          "doc": "read-write storage (compute only)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_STORAGE_TEXTURE",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_READONLY_STORAGE_BUFFER",
+          "value": 5,
+          "doc": "read-only storage (usable in fragment)"
+        },
+        {
+          "name": "KE_GPU_BINDING_TYPE_DEPTH_TEXTURE",
+          "value": 6,
+          "doc": "depth-format texture, sampled or texel-fetched"
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_gpu_shader_language",
+      "doc": "Shader source language a device accepts. Query via \u0060ke_gpu_device::shader_language\u0060.",
+      "values": [
+        {
+          "name": "KE_GPU_SHADER_LANG_WGSL",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_SPIRV",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_MSL",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_GPU_SHADER_LANG_DXIL",
+          "value": 3,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_graph_resource_kind",
+      "doc": "What a resource is.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_RESOURCE_TEXTURE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_RESOURCE_BUFFER",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_RESOURCE_TOKEN",
+          "value": 2,
+          "doc": "Holds no memory: reading and writing it only orders passes."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_RESOURCE_ACCELERATION_STRUCTURE",
+          "value": 3,
+          "doc": "A ray tracing acceleration structure; a graph without ray tracing refuses it."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_size_class",
+      "doc": "How a texture\u0027s size is given.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_SIZE_ABSOLUTE",
+          "value": 0,
+          "doc": "width and height in texels."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_SIZE_OUTPUT_RELATIVE",
+          "value": 1,
+          "doc": "scale_x and scale_y of the frame\u0027s output."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_SIZE_RESOURCE_RELATIVE",
+          "value": 2,
+          "doc": "scale_x and scale_y of the resource relative_to."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_usage",
+      "doc": "How a pass uses a resource.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_SAMPLED",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_STORAGE_READ",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_STORAGE_WRITE",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_DEPTH_READ",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_DEPTH_WRITE",
+          "value": 5,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_INPUT_ATTACHMENT",
+          "value": 6,
+          "doc": "Read as an attachment of the same render pass."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_RESOLVE",
+          "value": 7,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_COPY_SRC",
+          "value": 8,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_COPY_DST",
+          "value": 9,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_VERTEX",
+          "value": 10,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_INDEX",
+          "value": 11,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_INDIRECT",
+          "value": 12,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_UNIFORM",
+          "value": 13,
+          "doc": "The single-sampled target a multisampled attachment resolves into."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_PRESENT",
+          "value": 14,
+          "doc": "Presented once the frame ends."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_READBACK",
+          "value": 15,
+          "doc": "Its bytes are handed to the pass\u0027s readback when the frame retires."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_AS_BUILD",
+          "value": 16,
+          "doc": "Its bytes are handed to the pass\u0027s readback when the frame retires."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_AS_READ",
+          "value": 17,
+          "doc": "Its bytes are handed to the pass\u0027s readback when the frame retires."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_TOKEN_READ",
+          "value": 18,
+          "doc": "Its bytes are handed to the pass\u0027s readback when the frame retires."
+        },
+        {
+          "name": "KE_RENDER_GRAPH_USAGE_TOKEN_WRITE",
+          "value": 19,
+          "doc": "Its bytes are handed to the pass\u0027s readback when the frame retires."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_load",
+      "doc": "What an attachment holds when its pass starts.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_LOAD_KEEP",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_LOAD_CLEAR",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_LOAD_DONT_CARE",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_pass_type",
+      "doc": "What a pass records.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_PASS_RASTER",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_PASS_COMPUTE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_PASS_COPY",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_queue",
+      "doc": "The queue a pass would rather run on; a graph may run every pass on the graphics queue.",
+      "values": [
+        {
+          "name": "KE_RENDER_GRAPH_QUEUE_GRAPHICS",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_QUEUE_ASYNC_COMPUTE",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_RENDER_GRAPH_QUEUE_TRANSFER",
+          "value": 2,
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "structs": [
+    {
+      "name": "ke_gpu_clear_value",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "depth_stencil",
+          "type": "",
+          "tags": [],
+          "doc": null,
+          "inline": {
+            "name": "",
+            "doc": null,
+            "tags": [],
+            "fields": [
+              {
+                "name": "depth",
+                "type": "float",
+                "tags": [],
+                "doc": null
+              },
+              {
+                "name": "stencil",
+                "type": "uint8_t",
+                "tags": [],
+                "doc": null
+              }
+            ]
+          }
+        }
+      ],
+      "external": true,
+      "union": true
+    },
+    {
+      "name": "ke_gpu_capabilities",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "max_texture_dimension_2d",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_texture_array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_bind_groups",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_attributes",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_vertex_buffers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_uniform_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_storage_buffer_size",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_x",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_y",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "max_compute_workgroup_size_z",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_bindless",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_mesh_shaders",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "supports_ray_tracing",
+          "type": "bool",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "copy_bytes_per_row_alignment",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Byte multiple a texture/buffer copy\u0027s bytes_per_row must be a multiple of; 1 when the backend imposes none."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_ndc_convention",
+      "doc": null,
+      "tags": [],
+      "fields": [
+        {
+          "name": "z_zero_to_one",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when clip z is in [0,1] (Vulkan/D3D/WebGPU), false for [-1,1] (GL)."
+        },
+        {
+          "name": "y_flip",
+          "type": "bool",
+          "tags": [],
+          "doc": "True when a top-left framebuffer origin needs a Y flip in projection."
+        }
+      ],
+      "external": true
+    },
+    {
+      "name": "ke_render_graph_texture_desc",
+      "doc": "A texture made for one frame.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Shown by capture and validation tools."
+        },
+        {
+          "name": "format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "size_class",
+          "type": "ke_render_graph_size_class",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "width",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Texels, for KE_RENDER_GRAPH_SIZE_ABSOLUTE."
+        },
+        {
+          "name": "height",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Texels, for KE_RENDER_GRAPH_SIZE_ABSOLUTE."
+        },
+        {
+          "name": "scale_x",
+          "type": "float",
+          "tags": [],
+          "doc": "The factor of the width it is relative to, for a relative size class."
+        },
+        {
+          "name": "scale_y",
+          "type": "float",
+          "tags": [],
+          "doc": "The factor of the height it is relative to, for a relative size class."
+        },
+        {
+          "name": "relative_to",
+          "type": "ke_render_graph_resource",
+          "tags": [],
+          "doc": "The resource whose size it follows, for KE_RENDER_GRAPH_SIZE_RESOURCE_RELATIVE."
+        },
+        {
+          "name": "mip_levels",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "At least one."
+        },
+        {
+          "name": "array_layers",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "At least one."
+        },
+        {
+          "name": "samples",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "At least one; above one, the texture is multisampled."
+        },
+        {
+          "name": "generate_mips",
+          "type": "bool",
+          "tags": [],
+          "doc": "Whether its mips are generated from mip 0 after the last pass of the frame that writes it."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_buffer_desc",
+      "doc": "A buffer made for one frame.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Shown by capture and validation tools."
+        },
+        {
+          "name": "size",
+          "type": "uint64_t",
+          "tags": [],
+          "doc": "Greater than zero."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_use",
+      "doc": "One use of a resource by a pass.",
+      "tags": [
+        "value"
+      ],
+      "fields": [
+        {
+          "name": "resource",
+          "type": "ke_render_graph_resource",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "usage",
+          "type": "ke_render_graph_usage",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "base_mip",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The first mip used."
+        },
+        {
+          "name": "mip_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many mips; zero means every mip from base_mip."
+        },
+        {
+          "name": "base_layer",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The first array layer used."
+        },
+        {
+          "name": "layer_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "How many layers; zero means every layer from base_layer."
+        },
+        {
+          "name": "view_format",
+          "type": "ke_gpu_texture_format",
+          "tags": [],
+          "doc": "The format the pass views the texture in, such as the sRGB alias of a UNORM one; the texture\u0027s own format when it is KE_GPU_TEXTURE_FORMAT_INVALID."
+        },
+        {
+          "name": "load",
+          "type": "ke_render_graph_load",
+          "tags": [],
+          "doc": "For an attachment."
+        },
+        {
+          "name": "clear_color",
+          "type": "float[4]",
+          "tags": [],
+          "doc": "The colour a cleared colour attachment starts with."
+        },
+        {
+          "name": "clear_depth",
+          "type": "float",
+          "tags": [],
+          "doc": "The depth a cleared depth attachment starts with."
+        },
+        {
+          "name": "clear_stencil",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "The stencil a cleared depth attachment starts with."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_pass_desc",
+      "doc": "A pass of the frame.",
+      "tags": [
+        "bag"
+      ],
+      "fields": [
+        {
+          "name": "name",
+          "type": "const char *",
+          "tags": [
+            "utf8"
+          ],
+          "doc": "Shown by capture and validation tools; copied by the call."
+        },
+        {
+          "name": "type",
+          "type": "ke_render_graph_pass_type",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "queue",
+          "type": "ke_render_graph_queue",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "injection_point",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": "Orders the passes: a use refers to the last write of its resource by a pass earlier in the order of injection point, then declaration, and passes no dependency orders run with the lower point first."
+        },
+        {
+          "name": "side_effect",
+          "type": "bool",
+          "tags": [],
+          "doc": "Whether the pass runs even when nothing it writes is read."
+        },
+        {
+          "name": "uses",
+          "type": "const ke_render_graph_use *",
+          "tags": [
+            "array_of:use_count"
+          ],
+          "doc": "Copied by the call."
+        },
+        {
+          "name": "use_count",
+          "type": "uint32_t",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "record",
+          "type": "ke_render_graph_record_fn",
+          "tags": [
+            "closure:user"
+          ],
+          "doc": "Records the pass."
+        },
+        {
+          "name": "condition",
+          "type": "ke_render_graph_condition_fn",
+          "tags": [
+            "closure:user",
+            "optional"
+          ],
+          "doc": "NULL runs the pass every frame."
+        },
+        {
+          "name": "readback",
+          "type": "ke_render_graph_readback_fn",
+          "tags": [
+            "closure:user",
+            "optional"
+          ],
+          "doc": "Required when a use is READBACK."
+        },
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded to record, condition and readback."
+        }
+      ]
+    }
+  ],
+  "vtables": [
+    {
+      "name": "ke_render_graph_ctx",
+      "doc": "What a pass\u0027s record sees: what it records into and the resources it declared.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "encoder",
+          "returns": "ke_gpu_command_encoder *",
+          "tags": [],
+          "doc": "The encoder a copy pass records into.",
+          "return_doc": "Valid during the record call; NULL in a raster or compute pass.",
+          "params": [],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "render_pass",
+          "returns": "ke_gpu_render_pass *",
+          "tags": [],
+          "doc": "The render pass a raster pass records into, begun by the graph with the attachments the pass declared, loaded and cleared as declared, and ended by it after the record.",
+          "return_doc": "Valid during the record call; NULL in a compute or copy pass.",
+          "params": [],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "compute_pass",
+          "returns": "ke_gpu_compute_pass *",
+          "tags": [],
+          "doc": "The compute pass a compute pass records into, begun and ended by the graph.",
+          "return_doc": "Valid during the record call; NULL in a raster or copy pass.",
+          "params": [],
+          "return_tags": [
+            "borrowed"
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "texture",
+          "returns": "ke_gpu_texture",
+          "tags": [],
+          "doc": "The texture behind resource, which the pass declared.",
+          "return_doc": "The texture; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "texture_view",
+          "returns": "ke_gpu_texture_view",
+          "tags": [],
+          "doc": "The view of resource for the pass\u0027s use of it.",
+          "return_doc": "The view; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "buffer",
+          "returns": "ke_gpu_buffer",
+          "tags": [],
+          "doc": "The buffer behind resource, which the pass declared.",
+          "return_doc": "The buffer; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        },
+        {
+          "name": "buffer_size",
+          "returns": "uint64_t",
+          "tags": [],
+          "doc": "The size in bytes of the buffer behind resource, which the pass declared.",
+          "return_doc": "The size; zero for a resource the pass did not declare.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph_ctx *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph",
+      "doc": "The passes of a frame and the resources between them, declared each frame, then compiled into an order, a lifetime for every resource and the transitions between uses, and executed.",
+      "tags": [
+        "interface"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "begin_frame",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Starts declaring a frame whose output is output_width by output_height; what the previous frame declared is forgotten, its exports kept.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a zero size; KE_RESULT_NOT_SUPPORTED while the previous frame executes.",
+          "params": [
+            {
+              "name": "output_width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "output_height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "create_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a texture made for this frame.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a desc with no meaning; KE_RESULT_NOT_SUPPORTED for a texture the graph cannot make, such as one whose mips it would generate; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_render_graph_texture_desc *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Read during the call."
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "create_buffer",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a buffer made for this frame.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a zero size; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_render_graph_buffer_desc *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Read during the call."
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "create_token",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a token, which orders the passes that use it and holds nothing.",
+          "return_doc": "KE_OK; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "name",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "Copied by the call."
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "import_texture",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a texture made outside the graph, such as the swapchain\u0027s, which the frame leaves in the state of final_usage.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an invalid texture or view; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "texture",
+              "type": "ke_gpu_texture",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "view",
+              "type": "ke_gpu_texture_view",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "format",
+              "type": "ke_gpu_texture_format",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "width",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "height",
+              "type": "uint32_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "final_usage",
+              "type": "ke_render_graph_usage",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "import_buffer",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a buffer made outside the graph.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for an invalid buffer; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "buffer",
+              "type": "ke_gpu_buffer",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "size",
+              "type": "uint64_t",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "export_resource",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Keeps resource past this frame, as it is once the frame executed, such as a history buffer; a later frame declares it again with import_export.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a token or an unknown resource; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "resource",
+              "type": "ke_render_graph_resource",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_export",
+              "type": "ke_render_graph_export *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the kept resource."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "import_export",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares in this frame a resource an earlier frame exported.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND for an export released or never made; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "exported",
+              "type": "ke_render_graph_export",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "out_resource",
+              "type": "ke_render_graph_resource *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the resource; KE_RENDER_GRAPH_RESOURCE_INVALID on failure."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "release_export",
+          "returns": "void",
+          "tags": [],
+          "doc": "Frees a kept resource once no executing frame uses it.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "exported",
+              "type": "ke_render_graph_export",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "add_pass",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Declares a pass.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null record, an unknown resource, a READBACK use without a readback or a usage the resource\u0027s kind has no meaning for; KE_RESULT_NOT_SUPPORTED for a resource or a usage the graph does not offer, such as an acceleration structure without ray tracing; KE_RESULT_OUT_OF_MEMORY.",
+          "params": [
+            {
+              "name": "desc",
+              "type": "const ke_render_graph_pass_desc *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "Read during the call."
+            },
+            {
+              "name": "out_pass",
+              "type": "ke_render_graph_pass *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the pass."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "compile",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Orders the passes by their dependencies, then by injection point and declaration; drops every pass whose writes nothing reads unless it has a side effect, writes an export or an imported resource; decides when each resource is made and freed and the transition before each use.",
+          "return_doc": "KE_OK; KE_RESULT_GENERAL for a cycle, the passes named in the log; the code of a failed condition.",
+          "params": [],
+          "receiver": "ke_render_graph *"
+        },
+        {
+          "name": "execute",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Records the compiled passes and submits them in order.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_SUPPORTED before compile; the code of the device that refused a resource.",
+          "params": [
+            {
+              "name": "out_completion",
+              "type": "ke_completion **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the frame\u0027s execution, which carries the first failure of a record; the caller releases it."
+            }
+          ],
+          "receiver": "ke_render_graph *"
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_handle",
+      "doc": null,
+      "tags": [
+        "owner"
+      ],
+      "fields": [
+        {
+          "name": "ref",
+          "type": "ke_render_graph *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "destroy",
+          "returns": "void",
+          "tags": [],
+          "doc": null,
+          "return_doc": null,
+          "params": [],
+          "receiver": "ke_render_graph *"
+        }
+      ]
+    }
+  ],
+  "functions": [],
+  "callbacks": [
+    {
+      "name": "ke_gpu_pipeline_ready_func",
+      "returns": "void",
+      "doc": "Receives a pipeline compiled asynchronously.",
+      "lanes": [
+        {
+          "name": "result",
+          "type": "ke_result",
+          "tags": [],
+          "doc": "KE_OK, or the code of the compile that failed, whose reason is logged."
+        },
+        {
+          "name": "pso",
+          "type": "ke_gpu_pipeline",
+          "tags": [],
+          "doc": "The pipeline; KE_GPU_INVALID_HANDLE when the compile failed."
+        },
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from create_render_pipeline_async."
+        }
+      ]
+    },
+    {
+      "name": "ke_gpu_buffer_mapped_func",
+      "returns": "void",
+      "doc": "Receives the outcome of mapping a buffer for reading.",
+      "lanes": [
+        {
+          "name": "result",
+          "type": "ke_result",
+          "tags": [],
+          "doc": "KE_OK when the range is readable through map_buffer until unmap_buffer, or the code of the mapping that failed."
+        },
+        {
+          "name": "buffer",
+          "type": "ke_gpu_buffer",
+          "tags": [],
+          "doc": "The buffer that was mapped."
+        },
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from map_buffer_read."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_record_fn",
+      "returns": "ke_result",
+      "doc": "Records a pass, possibly on another thread and after add_pass returned, through ctx only.",
+      "lanes": [
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from the pass\u0027s desc."
+        },
+        {
+          "name": "arg2",
+          "type": "ke_render_graph_ctx *",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_condition_fn",
+      "returns": "bool",
+      "doc": "Whether a pass runs this frame; asked once, at compile.",
+      "lanes": [
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from the pass\u0027s desc."
+        }
+      ]
+    },
+    {
+      "name": "ke_render_graph_readback_fn",
+      "returns": "void",
+      "doc": "Receives the bytes of a resource the pass declared READBACK, once the frame retires.",
+      "lanes": [
+        {
+          "name": "user",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from the pass\u0027s desc."
+        },
+        {
+          "name": "arg2",
+          "type": "ke_render_graph_resource",
+          "tags": [],
+          "doc": null
+        },
+        {
+          "name": "bytes",
+          "type": "const void *",
+          "tags": [
+            "borrowed",
+            "array_of:size"
+          ],
+          "doc": "Valid during the call."
+        },
+        {
+          "name": "arg4",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
+        }
+      ]
+    }
+  ],
+  "id_types": [
+    "ke_render_graph_resource",
+    "ke_render_graph_pass",
+    "ke_render_graph_export"
+  ],
+  "foreign_id_types": [],
+  "type_aliases": {
+    "ke_gpu_texture_aspect": "uint32_t",
+    "ke_gpu_texture_usage": "uint32_t",
+    "ke_gpu_buffer_usage": "uint32_t",
+    "ke_gpu_shader_stage": "uint32_t",
+    "ke_gpu_buffer": "uint64_t",
+    "ke_gpu_texture": "uint64_t",
+    "ke_gpu_texture_view": "uint64_t",
+    "ke_gpu_sampler": "uint64_t",
+    "ke_gpu_shader_module": "uint64_t",
+    "ke_gpu_pipeline": "uint64_t",
+    "ke_gpu_bind_group_layout": "uint64_t",
+    "ke_gpu_bind_group": "uint64_t",
+    "ke_gpu_queue": "uint64_t",
+    "ke_gpu_pipeline_ready_func": "void (*)(ke_result, ke_gpu_pipeline, void *)",
+    "ke_gpu_buffer_mapped_func": "void (*)(ke_result, ke_gpu_buffer, void *)",
+    "ke_render_graph_resource": "uint32_t",
+    "ke_render_graph_pass": "uint32_t",
+    "ke_render_graph_export": "uint64_t",
+    "ke_render_graph_record_fn": "ke_result (*)(void *, ke_render_graph_ctx *)",
+    "ke_render_graph_condition_fn": "bool (*)(void *)",
+    "ke_render_graph_readback_fn": "void (*)(void *, ke_render_graph_resource, const void *, size_t)"
+  },
+  "constants": [
+    {
+      "name": "KE_RENDER_GRAPH_RESOURCE_INVALID",
+      "type": "unsigned int",
+      "value": "0",
+      "doc": "The null resource."
+    }
+  ]
+}

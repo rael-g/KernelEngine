@@ -38,6 +38,8 @@ pub const ke_module_targets = extern struct {
     update: ?*abi_schedule.c.ke_schedule = std.mem.zeroes(?*abi_schedule.c.ke_schedule),
     /// Runs once, when the loop shuts down.
     shutdown: ?*abi_schedule.c.ke_schedule = std.mem.zeroes(?*abi_schedule.c.ke_schedule),
+    /// Runs over the render world once per extraction; NULL where there is none.
+    render: ?*abi_schedule.c.ke_schedule = std.mem.zeroes(?*abi_schedule.c.ke_schedule),
     /// In startup.
     startup_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
     /// In pre_update.
@@ -54,6 +56,15 @@ pub const ke_module_targets = extern struct {
     post_update_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
     /// In shutdown.
     shutdown_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
+    /// In render, first: where the frame begins.
+    render_begin_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
+    /// In render, after render_begin_set: where uploads run and passes make what they hand to
+    /// others.
+    render_prepare_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
+    /// In render, after render_prepare_set: where passes are declared.
+    render_queue_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
+    /// In render, after render_queue_set: where the frame is executed and presented.
+    render_submit_set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
 };
 
 /// A piece that fits into a world by registering its systems in the standard schedules.

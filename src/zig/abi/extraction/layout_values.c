@@ -3,6 +3,7 @@
 const unsigned long long layout_values[] = {
     sizeof(ke_extraction),
     offsetof(ke_extraction, handle),
+    offsetof(ke_extraction, sync_component),
     offsetof(ke_extraction, extract_copy),
     offsetof(ke_extraction, extract_interpolate),
     offsetof(ke_extraction, extract_custom),

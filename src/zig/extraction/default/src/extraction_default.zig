@@ -75,6 +75,8 @@ const State = struct {
     copies: std.ArrayList(Copy) = .empty,
     interps: std.ArrayList(*Interp) = .empty,
     customs: std.ArrayList(Custom) = .empty,
+    sync_components: std.ArrayList(Cid) = .empty,
+    sync_queries: std.ArrayList(e.ke_query_id) = .empty,
     history: ?*abi_schedule.c.ke_schedule = null,
     history_set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
 };
@@ -148,6 +150,7 @@ fn describe(s: *State, main_cid: Cid, render_cid: Cid) R.Error!struct { size: us
 /// Slot `extract_copy`.
 fn extractCopy(self: ?*x.ke_extraction, main_cid: Cid, render_cid: Cid) callconv(.c) Result {
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    for (s.copies.items) |c| if (c.main == main_cid and c.render == render_cid) return R.ok;
     const d = describe(s, main_cid, render_cid) catch |err| return R.code(err);
     s.copies.append(gpa, .{ .main = main_cid, .render = render_cid, .size = d.size, .entity_offsets = d.offsets }) catch {
         gpa.free(d.offsets);
@@ -210,6 +213,22 @@ fn mainEntity(self: ?*x.ke_extraction, render_entity: Entity, out_entity: ?*Enti
     return R.ok;
 }
 
+/// Slot `sync_component`: a query of the component, registered once.
+fn syncComponent(self: ?*x.ke_extraction, main_cid: Cid) callconv(.c) Result {
+    const s = stateOf(self) orelse return R.code(error.InvalidArgument);
+    if (std.mem.indexOfScalar(Cid, s.sync_components.items, main_cid) != null) return R.ok;
+    const query = tagQuery(s.main, main_cid) catch |err| {
+        log.warn("extraction: component {d} cannot be synced", .{main_cid});
+        return R.code(err);
+    };
+    s.sync_components.append(gpa, main_cid) catch return R.code(error.OutOfMemory);
+    s.sync_queries.append(gpa, query) catch {
+        _ = s.sync_components.pop();
+        return R.code(error.OutOfMemory);
+    };
+    return R.ok;
+}
+
 fn unpair(s: *State, main_entity: Entity) void {
     const r = s.to_render.fetchRemove(main_entity) orelse return;
     _ = s.to_main.remove(r.value);
@@ -254,6 +273,15 @@ fn extractAll(s: *State, alpha: f32) R.Error!void {
 
     scratch.clearRetainingCapacity();
     try matched(s.main, s.synced_query, &scratch);
+    for (s.sync_queries.items) |query| try matched(s.main, query, &scratch);
+    var wanted: std.AutoHashMapUnmanaged(Entity, void) = .empty;
+    defer wanted.deinit(gpa);
+    for (scratch.items) |entity| wanted.put(gpa, entity, {}) catch return error.OutOfMemory;
+    var gone: std.ArrayList(Entity) = .empty;
+    defer gone.deinit(gpa);
+    var paired = s.to_render.keyIterator();
+    while (paired.next()) |entity| if (!wanted.contains(entity.*)) gone.append(gpa, entity.*) catch return error.OutOfMemory;
+    for (gone.items) |entity| unpair(s, entity);
     var fresh: std.ArrayList(Entity) = .empty;
     defer fresh.deinit(gpa);
     for (scratch.items) |entity| {
@@ -426,6 +454,8 @@ fn destroy(self: ?*x.ke_extraction) callconv(.c) void {
     for (s.interps.items) |i| freeInterp(i);
     s.interps.deinit(gpa);
     s.customs.deinit(gpa);
+    s.sync_components.deinit(gpa);
+    s.sync_queries.deinit(gpa);
     gpa.destroy(s);
 }
 
@@ -455,6 +485,7 @@ fn create(main: *Ecs, render: *Ecs, scheduler: *abi_scheduler.c.ke_scheduler, re
     errdefer gpa.destroy(s);
     s.* = .{
         .api = .{
+            .sync_component = syncComponent,
             .extract_copy = extractCopy,
             .extract_interpolate = extractInterpolate,
             .extract_custom = extractCustom,

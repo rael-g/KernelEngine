@@ -1,8 +1,8 @@
-//! The transparent forward pass: the render-phase system that draws the blended meshes over a copy
-//! of the frame's color, at the chain's transparent stage. It also owns the creation and teardown of that pass, behind the one
-//! factory it exports.
+//! The transparent forward pass: the system that declares, at the transparent stage, a copy of the
+//! frame's color and the pass drawing the blended meshes over that color, sampling the copy for what
+//! lies behind them. It also owns the creation and teardown of that pass, behind the one factory it
+//! exports.
 
-const abi_framework = @import("abi_framework");
 const abi_asset_resolver = @import("abi_asset_resolver");
 const abi_render_components = @import("abi_render_components");
 const abi_render_gpu = @import("abi_render_gpu");
@@ -13,18 +13,23 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const zm = @import("zmath");
 const abi_ecs = @import("abi_ecs");
+const abi_module = @import("abi_module");
 const abi_render = @import("abi_render");
 const abi_render_context = @import("abi_render_context");
 const abi_render_forward_factory = @import("abi_render_forward_factory");
+const abi_render_frame = @import("abi_render_frame");
+const abi_render_graph = @import("abi_render_graph");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
+const pass_systems = @import("pass_systems");
 const R = @import("result").Result(.{});
 
 const heap = @import("heap");
 const gpa = heap.gpa;
 const Features = @import("feature_bindings");
 const Groups = @import("material_pass_groups");
+const rg = abi_render_graph.c;
 
 /// One draw's transform record, uploaded into that draw's slot of `objects`.
 const PerObject = extern struct {
@@ -45,8 +50,8 @@ fn drawFartherFirst(_: void, a: Draw, b: Draw) bool {
     return a.view_distance_sq > b.view_distance_sq;
 }
 
-/// Called once per frame by `system` with the segments of its mesh query. Returns how many entries
-/// of `out` it filled. Those entries are sorted farthest first, and `system` records them in that
+/// Called once per frame by `queueSystem` with the segments of its mesh query. Returns how many entries
+/// of `out` it filled. Those entries are sorted farthest first, and `record` issues them in that
 /// order, so the blend composites back to front.
 fn collectDraws(
     core: *abi_render.c.ke_render_service,
@@ -77,28 +82,27 @@ fn collectDraws(
 
 const Objects = @import("object_uniforms").ObjectUniforms(PerObject);
 
-/// The state of one pass. `ke_render_forward_create` allocates it on the heap and `destroyHandle`
-/// frees it, and nothing else takes ownership. `core` and `device` are borrowed for its
-/// whole life and never released here. The GPU objects are made by `setup` and released by
-/// `destroyModule`, and `frame_set` is replaced whenever the environment cubemap changes or
-/// the declared targets are recreated.
-/// Several fields point into the struct itself, so it must not be moved after `setup`.
-/// `destroyHandle` unregisters the system the factory registered before it frees the module.
+/// One draw `queueSystem` prepared and `record` issues.
+const Prepared = struct {
+    pipeline: abi_asset_resolver.c.ke_gpu_pipeline,
+    material: abi_asset_resolver.c.ke_render_material_binding,
+    vbo: abi_asset_resolver.c.ke_gpu_buffer,
+    ibo: abi_asset_resolver.c.ke_gpu_buffer,
+    index_count: u32,
+    slot: u32,
+};
+
+/// The state of one pass. `ke_render_forward_create` allocates it and `destroyHandle` frees it after
+/// detaching `systems`. `color`, `copy`, `features`, `env_cubemap` and `prepared` are what
+/// `queueSystem` declared this frame, read by the two records; `frame_set` is replaced every frame,
+/// since the views it binds are the graph's for that frame.
 const ForwardModule = struct {
-    runtime: *abi_runtime.c.ke_runtime = undefined,
-    system: abi_runtime.c.ke_system_id = 0,
+    systems: pass_systems.Systems(1) = undefined,
     core: *abi_render.c.ke_render_service = undefined,
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
+    frame: *abi_render_frame.c.ke_render_frame = undefined,
 
     ibl_enabled: bool = true,
-
-    mesh_cid: abi_asset_resolver.c.ke_component_id = undefined,
-    world_transform_cid: abi_asset_resolver.c.ke_component_id = undefined,
-    camera_cid: abi_asset_resolver.c.ke_component_id = undefined,
-    skybox_cid: abi_asset_resolver.c.ke_component_id = undefined,
-
-    shadow: abi_render.c.ke_render_shadow_resources = undefined,
-    clusters: abi_render.c.ke_render_cluster_resources = undefined,
 
     pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
     attrs: [4]abi_render_gpu.c.ke_gpu_vertex_attribute = undefined,
@@ -107,22 +111,22 @@ const ForwardModule = struct {
     frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     objects: ?Objects = null,
     env_cubemap: abi_render_handles.c.ke_texture_handle = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE },
-    resource_generation: u32 = 0,
-    opaque_view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
+    color: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
+    copy: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
+    features: Features.Published = undefined,
 
     draws: std.ArrayList(Draw) = .empty,
+    prepared: std.ArrayList(Prepared) = .empty,
 
-    io: abi_render.c.ke_render_pass_io = std.mem.zeroes(abi_render.c.ke_render_pass_io),
-    access: [10]abi_runtime.c.ke_component_access = undefined,
-    access_count: u32 = 0,
-    queries_terms: [5]abi_runtime.c.ke_component_access = undefined,
-    queries: [3]abi_runtime.c.ke_query_decl = undefined,
+    access: [1]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries_terms: [5]abi_ecs.c.ke_ecs_query_term = undefined,
+    queries: [3]abi_ecs.c.ke_ecs_query_desc = undefined,
 
     /// Loads the vertex and fragment shaders of the pass for the material shader named `shader`
     /// and stores them in `pipeline_template`. `setup` calls it for the default material, and
-    /// `system` calls it for each draw before it fetches that draw's pipeline. Returns false when
+    /// `queueSystem` calls it for each draw before it fetches that draw's pipeline. Returns false when
     /// a load fails or the name does not fit the buffer it is formatted into. It reports nothing:
-    /// `setup` turns the false into an error, and `system` skips the draw.
+    /// `setup` turns the false into an error, and `queueSystem` skips the draw.
     fn resolvePipeline(fwd: *ForwardModule, shader: [*c]const u8) bool {
         var name_buf: [MAX_SHADER_QUALIFIED]u8 = undefined;
         const name = std.fmt.bufPrintZ(&name_buf, "{s}.{s}", .{ std.mem.span(shader), PASS_NAME }) catch return false;
@@ -146,144 +150,170 @@ inline fn moduleOf(user: ?*anyopaque) *ForwardModule {
     return @alignCast(@ptrCast(user.?));
 }
 
-/// Replaces `frame_set` with a set over `opaque_view`, sampled as "hdr_opaque", and the feature
-/// bindings, whose environment is the black cube when `ibl_enabled` is false. `setup` calls it once
-/// over the white texture, and `system` calls it when the skybox's cubemap or the color source of
-/// the link changes, or the service recreated its declared targets. The set it replaces is
-/// destroyed. A creation failure is logged, and `frame_set` is then invalid.
-fn rebuildFrameSet(fwd: *ForwardModule) void {
-    const core = fwd.core;
-    const binder = fwd.groups.binder;
-    const env_view = core.*.texture_view.?(core, fwd.env_cubemap);
-    const black_cube_view = core.*.texture_view.?(core, .{ .bits = abi_render_handles.c.KE_HANDLE_NONE });
-    const ibl_view = if (fwd.ibl_enabled) env_view else black_cube_view;
-
-    var bindings: [1 + Features.count]abi_render_gpu.c.ke_render_shader_binding = undefined;
-    bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = fwd.opaque_view, .sampler = 0 };
-    Features.fill(core, ibl_view, fwd.shadow, fwd.clusters, bindings[1..]);
-
-    binder.destroy_set.?(binder, fwd.frame_set);
-    fwd.resource_generation = core.*.resource_generation.?(core);
-    if (binder.create_set.?(binder, fwd.groups.layout, null, "forward.frame_set", &bindings, bindings.len, &fwd.frame_set) != R.ok)
-        log.err("transparent-forward frame set creation failed", .{});
+/// Records the copy of the frame's color the transparent draws sample.
+fn recordCopy(user: ?*anyopaque, ctx: ?*rg.ke_render_graph_ctx) callconv(.c) abi_result.c.ke_result {
+    const fwd = moduleOf(user);
+    fwd.core.*.blit.?(fwd.core, @ptrCast(ctx.?.render_pass.?(ctx)), ctx.?.texture_view.?(ctx, fwd.color), fwd.frame.color_format.?(fwd.frame));
+    return R.ok;
 }
 
-/// The render-phase system that `ke_render_forward_create` registers. It
-/// fails as out of memory when the draw list cannot grow, and with the code of the call that
-/// failed when the per-draw uniforms cannot. Once
-/// `begin_pass` has returned a pass context, every path reaches `end_pass`. A scene without a
-/// camera does nothing. Otherwise it draws over a copy of the frame's color, whose source the
-/// blended materials sample for what lies behind them, and it keeps `frame_set` matching the sky
-/// and that source. The view and the
-/// projection come from the frame globals the service holds. A draw whose geometry or shader is missing is skipped.
-fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+/// Records the blended draws farthest first. The frame set binds the copy as "hdr_opaque" and the
+/// feature bindings, whose environment is the black cube when `ibl_enabled` is false; a set that
+/// cannot be created fails with the binder's code.
+fn record(user: ?*anyopaque, ctx_in: ?*rg.ke_render_graph_ctx) callconv(.c) abi_result.c.ke_result {
     const fwd = moduleOf(user);
     const core = fwd.core;
+    const ctx = ctx_in.?;
+    const binder = fwd.groups.binder;
+    const env_view = core.*.texture_view.?(core, if (fwd.ibl_enabled) fwd.env_cubemap else .{ .bits = abi_render_handles.c.KE_HANDLE_NONE });
+    var bindings: [1 + Features.count]abi_render_gpu.c.ke_render_shader_binding = undefined;
+    bindings[0] = .{ .name = "hdr_opaque", .buffer = 0, .buffer_offset = 0, .buffer_size = 0, .texture_view = ctx.texture_view.?(ctx, fwd.copy), .sampler = 0 };
+    Features.fill(core, ctx, env_view, fwd.features, bindings[1..]);
+    binder.destroy_set.?(binder, fwd.frame_set);
+    const made = binder.create_set.?(binder, fwd.groups.layout, null, "forward.frame_set", &bindings, bindings.len, &fwd.frame_set);
+    if (made != R.ok) {
+        log.warn("forward pass: frame set creation failed", .{});
+        return made;
+    }
+    const rp: [*c]abi_render_gpu.c.ke_gpu_render_pass = @ptrCast(ctx.render_pass.?(ctx));
+    binder.bind_render_set.?(binder, rp, fwd.frame_set, null, 0);
+    const objects = &fwd.objects.?;
+    for (fwd.prepared.items) |d| {
+        rp.*.set_pipeline.?(rp, d.pipeline);
+        fwd.groups.bindMaterial(rp, d.material);
+        objects.bind(rp, d.slot);
+        rp.*.set_vertex_buffer.?(rp, 0, d.vbo, 0);
+        rp.*.set_index_buffer.?(rp, d.ibo, abi_render_gpu.c.KE_GPU_INDEX_FORMAT_UINT16, 0);
+        rp.*.draw_indexed.?(rp, d.index_count, 1, 0, 0, 0);
+    }
+    return R.ok;
+}
+
+fn addPass(graph: *rg.ke_render_graph, name: [*:0]const u8, uses: []const rg.ke_render_graph_use, recorder: rg.ke_render_graph_record_fn, fwd: *ForwardModule) abi_result.c.ke_result {
+    var desc = std.mem.zeroes(rg.ke_render_graph_pass_desc);
+    desc.name = name;
+    desc.type = rg.KE_RENDER_GRAPH_PASS_RASTER;
+    desc.injection_point = abi_render.c.KE_RENDER_STAGE_TRANSPARENT;
+    desc.uses = uses.ptr;
+    desc.use_count = @intCast(uses.len);
+    desc.record = recorder;
+    desc.user = fwd;
+    var pass: rg.ke_render_graph_pass = 0;
+    return graph.add_pass.?(graph, &desc, &pass);
+}
+
+/// "render.forward_transparent", in the render queue set. A frame not being declared, a render
+/// world without a camera, or one with no blended mesh to draw, gets nothing. Otherwise it prepares
+/// the draws, writing each one's matrices into the next slot of the shared uniform buffer and
+/// skipping one whose geometry or shader is missing, then declares at KE_RENDER_STAGE_TRANSPARENT
+/// the copy of the frame's color and the pass drawing over the color, tested against the depth. It
+/// fails as out of memory when a list cannot grow, and with the code of the call that failed
+/// otherwise.
+fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+    const fwd = moduleOf(user);
+    const core = fwd.core;
+    const frame = fwd.frame;
+    if (!frame.live.?(frame)) return R.ok;
 
     var cam_segc: usize = 0;
     const cam_segs = ctx.?.view.?(ctx, 0, &cam_segc);
     if (cam_segc == 0 or cam_segs.?[0].count == 0) return R.ok;
-
     const cam: *const abi_render_components.c.ke_camera_component = @ptrCast(@alignCast(cam_segs.?[0].columns.?[0]));
-
-    const pc = core.*.begin_pass.?(core, &fwd.io);
-    if (pc == null) return R.ok;
 
     const globals = core.*.frame_globals.?(core);
     const view = zm.loadMat(globals.?.view[0..]);
     const view_proj = zm.loadMat(globals.?.view_proj[0..]);
 
-    var sky_segc: usize = 0;
-    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
-    const want_env: abi_render_handles.c.ke_texture_handle = if (sky_segc != 0 and sky_segs.?[0].count != 0)
-        (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
-    else
-        .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
-    const opaque_view = pc.?.color_source.?(pc);
-    if (want_env.bits != fwd.env_cubemap.bits or fwd.frame_set == abi_render_gpu.c.KE_RENDER_BINDING_INVALID or
-        fwd.resource_generation != core.*.resource_generation.?(core) or opaque_view != fwd.opaque_view)
-    {
-        fwd.env_cubemap = want_env;
-        fwd.opaque_view = opaque_view;
-        rebuildFrameSet(fwd);
-    }
-
     var segc: usize = 0;
     const segs = ctx.?.view.?(ctx, 2, &segc);
-    const objects = &fwd.objects.?;
+    if (segc == 0) return R.ok;
     if (!collectDraws(core, cam, view, segs.?, segc, &fwd.draws)) {
         log.warn("forward pass: draw list allocation failed", .{});
-        core.*.end_pass.?(core, pc);
         return R.code(error.OutOfMemory);
     }
+    const objects = &fwd.objects.?;
     const grown = objects.ensure(@intCast(fwd.draws.items.len));
-    if (grown != R.ok) {
-        core.*.end_pass.?(core, pc);
-        return grown;
-    }
-
-    const rp = pc.?.begin_render.?(pc);
-    fwd.groups.binder.bind_render_set.?(fwd.groups.binder, rp, fwd.frame_set, null, 0);
-
-    for (fwd.draws.items, 0..) |draw, i| {
-        const d: u32 = @intCast(i);
+    if (grown != R.ok) return grown;
+    fwd.prepared.clearRetainingCapacity();
+    var slot: u32 = 0;
+    for (fwd.draws.items) |draw| {
         var vbo: abi_asset_resolver.c.ke_gpu_buffer = 0;
         var ibo: abi_asset_resolver.c.ke_gpu_buffer = 0;
         var idx_count: u32 = 0;
         if (!core.*.mesh_buffers.?(core, draw.mesh.mesh, &vbo, &ibo, &idx_count)) continue;
-
         if (!fwd.resolvePipeline(core.*.material_shader.?(core, draw.mesh.material))) continue;
-        rp.?.set_pipeline.?(rp, core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template));
-
         const model = zm.loadMat(draw.world.matrix.m[0..]);
-        const mvp = zm.mul(model, view_proj);
         var u: PerObject = undefined;
-        zm.storeMat(u.mvp[0..], mvp);
+        zm.storeMat(u.mvp[0..], zm.mul(model, view_proj));
         zm.storeMat(u.model[0..], model);
-        const offset: u32 = Objects.offset(d);
-        core.*.upload.?(core, objects.buffer, offset, &u, @sizeOf(PerObject));
-
-        fwd.groups.bindMaterial(rp, core.*.material_binding.?(core, draw.mesh.material));
-        objects.bind(rp, d);
-        rp.?.set_vertex_buffer.?(rp, 0, vbo, 0);
-        rp.?.set_index_buffer.?(rp, ibo, abi_render_gpu.c.KE_GPU_INDEX_FORMAT_UINT16, 0);
-        rp.?.draw_indexed.?(rp, idx_count, 1, 0, 0, 0);
+        core.*.upload.?(core, objects.buffer, Objects.offset(slot), &u, @sizeOf(PerObject));
+        fwd.prepared.append(gpa, .{
+            .pipeline = core.*.get_or_create_pipeline.?(core, &fwd.pipeline_template),
+            .material = core.*.material_binding.?(core, draw.mesh.material),
+            .vbo = vbo,
+            .ibo = ibo,
+            .index_count = idx_count,
+            .slot = slot,
+        }) catch return R.code(error.OutOfMemory);
+        slot += 1;
     }
-    rp.?.end.?(rp);
-    core.*.end_pass.?(core, pc);
-    return R.ok;
+    if (fwd.prepared.items.len == 0) return R.ok;
+
+    var sky_segc: usize = 0;
+    const sky_segs = ctx.?.view.?(ctx, 1, &sky_segc);
+    fwd.env_cubemap = if (sky_segc != 0 and sky_segs.?[0].count != 0)
+        (@as(*const abi_render_components.c.ke_skybox_component, @ptrCast(@alignCast(sky_segs.?[0].columns.?[0])))).cubemap
+    else
+        .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
+    fwd.features = Features.find(frame);
+    fwd.color = frame.color.?(frame);
+
+    const graph = frame.graph.?(frame).?;
+    var desc = std.mem.zeroes(rg.ke_render_graph_texture_desc);
+    desc.name = "forward.opaque";
+    desc.format = frame.color_format.?(frame);
+    desc.size_class = rg.KE_RENDER_GRAPH_SIZE_OUTPUT_RELATIVE;
+    desc.scale_x = 1.0;
+    desc.scale_y = 1.0;
+    desc.mip_levels = 1;
+    desc.array_layers = 1;
+    desc.samples = 1;
+    const made = graph.create_texture.?(graph, &desc, &fwd.copy);
+    if (made != R.ok) return made;
+
+    var copy_uses = std.mem.zeroes([2]rg.ke_render_graph_use);
+    copy_uses[0].resource = fwd.color;
+    copy_uses[0].usage = rg.KE_RENDER_GRAPH_USAGE_SAMPLED;
+    copy_uses[1].resource = fwd.copy;
+    copy_uses[1].usage = rg.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT;
+    copy_uses[1].load = rg.KE_RENDER_GRAPH_LOAD_DONT_CARE;
+    const copied = addPass(graph, "forward.opaque", &copy_uses, recordCopy, fwd);
+    if (copied != R.ok) return copied;
+
+    var uses = std.mem.zeroes([3 + Features.count]rg.ke_render_graph_use);
+    uses[0].resource = fwd.color;
+    uses[0].usage = rg.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT;
+    uses[1].resource = frame.depth.?(frame);
+    uses[1].usage = rg.KE_RENDER_GRAPH_USAGE_DEPTH_READ;
+    uses[2].resource = fwd.copy;
+    uses[2].usage = rg.KE_RENDER_GRAPH_USAGE_SAMPLED;
+    const feature_count = Features.uses(fwd.features, uses[3..]);
+    return addPass(graph, "render.forward_transparent", uses[0 .. 3 + feature_count], record, fwd);
 }
 
 /// Called once by `ke_render_forward_create` on a module that still has its default fields. It
-/// copies the group names, joins the chain at the transparent stage, builds the layouts
-/// and the pipeline template, resolves the default material shader and requests one pipeline from
-/// it, creates the uniform buffers, and fills the pass io, the access list and the queries. On
-/// failure it leaves the handles it had already made in the module, where `destroyModule` finds and releases them.
-/// Joining, it tells the runtime that the chain, not the runtime, orders the writers of the
-/// frame's color.
-fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, shadow: *const abi_render.c.ke_render_shadow_resources, clusters: *const abi_render.c.ke_render_cluster_resources, config: *const abi_render_forward_factory.c.ke_render_forward_config) R.Error!void {
+/// builds the layouts and the pipeline template in the frame's color format, resolves the default
+/// material shader and requests one pipeline from it, creates the uniform buffers, and fills the
+/// access list and the queries over the render world. On failure it leaves the handles it had
+/// already made in the module, where `destroyModule` finds and releases them.
+fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, config: *const abi_render_forward_factory.c.ke_render_forward_config) R.Error!void {
     const core: *abi_render.c.ke_render_service = p.service.?;
     const dev: *abi_render_gpu.c.ke_gpu_device = p.device.?;
-    const mesh_cid = p.scene.?.component_ids.?(p.scene).?.mesh;
-    const world_transform_cid = p.scene.?.component_ids.?(p.scene).?.world_transform;
-    const camera_cid = p.scene.?.component_ids.?(p.scene).?.camera;
-    const skybox_cid = p.scene.?.component_ids.?(p.scene).?.skybox;
-    const frame_cid = p.frame.?.frame_cid.?(p.frame);
+    const ids = p.scene.?.render_component_ids.?(p.scene).?;
     fwd.core = core;
     fwd.device = dev;
+    fwd.frame = p.frame.?;
     fwd.ibl_enabled = config.ibl_enabled;
-    fwd.mesh_cid = mesh_cid;
-    fwd.world_transform_cid = world_transform_cid;
-    fwd.camera_cid = camera_cid;
-    fwd.skybox_cid = skybox_cid;
-    fwd.env_cubemap = .{ .bits = abi_render_handles.c.KE_HANDLE_NONE };
-
-    fwd.shadow = shadow.*;
-    fwd.clusters = clusters.*;
-    fwd.io.name = "render.forward_transparent";
-    fwd.io.depth = abi_render.c.KE_RENDER_DEPTH_TEST;
-    try R.check(core.*.join_chain.?(core, abi_render.c.KE_RENDER_STAGE_TRANSPARENT, abi_render.c.KE_RENDER_CHAIN_SAMPLE_OVER, &fwd.io.chain));
-    try R.check(p.runtime.?.declare_self_ordered.?(p.runtime, core.*.frame_color.?(core)));
 
     try R.check(fwd.groups.init(core.*.resource_binder.?(core).?, DEFAULT_MATERIAL_SHADER ++ "." ++ PASS_NAME));
 
@@ -321,7 +351,7 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, 
     pp.depth_stencil.depth_write_enabled = false;
     pp.depth_stencil.depth_compare = abi_render_gpu.c.KE_GPU_COMPARE_LESS_EQUAL;
     try R.check(fwd.groups.place(&pp));
-    pp.color_target_formats[0] = core.*.chain_format.?(core, abi_render.c.KE_RENDER_STAGE_TRANSPARENT);
+    pp.color_target_formats[0] = fwd.frame.color_format.?(fwd.frame);
     pp.color_target_count = 1;
     fwd.pipeline_template = pp;
 
@@ -337,127 +367,70 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, 
     fwd.objects = .{ .device = dev, .binder = fwd.groups.binder, .layout = fwd.groups.layout, .buffer_label = "forward.obj_uniform", .set_label = "forward.obj_set" };
     try R.check(fwd.objects.?.ensure(1));
 
-    fwd.opaque_view = core.*.texture_view.?(core, core.*.white_texture.?(core));
-    rebuildFrameSet(fwd);
-
-    var ac: u32 = 0;
-    fwd.access[ac] = .{ .cid = core.*.frame_color.?(core), .access = abi_runtime.c.KE_ACCESS_WRITE };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = core.*.frame_depth.?(core), .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = mesh_cid, .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = world_transform_cid, .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = camera_cid, .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = skybox_cid, .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    fwd.access[ac] = .{ .cid = frame_cid, .access = abi_runtime.c.KE_ACCESS_READ };
-    ac += 1;
-    for ([_]abi_asset_resolver.c.ke_component_id{ fwd.clusters.tag, fwd.shadow.map }) |read| {
-        if (read == abi_ecs.c.KE_COMPONENT_INVALID) continue;
-        fwd.access[ac] = .{ .cid = read, .access = abi_runtime.c.KE_ACCESS_READ };
-        ac += 1;
-    }
-    fwd.access_count = ac;
-
-    const rd = abi_runtime.c.KE_ACCESS_READ;
-    fwd.queries_terms = .{ .{ .cid = camera_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd }, .{ .cid = skybox_cid, .access = rd }, .{ .cid = mesh_cid, .access = rd }, .{ .cid = world_transform_cid, .access = rd } };
+    fwd.access = .{.{ .component = fwd.frame.frame_cid.?(fwd.frame), .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
+    const rd = abi_ecs.c.KE_ECS_ACCESS_READ;
+    fwd.queries_terms = .{ .{ .component = ids.*.camera, .access = rd }, .{ .component = ids.*.world_transform, .access = rd }, .{ .component = ids.*.skybox, .access = rd }, .{ .component = ids.*.mesh, .access = rd }, .{ .component = ids.*.world_transform, .access = rd } };
     fwd.queries = .{ .{ .terms = fwd.queries_terms[0..].ptr, .term_count = 2 }, .{ .terms = fwd.queries_terms[2..].ptr, .term_count = 1 }, .{ .terms = fwd.queries_terms[3..].ptr, .term_count = 2 } };
 }
 
-/// Gives the link back and releases the names, sets, buffers and layout the module holds, skipping
-/// any still absent, so it also works after a partial `setup`. It does not free the module, and it
-/// does not release the pipeline, which `setup` obtained from the render service.
+/// Releases the sets, buffers and layout the module holds, skipping any still absent, so it also
+/// works after a partial `setup`. It does not free the module, and it does not release the
+/// pipeline, which `setup` obtained from the render service.
 fn destroyModule(fwd: *ForwardModule) void {
-    if (fwd.io.chain != abi_render.c.KE_RENDER_CHAIN_NONE) fwd.core.*.leave_chain.?(fwd.core, fwd.io.chain);
     if (fwd.frame_set != abi_render_gpu.c.KE_RENDER_BINDING_INVALID) fwd.groups.binder.destroy_set.?(fwd.groups.binder, fwd.frame_set);
     if (fwd.objects) |*objects| objects.release();
     fwd.draws.deinit(gpa);
+    fwd.prepared.deinit(gpa);
     fwd.groups.release();
 }
 
-/// The `destroy` slot of the handle that `ke_render_forward_create` returns. It is the only place
-/// that frees a module created successfully.
-fn destroyHandle(self: ?*abi_render_forward_factory.c.ke_render_forward) callconv(.c) void {
-    const fwd: *ForwardModule = @ptrCast(@alignCast(self orelse return));
-    _ = fwd.runtime.unregister_system.?(fwd.runtime, fwd.system);
+/// The `destroy` slot of the handle that `ke_render_forward_create` returns: detaches the module and
+/// frees it with its GPU objects.
+fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
+    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast((self orelse return).handle));
+    const fwd: *ForwardModule = @fieldParentPtr("systems", systems);
+    pass_systems.Systems(1).detach(self);
     destroyModule(fwd);
     gpa.destroy(fwd);
 }
 
-/// Factory declared in the plugin's forward_create.h. On success the returned handle's `ref` is the
-/// module, and its `destroy` must be called to release it. On failure `ref` is null and the module
-/// and its GPU objects are released. A missing runtime, service or device fails as an invalid
-/// argument. A failure in `setup` or of the registration fails with its code.
-export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, shadow_in: ?*const abi_render.c.ke_render_shadow_resources, clusters_in: ?*const abi_render.c.ke_render_cluster_resources, config_in: ?*const abi_render_forward_factory.c.ke_render_forward_config, out_forward: [*c]abi_render_forward_factory.c.ke_render_forward_handle) callconv(.c) abi_result.c.ke_result {
-    const out = out_forward orelse return R.code(error.InvalidArgument);
-    out.* = .{ .ref = null, .destroy = null };
+/// Factory declared in the plugin's forward_create.h. A missing config, scene, frame, service or
+/// device fails as an invalid argument; a failure in `setup` fails with its code, the module and its
+/// GPU objects released.
+export fn ke_render_forward_create(context_in: ?*const abi_render_context.c.ke_render_context, config_in: ?*const abi_render_forward_factory.c.ke_render_forward_config, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+    const out = out_module orelse return R.code(error.InvalidArgument);
+    out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
     const config = config_in orelse {
         log.warn("transparent-forward: no config", .{});
         return R.code(error.InvalidArgument);
     };
-    const shadow = shadow_in orelse return R.code(error.InvalidArgument);
-    const clusters = clusters_in orelse return R.code(error.InvalidArgument);
-    const rt: *abi_runtime.c.ke_runtime = p.runtime orelse return R.code(error.InvalidArgument);
     if (p.scene == null or p.frame == null or p.service == null or p.device == null)
         return R.code(error.InvalidArgument);
 
     const fwd = gpa.create(ForwardModule) catch |err| return R.code(err);
     fwd.* = .{};
-    setup(fwd, p, shadow, clusters, config) catch |err| {
+    setup(fwd, p, config) catch |err| {
         destroyModule(fwd);
         gpa.destroy(fwd);
         return R.code(err);
     };
-
-    var params = std.mem.zeroes(abi_runtime.c.ke_runtime_system_params);
-    params.name = "render.forward_transparent";
-    params.phase = abi_runtime.c.KE_PHASE_RENDER;
-    params.queries = &fwd.queries;
-    params.query_count = fwd.queries.len;
-    params.access_list = &fwd.access;
-    params.access_count = fwd.access_count;
-    params.user_data = fwd;
-    params.execute = system;
-    var system_id: abi_runtime.c.ke_system_id = 0;
-    const registered = rt.register_system.?(rt, &params, &system_id);
-    if (registered != R.ok) {
-        destroyModule(fwd);
-        gpa.destroy(fwd);
-        return registered;
-    }
-    fwd.runtime = rt;
-    fwd.system = system_id;
-
-    out.* = .{ .ref = @ptrCast(fwd), .destroy = destroyHandle };
+    fwd.systems.init(.{.{ .name = "render.forward_transparent", .execute = queueSystem, .user = fwd, .set = .queue, .queries = &fwd.queries, .access = &fwd.access }});
+    out.* = .{ .ref = &fwd.systems.module, .destroy = destroyHandle };
     return R.ok;
 }
 
-
 const testing = std.testing;
-
-const test_shadow: abi_render.c.ke_render_shadow_resources = .{ .map = 24, .light = 25 };
-const test_clusters = std.mem.zeroInit(abi_render.c.ke_render_cluster_resources, .{ .tag = 26 });
 
 const test_ids = std.mem.zeroInit(abi_render.c.ke_render_scene_component_ids, .{ .mesh = 1, .camera = 2, .directional_light = 3, .point_light = 4, .spot_light = 5, .ambient_light = 6, .skybox = 7, .sprite2d = 8, .label = 9, .world_transform = 10 });
 
-fn testComponentIds(_: [*c]abi_render.c.ke_render_scene_resolve) callconv(.c) [*c]const abi_render.c.ke_render_scene_component_ids {
+fn testComponentIds(_: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) ?*const abi_render.c.ke_render_scene_component_ids {
     return &test_ids;
 }
 
-var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds };
+var test_scene: abi_render.c.ke_render_scene_resolve = .{ .handle = null, .component_ids = testComponentIds, .render_component_ids = testComponentIds };
 
-fn testFrameCid(_: [*c]abi_render.c.ke_render_frame) callconv(.c) abi_render.c.ke_component_id {
-    return 11;
-}
-
-var test_frame: abi_render.c.ke_render_frame = .{ .handle = null, .frame_cid = testFrameCid };
-
-
-fn blendUnlessZero(_: [*c]abi_render.c.ke_render_service, m: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
+fn blendUnlessZero(_: ?*abi_render.c.ke_render_service, m: abi_render_handles.c.ke_material_handle) callconv(.c) abi_render_handles.c.ke_alpha_mode {
     return if (m.bits == 0) abi_render_handles.c.KE_ALPHA_MODE_OPAQUE else abi_render_handles.c.KE_ALPHA_MODE_BLEND;
 }
 
@@ -685,11 +658,45 @@ test "meshes are gathered across every segment the query returned" {
 
 const zsub = @import("zsub");
 
+var test_camera_component = std.mem.zeroInit(abi_render_components.c.ke_camera_component, .{ .cull_mask = 1 });
+var test_meshes = [_]abi_render_components.c.ke_mesh_component{std.mem.zeroInit(abi_render_components.c.ke_mesh_component, .{ .layers = 1, .material = .{ .bits = 7 } })};
+var test_transforms = [_]abi_spatial.c.ke_world_transform_component{std.mem.zeroes(abi_spatial.c.ke_world_transform_component)};
+var camera_columns = [_]?*anyopaque{ @ptrCast(&test_camera_component), @ptrCast(&test_transforms) };
+var mesh_columns = [_]?*anyopaque{ @ptrCast(&test_meshes), @ptrCast(&test_transforms) };
+var camera_segment: abi_ecs.c.ke_ecs_segment = .{ .entities = null, .count = 1, .columns = &camera_columns, .column_count = 2 };
+var mesh_segment: abi_ecs.c.ke_ecs_segment = .{ .entities = null, .count = 1, .columns = &mesh_columns, .column_count = 2 };
+
+fn sceneView(_: ?*abi_schedule.c.ke_schedule_ctx, index: u32, out_count: ?*usize) callconv(.c) ?[*]const abi_ecs.c.ke_ecs_segment {
+    out_count.?.* = if (index == 1) 0 else 1;
+    return switch (index) {
+        0 => (&camera_segment)[0..1],
+        2 => (&mesh_segment)[0..1],
+        else => null,
+    };
+}
+
+var scene_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = sceneView, .slice = null };
+var zero_globals = std.mem.zeroes(abi_render.c.ke_render_frame_globals);
+
+fn blendAll(_: zsub.For(abi_render.c.ke_render_service).Args(.material_alpha_mode)) abi_render_handles.c.ke_alpha_mode {
+    return abi_render_handles.c.KE_ALPHA_MODE_BLEND;
+}
+
+fn meshFound(args: zsub.For(abi_render.c.ke_render_service).Args(.mesh_buffers)) bool {
+    args[2].?.* = 1;
+    args[3].?.* = 2;
+    args[4].?.* = 3;
+    return true;
+}
+
+/// The parts a pass is made of in a test.
 const Rig = struct {
     dev: zsub.For(abi_render_gpu.c.ke_gpu_device),
     binder: zsub.For(abi_render_gpu.c.ke_render_resource_binder),
     core: zsub.For(abi_render.c.ke_render_service),
-    rt: zsub.For(abi_runtime.c.ke_runtime),
+    schedule: zsub.For(abi_schedule.c.ke_schedule),
+    frame: zsub.For(abi_render_frame.c.ke_render_frame),
+    graph: zsub.For(rg.ke_render_graph),
 
     fn init(self: *Rig) !void {
         try self.dev.init();
@@ -702,59 +709,96 @@ const Rig = struct {
         _ = self.core.when(.material_binding).returnsFresh();
         _ = self.core.when(.load_shader).writesFresh(3);
         _ = self.core.when(.get_or_create_pipeline).returnsFresh();
-        _ = self.core.when(.frame_color).returnsFresh();
-        _ = self.core.when(.frame_depth).returnsFresh();
-        _ = self.core.when(.resource_view).returnsFresh();
         _ = self.core.when(.texture_view).returnsFresh();
-        _ = self.core.when(.white_texture).returns(.{ .bits = 1 });
-        _ = self.core.when(.resource_buffer).returnsFresh();
-        _ = self.core.when(.resource_buffer_size).returns(256);
-        _ = self.core.when(.join_chain).writesFresh(3);
-        _ = self.core.when(.chain_format).does(chainFormat);
-        try self.rt.init();
-        _ = self.rt.when(.register_system).writesFresh(2);
+        _ = self.core.when(.frame_globals).returns(&zero_globals);
+        _ = self.core.when(.material_alpha_mode).does(blendAll);
+        _ = self.core.when(.mesh_buffers).does(meshFound);
+        _ = self.core.when(.material_shader).returns("standard");
+        try self.schedule.init();
+        _ = self.schedule.when(.register_system).writesFresh(2);
+        try self.graph.init();
+        _ = self.graph.when(.create_texture).writesFresh(2);
+        try self.frame.init();
+        _ = self.frame.when(.frame_cid).returns(11);
+        _ = self.frame.when(.live).returns(true);
+        _ = self.frame.when(.color).returns(2);
+        _ = self.frame.when(.depth).returns(4);
+        _ = self.frame.when(.graph).returns(self.graph.api());
+        _ = self.frame.when(.color_format).returns(abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT);
     }
 
     fn deinit(self: *Rig) void {
-        self.rt.deinit();
+        self.frame.deinit();
+        self.graph.deinit();
+        self.schedule.deinit();
         self.core.deinit();
         self.binder.deinit();
         self.dev.deinit();
+    }
+
+    fn context(self: *Rig) abi_render_context.c.ke_render_context {
+        return std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = self.frame.api(), .service = self.core.api(), .device = self.dev.api() });
+    }
+
+    fn targets(self: *Rig) abi_module.c.ke_module_targets {
+        var t = std.mem.zeroes(abi_module.c.ke_module_targets);
+        t.render = @ptrCast(self.schedule.api());
+        return t;
     }
 
     fn expectReleased(self: *Rig) !void {
         try self.dev.received(.destroy_buffer).where(zsub.argIsNot(1, abi_render_gpu.c.KE_GPU_INVALID_HANDLE)).sameAs(self.dev.received(.create_buffer));
         try self.binder.received(.destroy_shader_layout).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_shader_layout));
         try self.binder.received(.destroy_set).where(zsub.argIsNot(1, abi_render_gpu.c.KE_RENDER_BINDING_INVALID)).sameAs(self.binder.received(.create_set));
-        try self.core.received(.leave_chain).sameAs(self.core.received(.join_chain));
     }
 };
 
-fn chainFormat(args: zsub.For(abi_render.c.ke_render_service).Args(.chain_format)) abi_render_gpu.c.ke_gpu_texture_format {
-    return if (args[1] >= abi_render.c.KE_RENDER_STAGE_TONEMAP) abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM else abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT;
+const test_config: abi_render_forward_factory.c.ke_render_forward_config = .{ .ibl_enabled = true };
+
+fn passOf(h: abi_module.c.ke_module_handle) *ForwardModule {
+    const systems: *pass_systems.Systems(1) = @ptrCast(@alignCast(h.ref.?.handle));
+    return @fieldParentPtr("systems", systems);
 }
 
-test "creating and destroying the forward pass leaves no block allocated and no GPU resource live" {
+test "the forward module attaches its system to the render schedule, and destroying it detaches it and releases the GPU objects" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h));
+    const p = rig.context();
+    var h: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    const t = rig.targets();
+    try R.check(h.ref.?.attach.?(h.ref, &t));
+    try rig.schedule.received(.register_system).times(1);
     h.destroy.?(h.ref);
+    try rig.schedule.received(.unregister_system).times(1);
     try rig.expectReleased();
-    try heap.expectNoLeaks();
 }
 
-test "destroying the forward pass unregisters every system it registered" {
+test "a blended mesh in view gets a copy of the frame's color and a transparent pass over it" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h));
-    h.destroy.?(h.ref);
-    try rig.rt.received(.register_system).atLeast(1);
-    try rig.rt.received(.unregister_system).where(zsub.argIs(1, @as(abi_runtime.c.ke_system_id, 0))).never();
-    try rig.rt.received(.unregister_system).sameAs(rig.rt.received(.register_system));
+    const p = rig.context();
+    var h: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
+    try rig.graph.received(.create_texture).times(1);
+    try rig.graph.received(.add_pass).times(2);
+}
+
+test "a frame not being declared gets no transparent pass" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    _ = rig.frame.when(.live).returns(false);
+    const p = rig.context();
+    var h: abi_module.c.ke_module_handle = undefined;
+    try R.check(ke_render_forward_create(&p, &test_config, &h));
+    defer h.destroy.?(h.ref);
+    try testing.expectEqual(R.ok, queueSystem(&scene_ctx, passOf(h), 0));
+    try rig.graph.received(.add_pass).never();
 }
 
 test "a forward pass whose shader fails to load releases what it had created" {
@@ -762,37 +806,23 @@ test "a forward pass whose shader fails to load releases what it had created" {
     try rig.init();
     defer rig.deinit();
     _ = rig.core.when(.load_shader).returns(abi_result.c.KE_RESULT_GENERAL);
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h) != R.ok);
+    const p = rig.context();
+    var h: abi_module.c.ke_module_handle = undefined;
+    try testing.expect(ke_render_forward_create(&p, &test_config, &h) != R.ok);
     try testing.expect(h.ref == null);
     try rig.expectReleased();
-    try heap.expectNoLeaks();
 }
 
-test "a missing frame is refused" {
+test "a forward pass missing its scene is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = null, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h)));
+    var p = rig.context();
+    p.scene = null;
+    var h: abi_module.c.ke_module_handle = undefined;
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&p, &test_config, &h)));
 }
 
-test "a missing scene is refused" {
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = null, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h)));
-}
-
-test "a forward pass the runtime refuses to register releases what it had created" {
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    _ = rig.rt.when(.register_system).returns(abi_result.c.KE_RESULT_OUT_OF_MEMORY);
-    var h: abi_render_forward_factory.c.ke_render_forward_handle = undefined;
-    try testing.expect(ke_render_forward_create(&std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .scene = &test_scene, .frame = &test_frame, .runtime = rig.rt.api(), .service = rig.core.api(), .device = rig.dev.api() }), &test_shadow, &test_clusters, &.{ .ibl_enabled = false }, &h) != R.ok);
-    try testing.expect(h.ref == null);
-    try rig.expectReleased();
+test "creating and destroying forward passes leaves no block allocated" {
     try heap.expectNoLeaks();
 }

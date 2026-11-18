@@ -11,17 +11,16 @@ public sealed unsafe partial class DefaultRenderService
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="device">Borrowed, must outlive the service.</param>
     /// <param name="target">Borrowed, must outlive the service; every frame acquires and presents it.</param>
-    /// <param name="ecs">Borrowed, must outlive the service.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
     /// <param name="config">The service's values, applied as given.</param>
-    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(CreateLogged(loggerFactory, device, target, ecs, io, binder, config))
+    public DefaultRenderService(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config) : base(CreateLogged(loggerFactory, device, target, io, binder, config))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
+    private static KernelEngine.Render.Native.ke_render_service_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, in KernelEngine.Render.RenderServiceConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(device, target, ecs, io, binder, config);
+        return Create(device, target, io, binder, config);
     }
 }

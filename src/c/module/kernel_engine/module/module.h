@@ -22,6 +22,8 @@ typedef struct ke_module_targets {
     ke_schedule *update;
     /// Runs once, when the loop shuts down.
     ke_schedule *shutdown;
+    /// Runs over the render world once per extraction; NULL where there is none.
+    ke_schedule *render;
     /// In startup.
     ke_schedule_set_id startup_set;
     /// In pre_update.
@@ -38,6 +40,14 @@ typedef struct ke_module_targets {
     ke_schedule_set_id post_update_set;
     /// In shutdown.
     ke_schedule_set_id shutdown_set;
+    /// In render, first: where the frame begins.
+    ke_schedule_set_id render_begin_set;
+    /// In render, after render_begin_set: where uploads run and passes make what they hand to others.
+    ke_schedule_set_id render_prepare_set;
+    /// In render, after render_prepare_set: where passes are declared.
+    ke_schedule_set_id render_queue_set;
+    /// In render, after render_queue_set: where the frame is executed and presented.
+    ke_schedule_set_id render_submit_set;
 } ke_module_targets;
 
 /// [interface] A piece that fits into a world by registering its systems in the standard schedules.

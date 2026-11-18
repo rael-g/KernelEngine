@@ -23,7 +23,6 @@ pub const ke_gpu_texture = u64;
 pub const ke_gpu_texture_aspect = u32;
 pub const ke_gpu_texture_usage = u32;
 pub const ke_gpu_texture_view = u64;
-pub const ke_render_chain_link = u32;
 pub const ke_render_material_binding = u64;
 pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;

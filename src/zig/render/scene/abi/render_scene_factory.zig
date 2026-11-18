@@ -3,12 +3,15 @@
 const std = @import("std");
 const abi_asset_resolver = @import("asset_resolver");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
+const abi_module = @import("module");
 const abi_render = @import("render");
 const abi_render_context = @import("render_context");
+const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_scene_factory_c.zig");
@@ -17,24 +20,13 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderLabelResolve = struct {
-    ptr: *c.ke_render_label_resolve,
-    owner: ?c.ke_render_label_resolve_handle = null,
-
-    pub fn deinit(self: RenderLabelResolve) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// Registers the update-phase system "render.label.resolve", which runs before the ui pass's
-    /// "render.ui.labels". A missing runtime, service or ui fails as an invalid argument; the
-    /// handle's ref is NULL on failure.
-    pub fn create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const c.ke_render_label_resolve_config) Error!RenderLabelResolve {
-        var written: c.ke_render_label_resolve_handle = undefined;
-        try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, config, &written));
-        return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
-    }
-
-};
+/// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
+/// main world, in the update set, the font it names.
+pub fn renderLabelResolveCreate(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, config: ?*const c.ke_render_label_resolve_config) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, config, &written));
+    return written;
+}
 
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
@@ -42,15 +34,21 @@ pub fn renderSceneSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
     return c.ke_render_scene_set_log_callback(callback, ctx);
 }
 
-/// Registers the scene's render components and the update-phase systems
-/// "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A
-/// missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on
-/// failure, and the component types registered before it stay registered.
-pub fn renderSceneResolveCreate(runtime: ?*abi_runtime.c.ke_runtime, ecs: ?*abi_ecs.c.ke_ecs, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver) Error!abi_render.c.ke_render_scene_resolve_handle {
+/// Registers the scene's render components in the main world and in the render world, and a copy
+/// of each in the extraction. Its systems come from ke_render_scene_resolve_systems_create.
+pub fn renderSceneResolveCreate(main: ?*abi_ecs.c.ke_ecs, render: ?*abi_ecs.c.ke_ecs, extraction: ?*abi_extraction.c.ke_extraction, service: ?*abi_render.c.ke_render_service, resolver: ?*abi_asset_resolver.c.ke_asset_resolver) Error!abi_render.c.ke_render_scene_resolve_handle {
     var written: abi_render.c.ke_render_scene_resolve_handle = undefined;
-    try checkResult(c.ke_render_scene_resolve_create(runtime, ecs, service, resolver, &written));
+    try checkResult(c.ke_render_scene_resolve_create(main, render, extraction, service, resolver, &written));
+    return written;
+}
+
+/// Creates the module of scene: attaching it registers, in the main world's update set,
+/// "render.sprite2d.resolve" and "render.mesh.resolve", the second after the first, which give a
+/// sprite and a mesh the GPU resources they name.
+pub fn renderSceneResolveSystemsCreate(scene: ?*abi_render.c.ke_render_scene_resolve) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_render_scene_resolve_systems_create(scene, &written));
     return written;
 }
 
 pub const RenderLabelResolveConfig = c.ke_render_label_resolve_config;
-pub const RenderLabelResolveHandle = c.ke_render_label_resolve_handle;

@@ -3,7 +3,10 @@
 
 #nullable enable
 
+using KernelEngine.Async.Native;
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 
 namespace KernelEngine.Async;
 

@@ -14,6 +14,7 @@ const gpa = heap.gpa;
 
 const stb = @import("c");
 const abi_io = @import("abi_io");
+const pending_reads = @import("pending_reads");
 const abi_stb = @import("abi_asset_stb_image_factory");
 const abi_result = @import("abi_result");
 
@@ -21,11 +22,13 @@ const R = @import("result").Result(.{});
 
 const log = std.log.scoped(.asset_stb_image);
 
-/// The loader: the vtable the handle refers to, whose `handle` points back at the state, and the
-/// borrowed io every load reads its file through.
+/// The loader: the vtable the handle refers to, whose `handle` points back at the state, the
+/// borrowed io every load reads its file through, and the reads a load on a thread that may not
+/// wait leaves to a later call.
 const State = struct {
     api: abi_image_loader.c.ke_image_loader,
     io: *abi_io.c.ke_io,
+    reads: pending_reads.Reads,
 };
 
 fn stateOf(self: *abi_image_loader.c.ke_image_loader) *State {
@@ -35,10 +38,13 @@ fn stateOf(self: *abi_image_loader.c.ke_image_loader) *State {
 /// The handle's `destroy`: releases the loader. A null loader is ignored.
 fn destroy(self: ?*abi_image_loader.c.ke_image_loader) callconv(.c) void {
     const loader = self orelse return;
-    gpa.destroy(stateOf(loader));
+    const st = stateOf(loader);
+    st.reads.deinit(st.io);
+    gpa.destroy(st);
 }
 
-/// Called through the `load_image` slot. A file that cannot be read or decoded logs the reason and
+/// Called through the `load_image` slot. A file still being read on a thread that may not wait
+/// fails as pending, and a later call collects it. A file that cannot be read or decoded logs the reason and
 /// fails with not found; an allocation failure fails with out of memory. Either way nothing is left allocated
 /// and the image written is null. On success the result owns a copy of the pixels, independent of
 /// stb_image's allocator, and its path field holds the path truncated to fit; it is released
@@ -47,27 +53,29 @@ fn loadImage(self: ?*abi_image_loader.c.ke_image_loader, path: [*c]const u8, out
     const out = out_image orelse return R.code(error.InvalidArgument);
     out.* = null;
     if (self == null or path == null) return R.code(error.InvalidArgument);
-    out.* = decode(stateOf(self.?).io, path) catch |err| return R.code(err);
+    out.* = decode(stateOf(self.?), path) catch |err| return R.code(err);
     return R.ok;
 }
 
-fn decode(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error!*abi_mesh_data.c.ke_texture_data {
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(io.read_file.?(io, path, &request));
-    var file: abi_io.c.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &file)) catch |err| switch (err) {
-        error.OutOfMemory => return err,
+fn decode(st: *State, path: [*c]const u8) R.Error!*abi_mesh_data.c.ke_texture_data {
+    const file = st.reads.text(st.io, path) catch |err| switch (err) {
+        error.Pending => return err,
+        error.OutOfMemory => {
+            st.reads.forget(std.mem.span(path));
+            return err;
+        },
         else => {
             log.warn("reading {s} failed: {t}", .{ path, err });
+            st.reads.forget(std.mem.span(path));
             return error.NotFound;
         },
     };
-    defer io.free_bytes.?(io, file.bytes);
+    defer st.reads.forget(std.mem.span(path));
 
     var w: c_int = 0;
     var h: c_int = 0;
     var channels: c_int = 0;
-    const raw = stb.stbi_load_from_memory(@ptrCast(file.bytes), @intCast(file.size), &w, &h, &channels, 4);
+    const raw = stb.stbi_load_from_memory(file.ptr, @intCast(file.len), &w, &h, &channels, 4);
     if (raw == null) {
         log.warn("{s}: {s}", .{ path, stb.stbi_failure_reason() });
         return error.NotFound;
@@ -119,7 +127,7 @@ export fn ke_image_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_
         log.warn("creating the image loader failed: out of memory", .{});
         return R.code(error.OutOfMemory);
     };
-    state.* = .{ .api = .{ .handle = state, .load_image = &loadImage, .free_image = &freeImage }, .io = io };
+    state.* = .{ .api = .{ .handle = state, .load_image = &loadImage, .free_image = &freeImage }, .io = io, .reads = .{ .gpa = gpa } };
     out.* = .{ .ref = &state.api, .destroy = &destroy };
     return R.ok;
 }
@@ -144,6 +152,13 @@ fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result
         out.size = bytes.len;
     }
     return R.ok;
+}
+
+var wait_refused = false;
+
+fn waitUnlessRefused(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
+    if (wait_refused) return R.code(error.NotSupported);
+    return waitServed(args);
 }
 
 fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
@@ -231,6 +246,29 @@ test "loading a one pixel targa yields its dimensions and pixels" {
     try testing.expectEqual(@as(u32, 1), data.*.width);
     try testing.expectEqual(@as(u32, 1), data.*.height);
     try testing.expect(data.*.pixels != null);
+}
+
+test "an image whose read cannot be waited on yet is pending, and a later load decodes it" {
+    const tga = [_]u8{
+        0,   0,   2,  0,   0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 32, 0,
+        255, 128, 64, 255,
+    };
+    var served_io: ServedIo = undefined;
+    try served_io.init(&tga);
+    defer served_io.deinit();
+    _ = served_io.sub.when(.wait).does(waitUnlessRefused);
+    const h = served_io.loader();
+    defer h.destroy.?(h.ref);
+
+    var data: [*c]abi_mesh_data.c.ke_texture_data = null;
+    wait_refused = true;
+    try testing.expectError(error.Pending, R.check(h.ref.?.load_image.?(h.ref, "test_image.tga", &data)));
+    try testing.expect(data == null);
+    wait_refused = false;
+    try R.check(h.ref.?.load_image.?(h.ref, "test_image.tga", &data));
+    defer h.ref.?.free_image.?(h.ref, data);
+    try testing.expectEqual(@as(u32, 1), data.*.width);
+    try served_io.sub.received(.read_file).times(1);
 }
 
 test "creating without an io is refused and leaves the handle zeroed" {

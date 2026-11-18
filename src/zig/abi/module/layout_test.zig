@@ -37,7 +37,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
-extern const layout_values: [22]c_ulonglong;
+extern const layout_values: [27]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -48,6 +48,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_module_targets, "fixed"),
         @offsetOf(abi.c.ke_module_targets, "update"),
         @offsetOf(abi.c.ke_module_targets, "shutdown"),
+        @offsetOf(abi.c.ke_module_targets, "render"),
         @offsetOf(abi.c.ke_module_targets, "startup_set"),
         @offsetOf(abi.c.ke_module_targets, "pre_update_set"),
         @offsetOf(abi.c.ke_module_targets, "fixed_pre_update_set"),
@@ -56,6 +57,10 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_module_targets, "update_set"),
         @offsetOf(abi.c.ke_module_targets, "post_update_set"),
         @offsetOf(abi.c.ke_module_targets, "shutdown_set"),
+        @offsetOf(abi.c.ke_module_targets, "render_begin_set"),
+        @offsetOf(abi.c.ke_module_targets, "render_prepare_set"),
+        @offsetOf(abi.c.ke_module_targets, "render_queue_set"),
+        @offsetOf(abi.c.ke_module_targets, "render_submit_set"),
         @sizeOf(abi.c.ke_module),
         @offsetOf(abi.c.ke_module, "handle"),
         @offsetOf(abi.c.ke_module, "attach"),

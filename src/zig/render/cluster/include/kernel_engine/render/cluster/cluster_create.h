@@ -11,7 +11,7 @@
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
 #include <kernel_engine/view/view_space.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/module/module.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_CLUSTER_EXPORT
@@ -30,15 +30,6 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_render_cluster ke_render_cluster;
-
-    /// [owner]
-    typedef struct ke_render_cluster_handle
-    {
-        ke_render_cluster *ref;
-        void (*destroy)(ke_render_cluster *self);
-    } ke_render_cluster_handle;
-
     /// The values a light-cluster pass is created with, each applied as given.
     typedef struct ke_render_cluster_config
     {
@@ -52,20 +43,17 @@ extern "C"
         uint32_t max_lights_per_cluster;
     } ke_render_cluster_config;
 
-
     /**
-     * @brief Creates a light-cluster pass and registers its render-phase system.
+     * @brief Makes a light-cluster pass. Attached, it publishes the light lists and the grid in the render
+     * prepare set and declares the compute pass that fills them in the render queue set.
      * @param context [borrowed] The parts the pass is built on; read during the call.
      * @param config [borrowed] The pass's values; Required; every field is read as given.
-     * @param out_resources [out] Receives the ids of its tag, light lists and grid; every id
-     *        KE_COMPONENT_INVALID on failure.
-     * @param out_cluster [out] Receives the handle; left zeroed on failure.
+     * @param out_module [out] Receives the pass; left zeroed on failure.
      * @return KE_OK, or on failure; KE_RESULT_INVALID_ARGUMENT when the context or a part of it is NULL, or a
      *         field of @p config is 0.
      */
     KE_RENDER_CLUSTER_API ke_result ke_render_cluster_create(
-        const ke_render_context *context, const ke_render_cluster_config *config, ke_render_cluster_resources *out_resources,
-        ke_render_cluster_handle *out_cluster);
+        const ke_render_context *context, const ke_render_cluster_config *config, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

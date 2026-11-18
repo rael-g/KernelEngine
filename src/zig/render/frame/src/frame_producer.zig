@@ -1,5 +1,5 @@
-//! The first render-phase system of a frame: it begins the frame on the service, then derives the
-//! frame globals and the scene's light from the camera and the lights, once for every pass.
+//! What the frame publishes to every pass once it begins: the frame globals and the scene's light,
+//! derived from the camera and the lights of the render world.
 
 const abi_render_contract = @import("abi_render_contract");
 const abi_render_components = @import("abi_render_components");
@@ -7,13 +7,10 @@ const std = @import("std");
 const zm = @import("zmath");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
-const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const abi_spatial = @import("abi_spatial");
-const R = @import("result").Result(.{});
-const log = std.log.scoped(.render_frame);
 
-/// What the system reads besides its queries: the service it publishes to, the camera that turns
+/// What the publishing reads besides its queries: the service it publishes to, the camera that turns
 /// a camera entity into matrices, and the seconds elapsed since the first frame.
 pub const State = struct {
     core: *abi_render.c.ke_render_service,
@@ -26,14 +23,10 @@ pub const camera_query = 0;
 pub const light_query = 1;
 pub const ambient_query = 2;
 
-/// The system body: begins the frame, then publishes the frame globals and the light. Without a
-/// camera the matrices keep their last values while time, dt and viewport still advance. A failed
-/// `begin_frame` fails the body with the service's code.
-pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) callconv(.c) abi_result.c.ke_result {
-    const st: *State = @alignCast(@ptrCast(user.?));
+/// Publishes the frame globals and the light of a frame that began. Without a camera the matrices
+/// keep their last values while time, dt and viewport still advance.
+pub fn publish(ctx: ?*abi_schedule.c.ke_schedule_ctx, st: *State, dt: f32) void {
     const core = st.core;
-    const began = core.*.begin_frame.?(core);
-    if (began != R.ok) return began;
     st.time += dt;
 
     var bw: u32 = 0;
@@ -84,5 +77,4 @@ pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, dt: f32) ca
         lighting.ambient = .{ al.color.x, al.color.y, al.color.z, 0.0 };
     }
     core.*.set_lighting.?(core, &lighting);
-    return R.ok;
 }

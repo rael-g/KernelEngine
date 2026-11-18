@@ -9,7 +9,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/render/camera.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/module/module.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_SKYBOX_EXPORT
@@ -28,23 +28,14 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_render_skybox ke_render_skybox;
-
-    /// [owner]
-    typedef struct ke_render_skybox_handle
-    {
-        ke_render_skybox *ref;
-        void (*destroy)(ke_render_skybox *self);
-    } ke_render_skybox_handle;
-
-    /// Registers the pass's render-phase system. A missing runtime, service, device or camera
-    /// fails as an invalid argument.
-    /// It joins the chain at KE_RENDER_STAGE_SKY and draws over the frame's color where the frame's
-    /// depth is at the far plane.
+    /// Makes the skybox pass. Attached, it declares in the render queue set, at KE_RENDER_STAGE_SKY, the
+    /// pass that draws the sky over the frame's color where the frame's depth is at the far plane.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param out_skybox [out] Receives the handle; left zeroed on failure.
+    /// @param out_module [out] Receives the pass; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context or a part the pass uses is NULL; the
+    ///         code of the GPU object that could not be made.
     KE_RENDER_SKYBOX_API ke_result ke_render_skybox_create(
-        const ke_render_context *context, ke_render_skybox_handle *out_skybox);
+        const ke_render_context *context, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

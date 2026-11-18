@@ -8,7 +8,7 @@ set_target_properties(c_pong PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON)
 target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_window_glfw
     KernelEngine::ke_input_default
-    KernelEngine::ke_io_pool
+    KernelEngine::ke_io_async
     KernelEngine::ke_file_system_std
     KernelEngine::ke_task_pool_enki
     KernelEngine::ke_job_system_enki
@@ -26,6 +26,7 @@ target_link_libraries(c_pong PRIVATE
     KernelEngine::ke_physics_2d_box2d
     KernelEngine::ke_physics_body2d
     KernelEngine::ke_extraction_default
+    KernelEngine::ke_render_graph_simple
     KernelEngine::ke_gpu_device_webgpu
     KernelEngine::ke_render_service
     KernelEngine::ke_render_binder_grouped

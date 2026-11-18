@@ -152,6 +152,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -869,6 +874,12 @@
           "doc": "Runs once, when the loop shuts down."
         },
         {
+          "name": "render",
+          "type": "ke_schedule *",
+          "tags": [],
+          "doc": "Runs over the render world once per extraction; NULL where there is none."
+        },
+        {
           "name": "startup_set",
           "type": "ke_schedule_set_id",
           "tags": [],
@@ -915,6 +926,30 @@
           "type": "ke_schedule_set_id",
           "tags": [],
           "doc": "In shutdown."
+        },
+        {
+          "name": "render_begin_set",
+          "type": "ke_schedule_set_id",
+          "tags": [],
+          "doc": "In render, first: where the frame begins."
+        },
+        {
+          "name": "render_prepare_set",
+          "type": "ke_schedule_set_id",
+          "tags": [],
+          "doc": "In render, after render_begin_set: where uploads run and passes make what they hand to others."
+        },
+        {
+          "name": "render_queue_set",
+          "type": "ke_schedule_set_id",
+          "tags": [],
+          "doc": "In render, after render_prepare_set: where passes are declared."
+        },
+        {
+          "name": "render_submit_set",
+          "type": "ke_schedule_set_id",
+          "tags": [],
+          "doc": "In render, after render_queue_set: where the frame is executed and presented."
         }
       ]
     }

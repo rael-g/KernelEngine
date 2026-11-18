@@ -17,15 +17,18 @@ const abi_text = @import("abi_text");
 const abi_stb = @import("abi_text_stb_truetype_factory");
 
 const libc = @import("c");
+const pending_reads = @import("pending_reads");
 
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.text_stb_truetype);
 
-/// The loader: the vtable the handle refers to, whose `handle` points back at the state, and the
-/// borrowed io every bake reads its font file through.
+/// The loader: the vtable the handle refers to, whose `handle` points back at the state, the
+/// borrowed io every bake reads its font file through, and the reads a bake on a thread that may
+/// not wait leaves to a later call.
 const State = struct {
     api: abi_text.c.ke_font_loader,
     io: *abi_io.c.ke_io,
+    reads: pending_reads.Reads,
 };
 
 fn stateOf(self: *abi_text.c.ke_font_loader) *State {
@@ -36,25 +39,21 @@ fn stateOf(self: *abi_text.c.ke_font_loader) *State {
 /// already loaded are separate allocations and stay valid until freed.
 fn destroy(self: ?*abi_text.c.ke_font_loader) callconv(.c) void {
     const loader = self orelse return;
-    gpa.destroy(stateOf(loader));
+    const st = stateOf(loader);
+    st.reads.deinit(st.io);
+    gpa.destroy(st);
 }
 
-/// The whole file at `path`, released with the io's `free_bytes`. Fails with io when it cannot be
-/// read or is empty, and with out of memory when the request cannot be allocated.
-fn readFile(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error![]const u8 {
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(io.read_file.?(io, path, &request));
-    var file: abi_io.c.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &file)) catch |err| switch (err) {
+/// The whole file at `path`, kept by the reads until the bake forgets it. Fails as pending while
+/// the read goes on, with io when it cannot be read or is empty, and with out of memory.
+fn readFile(st: *State, path: [*c]const u8) R.Error![]const u8 {
+    const bytes = st.reads.text(st.io, path) catch |err| switch (err) {
+        error.Pending => return err,
         error.OutOfMemory => return err,
         else => return error.Io,
     };
-    const bytes = file.bytes orelse return error.Io;
-    if (file.size == 0) {
-        io.free_bytes.?(io, bytes);
-        return error.Io;
-    }
-    return @as([*]const u8, @ptrCast(bytes))[0..@intCast(file.size)];
+    if (bytes.len == 0) return error.Io;
+    return bytes;
 }
 
 /// Runs in the `load_font` slot, on the calling thread. On success the caller owns `out_font.*`
@@ -72,8 +71,8 @@ fn loadFont(
     const out = out_font orelse return R.code(error.InvalidArgument);
     out.* = null;
     if (self == null or path == null) return R.code(error.InvalidArgument);
-    out.* = bake(stateOf(self.?).io, path, pixel_size, first_codepoint, codepoint_count, atlas_size) catch |err| {
-        log.warn("baking {s} failed: {t}", .{ path, err });
+    out.* = bake(stateOf(self.?), path, pixel_size, first_codepoint, codepoint_count, atlas_size) catch |err| {
+        if (err != error.Pending) log.warn("baking {s} failed: {t}", .{ path, err });
         return R.code(err);
     };
     return R.ok;
@@ -84,13 +83,16 @@ fn loadFont(
 /// the packer as pixels and are stored as texture coordinates. The result is allocated last, so
 /// the caller gets a complete `ke_font_data` or an error, never a partial one, and the pack context
 /// is ended whenever it was begun. Fails with invalid argument for a non-positive pixel size or a
-/// zero atlas size or codepoint count, io when the file cannot be read, out of memory, and general
+/// zero atlas size or codepoint count, pending while the file is read, io when it cannot be read, out of memory, and general
 /// when the packer cannot begin or pack the range or the font cannot be initialised.
-fn bake(io: *abi_io.c.ke_io, path: [*c]const u8, pixel_size: f32, first_codepoint: u32, codepoint_count: u32, atlas_size: u32) R.Error!*abi_text.c.ke_font_data {
+fn bake(st: *State, path: [*c]const u8, pixel_size: f32, first_codepoint: u32, codepoint_count: u32, atlas_size: u32) R.Error!*abi_text.c.ke_font_data {
     if (pixel_size <= 0.0 or atlas_size == 0 or codepoint_count == 0) return error.InvalidArgument;
 
-    const ttf = try readFile(io, path);
-    defer io.free_bytes.?(io, @constCast(ttf.ptr));
+    const ttf = readFile(st, path) catch |err| {
+        if (err != error.Pending) st.reads.forget(std.mem.span(path));
+        return err;
+    };
+    defer st.reads.forget(std.mem.span(path));
 
     const w = atlas_size;
     const h = atlas_size;
@@ -183,7 +185,7 @@ export fn ke_font_loader_stb_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*abi_t
         log.warn("creating the font loader failed: out of memory", .{});
         return R.code(error.OutOfMemory);
     };
-    state.* = .{ .api = .{ .handle = state, .load_font = &loadFont, .free_font = &freeFont }, .io = io };
+    state.* = .{ .api = .{ .handle = state, .load_font = &loadFont, .free_font = &freeFont }, .io = io, .reads = .{ .gpa = gpa } };
     out.* = .{ .ref = &state.api, .destroy = &destroy };
     return R.ok;
 }
@@ -216,6 +218,13 @@ fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result
         out.size = bytes.len;
     }
     return R.ok;
+}
+
+var wait_refused = false;
+
+fn waitUnlessRefused(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
+    if (wait_refused) return R.code(error.NotSupported);
+    return waitServed(args);
 }
 
 fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
@@ -345,6 +354,22 @@ test "loading a font file that does not exist fails with io" {
     var data: [*c]abi_text.c.ke_font_data = null;
     try testing.expectError(error.Io, R.check(h.ref.?.load_font.?(h.ref, "missing.ttf", 16.0, 32, 96, 512, &data)));
     try testing.expect(data == null);
+}
+
+test "a font whose read cannot be waited on yet is pending, and a later load reads it" {
+    var served_io: ServedIo = undefined;
+    try served_io.init(null);
+    defer served_io.deinit();
+    _ = served_io.sub.when(.wait).does(waitUnlessRefused);
+    const h = try served_io.loader();
+    defer h.destroy.?(h.ref);
+
+    var data: [*c]abi_text.c.ke_font_data = null;
+    wait_refused = true;
+    try testing.expectError(error.Pending, R.check(h.ref.?.load_font.?(h.ref, "missing.ttf", 16.0, 32, 96, 512, &data)));
+    wait_refused = false;
+    try testing.expectError(error.Io, R.check(h.ref.?.load_font.?(h.ref, "missing.ttf", 16.0, 32, 96, 512, &data)));
+    try served_io.sub.received(.read_file).times(1);
 }
 
 test "creating without an io is refused and leaves the handle zeroed" {

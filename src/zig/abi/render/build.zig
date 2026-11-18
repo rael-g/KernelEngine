@@ -9,7 +9,6 @@ pub fn build(b: *std.Build) void {
     abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
     abi.addImport("mesh", b.dependency("abi_mesh", .{}).module("abi"));
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
-    abi.addImport("render_contract", b.dependency("abi_render_contract", .{}).module("abi"));
     abi.addImport("render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
@@ -17,7 +16,6 @@ pub fn build(b: *std.Build) void {
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/service/render_service.h>
         \\#include <kernel_engine/render/camera.h>
-        \\#include <kernel_engine/render/frame.h>
         \\#include <kernel_engine/render/scene_resolve.h>
         \\#include <kernel_engine/render/resource_groups.h>
     );

@@ -4,6 +4,7 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.TaskPool.Native;
 
 namespace KernelEngine.TaskPool;
 

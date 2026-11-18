@@ -211,18 +211,18 @@ test "a pass whose writes no later pass reads is dropped, whatever its injection
     try testing.expectEqualSlices(u8, "r", Log.order[0..Log.count]);
 }
 
-test "a writer declared before its reader runs first, and independent passes follow their injection points" {
+test "a use refers to the last write earlier in injection order, whatever the declaration order" {
     var f: Fixture = .{};
     try f.init();
     defer f.deinit();
     Log.reset();
     const target = try f.texture(g.KE_RENDER_GRAPH_SIZE_ABSOLUTE);
-    try f.pass('w', 9, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
-    try f.pass('r', 0, true, &.{use(target, g.KE_RENDER_GRAPH_USAGE_SAMPLED)});
-    try f.pass('b', 5, true, &.{});
-    try f.pass('a', 1, true, &.{});
+    try f.pass('r', 9, true, &.{use(target, g.KE_RENDER_GRAPH_USAGE_SAMPLED)});
+    try f.pass('u', 5, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
+    try f.pass('w', 1, false, &.{use(target, g.KE_RENDER_GRAPH_USAGE_COLOR_ATTACHMENT)});
+    try f.pass('a', 0, true, &.{});
     try testing.expectEqual(R.ok, try f.run());
-    try testing.expectEqualSlices(u8, "abwr", Log.order[0..Log.count]);
+    try testing.expectEqualSlices(u8, "awur", Log.order[0..Log.count]);
 }
 
 test "a raster pass records into a render pass begun with its cleared attachment, and sees only what it declared" {
@@ -318,6 +318,36 @@ test "what this graph does not offer is refused, and executing before compiling 
     try testing.expectEqual(R.code(error.NotSupported), f.ref().create_texture.?(f.ref(), &mips, &res));
     var done: ?*abi_completion.c.ke_completion = null;
     try testing.expectEqual(R.code(error.NotSupported), f.ref().execute.?(f.ref(), &done));
+}
+
+var seen_size: u64 = 0;
+
+fn recordSize(user: ?*anyopaque, ctx: ?*g.ke_render_graph_ctx) callconv(.c) Result {
+    const id: g.ke_render_graph_resource = @intCast(@intFromPtr(user));
+    seen_size = ctx.?.buffer_size.?(ctx, id);
+    return R.ok;
+}
+
+test "a pass sees the size of a buffer it declared" {
+    var f: Fixture = .{};
+    try f.init();
+    defer f.deinit();
+    var id: g.ke_render_graph_resource = 0;
+    try R.check(f.ref().import_buffer.?(f.ref(), 77, 256, &id));
+    const uses = [_]g.ke_render_graph_use{use(id, g.KE_RENDER_GRAPH_USAGE_UNIFORM)};
+    var desc = std.mem.zeroes(g.ke_render_graph_pass_desc);
+    desc.name = "sized";
+    desc.type = g.KE_RENDER_GRAPH_PASS_COPY;
+    desc.side_effect = true;
+    desc.uses = &uses;
+    desc.use_count = uses.len;
+    desc.record = recordSize;
+    desc.user = @ptrFromInt(id);
+    var pass: g.ke_render_graph_pass = 0;
+    try R.check(f.ref().add_pass.?(f.ref(), &desc, &pass));
+    seen_size = 0;
+    try testing.expectEqual(R.ok, try f.run());
+    try testing.expectEqual(@as(u64, 256), seen_size);
 }
 
 test "creating and destroying graphs leaves no block allocated" {

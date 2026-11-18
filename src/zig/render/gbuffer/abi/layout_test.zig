@@ -23,10 +23,11 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_render_gbuffer_handle, translated("ke_render_gbuffer_handle"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
     if (@hasDecl(c, "ke_entity")) try expectSameLayout(abi.c.ke_entity, c.ke_entity);
+    if (@hasDecl(c, "ke_extraction_custom_fn")) try expectSameLayout(abi.c.ke_extraction_custom_fn, c.ke_extraction_custom_fn);
+    if (@hasDecl(c, "ke_extraction_interpolate_fn")) try expectSameLayout(abi.c.ke_extraction_interpolate_fn, c.ke_extraction_interpolate_fn);
     if (@hasDecl(c, "ke_gpu_bind_group")) try expectSameLayout(abi.c.ke_gpu_bind_group, c.ke_gpu_bind_group);
     if (@hasDecl(c, "ke_gpu_bind_group_layout")) try expectSameLayout(abi.c.ke_gpu_bind_group_layout, c.ke_gpu_bind_group_layout);
     if (@hasDecl(c, "ke_gpu_buffer")) try expectSameLayout(abi.c.ke_gpu_buffer, c.ke_gpu_buffer);
@@ -43,27 +44,28 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_gpu_texture_usage")) try expectSameLayout(abi.c.ke_gpu_texture_usage, c.ke_gpu_texture_usage);
     if (@hasDecl(c, "ke_gpu_texture_view")) try expectSameLayout(abi.c.ke_gpu_texture_view, c.ke_gpu_texture_view);
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
-    if (@hasDecl(c, "ke_module_id")) try expectSameLayout(abi.c.ke_module_id, c.ke_module_id);
-    if (@hasDecl(c, "ke_module_load_fn")) try expectSameLayout(abi.c.ke_module_load_fn, c.ke_module_load_fn);
-    if (@hasDecl(c, "ke_module_unload_fn")) try expectSameLayout(abi.c.ke_module_unload_fn, c.ke_module_unload_fn);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
-    if (@hasDecl(c, "ke_render_chain_link")) try expectSameLayout(abi.c.ke_render_chain_link, c.ke_render_chain_link);
+    if (@hasDecl(c, "ke_render_graph_condition_fn")) try expectSameLayout(abi.c.ke_render_graph_condition_fn, c.ke_render_graph_condition_fn);
+    if (@hasDecl(c, "ke_render_graph_export")) try expectSameLayout(abi.c.ke_render_graph_export, c.ke_render_graph_export);
+    if (@hasDecl(c, "ke_render_graph_pass")) try expectSameLayout(abi.c.ke_render_graph_pass, c.ke_render_graph_pass);
+    if (@hasDecl(c, "ke_render_graph_readback_fn")) try expectSameLayout(abi.c.ke_render_graph_readback_fn, c.ke_render_graph_readback_fn);
+    if (@hasDecl(c, "ke_render_graph_record_fn")) try expectSameLayout(abi.c.ke_render_graph_record_fn, c.ke_render_graph_record_fn);
+    if (@hasDecl(c, "ke_render_graph_resource")) try expectSameLayout(abi.c.ke_render_graph_resource, c.ke_render_graph_resource);
     if (@hasDecl(c, "ke_render_material_binding")) try expectSameLayout(abi.c.ke_render_material_binding, c.ke_render_material_binding);
     if (@hasDecl(c, "ke_render_resource_set")) try expectSameLayout(abi.c.ke_render_resource_set, c.ke_render_resource_set);
     if (@hasDecl(c, "ke_render_shader_layout")) try expectSameLayout(abi.c.ke_render_shader_layout, c.ke_render_shader_layout);
-    if (@hasDecl(c, "ke_system_execute_fn")) try expectSameLayout(abi.c.ke_system_execute_fn, c.ke_system_execute_fn);
-    if (@hasDecl(c, "ke_system_id")) try expectSameLayout(abi.c.ke_system_id, c.ke_system_id);
+    if (@hasDecl(c, "ke_schedule_condition_fn")) try expectSameLayout(abi.c.ke_schedule_condition_fn, c.ke_schedule_condition_fn);
+    if (@hasDecl(c, "ke_schedule_execute_fn")) try expectSameLayout(abi.c.ke_schedule_execute_fn, c.ke_schedule_execute_fn);
+    if (@hasDecl(c, "ke_schedule_set_id")) try expectSameLayout(abi.c.ke_schedule_set_id, c.ke_schedule_set_id);
+    if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
-extern const layout_values: [4]c_ulonglong;
+extern const layout_values: [1]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_render_gbuffer_handle),
-        @offsetOf(abi.c.ke_render_gbuffer_handle, "ref"),
-        @offsetOf(abi.c.ke_render_gbuffer_handle, "destroy"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

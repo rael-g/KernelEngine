@@ -7,4 +7,6 @@ pub fn build(b: *std.Build) void {
     mod.addImport("abi_asset_resolver", b.dependency("abi_asset_resolver", .{}).module("abi"));
     mod.addImport("abi_render_gpu", b.dependency("abi_render_gpu", .{}).module("abi"));
     mod.addImport("abi_render", b.dependency("abi_render", .{}).module("abi"));
+    mod.addImport("abi_render_frame", b.dependency("abi_render_frame", .{}).module("abi"));
+    mod.addImport("abi_render_graph", b.dependency("abi_render_graph", .{}).module("abi"));
 }

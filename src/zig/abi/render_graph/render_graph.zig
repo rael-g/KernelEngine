@@ -114,6 +114,12 @@ pub const RenderGraphCtx = struct {
                     return T.buffer(state, a0);
                 }
             }.call,
+            .buffer_size = &struct {
+                fn call(self: ?*c.ke_render_graph_ctx, a0: c.ke_render_graph_resource) callconv(.c) u64 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(u64)));
+                    return T.bufferSize(state, a0);
+                }
+            }.call,
         };
     }
 
@@ -146,6 +152,11 @@ pub const RenderGraphCtx = struct {
     /// The buffer behind resource, which the pass declared.
     pub fn buffer(self: RenderGraphCtx, resource: c.ke_render_graph_resource) c.ke_gpu_buffer {
         return self.ptr.buffer.?(self.ptr, resource);
+    }
+
+    /// The size in bytes of the buffer behind resource, which the pass declared.
+    pub fn bufferSize(self: RenderGraphCtx, resource: c.ke_render_graph_resource) u64 {
+        return self.ptr.buffer_size.?(self.ptr, resource);
     }
 
 };

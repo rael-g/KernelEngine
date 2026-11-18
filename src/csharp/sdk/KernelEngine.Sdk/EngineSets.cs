@@ -29,6 +29,18 @@ public sealed class EngineSets
     /// <summary>The set of the shutdown schedule.</summary>
     public required uint Shutdown { get; init; }
 
+    /// <summary>The first set of the render schedule, where the frame begins; zero without one.</summary>
+    public uint RenderBegin { get; init; }
+
+    /// <summary>The set of the render schedule after <see cref="RenderBegin"/>, where uploads run and passes make what they hand to others.</summary>
+    public uint RenderPrepare { get; init; }
+
+    /// <summary>The set of the render schedule after <see cref="RenderPrepare"/>, where passes are declared.</summary>
+    public uint RenderQueue { get; init; }
+
+    /// <summary>The set of the render schedule after <see cref="RenderQueue"/>, where the frame is executed and presented.</summary>
+    public uint RenderSubmit { get; init; }
+
     /// <summary>Registers the standard sets in <paramref name="schedules"/>.</summary>
     /// <param name="schedules">The schedules the sets are registered in.</param>
     /// <returns>The id of each set.</returns>
@@ -37,6 +49,10 @@ public sealed class EngineSets
         var fixedPre = schedules.Fixed.RegisterSet("fixed_pre_update", []);
         var fixedUpdate = schedules.Fixed.RegisterSet("fixed_update", [fixedPre]);
         var update = schedules.Update.RegisterSet("update", []);
+        var render = schedules.Render;
+        var renderBegin = render?.RegisterSet("render_begin", []) ?? 0;
+        var renderPrepare = render?.RegisterSet("render_prepare", [renderBegin]) ?? 0;
+        var renderQueue = render?.RegisterSet("render_queue", [renderPrepare]) ?? 0;
         return new EngineSets
         {
             Startup = schedules.Startup.RegisterSet("startup", []),
@@ -47,6 +63,10 @@ public sealed class EngineSets
             Update = update,
             PostUpdate = schedules.Update.RegisterSet("post_update", [update]),
             Shutdown = schedules.Shutdown.RegisterSet("shutdown", []),
+            RenderBegin = renderBegin,
+            RenderPrepare = renderPrepare,
+            RenderQueue = renderQueue,
+            RenderSubmit = render?.RegisterSet("render_submit", [renderQueue]) ?? 0,
         };
     }
 }

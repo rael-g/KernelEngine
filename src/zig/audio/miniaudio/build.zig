@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
         .abi = &.{ "abi_resource_cache", "abi_audio", "abi_io", "abi_resource_cache_default_factory", "abi_result" },
         .common = &.{"heap"},
         .translations = &.{.{ .name = "c", .header = "src/c.h" }},
-        .packages = &.{.{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
+        .packages = &.{ .{ .name = "pending_reads", .dependency = "ke_io_pending_reads", .module = "pending_reads" }, .{ .name = "zsub", .dependency = "zsub", .module = "zsub" }},
         .third_party = thirdParty,
         .tests = "Run the miniaudio audio unit tests",
     });

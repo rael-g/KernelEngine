@@ -114,7 +114,7 @@ typedef enum ke_render_graph_load {
     KE_RENDER_GRAPH_LOAD_DONT_CARE = 2,
 } ke_render_graph_load;
 
-/// [bag] One use of a resource by a pass.
+/// [value] One use of a resource by a pass.
 typedef struct ke_render_graph_use {
     ke_render_graph_resource resource;
     ke_render_graph_usage usage;
@@ -173,7 +173,8 @@ typedef struct ke_render_graph_pass_desc {
     const char *name;
     ke_render_graph_pass_type type;
     ke_render_graph_queue queue;
-    /// Orders passes that no dependency orders: a lower point runs first.
+    /// Orders the passes: a use refers to the last write of its resource by a pass earlier in the order of
+    /// injection point, then declaration, and passes no dependency orders run with the lower point first.
     uint32_t injection_point;
     /// Whether the pass runs even when nothing it writes is read.
     bool side_effect;
@@ -218,6 +219,9 @@ typedef struct ke_render_graph_ctx {
     /// The buffer behind @p resource, which the pass declared.
     /// @return The buffer; KE_GPU_INVALID_HANDLE for a resource the pass did not declare.
     ke_gpu_buffer (*buffer)(ke_render_graph_ctx *self, ke_render_graph_resource resource);
+    /// The size in bytes of the buffer behind @p resource, which the pass declared.
+    /// @return The size; zero for a resource the pass did not declare.
+    uint64_t (*buffer_size)(ke_render_graph_ctx *self, ke_render_graph_resource resource);
 } ke_render_graph_ctx;
 
 /// [interface] The passes of a frame and the resources between them, declared each frame, then compiled

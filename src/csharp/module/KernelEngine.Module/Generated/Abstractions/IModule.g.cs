@@ -5,7 +5,10 @@
 
 using KernelEngine.Common;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Module.Native;
 using KernelEngine.Schedule;
+using KernelEngine.Schedule.Native;
 
 namespace KernelEngine.Module;
 
@@ -18,6 +21,7 @@ public interface IModule : IDisposable
     /// <param name="@fixed">Runs once per fixed step.</param>
     /// <param name="update">Runs after the fixed steps in every tick.</param>
     /// <param name="shutdown">Runs once, when the loop shuts down.</param>
+    /// <param name="render">Runs over the render world once per extraction; NULL where there is none.</param>
     /// <param name="startupSet">In startup.</param>
     /// <param name="preUpdateSet">In pre_update.</param>
     /// <param name="fixedPreUpdateSet">In fixed, first.</param>
@@ -26,8 +30,12 @@ public interface IModule : IDisposable
     /// <param name="updateSet">In update, first.</param>
     /// <param name="postUpdateSet">In update, after update_set.</param>
     /// <param name="shutdownSet">In shutdown.</param>
+    /// <param name="renderBeginSet">In render, first: where the frame begins.</param>
+    /// <param name="renderPrepareSet">In render, after render_begin_set: where uploads run and passes make what they hand to others.</param>
+    /// <param name="renderQueueSet">In render, after render_prepare_set: where passes are declared.</param>
+    /// <param name="renderSubmitSet">In render, after render_queue_set: where the frame is executed and presented.</param>
     /// <exception cref="Exception">The native call failed.</exception>
-    void Attach(nint startup, nint preUpdate, nint @fixed, nint update, nint shutdown, uint startupSet, uint preUpdateSet, uint fixedPreUpdateSet, uint fixedUpdateSet, uint fixedPostUpdateSet, uint updateSet, uint postUpdateSet, uint shutdownSet);
+    void Attach(nint startup, nint preUpdate, nint @fixed, nint update, nint shutdown, nint render, uint startupSet, uint preUpdateSet, uint fixedPreUpdateSet, uint fixedUpdateSet, uint fixedPostUpdateSet, uint updateSet, uint postUpdateSet, uint shutdownSet, uint renderBeginSet, uint renderPrepareSet, uint renderQueueSet, uint renderSubmitSet);
     /// <summary>Removes exactly what attach registered, and nothing else: components and entities stay in the world. A module not attached is left alone.</summary>
     void Detach();
 }

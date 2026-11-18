@@ -17,7 +17,7 @@ extern "C"
 #define KE_COMPONENT_NAME_SCENE_SLOT "scene_slot"
 
     /// A node whose children are the scene file it names. Writing @ref path replaces them: on the
-    /// next update the slot's children are destroyed and the file at @ref path is instantiated
+    /// first update once its files are read, the slot's children are destroyed and the file at @ref path is instantiated
     /// under the slot; an empty path only destroys them. What lies outside a slot outlives the
     /// change, and several slots hold several scenes at once.
     typedef struct ke_scene_slot_component
@@ -44,7 +44,9 @@ extern "C"
         ///                 that declares none.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p path or @p commands, or a fault
         ///         in what the file says; KE_RESULT_NOT_FOUND for a missing file or a type never
-        ///         registered; KE_RESULT_IO for a file that does not parse, or the queue's code.
+        ///         registered; KE_RESULT_IO for a file that does not parse;
+        ///         KE_RESULT_PENDING, with nothing recorded, while a file it reads is still being
+        ///         read on a thread that may not wait for it; or the queue's code.
         ///         On a failure @p commands may hold part of the scene.
         ke_result (*instantiate)(struct ke_scene_files *self, const char *path, ke_entity parent, ke_ecs_commands *commands, ke_entity *out_root);
 

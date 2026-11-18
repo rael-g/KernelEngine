@@ -8,7 +8,7 @@ const abi_mesh = @import("abi_mesh");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_scene);
 
@@ -147,7 +147,7 @@ fn swapMaterial(core: *abi_render.c.ke_render_service, m: *abi_render_components
 /// context, so the first pass reaches the sprite on a later tick. A refused attach returns the
 /// commands' code, and the sprite stays marked, so a later tick does not
 /// queue it again. A failed upload, material creation or texture resolve leaves its handle empty.
-pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+pub fn system(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;
@@ -428,7 +428,7 @@ var view_entities: [1]abi_asset_resolver.c.ke_entity = .{1};
 var view_segment: abi_ecs.c.ke_ecs_segment = undefined;
 var view_columns: [2]?*anyopaque = undefined;
 
-fn fakeView(_: [*c]abi_runtime.c.ke_system_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
+fn fakeView(_: [*c]abi_schedule.c.ke_schedule_ctx, index: u32, out_count: [*c]usize) callconv(.c) [*c]const abi_ecs.c.ke_ecs_segment {
     if (index != 0) {
         out_count.* = 0;
         return null;
@@ -455,7 +455,7 @@ test "a sprite resolved every tick holds one reference to its mesh and material,
     view_sprites[0] = defaultSprite();
     view_sprites[0].attached = 1;
     view_meshes[0] = std.mem.zeroes(abi_render_components.c.ke_mesh_component);
-    var ctx = std.mem.zeroes(abi_runtime.c.ke_system_ctx);
+    var ctx = std.mem.zeroes(abi_schedule.c.ke_schedule_ctx);
     ctx.view = fakeView;
 
     for (0..5) |_| try testing.expect(system(&ctx, &st, 0.0) == R.ok);

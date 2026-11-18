@@ -6,7 +6,7 @@ const abi_mesh = @import("abi_mesh");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_result = @import("abi_result");
-const abi_runtime = @import("abi_runtime");
+const abi_schedule = @import("abi_schedule");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_scene);
 
@@ -200,7 +200,7 @@ fn resolveMaterial(core: *abi_render.c.ke_render_service, m: [*c]abi_render_comp
 /// Runs in the update phase over the mesh view. For every component it runs `resolveMesh` and
 /// then `resolveMaterial`, each only while its handle is still empty. It always succeeds: a failed
 /// upload or creation is logged, leaves the handle empty and is attempted again on the next pass.
-pub fn system(ctx: ?*abi_runtime.c.ke_system_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
+pub fn system(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const core: *abi_render.c.ke_render_service = @ptrCast(@alignCast(user.?));
 
     var segc: usize = 0;

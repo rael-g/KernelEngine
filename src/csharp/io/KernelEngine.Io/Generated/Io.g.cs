@@ -8,6 +8,8 @@ using System.Runtime.InteropServices;
 
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.FileSystem;
 using KernelEngine.FileSystem.Native;
 using KernelEngine.Io.Native;
@@ -23,7 +25,7 @@ public unsafe interface INativeIo
     global::KernelEngine.Interop.NativeOwner? Owner { get; }
 }
 
-/// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
+/// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once, or passed as a dependency through its completion. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
 public unsafe partial class Io : IDisposable, INativeIo, IIo
 {
     private ke_io* _native;
@@ -280,7 +282,15 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         return Handle->is_completed(Handle, (ke_io_request*)request.Address);
     }
 
-    /// <summary>Blocks until the request finishes, releases it, and reports what it read.</summary>
+    /// <summary>The completion of a request, to pass as a dependency to work that reads its result; that work then waits on the request without blocking.</summary>
+    /// <param name="request">A request a submit slot returned.</param>
+    /// <returns>The completion, borrowed until the request is waited on; null for a null request.</returns>
+    public nint Completion(IoRequest request)
+    {
+        return (nint)Handle->completion(Handle, (ke_io_request*)request.Address);
+    }
+
+    /// <summary>Releases a request and reports what it read: at once, from any thread, when it finished; otherwise blocking until it finishes, where its completion may be waited on.</summary>
     /// <param name="request">A request a submit slot returned; invalid afterwards.</param>
     /// <returns>Receives what the request read; left zeroed when it failed.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

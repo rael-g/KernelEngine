@@ -9,18 +9,19 @@ public sealed unsafe partial class DefaultRenderFrame
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="runtime">Registers the frame's systems; borrowed, must outlive it.</param>
-    /// <param name="ecs">Registers the frame tag; borrowed.</param>
-    /// <param name="service">The frame begins and ends on it; borrowed, must outlive it.</param>
+    /// <param name="ecs">The render world; registers the frame tag; borrowed.</param>
+    /// <param name="graph">The frame is declared into it; borrowed, must outlive it.</param>
+    /// <param name="service">The frame begins, uploads and presents on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
-    /// <param name="scene">Names the components the frame reads; borrowed.</param>
-    public DefaultRenderFrame(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene) : base(CreateLogged(loggerFactory, runtime, ecs, service, camera, scene))
+    /// <param name="scene">Names the components the frame reads; borrowed, must outlive it.</param>
+    /// <param name="config">The frame's values; Required; every field is read as given.</param>
+    public DefaultRenderFrame(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config) : base(CreateLogged(loggerFactory, ecs, graph, service, camera, scene, config))
     {
     }
 
-    private static KernelEngine.Render.Native.ke_render_frame_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene)
+    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config)
     {
         if (loggerFactory is not null) KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(runtime, ecs, service, camera, scene);
+        return Create(ecs, graph, service, camera, scene, config);
     }
 }

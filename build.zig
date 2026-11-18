@@ -147,6 +147,7 @@ pub fn build(b: *std.Build) void {
     ctx.moduleTests("ke_abi", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
+    ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize });
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -170,7 +171,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    const io_pool = ctx.member("ke_io_pool", .{
+    const io_async = ctx.member("ke_io_async", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -541,6 +542,13 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "result" }),
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
+            b.pathJoin(&.{ src_c, "extraction" }),
+            b.pathJoin(&.{ src_c, "render_graph" }),
+            b.pathJoin(&.{ src_c, "async" }),
+            b.pathJoin(&.{ src_zig, "render_graph/simple/include" }),
+            b.pathJoin(&.{ src_zig, "extraction/default/include" }),
+            b.pathJoin(&.{ src_zig, "job/inline/include" }),
+            b.pathJoin(&.{ src_zig, "async/inline/include" }),
             b.pathJoin(&.{ src_zig, "render/texture_target/include" }),
             b.pathJoin(&.{ src_zig, "render/renderdoc_target/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
@@ -576,7 +584,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "file_system" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "io/pool/include" }),
+            b.pathJoin(&.{ src_zig, "io/async/include" }),
         }),
         .libs = joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
@@ -595,14 +603,19 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_tonemap") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_ecs_flecs") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_runtime") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_inline") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_async_inline") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_scheduler") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_schedule") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_extraction_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_graph_simple") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
         }),
         .@"link-m" = true,
     }, &.{
         &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step, &file_system_std.step, &io_pool.step });
+        &ecs_flecs.step,                 &task_pool_enki.step,              &runtime.step, &file_system_std.step, &io_async.step });
 
     const pong = ctx.example("c_pong", .{
         .target = target,
@@ -636,7 +649,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ root, "src/sdk/c" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "input/default/include" }),
-            b.pathJoin(&.{ src_zig, "io/pool/include" }),
+            b.pathJoin(&.{ src_zig, "io/async/include" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
             b.pathJoin(&.{ src_zig, "task_pool/enki/include" }),
             b.pathJoin(&.{ src_zig, "job/enki/include" }),
@@ -656,6 +669,8 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_zig, "physics/body2d/include" }),
             b.pathJoin(&.{ src_zig, "extraction/default/include" }),
             b.pathJoin(&.{ src_c, "extraction" }),
+            b.pathJoin(&.{ src_c, "render_graph" }),
+            b.pathJoin(&.{ src_zig, "render_graph/simple/include" }),
             b.pathJoin(&.{ src_zig, "render/webgpu/include" }),
             b.pathJoin(&.{ src_zig, "render/service/include" }),
             b.pathJoin(&.{ src_zig, "render/binder_grouped/include" }),
@@ -676,7 +691,7 @@ pub fn build(b: *std.Build) void {
         .libs = joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_pool") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_task_pool_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_enki") }),
@@ -694,6 +709,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_2d_box2d") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_physics_body2d") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_extraction_default") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_graph_simple") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_device_webgpu") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_service") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_binder_grouped") }),

@@ -5,29 +5,32 @@
 
 namespace KernelEngine.Render.Webgpu;
 
-/// <summary>Registers the scene's render components and the update-phase systems "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on failure, and the component types registered before it stay registered.</summary>
+/// <summary>Registers the scene's render components in the main world and in the render world, and a copy of each in the extraction. Its systems come from ke_render_scene_resolve_systems_create.</summary>
 public sealed unsafe partial class DefaultRenderSceneResolve : KernelEngine.Render.RenderSceneResolve
 {
-    /// <summary>Registers the scene's render components and the update-phase systems "render.sprite2d.resolve" and "render.mesh.resolve", the second running after the first. A missing runtime, ecs or service fails as an invalid argument; the handle's ref is NULL on failure, and the component types registered before it stay registered.</summary>
-    /// <param name="runtime">Registers the resolve systems; borrowed, must outlive it.</param>
-    /// <param name="ecs">Registers the components; borrowed.</param>
+    /// <summary>Registers the scene's render components in the main world and in the render world, and a copy of each in the extraction. Its systems come from ke_render_scene_resolve_systems_create.</summary>
+    /// <param name="main">The main world; borrowed, must outlive it.</param>
+    /// <param name="render">The render world; borrowed, must outlive it.</param>
+    /// <param name="extraction">Copies each component from main into render; borrowed, must outlive it.</param>
     /// <param name="service">Uploads the meshes, materials and textures; borrowed, must outlive it.</param>
     /// <param name="resolver">Reads the image a sprite names; borrowed. Without it a sprite draws untextured.</param>
-    public DefaultRenderSceneResolve(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(runtime, ecs, service, resolver))
+    public DefaultRenderSceneResolve(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver = default) : base(Create(main, render, extraction, service, resolver))
     {
-        Hold(runtime.Owner);
-        Hold(ecs.Owner);
+        Hold(main.Owner);
+        Hold(render.Owner);
+        Hold(extraction.Owner);
         Hold(service.Owner);
         Hold(resolver?.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Runtime.INativeRuntime runtime, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
+    private static KernelEngine.Render.Native.ke_render_scene_resolve_handle Create(KernelEngine.Ecs.INativeEcs main, KernelEngine.Ecs.INativeEcs render, KernelEngine.Extraction.INativeExtraction extraction, KernelEngine.Render.INativeRenderService service, KernelEngine.Framework.INativeAssetResolver? resolver)
     {
-        ArgumentNullException.ThrowIfNull(runtime);
-        ArgumentNullException.ThrowIfNull(ecs);
+        ArgumentNullException.ThrowIfNull(main);
+        ArgumentNullException.ThrowIfNull(render);
+        ArgumentNullException.ThrowIfNull(extraction);
         ArgumentNullException.ThrowIfNull(service);
         KernelEngine.Render.Native.ke_render_scene_resolve_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(runtime.Native, ecs.Native, service.Native, (resolver is null ? null : resolver.Native), &handle), "ke_render_scene_resolve_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_scene_resolve_create(main.Native, render.Native, extraction.Native, service.Native, (resolver is null ? null : resolver.Native), &handle), "ke_render_scene_resolve_create");
         return handle;
     }
 }

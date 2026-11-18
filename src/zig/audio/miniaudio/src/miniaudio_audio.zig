@@ -13,6 +13,7 @@ const gpa = heap.gpa;
 const ma = @import("c");
 const abi_audio = @import("abi_audio");
 const abi_io = @import("abi_io");
+const pending_reads = @import("pending_reads");
 const abi_resource_cache = @import("abi_resource_cache");
 const abi_resource_cache_default_factory = @import("abi_resource_cache_default_factory");
 const abi_result = @import("abi_result");
@@ -20,11 +21,10 @@ const abi_result = @import("abi_result");
 const R = @import("result").Result(.{});
 
 /// One loaded sound, allocated per load and owned by `sounds` until `destroySoundResource` frees
-/// it. `bytes` is the file the io read, released through the io with the sound; every voice of the
+/// it. `bytes` is a copy of the file the io read, released with the sound; every voice of the
 /// sound decodes from it.
 const LoadedSound = struct {
-    bytes: ?*anyopaque,
-    size: usize,
+    bytes: []u8,
 };
 
 /// One playback, allocated by `audioVoiceStart` and owned by `voices` until `audioVoiceStop` frees
@@ -44,9 +44,10 @@ const Voice = struct {
 /// created, and the destroy callback reads `sounds`, so the map must still exist while the cache is
 /// alive. A sound id is a key of `sounds` and a handle of the cache, which reference-counts it by
 /// id and by path. A voice id is a key of `voices`. `io` is borrowed from the factory's caller, and every sound file is read through
-/// it. Everything runs on the calling thread.
+/// it, a read still going on kept in `reads`. Everything runs on the calling thread.
 const State = struct {
     io: *abi_io.c.ke_io,
+    reads: pending_reads.Reads,
     engine: ma.ma_engine,
     engine_ready: bool,
     sounds: std.AutoHashMap(abi_audio.c.ke_audio_sound, *LoadedSound),
@@ -64,11 +65,11 @@ const log = std.log.scoped(.audio_miniaudio);
 fn destroySoundResource(handle: abi_resource_cache.c.ke_resource_handle, ctx: ?*anyopaque) callconv(.c) void {
     const state: *State = @ptrCast(@alignCast(ctx.?));
     const slot: ?*LoadedSound = if (state.sounds.fetchRemove(handle)) |kv| kv.value else null;
-    if (slot) |s| release(state, s);
+    if (slot) |s| release(s);
 }
 
-fn release(state: *State, s: *LoadedSound) void {
-    if (s.bytes) |bytes| state.io.free_bytes.?(state.io, bytes);
+fn release(s: *LoadedSound) void {
+    gpa.free(s.bytes);
     gpa.destroy(s);
 }
 
@@ -90,6 +91,7 @@ fn audioDestroy(self: ?*abi_audio.c.ke_audio) callconv(.c) void {
     state.cache_destroy(state.cache);
     if (state.engine_ready) ma.ma_engine_uninit(&state.engine);
     state.sounds.deinit();
+    state.reads.deinit(state.io);
     gpa.destroy(state);
     gpa.destroy(api);
 }
@@ -106,7 +108,7 @@ fn audioLoadSound(self: ?*abi_audio.c.ke_audio, path: [*c]const u8, out_sound: ?
     if (self == null or path == null) return R.code(error.InvalidArgument);
     const state: *State = @ptrCast(@alignCast(self.?.handle));
     out.* = loadSound(state, path) catch |err| {
-        log.warn("loading {s} failed: {t}", .{ path, err });
+        if (err != error.Pending) log.warn("loading {s} failed: {t}", .{ path, err });
         return R.code(err);
     };
     return R.ok;
@@ -117,23 +119,29 @@ fn loadSound(state: *State, path: [*c]const u8) R.Error!abi_audio.c.ke_audio_sou
     if (state.cache.try_get_cached.?(state.cache, path, &cached))
         return @intCast(cached);
 
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(state.io.read_file.?(state.io, path, &request));
-    var file: abi_io.c.ke_io_result = undefined;
-    R.check(state.io.wait.?(state.io, request, &file)) catch |err| switch (err) {
-        error.OutOfMemory => return err,
-        else => return error.NotFound,
+    const file = state.reads.text(state.io, path) catch |err| switch (err) {
+        error.Pending => return err,
+        error.OutOfMemory => {
+            state.reads.forget(std.mem.span(path));
+            return err;
+        },
+        else => {
+            state.reads.forget(std.mem.span(path));
+            return error.NotFound;
+        },
     };
+    defer state.reads.forget(std.mem.span(path));
 
+    const bytes = gpa.dupe(u8, file) catch return error.OutOfMemory;
     const slot = gpa.create(LoadedSound) catch {
-        state.io.free_bytes.?(state.io, file.bytes);
+        gpa.free(bytes);
         return error.OutOfMemory;
     };
-    slot.* = .{ .bytes = file.bytes, .size = file.size };
-    errdefer release(state, slot);
+    slot.* = .{ .bytes = bytes };
+    errdefer release(slot);
 
     var probe: ma.ma_decoder = undefined;
-    const decoded = ma.ma_decoder_init_memory(file.bytes, @intCast(file.size), null, &probe);
+    const decoded = ma.ma_decoder_init_memory(bytes.ptr, bytes.len, null, &probe);
     if (decoded != ma.MA_SUCCESS) {
         log.warn("{s}: {s}", .{ std.mem.span(path), ma.ma_result_description(decoded) });
         return error.NotFound;
@@ -182,7 +190,7 @@ fn voiceStart(state: *State, id: abi_audio.c.ke_audio_sound, volume: f32, pitch:
     v.* = .{ .clip = id, .decoder = undefined, .decoder_ready = false, .sound = undefined, .initialized = false };
     errdefer releaseVoice(v);
 
-    if (ma.ma_decoder_init_memory(clip.bytes, clip.size, null, &v.decoder) != ma.MA_SUCCESS) return error.General;
+    if (ma.ma_decoder_init_memory(clip.bytes.ptr, clip.bytes.len, null, &v.decoder) != ma.MA_SUCCESS) return error.General;
     v.decoder_ready = true;
     if (ma.ma_sound_init_from_data_source(&state.engine, @ptrCast(&v.decoder), 0, null, &v.sound) != ma.MA_SUCCESS) return error.General;
     v.initialized = true;
@@ -249,6 +257,7 @@ fn create(io: *abi_io.c.ke_io) R.Error!abi_audio.c.ke_audio_handle {
     errdefer gpa.destroy(state);
     state.* = .{
         .io = io,
+        .reads = .{ .gpa = gpa },
         .engine = undefined,
         .engine_ready = false,
         .sounds = std.AutoHashMap(abi_audio.c.ke_audio_sound, *LoadedSound).init(gpa),
@@ -311,6 +320,13 @@ fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result
     return R.ok;
 }
 
+var wait_refused = false;
+
+fn waitUnlessRefused(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
+    if (wait_refused) return R.code(error.NotSupported);
+    return waitServed(args);
+}
+
 fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
 
 var served_io: zsub.For(abi_io.c.ke_io) = undefined;
@@ -359,6 +375,24 @@ test "a sound is read through the io and decoded from memory" {
     try R.check(h.ref.?.load_sound.?(h.ref, "beep.wav", &id));
     try testing.expect(id != abi_audio.c.KE_AUDIO_SOUND_INVALID);
     try served_io.received(.read_file).atLeast(1);
+    h.ref.?.unload_sound.?(h.ref, id);
+}
+
+test "a sound whose read cannot be waited on yet is pending, and a later load decodes it" {
+    const h = createAudio();
+    if (h.ref == null) return error.SkipZigTest;
+    defer h.destroy.?(h.ref);
+
+    _ = try serving(&silent_wav);
+    defer served = null;
+    _ = served_io.when(.wait).does(waitUnlessRefused);
+    var id: abi_audio.c.ke_audio_sound = abi_audio.c.KE_AUDIO_SOUND_INVALID;
+    wait_refused = true;
+    try testing.expectError(error.Pending, R.check(h.ref.?.load_sound.?(h.ref, "pending.wav", &id)));
+    try testing.expect(id == abi_audio.c.KE_AUDIO_SOUND_INVALID);
+    wait_refused = false;
+    try R.check(h.ref.?.load_sound.?(h.ref, "pending.wav", &id));
+    try testing.expect(id != abi_audio.c.KE_AUDIO_SOUND_INVALID);
     h.ref.?.unload_sound.?(h.ref, id);
 }
 

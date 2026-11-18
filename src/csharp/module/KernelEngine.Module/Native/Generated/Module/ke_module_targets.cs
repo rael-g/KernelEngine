@@ -24,6 +24,9 @@ public unsafe partial struct ke_module_targets
     [NativeTypeName("ke_schedule *")]
     public KernelEngine.Schedule.Native.ke_schedule* shutdown;
 
+    [NativeTypeName("ke_schedule *")]
+    public KernelEngine.Schedule.Native.ke_schedule* render;
+
     [NativeTypeName("ke_schedule_set_id")]
     public uint startup_set;
 
@@ -47,4 +50,16 @@ public unsafe partial struct ke_module_targets
 
     [NativeTypeName("ke_schedule_set_id")]
     public uint shutdown_set;
+
+    [NativeTypeName("ke_schedule_set_id")]
+    public uint render_begin_set;
+
+    [NativeTypeName("ke_schedule_set_id")]
+    public uint render_prepare_set;
+
+    [NativeTypeName("ke_schedule_set_id")]
+    public uint render_queue_set;
+
+    [NativeTypeName("ke_schedule_set_id")]
+    public uint render_submit_set;
 }

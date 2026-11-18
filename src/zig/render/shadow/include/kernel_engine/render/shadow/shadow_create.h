@@ -11,7 +11,7 @@
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 #include <kernel_engine/view/view_space.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/module/module.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_SHADOW_EXPORT
@@ -32,8 +32,6 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_render_shadow ke_render_shadow;
-
     /** [bag]
      * The shape of the directional shadow pass's map. A scene larger than
      * `extent` loses shadows outside it, and a caster farther than `light_distance` stops
@@ -53,23 +51,16 @@ extern "C"
         float    far_plane;
     } ke_render_shadow_config;
 
-
-    /// [owner]
-    typedef struct ke_render_shadow_handle
-    {
-        ke_render_shadow *ref;
-        void (*destroy)(ke_render_shadow *self);
-    } ke_render_shadow_handle;
-
-    /// Registers the pass's render-phase system. A missing runtime, service, device or view space
-    /// fails as an invalid argument.
+    /// Makes the directional shadow pass. Attached, it publishes the shadow map and the light's
+    /// view-projection in the render prepare set, and declares the pass that draws the casters into the
+    /// map in the render queue set.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
     /// @param config [borrowed] The map's shape; Required; every field is read as given.
-    /// @param out_resources [out] Receives the ids of the map and the light it writes; every id
-    ///                      KE_COMPONENT_INVALID on failure.
-    /// @param out_shadow [out] Receives the handle; left zeroed on failure.
+    /// @param out_module [out] Receives the pass; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context, a part the pass uses or @p config is
+    ///         NULL; the code of the GPU object that could not be made.
     KE_RENDER_SHADOW_API ke_result ke_render_shadow_create(
-        const ke_render_context *context, const ke_render_shadow_config *config, ke_render_shadow_resources *out_resources, ke_render_shadow_handle *out_shadow);
+        const ke_render_context *context, const ke_render_shadow_config *config, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

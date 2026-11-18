@@ -24,6 +24,9 @@ public sealed class EngineSchedules
     /// <summary>Runs once, when the scheduler shuts down.</summary>
     public required KernelEngine.Schedule.Schedule Shutdown { get; init; }
 
+    /// <summary>Runs over the render world once per extraction; null when the engine has no render stage.</summary>
+    public KernelEngine.Schedule.Schedule? Render { get; init; }
+
     /// <summary>Adds the schedules to <paramref name="scheduler"/>, each at its cadence, in the order they tick.</summary>
     /// <param name="scheduler">The scheduler that runs them.</param>
     public void AddTo(KernelEngine.Scheduler.Scheduler scheduler)
@@ -40,8 +43,9 @@ public sealed class EngineSchedules
     /// <param name="sets">The sets the schedules hold.</param>
     public unsafe void Attach(KernelEngine.Module.Module module, EngineSets sets) =>
         module.Attach((nint)((INativeSchedule)Startup).Native, (nint)((INativeSchedule)PreUpdate).Native, (nint)((INativeSchedule)Fixed).Native,
-            (nint)((INativeSchedule)Update).Native, (nint)((INativeSchedule)Shutdown).Native, sets.Startup, sets.PreUpdate, sets.FixedPreUpdate,
-            sets.FixedUpdate, sets.FixedPostUpdate, sets.Update, sets.PostUpdate, sets.Shutdown);
+            (nint)((INativeSchedule)Update).Native, (nint)((INativeSchedule)Shutdown).Native, Render is null ? 0 : (nint)((INativeSchedule)Render).Native,
+            sets.Startup, sets.PreUpdate, sets.FixedPreUpdate, sets.FixedUpdate, sets.FixedPostUpdate, sets.Update, sets.PostUpdate, sets.Shutdown,
+            sets.RenderBegin, sets.RenderPrepare, sets.RenderQueue, sets.RenderSubmit);
 
     /// <summary>Adds the render stage of <paramref name="extraction"/> to <paramref name="scheduler"/>, ticking every tick, run by its own native run slot.</summary>
     /// <param name="scheduler">The scheduler that runs it.</param>

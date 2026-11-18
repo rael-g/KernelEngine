@@ -152,6 +152,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -862,122 +867,53 @@
       "external": true
     },
     {
-      "name": "ke_render_resource_type",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_RENDER_RESOURCE_TEXTURE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_RENDER_RESOURCE_BUFFER",
-          "value": 1,
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_render_size_mode",
-      "doc": null,
-      "values": [
-        {
-          "name": "KE_RENDER_SIZE_ABSOLUTE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_RENDER_SIZE_RELATIVE_TO_BACKBUFFER",
-          "value": 1,
-          "doc": null
-        }
-      ]
-    },
-    {
       "name": "ke_render_stage",
-      "doc": "Where a pass that works on the frame\u0027s color runs. The stages run in this order, and the passes of one stage in the order they joined. Stages up to KE_RENDER_STAGE_HDR_POST draw in the service\u0027s color format, the later ones in the backbuffer\u0027s.",
+      "doc": "Where a pass that works on the frame\u0027s color runs, given to the render graph as the pass\u0027s injection point: the stages run in this order. Stages up to KE_RENDER_STAGE_HDR_POST draw in the frame\u0027s color format, the later ones in its output\u0027s.",
       "values": [
+        {
+          "name": "KE_RENDER_STAGE_PREPASS",
+          "value": 0,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
+        },
         {
           "name": "KE_RENDER_STAGE_OPAQUE",
-          "value": 0,
-          "doc": null
+          "value": 1,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_SKY",
-          "value": 1,
-          "doc": null
+          "value": 2,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_TRANSPARENT",
-          "value": 2,
-          "doc": null
+          "value": 3,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_HDR_POST",
-          "value": 3,
-          "doc": null
+          "value": 4,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_TONEMAP",
-          "value": 4,
-          "doc": null
+          "value": 5,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_LDR_POST",
-          "value": 5,
-          "doc": null
+          "value": 6,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_OVERLAY",
-          "value": 6,
-          "doc": null
+          "value": 7,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         },
         {
           "name": "KE_RENDER_STAGE_COUNT",
-          "value": 7,
-          "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_render_chain_mode",
-      "doc": "What a pass in the chain does with the frame\u0027s color.",
-      "values": [
-        {
-          "name": "KE_RENDER_CHAIN_DRAW_OVER",
-          "value": 0,
-          "doc": "Draws over the current color."
-        },
-        {
-          "name": "KE_RENDER_CHAIN_SAMPLE_OVER",
-          "value": 1,
-          "doc": "Samples the current color, through the context\u0027s color_source, and draws over a copy of it, which becomes the current color."
-        },
-        {
-          "name": "KE_RENDER_CHAIN_REPLACE",
-          "value": 2,
-          "doc": "Samples the current color and writes every texel of a new one, which becomes the current color."
-        }
-      ]
-    },
-    {
-      "name": "ke_render_depth_mode",
-      "doc": "How a pass\u0027s render pass uses the frame\u0027s depth.",
-      "values": [
-        {
-          "name": "KE_RENDER_DEPTH_NONE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_RENDER_DEPTH_TEST",
-          "value": 1,
-          "doc": "Attached and tested against; the pass\u0027s pipeline does not write it."
-        },
-        {
-          "name": "KE_RENDER_DEPTH_WRITE",
-          "value": 2,
-          "doc": "Attached, tested against and written."
+          "value": 8,
+          "doc": "What the opaque stage reads: shadows, light clusters, the gbuffer."
         }
       ]
     }
@@ -1678,71 +1614,6 @@
       "external": true
     },
     {
-      "name": "ke_render_resource_params",
-      "doc": null,
-      "tags": [
-        "bag"
-      ],
-      "fields": [
-        {
-          "name": "name",
-          "type": "const char *",
-          "tags": [
-            "utf8"
-          ],
-          "doc": "The label the resource is debugged under; the service makes it unique."
-        },
-        {
-          "name": "type",
-          "type": "ke_render_resource_type",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "format",
-          "type": "ke_gpu_texture_format",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "size_mode",
-          "type": "ke_render_size_mode",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "width",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "Read when size_mode is ABSOLUTE."
-        },
-        {
-          "name": "height",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "scale_x",
-          "type": "float",
-          "tags": [],
-          "doc": "Read when size_mode is RELATIVE_TO_BACKBUFFER."
-        },
-        {
-          "name": "scale_y",
-          "type": "float",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "clear_value",
-          "type": "ke_vec4",
-          "tags": [],
-          "doc": "Per-resource clear color."
-        }
-      ]
-    },
-    {
       "name": "ke_render_frame_globals",
       "doc": "What every shader reads about the frame being drawn, under the parameter \u0060ke_frame\u0060. Matrices are stored the way the math library stores them.",
       "tags": [],
@@ -1841,59 +1712,6 @@
       ]
     },
     {
-      "name": "ke_render_pass_io",
-      "doc": "A pass\u0027s declared resource I/O. Every write is cleared when the pass\u0027s render pass opens. A pass in the chain draws into the frame\u0027s color as its first color attachment, before its writes.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "name",
-          "type": "const char *",
-          "tags": [],
-          "doc": "Optional name the pass\u0027s render or compute pass is labeled with; copied when the pass begins."
-        },
-        {
-          "name": "reads",
-          "type": "const ke_component_id *",
-          "tags": [
-            "array_of:reads_count"
-          ],
-          "doc": "The resources the pass reads."
-        },
-        {
-          "name": "reads_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "writes",
-          "type": "const ke_component_id *",
-          "tags": [
-            "array_of:writes_count"
-          ],
-          "doc": "The resources the pass writes."
-        },
-        {
-          "name": "writes_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": null
-        },
-        {
-          "name": "chain",
-          "type": "ke_render_chain_link",
-          "tags": [],
-          "doc": "The pass\u0027s link, or KE_RENDER_CHAIN_NONE for a pass outside the chain."
-        },
-        {
-          "name": "depth",
-          "type": "ke_render_depth_mode",
-          "tags": [],
-          "doc": "How the frame\u0027s depth is attached; ignored when a write is already a depth resource."
-        }
-      ]
-    },
-    {
       "name": "ke_render_service_config",
       "doc": "The values a render service is created with, whatever its implementation, each applied as given.",
       "tags": [
@@ -1907,24 +1725,6 @@
             "utf8"
           ],
           "doc": "Directory the shaders are loaded from; copied. Required."
-        },
-        {
-          "name": "color_format",
-          "type": "ke_gpu_texture_format",
-          "tags": [],
-          "doc": "Format of the frame\u0027s color up to KE_RENDER_STAGE_HDR_POST."
-        },
-        {
-          "name": "depth_format",
-          "type": "ke_gpu_texture_format",
-          "tags": [],
-          "doc": "Format of the frame\u0027s depth."
-        },
-        {
-          "name": "clear_color",
-          "type": "ke_vec4",
-          "tags": [],
-          "doc": "Color the frame is cleared to."
         }
       ]
     },
@@ -2550,105 +2350,6 @@
           "doc": null
         }
       ]
-    },
-    {
-      "name": "ke_render_gbuffer_resources",
-      "doc": "The resources a gbuffer pass writes, as the render service\u0027s ids. Every id KE_COMPONENT_INVALID stands for no gbuffer.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "albedo",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The base color."
-        },
-        {
-          "name": "normal",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The world normal."
-        },
-        {
-          "name": "emissive",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The emitted light."
-        }
-      ]
-    },
-    {
-      "name": "ke_render_shadow_resources",
-      "doc": "The resources a directional shadow pass writes, as the render service\u0027s ids. Every id KE_COMPONENT_INVALID stands for no shadow, which a reader meets with the neutral one.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "map",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The shadow map."
-        },
-        {
-          "name": "light",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The buffer holding the light\u0027s view-projection."
-        }
-      ]
-    },
-    {
-      "name": "ke_render_cluster_resources",
-      "doc": "The resources a light-cluster pass writes, as the render service\u0027s ids. Every id KE_COMPONENT_INVALID stands for no clustered light.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "tag",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The tag the pass writes, which orders its readers after it."
-        },
-        {
-          "name": "point_lights",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The clustered point lights."
-        },
-        {
-          "name": "spot_lights",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The clustered spot lights."
-        },
-        {
-          "name": "point_indices",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The point light indices of each cluster."
-        },
-        {
-          "name": "point_counts",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The point light count of each cluster."
-        },
-        {
-          "name": "spot_indices",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The spot light indices of each cluster."
-        },
-        {
-          "name": "spot_counts",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The spot light count of each cluster."
-        },
-        {
-          "name": "grid",
-          "type": "ke_component_id",
-          "tags": [],
-          "doc": "The cluster grid parameters."
-        }
-      ]
     }
   ],
   "vtables": [
@@ -2666,174 +2367,28 @@
       ],
       "slots": [
         {
-          "name": "declare",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Declares a transient resource the service allocates and recycles; every call declares a new one.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "params",
-              "type": "const ke_render_resource_params *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_cid",
-              "type": "ke_component_id *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the resource\u0027s id, the tag-component cid to place in a pass\u0027s access list."
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "import_texture",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Imports an externally-owned texture, labeled \u0060name\u0060.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "tex",
-              "type": "ke_gpu_texture",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_cid",
-              "type": "ke_component_id *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives its tag-component cid."
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "import_tag",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Mints a resource with no GPU payload, labeled \u0060name\u0060, that passes order on.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_cid",
-              "type": "ke_component_id *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the cid."
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "import_buffer",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Publishes an externally-owned GPU buffer, labeled \u0060name\u0060, for another pass to bind by its id.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "name",
-              "type": "const char *",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "buffer",
-              "type": "ke_gpu_buffer",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "size",
-              "type": "uint64_t",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_cid",
-              "type": "ke_component_id *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives its tag-component cid."
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "frame_color",
-          "returns": "ke_component_id",
-          "tags": [],
-          "doc": "The tag a pass that joined the chain writes in its access list, and that the system ending the frame reads.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "frame_depth",
-          "returns": "ke_component_id",
-          "tags": [],
-          "doc": "The frame\u0027s depth texture, cleared when the frame begins.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "begin_pass",
-          "returns": "struct ke_render_pass_ctx *",
-          "tags": [],
-          "doc": "Opens a pass\u0027s recording context, from inside a render system\u0027s body.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "io",
-              "type": "const ke_render_pass_io *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "end_pass",
-          "returns": "void",
-          "tags": [],
-          "doc": "Closes a recording context opened by begin_pass.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "ctx",
-              "type": "struct ke_render_pass_ctx *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "begin_frame",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Acquires the service\u0027s render target as the backbuffer, clears the per-pass command slot table, and clears the frame\u0027s color and depth. When the target has nothing to draw into this frame it succeeds without beginning one, and begin_pass then opens no pass; it fails with the target\u0027s code when acquiring failed.",
+          "doc": "Begins a frame: forgets the previous frame\u0027s uploads, acquires the service\u0027s render target and reads its size.",
+          "return_doc": "KE_OK, or the target\u0027s code when acquiring failed.",
+          "params": [
+            {
+              "name": "out_view",
+              "type": "ke_gpu_texture_view *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the view the frame is presented from; KE_GPU_INVALID_HANDLE when the target has nothing to draw into this frame, which then begins none."
+            }
+          ],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "submit_uploads",
+          "returns": "void",
+          "tags": [],
+          "doc": "Submits the uploads recorded since the frame began, before the frame\u0027s own work is submitted.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_service *"
@@ -2842,9 +2397,37 @@
           "name": "end_frame",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Submits the passes outside the chain in the order they ended, then the chain in its order, then draws the frame\u0027s color into the backbuffer and presents the render target. A link whose pass recorded nothing still carries the color through it. Succeeds doing nothing when no frame began, and fails with the target\u0027s code when presenting failed.",
+          "doc": "Presents the render target. Succeeds doing nothing when no frame began, and fails with the target\u0027s code when presenting failed.",
           "return_doc": null,
           "params": [],
+          "receiver": "struct ke_render_service *"
+        },
+        {
+          "name": "blit",
+          "returns": "void",
+          "tags": [],
+          "doc": "Draws source over the whole of pass\u0027s colour attachment, whose format is target_format.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "pass",
+              "type": "ke_gpu_render_pass *",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "source",
+              "type": "ke_gpu_texture_view",
+              "tags": [],
+              "doc": null
+            },
+            {
+              "name": "target_format",
+              "type": "ke_gpu_texture_format",
+              "tags": [],
+              "doc": null
+            }
+          ],
           "receiver": "struct ke_render_service *"
         },
         {
@@ -2938,40 +2521,6 @@
               "tags": [
                 "out"
               ],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "set_clear_color",
-          "returns": "void",
-          "tags": [],
-          "doc": "The color a pass clears its color attachments to (begin_render LOAD_OP_CLEAR).",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "r",
-              "type": "float",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "g",
-              "type": "float",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "b",
-              "type": "float",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "a",
-              "type": "float",
-              "tags": [],
               "doc": null
             }
           ],
@@ -3246,70 +2795,6 @@
           "receiver": "struct ke_render_service *"
         },
         {
-          "name": "resource_view",
-          "returns": "ke_gpu_texture_view",
-          "tags": [],
-          "doc": "The GPU view of a declared resource; KE_GPU_INVALID_HANDLE for an unknown id.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "resource",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_texture",
-          "returns": "ke_gpu_texture",
-          "tags": [],
-          "doc": "The raw GPU texture behind a declared resource, for the copy operations that take a texture rather than a view.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "resource",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_buffer",
-          "returns": "ke_gpu_buffer",
-          "tags": [],
-          "doc": "The GPU buffer published via import_buffer; KE_GPU_INVALID_HANDLE for another id.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "resource",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_buffer_size",
-          "returns": "uint64_t",
-          "tags": [],
-          "doc": "The size (bytes) of the buffer published via import_buffer; 0 for another id.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "resource",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
           "name": "backbuffer_size",
           "returns": "void",
           "tags": [],
@@ -3339,7 +2824,7 @@
           "name": "upload",
           "returns": "void",
           "tags": [],
-          "doc": "Records a buffer upload to be flushed single-threaded at end_frame (before submit).",
+          "doc": "Records a buffer upload, submitted by submit_uploads.",
           "return_doc": null,
           "params": [
             {
@@ -3594,8 +3079,8 @@
           "name": "load_shader",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
-          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
+          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module. Its file is read once; on a thread that may not wait for the read, the call returns while the read goes on, and a later call with the same name and stage collects it.",
+          "return_doc": "KE_OK; KE_RESULT_PENDING while the read goes on; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
           "params": [
             {
               "name": "name",
@@ -3686,93 +3171,6 @@
           "doc": "Texel format of the backbuffer, the format a pipeline drawing into it declares.",
           "return_doc": null,
           "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_format",
-          "returns": "ke_gpu_texture_format",
-          "tags": [],
-          "doc": "Texel format of a texture resource, the format a pipeline drawing into it declares; KE_GPU_TEXTURE_FORMAT_INVALID for an unknown id or a resource without one.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "resource",
-              "type": "ke_component_id",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "resource_generation",
-          "returns": "uint32_t",
-          "tags": [],
-          "doc": "Counts the times the targets declared relative to the backbuffer were recreated, which \u0060begin_frame\u0060 does when the backbuffer changes size. A pass that keeps something made from a declared target\u0027s view, a bind group for instance, rebuilds it when the count changes.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "join_chain",
-          "returns": "ke_result",
-          "tags": [],
-          "doc": "Gives a pass a place in the chain, after every pass that joined the same stage before it. The place is kept until leave_chain.",
-          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a stage or mode out of range.",
-          "params": [
-            {
-              "name": "stage",
-              "type": "ke_render_stage",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "mode",
-              "type": "ke_render_chain_mode",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "out_link",
-              "type": "ke_render_chain_link *",
-              "tags": [
-                "out"
-              ],
-              "doc": "Receives the link; KE_RENDER_CHAIN_NONE on failure."
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "leave_chain",
-          "returns": "void",
-          "tags": [],
-          "doc": "Gives the place back. An unknown link is ignored.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "link",
-              "type": "ke_render_chain_link",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_render_service *"
-        },
-        {
-          "name": "chain_format",
-          "returns": "ke_gpu_texture_format",
-          "tags": [],
-          "doc": "Texel format of the color a pass of stage draws into, the format its pipeline declares.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "stage",
-              "type": "ke_render_stage",
-              "tags": [],
-              "doc": null
-            }
-          ],
           "receiver": "struct ke_render_service *"
         }
       ]
@@ -3993,60 +3391,8 @@
       ]
     },
     {
-      "name": "ke_render_frame",
-      "doc": "The systems that begin and end a frame on the render service.",
-      "tags": [
-        "interface"
-      ],
-      "fields": [
-        {
-          "name": "handle",
-          "type": "void *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "frame_cid",
-          "returns": "ke_component_id",
-          "tags": [],
-          "doc": "The tag the system that begins the frame writes and the system that ends it reads. A pass that reads it runs inside the frame.",
-          "return_doc": null,
-          "params": [],
-          "receiver": "struct ke_render_frame *"
-        }
-      ]
-    },
-    {
-      "name": "ke_render_frame_handle",
-      "doc": null,
-      "tags": [
-        "owner"
-      ],
-      "fields": [
-        {
-          "name": "ref",
-          "type": "ke_render_frame *",
-          "tags": [],
-          "doc": null
-        }
-      ],
-      "slots": [
-        {
-          "name": "destroy",
-          "returns": "void",
-          "tags": [],
-          "doc": null,
-          "return_doc": null,
-          "params": [],
-          "receiver": "ke_render_frame *"
-        }
-      ]
-    },
-    {
       "name": "ke_render_scene_resolve",
-      "doc": "The scene\u0027s render components and the update-phase systems that give a mesh and a sprite the GPU resources they name.",
+      "doc": "The scene\u0027s render components, in the main world and paired in the render world, and the systems that give a mesh and a sprite the GPU resources they name.",
       "tags": [
         "interface"
       ],
@@ -4063,7 +3409,16 @@
           "name": "component_ids",
           "returns": "const ke_render_scene_component_ids *",
           "tags": [],
-          "doc": "The ids of the components the scene resolve registered; valid while it lives.",
+          "doc": "The ids the main world gave the scene\u0027s components; valid while the resolve lives.",
+          "return_doc": null,
+          "params": [],
+          "receiver": "struct ke_render_scene_resolve *"
+        },
+        {
+          "name": "render_component_ids",
+          "returns": "const ke_render_scene_component_ids *",
+          "tags": [],
+          "doc": "The ids the render world gave the same components, which every extraction copies the main world\u0027s into; valid while the resolve lives.",
           "return_doc": null,
           "params": [],
           "receiver": "struct ke_render_scene_resolve *"
@@ -4179,17 +3534,80 @@
     "ke_gpu_buffer_mapped_func": "void (*)(ke_result, ke_gpu_buffer, void *)",
     "ke_render_shader_layout": "uint64_t",
     "ke_render_resource_set": "uint64_t",
-    "ke_render_material_binding": "uint64_t",
-    "ke_render_chain_link": "uint32_t"
+    "ke_render_material_binding": "uint64_t"
   },
-  "opaques": [
-    "ke_render_pass_ctx"
-  ],
   "constants": [
     {
-      "name": "KE_RENDER_CHAIN_NONE",
-      "type": "unsigned int",
-      "value": "0"
+      "name": "KE_RENDER_RESOURCE_GBUFFER_ALBEDO",
+      "type": "const char *",
+      "value": "\u0022gbuffer.albedo\u0022",
+      "doc": "The gbuffer\u0027s base color."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_GBUFFER_NORMAL",
+      "type": "const char *",
+      "value": "\u0022gbuffer.normal\u0022",
+      "doc": "The gbuffer\u0027s world normal."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_GBUFFER_EMISSIVE",
+      "type": "const char *",
+      "value": "\u0022gbuffer.emissive\u0022",
+      "doc": "The gbuffer\u0027s emitted light."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_SHADOW_MAP",
+      "type": "const char *",
+      "value": "\u0022shadow.map\u0022",
+      "doc": "The directional shadow map."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_SHADOW_LIGHT",
+      "type": "const char *",
+      "value": "\u0022shadow.light\u0022",
+      "doc": "The buffer holding the directional light\u0027s view-projection."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_POINT_LIGHTS",
+      "type": "const char *",
+      "value": "\u0022cluster.point_lights\u0022",
+      "doc": "The clustered point lights."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_SPOT_LIGHTS",
+      "type": "const char *",
+      "value": "\u0022cluster.spot_lights\u0022",
+      "doc": "The clustered spot lights."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_POINT_INDICES",
+      "type": "const char *",
+      "value": "\u0022cluster.point_indices\u0022",
+      "doc": "The point light indices of each cluster."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_POINT_COUNTS",
+      "type": "const char *",
+      "value": "\u0022cluster.point_counts\u0022",
+      "doc": "The point light count of each cluster."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_SPOT_INDICES",
+      "type": "const char *",
+      "value": "\u0022cluster.spot_indices\u0022",
+      "doc": "The spot light indices of each cluster."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_SPOT_COUNTS",
+      "type": "const char *",
+      "value": "\u0022cluster.spot_counts\u0022",
+      "doc": "The spot light count of each cluster."
+    },
+    {
+      "name": "KE_RENDER_RESOURCE_CLUSTER_GRID",
+      "type": "const char *",
+      "value": "\u0022cluster.grid\u0022",
+      "doc": "The cluster grid\u0027s parameters."
     }
   ]
 }

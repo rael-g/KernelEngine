@@ -2,11 +2,13 @@
 
 const std = @import("std");
 const abi_ecs = @import("ecs");
+const abi_extraction = @import("extraction");
 const abi_logger = @import("logger");
-const abi_render = @import("render");
+const abi_module = @import("module");
 const abi_render_context = @import("render_context");
+const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
-const abi_runtime = @import("runtime");
+const abi_schedule = @import("schedule");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_shadow_factory_c.zig");
@@ -15,27 +17,19 @@ pub const Error = abi_result.Error;
 const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
-pub const RenderShadow = struct {
-    ptr: *c.ke_render_shadow,
-    owner: ?c.ke_render_shadow_handle = null,
-
-    pub fn deinit(self: RenderShadow) void {
-        if (self.owner) |owner| owner.destroy.?(owner.ref);
-    }
-
-    /// Registers the pass's render-phase system. A missing runtime, service, device or view space
-    /// fails as an invalid argument.
-    pub fn create(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_shadow_config, out_resources: ?*abi_render.c.ke_render_shadow_resources, out_shadow: ?*c.ke_render_shadow_handle) Error!void {
-        try checkResult(c.ke_render_shadow_create(context, config, out_resources, out_shadow));
-    }
-
-};
-
 /// Sends every line ke_render_shadow logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.
 pub fn renderShadowSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) void {
     return c.ke_render_shadow_set_log_callback(callback, ctx);
 }
 
+/// Makes the directional shadow pass. Attached, it publishes the shadow map and the light's
+/// view-projection in the render prepare set, and declares the pass that draws the casters into
+/// the map in the render queue set.
+pub fn renderShadowCreate(context: ?*const abi_render_context.c.ke_render_context, config: ?*const c.ke_render_shadow_config) Error!abi_module.c.ke_module_handle {
+    var written: abi_module.c.ke_module_handle = undefined;
+    try checkResult(c.ke_render_shadow_create(context, config, &written));
+    return written;
+}
+
 pub const RenderShadowConfig = c.ke_render_shadow_config;
-pub const RenderShadowHandle = c.ke_render_shadow_handle;

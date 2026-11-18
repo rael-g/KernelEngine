@@ -4,8 +4,5 @@
 const unsigned long long layout_values[] = {
     sizeof(ke_render_forward_config),
     offsetof(ke_render_forward_config, ibl_enabled),
-    sizeof(ke_render_forward_handle),
-    offsetof(ke_render_forward_handle, ref),
-    offsetof(ke_render_forward_handle, destroy),
     0,
 };

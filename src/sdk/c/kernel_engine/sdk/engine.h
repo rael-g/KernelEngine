@@ -66,6 +66,10 @@ typedef struct ke_sdk_sets
     ke_schedule_set_id update;            ///< In the update schedule.
     ke_schedule_set_id post_update;       ///< In the update schedule, after update.
     ke_schedule_set_id shutdown;          ///< In the shutdown schedule.
+    ke_schedule_set_id render_begin;      ///< In the render schedule.
+    ke_schedule_set_id render_prepare;    ///< In the render schedule, after render_begin.
+    ke_schedule_set_id render_queue;      ///< In the render schedule, after render_prepare.
+    ke_schedule_set_id render_submit;     ///< In the render schedule, after render_queue.
 } ke_sdk_sets;
 
 /**
@@ -140,10 +144,10 @@ typedef struct ke_sdk_engine_desc
 {
     ke_sdk_engine_part task_pool;
     ke_sdk_engine_part job_system;
+    ke_sdk_engine_part async;
     ke_sdk_engine_part file_system;
     ke_sdk_engine_part io;
     ke_sdk_engine_part configuration;
-    ke_sdk_engine_part async;
     ke_sdk_engine_part input;
     ke_sdk_engine_part window;
     ke_sdk_engine_part ecs;
@@ -155,6 +159,7 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part fonts;
     ke_sdk_engine_part assets;
     ke_sdk_engine_part scene_tree;
+    ke_sdk_engine_part extraction;
     ke_sdk_engine_part render_service;
     ke_sdk_engine_part shadow;
     ke_sdk_engine_part cluster;
@@ -169,7 +174,6 @@ typedef struct ke_sdk_engine_desc
     ke_sdk_engine_part actions;
     ke_sdk_engine_part node_types;
     ke_sdk_engine_part scene_files;
-    ke_sdk_engine_part extraction;
 } ke_sdk_engine_desc;
 
 /** The configuration the default parts read their sections from. */
@@ -215,10 +219,12 @@ static inline ke_module_targets ke_sdk_targets(ke_sdk_engine *e)
 {
     return (ke_module_targets){
         .startup = e->schedules.startup.ref, .pre_update = e->schedules.pre_update.ref, .fixed = e->schedules.fixed.ref,
-        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref,
+        .update = e->schedules.update.ref, .shutdown = e->schedules.shutdown.ref, .render = e->render_schedule.ref,
         .startup_set = e->sets.startup, .pre_update_set = e->sets.pre_update, .fixed_pre_update_set = e->sets.fixed_pre_update,
         .fixed_update_set = e->sets.fixed_update, .fixed_post_update_set = e->sets.fixed_post_update,
         .update_set = e->sets.update, .post_update_set = e->sets.post_update, .shutdown_set = e->sets.shutdown,
+        .render_begin_set = e->sets.render_begin, .render_prepare_set = e->sets.render_prepare,
+        .render_queue_set = e->sets.render_queue, .render_submit_set = e->sets.render_submit,
     };
 }
 
@@ -330,13 +336,13 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part core[] = {
-        desc->task_pool, desc->job_system, desc->file_system, desc->io, desc->configuration, desc->async, desc->input, desc->window, desc->ecs,
+        desc->task_pool, desc->job_system, desc->async, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
         desc->scheduler,
     };
     const ke_sdk_engine_part parts[] = {
-        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree,
+        desc->runtime, desc->gpu_device, desc->render_target, desc->fonts, desc->assets, desc->scene_tree, desc->extraction,
         desc->render_service, desc->shadow, desc->cluster, desc->gbuffer, desc->deferred_lighting, desc->forward,
-        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files, desc->extraction,
+        desc->tonemap, desc->ui, desc->labels, desc->physics, desc->audio, desc->actions, desc->node_types, desc->scene_files,
     };
     ke_result made = KE_OK;
     for (size_t i = 0; made == KE_OK && i < sizeof core / sizeof core[0]; ++i)

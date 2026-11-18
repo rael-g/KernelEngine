@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_IO_IO_H_
 #define KERNEL_ENGINE_IO_IO_H_
 
+#include <kernel_engine/completion/completion.h>
 #include <kernel_engine/file_system/file_system.h>
 #include <kernel_engine/result/result.h>
 #include <stdbool.h>
@@ -45,7 +46,7 @@ extern "C"
 
     /**
      * Reads files without blocking the caller: each slot that reads submits a request, which runs
-     * elsewhere and is waited on exactly once. A request never waited on is never released. Paths
+     * elsewhere and is waited on exactly once, or passed as a dependency through its completion. A request never waited on is never released. Paths
      * follow ke_file_system. Every slot may be called from several threads at once.
      */
     typedef struct ke_io
@@ -57,7 +58,7 @@ extern "C"
          * @param path [borrowed] The file to read; copied before the slot returns.
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
-         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.
          */
         ke_result (*read_file)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -66,7 +67,7 @@ extern "C"
          * @param path [borrowed] The file to open; copied before the slot returns.
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
-         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.
          */
         ke_result (*open)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -80,7 +81,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p file, a null @p dst with a
          *         non-zero @p len or a null @p out_request, KE_RESULT_OUT_OF_MEMORY, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*read_at)(struct ke_io *self, ke_open_file *file, uint64_t offset,
                              void *dst, size_t len, ke_io_request **out_request);
@@ -90,7 +91,7 @@ extern "C"
          * @param path [borrowed] The path to inspect; copied before the slot returns.
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
-         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.
          */
         ke_result (*stat)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -100,7 +101,7 @@ extern "C"
          * @param path [borrowed] The path to ask about; copied before the slot returns.
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p path or @p out_request,
-         *         KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.
+         *         KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.
          */
         ke_result (*file_exists)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -111,7 +112,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*dir_exists)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -121,7 +122,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*list_dir)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -134,7 +135,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*write_file)(struct ke_io *self, const char *path, const void *bytes, size_t len,
                                  ke_io_request **out_request);
@@ -146,7 +147,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*make_dir)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -156,7 +157,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*remove)(struct ke_io *self, const char *path, ke_io_request **out_request);
 
@@ -167,7 +168,7 @@ extern "C"
          * @param out_request [out] Receives the request; null on failure.
          * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY,
          *         KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code
-         *         the task pool refused the request with.
+         *         the async system refused the request with.
          */
         ke_result (*rename)(struct ke_io *self, const char *from, const char *to,
                              ke_io_request **out_request);
@@ -180,13 +181,24 @@ extern "C"
         bool (*is_completed)(struct ke_io *self, ke_io_request *request);
 
         /**
-         * Blocks until the request finishes, releases it, and reports what it read.
+         * The completion of a request, to pass as a dependency to work that reads its result; that
+         * work then waits on the request without blocking.
+         * @param request [borrowed] A request a submit slot returned.
+         * @return The completion, borrowed until the request is waited on; null for a null
+         *         @p request.
+         */
+        ke_completion *(*completion)(struct ke_io *self, ke_io_request *request);
+
+        /**
+         * Releases a request and reports what it read: at once, from any thread, when it finished;
+         * otherwise blocking until it finishes, where its completion may be waited on.
          * @param request [borrowed] A request a submit slot returned; invalid afterwards.
          * @param out_result [out,optional] Receives what the request read; left zeroed when it
          *        failed.
-         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p request, the code the task pool
-         *         refused the wait with, the request then still to be waited on, or the failure of
-         *         the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.
+         * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p request,
+         *         KE_RESULT_NOT_SUPPORTED for an unfinished request on a thread that may not wait,
+         *         the request then still to be waited on, or the failure of the read:
+         *         KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.
          */
         ke_result (*wait)(struct ke_io *self, ke_io_request *request, ke_io_result *out_result);
 

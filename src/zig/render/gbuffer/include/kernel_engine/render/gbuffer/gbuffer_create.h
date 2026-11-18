@@ -9,7 +9,7 @@
 #include <kernel_engine/render/scene_resolve.h>
 #include <kernel_engine/render/service/render_service.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
-#include <kernel_engine/runtime/runtime.h>
+#include <kernel_engine/module/module.h>
 
 #if defined(_WIN32) || defined(__CYGWIN__)
     #ifdef KE_RENDER_GBUFFER_EXPORT
@@ -28,25 +28,15 @@ extern "C"
 {
 #endif
 
-    typedef struct ke_render_gbuffer ke_render_gbuffer;
-
-    /// [owner]
-    typedef struct ke_render_gbuffer_handle
-    {
-        ke_render_gbuffer *ref;
-        void (*destroy)(ke_render_gbuffer *self);
-    } ke_render_gbuffer_handle;
-
-    /// Registers the pass's render-phase system. A missing runtime, service or device fails as an
-    /// invalid argument.
-    /// It writes the frame's depth and albedo, normal and emissive targets each the size of the
-    /// backbuffer.
+    /// Makes the gbuffer pass. Attached, it publishes the albedo, normal and emissive targets, each the
+    /// size of the frame's output, in the render prepare set, and declares the pass that draws the opaque
+    /// meshes and sprites into them and the frame's depth in the render queue set.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param out_resources [out] Receives the ids of the targets it writes; every id
-    ///                      KE_COMPONENT_INVALID on failure.
-    /// @param out_gbuffer [out] Receives the handle; left zeroed on failure.
+    /// @param out_module [out] Receives the pass; left zeroed on failure.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context or a part the pass uses is NULL; the
+    ///         code of the GPU object that could not be made.
     KE_RENDER_GBUFFER_API ke_result ke_render_gbuffer_create(
-        const ke_render_context *context, ke_render_gbuffer_resources *out_resources, ke_render_gbuffer_handle *out_gbuffer);
+        const ke_render_context *context, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

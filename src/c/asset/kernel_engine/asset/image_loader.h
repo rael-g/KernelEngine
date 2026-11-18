@@ -20,6 +20,8 @@ extern "C"
          * @param out_image [out] Receives the image, which the caller owns and releases with
          *        free_image; NULL on failure.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_image;
+         *         KE_RESULT_PENDING while the file is read on a thread that may not wait for it,
+         *         a later call with the same path collecting it;
          *         KE_RESULT_NOT_FOUND when the file cannot be decoded, its reason logged;
          *         KE_RESULT_OUT_OF_MEMORY. */
         ke_result (*load_image)(struct ke_image_loader *self,

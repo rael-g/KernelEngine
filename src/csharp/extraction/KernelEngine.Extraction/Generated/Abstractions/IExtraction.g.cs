@@ -4,7 +4,11 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.Ecs;
+using KernelEngine.Ecs.Native;
+using KernelEngine.Extraction.Native;
 
 namespace KernelEngine.Extraction;
 
@@ -23,7 +27,10 @@ public delegate void ExtractionCustom(IExtraction arg2, nint main, nint render);
 /// <summary>The extraction contract game code depends on, so a caller names a capability rather than the <see cref="Extraction"/> that carries it.</summary>
 public interface IExtraction : IDisposable
 {
-    /// <summary>Registers a copy: at each extraction, the pair carries render_component equal to the entity's main_component, every ENTITY field holding the entity's pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size.</summary>
+    /// <summary>Pairs every main-world entity carrying main_component as if it were tagged render_synced; the pair goes when the entity loses the component and the tag. Registering it again changes nothing.</summary>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void SyncComponent(ComponentId mainComponent);
+    /// <summary>Registers a copy: at each extraction, the pair carries render_component equal to the entity's main_component, every ENTITY field holding the entity's pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size; registering the same pair again changes nothing.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void ExtractCopy(ComponentId mainComponent, ComponentId renderComponent);
     /// <summary>Registers an interpolation: like a copy, except that for an entity tagged interpolated the pair receives blend of previous_component and main_component at the loop's alpha. An entity first paired, or tagged teleported, takes its current value as its previous one.</summary>

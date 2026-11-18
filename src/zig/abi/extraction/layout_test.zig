@@ -41,13 +41,14 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_FRAME_LOCAL, abi.c.KE_COMPONENT_NAME_FRAME_LOCAL);
 }
 
-extern const layout_values: [13]c_ulonglong;
+extern const layout_values: [14]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_extraction),
         @offsetOf(abi.c.ke_extraction, "handle"),
+        @offsetOf(abi.c.ke_extraction, "sync_component"),
         @offsetOf(abi.c.ke_extraction, "extract_copy"),
         @offsetOf(abi.c.ke_extraction, "extract_interpolate"),
         @offsetOf(abi.c.ke_extraction, "extract_custom"),
