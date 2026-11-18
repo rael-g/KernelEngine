@@ -9,6 +9,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("completion", b.dependency("abi_completion", .{}).module("abi"));
     abi.addImport("job", b.dependency("abi_job", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/scheduler/scheduler.h>
@@ -22,6 +23,7 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/scheduler"));
     translated.addIncludePath(b.path("../../scheduler/include"));
     translated.addIncludePath(b.path("../../common/include"));
+    translated.addIncludePath(b.path("../../../c/settings"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -40,5 +42,6 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/scheduler"));
     tests.root_module.addIncludePath(b.path("../../scheduler/include"));
     tests.root_module.addIncludePath(b.path("../../common/include"));
+    tests.root_module.addIncludePath(b.path("../../../c/settings"));
     b.step("test", "Check the scheduler ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

@@ -6,6 +6,7 @@ const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_scheduler = @import("scheduler");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scheduler_factory_c.zig");
@@ -16,9 +17,9 @@ const resultOf = abi_result.resultOf;
 
 /// Creates a scheduler with no executable, which drains job_system and async, both borrowed for
 /// its lifetime, at the start of every tick.
-pub fn schedulerCreate(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, config: ?*const abi_scheduler.c.ke_scheduler_config) Error!abi_scheduler.c.ke_scheduler_handle {
+pub fn schedulerCreate(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings) Error!abi_scheduler.c.ke_scheduler_handle {
     var written: abi_scheduler.c.ke_scheduler_handle = undefined;
-    try checkResult(c.ke_scheduler_create(job_system, async, config, &written));
+    try checkResult(c.ke_scheduler_create(job_system, async, settings, &written));
     return written;
 }
 

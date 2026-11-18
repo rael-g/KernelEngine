@@ -178,21 +178,6 @@
           "doc": null
         }
       ]
-    },
-    {
-      "name": "ke_job_system_config",
-      "doc": "What a job system is created with, each field applied as given.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "worker_count",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "Worker threads besides the creating thread; 0 runs every job on the creating thread, and KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD one per hardware thread besides it."
-        }
-      ]
     }
   ],
   "vtables": [
@@ -451,10 +436,10 @@
   },
   "constants": [
     {
-      "name": "KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD",
-      "type": "unsigned int",
-      "value": "4294967295",
-      "doc": "The worker_count that takes one worker per hardware thread besides the creating one."
+      "name": "KE_JOB_SYSTEM_SETTING_WORKER_COUNT",
+      "type": "const char *",
+      "value": "\u0022worker_count\u0022",
+      "doc": "Setting every job system reads, an integer: the worker threads besides the creating thread; 0 runs every job on the creating thread."
     }
   ]
 }

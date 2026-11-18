@@ -24,7 +24,6 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_job_ctx, translated("ke_job_ctx"));
-    try expectSameLayout(abi.c.ke_job_system_config, translated("ke_job_system_config"));
     try expectSameLayout(abi.c.ke_job_system, translated("ke_job_system"));
     try expectSameLayout(abi.c.ke_job_system_handle, translated("ke_job_system_handle"));
     if (@hasDecl(c, "ke_job_fn")) try expectSameLayout(abi.c.ke_job_fn, c.ke_job_fn);
@@ -33,10 +32,10 @@ test "every record is laid out as the header lays it out" {
 
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
-    try std.testing.expectEqual(@as(i128, c.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD), @as(i128, abi.c.KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD));
+    try std.testing.expectEqualStrings(c.KE_JOB_SYSTEM_SETTING_WORKER_COUNT, abi.c.KE_JOB_SYSTEM_SETTING_WORKER_COUNT);
 }
 
-extern const layout_values: [15]c_ulonglong;
+extern const layout_values: [13]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -44,8 +43,6 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_job_ctx),
         @offsetOf(abi.c.ke_job_ctx, "dep_results"),
         @offsetOf(abi.c.ke_job_ctx, "dep_count"),
-        @sizeOf(abi.c.ke_job_system_config),
-        @offsetOf(abi.c.ke_job_system_config, "worker_count"),
         @sizeOf(abi.c.ke_job_system),
         @offsetOf(abi.c.ke_job_system, "handle"),
         @offsetOf(abi.c.ke_job_system, "dispatch"),

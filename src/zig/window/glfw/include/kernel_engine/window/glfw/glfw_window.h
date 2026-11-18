@@ -2,6 +2,7 @@
 #ifndef KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 #define KERNEL_ENGINE_WINDOW_GLFW_GLFW_WINDOW_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/window/window.h>
 
 #ifndef KE_WINDOW_API
@@ -23,7 +24,6 @@ extern "C" {
 #endif
 
 struct ke_input;
-struct ke_settings;
 
 /**
  * Creates a window and starts it.
@@ -35,7 +35,7 @@ struct ke_settings;
  *         setting that is unknown, of another type or outside 1 to 16384 for a size;
  *         KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the OS refuses the window.
  */
-KE_WINDOW_API ke_result ke_window_glfw_create(struct ke_input *input, struct ke_settings *settings, ke_window_handle *out_window);
+KE_WINDOW_API ke_result ke_window_glfw_create(struct ke_input *input, ke_settings *settings, ke_window_handle *out_window);
 
 #ifdef __cplusplus
 }

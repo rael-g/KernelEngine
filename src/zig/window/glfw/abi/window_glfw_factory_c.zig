@@ -8,6 +8,9 @@ const abi_window = @import("window");
 
 
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
 /// >_log.h`; the host sets it once, before the library logs, and a NULL callback sends the

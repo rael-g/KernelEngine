@@ -63,14 +63,9 @@ typedef struct ke_async_handle {
     void (*destroy)(ke_async *self);
 } ke_async_handle;
 
-/// [value] What an async system is created with, each field applied as given.
-typedef struct ke_async_config {
-    /// Worker threads besides the creating thread; 0 runs every operation on the creating thread
-    /// when it drains.
-    uint32_t worker_count;
-    /// How many submissions from other threads may wait for the next drain; greater than zero.
-    uint32_t submit_capacity;
-} ke_async_config;
+/// Setting every async system reads, an integer: the worker threads besides the creating thread; 0
+/// runs every operation on the creating thread when it drains.
+#define KE_ASYNC_SETTING_WORKER_COUNT "worker_count"
 
 #ifdef __cplusplus
 }

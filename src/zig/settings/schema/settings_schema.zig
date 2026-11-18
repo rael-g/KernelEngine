@@ -15,7 +15,8 @@ const c = abi_settings.c;
 /// type than its field, a number outside the field's range, a string that names no value of an
 /// enum field, and a key that names no field are refused as an invalid argument, each logged with
 /// the key. `T` is a struct whose every field has a default and is a bool, an integer, a float, an
-/// enum, a `[:0]const u8` or an array of bool, integer or float, each element under `name.<index>`;
+/// enum, a `[:0]const u8`, an array of bool, integer or float, each element under `name.<index>`, or
+/// an optional of one of those, null while its key is absent;
 /// `T.ranges`, when declared, gives `.{ min, max }` per numeric field, for every element of an array.
 /// A string field borrows the settings' string, valid while the settings live.
 pub fn read(comptime T: type, settings: *c.ke_settings) R.Error!T {
@@ -25,11 +26,29 @@ pub fn read(comptime T: type, settings: *c.ke_settings) R.Error!T {
             .array => |a| inline for (0..a.len) |i| {
                 try readValue(T, field.name, a.child, field.name ++ std.fmt.comptimePrint(".{d}", .{i}), settings, &@field(out, field.name)[i]);
             },
+            .optional => |o| {
+                var v: o.child = undefined;
+                if (try readPresent(T, field.name, o.child, field.name, settings, &v)) @field(out, field.name) = v;
+            },
             else => try readValue(T, field.name, field.type, field.name, settings, &@field(out, field.name)),
         }
     }
     try refuseUnknown(T, settings);
     return out;
+}
+
+fn readPresent(comptime T: type, comptime name: []const u8, comptime F: type, comptime key: [:0]const u8, settings: *c.ke_settings, dst: *F) R.Error!bool {
+    var marker: struct { seen: bool = false } = .{};
+    const Seen = struct {
+        fn each(key_c: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+            const m: *@TypeOf(marker) = @ptrCast(@alignCast(ctx));
+            if (std.mem.eql(u8, std.mem.span(key_c.?), key)) m.seen = true;
+        }
+    };
+    try R.check(settings.for_each_key.?(settings, Seen.each, &marker));
+    if (!marker.seen) return false;
+    try readValue(T, name, F, key, settings, dst);
+    return true;
 }
 
 fn readValue(comptime T: type, comptime name: []const u8, comptime F: type, comptime key: [:0]const u8, settings: *c.ke_settings, dst: *F) R.Error!void {
@@ -193,6 +212,7 @@ const Example = struct {
     vsync: bool = true,
     mode: Mode = .fifo,
     tint: [3]f32 = .{ 0.0, 0.0, 1.0 },
+    workers: ?u32 = null,
 
     pub const ranges = .{ .width = .{ 1, 4096 }, .scale = .{ 0.5, 4.0 }, .tint = .{ 0.0, 1.0 } };
 };
@@ -203,6 +223,7 @@ test "settings that write nothing read as the implementation's defaults" {
     try testing.expectEqualStrings("untitled", v.title);
     try testing.expectEqual(@as(u32, 640), v.width);
     try testing.expect(v.vsync and v.mode == .fifo and v.scale == 1.0);
+    try testing.expectEqual(@as(?u32, null), v.workers);
 }
 
 test "each written key replaces its default, an integer reads as a number and a string names an enum value" {
@@ -213,6 +234,7 @@ test "each written key replaces its default, an integer reads as a number and a 
         .{ .key = "vsync", .value = .{ .boolean = false } },
         .{ .key = "mode", .value = .{ .string = "mailbox" } },
         .{ .key = "tint.1", .value = .{ .double = 0.5 } },
+        .{ .key = "workers", .value = .{ .int = 3 } },
     });
     const v = try read(Example, &s.api);
     try testing.expectEqualStrings("Pong", v.title);
@@ -220,6 +242,7 @@ test "each written key replaces its default, an integer reads as a number and a 
     try testing.expectEqual(@as(f32, 2.0), v.scale);
     try testing.expect(!v.vsync and v.mode == .mailbox);
     try testing.expectEqual([3]f32{ 0.0, 0.5, 1.0 }, v.tint);
+    try testing.expectEqual(@as(?u32, 3), v.workers);
 }
 
 test "a value of the wrong type, outside its range, naming no enum value, or under no setting is refused" {

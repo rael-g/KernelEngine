@@ -11,14 +11,14 @@ public sealed unsafe partial class DefaultScheduler
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="jobSystem"></param>
     /// <param name="async"></param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public DefaultScheduler(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config) : base(CreateLogged(loggerFactory, jobSystem, async, config))
+    /// <param name="settings">Read once. KE_SCHEDULER_SETTING_FIXED_DT, default 1/60; KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM, default 0.25.</param>
+    public DefaultScheduler(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, jobSystem, async, settings))
     {
     }
 
-    private static KernelEngine.Scheduler.Native.ke_scheduler_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, in KernelEngine.Scheduler.SchedulerConfig config)
+    private static KernelEngine.Scheduler.Native.ke_scheduler_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Async.INativeAsync async, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Scheduler.Native.NativeMethods.scheduler_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(jobSystem, async, config);
+        return Create(jobSystem, async, settings);
     }
 }

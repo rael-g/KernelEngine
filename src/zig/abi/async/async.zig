@@ -90,5 +90,4 @@ pub const Async = struct {
 
 };
 
-pub const AsyncConfig = c.ke_async_config;
 pub const AsyncHandle = c.ke_async_handle;

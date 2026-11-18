@@ -28,6 +28,7 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_log_callback")) try expectSameLayout(abi.c.ke_log_callback, c.ke_log_callback);
     if (@hasDecl(c, "ke_query_id")) try expectSameLayout(abi.c.ke_query_id, c.ke_query_id);
     if (@hasDecl(c, "ke_removal_tracker")) try expectSameLayout(abi.c.ke_removal_tracker, c.ke_removal_tracker);
+    if (@hasDecl(c, "ke_settings_key_func")) try expectSameLayout(abi.c.ke_settings_key_func, c.ke_settings_key_func);
 }
 
 extern const layout_values: [1]c_ulonglong;

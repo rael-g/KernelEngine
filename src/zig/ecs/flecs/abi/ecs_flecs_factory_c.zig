@@ -5,7 +5,6 @@ const abi_logger = @import("logger");
 const abi_result = @import("result");
 const abi_settings = @import("settings");
 
-
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_query_id = u64;
@@ -17,6 +16,9 @@ pub const ke_removal_tracker = u64;
 /// library's lines to stderr, which is also where they go until it is set. Called on whichever
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Sends every line ke_ecs_flecs logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

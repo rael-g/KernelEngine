@@ -11,14 +11,14 @@ public sealed unsafe partial class DefaultSchedule
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="ecs"></param>
     /// <param name="jobSystem"></param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public DefaultSchedule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config) : base(CreateLogged(loggerFactory, ecs, jobSystem, config))
+    /// <param name="settings">Read once. `refuse_ambiguity`, a boolean, default false: an ambiguity between two writers fails the run instead of being logged.</param>
+    public DefaultSchedule(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, ecs, jobSystem, settings))
     {
     }
 
-    private static KernelEngine.Schedule.Native.ke_schedule_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, in KernelEngine.Schedule.ScheduleConfig config)
+    private static KernelEngine.Schedule.Native.ke_schedule_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Job.INativeJobSystem jobSystem, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Schedule.Native.NativeMethods.schedule_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(ecs, jobSystem, config);
+        return Create(ecs, jobSystem, settings);
     }
 }

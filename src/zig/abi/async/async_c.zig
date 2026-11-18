@@ -5,17 +5,12 @@ const abi_completion = @import("completion");
 const abi_result = @import("result");
 
 
+/// Setting every async system reads, an integer: the worker threads besides the creating thread;
+/// 0 runs every operation on the creating thread when it drains.
+pub const KE_ASYNC_SETTING_WORKER_COUNT = "worker_count";
+
 /// The body of an operation, run once on a worker that may block in a system call.
 pub const ke_async_fn = ?*const fn (?*anyopaque, ?*ke_async_ctx) callconv(.c) abi_result.c.ke_result;
-
-/// What an async system is created with, each field applied as given.
-pub const ke_async_config = extern struct {
-    /// Worker threads besides the creating thread; 0 runs every operation on the creating thread
-    /// when it drains.
-    worker_count: u32 = std.mem.zeroes(u32),
-    /// How many submissions from other threads may wait for the next drain; greater than zero.
-    submit_capacity: u32 = std.mem.zeroes(u32),
-};
 
 /// What an operation sees while it runs.
 pub const ke_async_ctx = extern struct {

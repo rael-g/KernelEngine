@@ -1,7 +1,5 @@
 using System.Numerics;
 
-using global::KernelEngine.Async;
-
 using KernelEngine.Completion.Native;
 using KernelEngine.Result.Native;
 

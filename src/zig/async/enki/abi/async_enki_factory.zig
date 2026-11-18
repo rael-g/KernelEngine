@@ -3,6 +3,7 @@
 const abi_async = @import("async");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("async_enki_factory_c.zig");
@@ -12,9 +13,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates an async system on enkiTS, its workers started.
-pub fn asyncEnkiCreate(config: ?*const abi_async.c.ke_async_config) Error!abi_async.c.ke_async_handle {
+pub fn asyncEnkiCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_async.c.ke_async_handle {
     var written: abi_async.c.ke_async_handle = undefined;
-    try checkResult(c.ke_async_enki_create(config, &written));
+    try checkResult(c.ke_async_enki_create(settings, &written));
     return written;
 }
 

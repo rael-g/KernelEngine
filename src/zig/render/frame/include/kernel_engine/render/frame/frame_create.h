@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 #define KERNEL_ENGINE_RENDER_FRAME_FRAME_CREATE_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <kernel_engine/render/camera.h>
@@ -27,7 +28,6 @@ extern "C"
 {
 #endif
 
-    struct ke_settings;
 
     /// Makes the frame and registers the tag "render.frame" in @p ecs. Its systems come from
     /// ke_render_frame_systems_create.
@@ -48,7 +48,7 @@ extern "C"
     KE_RENDER_FRAME_API ke_result ke_render_frame_create(ke_ecs *ecs, ke_render_graph *graph, ke_render_service *service,
                                                          ke_render_camera *camera, ke_render_scene_resolve *scene,
                                                          ke_gpu_texture_format color_format, ke_gpu_texture_format depth_format,
-                                                         struct ke_settings *settings, ke_render_frame_handle *out_frame);
+                                                         ke_settings *settings, ke_render_frame_handle *out_frame);
 
 #ifdef __cplusplus
 }

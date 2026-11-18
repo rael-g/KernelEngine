@@ -3,6 +3,7 @@
 const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("job_system_inline_factory_c.zig");
@@ -13,9 +14,9 @@ const resultOf = abi_result.resultOf;
 
 /// Creates a job system that runs every job on the creating thread, when it is waited on or
 /// drained.
-pub fn jobSystemInlineCreate(config: ?*const abi_job.c.ke_job_system_config) Error!abi_job.c.ke_job_system_handle {
+pub fn jobSystemInlineCreate(settings: ?*abi_settings.c.ke_settings) Error!abi_job.c.ke_job_system_handle {
     var written: abi_job.c.ke_job_system_handle = undefined;
-    try checkResult(c.ke_job_system_inline_create(config, &written));
+    try checkResult(c.ke_job_system_inline_create(settings, &written));
     return written;
 }
 

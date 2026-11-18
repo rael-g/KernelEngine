@@ -3,7 +3,11 @@
 const abi_job = @import("job");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// The body of a job, run once on a worker after every dependency finished, whatever each
 /// finished with.
@@ -21,7 +25,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Creates a job system that runs every job on the creating thread, when it is waited on or
 /// drained.
-pub extern fn ke_job_system_inline_create(config: ?*const abi_job.c.ke_job_system_config, out_job_system: ?*abi_job.c.ke_job_system_handle) abi_result.c.ke_result;
+pub extern fn ke_job_system_inline_create(settings: ?*abi_settings.c.ke_settings, out_job_system: ?*abi_job.c.ke_job_system_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_job_system_inline logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

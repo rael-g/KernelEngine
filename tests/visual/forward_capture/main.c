@@ -253,15 +253,15 @@ int main(int argc, char **argv)
 
 
     ke_job_system_handle jobs = { 0 };
-    check("job system", ke_job_system_inline_create(&(ke_job_system_config){ .worker_count = 0 }, &jobs));
+    check("job system", ke_job_system_inline_create(unset, &jobs));
     ke_async_handle async = { 0 };
-    check("async", ke_async_inline_create(&(ke_async_config){ .worker_count = 0, .submit_capacity = 64 }, &async));
+    check("async", ke_async_inline_create(unset, &async));
     ke_scheduler_handle scheduler = { 0 };
-    check("scheduler", ke_scheduler_create(jobs.ref, async.ref, &(ke_scheduler_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f }, &scheduler));
+    check("scheduler", ke_scheduler_create(jobs.ref, async.ref, unset, &scheduler));
     ke_ecs_handle render_world = { 0 };
     check("render world", ke_ecs_flecs_create(unset, &render_world));
     ke_schedule_handle render_schedule = { 0 };
-    check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &render_schedule));
+    check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, unset, &render_schedule));
     ke_extraction_handle extraction = { 0 };
     check("extraction", ke_extraction_create(ecs.ref, render_world.ref, scheduler.ref, render_schedule.ref, &extraction));
     check("render stage", scheduler.ref->add(scheduler.ref, (ke_scheduler_run_fn)extraction.ref->run, extraction.ref, KE_SCHEDULER_CADENCE_EVERY_TICK));

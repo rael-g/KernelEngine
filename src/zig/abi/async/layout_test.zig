@@ -23,21 +23,22 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_async_config, translated("ke_async_config"));
     try expectSameLayout(abi.c.ke_async_ctx, translated("ke_async_ctx"));
     try expectSameLayout(abi.c.ke_async, translated("ke_async"));
     try expectSameLayout(abi.c.ke_async_handle, translated("ke_async_handle"));
     if (@hasDecl(c, "ke_async_fn")) try expectSameLayout(abi.c.ke_async_fn, c.ke_async_fn);
 }
 
-extern const layout_values: [17]c_ulonglong;
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_ASYNC_SETTING_WORKER_COUNT, abi.c.KE_ASYNC_SETTING_WORKER_COUNT);
+}
+
+extern const layout_values: [14]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_async_config),
-        @offsetOf(abi.c.ke_async_config, "worker_count"),
-        @offsetOf(abi.c.ke_async_config, "submit_capacity"),
         @sizeOf(abi.c.ke_async_ctx),
         @offsetOf(abi.c.ke_async_ctx, "handle"),
         @offsetOf(abi.c.ke_async_ctx, "dep_results"),

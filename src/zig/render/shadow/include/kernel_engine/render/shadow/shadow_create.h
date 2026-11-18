@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SHADOW_SHADOW_CREATE_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/context.h>
 #include <stdbool.h>
@@ -32,7 +33,6 @@ extern "C"
 {
 #endif
 
-    struct ke_settings;
 
     /// Makes the directional shadow pass. Attached, it publishes the shadow map and the light's
     /// view-projection in the render prepare set, and declares the pass that draws the casters into the
@@ -48,7 +48,7 @@ extern "C"
     ///         is NULL, a setting is unknown, of another type or out of its range, or the near plane is
     ///         not before the far one; the code of the GPU object that could not be made.
     KE_RENDER_SHADOW_API ke_result ke_render_shadow_create(
-        const ke_render_context *context, struct ke_settings *settings, ke_module_handle *out_module);
+        const ke_render_context *context, ke_settings *settings, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

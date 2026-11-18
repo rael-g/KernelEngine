@@ -9,14 +9,14 @@ public sealed unsafe partial class InlineAsync
 {
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
-    /// <param name="config">Required; every field is read as given.</param>
-    public InlineAsync(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Async.AsyncConfig config) : base(CreateLogged(loggerFactory, config))
+    /// <param name="settings">Read once. KE_ASYNC_SETTING_WORKER_COUNT, default 0, the only value it accepts; `submit_capacity`, an integer, default 1024: how many submissions from other threads may wait for the next drain.</param>
+    public InlineAsync(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, settings))
     {
     }
 
-    private static KernelEngine.Async.Native.ke_async_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, in KernelEngine.Async.AsyncConfig config)
+    private static KernelEngine.Async.Native.ke_async_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Async.Inline.Native.NativeMethods.async_inline_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(config);
+        return Create(settings);
     }
 }

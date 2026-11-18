@@ -15,7 +15,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_render_shadow", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_shadow_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result render_shadow_create([NativeTypeName("const ke_render_context *")] RenderContext* context, [NativeTypeName("struct ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result render_shadow_create([NativeTypeName("const ke_render_context *")] RenderContext* context, [NativeTypeName("ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
 
     [DllImport("ke_render_shadow", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_shadow_set_log_callback", ExactSpelling = true)]
     public static extern void render_shadow_set_log_callback([NativeTypeName("ke_log_callback")] delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void> callback, void* ctx);

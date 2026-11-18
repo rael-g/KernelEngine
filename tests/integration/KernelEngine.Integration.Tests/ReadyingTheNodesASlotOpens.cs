@@ -33,12 +33,12 @@ public class ReadyingTheNodesASlotOpens
         public readonly EngineSets Sets;
         public readonly DefaultScheduler Scheduler;
 
-        public Loop(FlecsEcsRegistry ecs, EnkiJobSystem jobs, EnkiAsync asyncs)
+        public Loop(FlecsEcsRegistry ecs, EnkiJobSystem jobs, EnkiAsync asyncs, DefaultConfiguration config)
         {
-            DefaultSchedule Make() => new(null, ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
+            DefaultSchedule Make() => new(null, ecs, jobs, config.Section("schedule"));
             Schedules = new EngineSchedules { Startup = Make(), PreUpdate = Make(), Fixed = Make(), Update = Make(), Shutdown = Make() };
             Sets = EngineSets.Register(Schedules);
-            Scheduler = new DefaultScheduler(null, jobs, asyncs, new SchedulerConfig { FixedDt = 1.0f / 60.0f, FixedDtMaxAccum = 0.25f });
+            Scheduler = new DefaultScheduler(null, jobs, asyncs, config.Section("scheduler"));
             Schedules.AddTo(Scheduler);
         }
 
@@ -58,14 +58,14 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
-        using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
+        using var config = new DefaultConfiguration(null);
+        using var jobs = new EnkiJobSystem(null, config.Section("job"));
+        using var asyncs = new EnkiAsync(null, config.Section("async"));
         using var files = new StdFileSystem(null, ".");
         using var io = new AsyncIo(null, asyncs, files);
-        using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
-        using var loop = new Loop(ecs, jobs, asyncs);
+        using var loop = new Loop(ecs, jobs, asyncs, config);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs);
@@ -90,14 +90,14 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
     {
-        using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
-        using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
+        using var config = new DefaultConfiguration(null);
+        using var jobs = new EnkiJobSystem(null, config.Section("job"));
+        using var asyncs = new EnkiAsync(null, config.Section("async"));
         using var files = new StdFileSystem(null, ".");
         using var io = new AsyncIo(null, asyncs, files);
-        using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
-        using var loop = new Loop(ecs, jobs, asyncs);
+        using var loop = new Loop(ecs, jobs, asyncs, config);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs);

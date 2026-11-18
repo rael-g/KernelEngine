@@ -1,6 +1,7 @@
 ﻿#ifndef KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 #define KERNEL_ENGINE_ECS_KE_ECS_FLECS_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/ecs/ke_ecs.h>
 #include <stdint.h>
 
@@ -22,7 +23,6 @@
 extern "C" {
 #endif
 
-struct ke_settings;
 
 /// Creates a ke_ecs vtable backed by an internally-owned world.
 /// Also installs process-wide log and abort handlers: a check flecs fails makes the
@@ -35,7 +35,7 @@ struct ke_settings;
 /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p settings or @p out_ecs, a setting that is
 ///         unknown or of another type, or a reserved_id_capacity that leaves no reserve pool; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_NOT_INITIALIZED when flecs cannot
 ///         start the world.
-KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(struct ke_settings *settings,
+KE_ECS_FLECS_API ke_result ke_ecs_flecs_create(ke_settings *settings,
                                                ke_ecs_handle             *out_ecs);
 
 #ifdef __cplusplus

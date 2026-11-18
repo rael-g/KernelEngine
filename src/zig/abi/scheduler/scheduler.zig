@@ -5,6 +5,7 @@ const abi_async = @import("async");
 const abi_completion = @import("completion");
 const abi_job = @import("job");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("scheduler_c.zig");
@@ -134,13 +135,12 @@ pub const Scheduler = struct {
 
     /// Creates a scheduler with no executable, which drains job_system and async, both borrowed for
     /// its lifetime, at the start of every tick.
-    pub fn create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, config: ?*const c.ke_scheduler_config) Error!Scheduler {
+    pub fn create(job_system: ?*abi_job.c.ke_job_system, async: ?*abi_async.c.ke_async, settings: ?*abi_settings.c.ke_settings) Error!Scheduler {
         var written: c.ke_scheduler_handle = undefined;
-        try checkResult(c.ke_scheduler_create(job_system, async, config, &written));
+        try checkResult(c.ke_scheduler_create(job_system, async, settings, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
 };
 
-pub const SchedulerConfig = c.ke_scheduler_config;
 pub const SchedulerHandle = c.ke_scheduler_handle;

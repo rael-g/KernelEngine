@@ -9,16 +9,15 @@ namespace KernelEngine.Job.Inline;
 public sealed unsafe partial class InlineJobSystem : KernelEngine.Job.JobSystem
 {
     /// <summary>Creates a job system that runs every job on the creating thread, when it is waited on or drained.</summary>
-    /// <param name="config">Required; every field is read as given.</param>
-    public InlineJobSystem(in KernelEngine.Job.JobSystemConfig config) : base(Create(config))
+    /// <param name="settings">Read once. KE_JOB_SYSTEM_SETTING_WORKER_COUNT, default 0, the only value it accepts.</param>
+    public InlineJobSystem(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
     {
     }
 
-    private static KernelEngine.Job.Native.ke_job_system_handle Create(in KernelEngine.Job.JobSystemConfig config)
+    private static KernelEngine.Job.Native.ke_job_system_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
-        var nativeConfig = config;
         KernelEngine.Job.Native.ke_job_system_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Job.Inline.Native.NativeMethods.job_system_inline_create(&nativeConfig, &handle), "ke_job_system_inline_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Job.Inline.Native.NativeMethods.job_system_inline_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_job_system_inline_create");
         return handle;
     }
 }

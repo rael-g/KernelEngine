@@ -127,30 +127,25 @@ static inline void ke_sdk_renderer_release(ke_sdk_engine *engine)
 /** A schedule over the engine's world, running on its job system. */
 static inline ke_result ke_sdk_schedule(ke_sdk_engine *e, ke_schedule_handle *out)
 {
-    return ke_schedule_create(e->ecs.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, out);
+    return ke_schedule_create(e->ecs.ref, e->job_system.ref, ke_sdk_settings(e, "schedule"), out);
 }
 
-/** The scheduler, its timestep from `runtime`. */
+/** The scheduler with the settings of `scheduler`. */
 static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_scheduler_config config = {
-        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
-        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
-    };
-    return ke_scheduler_create(e->job_system.ref, e->async.ref, &config, &e->scheduler);
+    return ke_scheduler_create(e->job_system.ref, e->async.ref, ke_sdk_settings(e, "scheduler"), &e->scheduler);
 }
 
-/** An enkiTS job system with one worker per hardware thread besides the calling one. */
+/** An enkiTS job system with its defaults: one worker per hardware thread besides the calling one. */
 static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
 {
-    return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
+    return ke_job_system_enki_create(ke_sdk_settings(e, "job"), &e->job_system);
 }
 
-/** An enkiTS async system with two workers and room for 1024 submissions from other threads. */
+/** An enkiTS async system with its defaults: two workers and room for 1024 submissions from other threads. */
 static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
 {
-    return ke_async_enki_create(&(ke_async_config){ .worker_count = 2, .submit_capacity = 1024 }, &e->async);
+    return ke_async_enki_create(ke_sdk_settings(e, "async"), &e->async);
 }
 
 /** The operating system's files, relative to the working directory. */
@@ -390,7 +385,7 @@ static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
 static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
 {
     ke_result made = ke_ecs_flecs_create(ke_sdk_settings(e, "ecs"), &e->render_world);
-    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
+    if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, ke_sdk_settings(e, "schedule"), &e->render_schedule);
     ke_sdk_sets *sets = &e->sets;
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_begin", NULL, &sets->render_begin);
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_prepare", &sets->render_begin, &sets->render_prepare);

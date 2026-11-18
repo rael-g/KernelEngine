@@ -13,6 +13,7 @@ using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
+using KernelEngine.Settings;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
 using KernelEngine.Window.Glfw;
@@ -38,9 +39,11 @@ public static class DefaultCore
         static ILoggerFactory? Log(IServiceProvider sp) => sp.GetService<ILoggerFactory>();
         static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Log(sp), new() { WorkerCount = uint.MaxValue }));
+        services.TryAddKeyedSingleton<Configuration.Configuration>("bootstrap", (sp, _) => new DefaultConfiguration(Log(sp)));
+        IPartSettings Bootstrap(IServiceProvider sp, string section) => sp.GetRequiredKeyedService<Configuration.Configuration>("bootstrap").Section(section);
+        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Log(sp), Bootstrap(sp, "job")));
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(Log(sp), "."));
-        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Log(sp), new() { WorkerCount = 2, SubmitCapacity = 1024 }));
+        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Log(sp), Bootstrap(sp, "async")));
         services.TryAddSingleton<Io.Io>(sp => new AsyncIo(Log(sp), Get<Async.Async>(sp), Get<FileSystem.FileSystem>(sp)));
         services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Log(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
@@ -53,18 +56,10 @@ public static class DefaultCore
         services.TryAddSingleton<Window.Window>(sp => new GlfwWindow(Log(sp), Get<Input.Input>(sp), Get<Configuration.Configuration>(sp).Section("runtime.window")));
         services.TryAddSingleton<Ecs.EcsRegistry>(sp => new FlecsEcsRegistry(Log(sp), Get<Configuration.Configuration>(sp).Section("ecs")));
         services.TryAddKeyedSingleton<Ecs.EcsRegistry>("render", (sp, _) => new FlecsEcsRegistry(Log(sp), Get<Configuration.Configuration>(sp).Section("ecs")));
-        services.TryAddKeyedSingleton<Schedule.Schedule>("render", (sp, _) => new DefaultSchedule(Log(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Job.JobSystem>(sp), new() { RefuseAmbiguity = false }));
+        services.TryAddKeyedSingleton<Schedule.Schedule>("render", (sp, _) => new DefaultSchedule(Log(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
         services.TryAddSingleton<Extraction.Extraction>(sp => new Extraction.DefaultExtraction(Log(sp), Get<Ecs.EcsRegistry>(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Scheduler.Scheduler>(sp), sp.GetRequiredKeyedService<Schedule.Schedule>("render")));
-        services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), new() { RefuseAmbiguity = false }));
-        services.TryAddSingleton<Scheduler.Scheduler>(sp =>
-        {
-            var config = Get<Configuration.Configuration>(sp);
-            return new DefaultScheduler(Log(sp), Get<Job.JobSystem>(sp), Get<Async.Async>(sp), new()
-            {
-                FixedDt = (float)config.GetDouble("runtime", "fixed_dt", 1.0 / 60.0),
-                FixedDtMaxAccum = (float)config.GetDouble("runtime", "fixed_dt_max_accum", 0.25),
-            });
-        });
+        services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), Get<Configuration.Configuration>(sp).Section("schedule")));
+        services.TryAddSingleton<Scheduler.Scheduler>(sp => new DefaultScheduler(Log(sp), Get<Job.JobSystem>(sp), Get<Async.Async>(sp), Get<Configuration.Configuration>(sp).Section("scheduler")));
 
         services.TryAddSingleton<Render.Gpu.GpuDevice>(sp => new WebgpuGpuDevice(Log(sp), null, new() { EnableValidation = false, DebugLabels = false }));
         services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));

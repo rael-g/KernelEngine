@@ -181,29 +181,7 @@
       ]
     }
   ],
-  "structs": [
-    {
-      "name": "ke_scheduler_config",
-      "doc": "What a scheduler is created with, each field applied as given.",
-      "tags": [
-        "value"
-      ],
-      "fields": [
-        {
-          "name": "fixed_dt",
-          "type": "float",
-          "tags": [],
-          "doc": "The dt of a fixed step, in seconds; greater than zero."
-        },
-        {
-          "name": "fixed_dt_max_accum",
-          "type": "float",
-          "tags": [],
-          "doc": "The most time a tick may accumulate for fixed steps, in seconds; the excess is dropped; greater than zero."
-        }
-      ]
-    }
-  ],
+  "structs": [],
   "vtables": [
     {
       "name": "ke_scheduler",
@@ -288,7 +266,7 @@
         },
         {
           "name": "exit_requested",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Whether a request to end the program was recorded.",
           "return_doc": null,
@@ -306,7 +284,7 @@
         },
         {
           "name": "completed_since",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Whether every executable added with user completed a run numbered sequence or later; true when none was added with it. Called from a body or between ticks.",
           "return_doc": null,
@@ -362,6 +340,153 @@
           "receiver": "ke_scheduler *"
         }
       ]
+    },
+    {
+      "name": "ke_settings",
+      "doc": "The values one part is created with, each under a key and of one type. A part reads them once, when it is created; a value that changes afterwards is a slot of the part\u0027s own contract.",
+      "tags": [
+        "lent"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "get_bool",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a boolean.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no value is under key; KE_RESULT_INVALID_ARGUMENT for a null argument or when the value under key is of another type.",
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "bool *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_int",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads an integer, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "int64_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_double",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a floating-point number, as get_bool. An integer value is read as its number.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "double *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_string",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a string, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "const char **",
+              "tags": [
+                "out",
+                "utf8"
+              ],
+              "doc": "Receives the string, borrowed while the settings live and the key is not written again."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "for_each_key",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Calls each once for every key that holds a value, in no particular order.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null each.",
+          "params": [
+            {
+              "name": "each",
+              "type": "ke_settings_key_func",
+              "tags": [
+                "closure:ctx"
+              ],
+              "doc": "Called once per key."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_settings *"
+        }
+      ],
+      "external": true
     }
   ],
   "functions": [
@@ -369,7 +494,7 @@
       "name": "ke_scheduler_create",
       "returns": "ke_result",
       "doc": "Creates a scheduler with no executable, which drains job_system and async, both borrowed for its lifetime, at the start of every tick.",
-      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null job_system, async, config or out_scheduler, or a fixed_dt or fixed_dt_max_accum not greater than zero; KE_RESULT_OUT_OF_MEMORY.",
+      "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null job_system, async, settings or out_scheduler, or a setting unknown, of another type or not greater than zero; KE_RESULT_OUT_OF_MEMORY.",
       "params": [
         {
           "name": "job_system",
@@ -384,12 +509,12 @@
           "doc": null
         },
         {
-          "name": "config",
-          "type": "const ke_scheduler_config *",
+          "name": "settings",
+          "type": "struct ke_settings *",
           "tags": [
             "borrowed"
           ],
-          "doc": "Required; every field is read as given."
+          "doc": "Read once. KE_SCHEDULER_SETTING_FIXED_DT, default 1/60; KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM, default 0.25."
         },
         {
           "name": "out_scheduler",
@@ -429,6 +554,30 @@
             "out"
           ],
           "doc": "Receives the run\u0027s completion, which the scheduler waits on and releases."
+        }
+      ]
+    },
+    {
+      "name": "ke_settings_key_func",
+      "returns": "void",
+      "doc": "Receives one key the settings hold.",
+      "lanes": [
+        {
+          "name": "key",
+          "type": "const char *",
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The key; valid only during the call."
+        },
+        {
+          "name": "ctx",
+          "type": "void *",
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from for_each_key."
         }
       ]
     },
@@ -512,8 +661,23 @@
   "foreign_id_types": [],
   "type_aliases": {
     "ke_scheduler_run_fn": "ke_result (*)(void *, float, ke_completion **)",
+    "ke_settings_key_func": "void (*)(const char *, void *)",
     "ke_async_fn": "ke_result (*)(void *, ke_async_ctx *)",
     "ke_job_fn": "ke_result (*)(void *, const ke_job_ctx *)",
     "ke_job_range_fn": "ke_result (*)(void *, uint32_t, uint32_t, uint32_t)"
-  }
+  },
+  "constants": [
+    {
+      "name": "KE_SCHEDULER_SETTING_FIXED_DT",
+      "type": "const char *",
+      "value": "\u0022fixed_dt\u0022",
+      "doc": "Setting every scheduler reads, a number: the dt of a fixed step, in seconds; greater than zero."
+    },
+    {
+      "name": "KE_SCHEDULER_SETTING_FIXED_DT_MAX_ACCUM",
+      "type": "const char *",
+      "value": "\u0022fixed_dt_max_accum\u0022",
+      "doc": "Setting every scheduler reads, a number: the most time a tick may accumulate for fixed steps, in seconds, the excess dropped; greater than zero."
+    }
+  ]
 }

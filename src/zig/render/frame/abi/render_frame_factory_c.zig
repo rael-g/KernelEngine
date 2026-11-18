@@ -11,7 +11,6 @@ const abi_result = @import("result");
 const abi_schedule = @import("schedule");
 const abi_settings = @import("settings");
 
-
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
@@ -37,6 +36,9 @@ pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
 pub const ke_schedule_set_id = u32;
 pub const ke_schedule_system_id = u64;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;

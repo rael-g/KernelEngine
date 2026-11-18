@@ -9,16 +9,15 @@ namespace KernelEngine.Async.Enki;
 public sealed unsafe partial class EnkiAsync : KernelEngine.Async.Async
 {
     /// <summary>Creates an async system on enkiTS, its workers started.</summary>
-    /// <param name="config">Required; every field is read as given.</param>
-    public EnkiAsync(in KernelEngine.Async.AsyncConfig config) : base(Create(config))
+    /// <param name="settings">Read once. KE_ASYNC_SETTING_WORKER_COUNT, default 2; `submit_capacity`, an integer, default 1024: how many submissions from other threads may wait for the next drain.</param>
+    public EnkiAsync(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
     {
     }
 
-    private static KernelEngine.Async.Native.ke_async_handle Create(in KernelEngine.Async.AsyncConfig config)
+    private static KernelEngine.Async.Native.ke_async_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
-        var nativeConfig = config;
         KernelEngine.Async.Native.ke_async_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Async.Enki.Native.NativeMethods.async_enki_create(&nativeConfig, &handle), "ke_async_enki_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Async.Enki.Native.NativeMethods.async_enki_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_async_enki_create");
         return handle;
     }
 }

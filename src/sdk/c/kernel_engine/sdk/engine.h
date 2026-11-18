@@ -173,12 +173,23 @@ typedef struct ke_sdk_engine_desc
 /** The configuration the default parts read their sections from. */
 static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return e->configuration.ref; }
 
-/** The section @p section of the engine's configuration as the settings a part is created with; NULL when the engine has no
- * configuration or the section cannot be viewed, which the part refuses. */
+static inline ke_result ke_sdk_no_bool(ke_settings *self, const char *key, bool *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_double(ke_settings *self, const char *key, double *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_string(ke_settings *self, const char *key, const char **out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
+static inline ke_result ke_sdk_no_keys(ke_settings *self, ke_settings_key_func each, void *ctx) { (void)self; (void)ctx; return each ? KE_OK : KE_RESULT_INVALID_ARGUMENT; }
+
+/** Settings that hold nothing, so a part takes its implementation's defaults. */
+static ke_settings ke_sdk_empty_settings = { NULL, ke_sdk_no_bool, ke_sdk_no_int, ke_sdk_no_double, ke_sdk_no_string, ke_sdk_no_keys };
+
+/** The section @p section of the engine's configuration as the settings a part is created with; empty settings while the
+ * engine has no configuration yet, as for the job and async systems the configuration is read through; NULL when the section
+ * cannot be viewed, which the part refuses. */
 static inline ke_settings *ke_sdk_settings(ke_sdk_engine *e, const char *section)
 {
+    if (!e->configuration.ref) return &ke_sdk_empty_settings;
     ke_settings *settings = NULL;
-    if (e->configuration.ref && e->configuration.ref->section(e->configuration.ref, section, &settings) != KE_OK) settings = NULL;
+    if (e->configuration.ref->section(e->configuration.ref, section, &settings) != KE_OK) settings = NULL;
     return settings;
 }
 

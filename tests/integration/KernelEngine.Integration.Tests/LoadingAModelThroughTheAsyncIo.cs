@@ -13,7 +13,8 @@ public class LoadingAModelThroughTheAsyncIo
     [Fact]
     public void AGltfAndTheBufferItNamesAreReadIntoMeshesAndMaterials()
     {
-        using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
+        using var config = new KernelEngine.Configuration.DefaultConfiguration(null);
+        using var asyncs = new EnkiAsync(null, config.Section("async"));
         using var files = new StdFileSystem(null, ".");
         using var io = new AsyncIo(null, asyncs, files);
         using var loader = new AssimpAssetLoader(null, io);
