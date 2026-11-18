@@ -14,8 +14,10 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
     /// <param name="service">The frame begins, uploads and presents on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
     /// <param name="scene">Names the components the frame reads; borrowed, must outlive it.</param>
-    /// <param name="config">The frame's values; Required; every field is read as given.</param>
-    public DefaultRenderFrame(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config) : base(Create(ecs, graph, service, camera, scene, config))
+    /// <param name="colorFormat">Format of the colour the frame begins with, up to KE_RENDER_STAGE_HDR_POST.</param>
+    /// <param name="depthFormat">Format of the frame's depth.</param>
+    /// <param name="settings">Read once. `clear_color`, four numbers from 0 to 1 under `clear_color.0` to `clear_color.3`, default 0, 0, 0, 1: the colour the frame's colour is cleared to.</param>
+    public DefaultRenderFrame(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, graph, service, camera, scene, colorFormat, depthFormat, settings))
     {
         Hold(ecs.Owner);
         Hold(graph.Owner);
@@ -24,19 +26,15 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
         Hold(scene.Owner);
     }
 
-    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, in KernelEngine.Render.Webgpu.RenderFrameConfig config)
+    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(graph);
         ArgumentNullException.ThrowIfNull(service);
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
-        KernelEngine.Render.Webgpu.Native.ke_render_frame_config nativeConfig = default;
-        nativeConfig.color_format = config.ColorFormat;
-        nativeConfig.depth_format = config.DepthFormat;
-        nativeConfig.clear_color = config.ClearColor;
         KernelEngine.Render.Frame.Native.ke_render_frame_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, &nativeConfig, &handle), "ke_render_frame_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, colorFormat, depthFormat, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_frame_create");
         return handle;
     }
 }

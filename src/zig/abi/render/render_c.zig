@@ -111,13 +111,6 @@ pub const ke_render_lighting = extern struct {
     ambient: [4]f32 = std.mem.zeroes([4]f32),
 };
 
-/// The values a render service is created with, whatever its implementation, each applied as
-/// given.
-pub const ke_render_service_config = extern struct {
-    /// Directory the shaders are loaded from; copied. Required.
-    shader_dir: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
 /// The perspective frustum a camera's field of view describes.
 pub const ke_camera_frustum = extern struct {
     /// Tangent of half the vertical field of view.

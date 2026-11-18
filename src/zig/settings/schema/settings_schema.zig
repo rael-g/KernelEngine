@@ -1,6 +1,6 @@
 //! Reads a `ke_settings` into the struct an implementation declares as its settings: each field is
-//! one key, its default value is the implementation's default, and a `ranges` declaration bounds
-//! the numeric ones.
+//! one key (an array field one key per element, `name.0`, `name.1`…), its default value is the
+//! implementation's default, and a `ranges` declaration bounds the numeric ones.
 
 const std = @import("std");
 const abi_settings = @import("abi_settings");
@@ -15,20 +15,25 @@ const c = abi_settings.c;
 /// type than its field, a number outside the field's range, a string that names no value of an
 /// enum field, and a key that names no field are refused as an invalid argument, each logged with
 /// the key. `T` is a struct whose every field has a default and is a bool, an integer, a float, an
-/// enum or a `[:0]const u8`; `T.ranges`, when declared, gives `.{ min, max }` per numeric field.
+/// enum, a `[:0]const u8` or an array of bool, integer or float, each element under `name.<index>`;
+/// `T.ranges`, when declared, gives `.{ min, max }` per numeric field, for every element of an array.
 /// A string field borrows the settings' string, valid while the settings live.
 pub fn read(comptime T: type, settings: *c.ke_settings) R.Error!T {
     var out: T = .{};
     inline for (@typeInfo(T).@"struct".fields) |field| {
-        try readField(T, field, settings, &@field(out, field.name));
+        switch (@typeInfo(field.type)) {
+            .array => |a| inline for (0..a.len) |i| {
+                try readValue(T, field.name, a.child, field.name ++ std.fmt.comptimePrint(".{d}", .{i}), settings, &@field(out, field.name)[i]);
+            },
+            else => try readValue(T, field.name, field.type, field.name, settings, &@field(out, field.name)),
+        }
     }
     try refuseUnknown(T, settings);
     return out;
 }
 
-fn readField(comptime T: type, comptime field: std.builtin.Type.StructField, settings: *c.ke_settings, dst: *field.type) R.Error!void {
-    const key: [:0]const u8 = field.name;
-    switch (@typeInfo(field.type)) {
+fn readValue(comptime T: type, comptime name: []const u8, comptime F: type, comptime key: [:0]const u8, settings: *c.ke_settings, dst: *F) R.Error!void {
+    switch (@typeInfo(F)) {
         .bool => {
             var v: bool = false;
             if (!try found(settings.get_bool.?(settings, key.ptr, &v), key, "a boolean")) return;
@@ -37,32 +42,32 @@ fn readField(comptime T: type, comptime field: std.builtin.Type.StructField, set
         .int => {
             var v: i64 = 0;
             if (!try found(settings.get_int.?(settings, key.ptr, &v), key, "an integer")) return;
-            const lo, const hi = bounds(T, field.name, field.type);
+            const lo, const hi = bounds(T, name, F);
             if (v < lo or v > hi) return outOfRange(key, v, lo, hi);
             dst.* = @intCast(v);
         },
         .float => {
             var v: f64 = 0;
             if (!try found(settings.get_double.?(settings, key.ptr, &v), key, "a number")) return;
-            const lo, const hi = bounds(T, field.name, field.type);
+            const lo, const hi = bounds(T, name, F);
             if (!(v >= lo and v <= hi)) return outOfRange(key, v, lo, hi);
             dst.* = @floatCast(v);
         },
         .@"enum" => {
             var v: ?[*:0]const u8 = null;
             if (!try found(settings.get_string.?(settings, key.ptr, &v), key, "a string")) return;
-            dst.* = std.meta.stringToEnum(field.type, std.mem.span(v.?)) orelse {
+            dst.* = std.meta.stringToEnum(F, std.mem.span(v.?)) orelse {
                 log.warn("setting {s}: '{s}' names no value of it", .{ key, v.? });
                 return error.InvalidArgument;
             };
         },
         .pointer => {
-            comptime std.debug.assert(field.type == [:0]const u8);
+            comptime std.debug.assert(F == [:0]const u8);
             var v: ?[*:0]const u8 = null;
             if (!try found(settings.get_string.?(settings, key.ptr, &v), key, "a string")) return;
             dst.* = std.mem.span(v.?);
         },
-        else => @compileError("settings field " ++ field.name ++ " has a type no setting holds"),
+        else => @compileError("settings field " ++ name ++ " has a type no setting holds"),
     }
 }
 
@@ -102,7 +107,12 @@ fn refuseUnknown(comptime T: type, settings: *c.ke_settings) R.Error!void {
             const self: *@This() = @ptrCast(@alignCast(ctx));
             const key = std.mem.span(key_c.?);
             inline for (@typeInfo(T).@"struct".fields) |field| {
-                if (std.mem.eql(u8, key, field.name)) return;
+                switch (@typeInfo(field.type)) {
+                    .array => |a| inline for (0..a.len) |i| {
+                        if (std.mem.eql(u8, key, field.name ++ std.fmt.comptimePrint(".{d}", .{i}))) return;
+                    },
+                    else => if (std.mem.eql(u8, key, field.name)) return,
+                }
             }
             log.warn("setting {s}: no such setting", .{key});
             self.unknown = true;
@@ -182,8 +192,9 @@ const Example = struct {
     scale: f32 = 1.0,
     vsync: bool = true,
     mode: Mode = .fifo,
+    tint: [3]f32 = .{ 0.0, 0.0, 1.0 },
 
-    pub const ranges = .{ .width = .{ 1, 4096 }, .scale = .{ 0.5, 4.0 } };
+    pub const ranges = .{ .width = .{ 1, 4096 }, .scale = .{ 0.5, 4.0 }, .tint = .{ 0.0, 1.0 } };
 };
 
 test "settings that write nothing read as the implementation's defaults" {
@@ -201,12 +212,14 @@ test "each written key replaces its default, an integer reads as a number and a 
         .{ .key = "scale", .value = .{ .int = 2 } },
         .{ .key = "vsync", .value = .{ .boolean = false } },
         .{ .key = "mode", .value = .{ .string = "mailbox" } },
+        .{ .key = "tint.1", .value = .{ .double = 0.5 } },
     });
     const v = try read(Example, &s.api);
     try testing.expectEqualStrings("Pong", v.title);
     try testing.expectEqual(@as(u32, 960), v.width);
     try testing.expectEqual(@as(f32, 2.0), v.scale);
     try testing.expect(!v.vsync and v.mode == .mailbox);
+    try testing.expectEqual([3]f32{ 0.0, 0.5, 1.0 }, v.tint);
 }
 
 test "a value of the wrong type, outside its range, naming no enum value, or under no setting is refused" {
@@ -216,6 +229,8 @@ test "a value of the wrong type, outside its range, naming no enum value, or und
         &.{.{ .key = "scale", .value = .{ .double = 8.0 } }},
         &.{.{ .key = "mode", .value = .{ .string = "immediate" } }},
         &.{.{ .key = "heigth", .value = .{ .int = 480 } }},
+        &.{.{ .key = "tint.3", .value = .{ .double = 0.5 } }},
+        &.{.{ .key = "tint.0", .value = .{ .double = 2.0 } }},
     };
     for (cases) |pairs| {
         var s = Fixed.init(pairs);

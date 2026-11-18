@@ -19,12 +19,13 @@ extern "C"
 
 /**
  * Creates a ke_file_system over the operating system's files, through Zig's standard library.
- * @param config [borrowed] Required; every field is read as given.
+ * @param root [borrowed,utf8] The directory relative paths are resolved against; "." for the working
+ *        directory of the process.
  * @param out_file_system [out] Receives the file system; left zeroed on failure.
- * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p params, root or @p out_file_system, KE_RESULT_NOT_FOUND for a
+ * @return KE_OK, KE_RESULT_INVALID_ARGUMENT for a null @p root or @p out_file_system, KE_RESULT_NOT_FOUND for a
  *         root that names no directory, KE_RESULT_OUT_OF_MEMORY, or KE_RESULT_IO.
  */
-KE_FILE_SYSTEM_STD_API ke_result ke_file_system_std_create(const ke_file_system_config *config,
+KE_FILE_SYSTEM_STD_API ke_result ke_file_system_std_create(const char *root,
                                                            ke_file_system_handle           *out_file_system);
 
 #ifdef __cplusplus

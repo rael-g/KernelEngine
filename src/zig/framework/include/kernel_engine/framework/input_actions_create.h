@@ -34,14 +34,14 @@ extern "C"
     /// a key name such as "Space" or "W".
     /// The input actions module evaluates the maps each tick.
     /// @param configuration [borrowed,optional] Read during the call only; NULL creates no map.
-    /// @param config [borrowed] Required; every field is read as given.
+    /// @param section [borrowed,utf8] The configuration section the maps are read from.
     /// @param out_actions [out] Receives the maps; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p config or @p out_actions, and for an
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p section or @p out_actions, and for an
     ///         unknown action type, binding kind, key or button name, or a binding missing a key,
     ///         logging where; KE_RESULT_OUT_OF_MEMORY.
     KE_FRAMEWORK_API ke_result ke_input_actions_create(
         ke_configuration              *configuration,
-        const ke_input_actions_config *config,
+        const char                    *section,
         ke_input_actions_handle       *out_actions);
 
 #ifdef __cplusplus

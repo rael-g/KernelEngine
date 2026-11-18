@@ -10,13 +10,6 @@ pub const KE_ACTION_TYPE_AXIS1D: ke_action_type = 1;
 pub const KE_ACTION_TYPE_AXIS2D: ke_action_type = 2;
 pub const KE_ACTION_TYPE_AXIS3D: ke_action_type = 3;
 
-/// The values the action maps are created with, whatever its implementation, each applied as
-/// given. The values the action maps are created with.
-pub const ke_input_actions_config = extern struct {
-    /// The configuration section the maps are read from.
-    section: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-};
-
 /// Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame
 /// against an input snapshot and polled. Maps are evaluated from the highest priority down, ties
 /// in the order they were added; a key or mouse button bound in an enabled map is not seen by

@@ -1217,24 +1217,6 @@
       "external": true
     },
     {
-      "name": "ke_render_service_config",
-      "doc": "The values a render service is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "borrowed"
-      ],
-      "fields": [
-        {
-          "name": "shader_dir",
-          "type": "const char *",
-          "tags": [
-            "utf8"
-          ],
-          "doc": "Directory the shaders are loaded from; copied. Required."
-        }
-      ],
-      "external": true
-    },
-    {
       "name": "ke_mesh_shape_data",
       "doc": "The vertices and indices of a baked mesh shape.",
       "tags": [

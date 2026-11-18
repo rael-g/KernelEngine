@@ -12,9 +12,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a ke_file_system over the operating system's files, through Zig's standard library.
-pub fn fileSystemStdCreate(config: ?*const abi_file_system.c.ke_file_system_config) Error!abi_file_system.c.ke_file_system_handle {
+pub fn fileSystemStdCreate(root_: [:0]const u8) Error!abi_file_system.c.ke_file_system_handle {
     var written: abi_file_system.c.ke_file_system_handle = undefined;
-    try checkResult(c.ke_file_system_std_create(config, &written));
+    try checkResult(c.ke_file_system_std_create(root_.ptr, &written));
     return written;
 }
 

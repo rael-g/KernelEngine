@@ -20,8 +20,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_render_lighting, direction),
     offsetof(ke_render_lighting, color),
     offsetof(ke_render_lighting, ambient),
-    sizeof(ke_render_service_config),
-    offsetof(ke_render_service_config, shader_dir),
     sizeof(ke_camera_frustum),
     offsetof(ke_camera_frustum, tan_half_fov_y),
     offsetof(ke_camera_frustum, aspect),

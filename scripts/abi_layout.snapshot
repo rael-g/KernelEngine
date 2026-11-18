@@ -62,8 +62,6 @@ ke_window_handle size=16 align=8
 ke_file_stat size=16 align=8
   kind 0
   size 8
-ke_file_system_config size=8 align=8
-  root 0
 ke_file_system size=48 align=8
   handle 0
   open 8
@@ -720,8 +718,6 @@ ke_render_lighting size=48 align=4
   direction 0
   color 16
   ambient 32
-ke_render_service_config size=8 align=8
-  shader_dir 0
 ke_camera_frustum size=16 align=4
   tan_half_fov_y 0
   aspect 4
@@ -1073,8 +1069,6 @@ ke_scene_files_handle size=16 align=8
 [engine_node_types]
 
 [input_actions]
-ke_input_actions_config size=8 align=8
-  section 0
 ke_input_actions size=144 align=8
   handle 0
   add_map 8

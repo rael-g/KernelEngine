@@ -6,13 +6,13 @@ using global::KernelEngine.Logger;
 using global::KernelEngine.Render;
 using global::KernelEngine.RenderGraph;
 
-using KernelEngine.Common.Native;
 using KernelEngine.Ecs.Native;
 using KernelEngine.Module.Native;
 using KernelEngine.Render.Frame.Native;
 using KernelEngine.Render.Native;
 using KernelEngine.RenderGraph.Native;
 using KernelEngine.Result.Native;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Render.Webgpu.Native;
 
@@ -20,7 +20,7 @@ public static unsafe partial class NativeMethods
 {
     [DllImport("ke_render_frame", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_frame_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result render_frame_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_render_graph *")] KernelEngine.RenderGraph.Native.ke_render_graph* graph, [NativeTypeName("ke_render_service *")] KernelEngine.Render.Native.ke_render_service* service, [NativeTypeName("ke_render_camera *")] KernelEngine.Render.Native.ke_render_camera* camera, [NativeTypeName("ke_render_scene_resolve *")] KernelEngine.Render.Native.ke_render_scene_resolve* scene, [NativeTypeName("const ke_render_frame_config *")] ke_render_frame_config* config, [NativeTypeName("ke_render_frame_handle *")] KernelEngine.Render.Frame.Native.ke_render_frame_handle* out_frame);
+    public static extern KernelEngine.Result.Native.Result render_frame_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, [NativeTypeName("ke_render_graph *")] KernelEngine.RenderGraph.Native.ke_render_graph* graph, [NativeTypeName("ke_render_service *")] KernelEngine.Render.Native.ke_render_service* service, [NativeTypeName("ke_render_camera *")] KernelEngine.Render.Native.ke_render_camera* camera, [NativeTypeName("ke_render_scene_resolve *")] KernelEngine.Render.Native.ke_render_scene_resolve* scene, [NativeTypeName("ke_gpu_texture_format")] global::KernelEngine.Render.GpuTextureFormat color_format, [NativeTypeName("ke_gpu_texture_format")] global::KernelEngine.Render.GpuTextureFormat depth_format, [NativeTypeName("struct ke_settings *")] KernelEngine.Settings.Native.ke_settings* settings, [NativeTypeName("ke_render_frame_handle *")] KernelEngine.Render.Frame.Native.ke_render_frame_handle* out_frame);
 
     [DllImport("ke_render_frame", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_render_frame_systems_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]

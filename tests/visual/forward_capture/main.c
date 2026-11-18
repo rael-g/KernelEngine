@@ -158,18 +158,19 @@ typedef struct renderer
 } renderer;
 
 static ke_settings *unset;
+static ke_settings *clear;
 
 static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = "shaders" }, &r->binder));
-    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, &(ke_render_service_config){ .shader_dir = "shaders" }, &r->service));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, "shaders", &r->binder));
+    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, "shaders", &r->service));
     ke_render_service *core = r->service.ref;
     check("render graph", ke_render_graph_simple_create(gpu, &r->graph));
     check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
     check("scene resolve", ke_render_scene_resolve_create(main_world, render_world, extraction, core, NULL, &r->scene));
     check("frame", ke_render_frame_create(render_world, r->graph.ref, core, r->camera.ref, r->scene.ref,
-        &(ke_render_frame_config){ .color_format = KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = { 0.10f, 0.15f, 0.30f, 1.0f } }, &r->frame));
+        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, clear, &r->frame));
     check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
     const ke_render_context context = {
@@ -217,6 +218,10 @@ int main(int argc, char **argv)
     ke_configuration_handle configuration = { 0 };
     check("configuration", ke_configuration_create(&configuration));
     check("unset settings", configuration.ref->section(configuration.ref, "unset", &unset));
+    const double clear_color[4] = { 0.10, 0.15, 0.30, 1.0 };
+    const char *clear_keys[4] = { "clear_color.0", "clear_color.1", "clear_color.2", "clear_color.3" };
+    for (int i = 0; i < 4; ++i) check("clear colour", configuration.ref->set_double(configuration.ref, "render", clear_keys[i], clear_color[i]));
+    check("frame settings", configuration.ref->section(configuration.ref, "render", &clear));
 
     ke_gpu_device_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = { 0 };
@@ -263,7 +268,7 @@ int main(int argc, char **argv)
 
     renderer render;
     ke_file_system_handle files = { 0 };
-    check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
+    check("file system", ke_file_system_std_create(".", &files));
     ke_io_handle file_io = { 0 };
     check("io", ke_io_async_create(async.ref, files.ref, &file_io));
     renderer_compose(&render, ecs.ref, render_world.ref, extraction.ref, render_schedule.ref, gpu.ref, frame_target, file_io.ref);

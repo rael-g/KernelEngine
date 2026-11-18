@@ -60,7 +60,7 @@ public class ReadyingTheNodesASlotOpens
     {
         using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
-        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
+        using var files = new StdFileSystem(null, ".");
         using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
@@ -69,7 +69,7 @@ public class ReadyingTheNodesASlotOpens
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs);
-        using var actions = new DefaultInputActions(null, config, new Framework.InputActionsConfig { Section = "input" });
+        using var actions = new DefaultInputActions(null, config, "input");
         using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystemsModule(null, types);
         loop.Attach(nodeSystems);
@@ -92,7 +92,7 @@ public class ReadyingTheNodesASlotOpens
     {
         using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
-        using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
+        using var files = new StdFileSystem(null, ".");
         using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
@@ -101,7 +101,7 @@ public class ReadyingTheNodesASlotOpens
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
         using var tree = new DefaultSceneTree(null, ecs);
-        using var actions = new DefaultInputActions(null, config, new Framework.InputActionsConfig { Section = "input" });
+        using var actions = new DefaultInputActions(null, config, "input");
         using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions);
         using var nodeSystems = new NodeTypesSystemsModule(null, types);
         loop.Attach(nodeSystems);

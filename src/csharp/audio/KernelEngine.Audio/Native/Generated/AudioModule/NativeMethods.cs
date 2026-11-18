@@ -17,5 +17,5 @@ public static unsafe partial class NativeMethods
 
     [DllImport("ke_audio_module", CallingConvention = CallingConvention.Cdecl, EntryPoint = "ke_sound_create", ExactSpelling = true)]
     [return: NativeTypeName("ke_result")]
-    public static extern KernelEngine.Result.Native.Result sound_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_audio* audio, [NativeTypeName("const ke_sound_config *")] ke_sound_config* config, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
+    public static extern KernelEngine.Result.Native.Result sound_create([NativeTypeName("ke_ecs *")] KernelEngine.Ecs.Native.ke_ecs* ecs, ke_audio* audio, [NativeTypeName("const char *")] sbyte* root, [NativeTypeName("ke_module_handle *")] KernelEngine.Module.Native.ke_module_handle* out_module);
 }

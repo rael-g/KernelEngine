@@ -13,7 +13,7 @@ const abi_result = @import("result");
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a ke_file_system over the operating system's files, through Zig's standard library.
-pub extern fn ke_file_system_std_create(config: ?*const abi_file_system.c.ke_file_system_config, out_file_system: ?*abi_file_system.c.ke_file_system_handle) abi_result.c.ke_result;
+pub extern fn ke_file_system_std_create(root: ?[*:0]const u8, out_file_system: ?*abi_file_system.c.ke_file_system_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_file_system_std logs to callback, with ctx; a NULL callback sends them
 /// back to stderr, where they go until this is called. Called once, before the library logs.

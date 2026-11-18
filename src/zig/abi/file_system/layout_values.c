@@ -4,8 +4,6 @@ const unsigned long long layout_values[] = {
     sizeof(ke_file_stat),
     offsetof(ke_file_stat, kind),
     offsetof(ke_file_stat, size),
-    sizeof(ke_file_system_config),
-    offsetof(ke_file_system_config, root),
     sizeof(ke_file_system),
     offsetof(ke_file_system, handle),
     offsetof(ke_file_system, open),

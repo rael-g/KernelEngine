@@ -15,6 +15,8 @@ const abi_module = @import("abi_module");
 const abi_render = @import("abi_render");
 const abi_render_frame_factory = @import("abi_render_frame_factory");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const R = @import("result").Result(.{});
 const log = std.log.scoped(.render_frame);
@@ -25,7 +27,12 @@ const gpa = heap.gpa;
 
 const g = abi_render_graph.c;
 const Frame = abi_render_frame.c.ke_render_frame;
-const Config = abi_render_frame_factory.c.ke_render_frame_config;
+/// The frame's settings, with this implementation's defaults.
+const Settings = struct {
+    clear_color: [4]f32 = .{ 0.0, 0.0, 0.0, 1.0 },
+
+    pub const ranges = .{ .clear_color = .{ 0.0, 1.0 } };
+};
 
 /// One resource a pass published in the frame being declared, under a name the frame owns.
 const Published = struct {
@@ -344,27 +351,27 @@ fn destroyFrame(self: ?*Frame) callconv(.c) void {
     gpa.destroy(st);
 }
 
-/// The factory declared in frame_create.h. A missing part or config, or an invalid format, fails as
-/// an invalid argument; the ecs refusing the tag fails with its code; each leaves the handle zeroed.
-export fn ke_render_frame_create(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*g.ke_render_graph, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, config: ?*const Config, out_frame: ?*abi_render_frame.c.ke_render_frame_handle) callconv(.c) abi_result.c.ke_result {
+/// The factory declared in frame_create.h. A missing part or settings, an invalid format, or a setting
+/// the schema refuses fails as an invalid argument; the ecs refusing the tag fails with its code; each leaves the handle zeroed.
+export fn ke_render_frame_create(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*g.ke_render_graph, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format, settings: ?*abi_settings.c.ke_settings, out_frame: ?*abi_render_frame.c.ke_render_frame_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_frame orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const given = config orelse return refused();
-    if (given.color_format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID or given.depth_format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID) {
+    const values = settings_schema.read(Settings, settings orelse return refused()) catch |err| return R.code(err);
+    if (color_format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID or depth_format == abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID) {
         log.warn("render frame: color_format and depth_format must be valid", .{});
         return R.code(error.InvalidArgument);
     }
-    const st = create(ecs orelse return refused(), graph orelse return refused(), service orelse return refused(), camera orelse return refused(), scene orelse return refused(), given) catch |err| return R.code(err);
+    const st = create(ecs orelse return refused(), graph orelse return refused(), service orelse return refused(), camera orelse return refused(), scene orelse return refused(), color_format, depth_format, values) catch |err| return R.code(err);
     out.* = .{ .ref = &st.api, .destroy = destroyFrame };
     return R.ok;
 }
 
 fn refused() abi_result.c.ke_result {
-    log.warn("render frame: ecs, graph, service, camera, scene and config are required", .{});
+    log.warn("render frame: ecs, graph, service, camera, scene and settings are required", .{});
     return R.code(error.InvalidArgument);
 }
 
-fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.c.ke_render_service, camera: *abi_render.c.ke_render_camera, scene: *abi_render.c.ke_render_scene_resolve, config: *const Config) R.Error!*State {
+fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.c.ke_render_service, camera: *abi_render.c.ke_render_camera, scene: *abi_render.c.ke_render_scene_resolve, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format, values: Settings) R.Error!*State {
     const st = try gpa.create(State);
     errdefer gpa.destroy(st);
     st.* = .{
@@ -388,9 +395,9 @@ fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.
         .service = service,
         .producer = .{ .core = service, .camera = camera },
         .frame_cid = abi_ecs.c.KE_COMPONENT_INVALID,
-        .color_format = config.color_format,
-        .depth_format = config.depth_format,
-        .clear_color = .{ config.clear_color.x, config.clear_color.y, config.clear_color.z, config.clear_color.w },
+        .color_format = color_format,
+        .depth_format = depth_format,
+        .clear_color = values.clear_color,
     };
     try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
 
@@ -521,9 +528,9 @@ const Rig = struct {
         return R.ok;
     }
 
-    fn frame(self: *Rig, config: ?*const Config) abi_render_frame.c.ke_render_frame_handle {
+    fn frame(self: *Rig, depth_format: abi_render_gpu.c.ke_gpu_texture_format) abi_render_frame.c.ke_render_frame_handle {
         var h: abi_render_frame.c.ke_render_frame_handle = .{ .ref = null, .destroy = null };
-        _ = ke_render_frame_create(self.ecs.api(), self.graph.api(), self.service.api(), &self.camera, &test_scene, config, &h);
+        _ = ke_render_frame_create(self.ecs.api(), self.graph.api(), self.service.api(), &self.camera, &test_scene, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, depth_format, &no_settings.api, &h);
         return h;
     }
 
@@ -551,7 +558,8 @@ fn noSegments(_: ?*abi_schedule.c.ke_schedule_ctx, _: u32, out_count: ?*usize) c
 
 var empty_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = noSegments, .slice = null };
 
-const test_config: Config = .{ .color_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, .depth_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT, .clear_color = .{ .x = 0, .y = 0, .z = 0, .w = 1 } };
+var no_settings = settings_schema.Fixed.init(&.{});
+const test_depth = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_D32_FLOAT;
 
 fn stateOfHandle(h: abi_render_frame.c.ke_render_frame_handle) *State {
     return stateOf(h.ref).?;
@@ -561,7 +569,7 @@ test "the frame registers its tag, and its module attaches a system to the rende
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     try testing.expect(h.ref.?.frame_cid.?(h.ref) != abi_ecs.c.KE_COMPONENT_INVALID);
     const m = try rig.attached(h);
     try rig.schedule.received(.register_system).times(2);
@@ -574,7 +582,7 @@ test "a frame module attached without a render schedule is refused" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     var m: abi_module.c.ke_module_handle = undefined;
     try R.check(ke_render_frame_systems_create(h.ref, &m));
@@ -587,7 +595,7 @@ test "a frame begins the graph at the output's size over the acquired view, and 
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, beginSystem(&empty_ctx, stateOfHandle(h), 0.016));
     try rig.graph.received(.begin_frame).where(zsub.argIs(1, @as(u32, 64))).times(1);
@@ -605,7 +613,7 @@ test "a frame whose target has nothing to draw into declares, executes and prese
     try rig.init();
     defer rig.deinit();
     _ = rig.service.when(.begin_frame).does(acquireNothing);
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, beginSystem(&empty_ctx, stateOfHandle(h), 0.016));
     try testing.expect(!h.ref.?.live.?(h.ref));
@@ -619,7 +627,7 @@ test "a frame whose output no pass claimed copies the colour there, then submits
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, beginSystem(&empty_ctx, stateOfHandle(h), 0.016));
     try testing.expectEqual(R.ok, endSystem(null, stateOfHandle(h), 0.016));
@@ -635,7 +643,7 @@ test "a frame whose output a pass claimed presents without copying the colour" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     try testing.expectEqual(R.ok, beginSystem(&empty_ctx, stateOfHandle(h), 0.016));
     h.ref.?.claim_output.?(h.ref);
@@ -648,7 +656,7 @@ test "a resource published in a frame is found under its name until the next fra
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    const h = rig.frame(&test_config);
+    const h = rig.frame(test_depth);
     defer h.destroy.?(h.ref);
     const f = h.ref;
     try testing.expectEqual(R.ok, beginSystem(&empty_ctx, stateOfHandle(h), 0.016));
@@ -664,12 +672,12 @@ test "a frame missing a part or given an invalid format is refused as an invalid
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    try testing.expect(rig.frame(null).ref == null);
-    var bad = test_config;
-    bad.depth_format = abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID;
-    try testing.expect(rig.frame(&bad).ref == null);
+    try testing.expect(rig.frame(abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_INVALID).ref == null);
     var h: abi_render_frame.c.ke_render_frame_handle = undefined;
-    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(rig.ecs.api(), null, rig.service.api(), &rig.camera, &test_scene, &test_config, &h));
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(rig.ecs.api(), null, rig.service.api(), &rig.camera, &test_scene, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, test_depth, &no_settings.api, &h));
+    try testing.expect(h.ref == null);
+    var out_of_range = settings_schema.Fixed.init(&.{.{ .key = "clear_color.0", .value = .{ .double = 2.0 } }});
+    try testing.expectEqual(R.code(error.InvalidArgument), ke_render_frame_create(rig.ecs.api(), rig.graph.api(), rig.service.api(), &rig.camera, &test_scene, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, test_depth, &out_of_range.api, &h));
     try testing.expect(h.ref == null);
 }
 

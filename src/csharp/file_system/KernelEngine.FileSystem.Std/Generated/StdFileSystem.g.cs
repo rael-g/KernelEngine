@@ -9,20 +9,18 @@ namespace KernelEngine.FileSystem.Std;
 public sealed unsafe partial class StdFileSystem : KernelEngine.FileSystem.FileSystem
 {
     /// <summary>Creates a ke_file_system over the operating system's files, through Zig's standard library.</summary>
-    /// <param name="config">Required; every field is read as given.</param>
-    public StdFileSystem(in KernelEngine.FileSystem.FileSystemConfig config) : base(Create(config))
+    /// <param name="root">The directory relative paths are resolved against; "." for the working directory of the process.</param>
+    public StdFileSystem(string? root = default) : base(Create(root))
     {
     }
 
-    private static KernelEngine.FileSystem.Native.ke_file_system_handle Create(in KernelEngine.FileSystem.FileSystemConfig config)
+    private static KernelEngine.FileSystem.Native.ke_file_system_handle Create(string? root)
     {
-        var rootConfigBytes = config.Root is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Root + "\0");
-        fixed (byte* rootConfigPtr = rootConfigBytes)
+        var rootBytes = root is null ? null : System.Text.Encoding.UTF8.GetBytes(root + "\0");
+        fixed (byte* rootPtr = rootBytes)
         {
-            KernelEngine.FileSystem.Native.ke_file_system_config nativeConfig = default;
-            nativeConfig.root = (sbyte*)rootConfigPtr;
             KernelEngine.FileSystem.Native.ke_file_system_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_create(&nativeConfig, &handle), "ke_file_system_std_create");
+            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_create((sbyte*)rootPtr, &handle), "ke_file_system_std_create");
             return handle;
         }
     }

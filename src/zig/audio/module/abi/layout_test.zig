@@ -23,7 +23,6 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_sound_config, translated("ke_sound_config"));
     if (@hasDecl(c, "ke_audio_sound")) try expectSameLayout(abi.c.ke_audio_sound, c.ke_audio_sound);
     if (@hasDecl(c, "ke_audio_voice")) try expectSameLayout(abi.c.ke_audio_voice, c.ke_audio_voice);
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
@@ -38,13 +37,11 @@ test "every record is laid out as the header lays it out" {
     if (@hasDecl(c, "ke_schedule_system_id")) try expectSameLayout(abi.c.ke_schedule_system_id, c.ke_schedule_system_id);
 }
 
-extern const layout_values: [3]c_ulonglong;
+extern const layout_values: [1]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_sound_config),
-        @offsetOf(abi.c.ke_sound_config, "root"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

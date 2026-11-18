@@ -111,5 +111,4 @@ pub const OpenFile = struct {
 };
 
 pub const FileStat = c.ke_file_stat;
-pub const FileSystemConfig = c.ke_file_system_config;
 pub const FileSystemHandle = c.ke_file_system_handle;

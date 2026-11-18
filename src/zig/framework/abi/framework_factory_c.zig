@@ -99,7 +99,7 @@ pub extern fn ke_framework_set_log_callback(callback: ke_log_callback, ctx: ?*an
 /// for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for
 /// key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps
 /// each tick.
-pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, config: ?*const abi_input_actions.c.ke_input_actions_config, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
+pub extern fn ke_input_actions_create(configuration: ?*abi_configuration.c.ke_configuration, section: ?[*:0]const u8, out_actions: ?*abi_input_actions.c.ke_input_actions_handle) abi_result.c.ke_result;
 
 /// Creates the module that evaluates actions each tick: attaching it registers the exclusive
 /// system "input.actions" in the pre_update schedule's pre_update set, which advances input's

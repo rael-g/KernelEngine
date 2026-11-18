@@ -24,7 +24,6 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_file_stat, translated("ke_file_stat"));
-    try expectSameLayout(abi.c.ke_file_system_config, translated("ke_file_system_config"));
     try expectSameLayout(abi.c.ke_file_system, translated("ke_file_system"));
     try expectSameLayout(abi.c.ke_file_system_handle, translated("ke_file_system_handle"));
 }
@@ -36,7 +35,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_FILE_KIND_OTHER), @as(i64, abi.c.KE_FILE_KIND_OTHER));
 }
 
-extern const layout_values: [16]c_ulonglong;
+extern const layout_values: [14]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -44,8 +43,6 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_file_stat),
         @offsetOf(abi.c.ke_file_stat, "kind"),
         @offsetOf(abi.c.ke_file_stat, "size"),
-        @sizeOf(abi.c.ke_file_system_config),
-        @offsetOf(abi.c.ke_file_system_config, "root"),
         @sizeOf(abi.c.ke_file_system),
         @offsetOf(abi.c.ke_file_system, "handle"),
         @offsetOf(abi.c.ke_file_system, "open"),

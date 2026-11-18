@@ -477,14 +477,13 @@ fn destroyBinder(self: [*c]abi_render_gpu.c.ke_render_resource_binder) callconv(
 
 /// The factory: copies the shader directory, keeps the borrowed io, reads the material block from the embedded
 /// reflection for the vertex and fragment stages and builds the material layout on the device.
-export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, config: ?*const abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_config, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, shader_dir: ?[*:0]const u8, out_binder: [*c]abi_render_gpu.c.ke_render_resource_binder_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_binder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
     const dev = device orelse return R.code(error.InvalidArgument);
     const reader = io orelse return R.code(error.InvalidArgument);
-    const cfg = config orelse return R.code(error.InvalidArgument);
-    if (cfg.shader_dir == null) return R.code(error.InvalidArgument);
-    const st = newBinder(dev, reader, cfg.shader_dir) catch |err| return R.code(err);
+    const dir = shader_dir orelse return R.code(error.InvalidArgument);
+    const st = newBinder(dev, reader, dir) catch |err| return R.code(err);
     out.* = .{ .ref = &st.api, .destroy = destroyBinder };
     return R.ok;
 }
@@ -639,9 +638,8 @@ const Rig = struct {
     }
 
     fn binder(self: *Rig) !abi_render_gpu.c.ke_render_resource_binder_handle {
-        const config = abi_render_binder_grouped_factory.c.ke_render_resource_binder_grouped_config{ .shader_dir = "shaders" };
         var h: abi_render_gpu.c.ke_render_resource_binder_handle = undefined;
-        try R.check(ke_render_resource_binder_grouped_create(self.dev.api(), self.io.api(), &config, &h));
+        try R.check(ke_render_resource_binder_grouped_create(self.dev.api(), self.io.api(), "shaders", &h));
         return h;
     }
 

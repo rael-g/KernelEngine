@@ -566,7 +566,6 @@ pub const RenderSceneResolve = struct {
 
 pub const RenderFrameGlobals = c.ke_render_frame_globals;
 pub const RenderLighting = c.ke_render_lighting;
-pub const RenderServiceConfig = c.ke_render_service_config;
 pub const CameraFrustum = c.ke_camera_frustum;
 pub const RenderSceneComponentIds = c.ke_render_scene_component_ids;
 pub const RenderServiceHandle = c.ke_render_service_handle;

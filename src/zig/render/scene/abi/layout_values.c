@@ -4,7 +4,5 @@
 #include <kernel_engine/render/scene/scene_resolve_create.h>
 #include <kernel_engine/render/scene/scene_resolve_systems_create.h>
 const unsigned long long layout_values[] = {
-    sizeof(ke_render_label_resolve_config),
-    offsetof(ke_render_label_resolve_config, default_font),
     0,
 };
