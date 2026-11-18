@@ -29,7 +29,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_io_handle, translated("ke_io_handle"));
 }
 
-extern const layout_values: [33]c_ulonglong;
+extern const layout_values: [34]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -59,6 +59,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_io, "remove"),
         @offsetOf(abi.c.ke_io, "rename"),
         @offsetOf(abi.c.ke_io, "is_completed"),
+        @offsetOf(abi.c.ke_io, "completion"),
         @offsetOf(abi.c.ke_io, "wait"),
         @offsetOf(abi.c.ke_io, "close"),
         @offsetOf(abi.c.ke_io, "free_bytes"),

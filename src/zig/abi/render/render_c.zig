@@ -201,7 +201,9 @@ pub const ke_render_service = extern struct {
     try_get_material: ?*const fn (?*ke_render_service, ?[*:0]const u8, ?*abi_render_handles.c.ke_material_handle) callconv(.c) bool = null,
     /// The built-in 1×1 white texture, resolvable everywhere a neutral albedo is wanted.
     white_texture: ?*const fn (?*ke_render_service) callconv(.c) abi_render_handles.c.ke_texture_handle = null,
-    /// Resolves a shader by logical NAME + STAGE to a device-ready module.
+    /// Resolves a shader by logical NAME + STAGE to a device-ready module. Its file is read once; on
+    /// a thread that may not wait for the read, the call returns while the read goes on, and a later
+    /// call with the same name and stage collects it.
     load_shader: ?*const fn (?*ke_render_service, ?[*:0]const u8, ke_gpu_shader_stage, ?*ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result = null,
     /// Replaces the frame globals and records their upload; a shader reads them as `ke_frame`.
     set_frame_globals: ?*const fn (?*ke_render_service, ?*const ke_render_frame_globals) callconv(.c) void = null,

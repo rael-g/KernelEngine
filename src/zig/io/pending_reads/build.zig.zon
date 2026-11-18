@@ -1,0 +1,16 @@
+.{
+    .name = .ke_io_pending_reads,
+    .version = "0.1.0",
+    .fingerprint = 0x4f657ce37eb0c942,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_io = .{ .path = "../../abi/io" },
+        .abi_result = .{ .path = "../../abi/result" },
+        .ke_result = .{ .path = "../../result" },
+        .zsub = .{
+            .url = "https://github.com/rael-g/zsub/archive/10fee26318ed2ef628f6fada5f3c39f4572381ba.tar.gz",
+            .hash = "zsub-0.0.0-c8a1QlLVAABkTAwiY20uW_c1jJDIb3Ke92-LuXFWiXmU",
+        },
+    },
+    .paths = .{"."},
+}

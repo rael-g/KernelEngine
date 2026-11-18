@@ -10,7 +10,7 @@ int main(void)
         .task_pool = ke_sdk_task_pool_enki,
         .job_system = ke_sdk_job_system_enki,
         .file_system = ke_sdk_file_system_std,
-        .io = ke_sdk_io_pool,
+        .io = ke_sdk_io_async,
         .configuration = ke_sdk_configuration_toml,
         .async = ke_sdk_async_enki,
         .input = ke_sdk_input,

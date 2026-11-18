@@ -408,7 +408,9 @@ pub const RenderService = struct {
         return self.ptr.white_texture.?(self.ptr);
     }
 
-    /// Resolves a shader by logical NAME + STAGE to a device-ready module.
+    /// Resolves a shader by logical NAME + STAGE to a device-ready module. Its file is read once; on
+    /// a thread that may not wait for the read, the call returns while the read goes on, and a later
+    /// call with the same name and stage collects it.
     pub fn loadShader(self: RenderService, name: [:0]const u8, stage: c.ke_gpu_shader_stage) Error!c.ke_gpu_shader_module {
         var written: c.ke_gpu_shader_module = undefined;
         try checkResult(self.ptr.load_shader.?(self.ptr, name.ptr, stage, &written));

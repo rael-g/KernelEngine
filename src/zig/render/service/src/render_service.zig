@@ -112,6 +112,7 @@ pub const CoreState = struct {
     shader_cache_destroy: *const fn (*abi_resource_cache.c.ke_resource_cache) callconv(.c) void,
     shader_dir: []const u8,
     io: *abi_io.c.ke_io,
+    shader_reads: std.atomic.Value(?*shader_loader.Read) = .init(null),
 
     globals: frame_globals.Globals,
     default_normal: abi_render_handles.c.ke_texture_handle,
@@ -165,6 +166,7 @@ fn destroyCore(self: [*c]abi_render.c.ke_render_service) callconv(.c) void {
     st.material_cache_destroy(st.material_cache);
     st.texture_cache_destroy(st.texture_cache);
     st.mesh_cache_destroy(st.mesh_cache);
+    shader_loader.releaseReads(st);
     st.shader_cache_destroy(st.shader_cache);
     st.material_store.deinit();
     st.texture_store.deinit();
@@ -621,6 +623,39 @@ test "creating and destroying the render service leaves no block allocated and n
     const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
+    try gpu.expectReleased();
+    try heap.expectNoLeaks();
+}
+
+var shader_wait_refused = false;
+
+fn waitUnlessRefused(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
+    if (shader_wait_refused) return R.code(error.NotSupported);
+    return waitEmpty(args);
+}
+
+test "a shader read the calling thread may not wait for is pending until a later load collects it" {
+    var sd: ShaderDir = undefined;
+    try sd.init();
+    defer sd.deinit();
+    _ = sd.io.when(.wait).does(waitUnlessRefused);
+    var gpu: Gpu = undefined;
+    try gpu.init();
+    defer gpu.deinit();
+    var target: Target = undefined;
+    target.init();
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const svc = h.ref orelse return error.TestUnexpectedResult;
+
+    var module: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
+    shader_wait_refused = true;
+    try testing.expectError(error.Pending, R.check(svc.*.load_shader.?(svc, "standard.forward", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &module)));
+    try testing.expectError(error.Pending, R.check(svc.*.load_shader.?(svc, "standard.forward", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &module)));
+    shader_wait_refused = false;
+    try R.check(svc.*.load_shader.?(svc, "standard.forward", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &module));
+    try testing.expect(module != abi_render_gpu.c.KE_GPU_INVALID_HANDLE);
+
+    h.destroy.?(svc);
     try gpu.expectReleased();
     try heap.expectNoLeaks();
 }

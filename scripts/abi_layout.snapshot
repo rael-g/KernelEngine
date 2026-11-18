@@ -460,7 +460,7 @@ ke_io_result size=64 align=8
   exists 40
   entries 48
   entry_count 56
-ke_io size=136 align=8
+ke_io size=144 align=8
   handle 0
   read_file 8
   open 16
@@ -474,10 +474,11 @@ ke_io size=136 align=8
   remove 80
   rename 88
   is_completed 96
-  wait 104
-  close 112
-  free_bytes 120
-  free_entries 128
+  completion 104
+  wait 112
+  close 120
+  free_bytes 128
+  free_entries 136
 ke_io_handle size=16 align=8
   ref 0
   destroy 8

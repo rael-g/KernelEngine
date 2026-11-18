@@ -90,7 +90,7 @@ public interface IRenderService : IDisposable
     bool TryGetMaterial(string key, out MaterialHandle @out);
     /// <summary>The built-in 1×1 white texture, resolvable everywhere a neutral albedo is wanted.</summary>
     TextureHandle WhiteTexture();
-    /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
+    /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module. Its file is read once; on a thread that may not wait for the read, the call returns while the read goes on, and a later call with the same name and stage collects it.</summary>
     /// <returns>Receives the module.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     ulong LoadShader(string name, uint stage);

@@ -4,6 +4,8 @@
 #nullable enable
 
 using KernelEngine.Common;
+using KernelEngine.Completion;
+using KernelEngine.Completion.Native;
 using KernelEngine.FileSystem;
 using KernelEngine.FileSystem.Native;
 using KernelEngine.Io.Native;
@@ -77,7 +79,11 @@ public interface IIo : IDisposable
     /// <summary>Reports whether a request has finished, without releasing it. Valid only before the request is waited on.</summary>
     /// <param name="request">A request a submit slot returned.</param>
     bool IsCompleted(IoRequest request);
-    /// <summary>Blocks until the request finishes, releases it, and reports what it read.</summary>
+    /// <summary>The completion of a request, to pass as a dependency to work that reads its result; that work then waits on the request without blocking.</summary>
+    /// <param name="request">A request a submit slot returned.</param>
+    /// <returns>The completion, borrowed until the request is waited on; null for a null request.</returns>
+    nint Completion(IoRequest request);
+    /// <summary>Releases a request and reports what it read: at once, from any thread, when it finished; otherwise blocking until it finishes, where its completion may be waited on.</summary>
     /// <param name="request">A request a submit slot returned; invalid afterwards.</param>
     /// <returns>Receives what the request read; left zeroed when it failed.</returns>
     /// <exception cref="Exception">The native call failed.</exception>

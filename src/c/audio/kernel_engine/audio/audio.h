@@ -32,6 +32,8 @@ extern "C"
          * @param path [borrowed,utf8] The audio file, read through the io the backend was created with.
          * @param out_sound [out] Receives the sound; KE_AUDIO_SOUND_INVALID on failure.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_sound;
+         *         KE_RESULT_PENDING while the file is read on a thread that may not wait for it,
+         *         a later call with the same path collecting it;
          *         KE_RESULT_NOT_FOUND when the file cannot be opened; KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*load_sound)(struct ke_audio *self, const char *path, ke_audio_sound *out_sound);

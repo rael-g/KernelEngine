@@ -210,10 +210,12 @@ struct ke_render_service
     /// is wanted.
     ke_texture_handle (*white_texture)(struct ke_render_service *self);
 
-    /// Resolves a shader by logical NAME + STAGE to a device-ready module.
+    /// Resolves a shader by logical NAME + STAGE to a device-ready module. Its file is read once;
+    /// on a thread that may not wait for the read, the call returns while the read goes on, and a
+    /// later call with the same name and stage collects it.
     /// @param out_module [out] Receives the module.
-    /// @return KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device's code
-    ///         when it rejects the module.
+    /// @return KE_OK; KE_RESULT_PENDING while the read goes on; KE_RESULT_NOT_FOUND when no shader
+    ///         has that name, or the device's code when it rejects the module.
     ke_result (*load_shader)(struct ke_render_service *self, const char *name,
                              ke_gpu_shader_stage stage, ke_gpu_shader_module *out_module);
 

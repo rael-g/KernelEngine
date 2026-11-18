@@ -353,7 +353,7 @@ public unsafe partial class RenderService : IDisposable, INativeRenderService, I
         return Handle->white_texture(Handle);
     }
 
-    /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module.</summary>
+    /// <summary>Resolves a shader by logical NAME + STAGE to a device-ready module. Its file is read once; on a thread that may not wait for the read, the call returns while the read goes on, and a later call with the same name and stage collects it.</summary>
     /// <returns>Receives the module.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public ulong LoadShader(string name, uint stage)

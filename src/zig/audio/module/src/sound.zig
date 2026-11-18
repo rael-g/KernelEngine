@@ -123,7 +123,7 @@ fn load(m: *Module, entity: abi_ecs.c.ke_entity, p: *Sound) void {
     defer gpa.free(full);
     var clip: abi_audio.c.ke_audio_sound = abi_audio.c.KE_AUDIO_SOUND_INVALID;
     R.check(m.audio.load_sound.?(m.audio, full.ptr, &clip)) catch |err| {
-        log.warn("loading {s} failed: {t}", .{ full, err });
+        if (err != error.Pending) log.warn("loading {s} failed: {t}", .{ full, err });
         return;
     };
     m.tracked.put(gpa, entity, .{ .clip = clip, .seen = m.update }) catch {

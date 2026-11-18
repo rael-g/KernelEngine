@@ -1,39 +1,40 @@
-//! The `ke_io` contract over a `ke_task_pool` and a `ke_file_system`: each request runs as one task
-//! of the pool, reading through the file system, and is released by the `wait` that collects it.
+//! The `ke_io` contract over a `ke_async` and a `ke_file_system`: each request runs as one operation
+//! of the async system, reading through the file system, and is released by the `wait` that collects it.
 
 const std = @import("std");
 
-pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_io_pool").logFn };
+pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_io_async").logFn };
 
 pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 
+const abi_async = @import("abi_async");
+const abi_completion = @import("abi_completion");
 const abi_file_system = @import("abi_file_system");
 const abi_io = @import("abi_io");
-const abi_io_pool_factory = @import("abi_io_pool_factory");
+const abi_io_async_factory = @import("abi_io_async_factory");
 const abi_result = @import("abi_result");
-const abi_task_pool = @import("abi_task_pool");
 const heap = @import("heap");
 
 const R = @import("result").Result(.{});
-const log = std.log.scoped(.io_pool);
+const log = std.log.scoped(.io_async);
 
 const bytes_header = 16;
 const bytes_alignment: std.mem.Alignment = .@"16";
 
 /// The allocation behind one handle. `api` is the vtable the handle's `ref` points at, and its
-/// `handle` slot points back at this block. `task_pool` and `file_system` are borrowed from the
+/// `handle` slot points back at this block. `async` and `file_system` are borrowed from the
 /// factory's arguments and never released here.
 const State = struct {
     api: abi_io.c.ke_io,
-    task_pool: *abi_task_pool.c.ke_task_pool,
+    async: *abi_async.c.ke_async,
     file_system: *abi_file_system.c.ke_file_system,
 };
 
 const Kind = enum { read_file, open, read_at, stat, file_exists };
 
 /// One submitted request, allocated by `submit` and freed by `wait`; the `ke_io_request` pointer is
-/// its address. The task writes `code` and `result` and then stores `completed`, so a thread that
-/// reads `completed` as true reads them as written.
+/// its address. The operation writes `result` before it finishes, so a thread that sees
+/// `completion` finished reads it as written.
 const Request = struct {
     state: *State,
     kind: Kind,
@@ -42,21 +43,19 @@ const Request = struct {
     offset: u64,
     dst: ?[*]u8,
     len: usize,
-    task: ?*abi_task_pool.c.ke_task,
-    code: abi_result.c.ke_result,
+    completion: ?*abi_completion.c.ke_completion,
     result: abi_io.c.ke_io_result,
-    completed: std.atomic.Value(bool),
 
-    fn run(self: *Request) void {
-        self.code = switch (self.kind) {
+    fn run(self: *Request) abi_result.c.ke_result {
+        const code = switch (self.kind) {
             .read_file => self.readFile(),
             .open => self.openFile(),
             .read_at => self.readAt(),
             .stat => self.statPath(),
             .file_exists => self.askExists(),
         };
-        if (self.code != R.ok) self.result = std.mem.zeroes(abi_io.c.ke_io_result);
-        self.completed.store(true, .release);
+        if (code != R.ok) self.result = std.mem.zeroes(abi_io.c.ke_io_result);
+        return code;
     }
 
     fn readFile(self: *Request) abi_result.c.ke_result {
@@ -141,15 +140,13 @@ fn freeBytes(bytes: [*]u8) void {
     heap.gpa.free(base[0 .. len + bytes_header]);
 }
 
-fn taskRun(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+fn operationRun(data: ?*anyopaque, _: ?*abi_async.c.ke_async_ctx) callconv(.c) abi_result.c.ke_result {
     const request: *Request = @ptrCast(@alignCast(data orelse return R.code(error.InvalidArgument)));
-    request.run();
-    return request.code;
+    return request.run();
 }
 
-/// Allocates a request, copies `path` into it, and dispatches it on the task pool. A request from a
-/// thread the task pool refuses runs on the calling thread before this returns, with no task. Returns
-/// null with nothing left allocated when an allocation or any other refusal fails.
+/// Allocates a request, copies `path` into it, and submits it to the async system. Returns null
+/// with nothing left allocated when an allocation or the submission fails.
 fn submit(self: *abi_io.c.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_file_system.c.ke_open_file, offset: u64, dst: ?[*]u8, len: usize, out: *?*abi_io.c.ke_io_request) abi_result.c.ke_result {
     const s = stateOf(self);
     const request = heap.gpa.create(Request) catch {
@@ -164,32 +161,26 @@ fn submit(self: *abi_io.c.ke_io, kind: Kind, path: ?[*:0]const u8, file: ?*abi_f
         .offset = offset,
         .dst = dst,
         .len = len,
-        .task = null,
-        .code = R.ok,
+        .completion = null,
         .result = std.mem.zeroes(abi_io.c.ke_io_result),
-        .completed = .init(false),
     };
     if (path) |p| request.path = heap.gpa.dupeZ(u8, std.mem.span(p)) catch {
         log.warn("submitting a {t} request failed: out of memory", .{kind});
         request.free();
         return R.code(error.OutOfMemory);
     };
-    R.check(s.task_pool.dispatch.?(s.task_pool, taskRun, request, &request.task)) catch |err| switch (err) {
-        error.NotSupported => {
-            request.task = null;
-            request.run();
-        },
-        else => {
-            log.warn("submitting a {t} request failed: the task pool refused it: {t}", .{ kind, err });
-            request.free();
-            return R.code(err);
-        },
+    R.check(s.async.submit.?(s.async, switch (kind) {
+        inline else => |k| "io." ++ @tagName(k),
+    }, operationRun, request, null, 0, &request.completion)) catch |err| {
+        log.warn("submitting a {t} request failed: the async system refused it: {t}", .{ kind, err });
+        request.free();
+        return R.code(err);
     };
     out.* = @ptrCast(request);
     return R.ok;
 }
 
-/// Slot `read_file`. The bytes are allocated by the task once the size is known.
+/// Slot `read_file`. The bytes are allocated by the operation once the size is known.
 fn readFile(self_in: ?*abi_io.c.ke_io, path: ?[*:0]const u8, out_request: ?*?*abi_io.c.ke_io_request) callconv(.c) abi_result.c.ke_result {
     const out = out_request orelse return R.code(error.InvalidArgument);
     out.* = null;
@@ -275,27 +266,34 @@ fn freeEntries(_: ?*abi_io.c.ke_io, _: ?*abi_io.c.ke_io_dir_entry) callconv(.c) 
 fn isCompleted(self_in: ?*abi_io.c.ke_io, request_in: ?*abi_io.c.ke_io_request) callconv(.c) bool {
     _ = self_in;
     const request = request_in orelse return true;
-    return requestOf(request).completed.load(.acquire);
+    const completion = requestOf(request).completion.?;
+    var code: abi_result.c.ke_result = R.ok;
+    return completion.poll.?(completion, &code);
 }
 
-/// Slot `wait`. Waits on the request's task, which leaves the request finished, then copies its
-/// result out and frees it. When the task pool refuses the calling thread as not supported, that
-/// code is returned and the request is left to be waited on again.
+/// Slot `completion`.
+fn completionOf(self_in: ?*abi_io.c.ke_io, request_in: ?*abi_io.c.ke_io_request) callconv(.c) ?*abi_completion.c.ke_completion {
+    _ = self_in orelse return null;
+    return requestOf(request_in orelse return null).completion;
+}
+
+/// Slot `wait`. A finished request is collected at once; an unfinished one is waited on through its
+/// completion, and when the completion refuses the calling thread that code is returned and the
+/// request is left to be waited on again. Collecting releases the completion, copies the result out
+/// and frees the request.
 fn wait(self_in: ?*abi_io.c.ke_io, request_in: ?*abi_io.c.ke_io_request, out_result: ?*abi_io.c.ke_io_result) callconv(.c) abi_result.c.ke_result {
-    const self = self_in orelse return R.code(error.InvalidArgument);
+    _ = self_in orelse return R.code(error.InvalidArgument);
     if (out_result) |out| out.* = std.mem.zeroes(abi_io.c.ke_io_result);
     const request = requestOf(request_in orelse return R.code(error.InvalidArgument));
-    const s = stateOf(self);
+    const completion = request.completion.?;
 
-    if (request.task != null) R.check(s.task_pool.wait.?(s.task_pool, request.task)) catch |err| switch (err) {
-        error.NotSupported => {
-            log.warn("wait refused: the task pool does not accept the calling thread", .{});
-            return R.code(err);
-        },
-        else => {},
-    };
-    const code = request.code;
-    if (out_result) |out| out.* = request.result;
+    var code: abi_result.c.ke_result = R.ok;
+    if (!completion.poll.?(completion, &code)) {
+        code = completion.wait.?(completion);
+        if (code == R.code(error.NotSupported) and !completion.poll.?(completion, &code)) return code;
+    }
+    completion.release.?(completion);
+    if (out_result) |out| out.* = if (code == R.ok) request.result else std.mem.zeroes(abi_io.c.ke_io_result);
     request.free();
     return code;
 }
@@ -322,25 +320,25 @@ fn destroy(self_in: ?*abi_io.c.ke_io) callconv(.c) void {
     heap.gpa.destroy(stateOf(self));
 }
 
-/// The factory. Both the task pool and the file system are required; either missing is an invalid
+/// The factory. Both the async system and the file system are required; either missing is an invalid
 /// argument. Fails with out of memory when the `State` cannot be allocated, leaving
 /// the handle zeroed.
-export fn ke_io_pool_create(task_pool: ?*abi_task_pool.c.ke_task_pool, file_system: ?*abi_file_system.c.ke_file_system, out_io: ?*abi_io.c.ke_io_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_io_async_create(async: ?*abi_async.c.ke_async, file_system: ?*abi_file_system.c.ke_file_system, out_io: ?*abi_io.c.ke_io_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_io orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_io.c.ke_io_handle);
-    out.* = create(task_pool, file_system) catch |err| {
+    out.* = create(async, file_system) catch |err| {
         log.warn("creating the io failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(task_pool: ?*abi_task_pool.c.ke_task_pool, file_system: ?*abi_file_system.c.ke_file_system) R.Error!abi_io.c.ke_io_handle {
+fn create(async: ?*abi_async.c.ke_async, file_system: ?*abi_file_system.c.ke_file_system) R.Error!abi_io.c.ke_io_handle {
     const s = heap.gpa.create(State) catch return error.OutOfMemory;
     errdefer heap.gpa.destroy(s);
     s.* = .{
         .api = std.mem.zeroes(abi_io.c.ke_io),
-        .task_pool = task_pool orelse return error.InvalidArgument,
+        .async = async orelse return error.InvalidArgument,
         .file_system = file_system orelse return error.InvalidArgument,
     };
 
@@ -358,6 +356,7 @@ fn create(task_pool: ?*abi_task_pool.c.ke_task_pool, file_system: ?*abi_file_sys
     s.api.rename = rename;
     s.api.free_entries = freeEntries;
     s.api.is_completed = isCompleted;
+    s.api.completion = completionOf;
     s.api.wait = wait;
     s.api.close = close;
     s.api.free_bytes = freeBytesSlot;
@@ -368,22 +367,61 @@ fn create(task_pool: ?*abi_task_pool.c.ke_task_pool, file_system: ?*abi_file_sys
 const testing = std.testing;
 const zsub = @import("zsub");
 
-const TaskPoolSub = zsub.For(abi_task_pool.c.ke_task_pool);
+const AsyncSub = zsub.For(abi_async.c.ke_async);
 const FileSystemSub = zsub.For(abi_file_system.c.ke_file_system);
 
 const contents = "the quick brown fox jumps over the lazy dog";
 var open_token: u8 = 0;
-var task_token: u8 = 0;
 
-fn runInline(args: TaskPoolSub.Args(.dispatch)) abi_result.c.ke_result {
-    _ = args[1].?(args[2]);
-    args[3].?.* = @ptrCast(&task_token);
+/// A completion the substitute async system hands out: an operation run at submission finishes it at
+/// once, a deferred one only when `finish` runs it, and `wait` refuses while `refuse_wait` is set.
+const Operation = struct {
+    api: abi_completion.c.ke_completion = .{ .handle = null, .poll = poll, .wait = waitOn, .release = release },
+    body: abi_async.c.ke_async_fn = null,
+    data: ?*anyopaque = null,
+    done: bool = false,
+    code: abi_result.c.ke_result = R.ok,
+    released: bool = false,
+
+    fn of(self: ?*abi_completion.c.ke_completion) *Operation {
+        return @fieldParentPtr("api", self.?);
+    }
+
+    fn finish(self: *Operation) void {
+        self.code = self.body.?(self.data, null);
+        self.done = true;
+    }
+
+    fn poll(self: ?*abi_completion.c.ke_completion, out: ?*abi_result.c.ke_result) callconv(.c) bool {
+        const op = of(self);
+        if (op.done) out.?.* = op.code;
+        return op.done;
+    }
+
+    fn waitOn(self: ?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result {
+        const op = of(self);
+        if (refuse_wait) return R.code(error.NotSupported);
+        if (!op.done) op.finish();
+        return op.code;
+    }
+
+    fn release(self: ?*abi_completion.c.ke_completion) callconv(.c) void {
+        of(self).released = true;
+    }
+};
+
+var operations: [8]Operation = undefined;
+var operation_count: usize = 0;
+var defer_operations = false;
+var refuse_wait = false;
+
+fn submitOperation(args: AsyncSub.Args(.submit)) abi_result.c.ke_result {
+    const op = &operations[operation_count];
+    operation_count += 1;
+    op.* = .{ .body = args[2], .data = args[3] };
+    if (!defer_operations) op.finish();
+    args[6].?.* = &op.api;
     return R.ok;
-}
-
-fn refuseDispatch(args: TaskPoolSub.Args(.dispatch)) abi_result.c.ke_result {
-    args[3].?.* = null;
-    return R.code(error.NotSupported);
 }
 
 fn openFox(args: FileSystemSub.Args(.open)) abi_result.c.ke_result {
@@ -412,21 +450,24 @@ fn statFox(args: FileSystemSub.Args(.stat)) abi_result.c.ke_result {
 }
 
 const Rig = struct {
-    pool: TaskPoolSub,
+    asyncs: AsyncSub,
     fs: FileSystemSub,
     handle: abi_io.c.ke_io_handle,
 
     fn init(self: *Rig) !void {
-        try self.pool.init();
-        errdefer self.pool.deinit();
+        operation_count = 0;
+        defer_operations = false;
+        refuse_wait = false;
+        try self.asyncs.init();
+        errdefer self.asyncs.deinit();
         try self.fs.init();
         errdefer self.fs.deinit();
-        _ = self.pool.when(.dispatch).does(runInline);
+        _ = self.asyncs.when(.submit).does(submitOperation);
         _ = self.fs.when(.open).does(openFox);
         _ = self.fs.when(.size).does(foxSize);
         _ = self.fs.when(.read_at).does(readFox);
         _ = self.fs.when(.stat).does(statFox);
-        try R.check(ke_io_pool_create(self.pool.api(), self.fs.api(), &self.handle));
+        try R.check(ke_io_async_create(self.asyncs.api(), self.fs.api(), &self.handle));
     }
 
     fn io(self: *Rig) *abi_io.c.ke_io {
@@ -466,11 +507,11 @@ const Rig = struct {
     fn deinit(self: *Rig) void {
         self.handle.destroy.?(self.handle.ref);
         self.fs.deinit();
-        self.pool.deinit();
+        self.asyncs.deinit();
     }
 };
 
-test "a whole-file read runs on the task pool and hands the bytes to the caller" {
+test "a whole-file read runs as an operation of the async system and hands the bytes to the caller" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
@@ -482,8 +523,8 @@ test "a whole-file read runs on the task pool and hands the bytes to the caller"
     defer rig.io().free_bytes.?(rig.io(), result.bytes);
 
     try testing.expectEqualStrings(contents, @as([*]const u8, @ptrCast(result.bytes.?))[0..result.size]);
-    try rig.pool.received(.dispatch).times(1);
-    try rig.pool.received(.wait).times(1);
+    try rig.asyncs.received(.submit).times(1);
+    try testing.expect(operations[0].released);
     try rig.fs.received(.close).sameAs(rig.fs.received(.open));
 }
 
@@ -527,28 +568,41 @@ test "stat reports what the path names" {
     try testing.expectEqual(@as(u64, contents.len), result.stat.size);
 }
 
-var pool_refuses_wait = false;
-
-fn waitUnlessRefused(_: TaskPoolSub.Args(.wait)) abi_result.c.ke_result {
-    return if (pool_refuses_wait) R.code(error.NotSupported) else R.ok;
-}
-
-test "a wait the task pool refuses for its calling thread fails and leaves the request waitable" {
+test "an unfinished request waited on from a thread that may not wait fails and stays waitable" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
-    _ = rig.pool.when(.wait).does(waitUnlessRefused);
+    defer_operations = true;
 
     const request = try rig.readFile("fox.txt");
+    try testing.expect(!rig.io().is_completed.?(rig.io(), request));
 
     var result: abi_io.c.ke_io_result = undefined;
-    pool_refuses_wait = true;
+    refuse_wait = true;
     try testing.expectError(error.NotSupported, R.check(rig.io().wait.?(rig.io(), request, &result)));
+    try testing.expect(!operations[0].released);
 
-    pool_refuses_wait = false;
+    refuse_wait = false;
     try R.check(rig.io().wait.?(rig.io(), request, &result));
     defer rig.io().free_bytes.?(rig.io(), result.bytes);
     try testing.expectEqual(@as(u64, contents.len), result.size);
+}
+
+test "a finished request is collected at once even on a thread that may not wait" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    defer_operations = true;
+
+    const request = try rig.readFile("fox.txt");
+    try testing.expect(rig.io().completion.?(rig.io(), request) == &operations[0].api);
+    operations[0].finish();
+
+    refuse_wait = true;
+    var result: abi_io.c.ke_io_result = undefined;
+    try R.check(rig.io().wait.?(rig.io(), request, &result));
+    defer rig.io().free_bytes.?(rig.io(), result.bytes);
+    try testing.expectEqualStrings(contents, @as([*]const u8, @ptrCast(result.bytes.?))[0..result.size]);
 }
 
 test "a file that exists is reported as existing and a missing one as not, without a failure" {
@@ -577,22 +631,7 @@ test "dir_exists, list_dir, write_file, make_dir, remove and rename are not supp
     try testing.expectError(error.NotSupported, R.check(io.remove.?(io, "fox.txt", &request)));
     try testing.expectError(error.NotSupported, R.check(io.rename.?(io, "fox.txt", "dog.txt", &request)));
     try testing.expect(request == null);
-    try rig.pool.received(.dispatch).never();
-}
-
-test "a request from a thread the task pool refuses runs on the calling thread and is waited on as any other" {
-    var rig: Rig = undefined;
-    try rig.init();
-    defer rig.deinit();
-    _ = rig.pool.when(.dispatch).does(refuseDispatch);
-
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(rig.io().read_file.?(rig.io(), "fox.txt", &request));
-    try testing.expect(rig.io().is_completed.?(rig.io(), request));
-    var result: abi_io.c.ke_io_result = undefined;
-    _ = rig.io().wait.?(rig.io(), request, &result);
-    rig.io().free_bytes.?(rig.io(), result.bytes);
-    try rig.pool.received(.wait).never();
+    try rig.asyncs.received(.submit).never();
 }
 
 test "submits with missing arguments are an invalid argument and a null request is refused by wait" {
@@ -614,19 +653,20 @@ test "submits with missing arguments are an invalid argument and a null request 
     try testing.expectError(error.InvalidArgument, R.check(rig.io().wait.?(rig.io(), null, null)));
     rig.io().close.?(rig.io(), null);
     rig.io().free_bytes.?(rig.io(), null);
-    try rig.pool.received(.dispatch).never();
+    try testing.expect(rig.io().completion.?(rig.io(), null) == null);
+    try rig.asyncs.received(.submit).never();
 }
 
-test "creating without a task pool or a file system is refused and leaves the handle zeroed" {
+test "creating without an async system or a file system is refused and leaves the handle zeroed" {
     var fs: FileSystemSub = undefined;
     try fs.init();
     defer fs.deinit();
 
     var h: abi_io.c.ke_io_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, fs.api(), &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_async_create(null, fs.api(), &h)));
     try testing.expect(h.ref == null and h.destroy == null);
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_io_pool_create(null, fs.api(), null)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_async_create(null, null, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_io_async_create(null, fs.api(), null)));
 }
 
 test "reading, waiting, freeing and destroying leaves no block allocated" {

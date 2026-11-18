@@ -144,10 +144,10 @@ typedef struct ke_sdk_engine_desc
 {
     ke_sdk_engine_part task_pool;
     ke_sdk_engine_part job_system;
+    ke_sdk_engine_part async;
     ke_sdk_engine_part file_system;
     ke_sdk_engine_part io;
     ke_sdk_engine_part configuration;
-    ke_sdk_engine_part async;
     ke_sdk_engine_part input;
     ke_sdk_engine_part window;
     ke_sdk_engine_part ecs;
@@ -336,7 +336,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part core[] = {
-        desc->task_pool, desc->job_system, desc->file_system, desc->io, desc->configuration, desc->async, desc->input, desc->window, desc->ecs,
+        desc->task_pool, desc->job_system, desc->async, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
         desc->scheduler,
     };
     const ke_sdk_engine_part parts[] = {

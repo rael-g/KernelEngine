@@ -44,8 +44,9 @@ extern "C"
          * @param out_font [out] Receives a ke_font_data (atlas RGBA8 + metrics) the caller
          *        releases via free_font; left NULL on failure.
          * @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive
-         *         size, or a zero atlas size or codepoint count; KE_RESULT_IO when the file cannot
-         *         be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be
+         *         size, or a zero atlas size or codepoint count; KE_RESULT_PENDING while the file
+         *         is read on a thread that may not wait for it, a later call with the same path
+         *         collecting it; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be
          *         packed. */
         ke_result (*load_font)(struct ke_font_loader *self,
                                const char *path,

@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <NativeTarget>ke_io_pool</NativeTarget>
+    <NativeTarget>ke_io_async</NativeTarget>
   </PropertyGroup>
 
   <Import Project="../../NativeDependencies.targets" />
@@ -13,7 +13,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\KernelEngine.Io\KernelEngine.Io.csproj" />
-    <ProjectReference Include="..\..\task_pool\KernelEngine.TaskPool\KernelEngine.TaskPool.csproj" />
+    <ProjectReference Include="..\..\async\KernelEngine.Async\KernelEngine.Async.csproj" />
     <ProjectReference Include="..\..\logger\KernelEngine.Logger\KernelEngine.Logger.csproj" />
   </ItemGroup>
 

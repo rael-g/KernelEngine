@@ -50,7 +50,7 @@
     <Project Path="src/csharp/file_system/KernelEngine.FileSystem/KernelEngine.FileSystem.csproj" />
     <Project Path="src/csharp/file_system/KernelEngine.FileSystem.Std/KernelEngine.FileSystem.Std.csproj" />
     <Project Path="src/csharp/io/KernelEngine.Io/KernelEngine.Io.csproj" />
-    <Project Path="src/csharp/io/KernelEngine.Io.Pool/KernelEngine.Io.Pool.csproj" />
+    <Project Path="src/csharp/io/KernelEngine.Io.Async/KernelEngine.Io.Async.csproj" />
     <Project Path="src/csharp/text/KernelEngine.Text/KernelEngine.Text.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window/KernelEngine.Window.csproj" />
     <Project Path="src/csharp/window/KernelEngine.Window.Glfw/KernelEngine.Window.Glfw.csproj" />

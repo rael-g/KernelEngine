@@ -152,6 +152,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -233,7 +238,7 @@
   "vtables": [
     {
       "name": "ke_io",
-      "doc": "Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.",
+      "doc": "Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once, or passed as a dependency through its completion. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.",
       "tags": [],
       "fields": [
         {
@@ -249,7 +254,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits a read of a whole file.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -275,7 +280,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the opening of a file for read_at.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -301,7 +306,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits a read from an open file at an offset; it reads fewer than len bytes only at the end of the file.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null file, a null dst with a non-zero len or a null out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null file, a null dst with a non-zero len or a null out_request, KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.",
           "params": [
             {
               "name": "file",
@@ -347,7 +352,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits an inspection of what a path names.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -373,7 +378,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the question whether a path names a regular file; a path that names nothing, or something else, is reported as no, not as a failure.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null path or out_request, KE_RESULT_OUT_OF_MEMORY, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -399,7 +404,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the question whether a path names a directory; a path that names nothing, or something else, is reported as no, not as a failure.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -425,7 +430,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the listing of a directory\u0027s entries, in no particular order, without \u0022.\u0022 and \u0022..\u0022.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -451,7 +456,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the writing of a whole file, which replaces what the path held only once every byte is written, so a failed write leaves the earlier file as it was.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -491,7 +496,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the creation of a directory and of every missing directory above it; a directory that already exists is not a failure.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -517,7 +522,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the removal of a file or of an empty directory.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "path",
@@ -543,7 +548,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Submits the renaming of a file or a directory, replacing a file already at to.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the task pool refused the request with.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, KE_RESULT_OUT_OF_MEMORY, KE_RESULT_NOT_SUPPORTED when the implementation does not provide it, or the code the async system refused the request with.",
           "params": [
             {
               "name": "from",
@@ -591,11 +596,29 @@
           "receiver": "struct ke_io *"
         },
         {
+          "name": "completion",
+          "returns": "ke_completion *",
+          "tags": [],
+          "doc": "The completion of a request, to pass as a dependency to work that reads its result; that work then waits on the request without blocking.",
+          "return_doc": "The completion, borrowed until the request is waited on; null for a null request.",
+          "params": [
+            {
+              "name": "request",
+              "type": "ke_io_request *",
+              "tags": [
+                "borrowed"
+              ],
+              "doc": "A request a submit slot returned."
+            }
+          ],
+          "receiver": "struct ke_io *"
+        },
+        {
           "name": "wait",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Blocks until the request finishes, releases it, and reports what it read.",
-          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null request, the code the task pool refused the wait with, the request then still to be waited on, or the failure of the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.",
+          "doc": "Releases a request and reports what it read: at once, from any thread, when it finished; otherwise blocking until it finishes, where its completion may be waited on.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null request, KE_RESULT_NOT_SUPPORTED for an unfinished request on a thread that may not wait, the request then still to be waited on, or the failure of the read: KE_RESULT_NOT_FOUND, KE_RESULT_OUT_OF_MEMORY or KE_RESULT_IO.",
           "params": [
             {
               "name": "request",

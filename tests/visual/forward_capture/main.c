@@ -30,7 +30,7 @@
 #include <kernel_engine/task_pool/task_pool.h>
 #include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/file_system/std/file_system_std_create.h>
-#include <kernel_engine/io/pool/io_pool_create.h>
+#include <kernel_engine/io/async/io_async_create.h>
 #include <kernel_engine/job/inline/job_system_inline_create.h>
 #include <kernel_engine/async/inline/async_inline_create.h>
 #include <kernel_engine/schedule/schedule_create.h>
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     ke_file_system_handle files = { 0 };
     check("file system", ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &files));
     ke_io_handle file_io = { 0 };
-    check("io", ke_io_pool_create(pool.ref, files.ref, &file_io));
+    check("io", ke_io_async_create(async.ref, files.ref, &file_io));
     renderer_compose(&render, ecs.ref, render_world.ref, extraction.ref, render_schedule.ref, gpu.ref, frame_target, file_io.ref);
     ke_render_service *core = render.service.ref;
 

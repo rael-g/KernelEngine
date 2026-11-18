@@ -188,10 +188,6 @@ fn resolveTexture(s: *const State, path: [*:0]const u8) R.Error!*abi_mesh_data.c
     var buf: [path_buf_max]u8 = undefined;
     try resolvePath(s, path, &buf);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
-    if (!file_read.isFile(s.io, resolved)) {
-        log.warn("texture file {s} not found", .{resolved});
-        return error.NotFound;
-    }
     var data: [*c]abi_mesh_data.c.ke_texture_data = null;
     try R.check(loader.load_image.?(loader, resolved, &data));
     return data;
@@ -303,11 +299,6 @@ fn vtResolveFont(
     var buf: [path_buf_max]u8 = undefined;
     resolvePath(s, path, &buf) catch |err| return R.code(err);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
-    if (!file_read.isFile(s.io, resolved)) {
-        log.warn("font file {s} not found", .{resolved});
-        return R.code(error.NotFound);
-    }
-
     return loader.load_font.?(loader, resolved, pixel_size, first_codepoint, codepoint_count, atlas_size, out);
 }
 
@@ -609,6 +600,7 @@ fn fakeLoadImage(
     @memcpy(fake_loader_last_path[0..n], p[0..n]);
     fake_loader_last_path_len = n;
     fake_loader_load_count += 1;
+    if (std.mem.endsWith(u8, p, "missing.png")) return R.code(error.NotFound);
 
     fake_loader_pixels = std.mem.zeroes([16]u8);
     fake_loader_texture = std.mem.zeroes(abi_mesh_data.c.ke_texture_data);
@@ -757,15 +749,16 @@ test "a res prefixed texture path is joined onto the project root" {
     a.free_texture.?(a, data);
 }
 
-test "a texture that is not on disk fails before the loader is ever called" {
+test "a texture the image loader cannot read fails with the loader's code" {
     const loader = resetFakeLoader();
     var r = try Resolver.init(loader, null);
     defer r.deinit();
 
     const a = r.api();
     var data: ?*abi_mesh_data.c.ke_texture_data = null;
-    try testing.expect(a.resolve_texture.?(a, "/this/does/not/exist.png", &data) != R.ok);
-    try testing.expectEqual(@as(u32, 0), fake_loader_load_count);
+    try testing.expectError(error.NotFound, R.check(a.resolve_texture.?(a, "/this/does/not/missing.png", &data)));
+    try testing.expectEqual(@as(u32, 1), fake_loader_load_count);
+    try testing.expect(data == null);
 }
 
 test "a resolver built without an image loader refuses to resolve a texture" {

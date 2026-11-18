@@ -1,14 +1,14 @@
 .{
-    .name = .abi_io_pool_factory,
+    .name = .abi_io_async_factory,
     .version = "0.1.0",
-    .fingerprint = 0x87e769e887bdc044,
+    .fingerprint = 0x0f823c50d0e2893a,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_async = .{ .path = "../../../abi/async" },
         .abi_file_system = .{ .path = "../../../abi/file_system" },
         .abi_io = .{ .path = "../../../abi/io" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_result = .{ .path = "../../../abi/result" },
-        .abi_task_pool = .{ .path = "../../../abi/task_pool" },
     },
     .paths = .{"."},
 }

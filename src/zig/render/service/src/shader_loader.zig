@@ -12,15 +12,76 @@ const abi_result = @import("abi_result");
 const R = rc.R;
 const log = std.log.scoped(.render_service);
 
-fn readFile(io: *rc.abi_io.c.ke_io, path: [:0]const u8) R.Error![]u8 {
-    var request: ?*rc.abi_io.c.ke_io_request = null;
-    try R.check(io.read_file.?(io, path.ptr, &request));
-    var result: rc.abi_io.c.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &result)) catch |err| {
+/// A read of a shader file in flight, pushed onto the service's `shader_reads` and freed only with
+/// the service. The thread that sets `taken` from false owns `request` until it clears `taken` again
+/// or collects the request, after which `request` is null and the read stays taken.
+pub const Read = struct {
+    next: ?*Read,
+    path: [:0]u8,
+    request: std.atomic.Value(?*abi_io.c.ke_io_request),
+    taken: std.atomic.Value(bool),
+};
+
+fn findRead(st: *rc.CoreState, path: []const u8) ?*Read {
+    var it = st.shader_reads.load(.acquire);
+    while (it) |read| : (it = read.next) {
+        if (read.request.load(.acquire) != null and std.mem.eql(u8, read.path, path)) return read;
+    }
+    return null;
+}
+
+fn startRead(st: *rc.CoreState, path: [:0]const u8) R.Error!*Read {
+    const read = try rc.gpa.create(Read);
+    errdefer rc.gpa.destroy(read);
+    const owned = try rc.gpa.dupeZ(u8, path);
+    errdefer rc.gpa.free(owned);
+    var request: ?*abi_io.c.ke_io_request = null;
+    R.check(st.io.read_file.?(st.io, path.ptr, &request)) catch |err| {
+        log.warn("load_shader: reading {s} failed: {t}", .{ path, err });
+        return err;
+    };
+    read.* = .{ .next = null, .path = owned, .request = .init(request), .taken = .init(false) };
+    var head = st.shader_reads.load(.monotonic);
+    while (true) {
+        read.next = head;
+        head = st.shader_reads.cmpxchgWeak(head, read, .release, .monotonic) orelse break;
+    }
+    return read;
+}
+
+/// Collects the read of `path`, starting it when none is in flight. Fails as pending when the read
+/// is being collected by another thread or cannot be waited on from this one.
+fn readFile(st: *rc.CoreState, path: [:0]const u8) R.Error![]u8 {
+    const read = findRead(st, path) orelse try startRead(st, path);
+    if (read.taken.cmpxchgStrong(false, true, .acquire, .monotonic) != null) return error.Pending;
+    const request = read.request.load(.acquire) orelse return error.Pending;
+    var result: abi_io.c.ke_io_result = undefined;
+    const code = st.io.wait.?(st.io, request, &result);
+    if (code == R.code(error.NotSupported)) {
+        read.taken.store(false, .release);
+        return error.Pending;
+    }
+    read.request.store(null, .release);
+    R.check(code) catch |err| {
         log.warn("load_shader: reading {s} failed: {t}", .{ path, err });
         return err;
     };
     return @as([*]u8, @ptrCast(result.bytes.?))[0..@intCast(result.size)];
+}
+
+/// Collects every read still in flight and frees the list; called when the service is destroyed,
+/// on the thread that may wait.
+pub fn releaseReads(st: *rc.CoreState) void {
+    var it = st.shader_reads.swap(null, .acquire);
+    while (it) |read| {
+        it = read.next;
+        if (read.request.load(.acquire)) |request| {
+            var result: abi_io.c.ke_io_result = undefined;
+            if (st.io.wait.?(st.io, request, &result) == R.ok) st.io.free_bytes.?(st.io, result.bytes);
+        }
+        rc.gpa.free(read.path);
+        rc.gpa.destroy(read);
+    }
 }
 
 /// Any language the file does not list falls back to the WGSL extension.
@@ -47,7 +108,8 @@ fn stageSuffix(stage: abi_asset_resolver.c.ke_gpu_shader_stage) ?[]const u8 {
 /// The service's shader-loading slot. The file read is "<shader dir>/<name>.<vs|fs|cs>.<ext>", and
 /// the resolved path is the cache key. A cache hit writes the stored module without reading the
 /// disk. On a miss the module is created on the device, stored, registered with the cache and
-/// cached under the path. A stage that is not exactly one or a path too long for its buffer fails
+/// cached under the path; the read is collected by `readFile`, which fails as pending while it goes
+/// on. A stage that is not exactly one or a path too long for its buffer fails
 /// as an invalid argument; a file that does not open as not found; one that cannot be sized or
 /// fully read as I/O; a file buffer or a store that cannot be allocated as out of memory, a module
 /// already created being destroyed on the device first. A failure of the device is its own code.
@@ -78,8 +140,11 @@ fn load(st: *rc.CoreState, name: [*c]const u8, stage: abi_asset_resolver.c.ke_gp
         return st.shader_store.get(cached).?.*;
     }
 
-    const bytes = try readFile(st.io, path);
+    const bytes = try readFile(st, path);
     defer st.io.free_bytes.?(st.io, bytes.ptr);
+    if (st.shader_cache.try_get_cached.?(st.shader_cache, path.ptr, &cached)) {
+        return st.shader_store.get(cached).?.*;
+    }
 
     var module: abi_asset_resolver.c.ke_gpu_shader_module = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_params{

@@ -5,11 +5,10 @@ using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
 using KernelEngine.Framework.Nodes.Native;
-using KernelEngine.Io.Pool;
+using KernelEngine.Io.Async;
 using KernelEngine.Job.Enki;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
-using KernelEngine.TaskPool.Enki;
 
 using Xunit;
 
@@ -59,11 +58,10 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
         using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
         using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
-        using var io = new PoolIo(null, pool, files);
+        using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
@@ -82,7 +80,8 @@ public class ReadyingTheNodesASlotOpens
 
         var slot = new SceneSlotComponent { Path = "res://scenes/Opened.scene.toml" };
         types.Spawn(loop.Schedules.PreUpdate.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
-        for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
+        for (var i = 0; i < 10 && Probe.Readied.Count == 0; i++) scheduler.Tick(1.0f / 60.0f);
+        scheduler.Tick(1.0f / 60.0f);
         scheduler.Shutdown();
 
         Assert.Equal([1, 2], Probe.Readied.Order());
@@ -91,11 +90,10 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
     {
-        using var pool = new EnkiTaskPool(null, new TaskPool.TaskPoolConfig { WorkerCount = uint.MaxValue });
         using var jobs = new EnkiJobSystem(null, new Job.JobSystemConfig { WorkerCount = uint.MaxValue });
         using var asyncs = new EnkiAsync(null, new Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
         using var files = new StdFileSystem(null, new FileSystem.FileSystemConfig { Root = "." });
-        using var io = new PoolIo(null, pool, files);
+        using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
         using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
@@ -115,7 +113,8 @@ public class ReadyingTheNodesASlotOpens
 
         var slot = new SceneSlotComponent { Path = "res://scenes/Grouped.scene.toml" };
         types.Spawn(loop.Schedules.PreUpdate.Commands(), nodes.Type("scene_slot"), "Scene", default, [NodeComponent.Of(nodes.Component("scene_slot"), slot)]);
-        for (var i = 0; i < 3; i++) scheduler.Tick(1.0f / 60.0f);
+        for (var i = 0; i < 10 && Probe.Readied.Count == 0; i++) scheduler.Tick(1.0f / 60.0f);
+        scheduler.Tick(1.0f / 60.0f);
         scheduler.Shutdown();
 
         Assert.Equal([3], Probe.Readied);

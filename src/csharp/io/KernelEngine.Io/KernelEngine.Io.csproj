@@ -11,6 +11,7 @@
     <ProjectReference Include="..\..\common\KernelEngine.Common\KernelEngine.Common.csproj" />
     <ProjectReference Include="..\..\result\KernelEngine.Result\KernelEngine.Result.csproj" />
     <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem\KernelEngine.FileSystem.csproj" />
+    <ProjectReference Include="..\..\completion\KernelEngine.Completion\KernelEngine.Completion.csproj" />
   </ItemGroup>
 
 </Project>

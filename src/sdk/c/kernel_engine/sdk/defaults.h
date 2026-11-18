@@ -20,7 +20,7 @@
 #include <kernel_engine/framework/scene_files_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/input/default/input_default_create.h>
-#include <kernel_engine/io/pool/io_pool_create.h>
+#include <kernel_engine/io/async/io_async_create.h>
 #include <kernel_engine/physics/body2d/body2d_module.h>
 #include <kernel_engine/physics/box2d/box2d_physics.h>
 #include <kernel_engine/render/binder_grouped/resource_binder_grouped_create.h>
@@ -155,15 +155,10 @@ static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
     return ke_job_system_enki_create(&(ke_job_system_config){ .worker_count = KE_JOB_SYSTEM_WORKERS_PER_HARDWARE_THREAD }, &e->job_system);
 }
 
-/** An enkiTS async system, its workers and the room for submissions from other threads from `async`. */
+/** An enkiTS async system with two workers and room for 1024 submissions from other threads. */
 static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
 {
-    ke_configuration *c = e->configuration.ref;
-    const ke_async_config config = {
-        .worker_count = c ? (uint32_t)c->get_int(c, "async", "worker_count", 2) : 2u,
-        .submit_capacity = c ? (uint32_t)c->get_int(c, "async", "submit_capacity", 1024) : 1024u,
-    };
-    return ke_async_enki_create(&config, &e->async);
+    return ke_async_enki_create(&(ke_async_config){ .worker_count = 2, .submit_capacity = 1024 }, &e->async);
 }
 
 /** The operating system's files, relative to the working directory. */
@@ -172,10 +167,10 @@ static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
     return ke_file_system_std_create(&(ke_file_system_config){ .root = "." }, &e->file_system);
 }
 
-/** Reads through the task pool. */
-static inline ke_result ke_sdk_io_pool(ke_sdk_engine *e)
+/** Reads as operations of the async system. */
+static inline ke_result ke_sdk_io_async(ke_sdk_engine *e)
 {
-    return ke_io_pool_create(e->task_pool.ref, e->file_system.ref, &e->io);
+    return ke_io_async_create(e->async.ref, e->file_system.ref, &e->io);
 }
 
 /** The configuration, loaded from the file Project in the project directory. */

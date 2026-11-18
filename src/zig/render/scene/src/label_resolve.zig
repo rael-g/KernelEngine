@@ -39,8 +39,8 @@ fn reportUnresolved(path: []const u8, reason: []const u8) void {
 /// Asks the asset resolver for the font at the label's size over a fixed glyph range and atlas
 /// size, uploads the glyph atlas as a texture and registers the font with the ui service, both
 /// under one key spelled from the path, size, range and atlas size. Returns the registered
-/// font, or `KE_UI_FONT_FAILED` after `reportUnresolved` has named the
-/// step that failed. The resolver's font data is released by the time it returns, on every path
+/// font, the empty handle while the resolver's read is pending, so a later run asks again, or
+/// `KE_UI_FONT_FAILED` after `reportUnresolved` has named the step that failed. The resolver's font data is released by the time it returns, on every path
 /// that received it.
 fn bake(st: *State, l: *abi_ui_components.c.ke_label_component, font_path: [*:0]const u8) abi_ui_components.c.ke_ui_font_handle {
     const path = std.mem.span(font_path);
@@ -63,7 +63,9 @@ fn bake(st: *State, l: *abi_ui_components.c.ke_label_component, font_path: [*:0]
     };
 
     var data: ?*abi_text.c.ke_font_data = null;
-    if (resolver.resolve_font.?(resolver, font_path, l.font_size, first_codepoint, codepoint_count, atlas_size, &data) != abi_result.c.KE_OK) {
+    const resolved = resolver.resolve_font.?(resolver, font_path, l.font_size, first_codepoint, codepoint_count, atlas_size, &data);
+    if (resolved == abi_result.c.KE_RESULT_PENDING) return abi_ui_components.c.KE_UI_FONT_NONE;
+    if (resolved != abi_result.c.KE_OK) {
         reportUnresolved(path, "the asset resolver could not read it");
         return abi_ui_components.c.KE_UI_FONT_FAILED;
     }
@@ -87,10 +89,11 @@ fn bake(st: *State, l: *abi_ui_components.c.ke_label_component, font_path: [*:0]
     return font;
 }
 
-/// Runs in the update phase over the label view. A failure is logged by `reportUnresolved` and
-/// yields the failed-font handle, which is not retried. Afterwards every label that named a font
-/// and had no handle holds either the registered font or the failed-font handle. It always
-/// succeeds, since each failure is logged by `bake` instead.
+/// Runs in the update phase over the label view. A pending font is asked for again on the next run;
+/// a failure is logged by `reportUnresolved` and yields the failed-font handle, which is not
+/// retried. Afterwards every label that named a font and had no handle holds the registered font,
+/// the failed-font handle, or still no handle while its font is pending. It always succeeds,
+/// since each failure is logged by `bake` instead.
 pub fn system(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32) callconv(.c) abi_result.c.ke_result {
     const st: *State = @ptrCast(@alignCast(user.?));
 

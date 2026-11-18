@@ -25,10 +25,10 @@ pub const ke_defer_fn = ?*const fn (?*abi_ecs.c.ke_ecs, ?*anyopaque) callconv(.c
 /// event, with event pointing at the event.
 pub const ke_node_behaviour_fn = ?*const fn (?*abi_framework.c.ke_node_ctx, ?*anyopaque) callconv(.c) abi_result.c.ke_result;
 
-/// A node whose children are the scene file it names. Writing path replaces them: on the next
-/// update the slot's children are destroyed and the file at path is instantiated under the slot;
-/// an empty path only destroys them. What lies outside a slot outlives the change, and several
-/// slots hold several scenes at once.
+/// A node whose children are the scene file it names. Writing path replaces them: on the first
+/// update once its files are read, the slot's children are destroyed and the file at path is
+/// instantiated under the slot; an empty path only destroys them. What lies outside a slot
+/// outlives the change, and several slots hold several scenes at once.
 pub const ke_scene_slot_component = extern struct {
     /// The scene file the slot holds, as `instantiate` reads a path.
     path: [256]u8 = std.mem.zeroes([256]u8),

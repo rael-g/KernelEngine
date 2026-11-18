@@ -174,6 +174,11 @@
           "doc": null
         },
         {
+          "name": "KE_RESULT_PENDING",
+          "value": 10,
+          "doc": null
+        },
+        {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
           "doc": null
@@ -2693,8 +2698,8 @@
           "name": "load_shader",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module.",
-          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
+          "doc": "Resolves a shader by logical NAME \u002B STAGE to a device-ready module. Its file is read once; on a thread that may not wait for the read, the call returns while the read goes on, and a later call with the same name and stage collects it.",
+          "return_doc": "KE_OK; KE_RESULT_PENDING while the read goes on; KE_RESULT_NOT_FOUND when no shader has that name, or the device\u0027s code when it rejects the module.",
           "params": [
             {
               "name": "name",
@@ -2837,7 +2842,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Loads an image from path into a newly allocated ke_texture_data (RGBA8).",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_image; KE_RESULT_NOT_FOUND when the file cannot be decoded, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_image; KE_RESULT_PENDING while the file is read on a thread that may not wait for it, a later call with the same path collecting it; KE_RESULT_NOT_FOUND when the file cannot be decoded, its reason logged; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "path",
@@ -2926,7 +2931,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Loads path and bakes a glyph atlas at pixel_size for the codepoint range [first_codepoint, first_codepoint \u002B codepoint_count).",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive size, or a zero atlas size or codepoint count; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be packed.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null path or out_font, a non-positive size, or a zero atlas size or codepoint count; KE_RESULT_PENDING while the file is read on a thread that may not wait for it, a later call with the same path collecting it; KE_RESULT_IO when the file cannot be read; KE_RESULT_OUT_OF_MEMORY; KE_RESULT_GENERAL when the font cannot be packed.",
           "params": [
             {
               "name": "path",
@@ -3037,7 +3042,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Resolves an image path into freshly-decoded RGBA8 pixel data. Caller owns the result; release with free_texture.",
-          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the file is missing or the extension is unsupported; KE_RESULT_INVALID_ARGUMENT when no image loader was injected at construction time; the image loader\u0027s code otherwise.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when the file is missing or the extension is unsupported; KE_RESULT_INVALID_ARGUMENT when no image loader was injected at construction time; the image loader\u0027s code otherwise, KE_RESULT_PENDING among them while the file is still being read.",
           "params": [
             {
               "name": "path",
@@ -3151,7 +3156,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Resolves a font file path into a freshly-baked ke_font_data (atlas RGBA8 \u002B glyph metrics). Caller owns the result; release with free_font.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when no font loader was injected at construction time; KE_RESULT_NOT_FOUND when the file is missing; the font loader\u0027s code otherwise.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT when no font loader was injected at construction time; the font loader\u0027s code otherwise, KE_RESULT_PENDING among them while the file is still being read.",
           "params": [
             {
               "name": "path",

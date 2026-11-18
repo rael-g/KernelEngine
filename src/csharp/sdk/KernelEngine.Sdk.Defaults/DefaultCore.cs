@@ -5,7 +5,7 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
-using KernelEngine.Io.Pool;
+using KernelEngine.Io.Async;
 using KernelEngine.Job.Enki;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render;
@@ -43,22 +43,14 @@ public static class DefaultCore
         services.TryAddSingleton<TaskPool.TaskPool>(sp => new EnkiTaskPool(Log(sp), new() { WorkerCount = uint.MaxValue }));
         services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Log(sp), new() { WorkerCount = uint.MaxValue }));
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(Log(sp), new() { Root = "." }));
-        services.TryAddSingleton<Io.Io>(sp => new PoolIo(Log(sp), Get<TaskPool.TaskPool>(sp), Get<FileSystem.FileSystem>(sp)));
+        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Log(sp), new() { WorkerCount = 2, SubmitCapacity = 1024 }));
+        services.TryAddSingleton<Io.Io>(sp => new AsyncIo(Log(sp), Get<Async.Async>(sp), Get<FileSystem.FileSystem>(sp)));
         services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Log(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
             var config = new DefaultConfiguration(Log(sp));
             Get<ConfigurationSource>(sp).Load(config, Path.Combine(root, "Project"));
             return config;
-        });
-        services.TryAddSingleton<Async.Async>(sp =>
-        {
-            var config = Get<Configuration.Configuration>(sp);
-            return new EnkiAsync(Log(sp), new()
-            {
-                WorkerCount = (uint)config.GetInt("async", "worker_count", 2),
-                SubmitCapacity = (uint)config.GetInt("async", "submit_capacity", 1024),
-            });
         });
         services.TryAddSingleton<Input.Input>(_ => new Input.DefaultInput());
         services.TryAddSingleton<Window.Window>(sp =>

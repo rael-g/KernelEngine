@@ -11,7 +11,7 @@ const abi_framework = @import("abi_framework");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
 const heap = @import("heap");
-const file_read = @import("file_read.zig");
+const pending_reads = @import("pending_reads");
 const fields_apply = @import("component_fields_apply.zig");
 const values = @import("scene_values.zig");
 const names_mod = @import("scene_names.zig");
@@ -38,6 +38,7 @@ const State = struct {
     types: *abi_framework.c.ke_node_types,
     assets: *abi_asset_resolver.c.ke_asset_resolver,
     io: *abi_io.c.ke_io,
+    reads: pending_reads.Reads,
 };
 
 fn stateOf(self: ?*abi_framework.c.ke_scene_files) ?*State {
@@ -57,6 +58,23 @@ const Load = struct {
     s: *State,
     commands: *abi_ecs.c.ke_ecs_commands,
     arena: Arena,
+    touched: std.ArrayList([]u8) = .empty,
+
+    fn touch(load: *Load, path: [*:0]const u8) R.Error!void {
+        const owned = try heap.gpa.dupe(u8, std.mem.span(path));
+        load.touched.append(heap.gpa, owned) catch {
+            heap.gpa.free(owned);
+            return error.OutOfMemory;
+        };
+    }
+
+    fn forgetTouched(load: *Load) void {
+        for (load.touched.items) |path| {
+            load.s.reads.forget(path);
+            heap.gpa.free(path);
+        }
+        load.touched.deinit(heap.gpa);
+    }
 };
 
 fn structural(comptime fmt: []const u8, args: anytype) R.Error {
@@ -229,14 +247,39 @@ fn processEntry(load: *Load, base_dir: []const u8, tbl: *c.toml_table_t, names: 
     return node;
 }
 
+/// Reads the file at `path` and every scene file it nests without spawning anything, so the load
+/// that follows finds them all read. Fails as pending while any read goes on; any other failure is
+/// left for the load to report.
+fn prefetch(load: *Load, path: [*:0]const u8) R.Error!void {
+    try load.touch(path);
+    const text = load.s.reads.text(load.s.io, path) catch |err| switch (err) {
+        error.Pending => return err,
+        else => return,
+    };
+    var errbuf: [200]u8 = undefined;
+    const root = c.toml_parse(@constCast(text.ptr), &errbuf, errbuf.len) orelse return;
+    defer c.toml_free(root);
+    const entries = c.toml_array_in(root, "entity") orelse return;
+    const base_dir = pathDirname(std.mem.span(path));
+    var i: c_int = 0;
+    while (i < c.toml_array_nelem(entries)) : (i += 1) {
+        const tbl = c.toml_table_at(entries, i) orelse continue;
+        const scene_d = c.toml_string_in(tbl, "scene");
+        if (scene_d.ok == 0) continue;
+        defer std.c.free(scene_d.u.s);
+        var nested: [std.fs.max_path_bytes]u8 = undefined;
+        resolvePath(load.s, base_dir, scene_d.u.s, &nested) catch continue;
+        try prefetch(load, @ptrCast(&nested));
+    }
+}
+
 fn loadFile(load: *Load, path: [*:0]const u8, outer: Outer) R.Error!Entity {
-    const text = file_read.readText(load.s.io, path) catch |err| {
+    const text = load.s.reads.text(load.s.io, path) catch |err| {
         log.warn("scene files: reading {s} failed: {t}", .{ path, err });
         return err;
     };
-    defer heap.gpa.free(text);
     var errbuf: [200]u8 = undefined;
-    const root = c.toml_parse(text.ptr, &errbuf, errbuf.len) orelse {
+    const root = c.toml_parse(@constCast(text.ptr), &errbuf, errbuf.len) orelse {
         log.warn("scene files: {s} does not parse: {s}", .{ path, std.mem.sliceTo(&errbuf, 0) });
         return error.Io;
     };
@@ -291,6 +334,12 @@ fn instantiate(self: ?*abi_framework.c.ke_scene_files, path_in: ?[*:0]const u8, 
     defer load.arena.deinit();
     var path: [std.fs.max_path_bytes]u8 = undefined;
     resolvePath(s, ".", path_ref, &path) catch |err| return R.code(err);
+    prefetch(&load, @ptrCast(&path)) catch |err| {
+        for (load.touched.items) |p| heap.gpa.free(p);
+        load.touched.deinit(heap.gpa);
+        return R.code(err);
+    };
+    defer load.forgetTouched();
     const root = loadFile(&load, @ptrCast(&path), .{ .parent = parent }) catch |err| return R.code(err);
     if (out_root) |r| r.* = root;
     return R.ok;
@@ -298,6 +347,7 @@ fn instantiate(self: ?*abi_framework.c.ke_scene_files, path_in: ?[*:0]const u8, 
 
 fn vtDestroy(self: ?*abi_framework.c.ke_scene_files) callconv(.c) void {
     const s = stateOf(self) orelse return;
+    s.reads.deinit(s.io);
     heap.gpa.destroy(s);
 }
 
@@ -307,8 +357,23 @@ const slot_fields = [_]abi_ecs.c.ke_component_field{
     .{ .name = "path", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = @offsetOf(Slot, "path"), .size = @sizeOf(@FieldType(Slot, "path")) },
 };
 
+/// Whether every file the scene at `path` reads has been read; false only while a read goes on.
+fn prepared(s: *State, path: [*:0]const u8, commands: *abi_ecs.c.ke_ecs_commands) bool {
+    var load: Load = .{ .s = s, .commands = commands, .arena = .init() };
+    defer load.arena.deinit();
+    defer {
+        for (load.touched.items) |p| heap.gpa.free(p);
+        load.touched.deinit(heap.gpa);
+    }
+    var resolved: [std.fs.max_path_bytes]u8 = undefined;
+    resolvePath(s, ".", path, &resolved) catch return true;
+    prefetch(&load, @ptrCast(&resolved)) catch |err| return err != error.Pending;
+    return true;
+}
+
 /// The update behaviour of the `scene_slot` node type: a slot whose path differs from the one it
-/// last instantiated has its children destroyed and the file at its path instantiated under it. A
+/// last instantiated has its children destroyed and the file at its path instantiated under it,
+/// once every file it reads has been read: until then the slot is left as it is. A
 /// file that cannot be instantiated is reported and not retried until the path changes again.
 fn slotUpdate(ctx: ?*abi_framework.c.ke_node_ctx, user_data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const s: *State = @ptrCast(@alignCast(user_data orelse return R.code(error.InvalidArgument)));
@@ -317,6 +382,7 @@ fn slotUpdate(ctx: ?*abi_framework.c.ke_node_ctx, user_data: ?*anyopaque) callco
         const slot: *Slot = @ptrCast(@alignCast(node.fields orelse continue));
         const path = std.mem.sliceTo(&slot.path, 0);
         if (std.mem.eql(u8, path, std.mem.sliceTo(&slot.loaded, 0))) continue;
+        if (path.len != 0 and !prepared(s, @ptrCast(&slot.path), node.commands.?)) continue;
         var child = node.first_child.?(node, node.self);
         while (child != invalid) {
             const after = node.next_sibling.?(node, child);
@@ -349,7 +415,7 @@ export fn ke_scene_files_create(
     const assets = assets_in orelse return R.code(error.InvalidArgument);
     const io = io_in orelse return R.code(error.InvalidArgument);
     const s = heap.gpa.create(State) catch return R.code(error.OutOfMemory);
-    s.* = .{ .api = .{ .instantiate = &instantiate, .open = &open }, .ecs = ecs, .types = types, .assets = assets, .io = io };
+    s.* = .{ .api = .{ .instantiate = &instantiate, .open = &open }, .ecs = ecs, .types = types, .assets = assets, .io = io, .reads = .{ .gpa = heap.gpa } };
     s.api.handle = s;
     var slot_desc = std.mem.zeroes(abi_framework.c.ke_node_type_desc);
     slot_desc.name = abi_framework.c.KE_COMPONENT_NAME_SCENE_SLOT;

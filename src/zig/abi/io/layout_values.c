@@ -26,6 +26,7 @@ const unsigned long long layout_values[] = {
     offsetof(ke_io, remove),
     offsetof(ke_io, rename),
     offsetof(ke_io, is_completed),
+    offsetof(ke_io, completion),
     offsetof(ke_io, wait),
     offsetof(ke_io, close),
     offsetof(ke_io, free_bytes),

@@ -24,7 +24,7 @@
     <ProjectReference Include="..\..\..\src\csharp\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\sdk\KernelEngine.Sdk\KernelEngine.Sdk.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
-    <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Pool\KernelEngine.Io.Pool.csproj" />
+    <ProjectReference Include="..\..\..\src\csharp\io\KernelEngine.Io.Async\KernelEngine.Io.Async.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\scheduler\KernelEngine.Scheduler\KernelEngine.Scheduler.csproj" />
     <ProjectReference Include="..\..\..\src\csharp\framework\KernelEngine.Framework\KernelEngine.Framework.csproj" />
