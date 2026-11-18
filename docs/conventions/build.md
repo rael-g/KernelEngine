@@ -38,7 +38,7 @@ managers not carrying the thing:
    `scripts/fetch_file.zig` for the host and runs it; Zig caches the run on its arguments. The vcpkg
    binary is the one file taken this way, and the root `build.zig` is the only place that fetches: a
    dependency does not download tools on behalf of the build that uses it.
-2. **A vendored copy**, under the rule for vendoring in `CLAUDE.md`.
+2. **A vendored copy**, under the rule for vendoring in `AGENTS.md`.
 
 The machine is never a source. Beyond the prerequisites named above, nothing is looked for in the
 environment or installed through the operating system's package manager.

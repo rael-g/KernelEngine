@@ -11,8 +11,7 @@ So the line is drawn by subject, not by quality:
 > status, branch, log, plan, task, idea, estimate — is not versioned.**
 
 Moments are not worthless; they are just not durable, and putting them under `git` alongside
-contracts is what makes contracts untrustworthy. They live in the kanban, which is deliberately
-unversioned.
+contracts is what makes contracts untrustworthy.
 
 ## The five rules
 
@@ -23,9 +22,8 @@ If a document needs one of these to be understood, it is a plan and it does not 
 narrative, no `Supersedes:` chain. A document that has been superseded is deleted — `git` already
 keeps every word of it, and a reader who finds it in `docs/` cannot know it was retired.
 
-**3. No checkboxes and no "delivered" tables.** A list of what shipped is a log. It belongs in the
-kanban or in `git log`, both of which are better at it and neither of which pretends to be a
-contract.
+**3. No checkboxes and no "delivered" tables.** A list of what shipped is a log. It belongs in `git log`,
+which is better at it and does not pretend to be a contract.
 
 **4. Every load-bearing claim names its source: the declaration and its file.** A statement
 about how the system behaves is an invitation to read the code that makes it behave that way.
@@ -46,8 +44,7 @@ down without leaning on "as of this branch" forces the author to find out what i
 which is the work the old documents avoided — and avoided at the reader's expense, compounding.
 
 A document that cannot be written under these rules is usually a document whose subject is not
-settled yet. That is useful information: it belongs in the kanban as a question, not in `docs/` as
-an answer.
+settled yet. That is useful information: it is a question to settle, not an answer to write in `docs/`.
 
 ## What is written where
 

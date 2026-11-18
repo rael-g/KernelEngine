@@ -45,7 +45,6 @@ dotnet run --project examples/csharp/games/pong
 
 ## Contributing
 
-- Read [CLAUDE.md](https://github.com/rael-g/KernelEngine/blob/main/CLAUDE.md) for the build, the layer rules and the coding conventions.
 - Work reaches `main` as described in [Git](docs/conventions/git.md).
 - Commits follow Conventional Commits, one per logical task.
 - Documents are written to [Documentation](docs/conventions/docs.md).
