@@ -63,8 +63,7 @@ TAGS
 cscope.*
 
 # Agent tooling: session scratch is not part of the project, the skills are
-.claude/*
-!.claude/skills/
+.claude/
 .aider*
 
 

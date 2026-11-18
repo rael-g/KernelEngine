@@ -146,8 +146,6 @@ root `build.zig.zon` whose `build.zig` the root imports.
 
 The same program is installed as `<--prefix>/bin/docir` by the default build and by `zig build
 docs`. `docir query <name> src` answers from the sources directly, with no document made first.
-`.claude/skills/docir/SKILL.md` is the skill that teaches a coding agent to use it, as the pinned
-release of docir publishes it.
 
 ## Shaders
 
