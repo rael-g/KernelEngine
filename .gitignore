@@ -67,9 +67,6 @@ cscope.*
 !.claude/skills/
 .aider*
 
-# Planning, logs, tasks and TODOs are not versioned — see docs/conventions/docs.md
-/docs/kanban/
-/.docs-lixeira/
 
 # OS
 .DS_Store

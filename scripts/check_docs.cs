@@ -1,5 +1,6 @@
 #!/usr/bin/env dotnet run
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 
@@ -9,9 +10,7 @@ static string ScriptDir([CallerFilePath] string path = "") => Path.GetDirectoryN
 var rootDir = Path.GetFullPath(Path.Combine(ScriptDir(), ".."));
 var docsDir = Path.Combine(rootDir, "docs");
 
-var pages = Directory.EnumerateFiles(docsDir, "*.md", SearchOption.AllDirectories)
-    .Select(p => Path.GetRelativePath(docsDir, p).Replace('\\', '/'))
-    .Where(p => !p.StartsWith("kanban/", StringComparison.Ordinal))
+var pages = TrackedPages(rootDir)
     .OrderBy(p => p, StringComparer.Ordinal)
     .ToList();
 
@@ -101,4 +100,14 @@ static IEnumerable<string> Tracked(string rootDir)
             yield return relative;
         }
     }
+}
+
+static IEnumerable<string> TrackedPages(string rootDir)
+{
+    var info = new ProcessStartInfo("git") { RedirectStandardOutput = true, WorkingDirectory = rootDir };
+    foreach (var a in new[] { "ls-files", "-z", "--", "docs/*.md" }) info.ArgumentList.Add(a);
+    using var process = Process.Start(info)!;
+    var listed = process.StandardOutput.ReadToEnd();
+    process.WaitForExit();
+    return listed.Split('\0', StringSplitOptions.RemoveEmptyEntries).Select(p => p["docs/".Length..]);
 }
