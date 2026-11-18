@@ -10,14 +10,17 @@ are `ke_job_system` under `src/c/job/`, `ke_async` under `src/c/async/` and `ke_
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | job system | `ke_job_system`, made by `ke_job_system_enki_create` | jobs of the frame, with dependencies | their execution on workers, as completions |
-| async system | `ke_async`, made by `ke_async_enki_create` | operations that tolerate latency and may block | their execution beside the frame, as completions |
+| async system | `ke_async`, made by `ke_async_enki_create` | CPU work that spans frames, which never blocks on I/O | its execution beside the frame, as completions |
 | schedule | `ke_schedule` | systems with their component access | system bodies as jobs, ordered by access |
 | scheduler | `ke_scheduler_create` | the job and async systems | the frame loop: it drains both and ticks the schedules |
-| io | `ke_io_async_create` | reads and writes of files | one async operation per request |
+| io | `ke_io_std_create` | reads of files | each request run on a thread of its own pool, as a completion |
 | ecs | `ke_ecs_flecs_create` | nothing from either system | single-threaded storage |
 
-**Threads are made by the host, and no thread is named.** The host creates the job and async systems
-and hands each consumer the one it runs on; no plugin starts a thread or uses a foreign pool. No
+**Three parts own the threads, and no thread is named.** The host creates the job system, the async
+system and the io, and hands each consumer the one it uses; each starts its threads from a ceiling its
+settings fix, and no other plugin starts one. Only the job system is sized to the cores: the async
+system defaults to a quarter of them, and the io's threads (`std.Io.Threaded`, two by default) spend
+their time blocked in the system. No
 contract or plugin defines a "sim" or a "render" thread.
 
 **A completion is waited on only where it may be.** `ke_completion.wait` blocks on the thread that

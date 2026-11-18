@@ -172,7 +172,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }, &.{}, .has_tests);
 
-    _ = ctx.member("ke_io_async", .{
+    _ = ctx.member("ke_io_std", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -573,7 +573,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "file_system" }),
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
-            b.pathJoin(&.{ src_zig, "io/async/include" }),
+            b.pathJoin(&.{ src_zig, "io/std/include" }),
             b.pathJoin(&.{ src_zig, "configuration/include" }),
         }),
         .libs = joinPaths(b, &.{
@@ -599,7 +599,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_extraction_default") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_graph_simple") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
         }),
         .@"link-m" = true,
@@ -636,7 +636,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ root, "src/sdk/c" }),
             b.pathJoin(&.{ src_zig, "window/glfw/include" }),
             b.pathJoin(&.{ src_zig, "input/default/include" }),
-            b.pathJoin(&.{ src_zig, "io/async/include" }),
+            b.pathJoin(&.{ src_zig, "io/std/include" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
             b.pathJoin(&.{ src_zig, "job/enki/include" }),
             b.pathJoin(&.{ src_zig, "async/enki/include" }),
@@ -676,7 +676,7 @@ pub fn build(b: *std.Build) void {
         .libs = joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_window_glfw") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_input_default") }),
-            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_job_system_enki") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_async_enki") }),

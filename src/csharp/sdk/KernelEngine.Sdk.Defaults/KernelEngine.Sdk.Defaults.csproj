@@ -13,7 +13,7 @@
     <ProjectReference Include="..\..\job\KernelEngine.Job.Enki\KernelEngine.Job.Enki.csproj" />
     <ProjectReference Include="..\..\async\KernelEngine.Async.Enki\KernelEngine.Async.Enki.csproj" />
     <ProjectReference Include="..\..\file_system\KernelEngine.FileSystem.Std\KernelEngine.FileSystem.Std.csproj" />
-    <ProjectReference Include="..\..\io\KernelEngine.Io.Async\KernelEngine.Io.Async.csproj" />
+    <ProjectReference Include="..\..\io\KernelEngine.Io.Std\KernelEngine.Io.Std.csproj" />
     <ProjectReference Include="..\..\window\KernelEngine.Window.Glfw\KernelEngine.Window.Glfw.csproj" />
     <ProjectReference Include="..\..\render\KernelEngine.Render.Webgpu\KernelEngine.Render.Webgpu.csproj" />
     <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph.Simple\KernelEngine.RenderGraph.Simple.csproj" />

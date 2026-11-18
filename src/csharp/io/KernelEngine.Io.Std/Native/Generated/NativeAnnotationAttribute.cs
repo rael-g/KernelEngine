@@ -1,7 +1,7 @@
 using System;
 using System.Diagnostics;
 
-namespace KernelEngine.Io.Async.Native;
+namespace KernelEngine.Io.Std.Native;
 
 /// <summary>Defines the annotation found in a native declaration.</summary>
 [AttributeUsage(AttributeTargets.Struct | AttributeTargets.Enum | AttributeTargets.Property | AttributeTargets.Field | AttributeTargets.Parameter | AttributeTargets.ReturnValue, AllowMultiple = true, Inherited = false)]

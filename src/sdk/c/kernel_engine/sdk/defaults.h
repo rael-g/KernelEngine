@@ -20,7 +20,7 @@
 #include <kernel_engine/framework/scene_files_create.h>
 #include <kernel_engine/framework/scene_tree_create.h>
 #include <kernel_engine/input/default/input_default_create.h>
-#include <kernel_engine/io/async/io_async_create.h>
+#include <kernel_engine/io/std/io_std_create.h>
 #include <kernel_engine/physics/body2d/body2d_module.h>
 #include <kernel_engine/physics/box2d/box2d_physics.h>
 #include <kernel_engine/render/binder_grouped/resource_binder_grouped_create.h>
@@ -154,10 +154,10 @@ static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
     return ke_file_system_std_create(".", &e->file_system);
 }
 
-/** Reads as operations of the async system. */
-static inline ke_result ke_sdk_io_async(ke_sdk_engine *e)
+/** Reads on a pool of threads of its own, through the file system. */
+static inline ke_result ke_sdk_io_std(ke_sdk_engine *e)
 {
-    return ke_io_async_create(e->async.ref, e->file_system.ref, &e->io);
+    return ke_io_std_create(e->file_system.ref, ke_sdk_settings(e, "io"), &e->io);
 }
 
 /** The configuration, loaded from the file Project in the project directory. */

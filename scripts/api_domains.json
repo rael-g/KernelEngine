@@ -1182,7 +1182,7 @@
     { "name": "file_system_std_factory", "packageDir": "src/zig/file_system/std/abi", "headers": ["src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_create.h", "src/zig/file_system/std/include/kernel_engine/file_system/std/file_system_std_log.h"], "includeDirs": ["src/c/file_system", "src/zig/file_system/std/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "framework_factory", "packageDir": "src/zig/framework/abi", "headers": ["src/zig/framework/include/kernel_engine/framework/asset_resolver_create.h", "src/zig/framework/include/kernel_engine/framework/framework_log.h", "src/zig/framework/include/kernel_engine/framework/input_actions_create.h", "src/zig/framework/include/kernel_engine/framework/input_actions_evaluation_create.h", "src/zig/framework/include/kernel_engine/framework/scene_hierarchy_create.h", "src/zig/framework/include/kernel_engine/framework/scene_tree_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_create.h", "src/zig/framework/include/kernel_engine/framework/node_types_systems_create.h", "src/zig/framework/include/kernel_engine/framework/scene_files_create.h"], "includeDirs": ["src/c/asset", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/zig/framework/include", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/zig/common/include", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/physics", "src/c/resource_cache", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "input_default_factory", "packageDir": "src/zig/input/default/abi", "headers": ["src/zig/input/default/include/kernel_engine/input/default/input_default_create.h", "src/zig/input/default/include/kernel_engine/input/default/input_default_log.h"], "includeDirs": ["src/c/input", "src/zig/input/default/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
-    { "name": "io_async_factory", "packageDir": "src/zig/io/async/abi", "headers": ["src/zig/io/async/include/kernel_engine/io/async/io_async_create.h", "src/zig/io/async/include/kernel_engine/io/async/io_async_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/async/include", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "io_std_factory", "packageDir": "src/zig/io/std/abi", "headers": ["src/zig/io/std/include/kernel_engine/io/std/io_std_create.h", "src/zig/io/std/include/kernel_engine/io/std/io_std_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/std/include", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "render_graph_simple_factory", "packageDir": "src/zig/render_graph/simple/abi", "headers": ["src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_create.h", "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_log.h"], "includeDirs": ["src/c/settings", "src/c/render_graph", "src/c/render", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/render_graph/simple/include", "src/c/result", "src/c/completion", "src/zig/common/include", "src/c/extraction", "src/c/module", "src/c/schedule", "src/c/job"] },
     { "name": "extraction_default_factory", "packageDir": "src/zig/extraction/default/abi", "headers": ["src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h"], "includeDirs": ["src/c/settings", "src/c/extraction", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/extraction/default/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/async", "src/zig/common/include"] },
     { "name": "physics_body2d_factory", "packageDir": "src/zig/physics/body2d/abi", "headers": ["src/zig/physics/body2d/include/kernel_engine/physics/body2d/body2d_module.h", "src/zig/physics/body2d/include/kernel_engine/physics/body2d/physics_body2d_log.h"], "includeDirs": ["src/c/ecs", "src/c/framework", "src/c/input", "src/c/logger", "src/c/math", "src/c/physics", "src/zig/physics/body2d/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/file_system", "src/c/io", "src/c/render", "src/c/resource_cache", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
@@ -1275,7 +1275,7 @@
     },
 
     "fieldTables": {},
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoAsync", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [
     {
@@ -1809,18 +1809,18 @@
       "headers": [
         "src/c/io/kernel_engine/io/io.h"
       ],
-      "library": "ke_io_async",
+      "library": "ke_io_std",
       "output": "Generated/Io/"
     },
     {
-      "name": "IoAsync",
-      "project": "src/csharp/io/KernelEngine.Io.Async",
-      "namespace": "KernelEngine.Io.Async.Native",
+      "name": "IoStd",
+      "project": "src/csharp/io/KernelEngine.Io.Std",
+      "namespace": "KernelEngine.Io.Std.Native",
       "headers": [
-        "src/zig/io/async/include/kernel_engine/io/async/io_async_create.h",
-        "src/zig/io/async/include/kernel_engine/io/async/io_async_log.h"
+        "src/zig/io/std/include/kernel_engine/io/std/io_std_create.h",
+        "src/zig/io/std/include/kernel_engine/io/std/io_std_log.h"
       ],
-      "library": "ke_io_async",
+      "library": "ke_io_std",
       "output": "Generated/"
     },
     {

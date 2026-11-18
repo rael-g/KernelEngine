@@ -34,8 +34,8 @@ the key. A value that changes while the part lives is a slot of its contract, no
 store calls no one when it is written.
 
 **The file is read once, when the engine is built.** `DefaultCore.AddDefaultCore` loads the project file
-into one store before it makes any part that reads it. The job and async systems are made before the
-store, since loading it reads the file through them: the C# SDK hands them sections of a separate
+into one store before it makes any part that reads it. The job and async systems and the io are made before the
+store, the io because loading it reads the file through it: the C# SDK hands them sections of a separate
 "bootstrap" store the host may fill in code, and the C SDK an empty `ke_settings`.
 
 ## What the parts agree on without a contract

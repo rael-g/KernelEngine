@@ -5,7 +5,7 @@ using KernelEngine.Ecs.Flecs;
 using KernelEngine.FileSystem.Std;
 using KernelEngine.Framework;
 using KernelEngine.Framework.Nodes;
-using KernelEngine.Io.Async;
+using KernelEngine.Io.Std;
 using KernelEngine.Job.Enki;
 using KernelEngine.Physics.Box2D;
 using KernelEngine.Render;
@@ -44,7 +44,7 @@ public static class DefaultCore
         services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Log(sp), Bootstrap(sp, "job")));
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(Log(sp), "."));
         services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Log(sp), Bootstrap(sp, "async")));
-        services.TryAddSingleton<Io.Io>(sp => new AsyncIo(Log(sp), Get<Async.Async>(sp), Get<FileSystem.FileSystem>(sp)));
+        services.TryAddSingleton<Io.Io>(sp => new StdIo(Log(sp), Get<FileSystem.FileSystem>(sp), Bootstrap(sp, "io")));
         services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Log(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
