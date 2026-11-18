@@ -12,11 +12,11 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
     public nint Ready { get; }
 
     /// <summary>Creates a ke_gpu_device backed by WebGPU.</summary>
-    /// <param name="taskPool">Runs the compile of create_render_pipeline_async on its workers; NULL compiles synchronously, invoking the callback before returning.</param>
+    /// <param name="async">Runs the compile of create_render_pipeline_async as one of its operations; NULL compiles synchronously, invoking the callback before returning.</param>
     /// <param name="config">The device's values; Required; every field is read as given.</param>
-    public WebgpuGpuDevice(KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config) : this(Create(taskPool, config))
+    public WebgpuGpuDevice(KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config) : this(Create(async, config))
     {
-        Hold(taskPool?.Owner);
+        Hold(async?.Owner);
     }
 
     private WebgpuGpuDevice((KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) made) : base(made.Handle)
@@ -24,12 +24,12 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
         Ready = made.Ready;
     }
 
-    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) Create(KernelEngine.TaskPool.INativeTaskPool? taskPool, in KernelEngine.Render.GpuDeviceConfig config)
+    private static (KernelEngine.Render.Native.ke_gpu_device_handle Handle, nint Ready) Create(KernelEngine.Async.INativeAsync? async, in KernelEngine.Render.GpuDeviceConfig config)
     {
         var nativeConfig = config;
         KernelEngine.Render.Native.ke_gpu_device_handle handle;
         nint ready = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((taskPool is null ? null : taskPool.Native), &nativeConfig, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((async is null ? null : async.Native), &nativeConfig, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
         return (handle, ready);
     }
 }

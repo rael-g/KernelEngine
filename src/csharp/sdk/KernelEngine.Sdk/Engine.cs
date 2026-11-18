@@ -26,7 +26,6 @@ public sealed class Engine : IDisposable
         Configuration = services.GetRequiredService<Configuration.Configuration>();
         Window = services.GetRequiredService<Window.Window>();
         Scheduler = services.GetRequiredService<Scheduler.Scheduler>();
-        Runtime = services.GetRequiredService<Runtime.Runtime>();
         var make = services.GetRequiredService<Func<Schedule.Schedule>>();
         Schedules = new EngineSchedules { Startup = make(), PreUpdate = make(), Fixed = make(), Update = make(), Shutdown = make(), Render = services.GetKeyedService<Schedule.Schedule>("render") };
         Sets = EngineSets.Register(Schedules);
@@ -48,9 +47,6 @@ public sealed class Engine : IDisposable
 
     /// <summary>The frame loop that ticks the standard schedules.</summary>
     public Scheduler.Scheduler Scheduler { get; }
-
-    /// <summary>The phase loop.</summary>
-    public Runtime.Runtime Runtime { get; }
 
     /// <summary>The standard schedules <see cref="Scheduler"/> runs.</summary>
     public EngineSchedules Schedules { get; }
@@ -92,15 +88,13 @@ public sealed class Engine : IDisposable
 
         var clock = Stopwatch.StartNew();
         var previous = clock.Elapsed.TotalSeconds;
-        while (!Window.ShouldClose() && !Runtime.ExitRequested() && !Scheduler.ExitRequested())
+        while (!Window.ShouldClose() && !Scheduler.ExitRequested())
         {
             Window.PollEvents();
             var current = clock.Elapsed.TotalSeconds;
             Scheduler.Tick((float)(current - previous));
-            Runtime.Tick((float)(current - previous));
             previous = current;
         }
-        Runtime.Flush();
     }
 
     /// <summary>Shuts the loop down, detaches every module, the last attached first, and releases the schedules.</summary>
@@ -108,8 +102,6 @@ public sealed class Engine : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        Runtime.Flush();
-        Runtime.UnloadModules();
         Scheduler.Shutdown();
         if (_attached)
             for (var i = _modules.Length - 1; i >= 0; i--) _modules[i].Detach();

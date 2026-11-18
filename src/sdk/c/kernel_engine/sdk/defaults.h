@@ -42,10 +42,8 @@
 #include <kernel_engine/render_graph/simple/render_graph_simple_create.h>
 #include <kernel_engine/render/webgpu/gpu_device_webgpu_create.h>
 #include <kernel_engine/render/webgpu/gpu_render_target_webgpu_window_create.h>
-#include <kernel_engine/runtime/runtime_create.h>
 #include <kernel_engine/schedule/schedule_create.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
-#include <kernel_engine/task_pool/enki/enki_task_pool.h>
 #include <kernel_engine/job/enki/job_system_enki_create.h>
 #include <kernel_engine/async/enki/async_enki_create.h>
 #include <kernel_engine/text/stb_truetype/stb_font.h>
@@ -143,12 +141,6 @@ static inline ke_result ke_sdk_scheduler(ke_sdk_engine *e)
     return ke_scheduler_create(e->job_system.ref, e->async.ref, &config, &e->scheduler);
 }
 
-/** An enkiTS pool with one worker per hardware thread. */
-static inline ke_result ke_sdk_task_pool_enki(ke_sdk_engine *e)
-{
-    return ke_task_pool_enki_create(&(ke_task_pool_config){ .worker_count = KE_TASK_POOL_WORKERS_PER_HARDWARE_THREAD }, &e->task_pool);
-}
-
 /** An enkiTS job system with one worker per hardware thread besides the calling one. */
 static inline ke_result ke_sdk_job_system_enki(ke_sdk_engine *e)
 {
@@ -212,17 +204,6 @@ static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 
 
 
-/** The runtime, its timestep from `runtime`. */
-static inline ke_result ke_sdk_runtime(ke_sdk_engine *e)
-{
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_runtime_config config = {
-        .fixed_dt = (float)c->get_double(c, "runtime", "fixed_dt", 1.0 / 60.0),
-        .fixed_dt_max_accum = (float)c->get_double(c, "runtime", "fixed_dt_max_accum", 0.25),
-        .max_systems_per_phase = (uint32_t)c->get_int(c, "runtime", "max_systems_per_phase", 256),
-    };
-    return ke_runtime_create(e->ecs.ref, e->task_pool.ref, &config, &e->runtime);
-}
 
 /** A WebGPU device. */
 static inline ke_result ke_sdk_gpu_device_webgpu(ke_sdk_engine *e)

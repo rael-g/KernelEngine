@@ -10,7 +10,6 @@ using KernelEngine.Asset.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
 using KernelEngine.Render;
-using KernelEngine.TaskPool;
 
 namespace KernelEngine.Asset;
 
@@ -54,7 +53,7 @@ public unsafe sealed class Model : IDisposable
     }
 }
 
-/// <summary>Loads 3D assets into ke_model_data.</summary>
+/// <summary>Loads 3D assets into ke_model_data. Async dispatch is the caller's concern.</summary>
 public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAssetLoader
 {
     private ke_asset_loader* _native;
@@ -118,63 +117,10 @@ public unsafe partial class AssetLoader : IDisposable, INativeAssetLoader, IAsse
         }
     }
 
-    /// <summary>Frees a ke_model_data previously returned by load_model or the async variant. The model must be given back to the same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
+    /// <summary>Frees a ke_model_data previously returned by load_model. The model must be given back to the same loader that produced it. A foreign or hand-built ke_model_data is not a valid argument. A null data is ignored.</summary>
     internal void FreeModel(nint data)
     {
         Handle->free_model(Handle, (ke_model_data*)data);
-    }
-
-    /// <summary>Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has finished or failed.</summary>
-    /// <param name="taskPool">Non-null task pool.</param>
-    /// <param name="path">File path (copied internally; caller may free after return).</param>
-    /// <returns>The loaded model; NULL when the load failed.</returns>
-    public global::System.Threading.Tasks.Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path)
-    {
-        var source = new TaskCompletionSource<Model>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var completion = GCHandle.Alloc(new LoadModelAsyncCompletion { Owner = this, Source = source });
-        var pathText = path ?? "";
-        var pathSize = System.Text.Encoding.UTF8.GetMaxByteCount(pathText.Length) + 1;
-        Span<byte> pathBytes = pathSize <= 512 ? stackalloc byte[512] : new byte[pathSize];
-        pathBytes[System.Text.Encoding.UTF8.GetBytes(pathText, pathBytes)] = 0;
-        fixed (byte* pathPtr = pathBytes)
-        {
-            try
-            {
-                Handle->load_model_async(Handle, taskPool.Native, (sbyte*)pathPtr, (delegate* unmanaged[Cdecl]<KernelEngine.Result.Native.Result, ke_model_data*, void*, void>)&LoadModelAsyncOnCompleteTrampoline, (void*)GCHandle.ToIntPtr(completion));
-            }
-            catch
-            {
-                completion.Free();
-                throw;
-            }
-        }
-        return source.Task;
-    }
-
-    /// <summary>What one operation in flight answers when it finishes.</summary>
-    private sealed class LoadModelAsyncCompletion
-    {
-        public required AssetLoader Owner;
-        public required TaskCompletionSource<Model> Source;
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
-    private static void LoadModelAsyncOnCompleteTrampoline(KernelEngine.Result.Native.Result arg0, ke_model_data* arg1, void* ctx)
-    {
-        var pending = GCHandle.FromIntPtr((nint)ctx);
-        if (pending.Target is not LoadModelAsyncCompletion state) return;
-        pending.Free();
-        try
-        {
-            if (arg0 != KernelEngine.Result.Native.Result.Ok || arg1 == null)
-                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "load_model_async"));
-            else
-                state.Source.TrySetResult(new Model(state.Owner, (ModelData*)arg1));
-        }
-        catch (Exception ex)
-        {
-            state.Source.TrySetException(ex);
-        }
     }
 
     /// <summary>Releases the native assetloader.</summary>

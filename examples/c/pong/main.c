@@ -7,7 +7,6 @@
 int main(void)
 {
     const ke_sdk_engine_desc desc = {
-        .task_pool = ke_sdk_task_pool_enki,
         .job_system = ke_sdk_job_system_enki,
         .file_system = ke_sdk_file_system_std,
         .io = ke_sdk_io_async,
@@ -18,7 +17,6 @@ int main(void)
         .ecs = ke_sdk_ecs_flecs,
         .scheduler = ke_sdk_scheduler,
         .schedule = ke_sdk_schedule,
-        .runtime = ke_sdk_runtime,
         .gpu_device = ke_sdk_gpu_device_webgpu,
         .render_target = ke_sdk_render_target_webgpu_window,
         .fonts = ke_sdk_fonts_stb,

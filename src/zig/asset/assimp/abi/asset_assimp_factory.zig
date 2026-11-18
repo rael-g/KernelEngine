@@ -3,9 +3,7 @@
 const abi_asset_loader = @import("asset_loader");
 const abi_io = @import("io");
 const abi_logger = @import("logger");
-const abi_mesh_data = @import("mesh_data");
 const abi_result = @import("result");
-const abi_task_pool = @import("task_pool");
 
 /// The ABI as the headers declare it.
 pub const c = @import("asset_assimp_factory_c.zig");

@@ -9,7 +9,7 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
-| native interface | `INativeRuntime`, such as `INativeRuntime`, `INativeEcs` | nothing | the wrapper's pointer, as `Native` |
+| native interface | one per domain, such as `INativeEcs`, `INativeIo` | nothing | the wrapper's pointer, as `Native` |
 | idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
 | result translation | `NativeResults` | a `ke_result`, or a managed exception | the matching exception, or a `ke_result` |
 | SDK | `Engine`, `AddKernelEngine` | the parts registered under their contracts in the host's container | the standard schedules, the modules attached to them, the loop |
@@ -24,7 +24,7 @@ given and drops it when it is destroyed, so disposing a dependency first only dr
 reference: the native object goes when its last holder does, in whatever order they are disposed.
 A wrapper made by `Borrow` has no owner and never destroys.
 
-**A pointer crosses assemblies through an interface.** The wrapper implements `INativeRuntime`
+**A pointer crosses assemblies through an interface.** The wrapper implements `INativeEcs`
 explicitly, so `Native` is not a member of the class. A consumer in another assembly names the
 interface to read the pointer; no assembly grants another access to its internals.
 
@@ -48,4 +48,4 @@ Only the host and the SDK use the container; no engine part asks it for a depend
 
 ## What the parts agree on without a contract
 
-- The `Native` property of `INativeRuntime` is the only way the pointer leaves a wrapper.
+- The `Native` property of `INativeEcs` is the only way the pointer leaves a wrapper.

@@ -11,17 +11,17 @@ inside is on the generated page of its file. The contract is `ke_ecs` in
 |---|---|---|---|
 | ecs | `ke_ecs` | component registrations, structural calls, query registrations | entity ids, component bytes, segments of columns |
 | flecs plugin | `ke_ecs_flecs_create`, `ke_ecs_config` | `reserved_id_capacity` | a `ke_ecs_handle` that owns the world |
-| commands | `ke_ecs_commands` | recorded spawn, attach, detach, despawn, defer | the changes, applied by the runtime at the wave barrier |
-| runtime | `ke_runtime_create` | the `ke_ecs` it borrows | queries resolved before a wave, structural calls after it |
+| commands | `ke_ecs_commands` | recorded spawn, attach, detach, despawn, defer | the changes, applied by the schedule after the bodies that recorded them |
+| schedule | `ke_schedule_create` | the `ke_ecs` it borrows | queries resolved before the bodies run, structural calls after them |
 
 **What may run at the same time is stated per slot in the header.** Entity creation and
 destruction, `component_add`, `component_remove` and `entity_materialize` are structural and
-single-threaded; `query_resolve` runs single-threaded before a parallel wave. `entity_reserve` is
-the one entity operation callable from any wave thread.
+single-threaded; `query_resolve` runs single-threaded before bodies run in parallel. `entity_reserve` is
+the one entity operation callable from any body.
 
-**The runtime keeps those rules.** It resolves queries on the tick thread before dispatching a
-wave, and applies the structural changes a body recorded in `ke_ecs_commands` only after the
-wave's barrier. A body's `spawn` reserves its id with `entity_reserve`; the entity enters the
+**The schedule keeps those rules.** It resolves queries on the ticking thread before running the
+bodies as jobs, and applies the structural changes a body recorded in `ke_ecs_commands` only after
+the bodies have run. A body's `spawn` reserves its id with `entity_reserve`; the entity enters the
 world at the barrier through `entity_materialize` or the first `component_add`.
 
 **A query yields segments.** `query_resolve` writes one `ke_ecs_segment` per matching archetype:

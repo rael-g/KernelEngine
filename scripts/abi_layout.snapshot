@@ -63,20 +63,6 @@ ke_window_handle size=16 align=8
 
 [logger]
 
-[task_pool]
-ke_task_pool_config size=4 align=4
-  worker_count 0
-ke_task_pool size=48 align=8
-  handle 0
-  dispatch 8
-  dispatch_on_complete 16
-  wait 24
-  is_completed 32
-  get_num_workers 40
-ke_task_pool_handle size=16 align=8
-  ref 0
-  destroy 8
-
 [file_system]
 ke_file_stat size=16 align=8
   kind 0
@@ -483,67 +469,6 @@ ke_io_handle size=16 align=8
   ref 0
   destroy 8
 
-[runtime]
-ke_component_access size=8 align=4
-  cid 0
-  access 4
-ke_query_decl size=16 align=8
-  terms 0
-  term_count 8
-ke_runtime_module_params size=32 align=8
-  name 0
-  user_data 8
-  on_load 16
-  on_unload 24
-ke_runtime_system_params size=96 align=8
-  name 0
-  phase 8
-  user_data 16
-  execute 24
-  queries 32
-  query_count 40
-  access_list 48
-  access_count 56
-  per_entity 60
-  after 64
-  after_count 72
-  before 80
-  before_count 88
-  exclusive 92
-ke_runtime_system_order size=16 align=8
-  id 0
-  wave 8
-  culled 12
-ke_runtime_config size=12 align=4
-  fixed_dt 0
-  fixed_dt_max_accum 4
-  max_systems_per_phase 8
-ke_runtime size=128 align=8
-  handle 0
-  register_module 8
-  register_system 16
-  unregister_system 24
-  last_system 32
-  declare_exclusive 40
-  declare_self_ordered 48
-  check_order 56
-  declare_transient 64
-  describe_phase 72
-  tick 80
-  flush_render 88
-  unload_modules 96
-  request_exit 104
-  exit_requested 112
-  commands 120
-ke_runtime_handle size=16 align=8
-  ref 0
-  destroy 8
-ke_system_ctx size=32 align=8
-  handle 0
-  commands 8
-  view 16
-  slice 24
-
 [scheduler]
 ke_scheduler_config size=8 align=4
   fixed_dt 0
@@ -879,11 +804,10 @@ ke_render_scene_resolve_handle size=16 align=8
   destroy 8
 
 [asset_loader]
-ke_asset_loader size=32 align=8
+ke_asset_loader size=24 align=8
   handle 0
   load_model 8
   free_model 16
-  load_model_async 24
 ke_asset_loader_handle size=16 align=8
   ref 0
   destroy 8

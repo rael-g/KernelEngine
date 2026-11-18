@@ -12,7 +12,6 @@ pub const _DllMainCRTStartup = @import("dll_entry")._DllMainCRTStartup;
 const c = @import("c");
 const abi_io = @import("abi_io");
 const abi_result = @import("abi_result");
-const abi_task_pool = @import("abi_task_pool");
 const log = std.log.scoped(.asset_assimp);
 const converter = @import("converter.zig");
 const textures = @import("texture_decoder.zig");
@@ -307,76 +306,6 @@ fn vtFreeModel(self_in: ?*abi_asset_loader.c.ke_asset_loader, data_in: ?*abi_mes
     gpa.destroy(data);
 }
 
-/// The heap context that carries an async load from `vtLoadModelAsync` to `asyncBody`. It owns
-/// the path copy and itself; `asyncBody` frees both after the callback returns. `state` is
-/// borrowed from the loader, not owned.
-const AsyncCtx = struct {
-    state: *State,
-    path: [:0]u8,
-    on_complete: abi_asset_loader.c.ke_load_model_complete_func,
-    user_data: ?*anyopaque,
-};
-
-/// The task body that the dispatch runs on the thread it chooses. It runs `loadModel`, calls the
-/// completion callback once with the model or the load failure, and frees the context. A failure is
-/// reported only through the callback, so the task itself returns OK.
-fn asyncBody(data: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
-    const ctx: *AsyncCtx = @ptrCast(@alignCast(data orelse return R.ok));
-    const gpa = ctx.state.gpa;
-    const loaded = loadModel(ctx.state, ctx.path.ptr);
-    if (ctx.on_complete) |done| {
-        if (loaded) |model| done(R.ok, model, ctx.user_data) else |err| done(R.code(err), null, ctx.user_data);
-    }
-    gpa.free(ctx.path);
-    gpa.destroy(ctx);
-    return R.ok;
-}
-
-/// The `load_model_async` slot. It returns whatever dispatch returns, and the body may already have
-/// run by then if dispatch runs it inline. When the context or its path copy cannot be allocated,
-/// the callback is called at once on the calling thread and the result is null.
-fn vtLoadModelAsync(
-    self_in: ?*abi_asset_loader.c.ke_asset_loader,
-    task_pool_in: ?*abi_task_pool.c.ke_task_pool,
-    path: [*c]const u8,
-    on_complete: abi_asset_loader.c.ke_load_model_complete_func,
-    user_data: ?*anyopaque,
-) callconv(.c) ?*abi_task_pool.c.ke_task {
-    const self = self_in orelse return null;
-    const task_pool = task_pool_in orelse return null;
-    if (self.handle == null or path == null or on_complete == null) return null;
-
-    const s = stateOf(self);
-    const gpa = s.gpa;
-
-    const ctx = gpa.create(AsyncCtx) catch {
-        on_complete.?(R.code(error.OutOfMemory), null, user_data);
-        return null;
-    };
-    const path_copy = gpa.dupeZ(u8, std.mem.span(path)) catch {
-        gpa.destroy(ctx);
-        on_complete.?(R.code(error.OutOfMemory), null, user_data);
-        return null;
-    };
-
-    ctx.* = .{
-        .state = s,
-        .path = path_copy,
-        .on_complete = on_complete,
-        .user_data = user_data,
-    };
-
-    var task: ?*abi_task_pool.c.ke_task = null;
-    R.check(task_pool.dispatch.?(task_pool, asyncBody, ctx, &task)) catch |err| {
-        log.warn("loading {s} asynchronously failed: the task pool refused it: {t}", .{ path, err });
-        gpa.free(path_copy);
-        gpa.destroy(ctx);
-        on_complete.?(R.code(err), null, user_data);
-        return null;
-    };
-    return task;
-}
-
 /// The `destroy` slot. It frees the State, and logs a warning, not an error, when the leak check
 /// finds live memory. Models that `free_model` has not released are what that check reports.
 fn vtDestroy(self_in: ?*abi_asset_loader.c.ke_asset_loader) callconv(.c) void {
@@ -412,7 +341,6 @@ export fn ke_asset_loader_assimp_create(io_in: ?*abi_io.c.ke_io, out_loader: ?*a
     s.api.handle = s;
     s.api.load_model = vtLoadModel;
     s.api.free_model = vtFreeModel;
-    s.api.load_model_async = vtLoadModelAsync;
 
     out.* = .{ .ref = &s.api, .destroy = vtDestroy };
     return R.ok;
@@ -466,29 +394,6 @@ const ServedIo = struct {
         return h;
     }
 };
-
-fn immediateDispatch(self: [*c]abi_task_pool.c.ke_task_pool, func: abi_asset_loader.c.ke_task_func, data: ?*anyopaque, out_task: [*c]?*abi_task_pool.c.ke_task) callconv(.c) abi_result.c.ke_result {
-    _ = self;
-    if (func) |f| _ = f(data);
-    out_task.* = @ptrFromInt(1);
-    return R.ok;
-}
-
-const AsyncResult = struct {
-    done: bool = false,
-    failed: bool = false,
-    loader: ?*abi_asset_loader.c.ke_asset_loader = null,
-};
-
-fn asyncComplete(code: abi_result.c.ke_result, data: ?*abi_mesh_data.c.ke_model_data, user: ?*anyopaque) callconv(.c) void {
-    const result: *AsyncResult = @ptrCast(@alignCast(user orelse return));
-    result.failed = code != R.ok;
-    if (data) |model| {
-        const l = result.loader.?;
-        l.free_model.?(l, model);
-    }
-    result.done = true;
-}
 
 test "creating a loader yields a usable vtable" {
     var served_io: ServedIo = undefined;
@@ -552,52 +457,6 @@ test "a model is read through the io and converted with its mesh" {
 
     try testing.expectEqual(@as(u32, 1), model.?.mesh_count);
     try served_io.sub.received(.read_file).atLeast(1);
-}
-
-test "an async load runs to completion on the task pool it was given" {
-    var served_io: ServedIo = undefined;
-    try served_io.init(triangle_obj);
-    defer served_io.deinit();
-    const h = served_io.loader();
-    defer h.destroy.?(h.ref);
-
-    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
-    task_pool.dispatch = &immediateDispatch;
-
-    var result = AsyncResult{ .loader = h.ref };
-    const task = h.ref.?.load_model_async.?(h.ref, &task_pool, "triangle.obj", &asyncComplete, &result);
-
-    try testing.expect(task != null);
-    try testing.expect(result.done);
-    try testing.expect(!result.failed);
-}
-
-test "an async load rejects a missing loader task pool or path" {
-    var served_io: ServedIo = undefined;
-    try served_io.init(null);
-    defer served_io.deinit();
-    const h = served_io.loader();
-    defer h.destroy.?(h.ref);
-
-    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
-    task_pool.dispatch = &immediateDispatch;
-
-    try testing.expect(h.ref.?.load_model_async.?(null, &task_pool, "test.obj", &asyncComplete, null) == null);
-    try testing.expect(h.ref.?.load_model_async.?(h.ref, null, "test.obj", &asyncComplete, null) == null);
-    try testing.expect(h.ref.?.load_model_async.?(h.ref, &task_pool, null, &asyncComplete, null) == null);
-}
-
-test "an async load rejects a missing completion callback" {
-    var served_io: ServedIo = undefined;
-    try served_io.init(null);
-    defer served_io.deinit();
-    const h = served_io.loader();
-    defer h.destroy.?(h.ref);
-
-    var task_pool = std.mem.zeroes(abi_task_pool.c.ke_task_pool);
-    task_pool.dispatch = &immediateDispatch;
-
-    try testing.expect(h.ref.?.load_model_async.?(h.ref, &task_pool, "test.obj", null, null) == null);
 }
 
 test "a malformed model file yields a model carrying no meshes" {

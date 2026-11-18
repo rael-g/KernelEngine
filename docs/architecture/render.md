@@ -8,7 +8,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 
 | part | contract | plugin | receives | hands on |
 |---|---|---|---|---|
-| device | `ke_gpu_device` | webgpu | optionally a `ke_task_pool` | GPU objects, command encoders, the clip-space convention |
+| device | `ke_gpu_device` | webgpu | optionally a `ke_async` | GPU objects, command encoders, the clip-space convention |
 | target | `ke_gpu_render_target` | webgpu, texture_target, renderdoc_target | the device, and a `ke_window` for the window target; the capture target wraps another target | the texture a frame ends in, and its presentation |
 | service | `ke_render_service` | service | device, target, `ke_io`, the resource binder | meshes, textures, materials, pipelines, shaders, uploads, the frame globals |
 | graph | `ke_render_graph` | render_graph/simple | the device | the order of a frame's passes, their resources and transitions |

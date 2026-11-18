@@ -6,7 +6,6 @@
 using KernelEngine.Asset.Native;
 using KernelEngine.Common;
 using KernelEngine.Render;
-using KernelEngine.TaskPool;
 
 namespace KernelEngine.Asset;
 
@@ -18,9 +17,4 @@ public interface IAssetLoader : IDisposable
     /// <returns>Receives the model, which the caller owns and releases with free_model; NULL on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     Model LoadModel(string path);
-    /// <summary>Asynchronously loads a 3D model, calling on_complete on a task pool thread once the load has finished or failed.</summary>
-    /// <param name="taskPool">Non-null task pool.</param>
-    /// <param name="path">File path (copied internally; caller may free after return).</param>
-    /// <returns>The loaded model; NULL when the load failed.</returns>
-    global::System.Threading.Tasks.Task<Model> LoadModelAsync(INativeTaskPool taskPool, string path);
 }

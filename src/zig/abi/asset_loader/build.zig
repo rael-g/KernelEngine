@@ -7,7 +7,6 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("asset_loader.zig") });
     abi.addImport("mesh_data", b.dependency("abi_mesh_data", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
-    abi.addImport("task_pool", b.dependency("abi_task_pool", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/asset/asset_loader.h>
@@ -17,7 +16,6 @@ pub fn build(b: *std.Build) void {
     translated.addIncludePath(b.path("../../../c/math"));
     translated.addIncludePath(b.path("../../../c/render"));
     translated.addIncludePath(b.path("../../../c/result"));
-    translated.addIncludePath(b.path("../../../c/task_pool"));
     const tests = b.addTest(.{ .root_module = b.createModule(.{
         .root_source_file = b.path("layout_test.zig"),
         .link_libc = true,
@@ -33,6 +31,5 @@ pub fn build(b: *std.Build) void {
     tests.root_module.addIncludePath(b.path("../../../c/math"));
     tests.root_module.addIncludePath(b.path("../../../c/render"));
     tests.root_module.addIncludePath(b.path("../../../c/result"));
-    tests.root_module.addIncludePath(b.path("../../../c/task_pool"));
     b.step("test", "Check the asset_loader ABI against its headers").dependOn(&b.addRunArtifact(tests).step);
 }

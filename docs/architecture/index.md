@@ -6,7 +6,6 @@ on the generated reference page of its file.
 - [Layers](layers.md)
 - [The C ABI](abi.md)
 - [Managed layer](managed-layer.md)
-- [Runtime](runtime.md)
 - [Threading](threading.md)
 - [ECS](ecs.md)
 - [Framework](framework.md)
