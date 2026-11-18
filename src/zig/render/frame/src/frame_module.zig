@@ -399,7 +399,7 @@ fn create(e: *abi_ecs.c.ke_ecs, graph: *g.ke_render_graph, service: *abi_render.
         .depth_format = depth_format,
         .clear_color = values.clear_color,
     };
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = "render.frame", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &st.frame_cid));
 
     const ids = scene.render_component_ids.?(scene).?;
     const rd = abi_ecs.c.KE_ECS_ACCESS_READ;

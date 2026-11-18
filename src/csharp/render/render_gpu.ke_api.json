@@ -942,7 +942,7 @@
       ]
     },
     {
-      "name": "ke_gpu_buffer_params",
+      "name": "ke_gpu_buffer_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -981,7 +981,7 @@
       ]
     },
     {
-      "name": "ke_gpu_texture_params",
+      "name": "ke_gpu_texture_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1056,7 +1056,7 @@
       ]
     },
     {
-      "name": "ke_gpu_texture_view_params",
+      "name": "ke_gpu_texture_view_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1113,7 +1113,7 @@
       ]
     },
     {
-      "name": "ke_gpu_sampler_params",
+      "name": "ke_gpu_sampler_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1188,7 +1188,7 @@
       ]
     },
     {
-      "name": "ke_gpu_shader_module_params",
+      "name": "ke_gpu_shader_module_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1458,7 +1458,7 @@
       ]
     },
     {
-      "name": "ke_gpu_bind_group_layout_params",
+      "name": "ke_gpu_bind_group_layout_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1536,7 +1536,7 @@
       ]
     },
     {
-      "name": "ke_gpu_bind_group_params",
+      "name": "ke_gpu_bind_group_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1571,7 +1571,7 @@
       ]
     },
     {
-      "name": "ke_gpu_render_pipeline_params",
+      "name": "ke_gpu_render_pipeline_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1688,7 +1688,7 @@
       ]
     },
     {
-      "name": "ke_gpu_compute_pipeline_params",
+      "name": "ke_gpu_compute_pipeline_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1815,7 +1815,7 @@
       ]
     },
     {
-      "name": "ke_gpu_render_pass_params",
+      "name": "ke_gpu_render_pass_desc",
       "doc": null,
       "tags": [
         "bag"
@@ -1846,36 +1846,6 @@
           "type": "const ke_gpu_depth_stencil_attachment *",
           "tags": [],
           "doc": null
-        }
-      ]
-    },
-    {
-      "name": "ke_gpu_command_encoder_params",
-      "doc": null,
-      "tags": [
-        "bag"
-      ],
-      "fields": [
-        {
-          "name": "label",
-          "type": "const char *",
-          "tags": [],
-          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
-        }
-      ]
-    },
-    {
-      "name": "ke_gpu_compute_pass_params",
-      "doc": null,
-      "tags": [
-        "bag"
-      ],
-      "fields": [
-        {
-          "name": "label",
-          "type": "const char *",
-          "tags": [],
-          "doc": "Optional name shown for this object by capture and validation tools; copied by the call."
         }
       ]
     },
@@ -1955,7 +1925,7 @@
       ]
     },
     {
-      "name": "ke_render_shader_layout_params",
+      "name": "ke_render_shader_layout_desc",
       "doc": "The compiled shader a layout is built for.",
       "tags": [
         "bag"
@@ -2191,7 +2161,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_buffer_params *",
+              "type": "const ke_gpu_buffer_desc *",
               "tags": [],
               "doc": null
             },
@@ -2215,7 +2185,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_texture_params *",
+              "type": "const ke_gpu_texture_desc *",
               "tags": [],
               "doc": null
             },
@@ -2245,7 +2215,7 @@
             },
             {
               "name": "p",
-              "type": "const ke_gpu_texture_view_params *",
+              "type": "const ke_gpu_texture_view_desc *",
               "tags": [],
               "doc": null
             },
@@ -2269,7 +2239,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_sampler_params *",
+              "type": "const ke_gpu_sampler_desc *",
               "tags": [],
               "doc": null
             },
@@ -2293,7 +2263,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_shader_module_params *",
+              "type": "const ke_gpu_shader_module_desc *",
               "tags": [],
               "doc": null
             },
@@ -2317,7 +2287,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pipeline_params *",
+              "type": "const ke_gpu_render_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -2341,7 +2311,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_compute_pipeline_params *",
+              "type": "const ke_gpu_compute_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -2365,7 +2335,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_bind_group_layout_params *",
+              "type": "const ke_gpu_bind_group_layout_desc *",
               "tags": [],
               "doc": null
             },
@@ -2389,7 +2359,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_bind_group_params *",
+              "type": "const ke_gpu_bind_group_desc *",
               "tags": [],
               "doc": null
             },
@@ -2536,14 +2506,18 @@
           "name": "create_command_encoder",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Creates a command encoder. p may be NULL, which creates it unlabeled.",
+          "doc": "Creates a command encoder.",
           "return_doc": null,
           "params": [
             {
-              "name": "p",
-              "type": "const ke_gpu_command_encoder_params *",
-              "tags": [],
-              "doc": null
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "optional",
+                "utf8"
+              ],
+              "doc": "Name shown by capture and validation tools; copied by the call."
             },
             {
               "name": "out_encoder",
@@ -2721,7 +2695,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pipeline_params *",
+              "type": "const ke_gpu_render_pipeline_desc *",
               "tags": [],
               "doc": null
             },
@@ -3375,7 +3349,7 @@
           "params": [
             {
               "name": "p",
-              "type": "const ke_gpu_render_pass_params *",
+              "type": "const ke_gpu_render_pass_desc *",
               "tags": [],
               "doc": null
             }
@@ -3386,14 +3360,18 @@
           "name": "begin_compute_pass",
           "returns": "struct ke_gpu_compute_pass *",
           "tags": [],
-          "doc": "Begins a compute pass. p may be NULL, which begins it unlabeled.",
+          "doc": "Begins a compute pass.",
           "return_doc": null,
           "params": [
             {
-              "name": "p",
-              "type": "const ke_gpu_compute_pass_params *",
-              "tags": [],
-              "doc": null
+              "name": "label",
+              "type": "const char *",
+              "tags": [
+                "borrowed",
+                "optional",
+                "utf8"
+              ],
+              "doc": "Name shown by capture and validation tools; copied by the call."
             }
           ],
           "receiver": "struct ke_gpu_command_encoder *"
@@ -3798,7 +3776,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_render_shader_layout_params *",
+              "type": "const ke_render_shader_layout_desc *",
               "tags": [],
               "doc": null
             },

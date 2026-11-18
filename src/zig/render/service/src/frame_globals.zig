@@ -43,7 +43,7 @@ pub const Globals = struct {
         try uniformBuffer(dev, "service.ke_frame", @sizeOf(abi_render.c.ke_render_frame_globals), &self.frame_buffer);
         try uniformBuffer(dev, "service.ke_lighting", @sizeOf(abi_render.c.ke_render_lighting), &self.lighting_buffer);
         for (samplers, &self.samplers) |s, *out| {
-            try R.check(dev.create_sampler.?(dev, &abi_render_gpu.c.ke_gpu_sampler_params{
+            try R.check(dev.create_sampler.?(dev, &abi_render_gpu.c.ke_gpu_sampler_desc{
                 .label = s.name.ptr,
                 .min_filter = s.min_mag,
                 .mag_filter = s.min_mag,
@@ -110,7 +110,7 @@ pub const Globals = struct {
 };
 
 fn uniformBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_asset_resolver.c.ke_gpu_buffer) R.Error!void {
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = label,
         .initial_data = null,
         .size = size,

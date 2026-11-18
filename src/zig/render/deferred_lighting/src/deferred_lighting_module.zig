@@ -32,7 +32,7 @@ const rg = abi_render_graph.c;
 
 const depth_hint = [_]abi_render_gpu.c.ke_render_binding_hint{.{ .name = "g_depth", .flags = abi_render_gpu.c.KE_RENDER_BINDING_HINT_DEPTH }};
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "deferred_lighting",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = &depth_hint,
@@ -54,7 +54,7 @@ const DeferredLightingModule = struct {
     depth: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
     features: Features.Published = undefined,
 
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     frame_set: abi_asset_resolver.c.ke_render_resource_set = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
@@ -183,7 +183,7 @@ fn setup(dl: *DeferredLightingModule, p: *const abi_render_context.c.ke_render_c
     var fs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "deferred_lighting", abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT, &fs));
 
-    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     pp.label = "deferred_lighting.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;

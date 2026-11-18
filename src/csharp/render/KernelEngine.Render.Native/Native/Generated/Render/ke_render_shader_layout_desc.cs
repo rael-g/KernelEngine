@@ -8,7 +8,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_render_shader_layout_params
+public unsafe partial struct ke_render_shader_layout_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* shader;

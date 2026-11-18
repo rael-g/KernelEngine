@@ -110,7 +110,7 @@ static void read_texture(ke_gpu_device *gpu, ke_gpu_texture texture, uint8_t *ou
     uint32_t padded_row = (WIDTH * BYTES_PER_TEXEL + align - 1) / align * align;
 
     ke_gpu_buffer staging = { 0 };
-    check("staging buffer create", gpu->create_buffer(gpu, &(ke_gpu_buffer_params){
+    check("staging buffer create", gpu->create_buffer(gpu, &(ke_gpu_buffer_desc){
         .size = (size_t)padded_row * HEIGHT,
         .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &staging));
 
@@ -232,7 +232,7 @@ int main(int argc, char **argv)
     check("gpu device", ke_gpu_device_webgpu_create(NULL, dp, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
-    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
+    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_desc){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
@@ -287,19 +287,19 @@ int main(int argc, char **argv)
                                                     KE_ALPHA_MODE_OPAQUE, 0.5f, 1.5f, 0.05f, NULL, &mat));
 
     ke_component_id transform_cid = KE_COMPONENT_INVALID;
-    ke_result registered_transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, &transform_cid);
+    ke_result registered_transform_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_TRANSFORM, .size = sizeof(ke_transform_component), .alignment = _Alignof(ke_transform_component), KE_COMPONENT_FIELDS(ke_transform_component_fields) }, &transform_cid);
     if (registered_transform_cid != KE_OK) die_result("component_register", registered_transform_cid);
     ke_component_id world_cid = KE_COMPONENT_INVALID;
-    ke_result registered_world_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = sizeof(ke_world_transform_component), .alignment = _Alignof(ke_world_transform_component) }, &world_cid);
+    ke_result registered_world_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_WORLD_TRANSFORM, .size = sizeof(ke_world_transform_component), .alignment = _Alignof(ke_world_transform_component) }, &world_cid);
     if (registered_world_cid != KE_OK) die_result("component_register", registered_world_cid);
     ke_component_id camera_cid = KE_COMPONENT_INVALID;
-    ke_result registered_camera_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_CAMERA, .size = sizeof(ke_camera_component), .alignment = _Alignof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields) }, &camera_cid);
+    ke_result registered_camera_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_CAMERA, .size = sizeof(ke_camera_component), .alignment = _Alignof(ke_camera_component), KE_COMPONENT_FIELDS(ke_camera_component_fields) }, &camera_cid);
     if (registered_camera_cid != KE_OK) die_result("component_register", registered_camera_cid);
     ke_component_id mesh_cid = KE_COMPONENT_INVALID;
-    ke_result registered_mesh_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_MESH, .size = sizeof(ke_mesh_component), .alignment = _Alignof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields) }, &mesh_cid);
+    ke_result registered_mesh_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_MESH, .size = sizeof(ke_mesh_component), .alignment = _Alignof(ke_mesh_component), KE_COMPONENT_FIELDS(ke_mesh_component_fields) }, &mesh_cid);
     if (registered_mesh_cid != KE_OK) die_result("component_register", registered_mesh_cid);
     ke_component_id light_cid = KE_COMPONENT_INVALID;
-    ke_result registered_light_cid = ecs.ref->component_register(ecs.ref, &(ke_component_params){ .name = KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = sizeof(ke_directional_light_component), .alignment = _Alignof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields) }, &light_cid);
+    ke_result registered_light_cid = ecs.ref->component_register(ecs.ref, &(ke_component_desc){ .name = KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, .size = sizeof(ke_directional_light_component), .alignment = _Alignof(ke_directional_light_component), KE_COMPONENT_FIELDS(ke_directional_light_component_fields) }, &light_cid);
     if (registered_light_cid != KE_OK) die_result("component_register", registered_light_cid);
 
     const ke_mat4 identity = { .m = { 1,0,0,0, 0,1,0,0, 0,0,1,0, 0,0,0,1 } };

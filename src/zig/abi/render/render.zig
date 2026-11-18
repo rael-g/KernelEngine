@@ -141,7 +141,7 @@ pub const RenderService = struct {
                 }
             }.call,
             .get_or_create_pipeline = &struct {
-                fn call(self: ?*c.ke_render_service, a0: ?*const abi_render_gpu.c.ke_gpu_render_pipeline_params) callconv(.c) c.ke_gpu_pipeline {
+                fn call(self: ?*c.ke_render_service, a0: ?*const abi_render_gpu.c.ke_gpu_render_pipeline_desc) callconv(.c) c.ke_gpu_pipeline {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_gpu_pipeline)));
                     return T.getOrCreatePipeline(state, a0);
                 }
@@ -347,7 +347,7 @@ pub const RenderService = struct {
     }
 
     /// Returns the pipeline for this exact params state, compiling it on first request.
-    pub fn getOrCreatePipeline(self: RenderService, params: ?*const abi_render_gpu.c.ke_gpu_render_pipeline_params) c.ke_gpu_pipeline {
+    pub fn getOrCreatePipeline(self: RenderService, params: ?*const abi_render_gpu.c.ke_gpu_render_pipeline_desc) c.ke_gpu_pipeline {
         return self.ptr.get_or_create_pipeline.?(self.ptr, params);
     }
 

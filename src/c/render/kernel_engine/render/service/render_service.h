@@ -166,7 +166,7 @@ struct ke_render_service
     /// Returns the pipeline for this exact params state, compiling it on first
     /// request.
     ke_gpu_pipeline (*get_or_create_pipeline)(struct ke_render_service *self,
-                                              const ke_gpu_render_pipeline_params *params);
+                                              const ke_gpu_render_pipeline_desc *params);
 
     /// The authored-material shader name a material handle was created with
     /// (see create_material's `shader`).

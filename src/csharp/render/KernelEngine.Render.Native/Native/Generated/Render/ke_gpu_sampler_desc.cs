@@ -8,7 +8,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_gpu_sampler_params
+public unsafe partial struct ke_gpu_sampler_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* label;

@@ -106,7 +106,7 @@ const ForwardModule = struct {
 
     ibl_enabled: bool = true,
 
-    pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_template: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     attrs: [4]abi_render_gpu.c.ke_gpu_vertex_attribute = undefined,
     vbl: abi_render_gpu.c.ke_gpu_vertex_buffer_layout = undefined,
     groups: Groups = .{},
@@ -337,7 +337,7 @@ fn setup(fwd: *ForwardModule, p: *const abi_render_context.c.ke_render_context, 
         .attributes = &fwd.attrs,
     };
 
-    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     pp.label = "forward.pipeline";
     pp.vertex_entry = "vs_main";
     pp.fragment_entry = "fs_main";

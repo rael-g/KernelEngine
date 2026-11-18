@@ -67,7 +67,7 @@ static void render_frame(ke_gpu_device *gpu, ke_gpu_render_target *target, ke_gp
         .store_op    = KE_GPU_STORE_OP_STORE,
         .clear_value = { .color = { 0.1f, 0.1f, 0.1f, 1.0f } },
     };
-    ke_gpu_render_pass_params rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
+    ke_gpu_render_pass_desc rpp = { .color_attachments = &ca, .color_attachment_count = 1 };
 
     ke_gpu_command_encoder_handle enc_handle = { 0 };
     check("create_command_encoder", gpu->create_command_encoder(gpu, NULL, &enc_handle));
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
     check("gpu device create", ke_gpu_device_webgpu_create(NULL, &validated, &gpu_ready, &gpu));
 
     ke_gpu_texture texture = { 0 };
-    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_params){
+    check("texture create", gpu.ref->create_texture(gpu.ref, &(ke_gpu_texture_desc){
         .width = WIDTH, .height = HEIGHT, .depth_or_array_layers = 1,
         .format = KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM, .dimension = KE_GPU_TEXTURE_DIM_2D,
         .usage = KE_GPU_TEXTURE_USAGE_COLOR_ATTACH | KE_GPU_TEXTURE_USAGE_COPY_SRC,
@@ -141,18 +141,18 @@ int main(int argc, char **argv)
     uint32_t padded_row = (WIDTH * BYTES_PER_TEXEL + align - 1) / align * align;
 
     ke_gpu_buffer staging = { 0 };
-    check("staging buffer create", gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_params){
+    check("staging buffer create", gpu.ref->create_buffer(gpu.ref, &(ke_gpu_buffer_desc){
         .size = (size_t)padded_row * HEIGHT,
         .usage = KE_GPU_BUFFER_USAGE_COPY_DST | KE_GPU_BUFFER_USAGE_MAP_READ }, &staging));
 
     ke_gpu_shader_module vs = { 0 };
-    check("vertex shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+    check("vertex shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_desc){
         .code = triangle_vs_wgsl, .byte_size = strlen(triangle_vs_wgsl), .label = "vs_main" }, &vs));
     ke_gpu_shader_module fs = { 0 };
-    check("fragment shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_params){
+    check("fragment shader creation", gpu.ref->create_shader_module(gpu.ref, &(ke_gpu_shader_module_desc){
         .code = triangle_fs_wgsl, .byte_size = strlen(triangle_fs_wgsl), .label = "fs_main" }, &fs));
 
-    ke_gpu_render_pipeline_params pp = {
+    ke_gpu_render_pipeline_desc pp = {
         .color_target_formats = { target.ref->format(target.ref) },
         .color_target_count = 1,
         .vertex_module = vs, .fragment_module = fs,

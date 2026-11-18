@@ -9,7 +9,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_gpu_compute_pipeline_params
+public unsafe partial struct ke_gpu_compute_pipeline_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* label;

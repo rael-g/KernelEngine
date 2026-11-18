@@ -256,7 +256,7 @@ extern "C"
         /// @param event [borrowed] Its name, size and field table.
         /// @param out_event [out] Receives the event's component id.
         /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null or nameless event, or the ecs's code.
-        ke_result (*register_event)(struct ke_node_types *self, const ke_component_params *event, ke_component_id *out_event);
+        ke_result (*register_event)(struct ke_node_types *self, const ke_component_desc *event, ke_component_id *out_event);
 
         /// Records a node of @p type named @p name under @p parent into @p commands, its fields
         /// and the components its type names in `with` holding their initial values. The one

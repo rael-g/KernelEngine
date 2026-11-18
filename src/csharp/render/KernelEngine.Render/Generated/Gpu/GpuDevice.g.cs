@@ -106,7 +106,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_buffer_params p = default;
+            ke_gpu_buffer_desc p = default;
             p.label = (sbyte*)labelPtr;
             p.initial_data = (void*)initialData;
             p.size = size;
@@ -132,7 +132,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_texture_params p = default;
+            ke_gpu_texture_desc p = default;
             p.label = (sbyte*)labelPtr;
             p.width = width;
             p.height = height;
@@ -162,7 +162,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_texture_view_params p = default;
+            ke_gpu_texture_view_desc p = default;
             p.label = (sbyte*)labelPtr;
             p.format = (GpuTextureFormat)format;
             p.dimension = (GpuTextureDimension)dimension;
@@ -189,7 +189,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_sampler_params p = default;
+            ke_gpu_sampler_desc p = default;
             p.label = (sbyte*)labelPtr;
             p.min_filter = (GpuFilter)minFilter;
             p.mag_filter = (GpuFilter)magFilter;
@@ -221,7 +221,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_shader_module_params p = default;
+            ke_gpu_shader_module_desc p = default;
             p.label = (sbyte*)labelPtr;
             p.code = (void*)code;
             p.byte_size = byteSize;
@@ -263,7 +263,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                         {
                             fixed (GpuTextureFormat* colorTargetFormatsPtr = colorTargetFormats)
                             {
-                                ke_gpu_render_pipeline_params p = default;
+                                ke_gpu_render_pipeline_desc p = default;
                                 p.label = (sbyte*)labelPtr;
                                 p.vertex_module = vertexModule;
                                 p.fragment_module = fragmentModule;
@@ -314,7 +314,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             {
                 fixed (ulong* bindGroupLayoutsPtr = bindGroupLayouts)
                 {
-                    ke_gpu_compute_pipeline_params p = default;
+                    ke_gpu_compute_pipeline_desc p = default;
                     p.label = (sbyte*)labelPtr;
                     p.compute_module = computeModule;
                     p.compute_entry = (sbyte*)computeEntryPtr;
@@ -343,7 +343,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         {
             fixed (GpuBindGroupLayoutEntry* entriesPtr = entries)
             {
-                ke_gpu_bind_group_layout_params p = default;
+                ke_gpu_bind_group_layout_desc p = default;
                 p.label = (sbyte*)labelPtr;
                 p.entry_count = (uint)entries.Length;
                 p.entries = entriesPtr;
@@ -368,7 +368,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         {
             fixed (GpuBindGroupEntry* entriesPtr = entries)
             {
-                ke_gpu_bind_group_params p = default;
+                ke_gpu_bind_group_desc p = default;
                 p.label = (sbyte*)labelPtr;
                 p.layout = layout;
                 p.entry_count = (uint)entries.Length;
@@ -428,8 +428,8 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         Handle->destroy_bind_group(Handle, h);
     }
 
-    /// <summary>Creates a command encoder. p may be NULL, which creates it unlabeled.</summary>
-    /// <param name="label">Optional name shown for this object by capture and validation tools; copied by the call.</param>
+    /// <summary>Creates a command encoder.</summary>
+    /// <param name="label">Name shown by capture and validation tools; copied by the call.</param>
     /// <returns>Receives the encoder; left zeroed on failure.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
     public IGpuCommandEncoder CreateCommandEncoder(string label)
@@ -440,10 +440,8 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         labelBytes[System.Text.Encoding.UTF8.GetBytes(labelText, labelBytes)] = 0;
         fixed (byte* labelPtr = labelBytes)
         {
-            ke_gpu_command_encoder_params p = default;
-            p.label = (sbyte*)labelPtr;
             ke_gpu_command_encoder_handle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_command_encoder(Handle, &p, &resultOut), "create_command_encoder");
+            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_command_encoder(Handle, (sbyte*)labelPtr, &resultOut), "create_command_encoder");
             return new GpuCommandEncoder(resultOut);
         }
     }
@@ -536,7 +534,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                         {
                             fixed (GpuTextureFormat* colorTargetFormatsPtr = colorTargetFormats)
                             {
-                                ke_gpu_render_pipeline_params p = default;
+                                ke_gpu_render_pipeline_desc p = default;
                                 p.label = (sbyte*)labelPtr;
                                 p.vertex_module = vertexModule;
                                 p.fragment_module = fragmentModule;

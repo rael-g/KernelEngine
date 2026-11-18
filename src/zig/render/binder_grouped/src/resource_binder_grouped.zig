@@ -131,7 +131,7 @@ fn zerosOf(st: *State, size: u64) R.Error!abi_asset_resolver.c.ke_gpu_buffer {
     defer gpa.free(bytes);
     @memset(bytes, 0);
     var buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "binder.zeros",
         .initial_data = bytes.ptr,
         .size = size,
@@ -212,7 +212,7 @@ fn readFailed(err: reflection.ReadError) R.Error {
 
 /// Drops the loose group when the shader declares no loose parameter, applies the hints, and
 /// builds each group's layout, the material block taking the binder's.
-fn finishLayout(st: *State, sl: *ShaderLayout, params: *const abi_render_gpu.c.ke_render_shader_layout_params) R.Error!void {
+fn finishLayout(st: *State, sl: *ShaderLayout, params: *const abi_render_gpu.c.ke_render_shader_layout_desc) R.Error!void {
     var i: usize = 0;
     while (i < sl.groups.items.len) {
         const g = &sl.groups.items[i];
@@ -257,7 +257,7 @@ fn finishLayout(st: *State, sl: *ShaderLayout, params: *const abi_render_gpu.c.k
 
 /// The binder's `create_shader_layout` slot: reads "<shader dir>/<shader>.<vs|fs|cs>.json" for
 /// each stage of the params.
-fn createShaderLayout(self: [*c]abi_render_gpu.c.ke_render_resource_binder, params: [*c]const abi_render_gpu.c.ke_render_shader_layout_params, out_layout: [*c]abi_asset_resolver.c.ke_render_shader_layout) callconv(.c) abi_result.c.ke_result {
+fn createShaderLayout(self: [*c]abi_render_gpu.c.ke_render_resource_binder, params: [*c]const abi_render_gpu.c.ke_render_shader_layout_desc, out_layout: [*c]abi_asset_resolver.c.ke_render_shader_layout) callconv(.c) abi_result.c.ke_result {
     const out = out_layout orelse return R.code(error.InvalidArgument);
     out.* = abi_render_gpu.c.KE_RENDER_BINDING_INVALID;
     if (self == null or params == null or params.*.shader == null or params.*.stages == 0) return R.code(error.InvalidArgument);
@@ -277,7 +277,7 @@ fn readFile(io: *abi_io.c.ke_io, path: [:0]const u8) R.Error![]u8 {
     return @as([*]u8, @ptrCast(result.bytes.?))[0..@intCast(result.size)];
 }
 
-fn shaderLayout(st: *State, params: *const abi_render_gpu.c.ke_render_shader_layout_params) R.Error!*ShaderLayout {
+fn shaderLayout(st: *State, params: *const abi_render_gpu.c.ke_render_shader_layout_desc) R.Error!*ShaderLayout {
     const sl = try gpa.create(ShaderLayout);
     sl.* = .{ .groups = .empty, .material_index = null };
     errdefer releaseShaderLayout(st.device, sl);
@@ -350,7 +350,7 @@ fn resourceSet(st: *State, sl: *ShaderLayout, block: ?[]const u8, label: [*c]con
     const set = try gpa.create(Set);
     errdefer gpa.destroy(set);
     set.* = .{ .index = g.group.index orelse 0, .bind_group = abi_render_gpu.c.KE_GPU_INVALID_HANDLE };
-    try R.check(st.device.create_bind_group.?(st.device, &abi_render_gpu.c.ke_gpu_bind_group_params{
+    try R.check(st.device.create_bind_group.?(st.device, &abi_render_gpu.c.ke_gpu_bind_group_desc{
         .label = label,
         .layout = g.layout,
         .entry_count = @intCast(entries.len),
@@ -403,7 +403,7 @@ fn newMaterial(st: *State, d: abi_render_gpu.c.ke_render_material_data) R.Error!
         .distortion_strength = d.distortion_strength,
     };
     var buffer: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(st.device.create_buffer.?(st.device, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "material.uniform",
         .initial_data = &uniform,
         .size = @sizeOf(MaterialUniform),
@@ -429,7 +429,7 @@ fn newMaterial(st: *State, d: abi_render_gpu.c.ke_render_material_data) R.Error!
     const entries = try reflection.matchBindings(&st.material_group, &bindings, st.provided.items);
     defer gpa.free(entries);
     var bind_group: abi_asset_resolver.c.ke_gpu_bind_group = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_bind_group.?(st.device, &abi_render_gpu.c.ke_gpu_bind_group_params{
+    try R.check(st.device.create_bind_group.?(st.device, &abi_render_gpu.c.ke_gpu_bind_group_desc{
         .label = "material.bind_group",
         .layout = st.material_layout,
         .entry_count = @intCast(entries.len),

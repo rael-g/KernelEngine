@@ -59,7 +59,7 @@ const Objects = @import("object_uniforms").ObjectUniforms(ShadowObj);
 
 const object_hint = [_]abi_render_gpu.c.ke_render_binding_hint{.{ .name = "object", .flags = abi_render_gpu.c.KE_RENDER_BINDING_HINT_DYNAMIC_OFFSET }};
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "shadow",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = &object_hint,
@@ -86,7 +86,7 @@ const ShadowModule = struct {
     depth: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
     light: rg.ke_render_graph_resource = rg.KE_RENDER_GRAPH_RESOURCE_INVALID,
 
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     lvp_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
@@ -267,7 +267,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, se
     sh.view_space = p.view_space.?;
     sh.params = try shapeOf(settings);
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{ .label = "shadow.lvp_uniform", .initial_data = null, .size = 64, .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_UNIFORM | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST, .mapped_at_creation = false }, &sh.lvp_uniform));
 
     var sh_vs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "shadow", abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX, &sh_vs));
@@ -279,7 +279,7 @@ fn setup(sh: *ShadowModule, p: *const abi_render_context.c.ke_render_context, se
 
     const sh_attr = abi_render_gpu.c.ke_gpu_vertex_attribute{ .shader_location = 0, .format = abi_render_gpu.c.KE_GPU_VERTEX_FORMAT_FLOAT32X3, .offset = 0 };
     const sh_vbl = abi_render_gpu.c.ke_gpu_vertex_buffer_layout{ .stride = 11 * @sizeOf(f32), .step_mode = abi_render_gpu.c.KE_GPU_VERTEX_STEP_MODE_VERTEX, .attribute_count = 1, .attributes = (&sh_attr)[0..1] };
-    var shp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var shp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     shp.label = "shadow.pipeline";
     shp.vertex_module = sh_vs;
     shp.fragment_module = sh_fs;

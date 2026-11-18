@@ -8,14 +8,14 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_gpu_shader_module_params
+public unsafe partial struct ke_gpu_bind_group_layout_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* label;
 
-    [NativeTypeName("const void *")]
-    public void* code;
+    [NativeTypeName("uint32_t")]
+    public uint entry_count;
 
-    [NativeTypeName("size_t")]
-    public nuint byte_size;
+    [NativeTypeName("const ke_gpu_bind_group_layout_entry *")]
+    public global::KernelEngine.Render.GpuBindGroupLayoutEntry* entries;
 }

@@ -7,7 +7,7 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Ecs.Native;
 
-public unsafe partial struct ke_component_params
+public unsafe partial struct ke_component_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* name;

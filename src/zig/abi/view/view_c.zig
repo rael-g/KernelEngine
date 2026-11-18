@@ -5,20 +5,14 @@ const abi_math = @import("math");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
 
-/// The view space as plain data, for consumers that cannot call this interface.
-pub const ke_view_space_params = extern struct {
-    /// Multiplies a view-space z into a distance in front of the camera.
-    depth_from_view_z: f32 = std.mem.zeroes(f32),
-};
-
 /// How the engine lays out view space: which way the camera faces along z, and with it the shape
 /// of the view and projection matrices. Independent of `ke_ndc_convention`, which reports the
 /// clip space of the device. Every slot is callable at any time. No slot's result is documented
 /// as constant; a consumer that caches one is making its own choice.
 pub const ke_view_space = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
-    /// The numbers to hand to consumers that cannot call this interface.
-    params: ?*const fn (?*ke_view_space) callconv(.c) ke_view_space_params = null,
+    /// Multiplies a view-space z into a distance in front of the camera.
+    depth_from_view_z: ?*const fn (?*ke_view_space) callconv(.c) f32 = null,
     /// World-to-view for a camera at `eye` facing `forward` with `up` above.
     look_to: ?*const fn (?*ke_view_space, ?*const abi_math.c.ke_vec3, ?*const abi_math.c.ke_vec3, ?*const abi_math.c.ke_vec3, ?*abi_math.c.ke_mat4) callconv(.c) void = null,
     /// World-to-view for a camera at `eye` aimed at `target`.

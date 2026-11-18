@@ -7,7 +7,7 @@ This is a map of the four layers and of the files that cross them. How the bound
 
 | layer | where | holds |
 |---|---|---|
-| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, `_config` and `_desc` structs, components, enums; headers only |
+| 1, contracts | `src/c/<domain>/kernel_engine/<domain>/*.h` | vtable shapes, descriptor structs, components, enums; headers only |
 | 2, plugins | `src/zig/<domain>/<plugin>/` | every implementation, one shared library each |
 | 3, bindings | `src/csharp/<domain>/*/Native/Generated/` | P/Invoke surface generated from layers 1 and 2 |
 | 4, managed | `src/csharp/<domain>/KernelEngine.*/` | wrappers, the C# node SDK, game code |

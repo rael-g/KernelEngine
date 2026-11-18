@@ -12,8 +12,8 @@ namespace KernelEngine.View;
 /// <summary>The viewspace contract game code depends on, so a caller names a capability rather than the <see cref="ViewSpace"/> that carries it.</summary>
 public interface IViewSpace : IDisposable
 {
-    /// <summary>The numbers to hand to consumers that cannot call this interface.</summary>
-    ViewSpaceParams Params();
+    /// <summary>Multiplies a view-space z into a distance in front of the camera.</summary>
+    float DepthFromViewZ();
     /// <summary>World-to-view for a camera at `eye` facing `forward` with `up` above.</summary>
     /// <param name="forward">Need not be normalized.</param>
     System.Numerics.Matrix4x4 LookTo(System.Numerics.Vector3 eye, System.Numerics.Vector3 forward, System.Numerics.Vector3 up);

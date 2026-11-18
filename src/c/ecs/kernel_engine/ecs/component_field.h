@@ -26,7 +26,7 @@ extern "C"
         uint32_t           enum_count; ///< Entries in `enum_names`.
     } ke_component_field;
 
-/** Expands a field table into the `fields` and `field_count` initializers of ke_component_params. */
+/** Expands a field table into the `fields` and `field_count` initializers of ke_component_desc. */
 #define KE_COMPONENT_FIELDS(table) .fields = (table), .field_count = (uint32_t)(sizeof(table) / sizeof((table)[0]))
 
 #ifdef __cplusplus

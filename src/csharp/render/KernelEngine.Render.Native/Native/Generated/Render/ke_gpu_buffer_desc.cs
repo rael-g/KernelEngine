@@ -1,0 +1,26 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Render;
+
+using KernelEngine.Common.Native;
+using KernelEngine.Result.Native;
+
+namespace KernelEngine.Render.Native;
+
+public unsafe partial struct ke_gpu_buffer_desc
+{
+    [NativeTypeName("const char *")]
+    public sbyte* label;
+
+    [NativeTypeName("const void *")]
+    public void* initial_data;
+
+    [NativeTypeName("size_t")]
+    public nuint size;
+
+    [NativeTypeName("ke_gpu_buffer_usage")]
+    public uint usage;
+
+    public bool mapped_at_creation;
+}

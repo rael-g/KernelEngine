@@ -113,7 +113,7 @@ extern "C"
          *         no field table to migrate by, what disagrees being logged; KE_RESULT_OUT_OF_MEMORY.
          */
         ke_result (*component_register)(struct ke_ecs              *self,
-                                        const ke_component_params  *params,
+                                        const ke_component_desc  *params,
                                         ke_component_id            *out_cid);
 
         /**

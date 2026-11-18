@@ -75,7 +75,7 @@ const UiState = struct {
     device: *abi_render_gpu.c.ke_gpu_device = undefined,
     frame: *abi_render_frame.c.ke_render_frame = undefined,
     ndc: abi_render_gpu.c.ke_ndc_convention = undefined,
-    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_params = undefined,
+    pipeline_params: abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined,
     binder: *abi_render_gpu.c.ke_render_resource_binder = undefined,
     layout: abi_asset_resolver.c.ke_render_shader_layout = abi_render_gpu.c.KE_RENDER_BINDING_INVALID,
     frame_uniform: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE,
@@ -205,7 +205,7 @@ fn shapeLabel(ui: *UiState, l_ptr: [*c]abi_ui_components.c.ke_label_component, b
     l.glyph_count = slot;
 }
 
-const shader_layout = abi_render_gpu.c.ke_render_shader_layout_params{
+const shader_layout = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "ui",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_VERTEX | abi_render_gpu.c.KE_GPU_SHADER_STAGE_FRAGMENT,
     .hints = null,
@@ -265,7 +265,7 @@ fn ensureVertexBuffer(ui: *UiState, bytes: usize) R.Error!void {
     const size = std.math.ceilPowerOfTwoAssert(usize, bytes);
     const dev = ui.device;
     var vbo: abi_asset_resolver.c.ke_gpu_buffer = undefined;
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "ui.vbo",
         .initial_data = null,
         .size = size,
@@ -447,7 +447,7 @@ fn setup(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error
         .attributes = &attrs,
     };
 
-    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_params);
+    var pp = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
     pp.label = "ui.pipeline";
     pp.vertex_module = vs;
     pp.fragment_module = fs;
@@ -479,7 +479,7 @@ fn setup(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error
         return error.NotInitialized;
     }
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "ui.frame_uniform",
         .initial_data = null,
         .size = 64,
@@ -607,9 +607,9 @@ export fn ke_render_ui_create(context_in: ?*const abi_render_context.c.ke_render
 
 fn registerUi(e: *abi_ecs.c.ke_ecs, quad: *abi_asset_resolver.c.ke_component_id, label: *abi_asset_resolver.c.ke_component_id) R.Error!void {
     quad.* = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render_contract.c.ke_ui_quad_component_fields, .field_count = abi_render_contract.c.ke_ui_quad_component_fields.len }, quad));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = abi_render_contract.c.KE_COMPONENT_NAME_UI_QUAD, .size = @sizeOf(UiQuadComponent), .alignment = @alignOf(UiQuadComponent), .fields = &abi_render_contract.c.ke_ui_quad_component_fields, .field_count = abi_render_contract.c.ke_ui_quad_component_fields.len }, quad));
     label.* = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, label));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = abi_render_contract.c.KE_COMPONENT_NAME_LABEL, .size = @sizeOf(abi_ui_components.c.ke_label_component), .alignment = @alignOf(abi_ui_components.c.ke_label_component), .fields = &abi_render_contract.c.ke_label_component_fields, .field_count = abi_render_contract.c.ke_label_component_fields.len }, label));
 }
 
 fn register(ui: *UiState, p: *const abi_render_context.c.ke_render_context) R.Error!void {

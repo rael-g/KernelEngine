@@ -7,7 +7,7 @@ cache works inside is on the generated page of its file.
 
 | part | declared as | receives | hands on |
 |---|---|---|---|
-| pass | a render system | its own `ke_gpu_render_pipeline_params` | the pipeline it was answered with, to `set_pipeline` |
+| pass | a render system | its own `ke_gpu_render_pipeline_desc` | the pipeline it was answered with, to `set_pipeline` |
 | service | `get_or_create_pipeline` of `ke_render_service` | the params of the pass | the current pipeline of that request |
 | cache | `PipelineCache` in `pipeline_cache.zig` of the service plugin | the params, reduced to a `PsoKey` | the fallback, then the real pipeline |
 | device | `create_render_pipeline_async` and `flush_pipeline_compiles` of `ke_gpu_device` | the params and a completion callback | the compiled pipeline, to the callback |

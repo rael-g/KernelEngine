@@ -8,19 +8,14 @@ using KernelEngine.Result.Native;
 
 namespace KernelEngine.Render.Native;
 
-public unsafe partial struct ke_gpu_buffer_params
+public unsafe partial struct ke_gpu_shader_module_desc
 {
     [NativeTypeName("const char *")]
     public sbyte* label;
 
     [NativeTypeName("const void *")]
-    public void* initial_data;
+    public void* code;
 
     [NativeTypeName("size_t")]
-    public nuint size;
-
-    [NativeTypeName("ke_gpu_buffer_usage")]
-    public uint usage;
-
-    public bool mapped_at_creation;
+    public nuint byte_size;
 }

@@ -232,7 +232,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_buffer = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_buffer_params, a1: ?*c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_buffer_desc, a1: ?*c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createBuffer(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -240,7 +240,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_texture = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_texture_params, a1: ?*c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_texture_desc, a1: ?*c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createTexture(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -248,7 +248,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_texture_view = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: c.ke_gpu_texture, a1: ?*const c.ke_gpu_texture_view_params, a2: ?*c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: c.ke_gpu_texture, a1: ?*const c.ke_gpu_texture_view_desc, a2: ?*c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createTextureView(state, a0, a1) catch |failure| return resultOf(failure);
                     (a2 orelse return resultOf(error.Failed)).* = value;
@@ -256,7 +256,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_sampler = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_sampler_params, a1: ?*c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_sampler_desc, a1: ?*c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createSampler(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -264,7 +264,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_shader_module = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_shader_module_params, a1: ?*c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_shader_module_desc, a1: ?*c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createShaderModule(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -272,7 +272,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_render_pipeline = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_params, a1: ?*c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_desc, a1: ?*c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createRenderPipeline(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -280,7 +280,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_compute_pipeline = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_compute_pipeline_params, a1: ?*c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_compute_pipeline_desc, a1: ?*c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createComputePipeline(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -288,7 +288,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_bind_group_layout = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_bind_group_layout_params, a1: ?*c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_bind_group_layout_desc, a1: ?*c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createBindGroupLayout(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -296,7 +296,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_bind_group = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_bind_group_params, a1: ?*c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_bind_group_desc, a1: ?*c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createBindGroup(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -352,9 +352,9 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_command_encoder = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_command_encoder_params, a1: ?*c.ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_gpu_device, a0: ?[*:0]const u8, a1: ?*c.ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.createCommandEncoder(state, a0) catch |failure| return resultOf(failure);
+                    const value = T.createCommandEncoder(state, if (a0) |text| std.mem.span(text) else null) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
@@ -408,7 +408,7 @@ pub const GpuDevice = struct {
                 }
             }.call,
             .create_render_pipeline_async = &struct {
-                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_params, a1: c.ke_gpu_pipeline_ready_func, a2: ?*anyopaque) callconv(.c) void {
+                fn call(self: ?*c.ke_gpu_device, a0: ?*const c.ke_gpu_render_pipeline_desc, a1: c.ke_gpu_pipeline_ready_func, a2: ?*anyopaque) callconv(.c) void {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return));
                     return T.createRenderPipelineAsync(state, a0, a1, a2);
                 }
@@ -454,63 +454,63 @@ pub const GpuDevice = struct {
     }
 
     /// Creates a buffer. The backend's reason for a rejection is logged.
-    pub fn createBuffer(self: GpuDevice, p: ?*const c.ke_gpu_buffer_params) Error!c.ke_gpu_buffer {
+    pub fn createBuffer(self: GpuDevice, p: ?*const c.ke_gpu_buffer_desc) Error!c.ke_gpu_buffer {
         var written: c.ke_gpu_buffer = undefined;
         try checkResult(self.ptr.create_buffer.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a texture. The backend's reason for a rejection is logged.
-    pub fn createTexture(self: GpuDevice, p: ?*const c.ke_gpu_texture_params) Error!c.ke_gpu_texture {
+    pub fn createTexture(self: GpuDevice, p: ?*const c.ke_gpu_texture_desc) Error!c.ke_gpu_texture {
         var written: c.ke_gpu_texture = undefined;
         try checkResult(self.ptr.create_texture.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a view of `tex`. The backend's reason for a rejection is logged.
-    pub fn createTextureView(self: GpuDevice, tex: c.ke_gpu_texture, p: ?*const c.ke_gpu_texture_view_params) Error!c.ke_gpu_texture_view {
+    pub fn createTextureView(self: GpuDevice, tex: c.ke_gpu_texture, p: ?*const c.ke_gpu_texture_view_desc) Error!c.ke_gpu_texture_view {
         var written: c.ke_gpu_texture_view = undefined;
         try checkResult(self.ptr.create_texture_view.?(self.ptr, tex, p, &written));
         return written;
     }
 
     /// Creates a sampler. The backend's reason for a rejection is logged.
-    pub fn createSampler(self: GpuDevice, p: ?*const c.ke_gpu_sampler_params) Error!c.ke_gpu_sampler {
+    pub fn createSampler(self: GpuDevice, p: ?*const c.ke_gpu_sampler_desc) Error!c.ke_gpu_sampler {
         var written: c.ke_gpu_sampler = undefined;
         try checkResult(self.ptr.create_sampler.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a shader module. The backend's reason for rejecting the source is logged.
-    pub fn createShaderModule(self: GpuDevice, p: ?*const c.ke_gpu_shader_module_params) Error!c.ke_gpu_shader_module {
+    pub fn createShaderModule(self: GpuDevice, p: ?*const c.ke_gpu_shader_module_desc) Error!c.ke_gpu_shader_module {
         var written: c.ke_gpu_shader_module = undefined;
         try checkResult(self.ptr.create_shader_module.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a render pipeline. The backend's reason for a rejection is logged.
-    pub fn createRenderPipeline(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_params) Error!c.ke_gpu_pipeline {
+    pub fn createRenderPipeline(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_desc) Error!c.ke_gpu_pipeline {
         var written: c.ke_gpu_pipeline = undefined;
         try checkResult(self.ptr.create_render_pipeline.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a compute pipeline. The backend's reason for a rejection is logged.
-    pub fn createComputePipeline(self: GpuDevice, p: ?*const c.ke_gpu_compute_pipeline_params) Error!c.ke_gpu_pipeline {
+    pub fn createComputePipeline(self: GpuDevice, p: ?*const c.ke_gpu_compute_pipeline_desc) Error!c.ke_gpu_pipeline {
         var written: c.ke_gpu_pipeline = undefined;
         try checkResult(self.ptr.create_compute_pipeline.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a bind group layout. The backend's reason for a rejection is logged.
-    pub fn createBindGroupLayout(self: GpuDevice, p: ?*const c.ke_gpu_bind_group_layout_params) Error!c.ke_gpu_bind_group_layout {
+    pub fn createBindGroupLayout(self: GpuDevice, p: ?*const c.ke_gpu_bind_group_layout_desc) Error!c.ke_gpu_bind_group_layout {
         var written: c.ke_gpu_bind_group_layout = undefined;
         try checkResult(self.ptr.create_bind_group_layout.?(self.ptr, p, &written));
         return written;
     }
 
     /// Creates a bind group. The backend's reason for a rejection is logged.
-    pub fn createBindGroup(self: GpuDevice, p: ?*const c.ke_gpu_bind_group_params) Error!c.ke_gpu_bind_group {
+    pub fn createBindGroup(self: GpuDevice, p: ?*const c.ke_gpu_bind_group_desc) Error!c.ke_gpu_bind_group {
         var written: c.ke_gpu_bind_group = undefined;
         try checkResult(self.ptr.create_bind_group.?(self.ptr, p, &written));
         return written;
@@ -549,10 +549,10 @@ pub const GpuDevice = struct {
         return self.ptr.destroy_bind_group.?(self.ptr, h);
     }
 
-    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
-    pub fn createCommandEncoder(self: GpuDevice, p: ?*const c.ke_gpu_command_encoder_params) Error!GpuCommandEncoder {
+    /// Creates a command encoder.
+    pub fn createCommandEncoder(self: GpuDevice, label: ?[:0]const u8) Error!GpuCommandEncoder {
         var written: c.ke_gpu_command_encoder_handle = undefined;
-        try checkResult(self.ptr.create_command_encoder.?(self.ptr, p, &written));
+        try checkResult(self.ptr.create_command_encoder.?(self.ptr, if (label) |text| text.ptr else null, &written));
         return .{ .ptr = written.ref orelse return error.Failed, .owner = written };
     }
 
@@ -594,7 +594,7 @@ pub const GpuDevice = struct {
     /// Kicks a background pipeline compile — the driver compiles off the caller's thread; `on_ready`
     /// fires later (during this device's normal event pump, e.g. at queue_poll) with the finished
     /// pipeline, or a failure code and KE_GPU_INVALID_HANDLE. No caching and no fallback.
-    pub fn createRenderPipelineAsync(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_params, on_ready: c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) void {
+    pub fn createRenderPipelineAsync(self: GpuDevice, p: ?*const c.ke_gpu_render_pipeline_desc, on_ready: c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) void {
         return self.ptr.create_render_pipeline_async.?(self.ptr, p, on_ready, user);
     }
 
@@ -872,15 +872,15 @@ pub const GpuCommandEncoder = struct {
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_gpu_command_encoder {
         return .{
             .begin_render_pass = &struct {
-                fn call(self: ?*c.ke_gpu_command_encoder, a0: ?*const c.ke_gpu_render_pass_params) callconv(.c) ?*c.ke_gpu_render_pass {
+                fn call(self: ?*c.ke_gpu_command_encoder, a0: ?*const c.ke_gpu_render_pass_desc) callconv(.c) ?*c.ke_gpu_render_pass {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*c.ke_gpu_render_pass)));
                     return if (T.beginRenderPass(state, a0)) |handle| handle.ptr else null;
                 }
             }.call,
             .begin_compute_pass = &struct {
-                fn call(self: ?*c.ke_gpu_command_encoder, a0: ?*const c.ke_gpu_compute_pass_params) callconv(.c) ?*c.ke_gpu_compute_pass {
+                fn call(self: ?*c.ke_gpu_command_encoder, a0: ?[*:0]const u8) callconv(.c) ?*c.ke_gpu_compute_pass {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(?*c.ke_gpu_compute_pass)));
-                    return if (T.beginComputePass(state, a0)) |handle| handle.ptr else null;
+                    return if (T.beginComputePass(state, if (a0) |text| std.mem.span(text) else null)) |handle| handle.ptr else null;
                 }
             }.call,
             .copy_buffer_to_buffer = &struct {
@@ -938,13 +938,13 @@ pub const GpuCommandEncoder = struct {
         };
     }
 
-    pub fn beginRenderPass(self: GpuCommandEncoder, p: ?*const c.ke_gpu_render_pass_params) ?GpuRenderPass {
+    pub fn beginRenderPass(self: GpuCommandEncoder, p: ?*const c.ke_gpu_render_pass_desc) ?GpuRenderPass {
         return if (self.ptr.begin_render_pass.?(self.ptr, p)) |ptr| GpuRenderPass{ .ptr = ptr } else null;
     }
 
-    /// Begins a compute pass. p may be NULL, which begins it unlabeled.
-    pub fn beginComputePass(self: GpuCommandEncoder, p: ?*const c.ke_gpu_compute_pass_params) ?GpuComputePass {
-        return if (self.ptr.begin_compute_pass.?(self.ptr, p)) |ptr| GpuComputePass{ .ptr = ptr } else null;
+    /// Begins a compute pass.
+    pub fn beginComputePass(self: GpuCommandEncoder, label: ?[:0]const u8) ?GpuComputePass {
+        return if (self.ptr.begin_compute_pass.?(self.ptr, if (label) |text| text.ptr else null)) |ptr| GpuComputePass{ .ptr = ptr } else null;
     }
 
     pub fn copyBufferToBuffer(self: GpuCommandEncoder, src: c.ke_gpu_buffer, src_offset: usize, dst: c.ke_gpu_buffer, dst_offset: usize, size: usize) void {
@@ -1082,7 +1082,7 @@ pub const RenderResourceBinder = struct {
                 }
             }.call,
             .create_shader_layout = &struct {
-                fn call(self: ?*c.ke_render_resource_binder, a0: ?*const c.ke_render_shader_layout_params, a1: ?*c.ke_render_shader_layout) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_render_resource_binder, a0: ?*const c.ke_render_shader_layout_desc, a1: ?*c.ke_render_shader_layout) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.createShaderLayout(state, a0) catch |failure| return resultOf(failure);
                     (a1 orelse return resultOf(error.Failed)).* = value;
@@ -1158,7 +1158,7 @@ pub const RenderResourceBinder = struct {
     }
 
     /// Builds the layout of a compiled shader from what the build recorded about it.
-    pub fn createShaderLayout(self: RenderResourceBinder, params: ?*const c.ke_render_shader_layout_params) Error!c.ke_render_shader_layout {
+    pub fn createShaderLayout(self: RenderResourceBinder, params: ?*const c.ke_render_shader_layout_desc) Error!c.ke_render_shader_layout {
         var written: c.ke_render_shader_layout = undefined;
         try checkResult(self.ptr.create_shader_layout.?(self.ptr, params, &written));
         return written;
@@ -1224,30 +1224,28 @@ pub const RenderResourceBinder = struct {
 pub const NdcConvention = c.ke_ndc_convention;
 pub const GpuClearValue = c.ke_gpu_clear_value;
 pub const GpuCapabilities = c.ke_gpu_capabilities;
-pub const GpuBufferParams = c.ke_gpu_buffer_params;
-pub const GpuTextureParams = c.ke_gpu_texture_params;
-pub const GpuTextureViewParams = c.ke_gpu_texture_view_params;
-pub const GpuSamplerParams = c.ke_gpu_sampler_params;
-pub const GpuShaderModuleParams = c.ke_gpu_shader_module_params;
+pub const GpuBufferDesc = c.ke_gpu_buffer_desc;
+pub const GpuTextureDesc = c.ke_gpu_texture_desc;
+pub const GpuTextureViewDesc = c.ke_gpu_texture_view_desc;
+pub const GpuSamplerDesc = c.ke_gpu_sampler_desc;
+pub const GpuShaderModuleDesc = c.ke_gpu_shader_module_desc;
 pub const GpuVertexAttribute = c.ke_gpu_vertex_attribute;
 pub const GpuVertexBufferLayout = c.ke_gpu_vertex_buffer_layout;
 pub const GpuBlendState = c.ke_gpu_blend_state;
 pub const GpuDepthStencilState = c.ke_gpu_depth_stencil_state;
 pub const GpuBindGroupLayoutEntry = c.ke_gpu_bind_group_layout_entry;
-pub const GpuBindGroupLayoutParams = c.ke_gpu_bind_group_layout_params;
+pub const GpuBindGroupLayoutDesc = c.ke_gpu_bind_group_layout_desc;
 pub const GpuBindGroupEntry = c.ke_gpu_bind_group_entry;
-pub const GpuBindGroupParams = c.ke_gpu_bind_group_params;
-pub const GpuRenderPipelineParams = c.ke_gpu_render_pipeline_params;
-pub const GpuComputePipelineParams = c.ke_gpu_compute_pipeline_params;
+pub const GpuBindGroupDesc = c.ke_gpu_bind_group_desc;
+pub const GpuRenderPipelineDesc = c.ke_gpu_render_pipeline_desc;
+pub const GpuComputePipelineDesc = c.ke_gpu_compute_pipeline_desc;
 pub const GpuColorAttachment = c.ke_gpu_color_attachment;
 pub const GpuDepthStencilAttachment = c.ke_gpu_depth_stencil_attachment;
-pub const GpuRenderPassParams = c.ke_gpu_render_pass_params;
-pub const GpuCommandEncoderParams = c.ke_gpu_command_encoder_params;
-pub const GpuComputePassParams = c.ke_gpu_compute_pass_params;
+pub const GpuRenderPassDesc = c.ke_gpu_render_pass_desc;
 pub const GpuCommandBuffer = c.ke_gpu_command_buffer;
 pub const RenderBindingHint = c.ke_render_binding_hint;
 pub const RenderShaderBinding = c.ke_render_shader_binding;
-pub const RenderShaderLayoutParams = c.ke_render_shader_layout_params;
+pub const RenderShaderLayoutDesc = c.ke_render_shader_layout_desc;
 pub const RenderMaterialData = c.ke_render_material_data;
 pub const GpuCommandEncoderHandle = c.ke_gpu_command_encoder_handle;
 pub const GpuCommandBufferHandle = c.ke_gpu_command_buffer_handle;

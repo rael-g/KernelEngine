@@ -458,7 +458,7 @@ fn entityDestroy(self_in: ?*abi_ecs.c.ke_ecs, entity: abi_asset_resolver.c.ke_en
 /// is zero and what disagrees is logged.
 fn componentRegister(
     self_in: ?*abi_ecs.c.ke_ecs,
-    params: [*c]const abi_ecs.c.ke_component_params,
+    params: [*c]const abi_ecs.c.ke_component_desc,
     out_cid: ?*abi_asset_resolver.c.ke_component_id,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_cid orelse return R.code(error.InvalidArgument);
@@ -1489,7 +1489,7 @@ fn made() !abi_ecs.c.ke_ecs_handle {
     return madeWith(null);
 }
 
-fn register(h: abi_ecs.c.ke_ecs_handle, params: *const abi_ecs.c.ke_component_params) R.Error!abi_asset_resolver.c.ke_component_id {
+fn register(h: abi_ecs.c.ke_ecs_handle, params: *const abi_ecs.c.ke_component_desc) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = 0;
     try R.check(h.ref.?.component_register.?(h.ref, params, &cid));
     return cid;
@@ -1526,7 +1526,7 @@ fn registerDesc(h: abi_ecs.c.ke_ecs_handle, desc: abi_ecs.c.ke_ecs_query_desc) R
 }
 
 fn sized(h: abi_ecs.c.ke_ecs_handle, name: [*:0]const u8) R.Error!abi_asset_resolver.c.ke_component_id {
-    return register(h, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 });
+    return register(h, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 });
 }
 
 fn term(cid: abi_asset_resolver.c.ke_component_id, access: c_uint) abi_ecs.c.ke_ecs_query_term {
@@ -1582,10 +1582,10 @@ test "componentRegister rejects re-registering a name with a different size" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
+    const first = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "dup_name", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expect(first != 0);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "dup_name", .size = 16, .alignment = 4, .fields = null, .field_count = 0 }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_desc{ .name = "dup_name", .size = 16, .alignment = 4, .fields = null, .field_count = 0 }));
 }
 
 test "a component keeps the alignment it was registered with, and a lookup reports it" {
@@ -1593,7 +1593,7 @@ test "a component keeps the alignment it was registered with, and a lookup repor
     defer handle.destroy.?(handle.ref);
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "aligned4", .size = 12, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "aligned4", .size = 12, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try testing.expect(cid != 0);
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "aligned4", &meta));
@@ -1605,7 +1605,7 @@ test "a component's meta is found by its id, and an unknown id finds none" {
     defer handle.destroy.?(handle.ref);
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "by_id", .size = 8, .alignment = 8, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "by_id", .size = 8, .alignment = 8, .fields = null, .field_count = 0 }, &cid));
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_meta.?(handle.ref, cid, &meta));
     try testing.expectEqual(cid, meta.cid);
@@ -1619,7 +1619,7 @@ test "a tag registered with size zero is found by lookup with size zero" {
     defer handle.destroy.?(handle.ref);
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "node.paddle", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "node.paddle", .size = 0, .alignment = 0, .fields = null, .field_count = 0 }, &cid));
     var meta = std.mem.zeroes(abi_ecs.c.ke_component_meta);
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "node.paddle", &meta));
     try testing.expectEqual(cid, meta.cid);
@@ -1631,7 +1631,7 @@ test "an entity that was never registered as a component is not found by lookup"
     defer handle.destroy.?(handle.ref);
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "scope.inner", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "scope.inner", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     try testing.expect(!handle.ref.?.component_lookup.?(handle.ref, "scope", null));
 }
 
@@ -1640,22 +1640,22 @@ test "a sized component with an alignment of zero is refused, not given a defaul
     defer handle.destroy.?(handle.ref);
 
     var ignored: abi_asset_resolver.c.ke_component_id = 0;
-    try testing.expectError(error.InvalidArgument, R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &ignored)));
+    try testing.expectError(error.InvalidArgument, R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "unaligned", .size = 12, .alignment = 0, .fields = null, .field_count = 0 }, &ignored)));
 }
 
 test "componentRegister rejects re-registering a name with a different alignment" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    _ = try register(handle, &abi_ecs.c.ke_component_params{ .name = "realigned", .size = 16, .alignment = 4, .fields = null, .field_count = 0 });
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "realigned", .size = 16, .alignment = 16, .fields = null, .field_count = 0 }));
+    _ = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "realigned", .size = 16, .alignment = 4, .fields = null, .field_count = 0 });
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_desc{ .name = "realigned", .size = 16, .alignment = 16, .fields = null, .field_count = 0 }));
 }
 
 test "componentRegister refuses an alignment that is not a power of two" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "odd_align", .size = 12, .alignment = 3, .fields = null, .field_count = 0 }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_desc{ .name = "odd_align", .size = 12, .alignment = 3, .fields = null, .field_count = 0 }));
 }
 
 fn field(name: [*c]const u8, t: abi_ecs_variant.c.ke_variant_type, offset: u32, size: u32) abi_ecs.c.ke_component_field {
@@ -1704,18 +1704,18 @@ test "componentRegister migrates a second layout the size check cannot tell apar
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const first = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
     try testing.expect(first != 0);
 
-    try testing.expectEqual(first, try register(handle, &abi_ecs.c.ke_component_params{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_b, .field_count = swapped_b.len }));
+    try testing.expectEqual(first, try register(handle, &abi_ecs.c.ke_component_desc{ .name = "swapped", .size = 8, .alignment = 4, .fields = &swapped_b, .field_count = swapped_b.len }));
 }
 
 test "componentRegister accepts a second registration describing the same layout" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
-    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const first = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const second = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "agreed", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
     try testing.expectEqual(first, second);
 }
 
@@ -1723,8 +1723,8 @@ test "a registrant with no table still joins one that has one, on size alone" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const described = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
-    const tableless = try register(handle, &abi_ecs.c.ke_component_params{ .name = "partial", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
+    const described = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "partial", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len });
+    const tableless = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "partial", .size = 8, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expectEqual(described, tableless);
 }
 
@@ -1733,10 +1733,10 @@ test "the table of the first registrant to carry one describes the component aft
     defer handle.destroy.?(handle.ref);
 
     var tableless: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &tableless));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "late_table", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &tableless));
     {
         var ignored: abi_asset_resolver.c.ke_component_id = 0;
-        try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "late_table", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }, &ignored));
+        try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "late_table", .size = 8, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }, &ignored));
     }
 
     var meta: abi_ecs.c.ke_component_meta = undefined;
@@ -1755,7 +1755,7 @@ test "a field table is copied, names and enum names with it, so the caller's may
     var choices = [_]?[*:0]const u8{&choice_buf};
     var fields = [_]abi_ecs.c.ke_component_field{.{ .name = &name_buf, .type = abi_ecs_variant.c.KE_VARIANT_INT, .offset = 0, .size = 4, .enum_names = @ptrCast(&choices), .enum_count = 1 }};
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "copied_table", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "copied_table", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
     @memset(&name_buf, 'x');
     @memset(&choice_buf, 'x');
     fields[0].offset = 99;
@@ -1775,7 +1775,7 @@ test "a field with no enum names is copied without a list, whatever pointer came
     var none = [_]?[*:0]const u8{null};
     const fields = [_]abi_ecs.c.ke_component_field{.{ .name = "name", .type = abi_ecs_variant.c.KE_VARIANT_STRING, .offset = 0, .size = 4, .enum_names = @ptrCast(&none), .enum_count = 0 }};
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "no_enum", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "no_enum", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 }, &cid));
     var meta: abi_ecs.c.ke_component_meta = undefined;
     try testing.expect(handle.ref.?.component_lookup.?(handle.ref, "no_enum", &meta));
     try testing.expect(meta.fields.?[0].enum_names == null);
@@ -1785,15 +1785,15 @@ test "componentRegister refuses a table describing bytes the component does not 
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_params{ .name = "too_small", .size = 4, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }));
+    try testing.expectError(error.InvalidArgument, register(handle, &abi_ecs.c.ke_component_desc{ .name = "too_small", .size = 4, .alignment = 4, .fields = &swapped_a, .field_count = swapped_a.len }));
 }
 
 test "componentRegister is idempotent for a repeated identical size" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
 
-    const first = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
-    const second = try register(handle, &abi_ecs.c.ke_component_params{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
+    const first = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
+    const second = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "same_name", .size = 12, .alignment = 4, .fields = null, .field_count = 0 });
     try testing.expectEqual(first, second);
 }
 
@@ -1807,7 +1807,7 @@ pub fn debugRunAbortHook(msg: [*:0]const u8) void {
 test "a check flecs fails is answered as an invalid argument instead of an abort" {
     const handle = try made();
     defer handle.destroy.?(handle.ref);
-    const tag = try register(handle, &abi_ecs.c.ke_component_params{ .name = "refusal_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
+    const tag = try register(handle, &abi_ecs.c.ke_component_desc{ .name = "refusal_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
     const entity = try spawn(handle);
     _ = try attach(handle, entity, tag);
 
@@ -1908,7 +1908,7 @@ test "a reserved id is not in the world until something materializes it" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "reserve_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "reserve_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect(e.component_get.?(handle.ref, reserved, cid) == null);
 
@@ -1922,7 +1922,7 @@ test "attaching to a reserved id materializes it without a separate call" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "attach_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "attach_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
 
     const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
@@ -1937,7 +1937,7 @@ test "materializing an id twice is a no-op rather than a second entity" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "twice_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "twice_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try R.check(e.entity_materialize.?(handle.ref, reserved));
     const slot = (try attach(handle, reserved, cid)) orelse return error.TestUnexpectedResult;
@@ -1954,7 +1954,7 @@ test "materializing an id the world already owns leaves it alone" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "owned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "owned_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const created = try spawn(handle);
     const slot = (try attach(handle, created, cid)) orelse return error.TestUnexpectedResult;
     @as(*u32, @ptrCast(@alignCast(slot))).* = 99;
@@ -1985,7 +1985,7 @@ test "a reserved entity that was destroyed does not come back on the next attach
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "revive_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "revive_probe", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const reserved = try reserve(handle);
     try testing.expect((try attach(handle, reserved, cid)) != null);
 
@@ -2030,7 +2030,7 @@ test "attaching a component seeds the defaults its field table declares" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "layered", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "layered", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
     try testing.expect(cid != 0);
 
     const entity = try spawn(handle);
@@ -2047,7 +2047,7 @@ test "attaching a component that is already there keeps the value it holds" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "layered_twice", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "layered_twice", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = &layered_fields, .field_count = layered_fields.len }, &cid));
     const entity = try spawn(handle);
 
     const first: *Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
@@ -2063,7 +2063,7 @@ test "a component registered without a field table still attaches zeroed" {
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "untabled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "untabled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
     const entity = try spawn(handle);
     const v: *const Layered = @ptrCast(@alignCast((try attach(handle, entity, cid)).?));
 
@@ -2076,7 +2076,7 @@ test "a component attached over memory a destroyed entity dirtied still arrives 
     const e = handle.ref.?.*;
 
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "recycled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "recycled", .size = @sizeOf(Layered), .alignment = @alignOf(Layered), .fields = null, .field_count = 0 }, &cid));
     const first = try spawn(handle);
     const dirty: [*]u8 = @ptrCast((try attach(handle, first, cid)).?);
     @memset(dirty[0..@sizeOf(Layered)], 0xAA);
@@ -2094,9 +2094,9 @@ test "registering the same component tuple twice returns one query, and another 
     const e = handle.ref.?.*;
 
     var a: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_a", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &a));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "dedup_a", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &a));
     var b: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "dedup_b", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &b));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "dedup_b", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &b));
     const ab = [_]abi_asset_resolver.c.ke_component_id{ a, b };
     const ba = [_]abi_asset_resolver.c.ke_component_id{ b, a };
 
@@ -2112,10 +2112,10 @@ test "resolving a query into too small an array reports every segment it matches
     const e = handle.ref.?.*;
 
     var shared: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "resolve_shared", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &shared));
+    try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "resolve_shared", .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, &shared));
     var extras: [4]abi_asset_resolver.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "resolve_x0", "resolve_x1", "resolve_x2", "resolve_x3" };
-    for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
+    for (&extras, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
     for (0..16) |mask| {
         const entity = try spawn(handle);
@@ -2150,7 +2150,7 @@ test "a query over twelve components resolves with a column for each" {
 
     var cids: [12]abi_asset_resolver.c.ke_component_id = undefined;
     const names = [_][*:0]const u8{ "wide_0", "wide_1", "wide_2", "wide_3", "wide_4", "wide_5", "wide_6", "wide_7", "wide_8", "wide_9", "wide_10", "wide_11" };
-    for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
+    for (&cids, names) |*cid, name| try R.check(e.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = name, .size = 4, .alignment = 4, .fields = null, .field_count = 0 }, cid));
 
     const entity = try spawn(handle);
     for (cids) |cid| try testing.expect((try attach(handle, entity, cid)) != null);
@@ -2173,7 +2173,7 @@ test "a query matches only entities having every with component and none of the 
     const h = try made();
     defer h.destroy.?(h.ref);
     const pos = try sized(h, "filter_pos");
-    const tag = try register(h, &abi_ecs.c.ke_component_params{ .name = "filter_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
+    const tag = try register(h, &abi_ecs.c.ke_component_desc{ .name = "filter_tag", .size = 0, .alignment = 0, .fields = null, .field_count = 0 });
     const hidden = try sized(h, "filter_hidden");
     const plain = try spawn(h);
     _ = try attach(h, plain, pos);
@@ -2259,7 +2259,7 @@ test "a singleton is seeded once, kept by a second add, matched by no query, and
     const h = try made();
     defer h.destroy.?(h.ref);
     const fields = [_]abi_ecs.c.ke_component_field{defaulted("value", abi_ecs_variant.c.KE_VARIANT_INT, 0, 4, intVariant(9))};
-    const cid = try register(h, &abi_ecs.c.ke_component_params{ .name = "singleton_value", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 });
+    const cid = try register(h, &abi_ecs.c.ke_component_desc{ .name = "singleton_value", .size = 4, .alignment = 4, .fields = &fields, .field_count = 1 });
     try testing.expectEqual(null, h.ref.?.singleton_get.?(h.ref, cid));
     var data: ?*anyopaque = null;
     try R.check(h.ref.?.singleton_add.?(h.ref, cid, &data));
@@ -2441,7 +2441,7 @@ test "a different size with no field table is still refused" {
 test "creating, filling and destroying an ecs leaves no block allocated" {
     const handle = try made();
     var cid: abi_asset_resolver.c.ke_component_id = 0;
-    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_params{ .name = "leak_probe", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
+    try R.check(handle.ref.?.component_register.?(handle.ref, &abi_ecs.c.ke_component_desc{ .name = "leak_probe", .size = 8, .alignment = 4, .fields = null, .field_count = 0 }, &cid));
     const entity = try spawn(handle);
     try testing.expect((try attach(handle, entity, cid)) != null);
     handle.destroy.?(handle.ref);

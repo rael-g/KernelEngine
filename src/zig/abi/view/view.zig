@@ -23,10 +23,10 @@ pub const ViewSpace = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_view_space {
         return .{
-            .params = &struct {
-                fn call(self: ?*c.ke_view_space) callconv(.c) c.ke_view_space_params {
-                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(c.ke_view_space_params)));
-                    return T.params(state);
+            .depth_from_view_z = &struct {
+                fn call(self: ?*c.ke_view_space) callconv(.c) f32 {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return std.mem.zeroes(f32)));
+                    return T.depthFromViewZ(state);
                 }
             }.call,
             .look_to = &struct {
@@ -62,9 +62,9 @@ pub const ViewSpace = struct {
         };
     }
 
-    /// The numbers to hand to consumers that cannot call this interface.
-    pub fn params(self: ViewSpace) c.ke_view_space_params {
-        return self.ptr.params.?(self.ptr);
+    /// Multiplies a view-space z into a distance in front of the camera.
+    pub fn depthFromViewZ(self: ViewSpace) f32 {
+        return self.ptr.depth_from_view_z.?(self.ptr);
     }
 
     /// World-to-view for a camera at `eye` facing `forward` with `up` above.
@@ -97,5 +97,4 @@ pub const ViewSpace = struct {
 
 };
 
-pub const ViewSpaceParams = c.ke_view_space_params;
 pub const ViewSpaceHandle = c.ke_view_space_handle;

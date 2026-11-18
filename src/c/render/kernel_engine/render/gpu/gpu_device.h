@@ -46,7 +46,7 @@ typedef struct ke_gpu_device ke_gpu_device;
 
 
 /// [bag]
-typedef struct ke_gpu_buffer_params
+typedef struct ke_gpu_buffer_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -54,10 +54,10 @@ typedef struct ke_gpu_buffer_params
     size_t             size;
     ke_gpu_buffer_usage usage;
     bool               mapped_at_creation;
-} ke_gpu_buffer_params;
+} ke_gpu_buffer_desc;
 
 /// [bag]
-typedef struct ke_gpu_texture_params
+typedef struct ke_gpu_texture_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -71,10 +71,10 @@ typedef struct ke_gpu_texture_params
     uint8_t                  sample_count;
     const void              *initial_data;      ///< Optional. Tightly-packed RGBA8 pixels (mip 0 only).
     uint32_t                 initial_data_size; ///< Byte size of initial_data.
-} ke_gpu_texture_params;
+} ke_gpu_texture_desc;
 
 /// [bag]
-typedef struct ke_gpu_texture_view_params
+typedef struct ke_gpu_texture_view_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -85,10 +85,10 @@ typedef struct ke_gpu_texture_view_params
     uint8_t                  mip_level_count;
     uint8_t                  base_array_layer;
     uint8_t                  array_layer_count;
-} ke_gpu_texture_view_params;
+} ke_gpu_texture_view_desc;
 
 /// [bag]
-typedef struct ke_gpu_sampler_params
+typedef struct ke_gpu_sampler_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -102,10 +102,10 @@ typedef struct ke_gpu_sampler_params
     float                       lod_max_clamp;
     ke_gpu_compare_function     compare;
     uint16_t                    max_anisotropy;
-} ke_gpu_sampler_params;
+} ke_gpu_sampler_desc;
 
 /// [bag]
-typedef struct ke_gpu_shader_module_params
+typedef struct ke_gpu_shader_module_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -113,7 +113,7 @@ typedef struct ke_gpu_shader_module_params
                              ///< (query ke_gpu_device::shader_language); WGSL text
                              ///< or SPIR-V binary etc.
     size_t      byte_size;   ///< size in bytes (excluding any text terminator)
-} ke_gpu_shader_module_params;
+} ke_gpu_shader_module_desc;
 
 typedef struct ke_gpu_vertex_attribute
 {
@@ -173,13 +173,13 @@ typedef struct ke_gpu_bind_group_layout_entry
 } ke_gpu_bind_group_layout_entry;
 
 /// [bag]
-typedef struct ke_gpu_bind_group_layout_params
+typedef struct ke_gpu_bind_group_layout_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
     uint32_t                              entry_count;
     const ke_gpu_bind_group_layout_entry *entries; ///< [array_of:entry_count]
-} ke_gpu_bind_group_layout_params;
+} ke_gpu_bind_group_layout_desc;
 
 typedef struct ke_gpu_bind_group_entry
 {
@@ -193,14 +193,14 @@ typedef struct ke_gpu_bind_group_entry
 } ke_gpu_bind_group_entry;
 
 /// [bag]
-typedef struct ke_gpu_bind_group_params
+typedef struct ke_gpu_bind_group_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
     ke_gpu_bind_group_layout      layout;
     uint32_t                      entry_count;
     const ke_gpu_bind_group_entry *entries; ///< [array_of:entry_count]
-} ke_gpu_bind_group_params;
+} ke_gpu_bind_group_desc;
 
 /** Receives a pipeline compiled asynchronously.
  * @param result KE_OK, or the code of the compile that failed, whose reason is logged.
@@ -216,7 +216,7 @@ typedef void (*ke_gpu_pipeline_ready_func)(ke_result result, ke_gpu_pipeline pso
 typedef void (*ke_gpu_buffer_mapped_func)(ke_result result, ke_gpu_buffer buffer, void *user);
 
 /// [bag]
-typedef struct ke_gpu_render_pipeline_params
+typedef struct ke_gpu_render_pipeline_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -236,10 +236,10 @@ typedef struct ke_gpu_render_pipeline_params
     bool                             alpha_to_coverage_enabled;
     ke_gpu_texture_format            color_target_formats[8]; ///< [array_of:color_target_count]
     uint32_t                         color_target_count;
-} ke_gpu_render_pipeline_params;
+} ke_gpu_render_pipeline_desc;
 
 /// [bag]
-typedef struct ke_gpu_compute_pipeline_params
+typedef struct ke_gpu_compute_pipeline_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
@@ -247,7 +247,7 @@ typedef struct ke_gpu_compute_pipeline_params
     const char              *compute_entry;
     ke_gpu_bind_group_layout bind_group_layouts[4]; ///< [array_of:bind_group_layout_count]
     uint32_t                 bind_group_layout_count;
-} ke_gpu_compute_pipeline_params;
+} ke_gpu_compute_pipeline_desc;
 
 typedef struct ke_gpu_color_attachment
 {
@@ -270,28 +270,14 @@ typedef struct ke_gpu_depth_stencil_attachment
 } ke_gpu_depth_stencil_attachment;
 
 /// [bag]
-typedef struct ke_gpu_render_pass_params
+typedef struct ke_gpu_render_pass_desc
 {
     /// Optional name shown for this object by capture and validation tools; copied by the call.
     const char *label;
     const ke_gpu_color_attachment         *color_attachments; ///< [array_of:color_attachment_count]
     uint32_t                               color_attachment_count;
     const ke_gpu_depth_stencil_attachment *depth_stencil_attachment;
-} ke_gpu_render_pass_params;
-
-/// [bag]
-typedef struct ke_gpu_command_encoder_params
-{
-    /// Optional name shown for this object by capture and validation tools; copied by the call.
-    const char *label;
-} ke_gpu_command_encoder_params;
-
-/// [bag]
-typedef struct ke_gpu_compute_pass_params
-{
-    /// Optional name shown for this object by capture and validation tools; copied by the call.
-    const char *label;
-} ke_gpu_compute_pass_params;
+} ke_gpu_render_pass_desc;
 
 typedef struct ke_gpu_device
 {
@@ -311,57 +297,57 @@ typedef struct ke_gpu_device
     /// @param out_buffer [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_buffer)(struct ke_gpu_device *self,
-                    const ke_gpu_buffer_params *p,
+                    const ke_gpu_buffer_desc *p,
                     ke_gpu_buffer *out_buffer);
     /// Creates a texture. The backend's reason for a rejection is logged.
     /// @param out_texture [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_texture)(struct ke_gpu_device *self,
-                    const ke_gpu_texture_params *p,
+                    const ke_gpu_texture_desc *p,
                     ke_gpu_texture *out_texture);
     /// Creates a view of `tex`. The backend's reason for a rejection is logged.
     /// @param out_view [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_texture_view)(struct ke_gpu_device *self,
                     ke_gpu_texture tex,
-                    const ke_gpu_texture_view_params *p,
+                    const ke_gpu_texture_view_desc *p,
                     ke_gpu_texture_view *out_view);
     /// Creates a sampler. The backend's reason for a rejection is logged.
     /// @param out_sampler [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_sampler)(struct ke_gpu_device *self,
-                    const ke_gpu_sampler_params *p,
+                    const ke_gpu_sampler_desc *p,
                     ke_gpu_sampler *out_sampler);
     /// Creates a shader module. The backend's reason for rejecting the source is logged.
     /// @param out_module [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_shader_module)(struct ke_gpu_device *self,
-                    const ke_gpu_shader_module_params *p,
+                    const ke_gpu_shader_module_desc *p,
                     ke_gpu_shader_module *out_module);
     /// Creates a render pipeline. The backend's reason for a rejection is logged.
     /// @param out_pipeline [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a color target without a format, or
     ///         KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_render_pipeline)(struct ke_gpu_device *self,
-                    const ke_gpu_render_pipeline_params *p,
+                    const ke_gpu_render_pipeline_desc *p,
                     ke_gpu_pipeline *out_pipeline);
     /// Creates a compute pipeline. The backend's reason for a rejection is logged.
     /// @param out_pipeline [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_compute_pipeline)(struct ke_gpu_device *self,
-                    const ke_gpu_compute_pipeline_params *p,
+                    const ke_gpu_compute_pipeline_desc *p,
                     ke_gpu_pipeline *out_pipeline);
     /// Creates a bind group layout. The backend's reason for a rejection is logged.
     /// @param out_layout [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_bind_group_layout)(struct ke_gpu_device *self,
-                    const ke_gpu_bind_group_layout_params *p,
+                    const ke_gpu_bind_group_layout_desc *p,
                     ke_gpu_bind_group_layout *out_layout);
     /// Creates a bind group. The backend's reason for a rejection is logged.
     /// @param out_group [out] Receives the object; KE_GPU_INVALID_HANDLE on failure.
     /// @return KE_OK, or KE_RESULT_GENERAL when the backend rejects the object.
     ke_result (*create_bind_group)(struct ke_gpu_device *self,
-                    const ke_gpu_bind_group_params *p,
+                    const ke_gpu_bind_group_desc *p,
                     ke_gpu_bind_group *out_group);
 
     void (*destroy_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h);
@@ -374,10 +360,11 @@ typedef struct ke_gpu_device
     void (*destroy_bind_group_layout)(struct ke_gpu_device *self, ke_gpu_bind_group_layout h);
     void (*destroy_bind_group)(struct ke_gpu_device *self, ke_gpu_bind_group h);
 
-    /// Creates a command encoder. p may be NULL, which creates it unlabeled.
+    /// Creates a command encoder.
+    /// @param label [borrowed,optional,utf8] Name shown by capture and validation tools; copied by the call.
     /// @param out_encoder [out] Receives the encoder; left zeroed on failure.
     ke_result (*create_command_encoder)(struct ke_gpu_device *self,
-                                        const ke_gpu_command_encoder_params *p,
+                                        const char *label,
                                         ke_gpu_command_encoder_handle *out_encoder);
 
     void (*write_buffer)(struct ke_gpu_device *self, ke_gpu_buffer h,
@@ -406,7 +393,7 @@ typedef struct ke_gpu_device
     /// KE_GPU_INVALID_HANDLE. No caching and no fallback.
     /// @param on_ready [completion:user]
     void (*create_render_pipeline_async)(struct ke_gpu_device *self,
-                                         const ke_gpu_render_pipeline_params *p,
+                                         const ke_gpu_render_pipeline_desc *p,
                                          ke_gpu_pipeline_ready_func on_ready,
                                          void *user);
 

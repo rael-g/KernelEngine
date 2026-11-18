@@ -587,10 +587,10 @@ fn encInsertDebugMarker(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, label:
 /// captured message releases the buffer, fails as general, logging the message, and writes
 /// the invalid handle. Initial data is copied in with a queue write only after the error scope has
 /// passed, so a rejected buffer receives no data.
-fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_buffer_params, out: ?*abi_asset_resolver.c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
+fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_buffer_desc, out: ?*abi_asset_resolver.c.ke_gpu_buffer) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_buffer_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_buffer_desc, @ptrCast(p));
     const s = state(dev);
     var usage = mapBufferUsage(pp.usage);
     if (pp.initial_data != null) usage |= wgpu.WGPUBufferUsage_CopyDst;
@@ -616,10 +616,10 @@ fn createBuffer(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render
 
 /// Shares the error scope protocol of `createBuffer`. A repack buffer that cannot be allocated
 /// returns the texture with the layers from that one on not uploaded.
-fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_texture_params, out: ?*abi_asset_resolver.c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
+fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_texture_desc, out: ?*abi_asset_resolver.c.ke_gpu_texture) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_desc, @ptrCast(p));
     const s = state(dev);
     var usage = mapTextureUsage(pp.usage);
     if (pp.initial_data != null) usage |= wgpu.WGPUTextureUsage_CopyDst;
@@ -688,10 +688,10 @@ fn createTexture(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_rende
 }
 
 /// Shares the error scope protocol of `createBuffer`.
-fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_asset_resolver.c.ke_gpu_texture, p: [*c]const abi_render_gpu.c.ke_gpu_texture_view_params, out: ?*abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
+fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_asset_resolver.c.ke_gpu_texture, p: [*c]const abi_render_gpu.c.ke_gpu_texture_view_desc, out: ?*abi_asset_resolver.c.ke_gpu_texture_view) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_view_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_texture_view_desc, @ptrCast(p));
     const desc = wgpu.WGPUTextureViewDescriptor{
         .nextInChain = null,
         .label = labelView(pp.label),
@@ -717,10 +717,10 @@ fn createTextureView(dev: [*c]abi_render_gpu.c.ke_gpu_device, tex: abi_asset_res
 
 /// Returns the sampler as a handle, with each filter and address mode translated to wgpu's.
 /// Shares the error scope protocol of `createBuffer`.
-fn createSampler(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_sampler_params, out: ?*abi_asset_resolver.c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
+fn createSampler(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_sampler_desc, out: ?*abi_asset_resolver.c.ke_gpu_sampler) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_sampler_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_sampler_desc, @ptrCast(p));
     const desc = wgpu.WGPUSamplerDescriptor{
         .nextInChain = null,
         .label = labelView(pp.label),
@@ -819,10 +819,10 @@ fn scopeFailed(device: wgpu.WGPUDevice, made: bool, comptime what: []const u8) b
 /// Reads the code as SPIR-V when it is at least four bytes long and its first word is
 /// `SPIRV_MAGIC`, otherwise as WGSL. The module is created inside a validation error scope that
 /// is polled before returning; a captured error releases the module and fails as general, logging the message.
-fn createShaderModule(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_shader_module_params, out: ?*abi_asset_resolver.c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
+fn createShaderModule(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_shader_module_desc, out: ?*abi_asset_resolver.c.ke_gpu_shader_module) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_shader_module_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_shader_module_desc, @ptrCast(p));
     const device = state(dev).device;
 
     const is_spirv = pp.byte_size >= 4 and
@@ -875,8 +875,8 @@ const RenderPipelineDescBuild = struct {
 
 /// Fills `build` in place. Attributes and vertex buffers beyond the fixed capacities of the arrays
 /// in `build` are dropped with no error.
-fn buildRenderPipelineDescriptor(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, build: *RenderPipelineDescBuild) void {
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_render_pipeline_params, @ptrCast(p));
+fn buildRenderPipelineDescriptor(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc, build: *RenderPipelineDescBuild) void {
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_render_pipeline_desc, @ptrCast(p));
 
     var attr_offset: usize = 0;
     const buf_count = @min(pp.vertex_buffer_count, build.wgpu_bufs.len);
@@ -1003,7 +1003,7 @@ fn buildRenderPipelineDescriptor(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c
     };
 }
 
-fn colorTargetsDeclared(p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params) bool {
+fn colorTargetsDeclared(p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) bool {
     if (p.*.fragment_module == abi_render_gpu.c.KE_GPU_INVALID_HANDLE) return true;
     const count = @min(@max(p.*.color_target_count, 1), 8);
     for (p.*.color_target_formats[0..count]) |f| {
@@ -1015,7 +1015,7 @@ fn colorTargetsDeclared(p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_par
 /// Compiles on the calling thread and never submits to the async system. A fragment target with no
 /// mappable format fails as an invalid argument; otherwise it shares the error scope protocol of
 /// `createBuffer`.
-fn createRenderPipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+fn createRenderPipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (!colorTargetsDeclared(p)) {
@@ -1122,7 +1122,7 @@ fn freeAsyncCompileJob(job: *AsyncCompileJob) void {
 /// async system, with the list full, or when a fragment target has no mappable format, the compile
 /// runs inline or fails inline and the callback has fired before this returns. A job that cannot
 /// be allocated calls back at once with the invalid handle. A null `on_ready` does nothing.
-fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params, on_ready: abi_render_gpu.c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) callconv(.c) void {
+fn createRenderPipelineAsync(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc, on_ready: abi_render_gpu.c.ke_gpu_pipeline_ready_func, user: ?*anyopaque) callconv(.c) void {
     const cb = on_ready orelse return;
     const s = state(dev);
     if (!colorTargetsDeclared(p)) {
@@ -1192,10 +1192,10 @@ fn flushPipelineCompiles(dev: [*c]abi_render_gpu.c.ke_gpu_device) callconv(.c) v
 
 /// Compiles on the calling thread. The pipeline is released with `destroyComputePipeline`. Shares
 /// the error scope protocol of `createBuffer`.
-fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_compute_pipeline_params, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
+fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_compute_pipeline_desc, out: ?*abi_asset_resolver.c.ke_gpu_pipeline) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_compute_pipeline_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_compute_pipeline_desc, @ptrCast(p));
 
     var pipeline_layout: wgpu.WGPUPipelineLayout = null;
     if (pp.bind_group_layout_count > 0) {
@@ -1238,10 +1238,10 @@ fn createComputePipeline(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const a
 /// Maps each binding type to a wgpu layout entry; entries beyond the local capacity are
 /// dropped with no error. A storage texture is fixed to write-only RGBA8 2D. Shares the error
 /// scope protocol of `createBuffer`.
-fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_layout_params, out: ?*abi_asset_resolver.c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
+fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_layout_desc, out: ?*abi_asset_resolver.c.ke_gpu_bind_group_layout) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_layout_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_layout_desc, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
     var entries: [32]wgpu.WGPUBindGroupLayoutEntry = undefined;
     for (0..n) |i| {
@@ -1309,10 +1309,10 @@ fn createBindGroupLayout(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const a
 /// Shares the error scope protocol of `createBuffer`: a validation error captured while the group
 /// is made releases it and fails as general, logging the message.
 /// Entries beyond the capacity of the local entry array are dropped with no error.
-fn createBindGroup(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_params, out: ?*abi_asset_resolver.c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
+fn createBindGroup(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_bind_group_desc, out: ?*abi_asset_resolver.c.ke_gpu_bind_group) callconv(.c) abi_result.c.ke_result {
     const o = out orelse return R.code(error.InvalidArgument);
     o.* = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_params, @ptrCast(p));
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_bind_group_desc, @ptrCast(p));
     const n = @min(pp.entry_count, 32);
     var entries: [32]wgpu.WGPUBindGroupEntry = undefined;
     for (0..n) |i| {
@@ -1474,8 +1474,8 @@ fn cmdBufDestroy(cmd: [*c]abi_render_gpu.c.ke_gpu_command_buffer) callconv(.c) v
 
 /// Copies the attachments into local arrays, so the caller's params need not outlive the call.
 /// Failure is reported as a null pointer with no error set.
-fn encBeginRenderPass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, p: [*c]const abi_render_gpu.c.ke_gpu_render_pass_params) callconv(.c) [*c]abi_render_gpu.c.ke_gpu_render_pass {
-    const pp = @as(*const abi_render_gpu.c.ke_gpu_render_pass_params, @ptrCast(p));
+fn encBeginRenderPass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, p: [*c]const abi_render_gpu.c.ke_gpu_render_pass_desc) callconv(.c) [*c]abi_render_gpu.c.ke_gpu_render_pass {
+    const pp = @as(*const abi_render_gpu.c.ke_gpu_render_pass_desc, @ptrCast(p));
 
     var color_attachments: [8]wgpu.WGPURenderPassColorAttachment = undefined;
     const color_count = @min(pp.color_attachment_count, color_attachments.len);
@@ -1543,8 +1543,8 @@ fn encBeginRenderPass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, p: [*c]c
 
 /// Wraps a raw compute pass in a wrapper from `gpa` that `cpEnd` frees. A failed pass or wrapper
 /// allocation is reported as a null pointer with no error set.
-fn encBeginComputePass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, p: [*c]const abi_render_gpu.c.ke_gpu_compute_pass_params) callconv(.c) [*c]abi_render_gpu.c.ke_gpu_compute_pass {
-    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null), .timestampWrites = null };
+fn encBeginComputePass(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder, label: [*c]const u8) callconv(.c) [*c]abi_render_gpu.c.ke_gpu_compute_pass {
+    const desc = wgpu.WGPUComputePassDescriptor{ .nextInChain = null, .label = labelView(label), .timestampWrites = null };
     const raw = wgpu.wgpuCommandEncoderBeginComputePass(@ptrCast(enc.*.handle), &desc) orelse return null;
     const cp = gpa.create(abi_render_gpu.c.ke_gpu_compute_pass) catch return null;
     cp.* = .{
@@ -1659,10 +1659,10 @@ fn encDestroy(enc: [*c]abi_render_gpu.c.ke_gpu_command_encoder) callconv(.c) voi
 /// Wraps a raw wgpu encoder in a wrapper from `gpa` that `encDestroy` frees. `p` may be null. An
 /// encoder wgpu refuses fails as general and a wrapper that cannot be allocated as out of memory,
 /// each leaving the handle zeroed.
-fn createCommandEncoder(dev: [*c]abi_render_gpu.c.ke_gpu_device, p: [*c]const abi_render_gpu.c.ke_gpu_command_encoder_params, out_encoder: ?*abi_render_gpu.c.ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result {
+fn createCommandEncoder(dev: [*c]abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, out_encoder: ?*abi_render_gpu.c.ke_gpu_command_encoder_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_encoder orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = labelView(if (p != null) p.*.label else null) };
+    const desc = wgpu.WGPUCommandEncoderDescriptor{ .nextInChain = null, .label = labelView(label) };
     const raw = wgpu.wgpuDeviceCreateCommandEncoder(state(dev).device, &desc) orelse {
         log.warn("creating a command encoder failed: wgpu returned no encoder", .{});
         return R.code(error.General);
@@ -1824,7 +1824,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     for (&pixels, 0..) |*b, i| b.* = @truncate(i *% 7);
 
     var tex: abi_asset_resolver.c.ke_gpu_texture = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try std.testing.expectEqual(R.ok, dev.?.create_texture.?(dev, &abi_render_gpu.c.ke_gpu_texture_params{
+    try std.testing.expectEqual(R.ok, dev.?.create_texture.?(dev, &abi_render_gpu.c.ke_gpu_texture_desc{
         .width = width,
         .height = height,
         .depth_or_array_layers = 1,
@@ -1839,7 +1839,7 @@ test "a texture's pixels are read back through a copy to a buffer and an asynchr
     defer dev.?.destroy_texture.?(dev, tex);
 
     var buf: abi_asset_resolver.c.ke_gpu_buffer = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try std.testing.expectEqual(R.ok, dev.?.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try std.testing.expectEqual(R.ok, dev.?.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .initial_data = null,
         .size = row_bytes * height,
         .usage = abi_render_gpu.c.KE_GPU_BUFFER_USAGE_MAP_READ | abi_render_gpu.c.KE_GPU_BUFFER_USAGE_COPY_DST,

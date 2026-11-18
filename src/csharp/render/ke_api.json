@@ -2836,7 +2836,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_gpu_render_pipeline_params *",
+              "type": "const ke_gpu_render_pipeline_desc *",
               "tags": [],
               "doc": null
             }

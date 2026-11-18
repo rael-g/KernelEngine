@@ -147,7 +147,7 @@ fn load(st: *rc.CoreState, name: [*c]const u8, stage: abi_asset_resolver.c.ke_gp
     }
 
     var module: abi_asset_resolver.c.ke_gpu_shader_module = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    try R.check(st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_params{
+    try R.check(st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_desc{
         .code = bytes.ptr,
         .byte_size = bytes.len,
         .label = name,

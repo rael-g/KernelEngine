@@ -78,7 +78,7 @@ const ClusterParams = extern struct {
     depth: [4]f32,
 };
 
-const cull_layout_params = abi_render_gpu.c.ke_render_shader_layout_params{
+const cull_layout_params = abi_render_gpu.c.ke_render_shader_layout_desc{
     .shader = "cluster_cull",
     .stages = abi_render_gpu.c.KE_GPU_SHADER_STAGE_COMPUTE,
     .hints = null,
@@ -263,7 +263,7 @@ fn queueSystem(ctx: ?*abi_schedule.c.ke_schedule_ctx, user: ?*anyopaque, _: f32)
     core.*.backbuffer_size.?(core, &bw, &bh);
     const aspect = if (bh != 0) @as(f32, @floatFromInt(bw)) / @as(f32, @floatFromInt(bh)) else 1.0;
 
-    const depth_from_view_z = cm.view_space.params.?(cm.view_space).depth_from_view_z;
+    const depth_from_view_z = cm.view_space.depth_from_view_z.?(cm.view_space);
     var frustum: abi_render.c.ke_camera_frustum = undefined;
     cm.camera.perspective_frustum.?(cm.camera, cam, aspect, &frustum);
     var params: ClusterParams = .{
@@ -299,13 +299,13 @@ fn uploadGrid(cm: *const ClusterModule, bw: u32, bh: u32, near: f32, far: f32) v
     const grid_data = ClusterGridUniform{
         .cluster_grid = .{ @floatFromInt(cm.grid_x), @floatFromInt(cm.grid_y), @floatFromInt(cm.grid_z), @floatFromInt(cm.max_lights_per_cluster) },
         .cluster_viewport = .{ @floatFromInt(bw), @floatFromInt(bh), near, far },
-        .view_space = .{ cm.view_space.params.?(cm.view_space).depth_from_view_z, 0.0, 0.0, 0.0 },
+        .view_space = .{ cm.view_space.depth_from_view_z.?(cm.view_space), 0.0, 0.0, 0.0 },
     };
     core.*.upload.?(core, cm.cluster_grid_uniform, 0, &grid_data, @sizeOf(ClusterGridUniform));
 }
 
 fn makeStorageBuffer(dev: *abi_render_gpu.c.ke_gpu_device, label: [*c]const u8, size: usize, out: *abi_asset_resolver.c.ke_gpu_buffer) R.Error!void {
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = label,
         .initial_data = null,
         .size = size,
@@ -345,7 +345,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     try makeStorageBuffer(dev, "cluster.spot_indices_sb", indices_bytes, &cm.spot_indices_sb);
     try makeStorageBuffer(dev, "cluster.spot_counts_sb", counts_bytes, &cm.spot_counts_sb);
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "cluster.cluster_grid_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterGridUniform),
@@ -364,7 +364,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     cm.binder = core.*.resource_binder.?(core).?;
     try R.check(cm.binder.create_shader_layout.?(cm.binder, &cull_layout_params, &cm.cull_layout));
 
-    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_params{
+    try R.check(dev.create_buffer.?(dev, &abi_render_gpu.c.ke_gpu_buffer_desc{
         .label = "cluster.cull_uniform",
         .initial_data = null,
         .size = @sizeOf(ClusterParams),
@@ -385,7 +385,7 @@ fn setup(cm: *ClusterModule, p: *const abi_render_context.c.ke_render_context, c
     var cs: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
     try R.check(core.*.load_shader.?(core, "cluster_cull", abi_render_gpu.c.KE_GPU_SHADER_STAGE_COMPUTE, &cs));
 
-    var cull_pipeline_params = abi_render_gpu.c.ke_gpu_compute_pipeline_params{
+    var cull_pipeline_params = abi_render_gpu.c.ke_gpu_compute_pipeline_desc{
         .label = "cluster.cull_pipeline",
         .compute_module = cs,
         .compute_entry = "cs_main",
@@ -485,8 +485,8 @@ fn cameraView(_: ?*abi_schedule.c.ke_schedule_ctx, index: u32, out_count: ?*usiz
 var camera_ctx: abi_schedule.c.ke_schedule_ctx = .{ .handle = null, .commands = null, .view = cameraView, .slice = null };
 var empty_ctx: abi_schedule.c.ke_schedule_ctx = std.mem.zeroes(abi_schedule.c.ke_schedule_ctx);
 
-fn viewParams(_: ?*abi_view.c.ke_view_space) callconv(.c) abi_view.c.ke_view_space_params {
-    return std.mem.zeroes(abi_view.c.ke_view_space_params);
+fn viewDepthFromViewZ(_: ?*abi_view.c.ke_view_space) callconv(.c) f32 {
+    return 0.0;
 }
 
 /// The parts a pass is made of in a test.
@@ -516,7 +516,7 @@ const Rig = struct {
         _ = self.graph.when(.import_buffer).writesFresh(3);
         try self.camera.init();
         self.view_space = std.mem.zeroes(abi_view.c.ke_view_space);
-        self.view_space.params = viewParams;
+        self.view_space.depth_from_view_z = viewDepthFromViewZ;
         try self.frame.init();
         _ = self.frame.when(.frame_cid).returns(11);
         _ = self.frame.when(.live).returns(true);

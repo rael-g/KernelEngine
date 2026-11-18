@@ -118,13 +118,13 @@ ke_gpu_capabilities size=48 align=4
   supports_mesh_shaders 41
   supports_ray_tracing 42
   copy_bytes_per_row_alignment 44
-ke_gpu_buffer_params size=32 align=8
+ke_gpu_buffer_desc size=32 align=8
   label 0
   initial_data 8
   size 16
   usage 24
   mapped_at_creation 28
-ke_gpu_texture_params size=56 align=8
+ke_gpu_texture_desc size=56 align=8
   label 0
   width 8
   height 12
@@ -136,7 +136,7 @@ ke_gpu_texture_params size=56 align=8
   sample_count 33
   initial_data 40
   initial_data_size 48
-ke_gpu_texture_view_params size=24 align=8
+ke_gpu_texture_view_desc size=24 align=8
   label 0
   format 8
   dimension 12
@@ -145,7 +145,7 @@ ke_gpu_texture_view_params size=24 align=8
   mip_level_count 21
   base_array_layer 22
   array_layer_count 23
-ke_gpu_sampler_params size=48 align=8
+ke_gpu_sampler_desc size=48 align=8
   label 0
   min_filter 8
   mag_filter 12
@@ -157,7 +157,7 @@ ke_gpu_sampler_params size=48 align=8
   lod_max_clamp 36
   compare 40
   max_anisotropy 44
-ke_gpu_shader_module_params size=24 align=8
+ke_gpu_shader_module_desc size=24 align=8
   label 0
   code 8
   byte_size 16
@@ -200,7 +200,7 @@ ke_gpu_bind_group_layout_entry size=20 align=4
   type 8
   has_dynamic_offset 12
   view_dimension 16
-ke_gpu_bind_group_layout_params size=24 align=8
+ke_gpu_bind_group_layout_desc size=24 align=8
   label 0
   entry_count 8
   entries 16
@@ -212,12 +212,12 @@ ke_gpu_bind_group_entry size=48 align=8
   buffer_size 24
   texture_view 32
   sampler 40
-ke_gpu_bind_group_params size=32 align=8
+ke_gpu_bind_group_desc size=32 align=8
   label 0
   layout 8
   entry_count 16
   entries 24
-ke_gpu_render_pipeline_params size=224 align=8
+ke_gpu_render_pipeline_desc size=224 align=8
   label 0
   vertex_module 8
   fragment_module 16
@@ -235,7 +235,7 @@ ke_gpu_render_pipeline_params size=224 align=8
   alpha_to_coverage_enabled 180
   color_target_formats 184
   color_target_count 216
-ke_gpu_compute_pipeline_params size=64 align=8
+ke_gpu_compute_pipeline_desc size=64 align=8
   label 0
   compute_module 8
   compute_entry 16
@@ -255,15 +255,11 @@ ke_gpu_depth_stencil_attachment size=32 align=8
   clear_stencil 24
   depth_read_only 25
   stencil_read_only 26
-ke_gpu_render_pass_params size=32 align=8
+ke_gpu_render_pass_desc size=32 align=8
   label 0
   color_attachments 8
   color_attachment_count 16
   depth_stencil_attachment 24
-ke_gpu_command_encoder_params size=8 align=8
-  label 0
-ke_gpu_compute_pass_params size=8 align=8
-  label 0
 ke_gpu_command_buffer size=8 align=8
   handle 0
 ke_render_binding_hint size=16 align=8
@@ -276,7 +272,7 @@ ke_render_shader_binding size=48 align=8
   buffer_size 24
   texture_view 32
   sampler 40
-ke_render_shader_layout_params size=32 align=8
+ke_render_shader_layout_desc size=32 align=8
   shader 0
   stages 8
   hints 16
@@ -399,11 +395,9 @@ ke_render_resource_binder_handle size=16 align=8
   destroy 8
 
 [view]
-ke_view_space_params size=4 align=4
-  depth_from_view_z 0
 ke_view_space size=56 align=8
   handle 0
-  params 8
+  depth_from_view_z 8
   look_to 16
   look_at 24
   view_from_transform 32
@@ -515,7 +509,7 @@ ke_component_field size=64 align=8
   default_value 24
   enum_names 48
   enum_count 56
-ke_component_params size=40 align=8
+ke_component_desc size=40 align=8
   name 0
   size 8
   alignment 16

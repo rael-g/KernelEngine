@@ -82,13 +82,13 @@ fn destroyScene(self: ?*abi_render.c.ke_render_scene_resolve) callconv(.c) void 
 fn registerComponent(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type, comptime table: anytype) R.Error!abi_asset_resolver.c.ke_component_id {
     const fields = @typeInfo(@TypeOf(table.*)).array;
     var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = table, .field_count = @intCast(fields.len) }, &cid));
     return cid;
 }
 
 fn registerBare(e: *abi_ecs.c.ke_ecs, name: [*c]const u8, comptime T: type) R.Error!abi_asset_resolver.c.ke_component_id {
     var cid: abi_asset_resolver.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_params{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = null, .field_count = 0 }, &cid));
+    try R.check(e.component_register.?(e, &abi_ecs.c.ke_component_desc{ .name = name, .size = @sizeOf(T), .alignment = @alignOf(T), .fields = null, .field_count = 0 }, &cid));
     return cid;
 }
 

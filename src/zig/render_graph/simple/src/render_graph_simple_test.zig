@@ -50,20 +50,20 @@ const Device = struct {
         d.compute_pass.end = endCompute;
     }
 
-    fn createTexture(_: ?*gpu.ke_gpu_device, p: ?*const gpu.ke_gpu_texture_params, out: ?*u64) callconv(.c) Result {
+    fn createTexture(_: ?*gpu.ke_gpu_device, p: ?*const gpu.ke_gpu_texture_desc, out: ?*u64) callconv(.c) Result {
         current.textures += 1;
         current.last_width = p.?.width;
         out.?.* = current.next;
         current.next += 1;
         return R.ok;
     }
-    fn createTextureView(_: ?*gpu.ke_gpu_device, _: u64, _: ?*const gpu.ke_gpu_texture_view_params, out: ?*u64) callconv(.c) Result {
+    fn createTextureView(_: ?*gpu.ke_gpu_device, _: u64, _: ?*const gpu.ke_gpu_texture_view_desc, out: ?*u64) callconv(.c) Result {
         current.views += 1;
         out.?.* = current.next;
         current.next += 1;
         return R.ok;
     }
-    fn createBuffer(_: ?*gpu.ke_gpu_device, _: ?*const gpu.ke_gpu_buffer_params, out: ?*u64) callconv(.c) Result {
+    fn createBuffer(_: ?*gpu.ke_gpu_device, _: ?*const gpu.ke_gpu_buffer_desc, out: ?*u64) callconv(.c) Result {
         out.?.* = current.next;
         current.next += 1;
         return R.ok;
@@ -75,7 +75,7 @@ const Device = struct {
         current.destroyed_views += 1;
     }
     fn destroyBuffer(_: ?*gpu.ke_gpu_device, _: u64) callconv(.c) void {}
-    fn createEncoder(_: ?*gpu.ke_gpu_device, _: ?*const gpu.ke_gpu_command_encoder_params, out: ?*gpu.ke_gpu_command_encoder_handle) callconv(.c) Result {
+    fn createEncoder(_: ?*gpu.ke_gpu_device, _: [*c]const u8, out: ?*gpu.ke_gpu_command_encoder_handle) callconv(.c) Result {
         out.?.* = .{ .ref = &current.encoder, .destroy = destroyEncoder };
         return R.ok;
     }
@@ -86,7 +86,7 @@ const Device = struct {
     fn submit(_: ?*gpu.ke_gpu_device, _: u64, _: ?[*]const ?*gpu.ke_gpu_command_buffer, _: u32) callconv(.c) void {
         current.submits += 1;
     }
-    fn beginRender(_: ?*gpu.ke_gpu_command_encoder, p: ?*const gpu.ke_gpu_render_pass_params) callconv(.c) ?*gpu.ke_gpu_render_pass {
+    fn beginRender(_: ?*gpu.ke_gpu_command_encoder, p: ?*const gpu.ke_gpu_render_pass_desc) callconv(.c) ?*gpu.ke_gpu_render_pass {
         if (p.?.color_attachment_count > 0) {
             current.color_count = p.?.color_attachment_count;
             current.last_clear = p.?.color_attachments.?[0].clear_value.color;
@@ -94,7 +94,7 @@ const Device = struct {
         }
         return &current.render_pass;
     }
-    fn beginCompute(_: ?*gpu.ke_gpu_command_encoder, _: ?*const gpu.ke_gpu_compute_pass_params) callconv(.c) ?*gpu.ke_gpu_compute_pass {
+    fn beginCompute(_: ?*gpu.ke_gpu_command_encoder, _: [*c]const u8) callconv(.c) ?*gpu.ke_gpu_compute_pass {
         return &current.compute_pass;
     }
     fn finish(_: ?*gpu.ke_gpu_command_encoder, out: ?*gpu.ke_gpu_command_buffer_handle) callconv(.c) Result {

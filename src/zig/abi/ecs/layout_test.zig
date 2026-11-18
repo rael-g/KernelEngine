@@ -24,7 +24,7 @@ fn translated(comptime name: []const u8) type {
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
     try expectSameLayout(abi.c.ke_component_field, translated("ke_component_field"));
-    try expectSameLayout(abi.c.ke_component_params, translated("ke_component_params"));
+    try expectSameLayout(abi.c.ke_component_desc, translated("ke_component_desc"));
     try expectSameLayout(abi.c.ke_component_meta, translated("ke_component_meta"));
     try expectSameLayout(abi.c.ke_ecs_query_term, translated("ke_ecs_query_term"));
     try expectSameLayout(abi.c.ke_ecs_query_desc, translated("ke_ecs_query_desc"));
@@ -66,12 +66,12 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_component_field, "default_value"),
         @offsetOf(abi.c.ke_component_field, "enum_names"),
         @offsetOf(abi.c.ke_component_field, "enum_count"),
-        @sizeOf(abi.c.ke_component_params),
-        @offsetOf(abi.c.ke_component_params, "name"),
-        @offsetOf(abi.c.ke_component_params, "size"),
-        @offsetOf(abi.c.ke_component_params, "alignment"),
-        @offsetOf(abi.c.ke_component_params, "fields"),
-        @offsetOf(abi.c.ke_component_params, "field_count"),
+        @sizeOf(abi.c.ke_component_desc),
+        @offsetOf(abi.c.ke_component_desc, "name"),
+        @offsetOf(abi.c.ke_component_desc, "size"),
+        @offsetOf(abi.c.ke_component_desc, "alignment"),
+        @offsetOf(abi.c.ke_component_desc, "fields"),
+        @offsetOf(abi.c.ke_component_desc, "field_count"),
         @sizeOf(abi.c.ke_component_meta),
         @offsetOf(abi.c.ke_component_meta, "cid"),
         @offsetOf(abi.c.ke_component_meta, "size"),

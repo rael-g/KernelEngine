@@ -12,11 +12,11 @@ public unsafe partial struct ke_gpu_command_encoder
 {
     public void* handle;
 
-    [NativeTypeName("struct ke_gpu_render_pass *(*)(struct ke_gpu_command_encoder *, const ke_gpu_render_pass_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, ke_gpu_render_pass_params*, ke_gpu_render_pass*> begin_render_pass;
+    [NativeTypeName("struct ke_gpu_render_pass *(*)(struct ke_gpu_command_encoder *, const ke_gpu_render_pass_desc *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, ke_gpu_render_pass_desc*, ke_gpu_render_pass*> begin_render_pass;
 
-    [NativeTypeName("struct ke_gpu_compute_pass *(*)(struct ke_gpu_command_encoder *, const ke_gpu_compute_pass_params *)")]
-    public delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, ke_gpu_compute_pass_params*, ke_gpu_compute_pass*> begin_compute_pass;
+    [NativeTypeName("struct ke_gpu_compute_pass *(*)(struct ke_gpu_command_encoder *, const char *)")]
+    public delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, sbyte*, ke_gpu_compute_pass*> begin_compute_pass;
 
     [NativeTypeName("void (*)(struct ke_gpu_command_encoder *, ke_gpu_buffer, size_t, ke_gpu_buffer, size_t, size_t)")]
     public delegate* unmanaged[Cdecl]<ke_gpu_command_encoder*, ulong, nuint, ulong, nuint, nuint, void> copy_buffer_to_buffer;

@@ -229,7 +229,7 @@ fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: [*:0]const
     m.root = try gpa.dupe(u8, std.mem.span(root));
 
     var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
-    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_params{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
+    try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
 
     m.terms = .{.{ .component = cid, .access = abi_ecs.c.KE_ECS_ACCESS_WRITE }};
     m.queries = .{.{ .terms = &m.terms, .term_count = 1 }};

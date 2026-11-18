@@ -89,7 +89,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
         {
             fixed (RenderBindingHint* hintsPtr = hints)
             {
-                ke_render_shader_layout_params @params = default;
+                ke_render_shader_layout_desc @params = default;
                 @params.shader = (sbyte*)shaderPtr;
                 @params.stages = stages;
                 @params.hints = hintsPtr;

@@ -783,7 +783,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_component_params *",
+              "type": "const ke_component_desc *",
               "tags": [
                 "borrowed"
               ],

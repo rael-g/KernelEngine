@@ -32,7 +32,7 @@ const PsoKey = struct {
     color_target_formats: [MAX_COLOR_TARGETS]abi_render_gpu.c.ke_gpu_texture_format,
     color_target_count: u32,
 
-    fn fromParams(p: *const abi_render_gpu.c.ke_gpu_render_pipeline_params) PsoKey {
+    fn fromParams(p: *const abi_render_gpu.c.ke_gpu_render_pipeline_desc) PsoKey {
         var key: PsoKey = std.mem.zeroes(PsoKey);
         key.vertex_module = p.vertex_module;
         key.fragment_module = p.fragment_module;
@@ -276,7 +276,7 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_asset_resolve
     }
     const src = w.buffered();
     var made: abi_asset_resolver.c.ke_gpu_shader_module = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
-    if (st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_params{
+    if (st.device.create_shader_module.?(st.device, &abi_render_gpu.c.ke_gpu_shader_module_desc{
         .code = src.ptr,
         .byte_size = src.len,
         .label = "service.fallback_fragment",
@@ -290,8 +290,8 @@ fn magentaFragmentModule(st: *rc.CoreState, target_count: u32) abi_asset_resolve
 
 /// The result is returned as it is, even when the device failed to create it: nothing here or in
 /// `getOrCreatePipeline` checks it.
-fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params) abi_asset_resolver.c.ke_gpu_pipeline {
-    const p = @as(*const abi_render_gpu.c.ke_gpu_render_pipeline_params, @ptrCast(params));
+fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_asset_resolver.c.ke_gpu_pipeline {
+    const p = @as(*const abi_render_gpu.c.ke_gpu_render_pipeline_desc, @ptrCast(params));
     var fallback_params = p.*;
     fallback_params.fragment_module = magentaFragmentModule(st, p.color_target_count);
     fallback_params.fragment_entry = "fs_main";
@@ -300,7 +300,7 @@ fn buildFallback(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_re
 
 /// The pipeline the device creates for `params` synchronously; the invalid handle, its reason
 /// logged by the device, when it refuses it.
-fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params) abi_asset_resolver.c.ke_gpu_pipeline {
+fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) abi_asset_resolver.c.ke_gpu_pipeline {
     var made: abi_asset_resolver.c.ke_gpu_pipeline = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     if (st.device.create_render_pipeline.?(st.device, params, &made) != abi_result.c.KE_OK) return abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     return made;
@@ -314,7 +314,7 @@ fn createNow(st: *rc.CoreState, params: [*c]const abi_render_gpu.c.ke_gpu_render
 /// its entry destroys the fallback it built, never starts its compile, and answers with the
 /// entry that won. A pipeline the device fails to compile leaves the entry on its fallback for
 /// good.
-pub fn getOrCreatePipeline(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_params) callconv(.c) abi_asset_resolver.c.ke_gpu_pipeline {
+pub fn getOrCreatePipeline(self: [*c]abi_render.c.ke_render_service, params: [*c]const abi_render_gpu.c.ke_gpu_render_pipeline_desc) callconv(.c) abi_asset_resolver.c.ke_gpu_pipeline {
     const st = rc.coreOf(self);
     const key = PsoKey.fromParams(params);
     const hash = hashKey({}, key);

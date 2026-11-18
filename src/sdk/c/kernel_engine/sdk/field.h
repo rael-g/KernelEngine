@@ -40,7 +40,7 @@
     { #member, KE_FIELD_TYPE(((type *)0)->member), (uint32_t)offsetof(type, member), \
       (uint32_t)KE_FIELD_SIZE(((type *)0)->member), { KE_VARIANT_NULL, { 0 } }, NULL, 0 }
 
-/** The ke_component_params of the struct type @p type registered as @p component_name with the field table @p fields. */
+/** The ke_component_desc of the struct type @p type registered as @p component_name with the field table @p fields. */
 #define KE_COMPONENT(type, component_name, fields) \
     { .name = (component_name), .size = sizeof(type), .alignment = _Alignof(type), KE_COMPONENT_FIELDS(fields) }
 
@@ -48,7 +48,7 @@
 #define KE_NODE_FIELDS(type, fields) \
     .fields_size = sizeof(type), .fields_alignment = _Alignof(type), KE_COMPONENT_FIELDS(fields)
 
-/** The ke_component_params of the struct type @p type registered as @p component_name with no field table. */
+/** The ke_component_desc of the struct type @p type registered as @p component_name with no field table. */
 #define KE_COMPONENT_UNTABLED(type, component_name) \
     { .name = (component_name), .size = sizeof(type), .alignment = _Alignof(type) }
 

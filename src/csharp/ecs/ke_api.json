@@ -590,7 +590,7 @@
       ]
     },
     {
-      "name": "ke_component_params",
+      "name": "ke_component_desc",
       "doc": "What a component type is registered with.",
       "tags": [
         "bag"
@@ -863,7 +863,7 @@
           "params": [
             {
               "name": "params",
-              "type": "const ke_component_params *",
+              "type": "const ke_component_desc *",
               "tags": [
                 "borrowed"
               ],

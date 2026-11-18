@@ -15,8 +15,8 @@ public unsafe partial struct ke_render_resource_binder
     [NativeTypeName("ke_result (*)(struct ke_render_resource_binder *, const ke_render_shader_binding *)")]
     public delegate* unmanaged[Cdecl]<ke_render_resource_binder*, RenderShaderBinding*, KernelEngine.Result.Native.Result> provide;
 
-    [NativeTypeName("ke_result (*)(struct ke_render_resource_binder *, const ke_render_shader_layout_params *, ke_render_shader_layout *)")]
-    public delegate* unmanaged[Cdecl]<ke_render_resource_binder*, ke_render_shader_layout_params*, ulong*, KernelEngine.Result.Native.Result> create_shader_layout;
+    [NativeTypeName("ke_result (*)(struct ke_render_resource_binder *, const ke_render_shader_layout_desc *, ke_render_shader_layout *)")]
+    public delegate* unmanaged[Cdecl]<ke_render_resource_binder*, ke_render_shader_layout_desc*, ulong*, KernelEngine.Result.Native.Result> create_shader_layout;
 
     [NativeTypeName("void (*)(struct ke_render_resource_binder *, ke_render_shader_layout)")]
     public delegate* unmanaged[Cdecl]<ke_render_resource_binder*, ulong, void> destroy_shader_layout;
