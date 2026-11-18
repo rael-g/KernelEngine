@@ -12,6 +12,8 @@ const abi_input = @import("abi_input");
 const abi_result = @import("abi_result");
 const abi_window = @import("abi_window");
 const abi_window_glfw_factory = @import("abi_window_glfw_factory");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 
 const core_mod = @import("core.zig");
 const device = @import("device.zig");
@@ -25,23 +27,31 @@ test {
     _ = @import("core.zig");
 }
 
-const Config = abi_window.c.ke_window_config;
+/// The window's settings: the keys of the window contract, with this implementation's defaults.
+const Settings = struct {
+    title: [:0]const u8 = "KernelEngine",
+    width: u32 = 1280,
+    height: u32 = 720,
+    fullscreen: bool = false,
 
-/// Creates the window and starts it with `config` applied as given, or with the defaults of every
-/// field when it is null. Fails with invalid argument when the out-parameter is null, the title is
-/// null or a size is not positive, out of memory when the device or the core cannot be allocated,
-/// and general when the core's initialization is refused, leaving the handle zeroed. On success the
-/// handle's ref is the core's window table and its destroy is the only way to release the window and
-/// its device. The input is handed to the core, which borrows it.
+    pub const ranges = .{ .width = .{ 1, 16384 }, .height = .{ 1, 16384 } };
+};
+
+/// Creates the window and starts it with its settings read once through `Settings`. Fails with
+/// invalid argument when the settings or the out-parameter are null or a setting is refused, out
+/// of memory when the device or the core cannot be allocated, and general when the core's
+/// initialization is refused, leaving the handle zeroed. On success the handle's ref is the core's
+/// window table and its destroy is the only way to release the window and its device. The input is
+/// handed to the core, which borrows it.
 export fn ke_window_glfw_create(
     input: ?*abi_input.c.ke_input,
-    config: ?*const Config,
+    settings: ?*abi_settings.c.ke_settings,
     out_window: ?*abi_window.c.ke_window_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_window orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_window.c.ke_window_handle);
-    const given = config orelse {
-        log.warn("creating the window failed: no config", .{});
+    const given = settings orelse {
+        log.warn("creating the window failed: no settings", .{});
         return R.code(error.InvalidArgument);
     };
     out.* = create(input, given) catch |err| {
@@ -51,14 +61,13 @@ export fn ke_window_glfw_create(
     return R.ok;
 }
 
-fn settingsOf(given: *const Config) R.Error!device.Config {
-    const title = given.title orelse return error.InvalidArgument;
-    if (given.width <= 0 or given.height <= 0) return error.InvalidArgument;
-    return .{ .title = title, .width = @intCast(given.width), .height = @intCast(given.height), .fullscreen = given.fullscreen };
+fn configOf(settings: *abi_settings.c.ke_settings) R.Error!device.Config {
+    const v = try settings_schema.read(Settings, settings);
+    return .{ .title = v.title.ptr, .width = v.width, .height = v.height, .fullscreen = v.fullscreen };
 }
 
-fn create(input: ?*abi_input.c.ke_input, given: *const Config) R.Error!abi_window.c.ke_window_handle {
-    const config = try settingsOf(given);
+fn create(input: ?*abi_input.c.ke_input, settings: *abi_settings.c.ke_settings) R.Error!abi_window.c.ke_window_handle {
+    const config = try configOf(settings);
     const dev = glfw.GlfwDevice.create() orelse return error.OutOfMemory;
 
     const core = core_mod.Core.create(dev.asDevice(), input) orelse {
@@ -74,33 +83,25 @@ fn create(input: ?*abi_input.c.ke_input, given: *const Config) R.Error!abi_windo
     return .{ .ref = core.toApi(), .destroy = core_mod.Core.destroyApi };
 }
 
-test "a given config is applied as given" {
-    const settings = try settingsOf(&.{ .title = "Pong", .width = 640, .height = 480, .fullscreen = true });
-    try std.testing.expectEqualStrings("Pong", std.mem.span(settings.title));
-    try std.testing.expectEqual(@as(u32, 640), settings.width);
-    try std.testing.expectEqual(@as(u32, 480), settings.height);
-    try std.testing.expect(settings.fullscreen);
+test "settings that write nothing give a 1280 by 720 window titled KernelEngine" {
+    var settings = settings_schema.Fixed.init(&.{});
+    const config = try configOf(&settings.api);
+    try std.testing.expectEqualStrings("KernelEngine", std.mem.span(config.title));
+    try std.testing.expectEqual(@as(u32, 1280), config.width);
+    try std.testing.expectEqual(@as(u32, 720), config.height);
+    try std.testing.expect(!config.fullscreen);
 }
 
-test "a zero width is refused" {
-    try std.testing.expectError(error.InvalidArgument, settingsOf(&.{ .width = 0 }));
+test "a written width replaces the default, and a zero width is refused" {
+    var narrow = settings_schema.Fixed.init(&.{.{ .key = "width", .value = .{ .int = 640 } }});
+    try std.testing.expectEqual(@as(u32, 640), (try configOf(&narrow.api)).width);
+    var zero = settings_schema.Fixed.init(&.{.{ .key = "width", .value = .{ .int = 0 } }});
+    try std.testing.expectError(error.InvalidArgument, configOf(&zero.api));
 }
 
-test "a zero height is refused" {
-    try std.testing.expectError(error.InvalidArgument, settingsOf(&.{ .height = 0 }));
-}
-
-test "a negative size is refused" {
-    try std.testing.expectError(error.InvalidArgument, settingsOf(&.{ .width = -1 }));
-    try std.testing.expectError(error.InvalidArgument, settingsOf(&.{ .height = -1 }));
-}
-
-test "a null title is refused" {
-    try std.testing.expectError(error.InvalidArgument, settingsOf(&.{ .title = null }));
-}
-
-test "creating with a zero size fails with invalid argument and leaves the handle zeroed" {
+test "creating with a zero width fails with invalid argument and leaves the handle zeroed" {
+    var zero = settings_schema.Fixed.init(&.{.{ .key = "width", .value = .{ .int = 0 } }});
     var window: abi_window.c.ke_window_handle = undefined;
-    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_window_glfw_create(null, &.{ .width = 0 }, &window));
+    try std.testing.expectEqual(R.code(error.InvalidArgument), ke_window_glfw_create(null, &zero.api, &window));
     try std.testing.expectEqual(@as(?*anyopaque, null), @as(?*anyopaque, @ptrCast(window.ref)));
 }

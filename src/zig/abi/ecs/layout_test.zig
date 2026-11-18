@@ -29,7 +29,6 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_ecs_query_term, translated("ke_ecs_query_term"));
     try expectSameLayout(abi.c.ke_ecs_query_desc, translated("ke_ecs_query_desc"));
     try expectSameLayout(abi.c.ke_ecs_segment, translated("ke_ecs_segment"));
-    try expectSameLayout(abi.c.ke_ecs_config, translated("ke_ecs_config"));
     try expectSameLayout(abi.c.ke_ecs, translated("ke_ecs"));
     try expectSameLayout(abi.c.ke_ecs_handle, translated("ke_ecs_handle"));
     try expectSameLayout(abi.c.ke_ecs_commands, translated("ke_ecs_commands"));
@@ -54,7 +53,7 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_COMPONENT_INVALID), @as(i128, abi.c.KE_COMPONENT_INVALID));
 }
 
-extern const layout_values: [79]c_ulonglong;
+extern const layout_values: [77]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -97,8 +96,6 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_ecs_segment, "column_count"),
         @offsetOf(abi.c.ke_ecs_segment, "changed"),
         @offsetOf(abi.c.ke_ecs_segment, "matched"),
-        @sizeOf(abi.c.ke_ecs_config),
-        @offsetOf(abi.c.ke_ecs_config, "reserved_id_capacity"),
         @sizeOf(abi.c.ke_ecs),
         @offsetOf(abi.c.ke_ecs, "handle"),
         @offsetOf(abi.c.ke_ecs, "entity_create"),

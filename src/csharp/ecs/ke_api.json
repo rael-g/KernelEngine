@@ -804,19 +804,6 @@
           "doc": "Per term, the component it matched: the pair a wildcard pair term matched, the term\u0027s own component otherwise."
         }
       ]
-    },
-    {
-      "name": "ke_ecs_config",
-      "doc": "The values an ECS is created with, whatever its implementation, each applied as given.",
-      "tags": [],
-      "fields": [
-        {
-          "name": "reserved_id_capacity",
-          "type": "uint32_t",
-          "tags": [],
-          "doc": "How many ids entity_reserve may hand out before the world issues any of its own; entity_reserve fails as out of memory once they are spent. Raise it for a world whose systems spawn heavily."
-        }
-      ]
     }
   ],
   "vtables": [

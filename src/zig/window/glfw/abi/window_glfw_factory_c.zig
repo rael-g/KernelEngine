@@ -3,6 +3,7 @@
 const abi_input = @import("input");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 const abi_window = @import("window");
 
 
@@ -15,7 +16,7 @@ const abi_window = @import("window");
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
 /// Creates a window and starts it.
-pub extern fn ke_window_glfw_create(input: ?*abi_input.c.ke_input, config: ?*const abi_window.c.ke_window_config, out_window: ?*abi_window.c.ke_window_handle) abi_result.c.ke_result;
+pub extern fn ke_window_glfw_create(input: ?*abi_input.c.ke_input, settings: ?*abi_settings.c.ke_settings, out_window: ?*abi_window.c.ke_window_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_window_glfw logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

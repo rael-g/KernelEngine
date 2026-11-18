@@ -3,6 +3,7 @@ using System.Numerics;
 using global::KernelEngine.Logger;
 
 using KernelEngine.Result.Native;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Configuration.Native;
 

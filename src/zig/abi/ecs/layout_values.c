@@ -42,8 +42,6 @@ const unsigned long long layout_values[] = {
     offsetof(ke_ecs_segment, column_count),
     offsetof(ke_ecs_segment, changed),
     offsetof(ke_ecs_segment, matched),
-    sizeof(ke_ecs_config),
-    offsetof(ke_ecs_config, reserved_id_capacity),
     sizeof(ke_ecs),
     offsetof(ke_ecs, handle),
     offsetof(ke_ecs, entity_create),

@@ -32,35 +32,23 @@ extern "C"
 {
 #endif
 
-    /** [bag]
-     * The shape of the directional shadow pass's map. A scene larger than
-     * `extent` loses shadows outside it, and a caster farther than `light_distance` stops
-     * casting.
-     */
-    typedef struct ke_render_shadow_config
-    {
-        /// Edge of the square shadow map, in texels.
-        uint32_t resolution;
-        /// How far back along the light the shadow camera sits.
-        float    light_distance;
-        /// Width and height of the shadowed area, in world units.
-        float    extent;
-        /// Near plane of the shadow camera.
-        float    near_plane;
-        /// Far plane of the shadow camera.
-        float    far_plane;
-    } ke_render_shadow_config;
+    struct ke_settings;
 
     /// Makes the directional shadow pass. Attached, it publishes the shadow map and the light's
     /// view-projection in the render prepare set, and declares the pass that draws the casters into the
     /// map in the render queue set.
     /// @param context [borrowed] The parts the pass is built on; read during the call.
-    /// @param config [borrowed] The map's shape; Required; every field is read as given.
+    /// @param settings [borrowed] Read once; each absent key takes its default. `resolution`, an
+    ///        integer, 1024: edge of the square map in texels. `light_distance`, 25: how far back along
+    ///        the light the shadow camera sits. `extent`, 20: width and height of the shadowed area in
+    ///        world units; a scene larger than it loses shadows outside it. `near_plane`, 0.1, and
+    ///        `far_plane`, 50: the shadow camera's planes.
     /// @param out_module [out] Receives the pass; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context, a part the pass uses or @p config is
-    ///         NULL; the code of the GPU object that could not be made.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT when the context, a part the pass uses or @p settings
+    ///         is NULL, a setting is unknown, of another type or out of its range, or the near plane is
+    ///         not before the far one; the code of the GPU object that could not be made.
     KE_RENDER_SHADOW_API ke_result ke_render_shadow_create(
-        const ke_render_context *context, const ke_render_shadow_config *config, ke_module_handle *out_module);
+        const ke_render_context *context, struct ke_settings *settings, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

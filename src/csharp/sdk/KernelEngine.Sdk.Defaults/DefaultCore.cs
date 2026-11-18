@@ -50,19 +50,9 @@ public static class DefaultCore
             return config;
         });
         services.TryAddSingleton<Input.Input>(_ => new Input.DefaultInput());
-        services.TryAddSingleton<Window.Window>(sp =>
-        {
-            var config = Get<Configuration.Configuration>(sp);
-            return new GlfwWindow(Log(sp), Get<Input.Input>(sp), new()
-            {
-                Title = config.GetString("runtime.window", "title", "KernelEngine"),
-                Width = (int)config.GetInt("runtime.window", "width", 1280),
-                Height = (int)config.GetInt("runtime.window", "height", 720),
-                Fullscreen = config.GetBool("runtime.window", "fullscreen", false),
-            });
-        });
-        services.TryAddSingleton<Ecs.EcsRegistry>(sp => new FlecsEcsRegistry(Log(sp), new() { ReservedIdCapacity = 1048576 }));
-        services.TryAddKeyedSingleton<Ecs.EcsRegistry>("render", (sp, _) => new FlecsEcsRegistry(Log(sp), new() { ReservedIdCapacity = 1048576 }));
+        services.TryAddSingleton<Window.Window>(sp => new GlfwWindow(Log(sp), Get<Input.Input>(sp), Get<Configuration.Configuration>(sp).Section("runtime.window")));
+        services.TryAddSingleton<Ecs.EcsRegistry>(sp => new FlecsEcsRegistry(Log(sp), Get<Configuration.Configuration>(sp).Section("ecs")));
+        services.TryAddKeyedSingleton<Ecs.EcsRegistry>("render", (sp, _) => new FlecsEcsRegistry(Log(sp), Get<Configuration.Configuration>(sp).Section("ecs")));
         services.TryAddKeyedSingleton<Schedule.Schedule>("render", (sp, _) => new DefaultSchedule(Log(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Job.JobSystem>(sp), new() { RefuseAmbiguity = false }));
         services.TryAddSingleton<Extraction.Extraction>(sp => new Extraction.DefaultExtraction(Log(sp), Get<Ecs.EcsRegistry>(sp), sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render"), Get<Scheduler.Scheduler>(sp), sp.GetRequiredKeyedService<Schedule.Schedule>("render")));
         services.TryAddSingleton<Func<Schedule.Schedule>>(sp => () => new DefaultSchedule(Log(sp), Get<Ecs.EcsRegistry>(sp), Get<Job.JobSystem>(sp), new() { RefuseAmbiguity = false }));
@@ -131,7 +121,7 @@ public static class DefaultCore
         void Pass<T>(Func<IServiceProvider, T> make) where T : Module.Module => services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, T>(make));
         Pass(sp => new RenderSceneResolveSystemsModule(Log(sp), Get<RenderSceneResolve>(sp)));
         Pass(sp => new RenderFrameSystemsModule(Log(sp), Get<Render.Frame.RenderFrame>(sp)));
-        Pass(sp => new RenderShadowModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { Resolution = 1024, LightDistance = 25.0f, Extent = 20.0f, NearPlane = 0.1f, FarPlane = 50.0f }));
+        Pass(sp => new RenderShadowModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.shadow")));
         Pass(sp => new RenderClusterModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { GridX = 16, GridY = 9, GridZ = 24, MaxLightsPerCluster = 64 }));
         Pass(sp => new RenderGbufferModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
         Pass(sp => new RenderDeferredLightingModule(Log(sp), RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), new() { IblEnabled = true }));

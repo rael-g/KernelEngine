@@ -489,5 +489,4 @@ pub const ComponentMeta = c.ke_component_meta;
 pub const EcsQueryTerm = c.ke_ecs_query_term;
 pub const EcsQueryDesc = c.ke_ecs_query_desc;
 pub const EcsSegment = c.ke_ecs_segment;
-pub const EcsConfig = c.ke_ecs_config;
 pub const EcsHandle = c.ke_ecs_handle;

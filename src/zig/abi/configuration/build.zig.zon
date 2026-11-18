@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_result = .{ .path = "../result" },
+        .abi_settings = .{ .path = "../settings" },
     },
     .paths = .{"."},
 }

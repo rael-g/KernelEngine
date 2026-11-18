@@ -158,8 +158,155 @@
   "structs": [],
   "vtables": [
     {
+      "name": "ke_settings",
+      "doc": "The values one part is created with, each under a key and of one type. A part reads them once, when it is created; a value that changes afterwards is a slot of the part\u0027s own contract.",
+      "tags": [
+        "lent"
+      ],
+      "fields": [
+        {
+          "name": "handle",
+          "type": "void *",
+          "tags": [],
+          "doc": null
+        }
+      ],
+      "slots": [
+        {
+          "name": "get_bool",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a boolean.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no value is under key; KE_RESULT_INVALID_ARGUMENT for a null argument or when the value under key is of another type.",
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "_Bool *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_int",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads an integer, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "int64_t *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_double",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a floating-point number, as get_bool. An integer value is read as its number.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "double *",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the value; untouched on failure."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "get_string",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Reads a string, as get_bool.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "key",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "The key."
+            },
+            {
+              "name": "out_value",
+              "type": "const char **",
+              "tags": [
+                "out",
+                "utf8"
+              ],
+              "doc": "Receives the string, borrowed while the settings live and the key is not written again."
+            }
+          ],
+          "receiver": "ke_settings *"
+        },
+        {
+          "name": "for_each_key",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Calls each once for every key that holds a value, in no particular order.",
+          "return_doc": "KE_OK, or KE_RESULT_INVALID_ARGUMENT for a null each.",
+          "params": [
+            {
+              "name": "each",
+              "type": "ke_settings_key_func",
+              "tags": [
+                "closure:ctx"
+              ],
+              "doc": "Called once per key."
+            },
+            {
+              "name": "ctx",
+              "type": "void *",
+              "tags": [],
+              "doc": null
+            }
+          ],
+          "receiver": "ke_settings *"
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_configuration",
-      "doc": "A typed (section, key) to value store.",
+      "doc": "A typed (section, key) to value store, holding what a part is created with.",
       "tags": [
         "interface"
       ],
@@ -230,7 +377,7 @@
         },
         {
           "name": "get_bool",
-          "returns": "bool",
+          "returns": "_Bool",
           "tags": [],
           "doc": null,
           "return_doc": null,
@@ -249,7 +396,7 @@
             },
             {
               "name": "fallback",
-              "type": "bool",
+              "type": "_Bool",
               "tags": [],
               "doc": null
             }
@@ -288,7 +435,7 @@
           "name": "set_int",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Stores value under section and key, replacing what the key held, then runs the section\u0027s subscribers. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.",
+          "doc": "Stores value under section and key, replacing what the key held. Returns KE_RESULT_INVALID_ARGUMENT for a null section or key and KE_RESULT_OUT_OF_MEMORY when the entry cannot be stored; the store is then unchanged.",
           "return_doc": null,
           "params": [
             {
@@ -361,7 +508,7 @@
             },
             {
               "name": "value",
-              "type": "bool",
+              "type": "_Bool",
               "tags": [],
               "doc": null
             }
@@ -397,45 +544,28 @@
           "receiver": "struct ke_configuration *"
         },
         {
-          "name": "subscribe",
-          "returns": "ke_configuration_subscription",
+          "name": "section",
+          "returns": "ke_result",
           "tags": [],
-          "doc": "Subscribes to writes on \u0060section\u0060. Returns a subscription id, or KE_CONFIGURATION_SUBSCRIPTION_NONE on failure.",
-          "return_doc": null,
+          "doc": "The keys directly in section as the settings a part is created with. Each read looks the store up at the time it is made; keys of sections under section are not included.",
+          "return_doc": "KE_OK, KE_RESULT_INVALID_ARGUMENT for a null argument, or KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "section",
               "type": "const char *",
-              "tags": [],
-              "doc": null
+              "tags": [
+                "borrowed",
+                "utf8"
+              ],
+              "doc": "The section; one that holds nothing gives empty settings."
             },
             {
-              "name": "cb",
-              "type": "ke_configuration_change_func",
-              "tags": [],
-              "doc": null
-            },
-            {
-              "name": "ctx",
-              "type": "void *",
-              "tags": [],
-              "doc": null
-            }
-          ],
-          "receiver": "struct ke_configuration *"
-        },
-        {
-          "name": "unsubscribe",
-          "returns": "void",
-          "tags": [],
-          "doc": "Removes a subscription. Safe to call with KE_CONFIGURATION_SUBSCRIPTION_NONE.",
-          "return_doc": null,
-          "params": [
-            {
-              "name": "sub",
-              "type": "ke_configuration_subscription",
-              "tags": [],
-              "doc": null
+              "name": "out_settings",
+              "type": "ke_settings **",
+              "tags": [
+                "out"
+              ],
+              "doc": "Receives the settings, borrowed for the lifetime of the store."
             }
           ],
           "receiver": "struct ke_configuration *"
@@ -572,21 +702,26 @@
   "functions": [],
   "callbacks": [
     {
-      "name": "ke_configuration_change_func",
+      "name": "ke_settings_key_func",
       "returns": "void",
-      "doc": "Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at subscribe time, passed back unchanged. The callback must be latch-only: it records that the section changed and does nothing else.",
+      "doc": "Receives one key the settings hold.",
       "lanes": [
         {
-          "name": "arg1",
+          "name": "key",
           "type": "const char *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "borrowed",
+            "utf8"
+          ],
+          "doc": "The key; valid only during the call."
         },
         {
-          "name": "arg2",
+          "name": "ctx",
           "type": "void *",
-          "tags": [],
-          "doc": null
+          "tags": [
+            "context"
+          ],
+          "doc": "Forwarded from for_each_key."
         }
       ]
     },
@@ -618,15 +753,7 @@
   "id_types": [],
   "foreign_id_types": [],
   "type_aliases": {
-    "ke_configuration_subscription": "uint32_t",
-    "ke_configuration_change_func": "void (*)(const char *, void *)",
+    "ke_settings_key_func": "void (*)(const char *, void *)",
     "ke_configuration_child_func": "void (*)(const char *, void *)"
-  },
-  "constants": [
-    {
-      "name": "KE_CONFIGURATION_SUBSCRIPTION_NONE",
-      "type": "unsigned int",
-      "value": "4294967295"
-    }
-  ]
+  }
 }

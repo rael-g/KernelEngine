@@ -10,25 +10,16 @@ public sealed unsafe partial class GlfwWindow : KernelEngine.Window.Window
 {
     /// <summary>Creates a window and starts it.</summary>
     /// <param name="input">Input sink target.</param>
-    /// <param name="config">The window's values; Required; every field is read as given.</param>
-    public GlfwWindow(KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config) : base(Create(input, config))
+    /// <param name="settings">Read once: the KE_WINDOW_SETTING_* keys, each with this implementation's default when absent (title "KernelEngine", 1280 by 720, not fullscreen).</param>
+    public GlfwWindow(KernelEngine.Input.INativeInput? input, KernelEngine.Settings.IPartSettings settings) : base(Create(input, settings))
     {
         Hold(input?.Owner);
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config)
+    private static KernelEngine.Window.Native.ke_window_handle Create(KernelEngine.Input.INativeInput? input, KernelEngine.Settings.IPartSettings settings)
     {
-        var titleConfigBytes = config.Title is null ? null : System.Text.Encoding.UTF8.GetBytes(config.Title + "\0");
-        fixed (byte* titleConfigPtr = titleConfigBytes)
-        {
-            KernelEngine.Window.Native.ke_window_config nativeConfig = default;
-            nativeConfig.title = (sbyte*)titleConfigPtr;
-            nativeConfig.width = config.Width;
-            nativeConfig.height = config.Height;
-            nativeConfig.fullscreen = config.Fullscreen;
-            KernelEngine.Window.Native.ke_window_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), &nativeConfig, &handle), "ke_window_glfw_create");
-            return handle;
-        }
+        KernelEngine.Window.Native.ke_window_handle handle;
+        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_create((input is null ? null : input.Native), ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_window_glfw_create");
+        return handle;
     }
 }

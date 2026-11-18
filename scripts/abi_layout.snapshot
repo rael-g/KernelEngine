@@ -46,11 +46,6 @@ ke_input_handle size=16 align=8
   destroy 8
 
 [window]
-ke_window_config size=24 align=8
-  title 0
-  width 8
-  height 12
-  fullscreen 16
 ke_window size=40 align=8
   handle 0
   should_close 8
@@ -81,7 +76,7 @@ ke_file_system_handle size=16 align=8
   destroy 8
 
 [configuration]
-ke_configuration size=96 align=8
+ke_configuration size=88 align=8
   handle 0
   get_int 8
   get_double 16
@@ -91,9 +86,8 @@ ke_configuration size=96 align=8
   set_double 48
   set_bool 56
   set_string 64
-  subscribe 72
-  unsubscribe 80
-  for_each_child 88
+  section 72
+  for_each_child 80
 ke_configuration_handle size=16 align=8
   ref 0
   destroy 8
@@ -563,8 +557,6 @@ ke_ecs_segment size=40 align=8
   column_count 24
   changed 28
   matched 32
-ke_ecs_config size=4 align=4
-  reserved_id_capacity 0
 ke_ecs size=216 align=8
   handle 0
   entity_create 8
@@ -1287,6 +1279,15 @@ ke_completion size=32 align=8
   poll 8
   wait 16
   release 24
+
+[settings]
+ke_settings size=48 align=8
+  handle 0
+  get_bool 8
+  get_int 16
+  get_double 24
+  get_string 32
+  for_each_key 40
 
 [job]
 ke_job_ctx size=16 align=8

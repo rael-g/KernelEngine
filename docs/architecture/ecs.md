@@ -10,7 +10,7 @@ inside is on the generated page of its file. The contract is `ke_ecs` in
 | part | declared as | receives | hands on |
 |---|---|---|---|
 | ecs | `ke_ecs` | component registrations, structural calls, query registrations | entity ids, component bytes, segments of columns |
-| flecs plugin | `ke_ecs_flecs_create`, `ke_ecs_config` | `reserved_id_capacity` | a `ke_ecs_handle` that owns the world |
+| flecs plugin | `ke_ecs_flecs_create` | the setting `reserved_id_capacity` | a `ke_ecs_handle` that owns the world |
 | commands | `ke_ecs_commands` | recorded spawn, attach, detach, despawn, defer | the changes, applied by the schedule after the bodies that recorded them |
 | schedule | `ke_schedule_create` | the `ke_ecs` it borrows | queries resolved before the bodies run, structural calls after them |
 
@@ -32,7 +32,7 @@ segments, which may exceed the capacity the caller gave.
 must describe the same layout; a `ke_component_field` table, when given, is compared field by
 field and must outlive the ecs.
 
-**The flecs plugin keeps two id sources apart.** Ids below `ke_ecs_config.reserved_id_capacity`
+**The flecs plugin keeps two id sources apart.** Ids below the `reserved_id_capacity` setting
 form the pool `entity_reserve` draws from; the world's own allocator issues ids from that value
 upward.
 

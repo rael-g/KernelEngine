@@ -8,7 +8,7 @@ consume it. How a part works inside is on the generated page of its file. Plugin
 
 | part | plugin | receives | hands on |
 |---|---|---|---|
-| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, `ke_render_shadow_config` | the map and the light buffer, published in the frame |
+| shadow | shadow | the directional light, meshes with a world transform, `ke_view_space`, the settings of the map's shape | the map and the light buffer, published in the frame |
 | cluster | cluster | point and spot lights, the camera, `ke_view_space` | its light buffers and grid, published in the frame |
 | skybox | skybox | the `ke_skybox_component`, the frame's depth | the background, drawn into the frame's color |
 | deferred lighting | deferred_lighting | the published gbuffer, the frame's depth, the hand-offs above, the directional and ambient lights | the frame's color |

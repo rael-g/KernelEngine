@@ -5,6 +5,8 @@
 
 using KernelEngine.Common;
 using KernelEngine.Configuration.Native;
+using KernelEngine.Settings;
+using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Configuration;
 

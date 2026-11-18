@@ -18,7 +18,6 @@ const abi_scheduler = @import("scheduler");
 const abi_text = @import("text");
 
 pub const ke_component_id = u32;
-pub const ke_configuration_subscription = u32;
 pub const ke_entity = u64;
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
@@ -54,10 +53,8 @@ pub const ke_gpu_buffer_mapped_func = ?*const fn (abi_result.c.ke_result, ke_gpu
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
-/// Change callback: invoked with the section whose value(s) changed, plus the ctx supplied at
-/// subscribe time, passed back unchanged. The callback must be latch-only: it records that the
-/// section changed and does nothing else.
-pub const ke_configuration_change_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives one child section of the section being listed.
 pub const ke_configuration_child_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;

@@ -10,14 +10,14 @@ public sealed unsafe partial class GlfwWindow
     /// <summary>The same construction, with the library logging to <paramref name="loggerFactory"/>.</summary>
     /// <param name="loggerFactory">Creates the logger of each scope the library logs under; null leaves the library logging where it did.</param>
     /// <param name="input">Input sink target.</param>
-    /// <param name="config">The window's values; Required; every field is read as given.</param>
-    public GlfwWindow(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config) : base(CreateLogged(loggerFactory, input, config))
+    /// <param name="settings">Read once: the KE_WINDOW_SETTING_* keys, each with this implementation's default when absent (title "KernelEngine", 1280 by 720, not fullscreen).</param>
+    public GlfwWindow(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, KernelEngine.Settings.IPartSettings settings) : base(CreateLogged(loggerFactory, input, settings))
     {
     }
 
-    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, in KernelEngine.Window.WindowConfig config)
+    private static KernelEngine.Window.Native.ke_window_handle CreateLogged(Microsoft.Extensions.Logging.ILoggerFactory? loggerFactory, KernelEngine.Input.INativeInput? input, KernelEngine.Settings.IPartSettings settings)
     {
         if (loggerFactory is not null) KernelEngine.Window.Glfw.Native.NativeMethods.window_glfw_set_log_callback(KernelEngine.Logger.NativeLogging.Callback, KernelEngine.Logger.NativeLogging.ContextOf(loggerFactory));
-        return Create(input, config);
+        return Create(input, settings);
     }
 }

@@ -3,6 +3,7 @@
 const abi_input = @import("input");
 const abi_logger = @import("logger");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 const abi_window = @import("window");
 
 /// The ABI as the headers declare it.
@@ -13,9 +14,9 @@ const checkResult = abi_result.checkResult;
 const resultOf = abi_result.resultOf;
 
 /// Creates a window and starts it.
-pub fn windowGlfwCreate(input: ?*abi_input.c.ke_input, config: ?*const abi_window.c.ke_window_config) Error!abi_window.c.ke_window_handle {
+pub fn windowGlfwCreate(input: ?*abi_input.c.ke_input, settings: ?*abi_settings.c.ke_settings) Error!abi_window.c.ke_window_handle {
     var written: abi_window.c.ke_window_handle = undefined;
-    try checkResult(c.ke_window_glfw_create(input, config, &written));
+    try checkResult(c.ke_window_glfw_create(input, settings, &written));
     return written;
 }
 

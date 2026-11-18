@@ -64,7 +64,7 @@ public class ReadyingTheNodesASlotOpens
         using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+        using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
@@ -96,7 +96,7 @@ public class ReadyingTheNodesASlotOpens
         using var io = new AsyncIo(null, asyncs, files);
         using var config = new DefaultConfiguration(null);
         using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(null, new Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+        using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs);
         var scheduler = loop.Scheduler;
         using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);

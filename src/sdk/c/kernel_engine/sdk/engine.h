@@ -173,6 +173,15 @@ typedef struct ke_sdk_engine_desc
 /** The configuration the default parts read their sections from. */
 static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return e->configuration.ref; }
 
+/** The section @p section of the engine's configuration as the settings a part is created with; NULL when the engine has no
+ * configuration or the section cannot be viewed, which the part refuses. */
+static inline ke_settings *ke_sdk_settings(ke_sdk_engine *e, const char *section)
+{
+    ke_settings *settings = NULL;
+    if (e->configuration.ref && e->configuration.ref->section(e->configuration.ref, section, &settings) != KE_OK) settings = NULL;
+    return settings;
+}
+
 /** Registers the set @p name in @p schedule, after @p after when it is not NULL, written to @p out_set. */
 static inline ke_result ke_sdk_set(ke_schedule *schedule, const char *name, const ke_schedule_set_id *after, ke_schedule_set_id *out_set)
 {

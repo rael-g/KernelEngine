@@ -30,6 +30,7 @@
   <Import Project="../../NativeDependencies.targets" />
 
   <ItemGroup>
+    <ProjectReference Include="..\..\settings\KernelEngine.Settings\KernelEngine.Settings.csproj" />
     <ProjectReference Include="..\KernelEngine.Render.Frame\KernelEngine.Render.Frame.csproj" />
     <ProjectReference Include="..\..\render_graph\KernelEngine.RenderGraph\KernelEngine.RenderGraph.csproj" />
     <ProjectReference Include="..\..\extraction\KernelEngine.Extraction\KernelEngine.Extraction.csproj" />

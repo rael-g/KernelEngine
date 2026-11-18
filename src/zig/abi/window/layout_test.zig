@@ -23,21 +23,23 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
-    try expectSameLayout(abi.c.ke_window_config, translated("ke_window_config"));
     try expectSameLayout(abi.c.ke_window, translated("ke_window"));
     try expectSameLayout(abi.c.ke_window_handle, translated("ke_window_handle"));
 }
 
-extern const layout_values: [15]c_ulonglong;
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_WINDOW_SETTING_TITLE, abi.c.KE_WINDOW_SETTING_TITLE);
+    try std.testing.expectEqualStrings(c.KE_WINDOW_SETTING_WIDTH, abi.c.KE_WINDOW_SETTING_WIDTH);
+    try std.testing.expectEqualStrings(c.KE_WINDOW_SETTING_HEIGHT, abi.c.KE_WINDOW_SETTING_HEIGHT);
+    try std.testing.expectEqualStrings(c.KE_WINDOW_SETTING_FULLSCREEN, abi.c.KE_WINDOW_SETTING_FULLSCREEN);
+}
+
+extern const layout_values: [10]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
-        @sizeOf(abi.c.ke_window_config),
-        @offsetOf(abi.c.ke_window_config, "title"),
-        @offsetOf(abi.c.ke_window_config, "width"),
-        @offsetOf(abi.c.ke_window_config, "height"),
-        @offsetOf(abi.c.ke_window_config, "fullscreen"),
         @sizeOf(abi.c.ke_window),
         @offsetOf(abi.c.ke_window, "handle"),
         @offsetOf(abi.c.ke_window, "should_close"),

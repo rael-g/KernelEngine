@@ -182,23 +182,16 @@ static inline ke_result ke_sdk_input(ke_sdk_engine *e)
     return ke_input_create(&e->input);
 }
 
-/** A GLFW window titled and sized by `runtime.window`. */
+/** A GLFW window with the settings of `runtime.window`. */
 static inline ke_result ke_sdk_window_glfw(ke_sdk_engine *e)
 {
-    ke_configuration *c = ke_sdk_engine_config(e);
-    const ke_window_config config = {
-        .title = c->get_string(c, "runtime.window", "title", "KernelEngine"),
-        .width = (int32_t)c->get_int(c, "runtime.window", "width", 1280),
-        .height = (int32_t)c->get_int(c, "runtime.window", "height", 720),
-        .fullscreen = c->get_bool(c, "runtime.window", "fullscreen", false),
-    };
-    return ke_window_glfw_create(e->input.ref, &config, &e->window);
+    return ke_window_glfw_create(e->input.ref, ke_sdk_settings(e, "runtime.window"), &e->window);
 }
 
-/** A flecs world. */
+/** A flecs world with the settings of `ecs`. */
 static inline ke_result ke_sdk_ecs_flecs(ke_sdk_engine *e)
 {
-    return ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->ecs);
+    return ke_ecs_flecs_create(ke_sdk_settings(e, "ecs"), &e->ecs);
 }
 
 
@@ -287,11 +280,11 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     return KE_OK;
 }
 
-/** A directional shadow map 1024 texels wide over a 20-unit area. */
+/** A directional shadow map with the settings of `render.shadow`. */
 static inline ke_result ke_sdk_shadow(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_shadow_create(&r->context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow);
+    ke_result made = ke_render_shadow_create(&r->context, ke_sdk_settings(e, "render.shadow"), &r->shadow);
     return made == KE_OK ? ke_sdk_add_module(e, r->shadow.ref) : made;
 }
 
@@ -406,7 +399,7 @@ static inline ke_result ke_sdk_scene_files(ke_sdk_engine *e)
  */
 static inline ke_result ke_sdk_extraction(ke_sdk_engine *e)
 {
-    ke_result made = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &e->render_world);
+    ke_result made = ke_ecs_flecs_create(ke_sdk_settings(e, "ecs"), &e->render_world);
     if (made == KE_OK) made = ke_schedule_create(e->render_world.ref, e->job_system.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &e->render_schedule);
     ke_sdk_sets *sets = &e->sets;
     if (made == KE_OK) made = ke_sdk_set(e->render_schedule.ref, "render_begin", NULL, &sets->render_begin);

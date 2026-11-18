@@ -1,5 +1,5 @@
-//! The in-memory store of typed configuration values addressed by section and key, with change
-//! notification per section.
+//! The in-memory store of typed configuration values addressed by section and key, and the view of
+//! one section as the settings a part is created with.
 
 const std = @import("std");
 
@@ -9,13 +9,11 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const abi_configuration = @import("abi_configuration");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
 
 const heap = @import("heap");
 /// The allocator every allocation in this file goes through, taken from the heap module.
 const gpa = heap.gpa;
-
-/// The sentinel `subscribe` returns on failure, and the id `unsubscribe` ignores.
-const NONE: u32 = std.math.maxInt(u32);
 
 /// The typed payload of an `Entry`. A `string` is an owned, zero-terminated copy, and the other
 /// variants hold their value inline. The active variant is the type the key was last written with.
@@ -35,26 +33,23 @@ const Entry = struct {
     value: Value,
 };
 
-/// One subscription slot. An inactive slot has no callback and keeps its `section` copy until
-/// `subscribe` reuses it or `destroy` frees it, so `subs` never shrinks.
-const Sub = struct {
-    id: u32,
-    section: [:0]u8,
-    cb: abi_configuration.c.ke_configuration_change_func,
-    ctx: ?*anyopaque,
-    active: bool,
-};
-
 /// The store behind a handle. The handle's `ref` is the address of `api`, and `api.handle` points
 /// back at this `State`, which is how every function in the table reaches the store. `entries`
-/// holds at most one `Entry` per section and key. `next_sub_id` only grows, so subscription ids
-/// are never repeated. Nothing is locked: every call, and every subscriber, runs on the thread
-/// that makes the call.
+/// holds at most one `Entry` per section and key. `views` holds one `View` per section asked for,
+/// each allocated once so the settings pointer handed out stays valid until `destroy`. Nothing is
+/// locked: every call runs on the thread that makes the call.
 const State = struct {
     api: abi_configuration.c.ke_configuration,
     entries: std.ArrayListUnmanaged(Entry),
-    subs: std.ArrayListUnmanaged(Sub),
-    next_sub_id: u32,
+    views: std.ArrayListUnmanaged(*View),
+};
+
+/// One section seen as `ke_settings`, made by `section`. `api.handle` points back at the view; every
+/// read looks `store` up under `name` when it is made, so a write after the view was taken is seen.
+const View = struct {
+    api: abi_settings.c.ke_settings,
+    store: *State,
+    name: [:0]u8,
 };
 
 fn state(self: [*c]abi_configuration.c.ke_configuration) *State {
@@ -100,7 +95,7 @@ fn upsert(st: *State, section: []const u8, key: []const u8) error{OutOfMemory}!*
     return &st.entries.items[st.entries.items.len - 1];
 }
 
-/// Stores `value` under the key through `upsert`, then runs the section's subscribers.
+/// Stores `value` under the key through `upsert`.
 fn store(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: Value) abi_result.c.ke_result {
     const st = state(self);
     const e = upsert(st, std.mem.span(section), std.mem.span(key)) catch {
@@ -108,20 +103,7 @@ fn store(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, 
         return R.code(error.OutOfMemory);
     };
     e.value = value;
-    notify(st, section);
     return R.ok;
-}
-
-/// Runs the callbacks of the active subscriptions on `section`, in list order, on the calling
-/// thread. Each callback gets the section pointer the setter received, not a copy, so it is valid
-/// only during that call.
-fn notify(st: *State, section_c: [*c]const u8) void {
-    const section = std.mem.span(section_c);
-    for (st.subs.items) |*s| {
-        if (s.active and std.mem.eql(u8, s.section, section)) {
-            if (s.cb) |cb| cb(section_c, s.ctx);
-        }
-    }
 }
 
 /// Lists the children of `section` from the entries' sections, deduplicated in first-seen order;
@@ -210,8 +192,7 @@ fn getString(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const 
 }
 
 /// Fails with invalid argument when an argument is null, and out of memory when the entry cannot be
-/// created; the store is then as it was. Otherwise the new value is stored and the subscribers of
-/// the section run, seeing it, before it returns.
+/// created; the store is then as it was.
 fn setInt(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, key: [*c]const u8, value: i64) callconv(.c) abi_result.c.ke_result {
     if (self == null or section == null or key == null) return R.code(error.InvalidArgument);
     return store(self, section, key, .{ .int = value });
@@ -244,53 +225,119 @@ fn setString(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const 
     return result;
 }
 
-/// Stores the subscription in the first inactive slot, or appends a slot, and returns the id taken
-/// from `next_sub_id`. A reused slot takes the new id, so the id of its previous subscription no
-/// longer matches it. On failure it returns `NONE` and changes neither `subs` nor `next_sub_id`.
-fn subscribe(self: [*c]abi_configuration.c.ke_configuration, section: [*c]const u8, cb: abi_configuration.c.ke_configuration_change_func, ctx: ?*anyopaque) callconv(.c) abi_configuration.c.ke_configuration_subscription {
-    if (self == null or section == null or cb == null) return NONE;
-    const st = state(self);
-    const sec = std.mem.span(section);
-
-    var reuse: ?*Sub = null;
-    for (st.subs.items) |*s| {
-        if (!s.active) {
-            reuse = s;
-            break;
-        }
-    }
-
-    const dup = gpa.dupeZ(u8, sec) catch return NONE;
-    const id = st.next_sub_id;
-
-    if (reuse) |slot| {
-        gpa.free(slot.section);
-        slot.* = .{ .id = id, .section = dup, .cb = cb, .ctx = ctx, .active = true };
-    } else {
-        st.subs.append(gpa, .{ .id = id, .section = dup, .cb = cb, .ctx = ctx, .active = true }) catch {
-            gpa.free(dup);
-            return NONE;
-        };
-    }
-    st.next_sub_id += 1;
-    return id;
+fn viewOf(self: ?*abi_settings.c.ke_settings) ?*View {
+    const api = self orelse return null;
+    return @ptrCast(@alignCast(api.handle orelse return null));
 }
 
-/// Deactivates the slot with this id, if one is active, and clears its callback.
-fn unsubscribe(self: [*c]abi_configuration.c.ke_configuration, sub: abi_configuration.c.ke_configuration_subscription) callconv(.c) void {
-    if (self == null or sub == NONE) return;
-    const st = state(self);
-    for (st.subs.items) |*s| {
-        if (s.active and s.id == sub) {
-            s.active = false;
-            s.cb = null;
-            return;
-        }
-    }
+fn viewEntry(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8) error{ InvalidArgument, NotFound }!*Entry {
+    const v = viewOf(self) orelse return error.InvalidArgument;
+    const k = key orelse return error.InvalidArgument;
+    return findEntry(v.store, v.name, std.mem.span(k)) orelse error.NotFound;
 }
 
-/// After it returns, the `State`, the handle's `ref` and every pointer from `getString` are
-/// invalid.
+/// Slot `get_bool` of a section's settings.
+fn settingsGetBool(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out_value: ?*bool) callconv(.c) abi_result.c.ke_result {
+    const out = out_value orelse return R.code(error.InvalidArgument);
+    const e = viewEntry(self, key) catch |err| return R.code(err);
+    switch (e.value) {
+        .boolean => |b| out.* = b,
+        else => return R.code(error.InvalidArgument),
+    }
+    return R.ok;
+}
+
+/// Slot `get_int` of a section's settings.
+fn settingsGetInt(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out_value: ?*i64) callconv(.c) abi_result.c.ke_result {
+    const out = out_value orelse return R.code(error.InvalidArgument);
+    const e = viewEntry(self, key) catch |err| return R.code(err);
+    switch (e.value) {
+        .int => |i| out.* = i,
+        else => return R.code(error.InvalidArgument),
+    }
+    return R.ok;
+}
+
+/// Slot `get_double` of a section's settings; an integer entry is read as its number.
+fn settingsGetDouble(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out_value: ?*f64) callconv(.c) abi_result.c.ke_result {
+    const out = out_value orelse return R.code(error.InvalidArgument);
+    const e = viewEntry(self, key) catch |err| return R.code(err);
+    switch (e.value) {
+        .double => |d| out.* = d,
+        .int => |i| out.* = @floatFromInt(i),
+        else => return R.code(error.InvalidArgument),
+    }
+    return R.ok;
+}
+
+/// Slot `get_string` of a section's settings: the entry's own string, valid until its key is
+/// written again or the store is destroyed.
+fn settingsGetString(self: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out_value: ?*?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+    const out = out_value orelse return R.code(error.InvalidArgument);
+    const e = viewEntry(self, key) catch |err| return R.code(err);
+    switch (e.value) {
+        .string => |str| out.* = str.ptr,
+        else => return R.code(error.InvalidArgument),
+    }
+    return R.ok;
+}
+
+/// Slot `for_each_key` of a section's settings: the keys of the entries whose section is exactly
+/// the view's, in the order they were first stored.
+fn settingsForEachKey(self: ?*abi_settings.c.ke_settings, each: abi_settings.c.ke_settings_key_func, ctx: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    const v = viewOf(self) orelse return R.code(error.InvalidArgument);
+    const cb = each orelse return R.code(error.InvalidArgument);
+    for (v.store.entries.items) |e| {
+        if (std.mem.eql(u8, e.section, v.name)) cb(e.key.ptr, ctx);
+    }
+    return R.ok;
+}
+
+/// Slot `section`. The view of a section is made the first time it is asked for and handed out
+/// again afterwards.
+fn sectionView(self: ?*abi_configuration.c.ke_configuration, name_c: ?[*:0]const u8, out_settings: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
+    const out = out_settings orelse return R.code(error.InvalidArgument);
+    out.* = null;
+    const self_ok = self orelse return R.code(error.InvalidArgument);
+    const st = state(self_ok);
+    const name = std.mem.span(name_c orelse return R.code(error.InvalidArgument));
+    for (st.views.items) |v| {
+        if (std.mem.eql(u8, v.name, name)) {
+            out.* = &v.api;
+            return R.ok;
+        }
+    }
+    const v = makeView(st, name) catch {
+        log.warn("viewing section {s} failed: out of memory", .{name});
+        return R.code(error.OutOfMemory);
+    };
+    out.* = &v.api;
+    return R.ok;
+}
+
+fn makeView(st: *State, name: []const u8) error{OutOfMemory}!*View {
+    const v = try gpa.create(View);
+    errdefer gpa.destroy(v);
+    const owned = try gpa.dupeZ(u8, name);
+    errdefer gpa.free(owned);
+    v.* = .{
+        .api = .{
+            .handle = v,
+            .get_bool = settingsGetBool,
+            .get_int = settingsGetInt,
+            .get_double = settingsGetDouble,
+            .get_string = settingsGetString,
+            .for_each_key = settingsForEachKey,
+        },
+        .store = st,
+        .name = owned,
+    };
+    try st.views.append(gpa, v);
+    return v;
+}
+
+/// After it returns, the `State`, the handle's `ref`, every settings view and every pointer from
+/// `getString` are invalid.
 fn destroy(self: [*c]abi_configuration.c.ke_configuration) callconv(.c) void {
     if (self == null) return;
     const st = state(self);
@@ -300,8 +347,11 @@ fn destroy(self: [*c]abi_configuration.c.ke_configuration) callconv(.c) void {
         gpa.free(e.key);
     }
     st.entries.deinit(gpa);
-    for (st.subs.items) |*s| gpa.free(s.section);
-    st.subs.deinit(gpa);
+    for (st.views.items) |v| {
+        gpa.free(v.name);
+        gpa.destroy(v);
+    }
+    st.views.deinit(gpa);
     gpa.destroy(st);
 }
 
@@ -325,27 +375,14 @@ export fn ke_configuration_create(out_store: ?*abi_configuration.c.ke_configurat
             .set_double = setDouble,
             .set_bool = setBool,
             .set_string = setString,
-            .subscribe = subscribe,
-            .unsubscribe = unsubscribe,
+            .section = sectionView,
             .for_each_child = forEachChild,
         },
         .entries = .empty,
-        .subs = .empty,
-        .next_sub_id = 0,
+        .views = .empty,
     };
     out.* = .{ .ref = &st.api, .destroy = destroy };
     return R.ok;
-}
-
-const TestProbe = struct {
-    calls: u32 = 0,
-    last: [:0]const u8 = "",
-};
-
-fn testCb(section: [*c]const u8, ctx: ?*anyopaque) callconv(.c) void {
-    const p: *TestProbe = @ptrCast(@alignCast(ctx));
-    p.calls += 1;
-    p.last = std.mem.span(section);
 }
 
 fn madeStore() !abi_configuration.c.ke_configuration_handle {
@@ -408,48 +445,61 @@ test "an integer written for a float key reads as that number, not the fallback"
     try std.testing.expectEqual(@as(f64, 30.0), c.?.get_double.?(c, "shadow", "frustum_size", 20.0));
 }
 
-test "subscriber fires only on writes to its section" {
-    const h = try madeStore();
-    defer h.destroy.?(h.ref);
-    const c = h.ref;
-    var probe = TestProbe{};
-    const sub = c.?.subscribe.?(c, "shadow", testCb, &probe);
-    try std.testing.expect(sub != NONE);
-
-    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
-    try std.testing.expectEqual(@as(u32, 1), probe.calls);
-    try std.testing.expectEqualStrings("shadow", probe.last);
-
-    try R.check(c.?.set_bool.?(c, "audio", "muted", true));
-    try std.testing.expectEqual(@as(u32, 1), probe.calls);
+fn settingsOf(cfg: ?*abi_configuration.c.ke_configuration, name: [*:0]const u8) !*abi_settings.c.ke_settings {
+    var out: ?*abi_settings.c.ke_settings = null;
+    try R.check(cfg.?.section.?(cfg, name, &out));
+    return out.?;
 }
 
-test "unsubscribe stops callbacks" {
+test "a section read as settings gives each key of it by type, and nothing of other sections" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
-    const c = h.ref;
-    var probe = TestProbe{};
-    const sub = c.?.subscribe.?(c, "shadow", testCb, &probe);
-    try R.check(c.?.set_int.?(c, "shadow", "resolution", 1));
-    try std.testing.expectEqual(@as(u32, 1), probe.calls);
+    const cfg = h.ref;
+    try R.check(cfg.?.set_int.?(cfg, "render.shadow", "resolution", 2048));
+    try R.check(cfg.?.set_bool.?(cfg, "render.shadow", "soft", true));
+    try R.check(cfg.?.set_string.?(cfg, "render.shadow", "mode", "pcf"));
+    try R.check(cfg.?.set_int.?(cfg, "render", "resolution", 7));
+    const st = try settingsOf(cfg, "render.shadow");
 
-    c.?.unsubscribe.?(c, sub);
-    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2));
-    try std.testing.expectEqual(@as(u32, 1), probe.calls);
+    var i: i64 = 0;
+    try R.check(st.get_int.?(st, "resolution", &i));
+    try std.testing.expectEqual(@as(i64, 2048), i);
+    var d: f64 = 0;
+    try R.check(st.get_double.?(st, "resolution", &d));
+    try std.testing.expectEqual(@as(f64, 2048), d);
+    var b = false;
+    try R.check(st.get_bool.?(st, "soft", &b));
+    try std.testing.expect(b);
+    var text: ?[*:0]const u8 = null;
+    try R.check(st.get_string.?(st, "mode", &text));
+    try std.testing.expectEqualStrings("pcf", std.mem.span(text.?));
+    try std.testing.expectError(error.NotFound, R.check(st.get_int.?(st, "missing", &i)));
+    try std.testing.expectError(error.InvalidArgument, R.check(st.get_bool.?(st, "resolution", &b)));
 }
 
-test "multiple subscribers each fire" {
+const KeyCount = struct {
+    count: u32 = 0,
+
+    fn add(_: ?[*:0]const u8, ctx: ?*anyopaque) callconv(.c) void {
+        const k: *KeyCount = @ptrCast(@alignCast(ctx));
+        k.count += 1;
+    }
+};
+
+test "a section's settings list its own keys, see a later write, and are handed out once per section" {
     const h = try madeStore();
     defer h.destroy.?(h.ref);
-    const c = h.ref;
-    var a = TestProbe{};
-    var b = TestProbe{};
-    const sa = c.?.subscribe.?(c, "shadow", testCb, &a);
-    const sb = c.?.subscribe.?(c, "shadow", testCb, &b);
-    try std.testing.expect(sa != sb);
-    try R.check(c.?.set_int.?(c, "shadow", "resolution", 2048));
-    try std.testing.expectEqual(@as(u32, 1), a.calls);
-    try std.testing.expectEqual(@as(u32, 1), b.calls);
+    const cfg = h.ref;
+    const empty = try settingsOf(cfg, "ecs");
+    var keys: KeyCount = .{};
+    try R.check(empty.for_each_key.?(empty, KeyCount.add, &keys));
+    try std.testing.expectEqual(@as(u32, 0), keys.count);
+
+    try R.check(cfg.?.set_int.?(cfg, "ecs", "reserved_id_capacity", 64));
+    try R.check(cfg.?.set_int.?(cfg, "ecs.inner", "x", 1));
+    try R.check(empty.for_each_key.?(empty, KeyCount.add, &keys));
+    try std.testing.expectEqual(@as(u32, 1), keys.count);
+    try std.testing.expectEqual(empty, try settingsOf(cfg, "ecs"));
 }
 
 test "null args rejected on write" {
@@ -465,6 +515,7 @@ test "creating, writing and destroying a configuration leaves no block allocated
     const cfg = h.ref;
     try R.check(cfg.?.set_int.?(cfg, "shadow", "resolution", 2048));
     try R.check(cfg.?.set_string.?(cfg, "render", "shader_path", "res/shaders"));
+    _ = try settingsOf(cfg, "shadow");
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

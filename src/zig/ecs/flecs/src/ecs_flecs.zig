@@ -13,6 +13,8 @@ const c = @import("c");
 const abi_ecs = @import("abi_ecs");
 const abi_ecs_flecs_factory = @import("abi_ecs_flecs_factory");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const field_write = @import("field_write.zig");
 const heap = @import("heap");
 
@@ -162,11 +164,10 @@ fn freeRegistered(rq: *const RegisteredQuery) void {
     heap.gpa.free(rq.without);
 }
 
-const test_config: abi_ecs.c.ke_ecs_config = .{ .reserved_id_capacity = 1048576 };
 
 /// The state behind `api.handle`, made by `ke_ecs_flecs_create` and freed by `destroy`. The world
 /// has two sources of entity ids that never meet: flecs's own allocator, moved to start at
-/// `ke_ecs_config.reserved_id_capacity` and serving `entityCreate`, and the pool of ids from
+/// the `reserved_id_capacity` setting and serving `entityCreate`, and the pool of ids from
 /// `reserve_low` up to `reserve_end`, below that split, handed out by `entityReserve` with the
 /// atomic counter `reserve_next`. A reserved id is only a number until `materializeReserved`
 /// makes it alive, once; the `materialized` bitmap, one bit per pool slot, is what keeps a
@@ -1059,7 +1060,7 @@ fn destroy(self_in: ?*abi_ecs.c.ke_ecs) callconv(.c) void {
     heap.gpa.destroy(s);
 }
 
-/// The factory the plugin exports. A null config takes the header's defaults. A failure after the world exists finalizes it and frees the state,
+/// The factory the plugin exports. Its settings are read once through `Settings`. A failure after the world exists finalizes it and frees the state,
 /// leaving the handle zeroed.
 
 /// Slot `pair`. A pair id is flecs's own pair of the relation's component entity and the target, or
@@ -1359,28 +1360,31 @@ fn snapshotFree(self_in: ?*abi_ecs.c.ke_ecs, snap_in: ?*abi_ecs.c.ke_ecs_snapsho
     freeSnapshot(@ptrCast(@alignCast(snap_in orelse return)));
 }
 
+/// The world's settings, with this implementation's defaults.
+const Settings = struct {
+    reserved_id_capacity: u32 = 1048576,
+
+    pub const ranges = .{ .reserved_id_capacity = .{ 1, std.math.maxInt(u32) } };
+};
+
 export fn ke_ecs_flecs_create(
-    config: ?*const abi_ecs.c.ke_ecs_config,
+    settings: ?*abi_settings.c.ke_settings,
     out_ecs: ?*abi_ecs.c.ke_ecs_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_ecs orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_ecs.c.ke_ecs_handle);
-    out.* = create(config) catch |err| {
+    out.* = create(settings) catch |err| {
         log.warn("creating the ECS failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(config: ?*const abi_ecs.c.ke_ecs_config) R.Error!abi_ecs.c.ke_ecs_handle {
-    const reserved_id_capacity = (config orelse {
-        log.warn("creating the ECS needs its config", .{});
+fn create(settings: ?*abi_settings.c.ke_settings) R.Error!abi_ecs.c.ke_ecs_handle {
+    const reserved_id_capacity = (try settings_schema.read(Settings, settings orelse {
+        log.warn("creating the ECS needs its settings", .{});
         return error.InvalidArgument;
-    }).*.reserved_id_capacity;
-    if (reserved_id_capacity == 0) {
-        log.warn("creating the ECS needs a world id base above 0, the capacity of entity_reserve", .{});
-        return error.InvalidArgument;
-    }
+    })).reserved_id_capacity;
 
     installFlecsOsApi();
 
@@ -1471,10 +1475,18 @@ test {
     _ = field_write;
 }
 
-fn made() !abi_ecs.c.ke_ecs_handle {
+const default_capacity = (Settings{}).reserved_id_capacity;
+
+fn madeWith(capacity: ?i64) R.Error!abi_ecs.c.ke_ecs_handle {
+    const written = [_]settings_schema.Pair{.{ .key = "reserved_id_capacity", .value = .{ .int = capacity orelse 0 } }};
+    var settings = settings_schema.Fixed.init(if (capacity == null) &.{} else &written);
     var h: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&test_config, &h));
+    try R.check(ke_ecs_flecs_create(&settings.api, &h));
     return h;
+}
+
+fn made() !abi_ecs.c.ke_ecs_handle {
+    return madeWith(null);
 }
 
 fn register(h: abi_ecs.c.ke_ecs_handle, params: *const abi_ecs.c.ke_component_params) R.Error!abi_asset_resolver.c.ke_component_id {
@@ -1822,25 +1834,21 @@ test "a reserved id can never be one the world's own allocator will issue" {
 
     const reserved = try reserve(handle);
     try testing.expect(reserved != 0);
-    try testing.expect(reserved < test_config.reserved_id_capacity);
+    try testing.expect(reserved < default_capacity);
 
     var i: usize = 0;
     while (i < 64) : (i += 1) {
         const created = try spawn(handle);
-        try testing.expect(created >= test_config.reserved_id_capacity);
+        try testing.expect(created >= default_capacity);
     }
 }
 
 test "reserving past the pool's capacity reports exhaustion instead of colliding" {
-    var config = test_config;
-    var probe: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&config, &probe));
+    const probe = try made();
     const low = stateOf(probe.ref.?).reserve_low;
     probe.destroy.?(probe.ref);
 
-    config.reserved_id_capacity = low + 4;
-    var handle: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&config, &handle));
+    const handle = try madeWith(low + 4);
     defer handle.destroy.?(handle.ref);
     const e = handle.ref.?.*;
 
@@ -1957,16 +1965,14 @@ test "materializing an id the world already owns leaves it alone" {
 }
 
 test "a split that leaves no room for the reserve pool is refused" {
-    var config = abi_ecs.c.ke_ecs_config{ .reserved_id_capacity = 1 };
+    var settings = settings_schema.Fixed.init(&.{.{ .key = "reserved_id_capacity", .value = .{ .int = 1 } }});
     var handle: abi_ecs.c.ke_ecs_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_ecs_flecs_create(&config, &handle)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_ecs_flecs_create(&settings.api, &handle)));
     try testing.expect(handle.ref == null);
 }
 
 test "a caller may move the split between the two id allocators" {
-    var config = abi_ecs.c.ke_ecs_config{ .reserved_id_capacity = 1_000_000 };
-    var handle: abi_ecs.c.ke_ecs_handle = undefined;
-    try R.check(ke_ecs_flecs_create(&config, &handle));
+    const handle = try madeWith(1_000_000);
     defer handle.destroy.?(handle.ref);
 
     try testing.expect(try reserve(handle) < 1_000_000);

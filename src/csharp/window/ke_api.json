@@ -155,44 +155,7 @@
       "external": true
     }
   ],
-  "structs": [
-    {
-      "name": "ke_window_config",
-      "doc": "The values a window is created with, whatever its implementation, each applied as given.",
-      "tags": [
-        "borrowed"
-      ],
-      "fields": [
-        {
-          "name": "title",
-          "type": "const char *",
-          "tags": [
-            "borrowed",
-            "utf8"
-          ],
-          "doc": "Window title."
-        },
-        {
-          "name": "width",
-          "type": "int32_t",
-          "tags": [],
-          "doc": "Client width in pixels."
-        },
-        {
-          "name": "height",
-          "type": "int32_t",
-          "tags": [],
-          "doc": "Client height in pixels."
-        },
-        {
-          "name": "fullscreen",
-          "type": "_Bool",
-          "tags": [],
-          "doc": "Whether the window covers the primary monitor."
-        }
-      ]
-    }
-  ],
+  "structs": [],
   "vtables": [
     {
       "name": "ke_window",
@@ -211,7 +174,7 @@
       "slots": [
         {
           "name": "should_close",
-          "returns": "_Bool",
+          "returns": "bool",
           "tags": [],
           "doc": "Returns true once the user has requested the window to close.",
           "return_doc": null,
@@ -295,5 +258,31 @@
   "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_WINDOW_SETTING_TITLE",
+      "type": "const char *",
+      "value": "\u0022title\u0022",
+      "doc": "Setting every window implementation reads, a string: the window\u0027s title."
+    },
+    {
+      "name": "KE_WINDOW_SETTING_WIDTH",
+      "type": "const char *",
+      "value": "\u0022width\u0022",
+      "doc": "Setting every window implementation reads, an integer: the client width in pixels."
+    },
+    {
+      "name": "KE_WINDOW_SETTING_HEIGHT",
+      "type": "const char *",
+      "value": "\u0022height\u0022",
+      "doc": "Setting every window implementation reads, an integer: the client height in pixels."
+    },
+    {
+      "name": "KE_WINDOW_SETTING_FULLSCREEN",
+      "type": "const char *",
+      "value": "\u0022fullscreen\u0022",
+      "doc": "Setting every window implementation reads, a boolean: whether the window covers the primary monitor."
+    }
+  ]
 }

@@ -33,6 +33,7 @@
 #include <kernel_engine/async/inline/async_inline_create.h>
 #include <kernel_engine/schedule/schedule_create.h>
 #include <kernel_engine/scheduler/scheduler_create.h>
+#include <kernel_engine/configuration/configuration_create.h>
 
 #include <stb_image_write.h>
 
@@ -156,6 +157,8 @@ typedef struct renderer
     ke_schedule_set_id sets[4];
 } renderer;
 
+static ke_settings *unset;
+
 static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
     check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, &(ke_render_resource_binder_grouped_config){ .shader_dir = "shaders" }, &r->binder));
@@ -173,7 +176,7 @@ static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_wor
         .ecs = render_world, .main = main_world, .extraction = extraction, .service = core, .device = gpu, .view_space = r->view_space.ref,
         .camera = r->camera.ref, .scene = r->scene.ref, .frame = r->frame.ref,
     };
-    check("shadow pass", ke_render_shadow_create(&context, &(ke_render_shadow_config){ .resolution = 1024, .light_distance = 25.0f, .extent = 20.0f, .near_plane = 0.1f, .far_plane = 50.0f }, &r->shadow));
+    check("shadow pass", ke_render_shadow_create(&context, unset, &r->shadow));
     check("cluster pass", ke_render_cluster_create(&context, &(ke_render_cluster_config){ .grid_x = 16, .grid_y = 9, .grid_z = 24, .max_lights_per_cluster = 64 }, &r->cluster));
     check("gbuffer pass", ke_render_gbuffer_create(&context, &r->gbuffer));
     check("deferred lighting pass", ke_render_deferred_lighting_create(&context, &(ke_render_deferred_lighting_config){ .ibl_enabled = true }, &r->deferred));
@@ -211,6 +214,10 @@ int main(int argc, char **argv)
     printf("--- c_demo_16: forward lit cube captured offscreen ---\n");
     const bool renderdoc = argc > 2 && strcmp(argv[2], "--renderdoc") == 0;
 
+    ke_configuration_handle configuration = { 0 };
+    check("configuration", ke_configuration_create(&configuration));
+    check("unset settings", configuration.ref->section(configuration.ref, "unset", &unset));
+
     ke_gpu_device_config dp = { .enable_validation = 1, .debug_labels = renderdoc };
     ke_gpu_device_handle gpu = { 0 };
     ke_completion *gpu_ready = NULL;
@@ -236,7 +243,7 @@ int main(int argc, char **argv)
     ke_gpu_render_target *frame_target = renderdoc ? captured.ref : target.ref;
 
     ke_ecs_handle ecs = { 0 };
-    ke_result made_ecs = ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &ecs);
+    ke_result made_ecs = ke_ecs_flecs_create(unset, &ecs);
     if (made_ecs != KE_OK) die_result("ecs", made_ecs);
 
 
@@ -247,7 +254,7 @@ int main(int argc, char **argv)
     ke_scheduler_handle scheduler = { 0 };
     check("scheduler", ke_scheduler_create(jobs.ref, async.ref, &(ke_scheduler_config){ .fixed_dt = 1.0f / 60.0f, .fixed_dt_max_accum = 0.25f }, &scheduler));
     ke_ecs_handle render_world = { 0 };
-    check("render world", ke_ecs_flecs_create(&(ke_ecs_config){ .reserved_id_capacity = 1048576 }, &render_world));
+    check("render world", ke_ecs_flecs_create(unset, &render_world));
     ke_schedule_handle render_schedule = { 0 };
     check("render schedule", ke_schedule_create(render_world.ref, jobs.ref, &(ke_schedule_config){ .refuse_ambiguity = false }, &render_schedule));
     ke_extraction_handle extraction = { 0 };
@@ -357,6 +364,7 @@ int main(int argc, char **argv)
     target.destroy(target.ref);
     gpu.ref->destroy_texture(gpu.ref, texture);
     gpu.destroy(gpu.ref);
+    configuration.destroy(configuration.ref);
 
     printf("--- Done ---\n");
     return lit > 0 && written ? 0 : 1;

@@ -148,6 +148,7 @@ pub fn build(b: *std.Build) void {
     ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
     ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize });
+    ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize });
 
     const ecs_flecs = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -268,7 +269,7 @@ pub fn build(b: *std.Build) void {
         .@"stb-include" = vcpkg_include,
     }, &.{}, .has_tests);
 
-    _ = ctx.member("ke_configuration", .{
+    const configuration = ctx.member("ke_configuration", .{
         .target = target,
         .optimize = optimize,
     }, &.{}, .has_tests);
@@ -508,6 +509,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "render" }),
             b.pathJoin(&.{ src_c, "view" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             vcpkg_include,
         }),
         .libs = joinPaths(b, &.{
@@ -522,6 +524,7 @@ pub fn build(b: *std.Build) void {
         .@"include-dirs" = joinPaths(b, &.{
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "configuration" }),
             b.pathJoin(&.{ src_c, "window" }),
             b.pathJoin(&.{ src_c, "ecs" }),
@@ -559,6 +562,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "job" }),
             b.pathJoin(&.{ src_zig, "scheduler/include" }),
             b.pathJoin(&.{ src_zig, "schedule/include" }),
@@ -570,6 +574,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "io" }),
             b.pathJoin(&.{ src_zig, "file_system/std/include" }),
             b.pathJoin(&.{ src_zig, "io/async/include" }),
+            b.pathJoin(&.{ src_zig, "configuration/include" }),
         }),
         .libs = joinPaths(b, &.{
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_gpu_render_target_texture") }),
@@ -595,11 +600,12 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_render_graph_simple") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_file_system_std") }),
             b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_io_async") }),
+            b.pathJoin(&.{ lib_dir, libFileName(b, target, "ke_configuration") }),
         }),
         .@"link-m" = true,
     }, &.{
         &gpu_render_target_texture.step, &gpu_render_target_renderdoc.step, &gpu_device_webgpu.step, &render_service.step, &binder_grouped.step, &view_space.step, &render_camera.step, &render_scene.step, &render_frame.step, &shadow.step, &cluster.step, &gbuffer.step, &deferred_lighting.step, &tonemap.step,
-        &ecs_flecs.step,                 &file_system_std.step, &io_async.step });
+        &ecs_flecs.step,                 &file_system_std.step, &io_async.step, &configuration.step });
 
     const pong = ctx.example("c_pong", .{
         .target = target,
@@ -623,6 +629,7 @@ pub fn build(b: *std.Build) void {
             b.pathJoin(&.{ src_c, "schedule" }),
             b.pathJoin(&.{ src_c, "module" }),
             b.pathJoin(&.{ src_c, "completion" }),
+            b.pathJoin(&.{ src_c, "settings" }),
             b.pathJoin(&.{ src_c, "job" }),
             b.pathJoin(&.{ src_c, "spatial" }),
             b.pathJoin(&.{ src_c, "text" }),

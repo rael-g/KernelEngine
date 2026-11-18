@@ -15,7 +15,8 @@ uint workers = (uint)ArgValue("--workers", 0);
 
 using var jobs = new EnkiJobSystem(new KernelEngine.Job.JobSystemConfig { WorkerCount = workers });
 using var asyncs = new EnkiAsync(new KernelEngine.Async.AsyncConfig { WorkerCount = 1, SubmitCapacity = 16 });
-using var ecs = new FlecsEcsRegistry(new KernelEngine.Ecs.EcsConfig { ReservedIdCapacity = 1048576 });
+using var config = new KernelEngine.Configuration.DefaultConfiguration();
+using var ecs = new FlecsEcsRegistry(config.Section("ecs"));
 DefaultSchedule Make() => new(ecs, jobs, new ScheduleConfig { RefuseAmbiguity = false });
 using var startup = Make();
 using var preUpdate = Make();

@@ -10,7 +10,7 @@ on the generated page of its header, under `src/c/`.
 |---|---|---|---|
 | contract struct | one header per contract in `src/c/<domain>/` | a call through a slot, with the struct as first argument | a `ke_result`, and a value through a last `out_` parameter |
 | owner | `ke_<name>_handle`, beside its contract, for example `ke_window_handle` | nothing | the borrowed contract pointer (`ref`) and the function that destroys it (`destroy`) |
-| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | its dependencies, the contract's `_config` (such as `ke_window_config`), and the `out_` handle | `KE_OK` and an owner through the output |
+| factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | its dependencies, the `ke_settings` it is created with (the window reads the `KE_WINDOW_SETTING_*` keys), and the `out_` handle | `KE_OK` and an owner through the output |
 | result code | `ke_result` in `kernel_engine/result/result.h` | nothing | `KE_OK`, or the code of the failure |
 | result helper | `Result` in `src/zig/result/result.zig` | the plugin's own translated C namespace | `R.ok`, `R.code`, `R.check` and `R.Error`, the conversions between a Zig error and a code |
 | managed translation | `NativeResults` in `src/csharp/result` | a `ke_result` | a .NET exception, or a `ke_result` written from one |
@@ -52,7 +52,6 @@ A resource is named by a number, and the number that means "none" differs per ki
 | `ke_query_id` | `KE_QUERY_INVALID`, zero |
 | `ke_audio_sound` | `KE_AUDIO_SOUND_INVALID`, zero |
 | `ke_resource_handle` | `KE_RESOURCE_HANDLE_NONE` |
-| configuration subscription | `KE_CONFIGURATION_SUBSCRIPTION_NONE` |
 | GPU object ids | `KE_GPU_INVALID_HANDLE` |
 
 A render handle is a one-member struct, one struct type per kind, so a mesh passed where a texture
