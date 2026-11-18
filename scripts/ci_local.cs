@@ -11,6 +11,7 @@ const string WineImage = "ke-ci-wine";
 const string ToolsVolume = "ke-ci-tools";
 const string PortsVolume = "ke-ci-vcpkg-installed";
 const string WindowsPortsVolume = "ke-ci-vcpkg-installed-windows";
+const string ArchivesVolume = "ke-ci-vcpkg-archives";
 
 var useCache = args.Contains("--cache");
 var keep = args.Contains("--keep");
@@ -67,7 +68,7 @@ try
     else if (Run("git", "clone", "--no-hardlinks", "--quiet", rootDir, checkout) != 0) return 1;
     if (Run("git", "-C", checkout, "-c", "protocol.file.allow=always", "-c", $"submodule.external/kabic.url={Path.Combine(rootDir, "external", "kabic")}", "submodule", "update", "--init", "--quiet") != 0) return 1;
 
-    var run = new List<string> { "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", "-w", "/work" };
+    var run = new List<string> { "run", "--rm", "--network", "host", "-v", $"{checkout}:/work", "-w", "/work", "-v", $"{ArchivesVolume}:/work/build/vcpkg-archives" };
     if (useCache)
     {
         run.AddRange(["-v", $"{ToolsVolume}:/work/build/tools", "-v", $"{PortsVolume}:/work/build/vcpkg-installed"]);
@@ -76,7 +77,7 @@ try
     run.AddRange([Image, "dotnet", "run", "scripts/verify.cs", "--", .. stages, .. updateGolden ? ["--update"] : Array.Empty<string>()]);
 
     Console.WriteLine($"--- running scripts/verify.cs {string.Join(' ', stages)} the way ci.yml does, on Linux"
-        + (useCache ? " (vcpkg caches kept between runs)" : " (cold, no caches)"));
+        + (useCache ? " (vcpkg caches kept between runs)" : " (cold, only the compiled vcpkg ports reused by their ABI hash)"));
     if (windows) Console.WriteLine("    Windows target cross-built on Linux; its tests run under Wine inside the container, never against the host's.");
     else Console.WriteLine("    The Windows leg of the matrix is not simulated here.");
     var exit = Run("docker", [.. run]);

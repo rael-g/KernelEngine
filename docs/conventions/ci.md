@@ -48,6 +48,8 @@ a warning such as a link to a section that does not exist, and `visual` is descr
 
 Three more stages exist for the Windows target and are run only when named: `cross-windows` builds it, `test-windows` runs its Zig tests under Wine, and `test-managed-windows` builds each project under `tests/csharp/` and `tests/integration/` against the Windows libraries and runs its assembly under Wine with the Windows .NET SDK. `scripts/ci_local.cs -- --windows` runs the three inside the image `scripts/ci/Dockerfile.wine` describes, which is where Wine and that SDK come from.
 
+`scripts/ci_local.cs` builds a fresh clone with no Zig cache, so every step of the engine's own build runs cold. The one thing it keeps between runs is the Docker volume `ke-ci-vcpkg-archives`, mounted at `build/vcpkg-archives`: vcpkg restores a compiled port from it only when the port's ABI hash matches, which covers its version, the triplet, the compiler and the flags. `--cache` also keeps `build/tools` and the installed ports.
+
 `dotnet test KernelEngine.slnx` builds every project the solution lists, so each C# example is
 compiled, and runs the test projects it lists: `Configuration` and `Kernel` under `tests/csharp/`, and `Integration` under
 `tests/integration/`, which composes real plugins. kabic's own tests live in its repository.
