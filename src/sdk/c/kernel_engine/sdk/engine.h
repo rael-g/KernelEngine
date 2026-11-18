@@ -171,7 +171,7 @@ typedef struct ke_sdk_engine_desc
 } ke_sdk_engine_desc;
 
 /** The configuration the default parts read their sections from. */
-static inline ke_configuration *ke_sdk_engine_config(ke_sdk_engine *e) { return e->configuration.ref; }
+static inline ke_configuration *ke_sdk_engine_configuration(ke_sdk_engine *e) { return e->configuration.ref; }
 
 static inline ke_result ke_sdk_no_bool(ke_settings *self, const char *key, bool *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
 static inline ke_result ke_sdk_no_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
@@ -420,7 +420,7 @@ static inline ke_result ke_sdk_engine_attach(ke_sdk_engine *engine)
 static inline ke_result ke_sdk_engine_run(ke_sdk_engine *engine, const char *first_scene)
 {
     if (!engine->configuration.ref || !engine->window.ref || !engine->scheduler.ref || !engine->scene_files.ref) return KE_RESULT_INVALID_ARGUMENT;
-    ke_configuration *c = ke_sdk_engine_config(engine);
+    ke_configuration *c = ke_sdk_engine_configuration(engine);
     char scene[KE_SDK_ENGINE_PATH_CAPACITY];
     if (first_scene) snprintf(scene, sizeof scene, "%s", first_scene);
     else snprintf(scene, sizeof scene, "res://scenes/%s.scene.toml", c->get_string(c, "project", "default_scene", "Main"));
