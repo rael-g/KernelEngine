@@ -101,7 +101,7 @@ static class Coverage
             "-targetdir:" + ReportDir,
             "-reporttypes:Cobertura;Html",
             "-sourcedirs:" + BaseDir,
-            "-filefilters:-*Generated*;-*examples*",
+            "-filefilters:-*Generated*;-*.g.cs;-*examples*",
             "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
         ], check: false, cwd: BaseDir);
     }
@@ -146,7 +146,7 @@ static class Coverage
     {
         var baseUri = Norm(BaseDir).TrimEnd('/') + "/";
         if (filePath.StartsWith(baseUri)) filePath = filePath[baseUri.Length..];
-        if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/")) return null;
+        if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/") || filePath.EndsWith(".g.cs")) return null;
         return Short(ModuleFor(filePath));
     }
 
