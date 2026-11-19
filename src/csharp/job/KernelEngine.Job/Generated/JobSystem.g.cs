@@ -20,17 +20,69 @@ public unsafe interface INativeJobSystem
     ke_job_system* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>Runs the work of a frame on workers, each piece after the completions it depends on. Work that does not fit in a frame belongs to the async system. Jobs are never cancelled.</summary>
 public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSystem
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_job_system* _native;
     private readonly ke_job_system* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_job_system*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
@@ -47,10 +99,10 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
 
     ke_job_system* INativeJobSystem.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeJobSystem.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeJobSystem.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -65,7 +117,7 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_job_system*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -113,7 +165,7 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
                     s_parkedCallbackException = null;
                     throw parked;
                 }
-                if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "dispatch");
+                if (!ok) throw NativeResult.FromCode(rc, "dispatch");
                 return resultOut;
             }
         }
@@ -129,12 +181,12 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
                 handler((nint)arg1);
                 return KernelEngine.Result.Native.Result.Ok;
             }
-            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_job_fn: no handler is registered"));
+            return NativeResult.ToCode(new InvalidOperationException("ke_job_fn: no handler is registered"));
         }
         catch (Exception ex)
         {
             s_parkedCallbackException ??= ex;
-            return KernelEngine.NativeResults.ToCode(ex);
+            return NativeResult.ToCode(ex);
         }
     }
 
@@ -173,7 +225,7 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
                     s_parkedCallbackException = null;
                     throw parked;
                 }
-                if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "parallel_for");
+                if (!ok) throw NativeResult.FromCode(rc, "parallel_for");
                 return resultOut;
             }
         }
@@ -189,12 +241,12 @@ public unsafe partial class JobSystem : IDisposable, INativeJobSystem, IJobSyste
                 handler(arg1, arg2, arg3);
                 return KernelEngine.Result.Native.Result.Ok;
             }
-            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_job_range_fn: no handler is registered"));
+            return NativeResult.ToCode(new InvalidOperationException("ke_job_range_fn: no handler is registered"));
         }
         catch (Exception ex)
         {
             s_parkedCallbackException ??= ex;
-            return KernelEngine.NativeResults.ToCode(ex);
+            return NativeResult.ToCode(ex);
         }
     }
 

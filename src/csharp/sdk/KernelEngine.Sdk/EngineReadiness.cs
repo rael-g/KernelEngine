@@ -23,7 +23,7 @@ public sealed unsafe class EngineReadiness
         if (!_completion->poll(_completion, &result)) return false;
         _completion->release(_completion);
         _completion = null;
-        NativeResults.ThrowIfFailed(result, "ke_completion.poll");
+        NativeCall.ThrowIfFailed(result, "ke_completion.poll");
         return true;
     }
 }

@@ -8,6 +8,48 @@ namespace KernelEngine.Framework;
 /// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
 public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.InputActions
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates the action maps, adding through the map's own slots every map the configuration describes under the section: ` &lt;section &gt;.map. &lt;Map &gt;` holds `priority` (default 0) and `enabled` (default true); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;` holds `type` (Button, Axis1D, Axis2D or Axis3D, default Button); ` &lt;section &gt;.map. &lt;Map &gt;.action. &lt;Action &gt;.bindings. &lt;n &gt;` holds `kind` and its keys: `key` for key, `button` (Left, Right, Middle) for mouse, `negative` and `positive` for key_pair, `up`, `down`, `left` and `right` for key_quad, each a key name such as "Space" or "W". The input actions module evaluates the maps each tick.</summary>
     /// <param name="configuration">Read during the call only; NULL creates no map.</param>
     /// <param name="section">The configuration section the maps are read from.</param>
@@ -22,7 +64,7 @@ public sealed unsafe partial class DefaultInputActions : KernelEngine.Framework.
         fixed (byte* sectionPtr = sectionBytes)
         {
             KernelEngine.Framework.Native.ke_input_actions_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((configuration is null ? null : configuration.Native), (sbyte*)sectionPtr, &handle), "ke_input_actions_create");
+            NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_create((configuration is null ? null : configuration.Native), (sbyte*)sectionPtr, &handle), "ke_input_actions_create");
             return handle;
         }
     }

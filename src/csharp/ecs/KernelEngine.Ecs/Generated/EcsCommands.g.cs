@@ -18,27 +18,79 @@ public unsafe interface INativeEcsCommands
     ke_ecs_commands* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>A queue of structural mutations. Every operation records its intent and returns; none changes the world while it runs. The queue is applied, in the order the operations were recorded, by whoever owns it, and an operation's effect is not observable before then. A caller needing a change visible at once uses ke_ecs, which mutates immediately. Recording never touches the world, so these operations may be called while other code reads it. The queue is applied while nothing else runs. An implementation that cannot accept an operation returns its code, logs the reason, and leaves the queue unchanged: KE_RESULT_NOT_SUPPORTED in a phase that may not change structure, KE_RESULT_OUT_OF_MEMORY when the queue cannot grow.</summary>
 public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsCommands
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_ecs_commands* _native;
     private readonly ke_ecs_commands* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs_commands*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_ecs_commands* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(EcsCommands));
 
     ke_ecs_commands* INativeEcsCommands.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeEcsCommands.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeEcsCommands.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -63,7 +115,7 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     public Entity Spawn()
     {
         Entity resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->spawn(Handle, &resultOut), "spawn");
+        NativeResult.ThrowIfFailed(Handle->spawn(Handle, &resultOut), "spawn");
         return resultOut;
     }
 
@@ -73,7 +125,7 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     {
         fixed (TData* dataPtr = &data)
         {
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData)), "attach");
+            NativeResult.ThrowIfFailed(Handle->attach(Handle, entity, cid, (void*)dataPtr, (nuint)sizeof(TData)), "attach");
         }
     }
 
@@ -81,14 +133,14 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     /// <exception cref="Exception">The native call failed.</exception>
     public void Detach(Entity entity, ComponentId cid)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->detach(Handle, entity, cid), "detach");
+        NativeResult.ThrowIfFailed(Handle->detach(Handle, entity, cid), "detach");
     }
 
     /// <summary>Records destroying `entity`.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Despawn(Entity entity)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->despawn(Handle, entity), "despawn");
+        NativeResult.ThrowIfFailed(Handle->despawn(Handle, entity), "despawn");
     }
 
     /// <summary>Records a structural operation for work the fixed verbs above cannot express. `fn` runs when the queue is applied, in order with the other operations. `user_size` bytes of `user` are copied, so the caller's buffer need not outlive the call.</summary>
@@ -97,7 +149,7 @@ public unsafe partial class EcsCommands : IDisposable, INativeEcsCommands, IEcsC
     {
         fixed (TUser* userPtr = &user)
         {
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->defer(Handle, (delegate* unmanaged[Cdecl]<ke_ecs*, void*, KernelEngine.Result.Native.Result>)fn, (void*)userPtr, (nuint)sizeof(TUser)), "defer");
+            NativeResult.ThrowIfFailed(Handle->defer(Handle, (delegate* unmanaged[Cdecl]<ke_ecs*, void*, KernelEngine.Result.Native.Result>)fn, (void*)userPtr, (nuint)sizeof(TUser)), "defer");
         }
     }
 

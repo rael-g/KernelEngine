@@ -18,27 +18,79 @@ public unsafe interface INativePhysics2d
     ke_physics_2d* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>A 2D rigid-body physics world. One instance is one world; several worlds take several instances. Not thread-safe — call all methods on the same thread.</summary>
 public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2D
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_physics_2d* _native;
     private readonly ke_physics_2d* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_physics_2d*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_physics_2d* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Physics2D));
 
     ke_physics_2d* INativePhysics2d.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativePhysics2d.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativePhysics2d.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -53,7 +105,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_physics_2d*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -85,7 +137,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     public Body2d CreateBody(BodyType2D type, System.Numerics.Vector2 position)
     {
         Body2d resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_body(Handle, (BodyType2D)type, position, &resultOut), "create_body");
+        NativeResult.ThrowIfFailed(Handle->create_body(Handle, (BodyType2D)type, position, &resultOut), "create_body");
         return resultOut;
     }
 
@@ -101,7 +153,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddBoxFixture(Body2d body, System.Numerics.Vector2 halfExtents, System.Numerics.Vector2 offset, float offsetAngle, float density, float friction, float restitution, CollisionFilter2d? filter)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfExtents, offset, offsetAngle, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_box_fixture");
+        NativeResult.ThrowIfFailed(Handle->add_box_fixture(Handle, body, halfExtents, offset, offsetAngle, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_box_fixture");
     }
 
     /// <summary>Attaches a circle fixture at the given offset from the body origin.</summary>
@@ -109,7 +161,7 @@ public unsafe partial class Physics2D : IDisposable, INativePhysics2d, IPhysics2
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddCircleFixture(Body2d body, float radius, System.Numerics.Vector2 offset, float density, float friction, float restitution, CollisionFilter2d? filter)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offset, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_circle_fixture");
+        NativeResult.ThrowIfFailed(Handle->add_circle_fixture(Handle, body, radius, offset, density, friction, restitution, filter.HasValue ? (CollisionFilter2d*)Unsafe.AsPointer(ref Unsafe.AsRef(in Nullable.GetValueRefOrDefaultRef(in filter))) : null), "add_circle_fixture");
     }
 
     /// <summary>Reads the body's current pose and motion.</summary>

@@ -54,7 +54,7 @@ public sealed class EngineSchedules
     {
         var native = extraction.Native;
         var run = (delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result>)native->run;
-        NativeResults.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, SchedulerCadence.EveryTick), "ke_scheduler.add");
+        NativeCall.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, SchedulerCadence.EveryTick), "ke_scheduler.add");
     }
 
     /// <summary>Adds <paramref name="schedule"/> to <paramref name="scheduler"/> as an executable whose user is the schedule, run by its own native run slot.</summary>
@@ -65,6 +65,6 @@ public sealed class EngineSchedules
     {
         var native = schedule.Native;
         var run = (delegate* unmanaged[Cdecl]<void*, float, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result>)native->run;
-        NativeResults.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, cadence), "ke_scheduler.add");
+        NativeCall.ThrowIfFailed(scheduler.Native->add(scheduler.Native, run, native, cadence), "ke_scheduler.add");
     }
 }

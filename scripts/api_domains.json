@@ -16,8 +16,19 @@
     "resultType": "ke_result",
     "resultOk": "Ok",
     "resultManagedType": "KernelEngine.Result.Native.Result",
-    "resultHelperClass": "KernelEngine.NativeResults",
-    "ownerClass": "global::KernelEngine.Interop.NativeOwner",
+    "resultFailure": "General",
+    "resultGeneralException": "System.InvalidOperationException",
+    "resultExceptions": {
+      "General": "System.InvalidOperationException",
+      "NotFound": "System.Collections.Generic.KeyNotFoundException",
+      "Io": "System.IO.IOException",
+      "OutOfMemory": "System.OutOfMemoryException",
+      "InvalidArgument": "System.ArgumentException",
+      "NotInitialized": "System.InvalidOperationException",
+      "NotSupported": "System.NotSupportedException",
+      "AlreadyExists": "System.InvalidOperationException",
+      "Cancelled": "System.OperationCanceledException"
+    },
     "commonManagedNamespace": "KernelEngine.Common",
     "fieldTable": {
       "entryType": "ke_component_field",
@@ -1254,26 +1265,6 @@
       "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
   },
   "extensions": {
-    "nodeBases": {
-      "outDir": "src/csharp/framework/KernelEngine.Framework.Nodes/Generated/Nodes",
-      "namespace": "KernelEngine.Framework.Nodes",
-      "usings": ["KernelEngine.Common", "KernelEngine.Render", "KernelEngine.Physics", "KernelEngine.Audio.Native"]
-    },
-    "resultCodes": {
-      "out": "src/csharp/result/KernelEngine.Result/Generated/NativeResults.Codes.g.cs",
-      "general": "InvalidOperationException",
-      "codes": [
-        { "code": "KE_RESULT_GENERAL", "managed": "InvalidOperationException" },
-        { "code": "KE_RESULT_NOT_FOUND", "managed": "KeyNotFoundException" },
-        { "code": "KE_RESULT_IO", "managed": "IOException" },
-        { "code": "KE_RESULT_OUT_OF_MEMORY", "managed": "OutOfMemoryException" },
-        { "code": "KE_RESULT_INVALID_ARGUMENT", "managed": "ArgumentException" },
-        { "code": "KE_RESULT_NOT_INITIALIZED", "managed": "InvalidOperationException" },
-        { "code": "KE_RESULT_NOT_SUPPORTED", "managed": "NotSupportedException" },
-        { "code": "KE_RESULT_ALREADY_EXISTS", "managed": "InvalidOperationException" },
-        { "code": "KE_RESULT_CANCELLED", "managed": "OperationCanceledException" }
-      ]
-    },
 
     "fieldTables": {},
     "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }

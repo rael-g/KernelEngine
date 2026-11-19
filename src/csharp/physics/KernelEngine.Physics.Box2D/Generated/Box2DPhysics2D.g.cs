@@ -8,6 +8,48 @@ namespace KernelEngine.Physics.Box2D;
 /// <summary>Creates a 2D physics world whose solver runs its tasks on job_system, borrowed for the world's lifetime, one Box2D worker per worker slot.</summary>
 public sealed unsafe partial class Box2DPhysics2D : KernelEngine.Physics.Physics2D
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates a 2D physics world whose solver runs its tasks on job_system, borrowed for the world's lifetime, one Box2D worker per worker slot.</summary>
     /// <param name="jobSystem"></param>
     /// <param name="settings">Read once. KE_PHYSICS_2D_SETTING_GRAVITY_X and KE_PHYSICS_2D_SETTING_GRAVITY_Y, each default 0.</param>
@@ -20,7 +62,7 @@ public sealed unsafe partial class Box2DPhysics2D : KernelEngine.Physics.Physics
     {
         ArgumentNullException.ThrowIfNull(jobSystem);
         KernelEngine.Physics.Native.ke_physics_2d_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(jobSystem.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_physics_2d_box2d_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Physics.Box2D.Native.NativeMethods.physics_2d_box2d_create(jobSystem.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_physics_2d_box2d_create");
         return handle;
     }
 }

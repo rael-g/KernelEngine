@@ -8,6 +8,48 @@ namespace KernelEngine.Job.Inline;
 /// <summary>Creates a job system that runs every job on the creating thread, when it is waited on or drained.</summary>
 public sealed unsafe partial class InlineJobSystem : KernelEngine.Job.JobSystem
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates a job system that runs every job on the creating thread, when it is waited on or drained.</summary>
     /// <param name="settings">Read once. KE_JOB_SYSTEM_SETTING_WORKER_COUNT, default 0, the only value it accepts.</param>
     public InlineJobSystem(KernelEngine.Settings.IPartSettings settings) : base(Create(settings))
@@ -17,7 +59,7 @@ public sealed unsafe partial class InlineJobSystem : KernelEngine.Job.JobSystem
     private static KernelEngine.Job.Native.ke_job_system_handle Create(KernelEngine.Settings.IPartSettings settings)
     {
         KernelEngine.Job.Native.ke_job_system_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Job.Inline.Native.NativeMethods.job_system_inline_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_job_system_inline_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Job.Inline.Native.NativeMethods.job_system_inline_create(((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_job_system_inline_create");
         return handle;
     }
 }

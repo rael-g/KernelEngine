@@ -13,11 +13,11 @@ public class LoadingAModelThroughTheStdIo
     [Fact]
     public void AGltfAndTheBufferItNamesAreReadIntoMeshesAndMaterials()
     {
-        using var config = new KernelEngine.Configuration.DefaultConfiguration(null);
-        using var asyncs = new EnkiAsync(null, config.Section("async"));
-        using var files = new StdFileSystem(null, ".");
-        using var io = new StdIo(null, files, config.Section("io"));
-        using var loader = new AssimpAssetLoader(null, io);
+        using var config = new KernelEngine.Configuration.DefaultConfiguration();
+        using var asyncs = new EnkiAsync(config.Section("async"));
+        using var files = new StdFileSystem(".");
+        using var io = new StdIo(files, config.Section("io"));
+        using var loader = new AssimpAssetLoader(io);
 
         using var model = loader.LoadModel(Path.Combine(AppContext.BaseDirectory, "assets", "Box.gltf"));
 

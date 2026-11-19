@@ -12,9 +12,7 @@ is `src/zig/logger/log.zig`, the managed side is under `src/csharp/logger/`.
 | callback | `ke_log_callback` | a context, a level, a scope and a message | whatever the host does with the line |
 | library destination | `@import("log").Destination` in each plugin root's `std_options` | every `std.log` line of the library | the line to the callback the host set, or to stderr |
 | library setter | `<library>_set_log_callback`, declared in each plugin's `<library>_log.h` | a callback and its context | them to the library's destination |
-| managed bridge | `LogCallback`, `LogCallbackNative`, generated from `ke_log_callback` | a managed handler | the callback pointer and the context a setter takes |
-| managed route | `NativeLogging` | an `ILoggerFactory` | the callback and one context per factory, which log each line to the factory's logger for its scope |
-| managed logging | `Microsoft.Extensions.Logging` | lines from managed code and from the route | them to the providers the host added, filtered by the levels it set |
+| managed setter | `NativeMethods.<library>_set_log_callback`, the setter's generated P/Invoke | a callback pointer and its context | them to the library's setter |
 
 ## What ties the parts together
 
@@ -27,10 +25,8 @@ library a plugin routes logs under that library's own name.
 
 **Until a callback is set, lines go to stderr.** A null callback sends them back there.
 
-**One channel.** The code that creates a library's objects hands the setter
-`NativeLogging.Callback` and `NativeLogging.ContextOf(loggerFactory)`, with the `ILoggerFactory`
-the host registered in its container, so a native line is logged under the category of its scope, at the
-`Microsoft.Extensions.Logging` level of the same name, beside every managed line.
+**A managed host sets it like any host.** It calls the library's setter through the generated
+P/Invoke, with a function pointer and a context of its own.
 
 **The filter and the output are the host's.** The host composes them with the logging builder, as any
 .NET application does; a line below the level it set is dropped, native or managed.

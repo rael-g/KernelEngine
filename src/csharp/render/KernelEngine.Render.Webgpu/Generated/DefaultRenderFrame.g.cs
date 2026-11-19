@@ -8,6 +8,48 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Makes the frame and registers the tag "render.frame" in ecs. Its systems come from ke_render_frame_systems_create.</summary>
 public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Frame.RenderFrame
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Makes the frame and registers the tag "render.frame" in ecs. Its systems come from ke_render_frame_systems_create.</summary>
     /// <param name="ecs">The render world; registers the frame tag; borrowed.</param>
     /// <param name="graph">The frame is declared into it; borrowed, must outlive it.</param>
@@ -34,7 +76,7 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         KernelEngine.Render.Frame.Native.ke_render_frame_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, colorFormat, depthFormat, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_frame_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, colorFormat, depthFormat, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_frame_create");
         return handle;
     }
 }

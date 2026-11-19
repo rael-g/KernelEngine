@@ -22,17 +22,69 @@ public unsafe interface INativeExtraction
     ke_extraction* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>Gives every main-world entity tagged render_synced, or carrying a component registered with sync_component, a pair in the render world, and makes the registered components of each pair what they are in the main world at the moment of an extraction.</summary>
 public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtraction
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_extraction* _native;
     private readonly ke_extraction* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_extraction*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
@@ -49,10 +101,10 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
 
     ke_extraction* INativeExtraction.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeExtraction.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeExtraction.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -67,7 +119,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_extraction*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -85,14 +137,14 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
     /// <exception cref="Exception">The native call failed.</exception>
     public void SyncComponent(ComponentId mainComponent)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->sync_component(Handle, mainComponent), "sync_component");
+        NativeResult.ThrowIfFailed(Handle->sync_component(Handle, mainComponent), "sync_component");
     }
 
     /// <summary>Registers a copy: at each extraction, the pair carries render_component equal to the entity's main_component, every ENTITY field holding the entity's pair or the null entity; when the entity lost the component, the pair loses it too. Both must have the same size; registering the same pair again changes nothing.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void ExtractCopy(ComponentId mainComponent, ComponentId renderComponent)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->extract_copy(Handle, mainComponent, renderComponent), "extract_copy");
+        NativeResult.ThrowIfFailed(Handle->extract_copy(Handle, mainComponent, renderComponent), "extract_copy");
     }
 
     /// <summary>Registers an interpolation: like a copy, except that for an entity tagged interpolated the pair receives blend of previous_component and main_component at the loop's alpha. An entity first paired, or tagged teleported, takes its current value as its previous one.</summary>
@@ -117,7 +169,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
             s_parkedCallbackException = null;
             throw parked;
         }
-        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "extract_interpolate");
+        if (!ok) throw NativeResult.FromCode(rc, "extract_interpolate");
     }
 
     [UnmanagedCallersOnly(CallConvs = [typeof(CallConvCdecl)])]
@@ -158,7 +210,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
             s_parkedCallbackException = null;
             throw parked;
         }
-        if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "extract_custom");
+        if (!ok) throw NativeResult.FromCode(rc, "extract_custom");
     }
 
     /// <summary>The handler, and the provider a failure of it is reported to.</summary>
@@ -178,12 +230,12 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
                 handler(state.Owner, (nint)arg2, (nint)arg3);
                 return KernelEngine.Result.Native.Result.Ok;
             }
-            return KernelEngine.NativeResults.ToCode(new InvalidOperationException("ke_extraction_custom_fn: no handler is registered"));
+            return NativeResult.ToCode(new InvalidOperationException("ke_extraction_custom_fn: no handler is registered"));
         }
         catch (Exception ex)
         {
             s_parkedCallbackException ??= ex;
-            return KernelEngine.NativeResults.ToCode(ex);
+            return NativeResult.ToCode(ex);
         }
     }
 
@@ -193,7 +245,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
     public Entity RenderEntity(Entity main)
     {
         Entity resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->render_entity(Handle, main, &resultOut), "render_entity");
+        NativeResult.ThrowIfFailed(Handle->render_entity(Handle, main, &resultOut), "render_entity");
         return resultOut;
     }
 
@@ -203,7 +255,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
     public Entity MainEntity(Entity render)
     {
         Entity resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->main_entity(Handle, render, &resultOut), "main_entity");
+        NativeResult.ThrowIfFailed(Handle->main_entity(Handle, render, &resultOut), "main_entity");
         return resultOut;
     }
 
@@ -211,7 +263,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
     /// <exception cref="Exception">The native call failed.</exception>
     public void Extract(float alpha)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->extract(Handle, alpha), "extract");
+        NativeResult.ThrowIfFailed(Handle->extract(Handle, alpha), "extract");
     }
 
     /// <summary>One run of the render stage, with the ABI of a scheduler's executable whose user is the extraction: extracts at the scheduler's fixed alpha, then starts a run of the render schedule.</summary>
@@ -220,7 +272,7 @@ public unsafe partial class Extraction : IDisposable, INativeExtraction, IExtrac
     public nint Run(float dt)
     {
         nint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->run(Handle, dt, (ke_completion**)&resultOut), "run");
+        NativeResult.ThrowIfFailed(Handle->run(Handle, dt, (ke_completion**)&resultOut), "run");
         return resultOut;
     }
 

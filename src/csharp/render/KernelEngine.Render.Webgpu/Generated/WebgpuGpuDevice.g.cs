@@ -8,6 +8,48 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Creates a ke_gpu_device backed by WebGPU.</summary>
 public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.GpuDevice
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Receives the completion that finishes when the device is ready, already finished since the device is made before the call returns; the caller releases it. Left NULL on failure.</summary>
     public nint Ready { get; }
 
@@ -28,7 +70,7 @@ public sealed unsafe partial class WebgpuGpuDevice : KernelEngine.Render.Gpu.Gpu
     {
         KernelEngine.Render.Native.ke_gpu_device_handle handle;
         nint ready = default;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((async is null ? null : async.Native), ((KernelEngine.Settings.INativeSettings)settings).Native, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.gpu_device_webgpu_create((async is null ? null : async.Native), ((KernelEngine.Settings.INativeSettings)settings).Native, (KernelEngine.Completion.Native.ke_completion**)&ready, &handle), "ke_gpu_device_webgpu_create");
         return (handle, ready);
     }
 }

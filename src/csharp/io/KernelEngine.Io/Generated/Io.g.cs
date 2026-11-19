@@ -22,27 +22,79 @@ public unsafe interface INativeIo
     ke_io* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>Reads files without blocking the caller: each slot that reads submits a request, which runs elsewhere and is waited on exactly once, or passed as a dependency through its completion. A request never waited on is never released. Paths follow ke_file_system. Every slot may be called from several threads at once.</summary>
 public unsafe partial class Io : IDisposable, INativeIo, IIo
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_io* _native;
     private readonly ke_io* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_io*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_io* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(Io));
 
     ke_io* INativeIo.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeIo.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeIo.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -57,7 +109,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_io*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -84,7 +136,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->read_file(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "read_file");
+            NativeResult.ThrowIfFailed(Handle->read_file(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "read_file");
             return new IoRequest(resultOut);
         }
     }
@@ -102,7 +154,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->open(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "open");
+            NativeResult.ThrowIfFailed(Handle->open(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "open");
             return new IoRequest(resultOut);
         }
     }
@@ -117,7 +169,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
     public IoRequest ReadAt(nint file, ulong offset, nint dst, nuint len)
     {
         nint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->read_at(Handle, (ke_open_file*)file, offset, (void*)dst, len, (ke_io_request**)&resultOut), "read_at");
+        NativeResult.ThrowIfFailed(Handle->read_at(Handle, (ke_open_file*)file, offset, (void*)dst, len, (ke_io_request**)&resultOut), "read_at");
         return new IoRequest(resultOut);
     }
 
@@ -134,7 +186,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->stat(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "stat");
+            NativeResult.ThrowIfFailed(Handle->stat(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "stat");
             return new IoRequest(resultOut);
         }
     }
@@ -152,7 +204,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->file_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "file_exists");
+            NativeResult.ThrowIfFailed(Handle->file_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "file_exists");
             return new IoRequest(resultOut);
         }
     }
@@ -170,7 +222,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->dir_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "dir_exists");
+            NativeResult.ThrowIfFailed(Handle->dir_exists(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "dir_exists");
             return new IoRequest(resultOut);
         }
     }
@@ -188,7 +240,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->list_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "list_dir");
+            NativeResult.ThrowIfFailed(Handle->list_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "list_dir");
             return new IoRequest(resultOut);
         }
     }
@@ -208,7 +260,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->write_file(Handle, (sbyte*)pathPtr, (void*)bytes, len, (ke_io_request**)&resultOut), "write_file");
+            NativeResult.ThrowIfFailed(Handle->write_file(Handle, (sbyte*)pathPtr, (void*)bytes, len, (ke_io_request**)&resultOut), "write_file");
             return new IoRequest(resultOut);
         }
     }
@@ -226,7 +278,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->make_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "make_dir");
+            NativeResult.ThrowIfFailed(Handle->make_dir(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "make_dir");
             return new IoRequest(resultOut);
         }
     }
@@ -244,7 +296,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
         fixed (byte* pathPtr = pathBytes)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->remove(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "remove");
+            NativeResult.ThrowIfFailed(Handle->remove(Handle, (sbyte*)pathPtr, (ke_io_request**)&resultOut), "remove");
             return new IoRequest(resultOut);
         }
     }
@@ -269,7 +321,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
             fixed (byte* toPtr = toBytes)
             {
                 nint resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->rename(Handle, (sbyte*)fromPtr, (sbyte*)toPtr, (ke_io_request**)&resultOut), "rename");
+                NativeResult.ThrowIfFailed(Handle->rename(Handle, (sbyte*)fromPtr, (sbyte*)toPtr, (ke_io_request**)&resultOut), "rename");
                 return new IoRequest(resultOut);
             }
         }
@@ -297,7 +349,7 @@ public unsafe partial class Io : IDisposable, INativeIo, IIo
     public IoResult Wait(IoRequest request)
     {
         IoResult resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->wait(Handle, (ke_io_request*)request.Address, &resultOut), "wait");
+        NativeResult.ThrowIfFailed(Handle->wait(Handle, (ke_io_request*)request.Address, &resultOut), "wait");
         return resultOut;
     }
 
