@@ -3,6 +3,7 @@
 const unsigned long long layout_values[] = {
     sizeof(ke_assembly),
     offsetof(ke_assembly, handle),
+    offsetof(ke_assembly, route_log),
     offsetof(ke_assembly, add_part),
     offsetof(ke_assembly, add_instance),
     offsetof(ke_assembly, add_external),

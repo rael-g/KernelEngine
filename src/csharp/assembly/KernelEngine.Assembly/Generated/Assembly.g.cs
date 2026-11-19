@@ -9,6 +9,7 @@ using System.Runtime.InteropServices;
 using KernelEngine.Assembly.Native;
 using KernelEngine.Common;
 using KernelEngine.Common.Native;
+using KernelEngine.Logger;
 using KernelEngine.Part;
 using KernelEngine.Part.Native;
 
@@ -23,7 +24,7 @@ public unsafe interface INativeAssembly
     global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
-/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied. Each distinct log setter of the parts is called once, with the destination the assembly was created with, before anything is created.</summary>
+/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied.</summary>
 public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
 {
 
@@ -129,6 +130,15 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         _owned = native;
         _destroy = null;
         _owner = null;
+    }
+
+    /// <summary>Sends every line the parts' libraries log to log: resolve calls each distinct log setter of the parts once, before anything is created. Without it they log to stderr.</summary>
+    /// <param name="log">Receives each line, on whichever thread logged; must outlive the assembly.</param>
+    /// <param name="logCtx">Handed to log unchanged.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    public void RouteLog(nint log, nint logCtx)
+    {
+        NativeResult.ThrowIfFailed(Handle->route_log(Handle, (delegate* unmanaged[Cdecl]<void*, LogLevel, sbyte*, sbyte*, void>)log, (void*)logCtx), "route_log");
     }
 
     /// <summary>Makes part available to instances.</summary>

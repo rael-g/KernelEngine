@@ -2,6 +2,7 @@ using System.Numerics;
 
 using global::KernelEngine.Assembly;
 using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
 
 using KernelEngine.Part.Native;
 using KernelEngine.Result.Native;
@@ -11,6 +12,9 @@ namespace KernelEngine.Assembly.Native;
 public unsafe partial struct ke_assembly
 {
     public void* handle;
+
+    [NativeTypeName("ke_result (*)(struct ke_assembly *, ke_log_callback, void *)")]
+    public delegate* unmanaged[Cdecl]<ke_assembly*, delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void>, void*, KernelEngine.Result.Native.Result> route_log;
 
     [NativeTypeName("ke_result (*)(struct ke_assembly *, const ke_part *)")]
     public delegate* unmanaged[Cdecl]<ke_assembly*, KernelEngine.Part.Native.ke_part*, KernelEngine.Result.Native.Result> add_part;

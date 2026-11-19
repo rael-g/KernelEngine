@@ -36,6 +36,13 @@ pub const Assembly = struct {
     /// The vtable whose slots call the methods of T, which embeds it as the named field.
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_assembly {
         return .{
+            .route_log = &struct {
+                fn call(self: ?*c.ke_assembly, a0: c.ke_log_callback, a1: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                    const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
+                    T.routeLog(state, a0, a1) catch |failure| return resultOf(failure);
+                    return abi_result.c.KE_OK;
+                }
+            }.call,
             .add_part = &struct {
                 fn call(self: ?*c.ke_assembly, a0: ?*const abi_part.c.ke_part) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
@@ -122,6 +129,12 @@ pub const Assembly = struct {
                 }
             }.call,
         };
+    }
+
+    /// Sends every line the parts' libraries log to log: resolve calls each distinct log setter of
+    /// the parts once, before anything is created. Without it they log to stderr.
+    pub fn routeLog(self: Assembly, log: c.ke_log_callback, log_ctx: ?*anyopaque) Error!void {
+        try checkResult(self.ptr.route_log.?(self.ptr, log, log_ctx));
     }
 
     /// Makes part available to instances.

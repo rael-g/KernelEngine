@@ -8,6 +8,7 @@
         .ke_io_pending_reads = .{ .path = "src/zig/io/pending_reads" },
         .ke_settings_schema = .{ .path = "src/zig/settings/schema" },
         .ke_part = .{ .path = "src/zig/part" },
+        .ke_assembly_default = .{ .path = "src/zig/assembly/default" },
         .ke_logger = .{ .path = "src/zig/logger" },
         .ke_result = .{ .path = "src/zig/result" },
         .ke_ecs_flecs = .{ .path = "src/zig/ecs/flecs" },

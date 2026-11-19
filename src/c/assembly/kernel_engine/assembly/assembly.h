@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_ASSEMBLY_ASSEMBLY_H_
 #define KERNEL_ENGINE_ASSEMBLY_ASSEMBLY_H_
 
+#include <kernel_engine/logger/log_callback.h>
 #include <kernel_engine/part/part.h>
 #include <kernel_engine/result/result.h>
 
@@ -40,10 +41,16 @@ typedef void (*ke_assembly_report_fn)(void *ctx, ke_assembly_failure failure, co
 
 /// [interface] Assembles instances of parts from a composition: which instances exist, of which part, with which
 /// section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole
-/// composition resolves. Every name is copied. Each distinct log setter of the parts is called once, with the
-/// destination the assembly was created with, before anything is created.
+/// composition resolves. Every name is copied.
 typedef struct ke_assembly {
     void *handle;
+
+    /// Sends every line the parts' libraries log to @p log: resolve calls each distinct log setter of the parts once,
+    /// before anything is created. Without it they log to stderr.
+    /// @param log [callback] Receives each line, on whichever thread logged; must outlive the assembly.
+    /// @param log_ctx [context] Handed to @p log unchanged.
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a null @p log; KE_RESULT_NOT_SUPPORTED after resolve.
+    ke_result (*route_log)(struct ke_assembly *self, ke_log_callback log, void *log_ctx);
 
     /// Makes @p part available to instances.
     /// @param part [borrowed] Must outlive the assembly.

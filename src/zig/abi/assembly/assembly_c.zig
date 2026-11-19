@@ -64,11 +64,12 @@ pub const ke_assembly_report_fn = ?*const fn (?*anyopaque, ke_assembly_failure, 
 
 /// Assembles instances of parts from a composition: which instances exist, of which part, with
 /// which section of settings, and which instance each slot and hook is bound to. Nothing is
-/// created before the whole composition resolves. Every name is copied. Each distinct log setter
-/// of the parts is called once, with the destination the assembly was created with, before
-/// anything is created.
+/// created before the whole composition resolves. Every name is copied.
 pub const ke_assembly = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
+    /// Sends every line the parts' libraries log to log: resolve calls each distinct log setter of
+    /// the parts once, before anything is created. Without it they log to stderr.
+    route_log: ?*const fn (?*ke_assembly, ke_log_callback, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
     /// Makes part available to instances.
     add_part: ?*const fn (?*ke_assembly, ?*const abi_part.c.ke_part) callconv(.c) abi_result.c.ke_result = null,
     /// Declares the instance name of the part part, created with the section section of the

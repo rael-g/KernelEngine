@@ -1284,20 +1284,21 @@ ke_part size=96 align=8
   set_log 88
 
 [assembly]
-ke_assembly size=104 align=8
+ke_assembly size=112 align=8
   handle 0
-  add_part 8
-  add_instance 16
-  add_external 24
-  bind 32
-  hook 40
-  order 48
-  add_set 56
-  order_set 64
-  set_default 72
-  resolve 80
-  advance 88
-  get 96
+  route_log 8
+  add_part 16
+  add_instance 24
+  add_external 32
+  bind 40
+  hook 48
+  order 56
+  add_set 64
+  order_set 72
+  set_default 80
+  resolve 88
+  advance 96
+  get 104
 ke_assembly_handle size=16 align=8
   ref 0
   destroy 8

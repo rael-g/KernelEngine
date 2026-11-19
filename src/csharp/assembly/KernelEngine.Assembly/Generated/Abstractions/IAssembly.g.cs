@@ -5,6 +5,7 @@
 
 using KernelEngine.Assembly.Native;
 using KernelEngine.Common;
+using KernelEngine.Logger;
 using KernelEngine.Part;
 using KernelEngine.Part.Native;
 
@@ -20,6 +21,11 @@ public delegate void AssemblyReport(AssemblyFailure failure, string instance, st
 /// <summary>The assembly contract game code depends on, so a caller names a capability rather than the <see cref="Assembly"/> that carries it.</summary>
 public interface IAssembly : IDisposable
 {
+    /// <summary>Sends every line the parts' libraries log to log: resolve calls each distinct log setter of the parts once, before anything is created. Without it they log to stderr.</summary>
+    /// <param name="log">Receives each line, on whichever thread logged; must outlive the assembly.</param>
+    /// <param name="logCtx">Handed to log unchanged.</param>
+    /// <exception cref="Exception">The native call failed.</exception>
+    void RouteLog(nint log, nint logCtx);
     /// <summary>Makes part available to instances.</summary>
     /// <param name="part">Must outlive the assembly.</param>
     /// <exception cref="Exception">The native call failed.</exception>

@@ -1,6 +1,43 @@
 {
   "enums": [
     {
+      "name": "ke_log_level",
+      "doc": "Diagnostic message severity levels.",
+      "values": [
+        {
+          "name": "KE_LOG_LEVEL_TRACE",
+          "value": 0,
+          "doc": null
+        },
+        {
+          "name": "KE_LOG_LEVEL_DEBUG",
+          "value": 1,
+          "doc": null
+        },
+        {
+          "name": "KE_LOG_LEVEL_INFO",
+          "value": 2,
+          "doc": null
+        },
+        {
+          "name": "KE_LOG_LEVEL_WARNING",
+          "value": 3,
+          "doc": null
+        },
+        {
+          "name": "KE_LOG_LEVEL_ERROR",
+          "value": 4,
+          "doc": null
+        },
+        {
+          "name": "KE_LOG_LEVEL_CRITICAL",
+          "value": 5,
+          "doc": null
+        }
+      ],
+      "external": true
+    },
+    {
       "name": "ke_result_domain",
       "doc": "The domains that own a range of result codes. A domain\u0027s own codes are written \u0060KE_RESULT_CODE(KE_RESULT_DOMAIN_ \u003CDOMAIN \u003E, n)\u0060 in its header, with \u0060n\u0060 from 1 up.",
       "values": [
@@ -154,43 +191,6 @@
         {
           "name": "KE_RESULT_MAX_ENUM",
           "value": 2147483647,
-          "doc": null
-        }
-      ],
-      "external": true
-    },
-    {
-      "name": "ke_log_level",
-      "doc": "Diagnostic message severity levels.",
-      "values": [
-        {
-          "name": "KE_LOG_LEVEL_TRACE",
-          "value": 0,
-          "doc": null
-        },
-        {
-          "name": "KE_LOG_LEVEL_DEBUG",
-          "value": 1,
-          "doc": null
-        },
-        {
-          "name": "KE_LOG_LEVEL_INFO",
-          "value": 2,
-          "doc": null
-        },
-        {
-          "name": "KE_LOG_LEVEL_WARNING",
-          "value": 3,
-          "doc": null
-        },
-        {
-          "name": "KE_LOG_LEVEL_ERROR",
-          "value": 4,
-          "doc": null
-        },
-        {
-          "name": "KE_LOG_LEVEL_CRITICAL",
-          "value": 5,
           "doc": null
         }
       ],
@@ -2326,7 +2326,7 @@
     },
     {
       "name": "ke_assembly",
-      "doc": "Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied. Each distinct log setter of the parts is called once, with the destination the assembly was created with, before anything is created.",
+      "doc": "Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied.",
       "tags": [
         "interface"
       ],
@@ -2339,6 +2339,32 @@
         }
       ],
       "slots": [
+        {
+          "name": "route_log",
+          "returns": "ke_result",
+          "tags": [],
+          "doc": "Sends every line the parts\u0027 libraries log to log: resolve calls each distinct log setter of the parts once, before anything is created. Without it they log to stderr.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null log; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "params": [
+            {
+              "name": "log",
+              "type": "ke_log_callback",
+              "tags": [
+                "callback"
+              ],
+              "doc": "Receives each line, on whichever thread logged; must outlive the assembly."
+            },
+            {
+              "name": "log_ctx",
+              "type": "void *",
+              "tags": [
+                "context"
+              ],
+              "doc": "Handed to log unchanged."
+            }
+          ],
+          "receiver": "struct ke_assembly *"
+        },
         {
           "name": "add_part",
           "returns": "ke_result",

@@ -55,13 +55,14 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(@as(i128, c.KE_RESULT_ASSEMBLY_UNRESOLVED), @as(i128, abi.c.KE_RESULT_ASSEMBLY_UNRESOLVED));
 }
 
-extern const layout_values: [18]c_ulonglong;
+extern const layout_values: [19]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
         @sizeOf(abi.c.ke_assembly),
         @offsetOf(abi.c.ke_assembly, "handle"),
+        @offsetOf(abi.c.ke_assembly, "route_log"),
         @offsetOf(abi.c.ke_assembly, "add_part"),
         @offsetOf(abi.c.ke_assembly, "add_instance"),
         @offsetOf(abi.c.ke_assembly, "add_external"),

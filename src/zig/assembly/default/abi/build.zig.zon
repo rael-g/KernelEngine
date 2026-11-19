@@ -1,0 +1,15 @@
+.{
+    .name = .abi_assembly_default_factory,
+    .version = "0.1.0",
+    .fingerprint = 0x14402aac2477110a,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_assembly = .{ .path = "../../../abi/assembly" },
+        .abi_configuration = .{ .path = "../../../abi/configuration" },
+        .abi_ecs = .{ .path = "../../../abi/ecs" },
+        .abi_logger = .{ .path = "../../../abi/logger" },
+        .abi_result = .{ .path = "../../../abi/result" },
+        .abi_schedule = .{ .path = "../../../abi/schedule" },
+    },
+    .paths = .{"."},
+}
