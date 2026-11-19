@@ -117,6 +117,14 @@ pub fn build(b: *std.Build) void {
         .executable_dirs = &.{"bin"},
     }).path(if (host_windows) "bin/slangc.exe" else "bin/slangc") else .{ .cwd_relative = slangc_given.? };
 
+    const kcov: ?std.Build.LazyPath = if (b.option(bool, "coverage", "Build kcov and give the coverage step every plugin's test coverage") orelse false)
+        if (b.lazyDependency("kcov", .{
+            .target = b.resolveTargetQuery(.{ .cpu_arch = b.graph.host.result.cpu.arch, .os_tag = .linux, .abi = .musl }),
+            .optimize = .ReleaseSafe,
+        })) |package| package.artifact("kcov").getEmittedBin() else null
+    else
+        null;
+
     const libraries_step = b.allocator.create(std.Build.Step) catch @panic("OOM");
     libraries_step.* = std.Build.Step.init(.{ .id = .custom, .name = "plugin libraries", .owner = b });
     var ctx = Ctx{
@@ -130,6 +138,7 @@ pub fn build(b: *std.Build) void {
         .libraries_step = libraries_step,
         .test_step = b.step("test", "Run every plugin's own Zig tests"),
         .docs_step = b.step("docs", "Write the documentation of the native sources"),
+        .kcov = kcov,
     };
 
     const docir_exe = b.dependency("docir", .{ .target = b.graph.host, .optimize = .ReleaseSafe }).artifact("docir");
@@ -472,6 +481,7 @@ pub fn build(b: *std.Build) void {
     }, &.{}, .has_tests);
 
     ctx.plugins_step.dependOn(ctx.libraries_step);
+    ctx.mergeCoverage();
     b.getInstallStep().dependOn(&wgpu_copy.step);
     b.getInstallStep().dependOn(ctx.plugins_step);
     ctx.plugins_step.dependOn(&wgpu_copy.step);
@@ -814,8 +824,10 @@ const Ctx = struct {
     test_step: *std.Build.Step,
     docs_step: *std.Build.Step,
     exe_suffix: []const u8,
+    kcov: ?std.Build.LazyPath,
     libraries: std.ArrayList([]const u8) = .empty,
     plugin_includes: std.ArrayList([]const u8) = .empty,
+    coverage_reports: std.ArrayList(std.Build.LazyPath) = .empty,
 
     fn addSlangInputs(ctx: *Ctx, run: *std.Build.Step.Run, dir_path: []const u8) void {
         const b = ctx.b;
@@ -954,7 +966,7 @@ const Ctx = struct {
     /// makes them all land in one directory.
     fn member(ctx: *Ctx, name: []const u8, args: anytype, deps: []const *std.Build.Step, tests: Tests) *std.Build.Step.InstallArtifact {
         const b = ctx.b;
-        const dependency = b.dependency(name, args);
+        const dependency = if (ctx.kcov) |kcov| b.dependency(name, withKcov(args, kcov)) else b.dependency(name, args);
         const artifact = dependency.artifact(name);
         artifact.step.dependOn(ctx.vcpkg_step);
         for (deps) |d| artifact.step.dependOn(d);
@@ -976,10 +988,28 @@ const Ctx = struct {
                 }
                 for (own_tests.dependencies.items) |run| run.dependOn(ctx.plugins_step);
                 ctx.test_step.dependOn(own_tests);
+                if (ctx.kcov != null) ctx.coverage_reports.append(b.allocator, dependency.namedLazyPath("coverage")) catch @panic("OOM");
             },
         }
 
         return install;
+    }
+
+    /// Gives the `coverage` step one report merged by kcov from every plugin's, installed under
+    /// `coverage`; without `-Dcoverage` the step says how to ask for it.
+    fn mergeCoverage(ctx: *Ctx) void {
+        const b = ctx.b;
+        const step = b.step("coverage", "Merge every plugin's test coverage, measured by kcov, under coverage");
+        const kcov = ctx.kcov orelse {
+            step.dependOn(&b.addFail("the coverage step needs -Dcoverage").step);
+            return;
+        };
+        const merge = std.Build.Step.Run.create(b, "merge coverage");
+        merge.addFileArg(kcov);
+        merge.addArg("--merge");
+        const report = merge.addOutputDirectoryArg("coverage");
+        for (ctx.coverage_reports.items) |r| merge.addDirectoryArg(r);
+        step.dependOn(&b.addInstallDirectory(.{ .source_dir = report, .install_dir = .prefix, .install_subdir = "coverage" }).step);
     }
 
     /// Runs, under the root `test` step, the tests of `name`, a package of shared Zig modules that
@@ -1171,4 +1201,24 @@ fn libFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8
 /// tolerates the missing extension).
 fn exeFileName(b: *std.Build, target: std.Build.ResolvedTarget, name: []const u8) []const u8 {
     return if (target.result.os.tag == .windows) b.fmt("{s}.exe", .{name}) else name;
+}
+
+fn withKcov(args: anytype, kcov: std.Build.LazyPath) WithKcov(@TypeOf(args)) {
+    var merged: WithKcov(@TypeOf(args)) = undefined;
+    inline for (@typeInfo(@TypeOf(args)).@"struct".fields) |field| @field(merged, field.name) = @field(args, field.name);
+    merged.kcov = kcov;
+    return merged;
+}
+
+fn WithKcov(comptime Args: type) type {
+    const fields = @typeInfo(Args).@"struct".fields;
+    var names: [fields.len + 1][]const u8 = undefined;
+    var types: [fields.len + 1]type = undefined;
+    for (fields, 0..) |field, i| {
+        names[i] = field.name;
+        types[i] = field.type;
+    }
+    names[fields.len] = "kcov";
+    types[fields.len] = std.Build.LazyPath;
+    return @Struct(.auto, null, &names, &types, &@splat(.{}));
 }
