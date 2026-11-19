@@ -153,7 +153,7 @@ static class Coverage
     static string? ZigModule(string filePath)
     {
         var at = filePath.IndexOf("/src/", StringComparison.Ordinal);
-        return at > 0 ? filePath[..at] : null;
+        return at > 0 ? filePath[..at] : Path.GetDirectoryName(filePath)?.Replace('\\', '/');
     }
 
     static void Section(List<string> outLines, string title, string cobertura, Func<string, string?> moduleOf, string missing)

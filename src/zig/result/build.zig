@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_build = @import("ke_build");
 
 /// The `result` module, for a plugin build that imports this file as `ke_result`.
 pub fn result(b: *std.Build) *std.Build.Module {
@@ -27,6 +28,7 @@ pub fn build(b: *std.Build) void {
     const tests = b.addTest(.{ .root_module = test_mod });
     const test_step = b.step("test", "Run the result conversion tests and, on Windows, the DLL entry point test");
     test_step.dependOn(&b.addRunArtifact(tests).step);
+    ke_build.coverage(b, "ke_result", tests, b.path(""));
     if (target.result.os.tag == .windows) addDllCrtInitTest(b, target, optimize, test_step);
 }
 

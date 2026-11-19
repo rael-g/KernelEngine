@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_build = @import("ke_build");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -12,4 +13,5 @@ pub fn build(b: *std.Build) void {
     }
     const tests = b.addTest(.{ .root_module = tests_mod });
     b.step("test", "Run the settings schema tests").dependOn(&b.addRunArtifact(tests).step);
+    ke_build.coverage(b, "ke_settings_schema", tests, b.path(""));
 }

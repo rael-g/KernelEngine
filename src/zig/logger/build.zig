@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_build = @import("ke_build");
 
 /// The `log` module, for a plugin build that imports this file as `ke_logger`: the plugin root
 /// names its library with `@import("log").Destination` in its `std_options`.
@@ -18,4 +19,5 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }) });
     b.step("test", "Run the log destination tests").dependOn(&b.addRunArtifact(tests).step);
+    ke_build.coverage(b, "ke_logger", tests, b.path(""));
 }

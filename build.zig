@@ -153,11 +153,11 @@ pub fn build(b: *std.Build) void {
         .excluded_names = &.{ "build.zig", "third_party" },
     }));
 
-    ctx.moduleTests("ke_abi", .{ .target = target, .optimize = optimize });
-    ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize });
-    ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize });
-    ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize });
-    ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize });
+    ctx.moduleTests("ke_abi", .{ .target = target, .optimize = optimize }, .generated);
+    ctx.moduleTests("ke_logger", .{ .target = target, .optimize = optimize }, .measured);
+    ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize }, .measured);
+    ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize }, .measured);
+    ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize }, .measured);
 
     _ = ctx.member("ke_ecs_flecs", .{
         .target = target,
@@ -813,6 +813,8 @@ fn installSdk(ctx: *Ctx, src_c: []const u8, sdk_include: []const u8, common_incl
 
 const Tests = enum { has_tests, no_tests };
 
+const Coverage = enum { measured, generated };
+
 const Ctx = struct {
     b: *std.Build,
     root: []const u8,
@@ -1013,10 +1015,13 @@ const Ctx = struct {
     }
 
     /// Runs, under the root `test` step, the tests of `name`, a package of shared Zig modules that
-    /// builds no library.
-    fn moduleTests(ctx: *Ctx, name: []const u8, args: anytype) void {
-        const dependency = ctx.b.dependency(name, args);
+    /// builds no library, and gives them to the `coverage` step unless its code is generated.
+    fn moduleTests(ctx: *Ctx, name: []const u8, args: anytype, coverage: Coverage) void {
+        const b = ctx.b;
+        const kcov = if (coverage == .measured) ctx.kcov else null;
+        const dependency = if (kcov) |path| b.dependency(name, withKcov(args, path)) else b.dependency(name, args);
         ctx.test_step.dependOn(&dependency.builder.top_level_steps.get("test").?.step);
+        if (kcov != null) ctx.coverage_reports.append(b.allocator, dependency.namedLazyPath("coverage")) catch @panic("OOM");
     }
 
     /// Makes every C translation `compile` imports wait for the vcpkg ports and for `deps`, so a header
