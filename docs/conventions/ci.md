@@ -105,7 +105,7 @@ and does not prevent one.
 
 - **Running the examples.** No example is started; `visual` runs only the capture fixtures under
   `tests/visual/`, so a defect that only shows when an example starts is not caught here.
-- **Coverage.** `scripts/coverage.cs` is not called.
+- **Coverage.** Neither `scripts/coverage.cs` nor `zig build coverage` is called.
 - **Artifacts.** The libraries it builds are discarded with the runner; the only upload is the images of
   a failed `visual`.
 - **Zig generation.** Nothing calls `kabic write zig`; `kabic check zig` compares the Zig packages against the

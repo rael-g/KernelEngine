@@ -23,6 +23,7 @@ the bug.
 zig build --prefix build/native --global-cache-dir build/zig-global       # vcpkg ports, every plugin, the tools
 zig build test --prefix build/native --global-cache-dir build/zig-global  # every plugin's Zig tests
 zig build docs --prefix build/native --global-cache-dir build/zig-global  # reference pages from the sources
+zig build coverage -Dcoverage --prefix build/native --global-cache-dir build/zig-global  # Zig test coverage, Linux
 dotnet build
 dotnet test KernelEngine.slnx
 dotnet run scripts/verify.cs              # every stage the CI runs; name one to run it alone (build, gates, docs, ...)
@@ -43,8 +44,10 @@ dotnet run scripts/ci_local.cs            # verify.cs in a fresh clone inside th
   `-- generate` every kabic domain from `scripts/api_domains.json`.
 - Slang shaders live with the pass that owns them (`src/zig/render/<pass>/shaders/`), shared modules and
   materials under `src/shaders/`; they compile to WGSL and are loaded at runtime by logical name.
-- There is no native coverage: `scripts/coverage.cs` measures C# only, and Zig emits a line table `kcov`
-  cannot decode.
+- Coverage: `zig build coverage -Dcoverage` runs every plugin's tests under kcov, fetched by
+  `build.zig.zon` and built for musl, compiling them with LLVM, whose line table kcov reads; the merged
+  report lands in `<prefix>/coverage`. `dotnet run scripts/coverage.cs` measures the C# and the Zig and
+  prints both as tables, per module; `-- report` prints them again.
 
 ## Tests
 

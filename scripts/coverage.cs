@@ -26,6 +26,8 @@ static class Coverage
     static readonly string ManagedDir = Path.Combine(CoverageDir, "managed");
     static readonly string ReportDir = Path.Combine(CoverageDir, "report");
     static readonly string SummaryTxt = Path.Combine(CoverageDir, "summary.txt");
+    static readonly string NativePrefix = Path.Combine(BaseDir, "build", "native");
+    static readonly string ZigCobertura = Path.Combine(NativePrefix, "coverage", "kcov-merged", "cobertura.xml");
 
     const double GapThresholdPct = 30.0;
     const int GapThresholdLines = 50;
@@ -65,7 +67,7 @@ static class Coverage
 
     static void RunManagedTests()
     {
-        Banner("[1/2] Run managed (C#) tests");
+        Banner("[1/3] Run managed (C#) tests");
         if (Directory.Exists(ManagedDir)) Directory.Delete(ManagedDir, recursive: true);
         Directory.CreateDirectory(ManagedDir);
         Run([
@@ -80,7 +82,7 @@ static class Coverage
 
     static void BuildReport()
     {
-        Banner("[2/2] Generate report");
+        Banner("[2/3] Generate report");
         if (Directory.Exists(ReportDir)) Directory.Delete(ReportDir, recursive: true);
         Directory.CreateDirectory(ReportDir);
 
@@ -92,15 +94,26 @@ static class Coverage
             Console.WriteLine("  (no coverage data - nothing to report)");
             return;
         }
+        Run(["dotnet", "tool", "restore"], cwd: BaseDir);
         Run([
-            "reportgenerator",
+            "dotnet", "tool", "run", "reportgenerator", "--",
             "-reports:" + string.Join(';', inputs),
             "-targetdir:" + ReportDir,
             "-reporttypes:Cobertura;Html",
             "-sourcedirs:" + BaseDir,
-            "-filefilters:-*Generated*;-*examples*",
+            "-filefilters:-*Generated*;-*.g.cs;-*examples*",
             "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
-        ], check: false);
+        ], check: false, cwd: BaseDir);
+    }
+
+    static void RunZigTests()
+    {
+        Banner("[3/3] Run the Zig tests under kcov");
+        Run([
+            "zig", "build", "coverage", "-Dcoverage",
+            "--prefix", NativePrefix,
+            "--global-cache-dir", Path.Combine(BaseDir, "build", "zig-global"),
+        ], check: false, cwd: BaseDir);
     }
 
     class Counts
@@ -109,69 +122,103 @@ static class Coverage
         public double Pct => Total != 0 ? 100.0 * Covered / Total : 0.0;
     }
 
-    static void PrintSummary()
+    static Dictionary<string, Counts>? Read(string cobertura, Func<string, string?> moduleOf, Counts total)
     {
-        var cobertura = Path.Combine(ReportDir, "Cobertura.xml");
-        if (!File.Exists(cobertura))
-        {
-            Console.WriteLine("\n  (no Cobertura.xml - run the pipeline first)\n");
-            return;
-        }
-
-        var root = XDocument.Load(cobertura).Root!;
-        var total = new Counts();
+        if (!File.Exists(cobertura)) return null;
         var modules = new Dictionary<string, Counts>();
-
-        var baseUri = Norm(BaseDir).TrimEnd('/') + "/";
-
-        foreach (var clazz in root.Descendants("class"))
+        foreach (var clazz in XDocument.Load(cobertura).Root!.Descendants("class"))
         {
-            var filePath = Norm(clazz.Attribute("filename")?.Value ?? "");
-            if (filePath.StartsWith(baseUri)) filePath = filePath[baseUri.Length..];
-            if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/")) continue;
-
+            var module = moduleOf(Norm(clazz.Attribute("filename")?.Value ?? ""));
+            if (module is null) continue;
             var lines = clazz.Descendants("line").ToList();
             if (lines.Count == 0) continue;
             var covered = lines.Count(ln => int.Parse(ln.Attribute("hits")?.Value ?? "0") > 0);
-            var lineTotal = lines.Count;
-
             total.Covered += covered;
-            total.Total += lineTotal;
-            var module = ModuleFor(filePath);
+            total.Total += lines.Count;
             if (!modules.TryGetValue(module, out var m)) modules[module] = m = new Counts();
             m.Covered += covered;
-            m.Total += lineTotal;
+            m.Total += lines.Count;
         }
+        return modules;
+    }
 
-        var outLines = new List<string>();
+    static string? ManagedModule(string filePath)
+    {
+        var baseUri = Norm(BaseDir).TrimEnd('/') + "/";
+        if (filePath.StartsWith(baseUri)) filePath = filePath[baseUri.Length..];
+        if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/") || filePath.EndsWith(".g.cs")) return null;
+        var parts = filePath.Split('/');
+        return parts.Length >= 4 ? parts[3] : null;
+    }
+
+    static bool HandWritten(string file)
+    {
+        var path = Norm(file);
+        return !path.Contains("/Generated/") && !path.Contains("/obj/") && !path.Contains("/bin/")
+            && !path.EndsWith(".g.cs") && Path.GetFileName(path) != "GlobalUsings.cs";
+    }
+
+    static Dictionary<string, int> ManagedProjects() =>
+        Directory.EnumerateFiles(Path.Combine(BaseDir, "src", "csharp"), "*.csproj", SearchOption.AllDirectories)
+            .Select(Path.GetDirectoryName)
+            .ToDictionary(dir => Path.GetFileName(dir!)!, dir => Directory.EnumerateFiles(dir!, "*.cs", SearchOption.AllDirectories)
+                .Where(HandWritten).Sum(f => File.ReadLines(f).Count()));
+
+    static string? ZigModule(string filePath)
+    {
+        var at = filePath.IndexOf("/src/", StringComparison.Ordinal);
+        return at > 0 ? filePath[..at] : Path.GetDirectoryName(filePath)?.Replace('\\', '/');
+    }
+
+    static void Section(List<string> outLines, string title, string cobertura, Func<string, string?> moduleOf, string missing, Dictionary<string, int>? expected = null)
+    {
         void W(string s = "") => outLines.Add(s);
-
-        var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
-        W(new string('=', 70));
-        W($"  KernelEngine Coverage (C#) - {now}");
-        W(new string('=', 70));
-        W();
-        W($"  TOTAL                                          {total.Pct,5:F1}%   {total.Covered}/{total.Total}");
-        W();
-        foreach (var (module, m) in modules.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            W($"    {Short(module),-38} {m.Pct,5:F1}%");
-        W();
-
-        var gaps = modules.Where(kv => kv.Value.Total >= GapThresholdLines && kv.Value.Pct < GapThresholdPct)
-            .Select(kv => (Module: kv.Key, kv.Value.Pct, kv.Value.Total))
-            .OrderBy(g => g.Pct)
-            .ToList();
-        if (gaps.Count > 0)
+        var total = new Counts();
+        var modules = Read(cobertura, moduleOf, total);
+        W($"  {title}");
+        if (modules is null)
         {
-            W($"  Critical gaps (< {GapThresholdPct:F0}% AND > {GapThresholdLines} lines):");
-            foreach (var (module, p, n) in gaps)
-                W($"    - {Short(module),-38} {p,5:F1}%   ({n} lines)");
+            W($"    ({missing})");
+            W();
+            return;
+        }
+        W($"    {"TOTAL",-38} {total.Pct,5:F1}%   {total.Covered,6}/{total.Total}");
+        W();
+        foreach (var (module, m) in modules.OrderBy(kv => kv.Value.Pct).ThenBy(kv => kv.Key, StringComparer.Ordinal))
+            W($"    {module,-38} {m.Pct,5:F1}%   {m.Covered,6}/{m.Total}");
+        W();
+        var untested = (expected ?? []).Where(kv => kv.Value > 0 && !modules.ContainsKey(kv.Key)).OrderByDescending(kv => kv.Value).ToList();
+        if (untested.Count > 0)
+        {
+            W("    No test loads these, so they are not counted above (hand-written source lines):");
+            foreach (var (project, lines) in untested)
+                W($"    {project,-38} {"-",6}   {lines,6} lines");
             W();
         }
-        W($"  HTML report: {Path.Combine(ReportDir, "index.html")}");
-        W(new string('=', 70));
+        var gaps = modules.Where(kv => kv.Value.Total >= GapThresholdLines && kv.Value.Pct < GapThresholdPct).ToList();
+        if (gaps.Count > 0)
+        {
+            W($"    Critical gaps (< {GapThresholdPct:F0}% AND > {GapThresholdLines} lines): {string.Join(", ", gaps.Select(g => g.Key))}");
+            W();
+        }
+        W($"    HTML report: {Path.Combine(Path.GetDirectoryName(cobertura)!, "index.html")}");
+        W();
+    }
+
+    static void PrintSummary()
+    {
+        var outLines = new List<string>();
+        var now = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+        outLines.Add(new string('=', 70));
+        outLines.Add($"  KernelEngine Coverage - {now}");
+        outLines.Add(new string('=', 70));
+        outLines.Add("");
+        Section(outLines, "C#", Path.Combine(ReportDir, "Cobertura.xml"), ManagedModule, "no Cobertura.xml - run the pipeline first", ManagedProjects());
+        Section(outLines, "Zig", ZigCobertura, ZigModule, "no kcov report - run zig build coverage -Dcoverage");
+        outLines.Add(new string('=', 70));
 
         var text = string.Join('\n', outLines);
+        Directory.CreateDirectory(CoverageDir);
         File.WriteAllText(SummaryTxt, text);
         Console.WriteLine();
         Console.WriteLine(text);
@@ -194,6 +241,7 @@ static class Coverage
     {
         RunManagedTests();
         BuildReport();
+        RunZigTests();
         PrintSummary();
     }
 

@@ -1,4 +1,5 @@
 const std = @import("std");
+const ke_build = @import("ke_build");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
@@ -13,4 +14,5 @@ pub fn build(b: *std.Build) void {
     tests_mod.addImport("zsub", b.dependency("zsub", .{}).module("zsub"));
     const tests = b.addTest(.{ .root_module = tests_mod });
     b.step("test", "Run the pending reads tests").dependOn(&b.addRunArtifact(tests).step);
+    ke_build.coverage(b, "ke_io_pending_reads", tests, b.path(""));
 }

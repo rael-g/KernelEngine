@@ -82,7 +82,8 @@ pub const Built = struct {
 /// Builds the plugin `description` describes: its shared library, installed under `lib`, and its
 /// tests, run by the `test` step. They are built from twin modules, so what `third_party` adds
 /// to the tests' modules alone stays out of the library; each extra root gets a module
-/// configured as the tests' one.
+/// configured as the tests' one. The tests are measured as `coverage` describes, over the plugin's
+/// `src`.
 pub fn plugin(b: *std.Build, description: Plugin) Built {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -111,8 +112,28 @@ pub fn plugin(b: *std.Build, description: Plugin) Built {
     const lib = b.addLibrary(.{ .name = description.name, .root_module = modules.lib, .linkage = .dynamic });
     b.getInstallStep().dependOn(&b.addInstallArtifact(lib, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } }).step);
     const test_step = b.step("test", description.tests);
-    test_step.dependOn(&b.addRunArtifact(b.addTest(.{ .root_module = tests[0] })).step);
+    const test_compile = b.addTest(.{ .root_module = tests[0] });
+    test_step.dependOn(&b.addRunArtifact(test_compile).step);
+    coverage(b, description.name, test_compile, b.path("src"));
     return .{ .test_step = test_step, .extra = tests[1..] };
+}
+
+/// Measures `tests`, of the package `name`, over `sources` when the build is given the option `kcov`, the path of a kcov
+/// executable: the tests are compiled with LLVM, whose line table kcov reads, and the `coverage`
+/// step runs them under kcov, installs the report under `coverage` and names it `coverage` for a
+/// consumer. Without the option it changes nothing. Call it once per build.
+pub fn coverage(b: *std.Build, name: []const u8, tests: *std.Build.Step.Compile, sources: std.Build.LazyPath) void {
+    const kcov = b.option(std.Build.LazyPath, "kcov", "kcov executable the coverage step runs the tests under") orelse return;
+    tests.use_llvm = true;
+    const run = std.Build.Step.Run.create(b, b.fmt("cover {s}", .{name}));
+    run.addFileArg(kcov);
+    run.addArg("--skip-solibs");
+    run.addPrefixedDirectoryArg("--include-path=", sources);
+    const report = run.addOutputDirectoryArg("coverage");
+    run.addArtifactArg(tests);
+    b.addNamedLazyPath("coverage", report);
+    const install = b.addInstallDirectory(.{ .source_dir = report, .install_dir = .prefix, .install_subdir = "coverage" });
+    b.step("coverage", "Run the tests under kcov and install the report").dependOn(&install.step);
 }
 
 fn create(b: *std.Build, root: []const u8, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) *std.Build.Module {

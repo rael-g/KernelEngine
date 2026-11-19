@@ -62,6 +62,11 @@
             .url = "https://github.com/rael-g/docir/archive/92fa1477310221be30e8781d582e02b905a6cfd0.tar.gz",
             .hash = "docir-0.2.0-dEniGgTnCAB0aSs5nozhZqPcCNPRFnraLliHTUGGog_y",
         },
+        .kcov = .{
+            .url = "https://github.com/allyourcodebase/kcov/archive/fe6a854b101af40c735b176ab51d1e13f5b3019d.tar.gz",
+            .hash = "kcov-43.0.0-xUyX6TKeAABKePl8XqUhwSQ2Y1tMNWElwV_3rUAz80UH",
+            .lazy = true,
+        },
         .tomlc99 = .{
             .url = "https://github.com/cktan/tomlc99/archive/29076dfd095bbbbd50a3c1b2760d29f4b83e74ac.tar.gz",
             .hash = "N-V-__8AADiWAQDqp6cfVlWT31hdl0BKXD2WKRPW-YZnlewm",
