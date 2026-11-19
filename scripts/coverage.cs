@@ -161,6 +161,8 @@ static class Coverage
 
     static string? ZigModule(string filePath)
     {
+        var tree = filePath.LastIndexOf("src/zig/", StringComparison.Ordinal);
+        if (tree >= 0) filePath = filePath[(tree + "src/zig/".Length)..];
         var at = filePath.IndexOf("/src/", StringComparison.Ordinal);
         return at > 0 ? filePath[..at] : Path.GetDirectoryName(filePath)?.Replace('\\', '/');
     }

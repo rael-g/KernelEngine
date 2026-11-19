@@ -13,5 +13,5 @@ pub fn build(b: *std.Build) void {
     }
     const tests = b.addTest(.{ .name = "ke_settings_schema", .root_module = tests_mod });
     b.step("test", "Run the settings schema tests").dependOn(&b.addRunArtifact(tests).step);
-    ke_build.coverage(b, "ke_settings_schema", tests, b.path(""));
+    ke_build.coverage(b, "ke_settings_schema", tests, "");
 }

@@ -14,5 +14,5 @@ pub fn build(b: *std.Build) void {
     tests_mod.addImport("zsub", b.dependency("zsub", .{}).module("zsub"));
     const tests = b.addTest(.{ .name = "ke_io_pending_reads", .root_module = tests_mod });
     b.step("test", "Run the pending reads tests").dependOn(&b.addRunArtifact(tests).step);
-    ke_build.coverage(b, "ke_io_pending_reads", tests, b.path(""));
+    ke_build.coverage(b, "ke_io_pending_reads", tests, "");
 }
