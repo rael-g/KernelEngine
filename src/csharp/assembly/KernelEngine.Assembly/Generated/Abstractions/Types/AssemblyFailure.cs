@@ -13,4 +13,6 @@ public enum AssemblyFailure : uint
     WrongContract = 5,
     Cycle = 6,
     Unhooked = 7,
+    Duplicate = 8,
+    SharedSection = 9,
 }

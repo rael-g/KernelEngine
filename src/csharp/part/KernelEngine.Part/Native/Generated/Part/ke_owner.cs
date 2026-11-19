@@ -11,7 +11,7 @@ using KernelEngine.Settings.Native;
 
 namespace KernelEngine.Part.Native;
 
-public unsafe partial struct ke_part_instance
+public unsafe partial struct ke_owner
 {
     public void* @ref;
 

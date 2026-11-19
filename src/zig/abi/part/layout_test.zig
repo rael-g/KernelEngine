@@ -28,7 +28,7 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_part_set, translated("ke_part_set"));
     try expectSameLayout(abi.c.ke_part_bound, translated("ke_part_bound"));
     try expectSameLayout(abi.c.ke_part_hooked, translated("ke_part_hooked"));
-    try expectSameLayout(abi.c.ke_part_instance, translated("ke_part_instance"));
+    try expectSameLayout(abi.c.ke_owner, translated("ke_owner"));
     try expectSameLayout(abi.c.ke_part, translated("ke_part"));
     if (@hasDecl(c, "ke_component_id")) try expectSameLayout(abi.c.ke_component_id, c.ke_component_id);
     if (@hasDecl(c, "ke_defer_fn")) try expectSameLayout(abi.c.ke_defer_fn, c.ke_defer_fn);
@@ -50,7 +50,7 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_PART_CARDINALITY_MANY), @as(i64, abi.c.KE_PART_CARDINALITY_MANY));
 }
 
-extern const layout_values: [34]c_ulonglong;
+extern const layout_values: [36]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
@@ -72,12 +72,13 @@ test "every size and offset is the one C computes" {
         @sizeOf(abi.c.ke_part_hooked),
         @offsetOf(abi.c.ke_part_hooked, "schedule"),
         @offsetOf(abi.c.ke_part_hooked, "set"),
-        @sizeOf(abi.c.ke_part_instance),
-        @offsetOf(abi.c.ke_part_instance, "ref"),
-        @offsetOf(abi.c.ke_part_instance, "destroy"),
+        @sizeOf(abi.c.ke_owner),
+        @offsetOf(abi.c.ke_owner, "ref"),
+        @offsetOf(abi.c.ke_owner, "destroy"),
         @sizeOf(abi.c.ke_part),
         @offsetOf(abi.c.ke_part, "name"),
         @offsetOf(abi.c.ke_part, "provides"),
+        @offsetOf(abi.c.ke_part, "provides_count"),
         @offsetOf(abi.c.ke_part, "slots"),
         @offsetOf(abi.c.ke_part, "slot_count"),
         @offsetOf(abi.c.ke_part, "hooks"),
@@ -85,6 +86,7 @@ test "every size and offset is the one C computes" {
         @offsetOf(abi.c.ke_part, "sets"),
         @offsetOf(abi.c.ke_part, "set_count"),
         @offsetOf(abi.c.ke_part, "create"),
+        @offsetOf(abi.c.ke_part, "provided"),
         @offsetOf(abi.c.ke_part, "ready"),
         @offsetOf(abi.c.ke_part, "pump"),
         @offsetOf(abi.c.ke_part, "set_log"),

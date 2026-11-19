@@ -318,7 +318,7 @@ test "the library's part provides ke_runner from a scheduler and an input" {
     const p = ke_runner_headless_parts(&count).?;
     try testing.expectEqual(@as(usize, 1), count);
     try testing.expectEqualStrings("runner_headless", std.mem.span(p.name.?));
-    try testing.expectEqualStrings("ke_runner", std.mem.span(p.provides.?));
+    try testing.expectEqualStrings("ke_runner", std.mem.span(p.provides.?.*.?));
     try testing.expectEqual(@as(usize, 2), p.slot_count);
     try testing.expect(p.set_log != null);
 }

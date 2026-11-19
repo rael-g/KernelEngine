@@ -908,7 +908,7 @@
     },
     {
       "name": "ke_part_hook",
-      "doc": "A place in the frame where a part runs work: a set of a schedule the composition names.",
+      "doc": "A place in the frame where a part runs work: a set of a schedule.",
       "tags": [
         "bag"
       ],
@@ -927,7 +927,7 @@
           "tags": [
             "utf8"
           ],
-          "doc": "The set the hook joins when the composition names only the schedule."
+          "doc": "The set the hook joins when the composition names no set, in the schedule the composition names or, when it names none, the only schedule that has a set of that name."
         }
       ]
     },
@@ -2124,8 +2124,8 @@
       "external": true
     },
     {
-      "name": "ke_part_instance",
-      "doc": "An instance a part created: the instance of its contract, or a handle of its own when it provides none. destroy is the part\u0027s own function taking that ref, never an implementation\u0027s destroy of another type.",
+      "name": "ke_owner",
+      "doc": "What has no contract of its own to be released through: an instance a part created, or the systems a module registered. destroy takes ref.",
       "tags": [
         "owner"
       ],
@@ -2166,12 +2166,17 @@
         },
         {
           "name": "provides",
-          "type": "const char *",
+          "type": "const char *const *",
           "tags": [
-            "utf8",
-            "optional"
+            "borrowed"
           ],
-          "doc": "The contract the instance provides; NULL when it provides none, as a module."
+          "doc": "provides_count contracts the instance provides, each named by the C type of its vtable; none for one that provides nothing, as a module."
+        },
+        {
+          "name": "provides_count",
+          "type": "size_t",
+          "tags": [],
+          "doc": null
         },
         {
           "name": "slots",
@@ -2250,14 +2255,32 @@
             },
             {
               "name": "out_instance",
-              "type": "ke_part_instance *",
+              "type": "ke_owner *",
               "tags": [
                 "out"
               ],
-              "doc": "Receives the instance; left zeroed on failure."
+              "doc": "Receives the owner of the instance; left zeroed on failure."
             }
           ],
           "receiver": "const struct ke_part *"
+        },
+        {
+          "name": "provided",
+          "returns": "void *",
+          "tags": [
+            "optional"
+          ],
+          "doc": "Gives the instance of the contract at index of provides; NULL for a part that provides one contract, whose instance is the owner\u0027s ref.",
+          "return_doc": null,
+          "params": [
+            {
+              "name": "index",
+              "type": "size_t",
+              "tags": [],
+              "doc": "Below provides_count."
+            }
+          ],
+          "receiver": "void *"
         },
         {
           "name": "ready",

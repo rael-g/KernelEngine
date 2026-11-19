@@ -313,6 +313,16 @@
           "name": "KE_ASSEMBLY_FAILURE_UNHOOKED",
           "value": 7,
           "doc": "A hook is bound to no schedule, or to a set its schedule does not have."
+        },
+        {
+          "name": "KE_ASSEMBLY_FAILURE_DUPLICATE",
+          "value": 8,
+          "doc": "A part, an instance or an external contract is given a name already taken."
+        },
+        {
+          "name": "KE_ASSEMBLY_FAILURE_SHARED_SECTION",
+          "value": 9,
+          "doc": "Instances of different parts are created with the same section, whose keys one of them would refuse."
         }
       ]
     }
@@ -2376,7 +2386,7 @@
     },
     {
       "name": "ke_assembly",
-      "doc": "Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied.",
+      "doc": "Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied. Gathering records what it is given and checks nothing: every mistake in it, as a name taken twice or one nothing declares, is reported by resolve, with the others.",
       "tags": [
         "interface"
       ],
@@ -2420,7 +2430,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Makes part available to instances.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null part; KE_RESULT_ALREADY_EXISTS when another part has its name; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null part; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "part",
@@ -2438,7 +2448,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Declares the instance name of the part part, created with the section section of the configuration.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_ALREADY_EXISTS for a name already taken; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null name or part; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "name",
@@ -2460,9 +2470,10 @@
               "name": "section",
               "type": "const char *",
               "tags": [
-                "utf8"
+                "utf8",
+                "optional"
               ],
-              "doc": "A section of the configuration."
+              "doc": "A section of the configuration; NULL creates the instance with empty settings."
             }
           ],
           "receiver": "struct ke_assembly *"
@@ -2471,8 +2482,8 @@
           "name": "add_external",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Declares the instance name, made by someone else, providing contract; never destroyed by the assembly.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_ALREADY_EXISTS for a name already taken; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "doc": "Declares that the instance name, made by someone else, provides contract as instance; called once per contract it provides. Never destroyed by the assembly.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "name",
@@ -2480,7 +2491,7 @@
               "tags": [
                 "utf8"
               ],
-              "doc": "Unique among the instances."
+              "doc": "No instance of a part has it."
             },
             {
               "name": "contract",
@@ -2488,7 +2499,7 @@
               "tags": [
                 "utf8"
               ],
-              "doc": "The contract instance provides."
+              "doc": "The contract instance is the vtable of."
             },
             {
               "name": "instance",
@@ -2506,7 +2517,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Binds the slot slot of instance to target; a slot that takes many is bound once per target.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "instance",
@@ -2539,8 +2550,8 @@
           "name": "hook",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Binds the hook hook of instance to the set set of the schedule instance schedule.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument other than set; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "doc": "Binds the hook hook of instance to the set set of the schedule instance schedule. A hook nothing binds joins the only schedule that has its default set.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument other than set; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "instance",
@@ -2583,7 +2594,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Orders two instances bound to the slot slot of instance: first comes before then. Instances of a slot with no order between them come in no guaranteed order.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "instance",
@@ -2625,7 +2636,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Introduces the set name in the schedule instance schedule.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "schedule",
@@ -2651,7 +2662,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Orders two sets of the schedule instance schedule: first runs before then.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "schedule",
@@ -2685,7 +2696,7 @@
           "returns": "ke_result",
           "tags": [],
           "doc": "Names the instance every slot of contract the composition binds nothing to takes.",
-          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve.",
+          "return_doc": "KE_OK; KE_RESULT_INVALID_ARGUMENT for a null argument; KE_RESULT_NOT_SUPPORTED after resolve; KE_RESULT_OUT_OF_MEMORY.",
           "params": [
             {
               "name": "contract",
@@ -2710,7 +2721,7 @@
           "name": "resolve",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Resolves the whole composition, creating nothing: a slot takes the instances bound to it, else the default of its contract, else the only instance that provides it. Every reason it cannot be assembled is reported.",
+          "doc": "Resolves the whole composition, creating nothing. A slot that takes one instance, or none, takes the one bound to it, else the default of its contract, else the only instance that provides it; a slot that takes many takes exactly the instances bound to it, none when nothing is. Every reason it cannot be assembled is reported.",
           "return_doc": "KE_OK; KE_RESULT_ASSEMBLY_UNRESOLVED when any reason was found; KE_RESULT_NOT_SUPPORTED when already resolved.",
           "params": [
             {
@@ -2746,8 +2757,8 @@
           "name": "get",
           "returns": "ke_result",
           "tags": [],
-          "doc": "Gives the instance name.",
-          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no instance has that name or it is not made yet; KE_RESULT_INVALID_ARGUMENT for a null argument.",
+          "doc": "Gives the instance name as the vtable of contract.",
+          "return_doc": "KE_OK; KE_RESULT_NOT_FOUND when no instance has that name, it does not provide contract or it is not made yet; KE_RESULT_INVALID_ARGUMENT for a null argument.",
           "params": [
             {
               "name": "name",
@@ -2758,12 +2769,20 @@
               "doc": null
             },
             {
+              "name": "contract",
+              "type": "const char *",
+              "tags": [
+                "utf8"
+              ],
+              "doc": "One of the contracts the instance provides."
+            },
+            {
               "name": "out_instance",
               "type": "void **",
               "tags": [
                 "out"
               ],
-              "doc": "Receives the instance\u0027s ref."
+              "doc": "Receives the vtable."
             }
           ],
           "receiver": "struct ke_assembly *"

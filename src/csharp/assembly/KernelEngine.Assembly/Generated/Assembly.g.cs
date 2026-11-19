@@ -24,7 +24,7 @@ public unsafe interface INativeAssembly
     global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
-/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied.</summary>
+/// <summary>Assembles instances of parts from a composition: which instances exist, of which part, with which section of settings, and which instance each slot and hook is bound to. Nothing is created before the whole composition resolves. Every name is copied. Gathering records what it is given and checks nothing: every mistake in it, as a name taken twice or one nothing declares, is reported by resolve, with the others.</summary>
 public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
 {
 
@@ -152,7 +152,7 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
     /// <summary>Declares the instance name of the part part, created with the section section of the configuration.</summary>
     /// <param name="name">Unique among the instances.</param>
     /// <param name="part">A part's name.</param>
-    /// <param name="section">A section of the configuration.</param>
+    /// <param name="section">A section of the configuration; NULL creates the instance with empty settings.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddInstance(string name, string part, string section)
     {
@@ -180,9 +180,9 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         }
     }
 
-    /// <summary>Declares the instance name, made by someone else, providing contract; never destroyed by the assembly.</summary>
-    /// <param name="name">Unique among the instances.</param>
-    /// <param name="contract">The contract instance provides.</param>
+    /// <summary>Declares that the instance name, made by someone else, provides contract as instance; called once per contract it provides. Never destroyed by the assembly.</summary>
+    /// <param name="name">No instance of a part has it.</param>
+    /// <param name="contract">The contract instance is the vtable of.</param>
     /// <param name="instance">Must outlive the assembly.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void AddExternal(string name, string contract, nint instance)
@@ -233,7 +233,7 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         }
     }
 
-    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule.</summary>
+    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule. A hook nothing binds joins the only schedule that has its default set.</summary>
     /// <param name="schedule">An instance providing ke_schedule.</param>
     /// <param name="set">NULL takes the hook's default set.</param>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -375,7 +375,7 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         }
     }
 
-    /// <summary>Resolves the whole composition, creating nothing: a slot takes the instances bound to it, else the default of its contract, else the only instance that provides it. Every reason it cannot be assembled is reported.</summary>
+    /// <summary>Resolves the whole composition, creating nothing. A slot that takes one instance, or none, takes the one bound to it, else the default of its contract, else the only instance that provides it; a slot that takes many takes exactly the instances bound to it, none when nothing is. Every reason it cannot be assembled is reported.</summary>
     /// <param name="report">Receives each reason; NULL reports none.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Resolve(AssemblyReport? report)
@@ -421,10 +421,11 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         NativeResult.ThrowIfFailed(Handle->advance(Handle), "advance");
     }
 
-    /// <summary>Gives the instance name.</summary>
-    /// <returns>Receives the instance's ref.</returns>
+    /// <summary>Gives the instance name as the vtable of contract.</summary>
+    /// <param name="contract">One of the contracts the instance provides.</param>
+    /// <returns>Receives the vtable.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    public nint Get(string name)
+    public nint Get(string name, string contract)
     {
         var nameText = name ?? "";
         var nameSize = System.Text.Encoding.UTF8.GetMaxByteCount(nameText.Length) + 1;
@@ -432,9 +433,16 @@ public unsafe partial class Assembly : IDisposable, INativeAssembly, IAssembly
         nameBytes[System.Text.Encoding.UTF8.GetBytes(nameText, nameBytes)] = 0;
         fixed (byte* namePtr = nameBytes)
         {
-            nint resultOut = default;
-            NativeResult.ThrowIfFailed(Handle->get(Handle, (sbyte*)namePtr, (void**)&resultOut), "get");
-            return resultOut;
+            var contractText = contract ?? "";
+            var contractSize = System.Text.Encoding.UTF8.GetMaxByteCount(contractText.Length) + 1;
+            Span<byte> contractBytes = contractSize <= 512 ? stackalloc byte[512] : new byte[contractSize];
+            contractBytes[System.Text.Encoding.UTF8.GetBytes(contractText, contractBytes)] = 0;
+            fixed (byte* contractPtr = contractBytes)
+            {
+                nint resultOut = default;
+                NativeResult.ThrowIfFailed(Handle->get(Handle, (sbyte*)namePtr, (sbyte*)contractPtr, (void**)&resultOut), "get");
+                return resultOut;
+            }
         }
     }
 

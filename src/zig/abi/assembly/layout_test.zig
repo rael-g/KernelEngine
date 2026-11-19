@@ -48,6 +48,8 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT));
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_CYCLE), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_CYCLE));
     try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_UNHOOKED), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_UNHOOKED));
+    try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_DUPLICATE), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_DUPLICATE));
+    try std.testing.expectEqual(@as(i64, c.KE_ASSEMBLY_FAILURE_SHARED_SECTION), @as(i64, abi.c.KE_ASSEMBLY_FAILURE_SHARED_SECTION));
 }
 
 test "every constant is the header's value" {

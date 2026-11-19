@@ -22,6 +22,8 @@ pub const AssemblyFailure = enum(c.ke_assembly_failure) {
     wrong_contract = 5,
     cycle = 6,
     unhooked = 7,
+    duplicate = 8,
+    shared_section = 9,
     _,
 };
 
@@ -53,7 +55,7 @@ pub const Assembly = struct {
             .add_instance = &struct {
                 fn call(self: ?*c.ke_assembly, a0: ?[*:0]const u8, a1: ?[*:0]const u8, a2: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    T.addInstance(state, std.mem.span(a0 orelse return resultOf(error.Failed)), std.mem.span(a1 orelse return resultOf(error.Failed)), std.mem.span(a2 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    T.addInstance(state, std.mem.span(a0 orelse return resultOf(error.Failed)), std.mem.span(a1 orelse return resultOf(error.Failed)), if (a2) |text| std.mem.span(text) else null) catch |failure| return resultOf(failure);
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -121,10 +123,10 @@ pub const Assembly = struct {
                 }
             }.call,
             .get = &struct {
-                fn call(self: ?*c.ke_assembly, a0: ?[*:0]const u8, a1: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*c.ke_assembly, a0: ?[*:0]const u8, a1: ?[*:0]const u8, a2: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
-                    const value = T.get(state, std.mem.span(a0 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
-                    (a1 orelse return resultOf(error.Failed)).* = value;
+                    const value = T.get(state, std.mem.span(a0 orelse return resultOf(error.Failed)), std.mem.span(a1 orelse return resultOf(error.Failed))) catch |failure| return resultOf(failure);
+                    (a2 orelse return resultOf(error.Failed)).* = value;
                     return abi_result.c.KE_OK;
                 }
             }.call,
@@ -144,12 +146,12 @@ pub const Assembly = struct {
 
     /// Declares the instance name of the part part, created with the section section of the
     /// configuration.
-    pub fn addInstance(self: Assembly, name: [:0]const u8, part: [:0]const u8, section: [:0]const u8) Error!void {
-        try checkResult(self.ptr.add_instance.?(self.ptr, name.ptr, part.ptr, section.ptr));
+    pub fn addInstance(self: Assembly, name: [:0]const u8, part: [:0]const u8, section: ?[:0]const u8) Error!void {
+        try checkResult(self.ptr.add_instance.?(self.ptr, name.ptr, part.ptr, if (section) |text| text.ptr else null));
     }
 
-    /// Declares the instance name, made by someone else, providing contract; never destroyed by the
-    /// assembly.
+    /// Declares that the instance name, made by someone else, provides contract as instance; called
+    /// once per contract it provides. Never destroyed by the assembly.
     pub fn addExternal(self: Assembly, name: [:0]const u8, contract: [:0]const u8, instance: ?*anyopaque) Error!void {
         try checkResult(self.ptr.add_external.?(self.ptr, name.ptr, contract.ptr, instance));
     }
@@ -159,7 +161,8 @@ pub const Assembly = struct {
         try checkResult(self.ptr.bind.?(self.ptr, instance.ptr, slot.ptr, target.ptr));
     }
 
-    /// Binds the hook hook of instance to the set set of the schedule instance schedule.
+    /// Binds the hook hook of instance to the set set of the schedule instance schedule. A hook
+    /// nothing binds joins the only schedule that has its default set.
     pub fn hook(self: Assembly, instance: [:0]const u8, hook_: [:0]const u8, schedule: [:0]const u8, set: ?[:0]const u8) Error!void {
         try checkResult(self.ptr.hook.?(self.ptr, instance.ptr, hook_.ptr, schedule.ptr, if (set) |text| text.ptr else null));
     }
@@ -185,9 +188,10 @@ pub const Assembly = struct {
         try checkResult(self.ptr.set_default.?(self.ptr, contract.ptr, instance.ptr));
     }
 
-    /// Resolves the whole composition, creating nothing: a slot takes the instances bound to it,
-    /// else the default of its contract, else the only instance that provides it. Every reason it
-    /// cannot be assembled is reported.
+    /// Resolves the whole composition, creating nothing. A slot that takes one instance, or none,
+    /// takes the one bound to it, else the default of its contract, else the only instance that
+    /// provides it; a slot that takes many takes exactly the instances bound to it, none when
+    /// nothing is. Every reason it cannot be assembled is reported.
     pub fn resolve(self: Assembly, report: c.ke_assembly_report_fn, ctx: ?*anyopaque) Error!void {
         try checkResult(self.ptr.resolve.?(self.ptr, report, ctx));
     }
@@ -198,10 +202,10 @@ pub const Assembly = struct {
         try checkResult(self.ptr.advance.?(self.ptr));
     }
 
-    /// Gives the instance name.
-    pub fn get(self: Assembly, name: [:0]const u8) Error!?*anyopaque {
+    /// Gives the instance name as the vtable of contract.
+    pub fn get(self: Assembly, name: [:0]const u8, contract: [:0]const u8) Error!?*anyopaque {
         var written: ?*anyopaque = undefined;
-        try checkResult(self.ptr.get.?(self.ptr, name.ptr, &written));
+        try checkResult(self.ptr.get.?(self.ptr, name.ptr, contract.ptr, &written));
         return written;
     }
 

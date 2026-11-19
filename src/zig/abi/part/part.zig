@@ -29,7 +29,7 @@ pub const Part = struct {
     pub fn implement(comptime T: type, comptime field: []const u8) c.ke_part {
         return .{
             .create = &struct {
-                fn call(self: ?*const c.ke_part, a0: ?*const c.ke_part_bound, a1: ?*const c.ke_part_hooked, a2: ?*abi_settings.c.ke_settings, a3: ?*c.ke_part_instance) callconv(.c) abi_result.c.ke_result {
+                fn call(self: ?*const c.ke_part, a0: ?*const c.ke_part_bound, a1: ?*const c.ke_part_hooked, a2: ?*abi_settings.c.ke_settings, a3: ?*c.ke_owner) callconv(.c) abi_result.c.ke_result {
                     const state: *T = @alignCast(@fieldParentPtr(field, self orelse return resultOf(error.Failed)));
                     const value = T.create(state, a0, a1, a2) catch |failure| return resultOf(failure);
                     (a3 orelse return resultOf(error.Failed)).* = value;
@@ -40,8 +40,8 @@ pub const Part = struct {
     }
 
     /// Creates an instance.
-    pub fn create(self: Part, slots: ?*const c.ke_part_bound, hooks: ?*const c.ke_part_hooked, settings: ?*abi_settings.c.ke_settings) Error!c.ke_part_instance {
-        var written: c.ke_part_instance = undefined;
+    pub fn create(self: Part, slots: ?*const c.ke_part_bound, hooks: ?*const c.ke_part_hooked, settings: ?*abi_settings.c.ke_settings) Error!c.ke_owner {
+        var written: c.ke_owner = undefined;
         try checkResult(self.ptr.create.?(self.ptr, slots, hooks, settings, &written));
         return written;
     }
@@ -53,4 +53,4 @@ pub const PartHook = c.ke_part_hook;
 pub const PartSet = c.ke_part_set;
 pub const PartBound = c.ke_part_bound;
 pub const PartHooked = c.ke_part_hooked;
-pub const PartInstance = c.ke_part_instance;
+pub const Owner = c.ke_owner;

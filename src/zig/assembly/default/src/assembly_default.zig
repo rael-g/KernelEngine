@@ -32,29 +32,56 @@ const Binding = struct { slot: Name, target: Name };
 const Hooking = struct { hook: Name, schedule: Name, set: ?Name };
 const Order = struct { slot: Name, first: Name, then: Name };
 const SetOrder = struct { first: Name, then: Name };
+const External = struct { contract: Name, ref: *anyopaque };
+const Problem = struct { failure: A.ke_assembly_failure, instance: ?Name, name: ?Name, detail: Name };
 
-/// One instance of the composition: of a part, or made outside. After resolve, `slots` holds the instances each
-/// slot takes and `hooked` where each hook runs; `made` is set once created, and an external one never is.
+/// One instance of the composition: of a part, or made outside as one vtable per contract. After resolve, `slots`
+/// holds the instances each slot takes and `hooked` where each hook runs; `made` is set once created, and an
+/// external one never is.
 const Instance = struct {
     name: Name,
     part_name: ?Name = null,
     section: ?Name = null,
-    contract: ?Name = null,
-    external: ?*anyopaque = null,
+    externals: std.ArrayListUnmanaged(External) = .empty,
     part: ?*const P.ke_part = null,
     bindings: std.ArrayListUnmanaged(Binding) = .empty,
     hookings: std.ArrayListUnmanaged(Hooking) = .empty,
     orders: std.ArrayListUnmanaged(Order) = .empty,
     slots: [][]usize = &.{},
     hooked: []Hooked = &.{},
-    made: ?P.ke_part_instance = null,
+    made: ?P.ke_owner = null,
 
-    fn provides(self: *const Instance) ?[]const u8 {
-        if (self.contract) |c| return c;
+    fn isExternal(self: *const Instance) bool {
+        return self.externals.items.len > 0;
+    }
+
+    fn contractIndex(self: *const Instance, contract: []const u8) ?usize {
+        if (self.isExternal()) {
+            for (self.externals.items, 0..) |e, i| if (std.mem.eql(u8, e.contract, contract)) return i;
+            return null;
+        }
         const part = self.part orelse return null;
-        return if (part.provides) |p| std.mem.span(p) else null;
+        for (providesOf(part), 0..) |c, i| if (std.mem.eql(u8, std.mem.span(c.?), contract)) return i;
+        return null;
+    }
+
+    fn provides(self: *const Instance, contract: []const u8) bool {
+        return self.contractIndex(contract) != null;
+    }
+
+    /// The vtable of `contract`: the external given for it, or what the part says of its instance once made.
+    fn refFor(self: *const Instance, contract: []const u8) ?*anyopaque {
+        const i = self.contractIndex(contract) orelse return null;
+        if (self.isExternal()) return self.externals.items[i].ref;
+        const made = self.made orelse return null;
+        return if (self.part.?.provided) |provided| provided(made.ref, i) else made.ref;
     }
 };
+
+fn providesOf(part: *const P.ke_part) []const ?[*:0]const u8 {
+    if (part.provides_count == 0) return &.{};
+    return @as([*]const ?[*:0]const u8, @ptrCast(part.provides.?))[0..part.provides_count];
+}
 
 const Hooked = struct { schedule: usize, set: Name };
 
@@ -79,6 +106,7 @@ const State = struct {
     by_name: std.StringHashMapUnmanaged(usize) = .empty,
     defaults: std.StringHashMapUnmanaged(Name) = .empty,
     sets: std.StringHashMapUnmanaged(Sets) = .empty,
+    problems: std.ArrayListUnmanaged(Problem) = .empty,
     resolved: bool = false,
     plan: []usize = &.{},
     next: usize = 0,
@@ -94,6 +122,11 @@ const State = struct {
 
     fn instanceOf(s: *State, name: []const u8) ?*Instance {
         return &s.instances.items[s.by_name.get(name) orelse return null];
+    }
+
+    /// Remembers a mistake gathering found, for resolve to report with the others.
+    fn problem(s: *State, failure: A.ke_assembly_failure, instance: ?Name, name: ?Name, comptime fmt: []const u8, args: anytype) R.Error!void {
+        try s.problems.append(s.names(), .{ .failure = failure, .instance = instance, .name = name, .detail = try std.fmt.allocPrintSentinel(s.names(), fmt, args, 0) });
     }
 
     fn setsOf(s: *State, schedule: Name) R.Error!*Sets {
@@ -135,23 +168,35 @@ fn addPart(self: ?*A.ke_assembly, part_in: ?*const P.ke_part) callconv(.c) abi_r
         const part = part_in orelse break :blk error.InvalidArgument;
         const name = std.mem.span(part.name orelse break :blk error.InvalidArgument);
         const entry = s.parts.getOrPut(s.names(), name) catch |err| break :blk err;
-        if (entry.found_existing) break :blk error.AlreadyExists;
+        if (entry.found_existing) break :blk s.problem(A.KE_ASSEMBLY_FAILURE_DUPLICATE, null, s.copy(part.name) catch |err| break :blk err, "two parts are named {s}", .{name});
         entry.value_ptr.* = part;
     });
 }
 
-fn declare(s: *State, instance: Instance) R.Error!void {
-    const entry = try s.by_name.getOrPut(s.names(), instance.name);
-    if (entry.found_existing) return error.AlreadyExists;
-    entry.value_ptr.* = s.instances.items.len;
-    try s.instances.append(s.names(), instance);
+/// The instance named `name`, declared now when nothing named it yet; one only bound, hooked or ordered so far has
+/// no part and no external.
+fn declared(s: *State, name: ?[*:0]const u8) R.Error!*Instance {
+    const n = std.mem.span(name orelse return error.InvalidArgument);
+    if (s.instanceOf(n)) |found| return found;
+    const copied = try s.copy(name);
+    try s.by_name.put(s.names(), copied, s.instances.items.len);
+    try s.instances.append(s.names(), .{ .name = copied });
+    return s.instanceOf(n).?;
+}
+
+fn isPlaceholder(self: *const Instance) bool {
+    return self.part_name == null and !self.isExternal();
 }
 
 /// Slot `add_instance`.
 fn addInstance(self: ?*A.ke_assembly, name: ?[*:0]const u8, part: ?[*:0]const u8, section: ?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
     return code(blk: {
         const s = gathering(self) catch |err| break :blk err;
-        break :blk declare(s, .{ .name = s.copy(name) catch |err| break :blk err, .part_name = s.copy(part) catch |err| break :blk err, .section = s.copy(section) catch |err| break :blk err });
+        const part_name = s.copy(part) catch |err| break :blk err;
+        const at = declared(s, name) catch |err| break :blk err;
+        if (!isPlaceholder(at)) break :blk s.problem(A.KE_ASSEMBLY_FAILURE_DUPLICATE, at.name, null, "two instances are named {s}", .{at.name});
+        at.part_name = part_name;
+        at.section = if (section != null) s.copy(section) catch |err| break :blk err else null;
     });
 }
 
@@ -160,17 +205,12 @@ fn addExternal(self: ?*A.ke_assembly, name: ?[*:0]const u8, contract: ?[*:0]cons
     return code(blk: {
         const s = gathering(self) catch |err| break :blk err;
         const ref = instance orelse break :blk error.InvalidArgument;
-        break :blk declare(s, .{ .name = s.copy(name) catch |err| break :blk err, .contract = s.copy(contract) catch |err| break :blk err, .external = ref });
+        const given = s.copy(contract) catch |err| break :blk err;
+        const at = declared(s, name) catch |err| break :blk err;
+        if (at.part_name != null) break :blk s.problem(A.KE_ASSEMBLY_FAILURE_DUPLICATE, at.name, given, "{s} is an instance of {s} and is also given from outside", .{ at.name, at.part_name.? });
+        if (at.provides(given)) break :blk s.problem(A.KE_ASSEMBLY_FAILURE_DUPLICATE, at.name, given, "{s} is given twice as {s}", .{ at.name, given });
+        break :blk at.externals.append(s.names(), .{ .contract = given, .ref = ref });
     });
-}
-
-fn declared(s: *State, name: ?[*:0]const u8) R.Error!*Instance {
-    const n = std.mem.span(name orelse return error.InvalidArgument);
-    return s.instanceOf(n) orelse {
-        const copied = try s.copy(name);
-        try declare(s, .{ .name = copied });
-        return s.instanceOf(n).?;
-    };
 }
 
 /// Slot `bind`. An instance not yet declared is remembered by name and reported by resolve if it never is.
@@ -273,7 +313,7 @@ fn partSetsOf(part: *const P.ke_part) []const P.ke_part_set {
 fn providing(s: *State, contract: []const u8, except: usize, into: *std.ArrayListUnmanaged(usize)) R.Error!void {
     for (s.instances.items, 0..) |*other, j| {
         if (j == except) continue;
-        if (other.provides()) |p| if (std.mem.eql(u8, p, contract)) try into.append(s.names(), j);
+        if (other.provides(contract)) try into.append(s.names(), j);
     }
 }
 
@@ -327,20 +367,19 @@ fn resolveSlots(s: *State, report: *Report, at: usize) R.Error!void {
                 report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, slot_name, "{s}.{s} is bound to {s}, which is no instance", .{ self.name, slot_name, b.target });
                 continue;
             };
-            const p = s.instances.items[j].provides() orelse "nothing";
-            if (!std.mem.eql(u8, p, contract)) {
-                report.add(A.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT, self.name, slot_name, "{s}.{s} takes {s}, and {s} provides {s}", .{ self.name, slot_name, contract, b.target, p });
+            if (!s.instances.items[j].provides(contract)) {
+                report.add(A.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT, self.name, slot_name, "{s}.{s} takes {s}, which {s} does not provide", .{ self.name, slot_name, contract, b.target });
                 continue;
             }
             try chosen.append(s.names(), j);
         }
+        const many = slot.cardinality == P.KE_PART_CARDINALITY_MANY;
         const explicit = chosen.items.len > 0 or anyBinding(self, slot_name);
-        if (!explicit) {
+        if (!explicit and !many) {
             if (s.defaults.get(contract)) |d| {
                 if (s.by_name.get(d)) |j| try chosen.append(s.names(), j) else report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, null, contract, "the default of {s} is {s}, which is no instance", .{ contract, d });
             } else try providing(s, contract, at, &chosen);
         }
-        const many = slot.cardinality == P.KE_PART_CARDINALITY_MANY;
         if (!many and chosen.items.len > 1) {
             report.add(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS, self.name, slot_name, "{s}.{s} takes one {s} and {d} provide it; bind one or name the default", .{ self.name, slot_name, contract, chosen.items.len });
         } else if (slot.cardinality == P.KE_PART_CARDINALITY_ONE and chosen.items.len == 0 and !explicit) {
@@ -376,6 +415,9 @@ fn orderSlot(s: *State, report: *Report, self: *const Instance, slot: []const u8
     return sorted;
 }
 
+const unhooked = std.math.maxInt(usize);
+
+/// The hooks the composition binds: each to its schedule, at the set it names or the hook's default.
 fn resolveHooks(s: *State, report: *Report, at: usize) R.Error!void {
     const self = &s.instances.items[at];
     const hooks = hooksOf(self.part.?);
@@ -387,29 +429,75 @@ fn resolveHooks(s: *State, report: *Report, at: usize) R.Error!void {
     }
     for (hooks, 0..) |declared_hook, k| {
         const hook_name = std.mem.span(declared_hook.name.?);
-        self.hooked[k] = .{ .schedule = std.math.maxInt(usize), .set = "" };
+        self.hooked[k] = .{ .schedule = unhooked, .set = "" };
         const h = for (self.hookings.items) |x| {
             if (std.mem.eql(u8, x.hook, hook_name)) break x;
-        } else {
-            report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, self.name, hook_name, "{s}.{s} is bound to no schedule", .{ self.name, hook_name });
-            continue;
-        };
+        } else continue;
         const j = s.by_name.get(h.schedule) orelse {
             report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, hook_name, "{s}.{s} is hooked to {s}, which is no instance", .{ self.name, hook_name, h.schedule });
             continue;
         };
-        const p = s.instances.items[j].provides() orelse "nothing";
-        if (!std.mem.eql(u8, p, schedule_contract)) {
-            report.add(A.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT, self.name, hook_name, "{s}.{s} is hooked to {s}, which provides {s}, not a schedule", .{ self.name, hook_name, h.schedule, p });
+        if (!s.instances.items[j].provides(schedule_contract)) {
+            report.add(A.KE_ASSEMBLY_FAILURE_WRONG_CONTRACT, self.name, hook_name, "{s}.{s} is hooked to {s}, which is not a schedule", .{ self.name, hook_name, h.schedule });
             continue;
         }
         self.hooked[k] = .{ .schedule = j, .set = h.set orelse try s.names().dupeZ(u8, std.mem.span(declared_hook.default_set.?)) };
-        for (partSetsOf(self.part.?)) |introduced| {
-            if (!std.mem.eql(u8, std.mem.span(introduced.hook.?), hook_name)) continue;
-            const sets = try s.setsOf(h.schedule);
-            const name = try s.names().dupeZ(u8, std.mem.span(introduced.name.?));
-            try sets.names.append(s.names(), name);
-            if (introduced.after) |after| try sets.orders.append(s.names(), .{ .first = try s.names().dupeZ(u8, std.mem.span(after)), .then = name });
+        try introduceSets(s, self, hook_name, s.instances.items[j].name);
+    }
+}
+
+/// The hooks nothing binds: each joins the only schedule that has its default set.
+fn resolveDefaultHooks(s: *State, report: *Report, at: usize) R.Error!void {
+    const self = &s.instances.items[at];
+    for (hooksOf(self.part.?), 0..) |declared_hook, k| {
+        const hook_name = std.mem.span(declared_hook.name.?);
+        if (self.hooked[k].schedule != unhooked or anyHooking(self, hook_name)) continue;
+        const set = std.mem.span(declared_hook.default_set.?);
+        var found: ?usize = null;
+        var count: usize = 0;
+        for (s.instances.items, 0..) |*other, j| {
+            if (!other.provides(schedule_contract)) continue;
+            const sets = s.sets.getPtr(other.name) orelse continue;
+            if (!hasSet(sets, set)) continue;
+            found = j;
+            count += 1;
+        }
+        if (count > 1) {
+            report.add(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS, self.name, hook_name, "{s}.{s} joins {s}, and {d} schedules have it; hook it to one", .{ self.name, hook_name, set, count });
+            continue;
+        }
+        const j = found orelse {
+            report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, self.name, hook_name, "{s}.{s} joins {s}, and no schedule has it", .{ self.name, hook_name, set });
+            continue;
+        };
+        self.hooked[k] = .{ .schedule = j, .set = try s.names().dupeZ(u8, set) };
+        try introduceSets(s, self, hook_name, s.instances.items[j].name);
+    }
+}
+
+fn anyHooking(self: *const Instance, hook_name: []const u8) bool {
+    for (self.hookings.items) |h| if (std.mem.eql(u8, h.hook, hook_name)) return true;
+    return false;
+}
+
+fn introduceSets(s: *State, self: *const Instance, hook_name: []const u8, schedule: Name) R.Error!void {
+    for (partSetsOf(self.part.?)) |introduced| {
+        if (!std.mem.eql(u8, std.mem.span(introduced.hook.?), hook_name)) continue;
+        const sets = try s.setsOf(schedule);
+        const name = try s.names().dupeZ(u8, std.mem.span(introduced.name.?));
+        try sets.names.append(s.names(), name);
+        if (introduced.after) |after| try sets.orders.append(s.names(), .{ .first = try s.names().dupeZ(u8, std.mem.span(after)), .then = name });
+    }
+}
+
+/// Two instances of different parts created with one section: the keys one reads, the other refuses.
+fn checkSections(s: *State, report: *Report) void {
+    for (s.instances.items, 0..) |*a, i| {
+        const sa = a.section orelse continue;
+        for (s.instances.items[i + 1 ..]) |*b| {
+            const sb = b.section orelse continue;
+            if (!std.mem.eql(u8, sa, sb) or std.mem.eql(u8, a.part_name.?, b.part_name.?)) continue;
+            report.add(A.KE_ASSEMBLY_FAILURE_SHARED_SECTION, b.name, sb, "{s} ({s}) and {s} ({s}) are both created with the section {s}", .{ a.name, a.part_name.?, b.name, b.part_name.?, sb });
         }
     }
 }
@@ -445,7 +533,7 @@ fn checkSets(s: *State, report: *Report) R.Error!void {
     }
     for (s.instances.items) |*self| {
         for (self.hooked, 0..) |h, k| {
-            if (h.schedule == std.math.maxInt(usize)) continue;
+            if (h.schedule == unhooked) continue;
             const schedule = s.instances.items[h.schedule].name;
             const known = if (s.sets.getPtr(schedule)) |sets| hasSet(sets, h.set) else false;
             if (!known) report.add(A.KE_ASSEMBLY_FAILURE_UNHOOKED, self.name, std.mem.span(hooksOf(self.part.?)[k].name.?), "{s} joins the set {s} of {s}, which it does not have", .{ self.name, h.set, schedule });
@@ -462,7 +550,7 @@ fn plan(s: *State, report: *Report) R.Error!void {
     var edges: std.ArrayListUnmanaged([2]usize) = .empty;
     for (s.instances.items, 0..) |*self, at| {
         for (self.slots) |targets| for (targets) |t| try edges.append(s.names(), .{ t, at });
-        for (self.hooked) |h| if (h.schedule != std.math.maxInt(usize)) try edges.append(s.names(), .{ h.schedule, at });
+        for (self.hooked) |h| if (h.schedule != unhooked) try edges.append(s.names(), .{ h.schedule, at });
     }
     const sorted = try s.names().alloc(usize, s.instances.items.len);
     if (!try topological(s.names(), s.instances.items.len, edges.items, sorted)) {
@@ -495,8 +583,9 @@ fn resolve(self: ?*A.ke_assembly, callback: A.ke_assembly_report_fn, ctx: ?*anyo
 }
 
 fn resolveAll(s: *State, report: *Report) R.Error!void {
+    for (s.problems.items) |p| report.add(p.failure, p.instance, p.name, "{s}", .{p.detail});
     for (s.instances.items) |*self| {
-        if (self.external != null) continue;
+        if (self.isExternal()) continue;
         const part_name = self.part_name orelse {
             report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, self.name, null, "{s} is bound, hooked or ordered but never declared", .{self.name});
             continue;
@@ -511,6 +600,8 @@ fn resolveAll(s: *State, report: *Report) R.Error!void {
         try resolveSlots(s, report, at);
         try resolveHooks(s, report, at);
     }
+    for (s.instances.items, 0..) |*self, at| if (self.part != null) try resolveDefaultHooks(s, report, at);
+    checkSections(s, report);
     var defaults = s.defaults.iterator();
     while (defaults.next()) |d| if (s.by_name.get(d.value_ptr.*) == null)
         report.add(A.KE_ASSEMBLY_FAILURE_UNKNOWN_NAME, null, d.key_ptr.*, "the default of {s} is {s}, which is no instance", .{ d.key_ptr.*, d.value_ptr.* });
@@ -524,7 +615,7 @@ fn resolveAll(s: *State, report: *Report) R.Error!void {
 fn registerSets(s: *State, at: usize) R.Error!void {
     const self = &s.instances.items[at];
     const sets = s.sets.getPtr(self.name) orelse return;
-    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(@alignCast(refOf(self)));
+    const schedule: *abi_schedule.c.ke_schedule = @ptrCast(@alignCast(self.refFor(schedule_contract) orelse return));
     for (sets.names.items) |name| {
         var after: std.ArrayListUnmanaged(abi_schedule.c.ke_schedule_set_id) = .empty;
         for (sets.orders.items) |o| if (std.mem.eql(u8, o.then, name)) try after.append(s.names(), sets.ids.get(o.first).?);
@@ -534,28 +625,24 @@ fn registerSets(s: *State, at: usize) R.Error!void {
     }
 }
 
-fn refOf(self: *const Instance) ?*anyopaque {
-    if (self.external) |e| return e;
-    return if (self.made) |m| m.ref else null;
-}
-
 fn make(s: *State, at: usize) R.Error!void {
     const self = &s.instances.items[at];
     const part = self.part.?;
     const bound = try s.names().alloc(P.ke_part_bound, self.slots.len);
+    const slots = slotsOf(part);
     for (self.slots, 0..) |targets, k| {
         const refs = try s.names().alloc(?*anyopaque, targets.len);
-        for (targets, 0..) |t, i| refs[i] = refOf(&s.instances.items[t]);
+        for (targets, 0..) |t, i| refs[i] = s.instances.items[t].refFor(std.mem.span(slots[k].contract.?));
         bound[k] = .{ .instances = if (refs.len > 0) @ptrCast(refs.ptr) else null, .count = refs.len };
     }
     const hooked = try s.names().alloc(P.ke_part_hooked, self.hooked.len);
     for (self.hooked, 0..) |h, k| {
         const schedule = &s.instances.items[h.schedule];
-        hooked[k] = .{ .schedule = @ptrCast(@alignCast(refOf(schedule))), .set = s.sets.getPtr(schedule.name).?.ids.get(h.set).? };
+        hooked[k] = .{ .schedule = @ptrCast(@alignCast(schedule.refFor(schedule_contract))), .set = s.sets.getPtr(schedule.name).?.ids.get(h.set).? };
     }
-    var settings: ?*abi_settings.c.ke_settings = null;
-    try R.check(s.configuration.section.?(s.configuration, self.section.?.ptr, &settings));
-    var made: P.ke_part_instance = undefined;
+    var settings: ?*abi_settings.c.ke_settings = &empty_settings;
+    if (self.section) |section| try R.check(s.configuration.section.?(s.configuration, section.ptr, &settings));
+    var made: P.ke_owner = undefined;
     R.check(part.create.?(part, if (bound.len > 0) &bound[0] else null, if (hooked.len > 0) &hooked[0] else null, settings, &made)) catch |err| {
         log.warn("creating {s}, an instance of {s}, failed: {t}", .{ self.name, self.part_name.?, err });
         return err;
@@ -617,7 +704,7 @@ fn advanceAll(s: *State) R.Error!void {
     while (s.next < s.plan.len) {
         const at = s.plan[s.next];
         s.next += 1;
-        if (s.instances.items[at].external != null) {
+        if (s.instances.items[at].isExternal()) {
             try registerSets(s, at);
             continue;
         }
@@ -630,11 +717,40 @@ fn advanceAll(s: *State) R.Error!void {
 }
 
 /// Slot `get`.
-fn get(self: ?*A.ke_assembly, name: ?[*:0]const u8, out_instance: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
+fn get(self: ?*A.ke_assembly, name: ?[*:0]const u8, contract: ?[*:0]const u8, out_instance: ?*?*anyopaque) callconv(.c) abi_result.c.ke_result {
     const s = stateOf(self) orelse return R.code(error.InvalidArgument);
     const out = out_instance orelse return R.code(error.InvalidArgument);
+    const wanted = std.mem.span(contract orelse return R.code(error.InvalidArgument));
     const instance = s.instanceOf(std.mem.span(name orelse return R.code(error.InvalidArgument))) orelse return R.code(error.NotFound);
-    out.* = refOf(instance) orelse return R.code(error.NotFound);
+    out.* = instance.refFor(wanted) orelse return R.code(error.NotFound);
+    return R.ok;
+}
+
+/// The settings of an instance declared with no section: no key and no child.
+var empty_settings: abi_settings.c.ke_settings = .{ .get_bool = emptyBool, .get_int = emptyInt, .get_double = emptyDouble, .get_string = emptyString, .for_each_key = emptyList, .child = emptyChild, .for_each_child = emptyList };
+
+fn emptyBool(_: ?*abi_settings.c.ke_settings, _: ?[*:0]const u8, _: ?*bool) callconv(.c) abi_result.c.ke_result {
+    return R.code(error.NotFound);
+}
+
+fn emptyInt(_: ?*abi_settings.c.ke_settings, _: ?[*:0]const u8, _: ?*i64) callconv(.c) abi_result.c.ke_result {
+    return R.code(error.NotFound);
+}
+
+fn emptyDouble(_: ?*abi_settings.c.ke_settings, _: ?[*:0]const u8, _: ?*f64) callconv(.c) abi_result.c.ke_result {
+    return R.code(error.NotFound);
+}
+
+fn emptyString(_: ?*abi_settings.c.ke_settings, _: ?[*:0]const u8, _: ?*?[*:0]const u8) callconv(.c) abi_result.c.ke_result {
+    return R.code(error.NotFound);
+}
+
+fn emptyList(_: ?*abi_settings.c.ke_settings, _: abi_settings.c.ke_settings_key_func, _: ?*anyopaque) callconv(.c) abi_result.c.ke_result {
+    return R.ok;
+}
+
+fn emptyChild(_: ?*abi_settings.c.ke_settings, _: ?[*:0]const u8, out: ?*?*abi_settings.c.ke_settings) callconv(.c) abi_result.c.ke_result {
+    (out orelse return R.code(error.InvalidArgument)).* = &empty_settings;
     return R.ok;
 }
 
@@ -676,6 +792,7 @@ const Probe = struct {
     var pumps: usize = 0;
     var logs_set: usize = 0;
     var ready_done = true;
+    var seen_settings: ?*abi_settings.c.ke_settings = null;
 
     fn reset() void {
         created_count = 0;
@@ -691,7 +808,7 @@ const Probe = struct {
 const Thing = struct { name: []const u8, first: ?*anyopaque = null };
 var things: [8]Thing = undefined;
 
-fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_part_instance) callconv(.c) abi_result.c.ke_result {
+fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: ?*const P.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
     const part = self.?;
     const name = std.mem.span(part.name.?);
     if (Probe.fail_on) |f| if (std.mem.eql(u8, f, name)) return R.code(error.Io);
@@ -703,6 +820,7 @@ fn thingCreate(self: ?*const P.ke_part, bound: ?*const P.ke_part_bound, hooked: 
         };
     }
     if (hooked) |h| Probe.seen_hook = h.*;
+    Probe.seen_settings = settings;
     const at = Probe.created_count;
     Probe.created[at] = name;
     Probe.created_count += 1;
@@ -743,13 +861,16 @@ const one_gear = [_]P.ke_part_slot{.{ .name = "gear", .contract = "ke_gear", .ca
 const many_gears = [_]P.ke_part_slot{.{ .name = "gears", .contract = "ke_gear", .cardinality = P.KE_PART_CARDINALITY_MANY }};
 const tick_hook = [_]P.ke_part_hook{.{ .name = "tick", .default_set = "update" }};
 
-const gear_a = P.ke_part{ .name = "gear_a", .provides = "ke_gear", .create = thingCreate, .set_log = countLog };
-const gear_b = P.ke_part{ .name = "gear_b", .provides = "ke_gear", .create = thingCreate, .set_log = countLog };
-const gear_slow = P.ke_part{ .name = "gear_slow", .provides = "ke_gear", .create = thingCreate, .ready = readyProbe, .pump = pumpProbe };
-const wheel = P.ke_part{ .name = "wheel", .provides = "ke_wheel", .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
-const axle = P.ke_part{ .name = "axle", .provides = "ke_axle", .slots = &many_gears[0], .slot_count = 1, .create = thingCreate };
+const gear_contract = [_]?[*:0]const u8{"ke_gear"};
+const wheel_contract = [_]?[*:0]const u8{"ke_wheel"};
+const axle_contract = [_]?[*:0]const u8{"ke_axle"};
+const gear_a = P.ke_part{ .name = "gear_a", .provides = &gear_contract[0], .provides_count = 1, .create = thingCreate, .set_log = countLog };
+const gear_b = P.ke_part{ .name = "gear_b", .provides = &gear_contract[0], .provides_count = 1, .create = thingCreate, .set_log = countLog };
+const gear_slow = P.ke_part{ .name = "gear_slow", .provides = &gear_contract[0], .provides_count = 1, .create = thingCreate, .ready = readyProbe, .pump = pumpProbe };
+const wheel = P.ke_part{ .name = "wheel", .provides = &wheel_contract[0], .provides_count = 1, .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
+const axle = P.ke_part{ .name = "axle", .provides = &axle_contract[0], .provides_count = 1, .slots = &many_gears[0], .slot_count = 1, .create = thingCreate };
 const ticker = P.ke_part{ .name = "ticker", .hooks = &tick_hook[0], .hook_count = 1, .create = thingCreate };
-const loop_wheel = P.ke_part{ .name = "loop_wheel", .provides = "ke_gear", .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
+const loop_wheel = P.ke_part{ .name = "loop_wheel", .provides = &gear_contract[0], .provides_count = 1, .slots = &one_gear[0], .slot_count = 1, .create = thingCreate };
 
 const Rig = struct {
     cfg: zsub.For(abi_configuration.c.ke_configuration),
@@ -784,14 +905,14 @@ const Rig = struct {
         return rig.a().resolve.?(rig.a(), record, rig);
     }
 
-    fn ref(rig: *Rig, name: [*:0]const u8) !?*anyopaque {
+    fn ref(rig: *Rig, name: [*:0]const u8, contract: [*:0]const u8) !?*anyopaque {
         var out: ?*anyopaque = null;
-        try R.check(rig.a().get.?(rig.a(), name, &out));
+        try R.check(rig.a().get.?(rig.a(), name, contract, &out));
         return out;
     }
 
-    fn thing(rig: *Rig, name: [*:0]const u8) !*Thing {
-        return @ptrCast(@alignCast((try rig.ref(name)).?));
+    fn thing(rig: *Rig, name: [*:0]const u8, contract: [*:0]const u8) !*Thing {
+        return @ptrCast(@alignCast((try rig.ref(name, contract)).?));
     }
 
     fn deinit(rig: *Rig) void {
@@ -833,9 +954,8 @@ test "an instance is created after the only instance providing its slot's contra
     try R.check(rig.resolve());
     try R.check(rig.a().advance.?(rig.a()));
     try createdIs(&.{ "gear_a", "wheel" });
-    var cog: ?*anyopaque = null;
-    try R.check(rig.a().get.?(rig.a(), "cog", &cog));
-    try testing.expectEqual(cog, Probe.seen_slots[0]);
+    try testing.expectEqual(try rig.ref("cog", "ke_gear"), Probe.seen_slots[0]);
+    try testing.expectEqual(R.code(error.NotFound), rig.a().get.?(rig.a(), "cog", "ke_wheel", &Probe.seen_slots[1]));
 }
 
 test "a slot takes what the composition binds, else the contract's default, else the only candidate" {
@@ -853,8 +973,8 @@ test "a slot takes what the composition binds, else the contract's default, else
     try R.check(rig.a().set_default.?(rig.a(), "ke_gear", "a"));
     try R.check(rig.resolve());
     try R.check(rig.a().advance.?(rig.a()));
-    try testing.expectEqual(try rig.ref("b"), (try rig.thing("front")).first);
-    try testing.expectEqual(try rig.ref("a"), (try rig.thing("rear")).first);
+    try testing.expectEqual(try rig.ref("b", "ke_gear"), (try rig.thing("front", "ke_wheel")).first);
+    try testing.expectEqual(try rig.ref("a", "ke_gear"), (try rig.thing("rear", "ke_wheel")).first);
 }
 
 test "every reason a composition cannot be assembled is reported together, and nothing is created" {
@@ -922,10 +1042,8 @@ test "a slot that takes many receives its instances in the order the composition
     try R.check(rig.a().order.?(rig.a(), "shaft", "gears", "second", "first"));
     try R.check(rig.resolve());
     try R.check(rig.a().advance.?(rig.a()));
-    var second: ?*anyopaque = null;
-    try R.check(rig.a().get.?(rig.a(), "second", &second));
     try testing.expectEqual(@as(usize, 2), Probe.seen_count);
-    try testing.expectEqual(second, Probe.seen_slots[0]);
+    try testing.expectEqual(try rig.ref("second", "ke_gear"), Probe.seen_slots[0]);
 
     var other: Rig = undefined;
     try other.init();
@@ -945,12 +1063,13 @@ test "a slot that takes many receives its instances in the order the composition
 
 var schedule_sub: zsub.For(abi_schedule.c.ke_schedule) = undefined;
 
-fn scheduleCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_part_instance) callconv(.c) abi_result.c.ke_result {
+fn scheduleCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
     out.?.* = .{ .ref = schedule_sub.api(), .destroy = null };
     return R.ok;
 }
 
-const fake_schedule = P.ke_part{ .name = "fake_schedule", .provides = "ke_schedule", .create = scheduleCreate };
+const schedule_contract_list = [_]?[*:0]const u8{"ke_schedule"};
+const fake_schedule = P.ke_part{ .name = "fake_schedule", .provides = &schedule_contract_list[0], .provides_count = 1, .create = scheduleCreate };
 
 test "a hook receives its schedule and the id of the set it joins, registered in the order the composition gave" {
     try schedule_sub.init();
@@ -1042,17 +1161,143 @@ test "each distinct log setter of the parts is called once, before anything is c
     try testing.expectEqual(@as(usize, 0), Probe.created_count);
 }
 
-test "a name taken twice is refused, and nothing is gathered after resolve" {
+test "a name taken twice is reported by resolve with the other reasons, and nothing is gathered after resolve" {
     var rig: Rig = undefined;
     try rig.init();
     defer rig.deinit();
     try rig.part(&gear_a);
-    try testing.expectEqual(R.code(error.AlreadyExists), rig.a().add_part.?(rig.a(), &gear_a));
+    try rig.part(&gear_a);
     try rig.instance("a", "gear_a");
-    try testing.expectEqual(R.code(error.AlreadyExists), rig.a().add_instance.?(rig.a(), "a", "gear_a", "a"));
+    try rig.instance("a", "gear_a");
+    var outside = Thing{ .name = "outside" };
+    try R.check(rig.a().add_external.?(rig.a(), "a", "ke_gear", &outside));
+    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, rig.resolve());
+    try testing.expectEqual(@as(usize, 3), rig.failure_count);
+    try testing.expect(rig.reported(A.KE_ASSEMBLY_FAILURE_DUPLICATE));
+
+    var done: Rig = undefined;
+    try done.init();
+    defer done.deinit();
+    try done.part(&gear_a);
+    try done.instance("a", "gear_a");
+    try R.check(done.resolve());
+    try testing.expectEqual(R.code(error.NotSupported), done.a().add_instance.?(done.a(), "b", "gear_a", "b"));
+    try testing.expectEqual(R.code(error.NotSupported), done.resolve());
+}
+
+test "a slot that takes many takes only what the composition binds, none when nothing is" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try rig.part(&axle);
+    try rig.part(&gear_a);
+    try rig.instance("shaft", "axle");
+    try rig.instance("cog", "gear_a");
     try R.check(rig.resolve());
-    try testing.expectEqual(R.code(error.NotSupported), rig.a().add_instance.?(rig.a(), "b", "gear_a", "b"));
-    try testing.expectEqual(R.code(error.NotSupported), rig.resolve());
+    try R.check(rig.a().advance.?(rig.a()));
+    try testing.expectEqual(@as(usize, 0), Probe.seen_count);
+}
+
+test "a hook nothing binds joins the only schedule with its default set, and two such schedules are ambiguous" {
+    try schedule_sub.init();
+    defer schedule_sub.deinit();
+    _ = schedule_sub.when(.register_set).writesFresh(2);
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try rig.part(&fake_schedule);
+    try rig.part(&ticker);
+    try rig.instance("startup", "fake_schedule");
+    try rig.instance("frame", "fake_schedule");
+    try rig.instance("clock", "ticker");
+    try R.check(rig.a().add_set.?(rig.a(), "startup", "startup"));
+    try R.check(rig.a().add_set.?(rig.a(), "frame", "update"));
+    try R.check(rig.resolve());
+    try R.check(rig.a().advance.?(rig.a()));
+    try testing.expect(Probe.seen_hook.set != 0);
+
+    var two: Rig = undefined;
+    try two.init();
+    defer two.deinit();
+    try two.part(&fake_schedule);
+    try two.part(&ticker);
+    try two.instance("left", "fake_schedule");
+    try two.instance("right", "fake_schedule");
+    try two.instance("clock", "ticker");
+    try R.check(two.a().add_set.?(two.a(), "left", "update"));
+    try R.check(two.a().add_set.?(two.a(), "right", "update"));
+    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, two.resolve());
+    try testing.expect(two.reported(A.KE_ASSEMBLY_FAILURE_AMBIGUOUS));
+}
+
+test "an instance declared with no section is created with empty settings, and parts sharing a section are reported" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try rig.part(&gear_a);
+    try R.check(rig.a().add_instance.?(rig.a(), "a", "gear_a", null));
+    try R.check(rig.resolve());
+    try R.check(rig.a().advance.?(rig.a()));
+    const given = Probe.seen_settings.?;
+    var value: i64 = 0;
+    try testing.expectEqual(R.code(error.NotFound), given.get_int.?(given, "anything", &value));
+    try rig.cfg.received(.section).never();
+
+    var shared: Rig = undefined;
+    try shared.init();
+    defer shared.deinit();
+    try shared.part(&gear_a);
+    try shared.part(&gear_b);
+    try R.check(shared.a().add_instance.?(shared.a(), "one", "gear_a", "gears"));
+    try R.check(shared.a().add_instance.?(shared.a(), "two", "gear_a", "gears"));
+    try R.check(shared.a().add_instance.?(shared.a(), "three", "gear_b", "gears"));
+    try testing.expectEqual(abi_assembly.c.KE_RESULT_ASSEMBLY_UNRESOLVED, shared.resolve());
+    try testing.expectEqual(@as(usize, 2), shared.failure_count);
+    try testing.expect(shared.reported(A.KE_ASSEMBLY_FAILURE_SHARED_SECTION));
+}
+
+const Pair = struct { gear: Thing = .{ .name = "pair-gear" }, wheel: Thing = .{ .name = "pair-wheel" } };
+var pair: Pair = .{};
+
+fn pairCreate(_: ?*const P.ke_part, _: ?*const P.ke_part_bound, _: ?*const P.ke_part_hooked, _: ?*abi_settings.c.ke_settings, out: ?*P.ke_owner) callconv(.c) abi_result.c.ke_result {
+    out.?.* = .{ .ref = &pair, .destroy = null };
+    return R.ok;
+}
+
+fn pairProvided(instance: ?*anyopaque, index: usize) callconv(.c) ?*anyopaque {
+    const p: *Pair = @ptrCast(@alignCast(instance.?));
+    return if (index == 0) &p.gear else &p.wheel;
+}
+
+const pair_contracts = [_]?[*:0]const u8{ "ke_gear", "ke_wheel" };
+const gear_and_wheel = P.ke_part{ .name = "gear_and_wheel", .provides = &pair_contracts[0], .provides_count = 2, .create = pairCreate, .provided = pairProvided };
+
+test "an instance providing several contracts hands each slot the vtable of its contract, and so does an external" {
+    var rig: Rig = undefined;
+    try rig.init();
+    defer rig.deinit();
+    try rig.part(&gear_and_wheel);
+    try rig.part(&wheel);
+    try rig.instance("both", "gear_and_wheel");
+    try rig.instance("front", "wheel");
+    try R.check(rig.resolve());
+    try R.check(rig.a().advance.?(rig.a()));
+    try testing.expectEqual(@as(?*anyopaque, &pair.gear), Probe.seen_slots[0]);
+    try testing.expectEqual(@as(?*anyopaque, &pair.wheel), try rig.ref("both", "ke_wheel"));
+
+    var outside: Rig = undefined;
+    try outside.init();
+    defer outside.deinit();
+    try outside.part(&wheel);
+    var gear = Thing{ .name = "gear" };
+    var spare = Thing{ .name = "spare" };
+    try R.check(outside.a().add_external.?(outside.a(), "given", "ke_gear", &gear));
+    try R.check(outside.a().add_external.?(outside.a(), "given", "ke_axle", &spare));
+    try outside.instance("front", "wheel");
+    try R.check(outside.resolve());
+    try R.check(outside.a().advance.?(outside.a()));
+    try testing.expectEqual(@as(?*anyopaque, &gear), Probe.seen_slots[0]);
+    try testing.expectEqual(@as(?*anyopaque, &spare), try outside.ref("given", "ke_axle"));
 }
 
 test "assembling and destroying leaves no block allocated" {

@@ -49,6 +49,6 @@ public unsafe partial struct ke_assembly
     [NativeTypeName("ke_result (*)(struct ke_assembly *)")]
     public delegate* unmanaged[Cdecl]<ke_assembly*, KernelEngine.Result.Native.Result> advance;
 
-    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, void **)")]
-    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, void**, KernelEngine.Result.Native.Result> get;
+    [NativeTypeName("ke_result (*)(struct ke_assembly *, const char *, const char *, void **)")]
+    public delegate* unmanaged[Cdecl]<ke_assembly*, sbyte*, sbyte*, void**, KernelEngine.Result.Native.Result> get;
 }

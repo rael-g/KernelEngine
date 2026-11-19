@@ -58,11 +58,12 @@ pub const ke_part_slot = extern struct {
     cardinality: ke_part_cardinality = std.mem.zeroes(ke_part_cardinality),
 };
 
-/// A place in the frame where a part runs work: a set of a schedule the composition names.
+/// A place in the frame where a part runs work: a set of a schedule.
 pub const ke_part_hook = extern struct {
     /// Unique among the part's hooks.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The set the hook joins when the composition names only the schedule.
+    /// The set the hook joins when the composition names no set, in the schedule the composition
+    /// names or, when it names none, the only schedule that has a set of that name.
     default_set: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
 };
 
@@ -91,10 +92,9 @@ pub const ke_part_hooked = extern struct {
     set: ke_schedule_set_id = std.mem.zeroes(ke_schedule_set_id),
 };
 
-/// An instance a part created: the instance of its contract, or a handle of its own when it
-/// provides none. destroy is the part's own function taking that ref, never an implementation's
-/// destroy of another type.
-pub const ke_part_instance = extern struct {
+/// What has no contract of its own to be released through: an instance a part created, or the
+/// systems a module registered. destroy takes ref.
+pub const ke_owner = extern struct {
     ref: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     destroy: ?*const fn (?*anyopaque) callconv(.c) void = null,
 };
@@ -105,8 +105,10 @@ pub const ke_part_instance = extern struct {
 pub const ke_part = extern struct {
     /// The implementation's name, unique among the parts given to one assembly.
     name: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
-    /// The contract the instance provides; NULL when it provides none, as a module.
-    provides: ?[*:0]const u8 = std.mem.zeroes(?[*:0]const u8),
+    /// provides_count contracts the instance provides, each named by the C type of its vtable; none
+    /// for one that provides nothing, as a module.
+    provides: ?*const ?[*:0]const u8 = std.mem.zeroes(?*const ?[*:0]const u8),
+    provides_count: usize = std.mem.zeroes(usize),
     /// slot_count slots, in the order create receives them.
     slots: ?*const ke_part_slot = std.mem.zeroes(?*const ke_part_slot),
     slot_count: usize = std.mem.zeroes(usize),
@@ -117,7 +119,10 @@ pub const ke_part = extern struct {
     sets: ?*const ke_part_set = std.mem.zeroes(?*const ke_part_set),
     set_count: usize = std.mem.zeroes(usize),
     /// Creates an instance.
-    create: ?*const fn (?*const ke_part, ?*const ke_part_bound, ?*const ke_part_hooked, ?*abi_settings.c.ke_settings, ?*ke_part_instance) callconv(.c) abi_result.c.ke_result = null,
+    create: ?*const fn (?*const ke_part, ?*const ke_part_bound, ?*const ke_part_hooked, ?*abi_settings.c.ke_settings, ?*ke_owner) callconv(.c) abi_result.c.ke_result = null,
+    /// Gives the instance of the contract at index of provides; NULL for a part that provides one
+    /// contract, whose instance is the owner's ref.
+    provided: ?*const fn (?*anyopaque, usize) callconv(.c) ?*anyopaque = null,
     /// Gives the completion an instance finishes becoming usable with; NULL for an implementation
     /// that is usable once created.
     ready: ?*const fn (?*anyopaque, ?*?*abi_completion.c.ke_completion) callconv(.c) abi_result.c.ke_result = null,

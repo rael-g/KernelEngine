@@ -33,12 +33,12 @@ public interface IAssembly : IDisposable
     /// <summary>Declares the instance name of the part part, created with the section section of the configuration.</summary>
     /// <param name="name">Unique among the instances.</param>
     /// <param name="part">A part's name.</param>
-    /// <param name="section">A section of the configuration.</param>
+    /// <param name="section">A section of the configuration; NULL creates the instance with empty settings.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void AddInstance(string name, string part, string section);
-    /// <summary>Declares the instance name, made by someone else, providing contract; never destroyed by the assembly.</summary>
-    /// <param name="name">Unique among the instances.</param>
-    /// <param name="contract">The contract instance provides.</param>
+    /// <summary>Declares that the instance name, made by someone else, provides contract as instance; called once per contract it provides. Never destroyed by the assembly.</summary>
+    /// <param name="name">No instance of a part has it.</param>
+    /// <param name="contract">The contract instance is the vtable of.</param>
     /// <param name="instance">Must outlive the assembly.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void AddExternal(string name, string contract, nint instance);
@@ -46,7 +46,7 @@ public interface IAssembly : IDisposable
     /// <param name="target">An instance's name.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void Bind(string instance, string slot, string target);
-    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule.</summary>
+    /// <summary>Binds the hook hook of instance to the set set of the schedule instance schedule. A hook nothing binds joins the only schedule that has its default set.</summary>
     /// <param name="schedule">An instance providing ke_schedule.</param>
     /// <param name="set">NULL takes the hook's default set.</param>
     /// <exception cref="Exception">The native call failed.</exception>
@@ -63,15 +63,16 @@ public interface IAssembly : IDisposable
     /// <summary>Names the instance every slot of contract the composition binds nothing to takes.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void SetDefault(string contract, string instance);
-    /// <summary>Resolves the whole composition, creating nothing: a slot takes the instances bound to it, else the default of its contract, else the only instance that provides it. Every reason it cannot be assembled is reported.</summary>
+    /// <summary>Resolves the whole composition, creating nothing. A slot that takes one instance, or none, takes the one bound to it, else the default of its contract, else the only instance that provides it; a slot that takes many takes exactly the instances bound to it, none when nothing is. Every reason it cannot be assembled is reported.</summary>
     /// <param name="report">Receives each reason; NULL reports none.</param>
     /// <exception cref="Exception">The native call failed.</exception>
     void Resolve(AssemblyReport? report);
     /// <summary>Creates the instances whose slots are ready, each after every instance it is bound to became usable, pumping the instances already made while one is not.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     void Advance();
-    /// <summary>Gives the instance name.</summary>
-    /// <returns>Receives the instance's ref.</returns>
+    /// <summary>Gives the instance name as the vtable of contract.</summary>
+    /// <param name="contract">One of the contracts the instance provides.</param>
+    /// <returns>Receives the vtable.</returns>
     /// <exception cref="Exception">The native call failed.</exception>
-    nint Get(string name);
+    nint Get(string name, string contract);
 }

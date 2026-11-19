@@ -34,6 +34,11 @@ pub const KE_ASSEMBLY_FAILURE_WRONG_CONTRACT: ke_assembly_failure = 5;
 pub const KE_ASSEMBLY_FAILURE_CYCLE: ke_assembly_failure = 6;
 /// A hook is bound to no schedule, or to a set its schedule does not have.
 pub const KE_ASSEMBLY_FAILURE_UNHOOKED: ke_assembly_failure = 7;
+/// A part, an instance or an external contract is given a name already taken.
+pub const KE_ASSEMBLY_FAILURE_DUPLICATE: ke_assembly_failure = 8;
+/// Instances of different parts are created with the same section, whose keys one of them would
+/// refuse.
+pub const KE_ASSEMBLY_FAILURE_SHARED_SECTION: ke_assembly_failure = 9;
 
 /// Receives one line a plugin library logged. Each plugin library exports ` <library
 /// >_set_log_callback(ke_log_callback callback, void *ctx)`, declared in its ` <library
@@ -64,7 +69,9 @@ pub const ke_assembly_report_fn = ?*const fn (?*anyopaque, ke_assembly_failure, 
 
 /// Assembles instances of parts from a composition: which instances exist, of which part, with
 /// which section of settings, and which instance each slot and hook is bound to. Nothing is
-/// created before the whole composition resolves. Every name is copied.
+/// created before the whole composition resolves. Every name is copied. Gathering records what
+/// it is given and checks nothing: every mistake in it, as a name taken twice or one nothing
+/// declares, is reported by resolve, with the others.
 pub const ke_assembly = extern struct {
     handle: ?*anyopaque = std.mem.zeroes(?*anyopaque),
     /// Sends every line the parts' libraries log to log: resolve calls each distinct log setter of
@@ -75,12 +82,13 @@ pub const ke_assembly = extern struct {
     /// Declares the instance name of the part part, created with the section section of the
     /// configuration.
     add_instance: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
-    /// Declares the instance name, made by someone else, providing contract; never destroyed by the
-    /// assembly.
+    /// Declares that the instance name, made by someone else, provides contract as instance; called
+    /// once per contract it provides. Never destroyed by the assembly.
     add_external: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
     /// Binds the slot slot of instance to target; a slot that takes many is bound once per target.
     bind: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
-    /// Binds the hook hook of instance to the set set of the schedule instance schedule.
+    /// Binds the hook hook of instance to the set set of the schedule instance schedule. A hook
+    /// nothing binds joins the only schedule that has its default set.
     hook: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Orders two instances bound to the slot slot of instance: first comes before then. Instances
     /// of a slot with no order between them come in no guaranteed order.
@@ -91,15 +99,16 @@ pub const ke_assembly = extern struct {
     order_set: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
     /// Names the instance every slot of contract the composition binds nothing to takes.
     set_default: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) abi_result.c.ke_result = null,
-    /// Resolves the whole composition, creating nothing: a slot takes the instances bound to it,
-    /// else the default of its contract, else the only instance that provides it. Every reason it
-    /// cannot be assembled is reported.
+    /// Resolves the whole composition, creating nothing. A slot that takes one instance, or none,
+    /// takes the one bound to it, else the default of its contract, else the only instance that
+    /// provides it; a slot that takes many takes exactly the instances bound to it, none when
+    /// nothing is. Every reason it cannot be assembled is reported.
     resolve: ?*const fn (?*ke_assembly, ke_assembly_report_fn, ?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
     /// Creates the instances whose slots are ready, each after every instance it is bound to became
     /// usable, pumping the instances already made while one is not.
     advance: ?*const fn (?*ke_assembly) callconv(.c) abi_result.c.ke_result = null,
-    /// Gives the instance name.
-    get: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?*?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
+    /// Gives the instance name as the vtable of contract.
+    get: ?*const fn (?*ke_assembly, ?[*:0]const u8, ?[*:0]const u8, ?*?*anyopaque) callconv(.c) abi_result.c.ke_result = null,
 };
 
 /// Destroying it destroys every instance it made, in the reverse of the order it made them.

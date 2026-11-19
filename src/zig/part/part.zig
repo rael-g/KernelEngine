@@ -9,7 +9,6 @@ const abi_settings = @import("abi_settings");
 
 const c = abi_part.c;
 
-/// What a factory cannot say about itself.
 /// What a factory cannot say about itself: the implementation's name, one name per dependency parameter in the
 /// factory's order, which of them take none or one instance, and the part's optional functions.
 pub const Options = struct {
@@ -33,7 +32,8 @@ pub fn of(comptime factory: anytype, comptime options: Options) c.ke_part {
     const Built = Of(factory, options);
     return .{
         .name = options.name.ptr,
-        .provides = Built.provides.ptr,
+        .provides = &Built.provides[0],
+        .provides_count = Built.provides.len,
         .slots = if (Built.slots.len > 0) &Built.slots[0] else null,
         .slot_count = Built.slots.len,
         .create = Built.create,
@@ -50,7 +50,7 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
     const Settings = ?*abi_settings.c.ke_settings;
 
     return struct {
-        const provides = contractName(Pointee);
+        const provides = [_]?[*:0]const u8{contractName(Pointee).ptr};
 
         const slots = blk: {
             var made: [options.slots.len]c.ke_part_slot = undefined;
@@ -84,9 +84,9 @@ fn Of(comptime factory: anytype, comptime options: Options) type {
         }
 
         /// Slot `create`. A slot bound to nothing passes null; the instance is left zeroed when the factory fails.
-        fn create(self: ?*const c.ke_part, bound: ?*const c.ke_part_bound, _: ?*const c.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out_instance: ?*c.ke_part_instance) callconv(.c) abi_result.c.ke_result {
+        fn create(self: ?*const c.ke_part, bound: ?*const c.ke_part_bound, _: ?*const c.ke_part_hooked, settings: ?*abi_settings.c.ke_settings, out_instance: ?*c.ke_owner) callconv(.c) abi_result.c.ke_result {
             const out = out_instance orelse return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
-            out.* = std.mem.zeroes(c.ke_part_instance);
+            out.* = std.mem.zeroes(c.ke_owner);
             if (self == null or (slots.len > 0 and bound == null)) return abi_result.c.KE_RESULT_INVALID_ARGUMENT;
             const each: [*]const c.ke_part_bound = if (bound) |b| @ptrCast(b) else undefined;
             var handle = std.mem.zeroes(@typeInfo(Handle).pointer.child);
@@ -149,7 +149,9 @@ fn sizeIs(_: ?*abi_settings.c.ke_settings, key: ?[*:0]const u8, out: ?*i64) call
 
 test "the factory's dependencies become the part's slots, named after their contracts, and its handle what it provides" {
     try testing.expectEqualStrings("wheel_default", std.mem.span(wheel_part.name.?));
-    try testing.expectEqualStrings("ke_wheel", std.mem.span(wheel_part.provides.?));
+    try testing.expectEqual(@as(usize, 1), wheel_part.provides_count);
+    try testing.expectEqualStrings("ke_wheel", std.mem.span(wheel_part.provides.?.*.?));
+    try testing.expect(wheel_part.provided == null);
     try testing.expectEqual(@as(usize, 2), wheel_part.slot_count);
     try testing.expectEqualStrings("gear", std.mem.span(slotOf(wheel_part, 0).name.?));
     try testing.expectEqualStrings("ke_gear", std.mem.span(slotOf(wheel_part, 0).contract.?));
@@ -164,7 +166,7 @@ test "creating through the part hands the factory the bound instances and the se
     const bound = [_]c.ke_part_bound{ .{ .instances = @ptrCast(&gears), .count = 1 }, .{ .instances = null, .count = 0 } };
     var settings = std.mem.zeroes(abi_settings.c.ke_settings);
     settings.get_int = sizeIs;
-    var instance: c.ke_part_instance = undefined;
+    var instance: c.ke_owner = undefined;
     try testing.expectEqual(abi_result.c.KE_OK, wheel_part.create.?(&wheel_part, &bound[0], null, &settings, &instance));
     const wheel: *ke_wheel = @ptrCast(@alignCast(instance.ref.?));
     try testing.expectEqual(&gear, wheel.gear.?);
@@ -186,17 +188,17 @@ fn gearCreate(out: ?*ke_gear_handle) callconv(.c) abi_result.c.ke_result {
 const gear_part = of(gearCreate, .{ .name = "gear_default", .slots = &.{} });
 
 test "a factory with no dependency and no settings is a part with no slot" {
-    try testing.expectEqualStrings("ke_gear", std.mem.span(gear_part.provides.?));
+    try testing.expectEqualStrings("ke_gear", std.mem.span(gear_part.provides.?.*.?));
     try testing.expectEqual(@as(usize, 0), gear_part.slot_count);
     try testing.expect(gear_part.slots == null);
-    var instance: c.ke_part_instance = undefined;
+    var instance: c.ke_owner = undefined;
     try testing.expectEqual(abi_result.c.KE_OK, gear_part.create.?(&gear_part, null, null, null, &instance));
     try testing.expectEqual(@as(?*anyopaque, &made_gear), instance.ref);
 }
 
 test "a factory that fails leaves the instance zeroed and returns its code" {
     const bound = [_]c.ke_part_bound{ .{ .instances = null, .count = 0 }, .{ .instances = null, .count = 0 } };
-    var instance: c.ke_part_instance = undefined;
+    var instance: c.ke_owner = undefined;
     try testing.expectEqual(abi_result.c.KE_RESULT_INVALID_ARGUMENT, wheel_part.create.?(&wheel_part, &bound[0], null, null, &instance));
     try testing.expect(instance.ref == null and instance.destroy == null);
 }
