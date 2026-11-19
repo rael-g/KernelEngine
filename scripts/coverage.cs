@@ -94,15 +94,16 @@ static class Coverage
             Console.WriteLine("  (no coverage data - nothing to report)");
             return;
         }
+        Run(["dotnet", "tool", "restore"], cwd: BaseDir);
         Run([
-            "reportgenerator",
+            "dotnet", "tool", "run", "reportgenerator", "--",
             "-reports:" + string.Join(';', inputs),
             "-targetdir:" + ReportDir,
             "-reporttypes:Cobertura;Html",
             "-sourcedirs:" + BaseDir,
             "-filefilters:-*Generated*;-*examples*",
             "-classfilters:-*NativeMethods*;-*NativeAnnotation*;-*NativeTypeName*",
-        ], check: false);
+        ], check: false, cwd: BaseDir);
     }
 
     static void RunZigTests()
