@@ -1097,6 +1097,22 @@
       ]
     },
     {
+      "name": "runner",
+      "headers": [
+        "src/c/runner/kernel_engine/runner/runner.h"
+      ],
+      "includeDirs": [
+        "src/c/runner",
+        "src/zig/common/include",
+        "src/c/result"
+      ],
+      "apiJson": "src/csharp/runner/ke_api.json",
+      "namespace": "KernelEngine.Runner",
+      "nativeNamespace": "KernelEngine.Runner.Native",
+      "outDir": "src/csharp/runner/KernelEngine.Runner/Generated",
+      "abstractionsOutDir": "src/csharp/runner/KernelEngine.Runner/Generated/Abstractions"
+    },
+    {
       "name": "completion",
       "headers": [
         "src/c/completion/kernel_engine/completion/completion.h"
@@ -1201,6 +1217,7 @@
     { "name": "input_default_factory", "packageDir": "src/zig/input/default/abi", "headers": ["src/zig/input/default/include/kernel_engine/input/default/input_default_create.h", "src/zig/input/default/include/kernel_engine/input/default/input_default_log.h"], "includeDirs": ["src/c/input", "src/zig/input/default/include", "src/c/logger", "src/c/result", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "io_std_factory", "packageDir": "src/zig/io/std/abi", "headers": ["src/zig/io/std/include/kernel_engine/io/std/io_std_create.h", "src/zig/io/std/include/kernel_engine/io/std/io_std_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/std/include", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "io_inline_factory", "packageDir": "src/zig/io/inline/abi", "headers": ["src/zig/io/inline/include/kernel_engine/io/inline/io_inline_create.h", "src/zig/io/inline/include/kernel_engine/io/inline/io_inline_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/zig/io/inline/include", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "runner_headless_factory", "packageDir": "src/zig/runner/headless/abi", "headers": ["src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_create.h", "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_log.h", "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_parts.h"], "includeDirs": ["src/zig/runner/headless/include", "src/c/runner", "src/c/part", "src/c/scheduler", "src/c/input", "src/c/settings", "src/c/schedule", "src/c/completion", "src/c/job", "src/c/ecs", "src/c/math", "src/c/logger", "src/c/result", "src/zig/common/include"] },
     { "name": "assembly_default_factory", "packageDir": "src/zig/assembly/default/abi", "headers": ["src/zig/assembly/default/include/kernel_engine/assembly/default/assembly_default_create.h", "src/zig/assembly/default/include/kernel_engine/assembly/default/assembly_default_log.h"], "includeDirs": ["src/zig/assembly/default/include", "src/c/assembly", "src/c/part", "src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/async", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "render_graph_simple_factory", "packageDir": "src/zig/render_graph/simple/abi", "headers": ["src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_create.h", "src/zig/render_graph/simple/include/kernel_engine/render_graph/simple/render_graph_simple_log.h"], "includeDirs": ["src/c/settings", "src/c/render_graph", "src/c/render", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/render_graph/simple/include", "src/c/result", "src/c/completion", "src/zig/common/include", "src/c/extraction", "src/c/module", "src/c/schedule", "src/c/job"] },
     { "name": "extraction_default_factory", "packageDir": "src/zig/extraction/default/abi", "headers": ["src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_history_create.h", "src/zig/extraction/default/include/kernel_engine/extraction/default/extraction_default_log.h"], "includeDirs": ["src/c/settings", "src/c/extraction", "src/c/ecs", "src/c/logger", "src/c/math", "src/zig/extraction/default/include", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/async", "src/zig/common/include"] },
@@ -1272,7 +1289,7 @@
       "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
   },
   "extensions": {
-    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "AssemblyDefault", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
+    "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "AssemblyDefault", "RunnerHeadless", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [
     {
@@ -1843,6 +1860,18 @@
       "output": "Generated/"
     },
     {
+      "name": "RunnerHeadless",
+      "project": "src/csharp/runner/KernelEngine.Runner.Headless",
+      "namespace": "KernelEngine.Runner.Headless.Native",
+      "headers": [
+        "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_create.h",
+        "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_log.h",
+        "src/zig/runner/headless/include/kernel_engine/runner/headless/runner_headless_parts.h"
+      ],
+      "library": "ke_runner_headless",
+      "output": "Generated/"
+    },
+    {
       "name": "StbTrueType",
       "project": "src/csharp/text/KernelEngine.Text.StbTrueType",
       "namespace": "KernelEngine.Text.StbTrueType.Native",
@@ -1957,6 +1986,16 @@
       ],
       "library": "ke_scheduler",
       "output": "Generated/Assembly/"
+    },
+    {
+      "name": "Runner",
+      "project": "src/csharp/runner/KernelEngine.Runner",
+      "namespace": "KernelEngine.Runner.Native",
+      "headers": [
+        "src/c/runner/kernel_engine/runner/runner.h"
+      ],
+      "library": "ke_runner_headless",
+      "output": "Generated/Runner/"
     },
     {
       "name": "Completion",

@@ -48,6 +48,7 @@ pub fn build(b: *std.Build) void {
         "abi_render_ui",
         "abi_resource_cache",
         "abi_result",
+        "abi_runner",
         "abi_scene_files",
         "abi_scene_tree",
         "abi_schedule",

@@ -1303,6 +1303,14 @@ ke_assembly_handle size=16 align=8
   ref 0
   destroy 8
 
+[runner]
+ke_runner size=16 align=8
+  handle 0
+  run 8
+ke_runner_handle size=16 align=8
+  ref 0
+  destroy 8
+
 [completion]
 ke_completion size=32 align=8
   handle 0

@@ -30,7 +30,7 @@ pub fn Destination(comptime library: []const u8) type {
         var current: std.atomic.Value(?*const Target) = .init(null);
 
         /// Slot `<library>_set_log_callback`. A null callback sends the library's lines back to stderr.
-        fn setLogCallback(callback: ?Callback, ctx: ?*anyopaque) callconv(.c) void {
+        pub fn setLogCallback(callback: ?Callback, ctx: ?*anyopaque) callconv(.c) void {
             const cb = callback orelse {
                 current.store(null, .release);
                 return;
