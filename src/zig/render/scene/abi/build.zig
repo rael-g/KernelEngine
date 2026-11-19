@@ -17,6 +17,7 @@ pub fn build(b: *std.Build) void {
     abi.addImport("render_ui_factory", b.dependency("abi_render_ui_factory", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("schedule", b.dependency("abi_schedule", .{}).module("abi"));
+    abi.addImport("settings", b.dependency("abi_settings", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/scene/label_resolve_create.h>

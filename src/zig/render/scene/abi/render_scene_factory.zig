@@ -11,6 +11,7 @@ const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_scene_factory_c.zig");
@@ -21,9 +22,9 @@ const resultOf = abi_result.resultOf;
 
 /// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
 /// main world, in the update set, the font it names.
-pub fn renderLabelResolveCreate(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, default_font: ?[:0]const u8) Error!abi_module.c.ke_module_handle {
+pub fn renderLabelResolveCreate(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings) Error!abi_module.c.ke_module_handle {
     var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, if (default_font) |text| text.ptr else null, &written));
+    try checkResult(c.ke_render_label_resolve_create(context, ui, resolver, settings, &written));
     return written;
 }
 

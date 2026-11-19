@@ -168,6 +168,7 @@ static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
     ke_result made = ke_configuration_create(&e->configuration);
     if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.binder", "shader_dir", e->shader_dir);
     if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.service", "shader_dir", e->shader_dir);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.label", "default_font", e->default_font);
     if (made == KE_OK) made = ke_configuration_toml_create(e->file_system.ref, &e->configuration_source);
     if (made == KE_OK) made = e->configuration_source.ref->load(e->configuration_source.ref, e->configuration.ref, project_file);
     return made;
@@ -325,7 +326,7 @@ static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
 static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, e->default_font, &r->labels);
+    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, ke_sdk_settings(e, "render.label"), &r->labels);
     return made == KE_OK ? ke_sdk_add_module(e, r->labels.ref) : made;
 }
 

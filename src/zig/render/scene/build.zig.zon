@@ -19,6 +19,8 @@
         .abi_render_ui_factory = .{ .path = "../ui/abi" },
         .abi_render_ui = .{ .path = "../../abi/render_ui" },
         .abi_result = .{ .path = "../../abi/result" },
+        .abi_settings = .{ .path = "../../abi/settings" },
+        .ke_settings_schema = .{ .path = "../../settings/schema" },
         .abi_module = .{ .path = "../../abi/module" },
         .abi_schedule = .{ .path = "../../abi/schedule" },
         .abi_extraction = .{ .path = "../../abi/extraction" },

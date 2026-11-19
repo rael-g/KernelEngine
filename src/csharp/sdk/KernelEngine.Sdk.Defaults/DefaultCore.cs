@@ -51,6 +51,7 @@ public static class DefaultCore
             var shaders = Path.Combine(AppContext.BaseDirectory, "shaders");
             config.SetString("render.binder", "shader_dir", shaders);
             config.SetString("render.service", "shader_dir", shaders);
+            config.SetString("render.label", "default_font", Path.Combine(AppContext.BaseDirectory, "assets", "fonts", "LiberationSans-Regular.ttf"));
             Get<ConfigurationSource>(sp).Load(config, Path.Combine(root, "Project"));
             return config;
         });
@@ -86,7 +87,6 @@ public static class DefaultCore
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Extraction.ExtractionHistoryModule>(sp => new Extraction.ExtractionHistoryModule(Get<Extraction.Extraction>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, NodeTypesSystemsModule>(sp => new NodeTypesSystemsModule(Get<NodeTypes>(sp))));
 
-        var defaultFont = Path.Combine(AppContext.BaseDirectory, "assets", "fonts", "LiberationSans-Regular.ttf");
         Ecs.EcsRegistry RenderWorld(IServiceProvider sp) => sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render");
         services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), Get<Configuration.Configuration>(sp).Section("render.binder")));
         services.TryAddSingleton<RenderService>(sp => new DefaultRenderService(Get<Render.Gpu.GpuDevice>(sp), Get<Render.Gpu.GpuRenderTarget>(sp), Get<Io.Io>(sp), Get<Render.Gpu.RenderResourceBinder>(sp), Get<Configuration.Configuration>(sp).Section("render.service")));
@@ -108,7 +108,7 @@ public static class DefaultCore
         Pass(sp => new RenderForwardModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.forward")));
         Pass(sp => new RenderTonemapModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
         Pass(sp => new RenderUiSystemsModule(Get<RenderUi>(sp)));
-        Pass(sp => new RenderLabelResolveModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), defaultFont));
+        Pass(sp => new RenderLabelResolveModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), Get<Configuration.Configuration>(sp).Section("render.label")));
         return services;
     }
 }
