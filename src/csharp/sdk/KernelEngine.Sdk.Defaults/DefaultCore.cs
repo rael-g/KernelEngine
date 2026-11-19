@@ -13,7 +13,6 @@ using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
-using KernelEngine.Settings;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
 using KernelEngine.Window.Glfw;
@@ -38,12 +37,10 @@ public static class DefaultCore
         var root = projectDir.TrimEnd(Path.DirectorySeparatorChar);
         static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-        services.TryAddKeyedSingleton<Configuration.Configuration>("bootstrap", (sp, _) => new DefaultConfiguration());
-        IPartSettings Bootstrap(IServiceProvider sp, string section) => sp.GetRequiredKeyedService<Configuration.Configuration>("bootstrap").Section(section);
-        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Bootstrap(sp, "job")));
+        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Get<Configuration.Configuration>(sp).Section("job")));
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(root));
-        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Bootstrap(sp, "async")));
-        services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Bootstrap(sp, "io")));
+        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Get<Configuration.Configuration>(sp).Section("async")));
+        services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Get<Configuration.Configuration>(sp).Section("io")));
         services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<FileSystem.FileSystem>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
