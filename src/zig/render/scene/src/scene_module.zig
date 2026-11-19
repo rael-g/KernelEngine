@@ -102,7 +102,7 @@ fn registerIds(e: *abi_ecs.c.ke_ecs, ids: *abi_render.c.ke_render_scene_componen
     ids.ambient_light = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_AMBIENT_LIGHT, abi_render_components.c.ke_ambient_light_component, &abi_render_contract.c.ke_ambient_light_component_fields);
     ids.skybox = try registerBare(e, abi_render_contract.c.KE_COMPONENT_NAME_SKYBOX, abi_render_components.c.ke_skybox_component);
     ids.sprite2d = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_SPRITE2D, abi_render_components.c.ke_sprite2d_component, &abi_render_contract.c.ke_sprite2d_component_fields);
-    ids.label = try registerComponent(e, abi_render_contract.c.KE_COMPONENT_NAME_LABEL, abi_ui_components.c.ke_label_component, &abi_render_contract.c.ke_label_component_fields);
+    ids.label = try registerComponent(e, abi_ui_components.c.KE_COMPONENT_NAME_LABEL, abi_ui_components.c.ke_label_component, &abi_render_contract.c.ke_label_component_fields);
 }
 
 /// The components every pair of the render world carries when its entity has them, and those whose

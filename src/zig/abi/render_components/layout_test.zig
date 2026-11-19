@@ -33,6 +33,18 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_sprite2d_component, translated("ke_sprite2d_component"));
 }
 
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_CAMERA, abi.c.KE_COMPONENT_NAME_CAMERA);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT, abi.c.KE_COMPONENT_NAME_DIRECTIONAL_LIGHT);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_POINT_LIGHT, abi.c.KE_COMPONENT_NAME_POINT_LIGHT);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPOT_LIGHT, abi.c.KE_COMPONENT_NAME_SPOT_LIGHT);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_AMBIENT_LIGHT, abi.c.KE_COMPONENT_NAME_AMBIENT_LIGHT);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SKYBOX, abi.c.KE_COMPONENT_NAME_SKYBOX);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_MESH, abi.c.KE_COMPONENT_NAME_MESH);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPRITE2D, abi.c.KE_COMPONENT_NAME_SPRITE2D);
+}
+
 extern const layout_values: [51]c_ulonglong;
 
 test "every size and offset is the one C computes" {

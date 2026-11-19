@@ -78,4 +78,9 @@ extern "C"
 }
 #endif
 
+/// The name the `ui_quad` component is registered under.
+#define KE_COMPONENT_NAME_UI_QUAD "ui_quad"
+/// The name the `label` component is registered under.
+#define KE_COMPONENT_NAME_LABEL "label"
+
 #endif

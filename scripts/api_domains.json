@@ -30,29 +30,6 @@
       "Cancelled": "System.OperationCanceledException"
     },
     "commonManagedNamespace": "KernelEngine.Common",
-    "fieldTable": {
-      "entryType": "ke_component_field",
-      "variantType": "ke_variant",
-      "variantKindType": "ke_variant_type",
-      "include": "kernel_engine/ecs/component_field.h",
-      "nameMacroPrefix": "KE_COMPONENT_NAME_",
-      "managedNamespace": "KernelEngine.Ecs",
-      
-      "bindingsNamespace": "KernelEngine.Ecs.Native",
-      
-      "variants": {
-        "null": { "constant": "KE_VARIANT_NULL" },
-        "bool": { "constant": "KE_VARIANT_BOOL", "member": ".b" },
-        "int": { "constant": "KE_VARIANT_INT", "member": ".i" },
-        "float": { "constant": "KE_VARIANT_FLOAT", "member": ".f" },
-        "string": { "constant": "KE_VARIANT_STRING", "member": ".s" },
-        "vec2": { "constant": "KE_VARIANT_VEC2", "member": ".v2" },
-        "vec3": { "constant": "KE_VARIANT_VEC3", "member": ".v3" },
-        "vec4": { "constant": "KE_VARIANT_VEC4", "member": ".v4" },
-        "quat": { "constant": "KE_VARIANT_QUAT", "member": ".q" },
-        "entity": { "constant": "KE_VARIANT_ENTITY", "member": ".e" }
-      }
-    },
     "includeDirectoryName": "kernel_engine",
     "commonBindingsNamespace": "KernelEngine.Common.Native",
     "bindingsMethodsClass": "NativeMethods"
@@ -435,13 +412,6 @@
         "src/c/physics/kernel_engine/physics/physics_2d.h"
       ],
       "apiJson": "src/csharp/physics/components.ke_api.json",
-      "cOut": {
-        "file": "src/c/physics/kernel_engine/physics/component_fields.h",
-        "guard": "KERNEL_ENGINE_PHYSICS_COMPONENT_FIELDS_H_",
-        "includes": [
-          "kernel_engine/physics/components.h"
-        ]
-      },
       "namespace": "KernelEngine.Physics",
       "nativeNamespace": "KernelEngine.Physics.Native",
       "outDir": "src/csharp/physics/KernelEngine.Physics/Scene",
@@ -468,13 +438,6 @@
         "src/c/spatial/kernel_engine/spatial/transform.h"
       ],
       "apiJson": "src/csharp/audio/components.ke_api.json",
-      "cOut": {
-        "file": "src/c/audio/kernel_engine/audio/component_fields.h",
-        "guard": "KERNEL_ENGINE_AUDIO_COMPONENT_FIELDS_H_",
-        "includes": [
-          "kernel_engine/audio/components.h"
-        ]
-      },
       "namespace": "KernelEngine.Audio",
       "nativeNamespace": "KernelEngine.Audio.Native",
       "outDir": "src/csharp/audio/KernelEngine.Audio/Scene",
@@ -686,13 +649,6 @@
         "src/c/result"
       ],
       "apiJson": "src/csharp/framework/spatial.ke_api.json",
-      "cOut": {
-        "file": "src/c/spatial/kernel_engine/spatial/component_fields.h",
-        "guard": "KERNEL_ENGINE_SPATIAL_COMPONENT_FIELDS_H_",
-        "includes": [
-          "kernel_engine/spatial/transform.h"
-        ]
-      },
       "namespace": "KernelEngine.Common",
       "nativeNamespace": "KernelEngine.Common.Native",
       "abstractionsOutDir": "src/csharp/common/KernelEngine.Common/Generated/Contract",
@@ -757,13 +713,6 @@
         "src/c/job"
       ],
       "apiJson": "src/csharp/render/components.ke_api.json",
-      "cOut": {
-        "file": "src/c/render/kernel_engine/render/component_fields.h",
-        "guard": "KERNEL_ENGINE_RENDER_COMPONENT_FIELDS_H_",
-        "includes": [
-          "kernel_engine/render/components.h"
-        ]
-      },
       "namespace": "KernelEngine.Render",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
@@ -793,13 +742,6 @@
         "src/c/job"
       ],
       "apiJson": "src/csharp/render/ui_components.ke_api.json",
-      "cOut": {
-        "file": "src/c/render/kernel_engine/render/ui/component_fields.h",
-        "guard": "KERNEL_ENGINE_RENDER_UI_COMPONENT_FIELDS_H_",
-        "includes": [
-          "kernel_engine/render/ui/components.h"
-        ]
-      },
       "namespace": "KernelEngine.Render",
       "nativeNamespace": "KernelEngine.Render.Native",
       "outDir": "src/csharp/render/KernelEngine.Render/Scene",
@@ -1221,14 +1163,14 @@
     { "name": "text_stb_truetype_factory", "packageDir": "src/zig/text/stb_truetype/abi", "headers": ["src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/stb_font.h", "src/zig/text/stb_truetype/include/kernel_engine/text/stb_truetype/text_stb_truetype_log.h"], "includeDirs": ["src/c/file_system", "src/c/io", "src/c/logger", "src/c/result", "src/c/text", "src/zig/text/stb_truetype/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/framework", "src/c/input", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/view", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "view_space_factory", "packageDir": "src/zig/view/space/abi", "headers": ["src/zig/view/space/include/kernel_engine/view/space/view_space_lh_create.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_log.h", "src/zig/view/space/include/kernel_engine/view/space/view_space_rh_create.h"], "includeDirs": ["src/c/ecs", "src/c/logger", "src/c/math", "src/c/render", "src/c/result", "src/c/spatial", "src/c/view", "src/zig/view/space/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/physics", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/text", "src/c/window", "src/c/render_graph", "src/c/extraction"] },
     { "name": "window_glfw_factory", "packageDir": "src/zig/window/glfw/abi", "headers": ["src/zig/window/glfw/include/kernel_engine/window/glfw/glfw_window.h", "src/zig/window/glfw/include/kernel_engine/window/glfw/window_glfw_log.h"], "includeDirs": ["src/c/input", "src/c/logger", "src/c/result", "src/c/window", "src/zig/window/glfw/include", "src/zig/common/include", "src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/io", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/render_graph", "src/c/extraction"] },
-    { "name": "audio_contract", "headers": ["src/c/audio/kernel_engine/audio/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "audio_contract", "headers": ["src/c/audio/kernel_engine/audio/component_fields.h", "src/c/audio/kernel_engine/audio/components.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
     { "name": "framework", "headers": ["src/c/framework/kernel_engine/framework/node_types.h", "src/c/framework/kernel_engine/framework/scene_files.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
     { "name": "framework_components", "headers": [ "src/c/framework/kernel_engine/framework/components.h" ], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
-    { "name": "physics_contract", "headers": ["src/c/physics/kernel_engine/physics/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
-    { "name": "render_contract", "headers": ["src/c/render/kernel_engine/render/component_fields.h", "src/c/render/kernel_engine/render/ui/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "physics_contract", "headers": ["src/c/physics/kernel_engine/physics/component_fields.h", "src/c/physics/kernel_engine/physics/components.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "render_contract", "headers": ["src/c/render/kernel_engine/render/component_fields.h", "src/c/render/kernel_engine/render/ui/component_fields.h", "src/c/render/kernel_engine/render/components.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
     { "name": "render_context", "headers": ["src/c/render/kernel_engine/render/context.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
     { "name": "resource_cache", "headers": ["src/c/resource_cache/kernel_engine/resource_cache/resource_cache.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
-    { "name": "spatial_contract", "headers": ["src/c/spatial/kernel_engine/spatial/component_fields.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
+    { "name": "spatial_contract", "headers": ["src/c/spatial/kernel_engine/spatial/component_fields.h", "src/c/spatial/kernel_engine/spatial/transform.h"], "includeDirs": ["src/c/asset", "src/c/audio", "src/c/configuration", "src/c/settings", "src/c/ecs", "src/c/file_system", "src/c/framework", "src/c/input", "src/c/io", "src/c/logger", "src/c/math", "src/c/physics", "src/c/render", "src/c/resource_cache", "src/c/result", "src/c/scheduler", "src/c/schedule", "src/c/module", "src/c/completion", "src/c/job", "src/c/spatial", "src/c/text", "src/c/view", "src/c/window", "src/zig/common/include", "src/c/render_graph", "src/c/extraction"] },
     { "name": "result", "headers": [ "src/c/result/kernel_engine/result/result.h" ], "includeDirs": ["src/c/settings",  "src/c/result", "src/zig/common/include" ] },
     { "name": "render_handles", "headers": [ "src/c/render/kernel_engine/render/handles.h" ], "includeDirs": ["src/c/settings",  "src/c/render", "src/c/result", "src/zig/common/include", "src/c/render_graph", "src/c/extraction", "src/c/completion", "src/c/module", "src/c/schedule", "src/c/job"] },
     { "name": "render_material", "headers": [ "src/c/render/kernel_engine/render/material_file.h" ], "includeDirs": ["src/c/settings",  "src/c/render", "src/c/math", "src/c/result", "src/zig/common/include", "src/c/render_graph", "src/c/extraction", "src/c/completion", "src/c/module", "src/c/schedule", "src/c/job"] },
@@ -1265,8 +1207,6 @@
       "render/texture_target/gpu_render_target_texture_log.h": "log of a library with no managed caller"
   },
   "extensions": {
-
-    "fieldTables": {},
     "factories": { "bindings": ["Assimp", "Input", "Ui", "RenderLabelResolve", "Shadow", "Cluster", "Gbuffer", "DeferredLighting", "Skybox", "Forward", "RenderFrame", "RenderSceneResolve", "Tonemap", "Camera", "ViewSpaceRh", "BinderGrouped", "RenderServiceFactory", "Box2D", "GpuDevice", "GpuWindowTarget", "Glfw", "EcsFlecs", "MiniAudio", "FileSystemStd", "IoStd", "IoInline", "StbImage", "StbTrueType", "Store", "Toml", "Scheduler", "Schedule", "Framework", "FrameworkNodes", "AudioModule", "Body2DModule", "ExtractionDefault", "RenderGraphSimple", "JobEnki", "JobInline", "AsyncEnki", "AsyncInline"] }
   },
   "bindings": [

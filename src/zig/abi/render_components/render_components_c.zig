@@ -5,6 +5,23 @@ const abi_math = @import("math");
 const abi_render_handles = @import("render_handles");
 const abi_result = @import("result");
 
+/// The name the `camera` component is registered under.
+pub const KE_COMPONENT_NAME_CAMERA = "camera";
+/// The name the `directional_light` component is registered under.
+pub const KE_COMPONENT_NAME_DIRECTIONAL_LIGHT = "directional_light";
+/// The name the `point_light` component is registered under.
+pub const KE_COMPONENT_NAME_POINT_LIGHT = "point_light";
+/// The name the `spot_light` component is registered under.
+pub const KE_COMPONENT_NAME_SPOT_LIGHT = "spot_light";
+/// The name the `ambient_light` component is registered under.
+pub const KE_COMPONENT_NAME_AMBIENT_LIGHT = "ambient_light";
+/// The name the `skybox` component is registered under.
+pub const KE_COMPONENT_NAME_SKYBOX = "skybox";
+/// The name the `mesh` component is registered under.
+pub const KE_COMPONENT_NAME_MESH = "mesh";
+/// The name the `sprite2d` component is registered under.
+pub const KE_COMPONENT_NAME_SPRITE2D = "sprite2d";
+
 /// Scene node that drives the per-frame view/projection. The first entity with a Camera in the
 /// ECS becomes the active camera.
 pub const ke_camera_component = extern struct {

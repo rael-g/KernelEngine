@@ -5,15 +5,8 @@
 #include <kernel_engine/render/components.h>
 #include <stddef.h>
 
-#define KE_COMPONENT_NAME_CAMERA "camera"
-#define KE_COMPONENT_NAME_DIRECTIONAL_LIGHT "directional_light"
-#define KE_COMPONENT_NAME_POINT_LIGHT "point_light"
-#define KE_COMPONENT_NAME_SPOT_LIGHT "spot_light"
-#define KE_COMPONENT_NAME_AMBIENT_LIGHT "ambient_light"
-#define KE_COMPONENT_NAME_SKYBOX "skybox"
-#define KE_COMPONENT_NAME_MESH "mesh"
-#define KE_COMPONENT_NAME_SPRITE2D "sprite2d"
-
+/// The fields of `ke_camera_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_camera_component_fields[] = {
     { "fov", KE_VARIANT_FLOAT, offsetof(ke_camera_component, fov), sizeof(((ke_camera_component *)0)->fov), { KE_VARIANT_FLOAT, { .f = 60.0 } }, NULL, 0 },
     { "near_plane", KE_VARIANT_FLOAT, offsetof(ke_camera_component, near_plane), sizeof(((ke_camera_component *)0)->near_plane), { KE_VARIANT_FLOAT, { .f = 0.1 } }, NULL, 0 },
@@ -23,6 +16,8 @@ static const ke_component_field ke_camera_component_fields[] = {
     { "cull_mask", KE_VARIANT_INT, offsetof(ke_camera_component, cull_mask), sizeof(((ke_camera_component *)0)->cull_mask), { KE_VARIANT_INT, { .i = 4294967295 } }, NULL, 0 },
 };
 
+/// The fields of `ke_directional_light_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_directional_light_component_fields[] = {
     { "direction", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, direction), sizeof(((ke_directional_light_component *)0)->direction), { KE_VARIANT_VEC3, { .v3 = { 0.2f, 1.0f, 0.5f } } }, NULL, 0 },
     { "color", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, color), sizeof(((ke_directional_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
@@ -30,12 +25,16 @@ static const ke_component_field ke_directional_light_component_fields[] = {
     { "ambient", KE_VARIANT_VEC3, offsetof(ke_directional_light_component, ambient), sizeof(((ke_directional_light_component *)0)->ambient), { KE_VARIANT_VEC3, { .v3 = { 0.2f, 0.2f, 0.2f } } }, NULL, 0 },
 };
 
+/// The fields of `ke_point_light_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_point_light_component_fields[] = {
     { "color", KE_VARIANT_VEC3, offsetof(ke_point_light_component, color), sizeof(((ke_point_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
     { "intensity", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, intensity), sizeof(((ke_point_light_component *)0)->intensity), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },
     { "radius", KE_VARIANT_FLOAT, offsetof(ke_point_light_component, radius), sizeof(((ke_point_light_component *)0)->radius), { KE_VARIANT_FLOAT, { .f = 10.0 } }, NULL, 0 },
 };
 
+/// The fields of `ke_spot_light_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_spot_light_component_fields[] = {
     { "direction", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, direction), sizeof(((ke_spot_light_component *)0)->direction), { KE_VARIANT_VEC3, { .v3 = { 0.0f, -1.0f, 0.0f } } }, NULL, 0 },
     { "color", KE_VARIANT_VEC3, offsetof(ke_spot_light_component, color), sizeof(((ke_spot_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
@@ -45,10 +44,14 @@ static const ke_component_field ke_spot_light_component_fields[] = {
     { "outer_angle", KE_VARIANT_FLOAT, offsetof(ke_spot_light_component, outer_angle), sizeof(((ke_spot_light_component *)0)->outer_angle), { KE_VARIANT_FLOAT, { .f = 35.0 } }, NULL, 0 },
 };
 
+/// The fields of `ke_ambient_light_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_ambient_light_component_fields[] = {
     { "color", KE_VARIANT_VEC3, offsetof(ke_ambient_light_component, color), sizeof(((ke_ambient_light_component *)0)->color), { KE_VARIANT_VEC3, { .v3 = { 0.05f, 0.05f, 0.05f } } }, NULL, 0 },
 };
 
+/// The fields of `ke_mesh_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_mesh_component_fields[] = {
     { "mesh", KE_VARIANT_STRING, offsetof(ke_mesh_component, primitive), sizeof(((ke_mesh_component *)0)->primitive), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "color", KE_VARIANT_VEC4, offsetof(ke_mesh_component, base_color), sizeof(((ke_mesh_component *)0)->base_color), { KE_VARIANT_VEC4, { .v4 = { 1.0f, 1.0f, 1.0f, 1.0f } } }, NULL, 0 },
@@ -60,6 +63,8 @@ static const ke_component_field ke_mesh_component_fields[] = {
     { "layers", KE_VARIANT_INT, offsetof(ke_mesh_component, layers), sizeof(((ke_mesh_component *)0)->layers), { KE_VARIANT_INT, { .i = 1 } }, NULL, 0 },
 };
 
+/// The fields of `ke_sprite2d_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_sprite2d_component_fields[] = {
     { "texture", KE_VARIANT_STRING, offsetof(ke_sprite2d_component, texture), sizeof(((ke_sprite2d_component *)0)->texture), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "region", KE_VARIANT_VEC4, offsetof(ke_sprite2d_component, region), sizeof(((ke_sprite2d_component *)0)->region), { KE_VARIANT_VEC4, { .v4 = { 0.0f, 0.0f, 1.0f, 1.0f } } }, NULL, 0 },

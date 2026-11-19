@@ -7,6 +7,8 @@ pub const ke_audio_sound = u32;
 pub const ke_audio_voice = u32;
 
 pub const KE_SOUND_MAX_PATH = 256;
+/// The name the `sound` component is registered under.
+pub const KE_COMPONENT_NAME_SOUND = "sound";
 
 pub const ke_sound_release = c_uint;
 /// The entity stays when the sound ends, ready to play again.

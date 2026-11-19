@@ -20,5 +20,5 @@ partial class Scoreboard : Node
     [On<ServeRequested>]
     void OnServe(ServeRequested _) => Show("ScoreHint", "");
 
-    void Show(string child, string text) => Get<LabelComponent>(Child(child)).Text = text;
+    void Show(string child, string text) => Component<LabelComponent>(Child(child), UiComponentsConstants.ComponentNameLabel).Text = text;
 }

@@ -40,8 +40,9 @@ dotnet run scripts/ci_local.cs            # verify.cs in a fresh clone inside th
 - Never `dotnet run --no-build` after a native rebuild: the native libraries are copied into the C# output
   only during a build (`src/csharp/NativeDependencies.targets`), so `--no-build` runs the old native code.
 - Bindings and projections are generated, never edited:
-  `dotnet run --project src/csharp/generators/KernelEngine.Kabic -- bindings` regenerates the P/Invoke layer,
-  `-- generate` every kabic domain from `scripts/api_domains.json`.
+  `dotnet run --project external/kabic/src/Kabic -- --cache-dir build/kabic-cache bindings` regenerates the
+  P/Invoke layer, `generate` every kabic domain from `scripts/api_domains.json`, with no extension of the
+  engine's.
 - Slang shaders live with the pass that owns them (`src/zig/render/<pass>/shaders/`), shared modules and
   materials under `src/shaders/`; they compile to WGSL and are loaded at runtime by logical name.
 - Coverage: `zig build coverage -Dcoverage` runs every plugin's tests under kcov, fetched by

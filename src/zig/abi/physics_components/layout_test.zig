@@ -33,6 +33,12 @@ test "every enum value is the header's value" {
     try std.testing.expectEqual(@as(i64, c.KE_SHAPE_KIND_2D_CIRCLE), @as(i64, abi.c.KE_SHAPE_KIND_2D_CIRCLE));
 }
 
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_BODY2D, abi.c.KE_COMPONENT_NAME_BODY2D);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_COLLIDER2D, abi.c.KE_COMPONENT_NAME_COLLIDER2D);
+}
+
 extern const layout_values: [19]c_ulonglong;
 
 test "every size and offset is the one C computes" {

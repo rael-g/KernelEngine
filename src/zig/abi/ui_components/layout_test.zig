@@ -35,6 +35,8 @@ test "every constant is the header's value" {
     try std.testing.expectEqual(std.mem.toBytes(c.KE_UI_FONT_FAILED), std.mem.toBytes(abi.c.KE_UI_FONT_FAILED));
     try std.testing.expectEqual(@as(i128, c.KE_LABEL_MAX_TEXT), @as(i128, abi.c.KE_LABEL_MAX_TEXT));
     try std.testing.expectEqual(@as(i128, c.KE_LABEL_MAX_GLYPHS), @as(i128, abi.c.KE_LABEL_MAX_GLYPHS));
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_UI_QUAD, abi.c.KE_COMPONENT_NAME_UI_QUAD);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.c.KE_COMPONENT_NAME_LABEL);
 }
 
 extern const layout_values: [33]c_ulonglong;

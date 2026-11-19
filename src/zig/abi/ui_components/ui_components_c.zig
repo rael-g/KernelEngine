@@ -9,6 +9,10 @@ pub const KE_UI_FONT_NONE: ke_ui_font_handle = .{ .bits = 0 };
 pub const KE_UI_FONT_FAILED: ke_ui_font_handle = .{ .bits = 4294967295 };
 pub const KE_LABEL_MAX_TEXT = 256;
 pub const KE_LABEL_MAX_GLYPHS = 256;
+/// The name the `ui_quad` component is registered under.
+pub const KE_COMPONENT_NAME_UI_QUAD = "ui_quad";
+/// The name the `label` component is registered under.
+pub const KE_COMPONENT_NAME_LABEL = "label";
 
 pub const ke_ui_font_handle = extern struct {
     bits: u32 = std.mem.zeroes(u32),

@@ -1,6 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 using System.Numerics;
 
+using KernelEngine.Audio;
 using KernelEngine.Framework.Nodes;
 
 namespace Pong;
@@ -46,7 +47,7 @@ partial class Ball : Body2D
     {
         var bounced = LastVelocity.X != 0 && (Body.Velocity.X > 0) != (LastVelocity.X > 0);
         LastVelocity = Body.Velocity;
-        if (bounced) Spawn("Sound", Sounds.Once(HitSound, HitVolume));
+        if (bounced) Spawn(AudioComponentsConstants.ComponentNameSound, "Sound", Sounds.Once(HitSound, HitVolume));
 
         var leftScored = Transform2D.Position.X > FieldHalfWidth + GoalLineMargin;
         if (!leftScored && Transform2D.Position.X >= -FieldHalfWidth - GoalLineMargin) return;

@@ -4,6 +4,13 @@ const std = @import("std");
 const abi_math = @import("math");
 const abi_result = @import("result");
 
+/// The name the `transform` component is registered under.
+pub const KE_COMPONENT_NAME_TRANSFORM = "transform";
+/// The name the `transform2d` component is registered under.
+pub const KE_COMPONENT_NAME_TRANSFORM2D = "transform2d";
+/// The name the `world_transform` component is registered under.
+pub const KE_COMPONENT_NAME_WORLD_TRANSFORM = "world_transform";
+
 /// An entity's authored 3D pose.
 pub const ke_transform_component = extern struct {
     position: abi_math.c.ke_vec3 = std.mem.zeroes(abi_math.c.ke_vec3),

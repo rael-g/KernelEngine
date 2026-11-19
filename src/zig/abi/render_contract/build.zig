@@ -7,13 +7,17 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("render_contract.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
+    abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
     abi.addImport("render_components", b.dependency("abi_render_components", .{}).module("abi"));
+    abi.addImport("render_handles", b.dependency("abi_render_handles", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
     abi.addImport("ui_components", b.dependency("abi_ui_components", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/render/component_fields.h>
         \\#include <kernel_engine/render/ui/component_fields.h>
+        \\#include <kernel_engine/render/components.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/ecs"));

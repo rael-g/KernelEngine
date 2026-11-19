@@ -604,6 +604,18 @@
       "name": "KE_LABEL_MAX_GLYPHS",
       "type": "int",
       "value": "256"
+    },
+    {
+      "name": "KE_COMPONENT_NAME_UI_QUAD",
+      "type": "const char *",
+      "value": "\u0022ui_quad\u0022",
+      "doc": "The name the \u0060ui_quad\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_LABEL",
+      "type": "const char *",
+      "value": "\u0022label\u0022",
+      "doc": "The name the \u0060label\u0060 component is registered under."
     }
   ]
 }
