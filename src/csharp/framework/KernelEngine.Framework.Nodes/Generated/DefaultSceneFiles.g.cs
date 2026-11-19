@@ -8,6 +8,48 @@ namespace KernelEngine.Framework.Nodes;
 /// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it.</summary>
 public sealed unsafe partial class DefaultSceneFiles : KernelEngine.Framework.Nodes.SceneFiles
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates scene files that spawn through `node_types`, look components up and write their fields through `ecs`, resolve a `res://` path through `assets` and read every file through `io`; each must outlive the scene files. It registers through `node_types` the node type `scene_slot`, carrying a ke_scene_slot_component, whose update replaces a slot's children when its path changes; the scene files must outlive every tick that runs it.</summary>
     /// <param name="ecs"></param>
     /// <param name="nodeTypes"></param>
@@ -28,7 +70,7 @@ public sealed unsafe partial class DefaultSceneFiles : KernelEngine.Framework.No
         ArgumentNullException.ThrowIfNull(assets);
         ArgumentNullException.ThrowIfNull(io);
         KernelEngine.Framework.Nodes.Native.ke_scene_files_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.scene_files_create(ecs.Native, nodeTypes.Native, assets.Native, io.Native, &handle), "ke_scene_files_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.scene_files_create(ecs.Native, nodeTypes.Native, assets.Native, io.Native, &handle), "ke_scene_files_create");
         return handle;
     }
 }

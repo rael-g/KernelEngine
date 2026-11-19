@@ -8,6 +8,48 @@ namespace KernelEngine.Framework;
 /// <summary>Creates the module that evaluates actions each tick: attaching it registers the exclusive system "input.actions" in the pre_update schedule's pre_update set, which advances input's frame and evaluates the maps against its snapshot.</summary>
 public sealed unsafe partial class InputActionsEvaluationModule : KernelEngine.Module.Module
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates the module that evaluates actions each tick: attaching it registers the exclusive system "input.actions" in the pre_update schedule's pre_update set, which advances input's frame and evaluates the maps against its snapshot.</summary>
     /// <param name="actions">Created by ke_input_actions_create; must outlive the module.</param>
     /// <param name="input">Must outlive the module.</param>
@@ -22,7 +64,7 @@ public sealed unsafe partial class InputActionsEvaluationModule : KernelEngine.M
         ArgumentNullException.ThrowIfNull(actions);
         ArgumentNullException.ThrowIfNull(input);
         KernelEngine.Module.Native.ke_module_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_evaluation_create(actions.Native, input.Native, &handle), "ke_input_actions_evaluation_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.input_actions_evaluation_create(actions.Native, input.Native, &handle), "ke_input_actions_evaluation_create");
         return handle;
     }
 }

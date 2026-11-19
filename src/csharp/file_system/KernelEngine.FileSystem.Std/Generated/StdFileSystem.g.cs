@@ -8,6 +8,48 @@ namespace KernelEngine.FileSystem.Std;
 /// <summary>Creates a ke_file_system over the operating system's files, through Zig's standard library.</summary>
 public sealed unsafe partial class StdFileSystem : KernelEngine.FileSystem.FileSystem
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates a ke_file_system over the operating system's files, through Zig's standard library.</summary>
     /// <param name="root">The directory relative paths are resolved against; "." for the working directory of the process.</param>
     public StdFileSystem(string? root = default) : base(Create(root))
@@ -20,7 +62,7 @@ public sealed unsafe partial class StdFileSystem : KernelEngine.FileSystem.FileS
         fixed (byte* rootPtr = rootBytes)
         {
             KernelEngine.FileSystem.Native.ke_file_system_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_create((sbyte*)rootPtr, &handle), "ke_file_system_std_create");
+            NativeResult.ThrowIfFailed(KernelEngine.FileSystem.Std.Native.NativeMethods.file_system_std_create((sbyte*)rootPtr, &handle), "ke_file_system_std_create");
             return handle;
         }
     }

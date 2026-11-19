@@ -8,6 +8,48 @@ namespace KernelEngine.View;
 /// <summary>Right-handed view space: the camera looks down -z. A visible point has negative view-space z, and the farther of two is the more negative.</summary>
 public sealed unsafe partial class RhViewSpace : KernelEngine.View.ViewSpace
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Right-handed view space: the camera looks down -z. A visible point has negative view-space z, and the farther of two is the more negative.</summary>
     public RhViewSpace() : base(Create())
     {
@@ -16,7 +58,7 @@ public sealed unsafe partial class RhViewSpace : KernelEngine.View.ViewSpace
     private static KernelEngine.View.Native.ke_view_space_handle Create()
     {
         KernelEngine.View.Native.ke_view_space_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.View.Native.NativeMethods.view_space_rh_create(&handle), "ke_view_space_rh_create");
+        NativeResult.ThrowIfFailed(KernelEngine.View.Native.NativeMethods.view_space_rh_create(&handle), "ke_view_space_rh_create");
         return handle;
     }
 }

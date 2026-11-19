@@ -8,6 +8,48 @@ namespace KernelEngine.Asset.StbImage;
 /// <summary>Creates a ke_image_loader that reads a file through io, decodes it with stb_image and logs a failed decode's reason.</summary>
 public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoader
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates a ke_image_loader that reads a file through io, decodes it with stb_image and logs a failed decode's reason.</summary>
     /// <param name="io">The io it reads through; borrowed for the lifetime of the loader.</param>
     public StbImageLoader(KernelEngine.Io.INativeIo io) : base(Create(io))
@@ -19,7 +61,7 @@ public sealed unsafe partial class StbImageLoader : KernelEngine.Asset.ImageLoad
     {
         ArgumentNullException.ThrowIfNull(io);
         KernelEngine.Asset.Native.ke_image_loader_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(io.Native, &handle), "ke_image_loader_stb_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Asset.StbImage.Native.NativeMethods.image_loader_stb_create(io.Native, &handle), "ke_image_loader_stb_create");
         return handle;
     }
 }

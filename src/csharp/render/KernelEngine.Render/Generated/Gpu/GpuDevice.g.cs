@@ -18,27 +18,79 @@ public unsafe interface INativeGpuDevice
     ke_gpu_device* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 
 public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevice
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_gpu_device* _native;
     private readonly ke_gpu_device* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_gpu_device*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_gpu_device* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(GpuDevice));
 
     ke_gpu_device* INativeGpuDevice.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeGpuDevice.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeGpuDevice.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -53,7 +105,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_gpu_device*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -113,7 +165,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             p.usage = usage;
             p.mapped_at_creation = mappedAtCreation;
             ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_buffer(Handle, &p, &resultOut), "create_buffer");
+            NativeResult.ThrowIfFailed(Handle->create_buffer(Handle, &p, &resultOut), "create_buffer");
             return resultOut;
         }
     }
@@ -145,7 +197,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             p.initial_data = (void*)initialData;
             p.initial_data_size = initialDataSize;
             ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_texture(Handle, &p, &resultOut), "create_texture");
+            NativeResult.ThrowIfFailed(Handle->create_texture(Handle, &p, &resultOut), "create_texture");
             return resultOut;
         }
     }
@@ -172,7 +224,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             p.base_array_layer = baseArrayLayer;
             p.array_layer_count = arrayLayerCount;
             ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_texture_view(Handle, tex, &p, &resultOut), "create_texture_view");
+            NativeResult.ThrowIfFailed(Handle->create_texture_view(Handle, tex, &p, &resultOut), "create_texture_view");
             return resultOut;
         }
     }
@@ -202,7 +254,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             p.compare = (GpuCompareFunction)compare;
             p.max_anisotropy = maxAnisotropy;
             ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_sampler(Handle, &p, &resultOut), "create_sampler");
+            NativeResult.ThrowIfFailed(Handle->create_sampler(Handle, &p, &resultOut), "create_sampler");
             return resultOut;
         }
     }
@@ -226,7 +278,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
             p.code = (void*)code;
             p.byte_size = byteSize;
             ulong resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_shader_module(Handle, &p, &resultOut), "create_shader_module");
+            NativeResult.ThrowIfFailed(Handle->create_shader_module(Handle, &p, &resultOut), "create_shader_module");
             return resultOut;
         }
     }
@@ -284,7 +336,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                                 for (var colorTargetFormatsAt = 0; colorTargetFormatsAt < colorTargetFormats.Length; colorTargetFormatsAt++) p.color_target_formats[colorTargetFormatsAt] = (colorTargetFormatsPtr)[colorTargetFormatsAt];
                                 p.color_target_count = (uint)colorTargetFormats.Length;
                                 ulong resultOut = default;
-                                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_render_pipeline(Handle, &p, &resultOut), "create_render_pipeline");
+                                NativeResult.ThrowIfFailed(Handle->create_render_pipeline(Handle, &p, &resultOut), "create_render_pipeline");
                                 return resultOut;
                             }
                         }
@@ -322,7 +374,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                     for (var bindGroupLayoutsAt = 0; bindGroupLayoutsAt < bindGroupLayouts.Length; bindGroupLayoutsAt++) p.bind_group_layouts[bindGroupLayoutsAt] = (bindGroupLayoutsPtr)[bindGroupLayoutsAt];
                     p.bind_group_layout_count = (uint)bindGroupLayouts.Length;
                     ulong resultOut = default;
-                    KernelEngine.NativeResults.ThrowIfFailed(Handle->create_compute_pipeline(Handle, &p, &resultOut), "create_compute_pipeline");
+                    NativeResult.ThrowIfFailed(Handle->create_compute_pipeline(Handle, &p, &resultOut), "create_compute_pipeline");
                     return resultOut;
                 }
             }
@@ -348,7 +400,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                 p.entry_count = (uint)entries.Length;
                 p.entries = entriesPtr;
                 ulong resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_bind_group_layout(Handle, &p, &resultOut), "create_bind_group_layout");
+                NativeResult.ThrowIfFailed(Handle->create_bind_group_layout(Handle, &p, &resultOut), "create_bind_group_layout");
                 return resultOut;
             }
         }
@@ -374,7 +426,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
                 p.entry_count = (uint)entries.Length;
                 p.entries = entriesPtr;
                 ulong resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_bind_group(Handle, &p, &resultOut), "create_bind_group");
+                NativeResult.ThrowIfFailed(Handle->create_bind_group(Handle, &p, &resultOut), "create_bind_group");
                 return resultOut;
             }
         }
@@ -441,7 +493,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         fixed (byte* labelPtr = labelBytes)
         {
             ke_gpu_command_encoder_handle resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->create_command_encoder(Handle, (sbyte*)labelPtr, &resultOut), "create_command_encoder");
+            NativeResult.ThrowIfFailed(Handle->create_command_encoder(Handle, (sbyte*)labelPtr, &resultOut), "create_command_encoder");
             return new GpuCommandEncoder(resultOut);
         }
     }
@@ -587,7 +639,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         try
         {
             if (arg0 != KernelEngine.Result.Native.Result.Ok)
-                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "create_render_pipeline_async"));
+                state.Source.TrySetException(NativeResult.FromCode(arg0, "create_render_pipeline_async"));
             else
                 state.Source.TrySetResult(arg1);
         }
@@ -636,7 +688,7 @@ public unsafe partial class GpuDevice : IDisposable, INativeGpuDevice, IGpuDevic
         try
         {
             if (arg0 != KernelEngine.Result.Native.Result.Ok)
-                state.Source.TrySetException(KernelEngine.NativeResults.FromCode(arg0, "map_buffer_read"));
+                state.Source.TrySetException(NativeResult.FromCode(arg0, "map_buffer_read"));
             else
                 state.Source.TrySetResult(arg1);
         }

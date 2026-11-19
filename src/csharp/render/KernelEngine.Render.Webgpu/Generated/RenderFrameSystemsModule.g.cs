@@ -8,6 +8,48 @@ namespace KernelEngine.Render.Webgpu;
 /// <summary>Creates the module of frame: attaching it registers, in the render schedule, "render.begin_frame" in the render begin set, which begins the frame, publishes the frame globals and the scene's light and declares the clear of the frame's colour and depth, and "render.end_frame" in the render submit set, which copies the colour into the output when no pass claimed it, submits the uploads, executes the graph and presents. A frame the render target has nothing to draw into is neither declared nor executed.</summary>
 public sealed unsafe partial class RenderFrameSystemsModule : KernelEngine.Module.Module
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates the module of frame: attaching it registers, in the render schedule, "render.begin_frame" in the render begin set, which begins the frame, publishes the frame globals and the scene's light and declares the clear of the frame's colour and depth, and "render.end_frame" in the render submit set, which copies the colour into the output when no pass claimed it, submits the uploads, executes the graph and presents. A frame the render target has nothing to draw into is neither declared nor executed.</summary>
     /// <param name="frame">Created by this library; must outlive the module.</param>
     public RenderFrameSystemsModule(KernelEngine.Render.Frame.INativeRenderFrame frame) : base(Create(frame))
@@ -19,7 +61,7 @@ public sealed unsafe partial class RenderFrameSystemsModule : KernelEngine.Modul
     {
         ArgumentNullException.ThrowIfNull(frame);
         KernelEngine.Module.Native.ke_module_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_systems_create(frame.Native, &handle), "ke_render_frame_systems_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_systems_create(frame.Native, &handle), "ke_render_frame_systems_create");
         return handle;
     }
 }

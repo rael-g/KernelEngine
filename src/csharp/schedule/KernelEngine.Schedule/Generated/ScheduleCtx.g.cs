@@ -24,27 +24,79 @@ public unsafe interface INativeScheduleCtx
     ke_schedule_ctx* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>What one call of a system body is given: the entities its queries resolved to, its share of them, and the queue it records structural changes into. It means nothing outside the call.</summary>
 public unsafe partial class ScheduleCtx : IDisposable, INativeScheduleCtx, IScheduleCtx
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_schedule_ctx* _native;
     private readonly ke_schedule_ctx* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_schedule_ctx*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_schedule_ctx* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(ScheduleCtx));
 
     ke_schedule_ctx* INativeScheduleCtx.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeScheduleCtx.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeScheduleCtx.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;

@@ -35,10 +35,10 @@ public class ReadyingTheNodesASlotOpens
 
         public Loop(FlecsEcsRegistry ecs, EnkiJobSystem jobs, EnkiAsync asyncs, DefaultConfiguration config)
         {
-            DefaultSchedule Make() => new(null, ecs, jobs, config.Section("schedule"));
+            DefaultSchedule Make() => new(ecs, jobs, config.Section("schedule"));
             Schedules = new EngineSchedules { Startup = Make(), PreUpdate = Make(), Fixed = Make(), Update = Make(), Shutdown = Make() };
             Sets = EngineSets.Register(Schedules);
-            Scheduler = new DefaultScheduler(null, jobs, asyncs, config.Section("scheduler"));
+            Scheduler = new DefaultScheduler(jobs, asyncs, config.Section("scheduler"));
             Schedules.AddTo(Scheduler);
         }
 
@@ -58,22 +58,22 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void ANodeOfTheOpenedSceneAndOneOfASceneItInstantiatesAreBothReadied()
     {
-        using var config = new DefaultConfiguration(null);
-        using var jobs = new EnkiJobSystem(null, config.Section("job"));
-        using var asyncs = new EnkiAsync(null, config.Section("async"));
-        using var files = new StdFileSystem(null, ".");
-        using var io = new StdIo(null, files, config.Section("io"));
+        using var config = new DefaultConfiguration();
+        using var jobs = new EnkiJobSystem(config.Section("job"));
+        using var asyncs = new EnkiAsync(config.Section("async"));
+        using var files = new StdFileSystem(".");
+        using var io = new StdIo(files, config.Section("io"));
         using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
+        using var ecs = new FlecsEcsRegistry(config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs, config);
         var scheduler = loop.Scheduler;
-        using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
-        using var tree = new DefaultSceneTree(null, ecs);
-        using var actions = new DefaultInputActions(null, config, "input");
-        using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystemsModule(null, types);
+        using var assets = new DefaultAssetResolver(null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
+        using var tree = new DefaultSceneTree(ecs);
+        using var actions = new DefaultInputActions(config, "input");
+        using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
+        using var nodeSystems = new NodeTypesSystemsModule(types);
         loop.Attach(nodeSystems);
-        using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
+        using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());
         Probe.Readied.Clear();
@@ -90,22 +90,22 @@ public class ReadyingTheNodesASlotOpens
     [Fact]
     public void A_scene_places_nodes_under_a_bare_node_that_carries_no_component()
     {
-        using var config = new DefaultConfiguration(null);
-        using var jobs = new EnkiJobSystem(null, config.Section("job"));
-        using var asyncs = new EnkiAsync(null, config.Section("async"));
-        using var files = new StdFileSystem(null, ".");
-        using var io = new StdIo(null, files, config.Section("io"));
+        using var config = new DefaultConfiguration();
+        using var jobs = new EnkiJobSystem(config.Section("job"));
+        using var asyncs = new EnkiAsync(config.Section("async"));
+        using var files = new StdFileSystem(".");
+        using var io = new StdIo(files, config.Section("io"));
         using var input = new Input.DefaultInput();
-        using var ecs = new FlecsEcsRegistry(null, config.Section("ecs"));
+        using var ecs = new FlecsEcsRegistry(config.Section("ecs"));
         using var loop = new Loop(ecs, jobs, asyncs, config);
         var scheduler = loop.Scheduler;
-        using var assets = new DefaultAssetResolver(null, null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
-        using var tree = new DefaultSceneTree(null, ecs);
-        using var actions = new DefaultInputActions(null, config, "input");
-        using var types = new DefaultNodeTypes(null, scheduler, ecs, tree, actions);
-        using var nodeSystems = new NodeTypesSystemsModule(null, types);
+        using var assets = new DefaultAssetResolver(null, null, AppContext.BaseDirectory.TrimEnd(Path.DirectorySeparatorChar), io);
+        using var tree = new DefaultSceneTree(ecs);
+        using var actions = new DefaultInputActions(config, "input");
+        using var types = new DefaultNodeTypes(scheduler, ecs, tree, actions);
+        using var nodeSystems = new NodeTypesSystemsModule(types);
         loop.Attach(nodeSystems);
-        using var scenes = new DefaultSceneFiles(null, ecs, types, assets, io);
+        using var scenes = new DefaultSceneFiles(ecs, types, assets, io);
         types.RegisterType(name: "node");
         var nodes = new NodeWorld(types);
         nodes.Register(new Probe());

@@ -8,6 +8,48 @@ namespace KernelEngine.Framework.Nodes;
 /// <summary>Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Their systems run once the node types module is attached; a node's exit request goes to `scheduler`, which runs each schedule of the module's targets as an executable whose user is the schedule. Every argument but `input_actions` and `out_types` must outlive the node types.</summary>
 public sealed unsafe partial class DefaultNodeTypes : KernelEngine.Framework.Nodes.NodeTypes
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Creates the node types of `ecs`, whose nodes live in `scene_tree` and whose axis and pressed read `input_actions`. Their systems run once the node types module is attached; a node's exit request goes to `scheduler`, which runs each schedule of the module's targets as an executable whose user is the schedule. Every argument but `input_actions` and `out_types` must outlive the node types.</summary>
     /// <param name="scheduler"></param>
     /// <param name="ecs"></param>
@@ -27,7 +69,7 @@ public sealed unsafe partial class DefaultNodeTypes : KernelEngine.Framework.Nod
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(sceneTree);
         KernelEngine.Framework.Nodes.Native.ke_node_types_handle handle;
-        KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.node_types_create(scheduler.Native, ecs.Native, sceneTree.Native, (inputActions is null ? null : inputActions.Native), &handle), "ke_node_types_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Nodes.Native.NativeMethods.node_types_create(scheduler.Native, ecs.Native, sceneTree.Native, (inputActions is null ? null : inputActions.Native), &handle), "ke_node_types_create");
         return handle;
     }
 }

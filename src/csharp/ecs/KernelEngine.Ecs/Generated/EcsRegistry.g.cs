@@ -18,27 +18,79 @@ public unsafe interface INativeEcs
     ke_ecs* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>One world: entity lifetime, component storage and queries. The ids, components and queries of one ke_ecs mean nothing to another.</summary>
 public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_ecs* _native;
     private readonly ke_ecs* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_ecs*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_ecs* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(EcsRegistry));
 
     ke_ecs* INativeEcs.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeEcs.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeEcs.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -53,7 +105,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_ecs*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -73,7 +125,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public Entity EntityCreate()
     {
         Entity resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_create(Handle, &resultOut), "entity_create");
+        NativeResult.ThrowIfFailed(Handle->entity_create(Handle, &resultOut), "entity_create");
         return resultOut;
     }
 
@@ -81,7 +133,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <exception cref="Exception">The native call failed.</exception>
     public void EntityDestroy(Entity entity)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_destroy(Handle, entity), "entity_destroy");
+        NativeResult.ThrowIfFailed(Handle->entity_destroy(Handle, entity), "entity_destroy");
     }
 
     /// <summary>Registers a component type by name, or returns the existing id if already registered. A repeated name with the same size, alignment and layout answers the same id. A repeated name with another layout and a field table on both registrations migrates the data of every entity and singleton by field name: a field of the same name and type is copied, a new field takes the default of the table, a field that is gone is dropped; the id stays. Without field tables a different size or alignment is refused.</summary>
@@ -131,7 +183,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
                     @params.fields = fieldsPtr;
                     @params.field_count = (uint)fields.Length;
                     ComponentId resultOut = default;
-                    KernelEngine.NativeResults.ThrowIfFailed(Handle->component_register(Handle, &@params, &resultOut), "component_register");
+                    NativeResult.ThrowIfFailed(Handle->component_register(Handle, &@params, &resultOut), "component_register");
                     return resultOut;
                 }
             }
@@ -179,7 +231,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public nint ComponentAdd(Entity entity, ComponentId component)
     {
         nint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_add(Handle, entity, component, (void**)&resultOut), "component_add");
+        NativeResult.ThrowIfFailed(Handle->component_add(Handle, entity, component, (void**)&resultOut), "component_add");
         return resultOut;
     }
 
@@ -187,7 +239,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <exception cref="Exception">The native call failed.</exception>
     public void ComponentRemove(Entity entity, ComponentId component)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->component_remove(Handle, entity, component), "component_remove");
+        NativeResult.ThrowIfFailed(Handle->component_remove(Handle, entity, component), "component_remove");
     }
 
     /// <summary>Returns an entity's component storage, or NULL if it doesn't have that component. The pointer is valid until the next structural change on this ecs.</summary>
@@ -220,7 +272,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         descNative.without_count = (uint)desc.Without.Length;
         descNative.track_changes = desc.TrackChanges;
         ulong resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->query_register(Handle, &descNative, &resultOut), "query_register");
+        NativeResult.ThrowIfFailed(Handle->query_register(Handle, &descNative, &resultOut), "query_register");
         return resultOut;
     }
 
@@ -234,7 +286,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
             nint outColumns;
             ComponentId outMatched;
             nuint outCount;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&outColumns, &outMatched, &outCount), "query_resolve");
+            NativeResult.ThrowIfFailed(Handle->query_resolve(Handle, query, outSegmentsPtr, (nuint)outSegments.Length, (void**)&outColumns, &outMatched, &outCount), "query_resolve");
             return (outColumns, outMatched, outCount);
         }
     }
@@ -245,7 +297,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public Entity EntityReserve()
     {
         Entity resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_reserve(Handle, &resultOut), "entity_reserve");
+        NativeResult.ThrowIfFailed(Handle->entity_reserve(Handle, &resultOut), "entity_reserve");
         return resultOut;
     }
 
@@ -253,7 +305,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <exception cref="Exception">The native call failed.</exception>
     public void EntityMaterialize(Entity entity)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_materialize(Handle, entity), "entity_materialize");
+        NativeResult.ThrowIfFailed(Handle->entity_materialize(Handle, entity), "entity_materialize");
     }
 
     /// <summary>Gives the world one value of a component, matched by no query: its storage is zeroed, then seeded with the defaults of the component's field table, the first time; a singleton that exists keeps its storage. Structural; single-threaded.</summary>
@@ -262,7 +314,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public nint SingletonAdd(ComponentId component)
     {
         nint resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->singleton_add(Handle, component, (void**)&resultOut), "singleton_add");
+        NativeResult.ThrowIfFailed(Handle->singleton_add(Handle, component, (void**)&resultOut), "singleton_add");
         return resultOut;
     }
 
@@ -276,7 +328,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <exception cref="Exception">The native call failed.</exception>
     public void SingletonRemove(ComponentId component)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->singleton_remove(Handle, component), "singleton_remove");
+        NativeResult.ThrowIfFailed(Handle->singleton_remove(Handle, component), "singleton_remove");
     }
 
     /// <summary>The component id of a pair: relation applied to target. A pair is added, removed, read and queried as any component, holding the relation's storage. With KE_ENTITY_WILDCARD as target the id matches every pair of the relation, in a query term, a with or a without alone.</summary>
@@ -285,7 +337,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public ComponentId Pair(ComponentId relation, Entity target)
     {
         ComponentId resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->pair(Handle, relation, target, &resultOut), "pair");
+        NativeResult.ThrowIfFailed(Handle->pair(Handle, relation, target, &resultOut), "pair");
         return resultOut;
     }
 
@@ -309,7 +361,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     public RemovalTracker RemovalTrack(ComponentId component)
     {
         RemovalTracker resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->removal_track(Handle, component, &resultOut), "removal_track");
+        NativeResult.ThrowIfFailed(Handle->removal_track(Handle, component, &resultOut), "removal_track");
         return resultOut;
     }
 
@@ -322,7 +374,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         fixed (Entity* outEntitiesPtr = outEntities)
         {
             nuint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->removals(Handle, tracker, outEntitiesPtr, (nuint)outEntities.Length, &resultOut), "removals");
+            NativeResult.ThrowIfFailed(Handle->removals(Handle, tracker, outEntitiesPtr, (nuint)outEntities.Length, &resultOut), "removals");
             return resultOut;
         }
     }
@@ -336,7 +388,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         fixed (ComponentId* outCidsPtr = outCids)
         {
             nuint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->entity_components(Handle, entity, outCidsPtr, (nuint)outCids.Length, &resultOut), "entity_components");
+            NativeResult.ThrowIfFailed(Handle->entity_components(Handle, entity, outCidsPtr, (nuint)outCids.Length, &resultOut), "entity_components");
             return resultOut;
         }
     }
@@ -350,7 +402,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         fixed (ComponentId* outCidsPtr = outCids)
         {
             nuint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->components(Handle, outCidsPtr, (nuint)outCids.Length, &resultOut), "components");
+            NativeResult.ThrowIfFailed(Handle->components(Handle, outCidsPtr, (nuint)outCids.Length, &resultOut), "components");
             return resultOut;
         }
     }
@@ -364,7 +416,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
         fixed (ComponentId* componentsPtr = components)
         {
             nint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->snapshot(Handle, componentsPtr, (uint)components.Length, (ke_ecs_snapshot**)&resultOut), "snapshot");
+            NativeResult.ThrowIfFailed(Handle->snapshot(Handle, componentsPtr, (uint)components.Length, (ke_ecs_snapshot**)&resultOut), "snapshot");
             return new EcsSnapshot(resultOut);
         }
     }
@@ -373,7 +425,7 @@ public unsafe partial class EcsRegistry : IDisposable, INativeEcs, IEcsRegistry
     /// <exception cref="Exception">The native call failed.</exception>
     public void Restore(EcsSnapshot snapshot)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->restore(Handle, (ke_ecs_snapshot*)snapshot.Address), "restore");
+        NativeResult.ThrowIfFailed(Handle->restore(Handle, (ke_ecs_snapshot*)snapshot.Address), "restore");
     }
 
     /// <summary>Frees a snapshot; a null one is ignored.</summary>

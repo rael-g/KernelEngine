@@ -18,27 +18,79 @@ public unsafe interface INativeRenderResourceBinder
     ke_render_resource_binder* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>Brings the resources of a frame to the shaders that read them. A pass names a shader's parameters and never learns how they reach it: in groups, in tables indexed per draw, or any other way the implementation chooses.</summary>
 public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderResourceBinder, IRenderResourceBinder
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_render_resource_binder* _native;
     private readonly ke_render_resource_binder* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_render_resource_binder*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_render_resource_binder* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(RenderResourceBinder));
 
     ke_render_resource_binder* INativeRenderResourceBinder.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeRenderResourceBinder.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeRenderResourceBinder.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -53,7 +105,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_render_resource_binder*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -71,7 +123,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
     /// <exception cref="Exception">The native call failed.</exception>
     public void Provide(RenderShaderBinding binding)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->provide(Handle, (RenderShaderBinding*)&binding), "provide");
+        NativeResult.ThrowIfFailed(Handle->provide(Handle, (RenderShaderBinding*)&binding), "provide");
     }
 
     /// <summary>Builds the layout of a compiled shader from what the build recorded about it.</summary>
@@ -95,7 +147,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
                 @params.hints = hintsPtr;
                 @params.hint_count = (uint)hints.Length;
                 ulong resultOut = default;
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->create_shader_layout(Handle, &@params, &resultOut), "create_shader_layout");
+                NativeResult.ThrowIfFailed(Handle->create_shader_layout(Handle, &@params, &resultOut), "create_shader_layout");
                 return resultOut;
             }
         }
@@ -116,7 +168,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
         fixed (ulong* outLayoutsPtr = outLayouts)
         {
             uint resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->pipeline_layouts(Handle, layout, outLayoutsPtr, (uint)outLayouts.Length, &resultOut), "pipeline_layouts");
+            NativeResult.ThrowIfFailed(Handle->pipeline_layouts(Handle, layout, outLayoutsPtr, (uint)outLayouts.Length, &resultOut), "pipeline_layouts");
             return resultOut;
         }
     }
@@ -144,7 +196,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
                 fixed (RenderShaderBinding* bindingsPtr = bindings)
                 {
                     ulong resultOut = default;
-                    KernelEngine.NativeResults.ThrowIfFailed(Handle->create_set(Handle, layout, (sbyte*)blockPtr, (sbyte*)labelPtr, bindingsPtr, (uint)bindings.Length, &resultOut), "create_set");
+                    NativeResult.ThrowIfFailed(Handle->create_set(Handle, layout, (sbyte*)blockPtr, (sbyte*)labelPtr, bindingsPtr, (uint)bindings.Length, &resultOut), "create_set");
                     return resultOut;
                 }
             }
@@ -178,7 +230,7 @@ public unsafe partial class RenderResourceBinder : IDisposable, INativeRenderRes
     public ulong CreateMaterial(RenderMaterialData data)
     {
         ulong resultOut = default;
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->create_material(Handle, (RenderMaterialData*)&data, &resultOut), "create_material");
+        NativeResult.ThrowIfFailed(Handle->create_material(Handle, (RenderMaterialData*)&data, &resultOut), "create_material");
         return resultOut;
     }
 

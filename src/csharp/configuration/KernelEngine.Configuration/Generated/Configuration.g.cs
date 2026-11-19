@@ -20,17 +20,69 @@ public unsafe interface INativeConfiguration
     ke_configuration* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>A typed (section, key) to value store, holding what a part is created with.</summary>
 public unsafe partial class Configuration : IDisposable, INativeConfiguration, IConfiguration
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_configuration* _native;
     private readonly ke_configuration* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_configuration*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     /// <summary>
     /// Where a managed exception waits out the native frames. A handler runs
@@ -47,10 +99,10 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
 
     ke_configuration* INativeConfiguration.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeConfiguration.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeConfiguration.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -65,7 +117,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_configuration*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -182,7 +234,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
             keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
             fixed (byte* keyPtr = keyBytes)
             {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->set_int(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_int");
+                NativeResult.ThrowIfFailed(Handle->set_int(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_int");
             }
         }
     }
@@ -203,7 +255,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
             keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
             fixed (byte* keyPtr = keyBytes)
             {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->set_double(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_double");
+                NativeResult.ThrowIfFailed(Handle->set_double(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_double");
             }
         }
     }
@@ -224,7 +276,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
             keyBytes[System.Text.Encoding.UTF8.GetBytes(keyText, keyBytes)] = 0;
             fixed (byte* keyPtr = keyBytes)
             {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->set_bool(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_bool");
+                NativeResult.ThrowIfFailed(Handle->set_bool(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, @value), "set_bool");
             }
         }
     }
@@ -251,7 +303,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
                 @valueBytes[System.Text.Encoding.UTF8.GetBytes(@valueText, @valueBytes)] = 0;
                 fixed (byte* @valuePtr = @valueBytes)
                 {
-                    KernelEngine.NativeResults.ThrowIfFailed(Handle->set_string(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, (sbyte*)@valuePtr), "set_string");
+                    NativeResult.ThrowIfFailed(Handle->set_string(Handle, (sbyte*)sectionPtr, (sbyte*)keyPtr, (sbyte*)@valuePtr), "set_string");
                 }
             }
         }
@@ -270,7 +322,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
         fixed (byte* sectionPtr = sectionBytes)
         {
             ke_settings* resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->section(Handle, (sbyte*)sectionPtr, &resultOut), "section");
+            NativeResult.ThrowIfFailed(Handle->section(Handle, (sbyte*)sectionPtr, &resultOut), "section");
             return PartSettings.Borrow((ke_settings*)resultOut);
         }
     }
@@ -304,7 +356,7 @@ public unsafe partial class Configuration : IDisposable, INativeConfiguration, I
                 s_parkedCallbackException = null;
                 throw parked;
             }
-            if (!ok) throw KernelEngine.NativeResults.FromCode(rc, "for_each_child");
+            if (!ok) throw NativeResult.FromCode(rc, "for_each_child");
         }
     }
 

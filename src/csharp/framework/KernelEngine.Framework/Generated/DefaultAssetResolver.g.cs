@@ -8,6 +8,48 @@ namespace KernelEngine.Framework;
 /// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. project_root may be NULL — res:// resolution is then disabled; only absolute or CWD-relative paths work.</summary>
 public sealed unsafe partial class DefaultAssetResolver : KernelEngine.Framework.AssetResolver
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
+
     /// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. project_root may be NULL — res:// resolution is then disabled; only absolute or CWD-relative paths work.</summary>
     /// <param name="imageLoader">NULL refuses every texture.</param>
     /// <param name="fontLoader">NULL refuses every font.</param>
@@ -27,7 +69,7 @@ public sealed unsafe partial class DefaultAssetResolver : KernelEngine.Framework
         fixed (byte* projectRootPtr = projectRootBytes)
         {
             KernelEngine.Asset.Native.ke_asset_resolver_handle handle;
-            KernelEngine.NativeResults.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create((imageLoader is null ? null : imageLoader.Native), (fontLoader is null ? null : fontLoader.Native), (sbyte*)projectRootPtr, io.Native, &handle), "ke_asset_resolver_create");
+            NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create((imageLoader is null ? null : imageLoader.Native), (fontLoader is null ? null : fontLoader.Native), (sbyte*)projectRootPtr, io.Native, &handle), "ke_asset_resolver_create");
             return handle;
         }
     }

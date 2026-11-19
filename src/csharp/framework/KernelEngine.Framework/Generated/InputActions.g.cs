@@ -22,27 +22,79 @@ public unsafe interface INativeInputActions
     ke_input_actions* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>Named actions grouped in maps, bound to keys and mouse buttons, evaluated once per frame against an input snapshot and polled. Maps are evaluated from the highest priority down, ties in the order they were added; a key or mouse button bound in an enabled map is not seen by any map evaluated after it. The actions of a disabled map are inactive.</summary>
 public unsafe partial class InputActions : IDisposable, INativeInputActions, IInputActions
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_input_actions* _native;
     private readonly ke_input_actions* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_input_actions*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_input_actions* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(InputActions));
 
     ke_input_actions* INativeInputActions.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeInputActions.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeInputActions.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -57,7 +109,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_input_actions*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -104,7 +156,7 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     /// <exception cref="Exception">The native call failed.</exception>
     public void SetMapEnabled(int mapId, bool enabled)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->set_map_enabled(Handle, mapId, enabled), "set_map_enabled");
+        NativeResult.ThrowIfFailed(Handle->set_map_enabled(Handle, mapId, enabled), "set_map_enabled");
     }
 
     /// <summary>False for an id no map has.</summary>
@@ -145,35 +197,35 @@ public unsafe partial class InputActions : IDisposable, INativeInputActions, IIn
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKey(int actionId, Key key)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key(Handle, actionId, (Key)key), "bind_key");
+        NativeResult.ThrowIfFailed(Handle->bind_key(Handle, actionId, (Key)key), "bind_key");
     }
 
     /// <summary>Adds a mouse button binding to an action. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindMouseButton(int actionId, MouseButton button)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, (MouseButton)button), "bind_mouse_button");
+        NativeResult.ThrowIfFailed(Handle->bind_mouse_button(Handle, actionId, (MouseButton)button), "bind_mouse_button");
     }
 
     /// <summary>Adds a one-axis binding to an action, positive while positive is held and negative while negative is. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyPair(int actionId, Key negative, Key positive)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, (Key)negative, (Key)positive), "bind_key_pair");
+        NativeResult.ThrowIfFailed(Handle->bind_key_pair(Handle, actionId, (Key)negative, (Key)positive), "bind_key_pair");
     }
 
     /// <summary>Adds a two-axis binding to an action: x is right minus left and y is up minus down. Fails as bind_key does.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void BindKeyQuad(int actionId, Key up, Key down, Key left, Key right)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, (Key)up, (Key)down, (Key)left, (Key)right), "bind_key_quad");
+        NativeResult.ThrowIfFailed(Handle->bind_key_quad(Handle, actionId, (Key)up, (Key)down, (Key)left, (Key)right), "bind_key_quad");
     }
 
     /// <summary>Runs one frame of evaluation against snapshot, making each action's held state, edges and axes current.</summary>
     /// <exception cref="Exception">The native call failed.</exception>
     public void Evaluate(InputSnapshot snapshot)
     {
-        KernelEngine.NativeResults.ThrowIfFailed(Handle->evaluate(Handle, (InputSnapshot*)&snapshot), "evaluate");
+        NativeResult.ThrowIfFailed(Handle->evaluate(Handle, (InputSnapshot*)&snapshot), "evaluate");
     }
 
 

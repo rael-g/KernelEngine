@@ -26,7 +26,7 @@ public unsafe interface INativeAssetResolver
     ke_asset_resolver* Native { get; }
 
     /// <summary>Counts the references to the native object; null when it is owned elsewhere.</summary>
-    global::KernelEngine.Interop.NativeOwner? Owner { get; }
+    global::System.Runtime.InteropServices.SafeHandle? Owner { get; }
 }
 
 /// <summary>
@@ -125,21 +125,73 @@ public unsafe sealed class ResolvedFont : IDisposable
 
 public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, IAssetResolver
 {
+
+    /// <summary>Turns a result code into the exception that carries it, and back.</summary>
+    private static class NativeResult
+    {
+        public static void ThrowIfFailed(KernelEngine.Result.Native.Result code, string call)
+        {
+            if (code != KernelEngine.Result.Native.Result.Ok) throw FromCode(code, call);
+        }
+
+        public static global::System.Exception FromCode(KernelEngine.Result.Native.Result code, string call)
+        {
+            var message = $"{call} failed with {code}";
+            return code switch
+            {
+                KernelEngine.Result.Native.Result.General => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotFound => new global::System.Collections.Generic.KeyNotFoundException(message),
+                KernelEngine.Result.Native.Result.Io => new global::System.IO.IOException(message),
+                KernelEngine.Result.Native.Result.OutOfMemory => new global::System.OutOfMemoryException(message),
+                KernelEngine.Result.Native.Result.InvalidArgument => new global::System.ArgumentException(message),
+                KernelEngine.Result.Native.Result.NotInitialized => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.NotSupported => new global::System.NotSupportedException(message),
+                KernelEngine.Result.Native.Result.AlreadyExists => new global::System.InvalidOperationException(message),
+                KernelEngine.Result.Native.Result.Cancelled => new global::System.OperationCanceledException(message),
+                _ => new global::System.InvalidOperationException(message),
+            };
+        }
+
+        public static KernelEngine.Result.Native.Result ToCode(global::System.Exception exception)
+        {
+            if (exception is global::System.Runtime.InteropServices.ExternalException native) return unchecked((KernelEngine.Result.Native.Result)native.ErrorCode);
+            var type = exception.GetType();
+            if (type == typeof(global::System.InvalidOperationException)) return KernelEngine.Result.Native.Result.General;
+            if (type == typeof(global::System.Collections.Generic.KeyNotFoundException)) return KernelEngine.Result.Native.Result.NotFound;
+            if (type == typeof(global::System.IO.IOException)) return KernelEngine.Result.Native.Result.Io;
+            if (type == typeof(global::System.OutOfMemoryException)) return KernelEngine.Result.Native.Result.OutOfMemory;
+            if (type == typeof(global::System.ArgumentException)) return KernelEngine.Result.Native.Result.InvalidArgument;
+            if (type == typeof(global::System.NotSupportedException)) return KernelEngine.Result.Native.Result.NotSupported;
+            if (type == typeof(global::System.OperationCanceledException)) return KernelEngine.Result.Native.Result.Cancelled;
+            return KernelEngine.Result.Native.Result.General;
+        }
+    }
     private ke_asset_resolver* _native;
     private readonly ke_asset_resolver* _owned;
     private readonly delegate* unmanaged[Cdecl]<ke_asset_resolver*, void> _destroy;
-    private readonly global::KernelEngine.Interop.NativeOwner? _owner;
-    private readonly List<global::KernelEngine.Interop.NativeOwner> _held = new();
+    private readonly global::System.Runtime.InteropServices.SafeHandle? _owner;
+    private readonly List<global::System.Runtime.InteropServices.SafeHandle> _held = new();
+
+    /// <summary>Counts the references to the native object this wrapper owns, and destroys it when the last one is released.</summary>
+    private sealed class NativeOwner(Action teardown) : global::System.Runtime.InteropServices.SafeHandle(new nint(1), true)
+    {
+        public override bool IsInvalid => false;
+        protected override bool ReleaseHandle()
+        {
+            teardown();
+            return true;
+        }
+    }
 
     private ke_asset_resolver* Handle => _native != null ? _native
         : throw new ObjectDisposedException(nameof(AssetResolver));
 
     ke_asset_resolver* INativeAssetResolver.Native => _owner is { IsClosed: false } ? _owned : Handle;
 
-    global::KernelEngine.Interop.NativeOwner? INativeAssetResolver.Owner => _owner;
+    global::System.Runtime.InteropServices.SafeHandle? INativeAssetResolver.Owner => _owner;
 
     /// <summary>Keeps the object <paramref name="owner"/> counts alive until this one is torn down.</summary>
-    public void Hold(global::KernelEngine.Interop.NativeOwner? owner)
+    public void Hold(global::System.Runtime.InteropServices.SafeHandle? owner)
     {
         if (owner is null) return;
         var added = false;
@@ -154,7 +206,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         _native = handle.@ref;
         _owned = handle.@ref;
         _destroy = handle.destroy;
-        _owner = new global::KernelEngine.Interop.NativeOwner(Teardown);
+        _owner = new NativeOwner(Teardown);
     }
 
     /// <summary>Wraps a <c>ke_asset_resolver*</c> owned elsewhere. Disposing the result does not destroy it.</summary>
@@ -180,7 +232,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         fixed (byte* pathPtr = pathBytes)
         {
             ke_texture_data* resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_texture(Handle, (sbyte*)pathPtr, &resultOut), "resolve_texture");
+            NativeResult.ThrowIfFailed(Handle->resolve_texture(Handle, (sbyte*)pathPtr, &resultOut), "resolve_texture");
             return new ResolvedTexture(this, (TextureData*)resultOut);
         }
     }
@@ -203,7 +255,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         fixed (byte* pathPtr = pathBytes)
         {
             ke_mesh_shape_data* resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_mesh(Handle, (sbyte*)pathPtr, &resultOut), "resolve_mesh");
+            NativeResult.ThrowIfFailed(Handle->resolve_mesh(Handle, (sbyte*)pathPtr, &resultOut), "resolve_mesh");
             return new ResolvedMesh(this, (MeshShapeData*)resultOut);
         }
     }
@@ -226,7 +278,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         fixed (byte* pathPtr = pathBytes)
         {
             MaterialSpec resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_material(Handle, (sbyte*)pathPtr, &resultOut), "resolve_material");
+            NativeResult.ThrowIfFailed(Handle->resolve_material(Handle, (sbyte*)pathPtr, &resultOut), "resolve_material");
             return resultOut;
         }
     }
@@ -243,7 +295,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         fixed (byte* pathPtr = pathBytes)
         {
             ke_font_data* resultOut = default;
-            KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &resultOut), "resolve_font");
+            NativeResult.ThrowIfFailed(Handle->resolve_font(Handle, (sbyte*)pathPtr, pixelSize, firstCodepoint, codepointCount, atlasSize, &resultOut), "resolve_font");
             return new ResolvedFont(this, (FontData*)resultOut);
         }
     }
@@ -267,7 +319,7 @@ public unsafe partial class AssetResolver : IDisposable, INativeAssetResolver, I
         {
             fixed (sbyte* @outPtr = @out)
             {
-                KernelEngine.NativeResults.ThrowIfFailed(Handle->resolve_path(Handle, (sbyte*)pathPtr, @outPtr, (nuint)@out.Length), "resolve_path");
+                NativeResult.ThrowIfFailed(Handle->resolve_path(Handle, (sbyte*)pathPtr, @outPtr, (nuint)@out.Length), "resolve_path");
             }
         }
     }
