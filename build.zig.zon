@@ -6,6 +6,7 @@
     .dependencies = .{
         .ke_abi = .{ .path = "src/zig/abi" },
         .ke_io_pending_reads = .{ .path = "src/zig/io/pending_reads" },
+        .ke_input_names = .{ .path = "src/zig/input/names" },
         .ke_settings_schema = .{ .path = "src/zig/settings/schema" },
         .ke_part = .{ .path = "src/zig/part" },
         .ke_assembly_default = .{ .path = "src/zig/assembly/default" },

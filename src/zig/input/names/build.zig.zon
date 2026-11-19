@@ -1,0 +1,11 @@
+.{
+    .name = .ke_input_names,
+    .version = "0.1.0",
+    .fingerprint = 0x6e27512ba0570168,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_build = .{ .path = "../../build" },
+        .abi_input = .{ .path = "../../abi/input" },
+    },
+    .paths = .{"."},
+}

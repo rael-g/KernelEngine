@@ -5,6 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .ke_io_pending_reads = .{ .path = "../io/pending_reads" },
+        .ke_input_names = .{ .path = "../input/names" },
         .abi_framework_components = .{ .path = "../abi/framework_components" },
         .abi_spatial_contract = .{ .path = "../abi/spatial_contract" },
         .abi_render_contract = .{ .path = "../abi/render_contract" },
