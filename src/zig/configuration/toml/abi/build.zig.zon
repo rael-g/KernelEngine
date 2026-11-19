@@ -5,7 +5,7 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .abi_configuration = .{ .path = "../../../abi/configuration" },
-        .abi_io = .{ .path = "../../../abi/io" },
+        .abi_file_system = .{ .path = "../../../abi/file_system" },
         .abi_logger = .{ .path = "../../../abi/logger" },
         .abi_result = .{ .path = "../../../abi/result" },
     },

@@ -166,7 +166,7 @@ static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
     char project_file[KE_SDK_ENGINE_PATH_CAPACITY + 16];
     snprintf(project_file, sizeof project_file, "%s/Project", e->project_dir);
     ke_result made = ke_configuration_create(&e->configuration);
-    if (made == KE_OK) made = ke_configuration_toml_create(e->io.ref, &e->configuration_source);
+    if (made == KE_OK) made = ke_configuration_toml_create(e->file_system.ref, &e->configuration_source);
     if (made == KE_OK) made = e->configuration_source.ref->load(e->configuration_source.ref, e->configuration.ref, project_file);
     return made;
 }

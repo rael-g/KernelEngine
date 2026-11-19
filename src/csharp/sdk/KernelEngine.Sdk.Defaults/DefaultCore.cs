@@ -44,7 +44,7 @@ public static class DefaultCore
         services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem("."));
         services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Bootstrap(sp, "async")));
         services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Bootstrap(sp, "io")));
-        services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<Io.Io>(sp)));
+        services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<FileSystem.FileSystem>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
             var config = new DefaultConfiguration();

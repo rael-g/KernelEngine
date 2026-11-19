@@ -7,7 +7,7 @@ pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @imp
 
 const toml = @import("c");
 const abi_configuration = @import("abi_configuration");
-const abi_io = @import("abi_io");
+const abi_file_system = @import("abi_file_system");
 const abi_toml = @import("abi_configuration_toml_factory");
 const abi_result = @import("abi_result");
 
@@ -108,35 +108,40 @@ fn walkArrayOfValues(cfg: [*c]abi_configuration.c.ke_configuration, arr: *toml.t
     }
 }
 
-/// The state behind the source the factory returns: the vtable and the borrowed io every load
-/// reads through; a load keeps nothing between calls.
+/// The state behind the source the factory returns: the vtable and the borrowed file system every
+/// load reads through; a load keeps nothing between calls.
 const State = struct {
     api: abi_configuration.c.ke_configuration_source,
-    io: *abi_io.c.ke_io,
+    fs: *abi_file_system.c.ke_file_system,
 };
-
-fn isFile(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error!bool {
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(io.file_exists.?(io, path, &request));
-    var result: abi_io.c.ke_io_result = undefined;
-    try R.check(io.wait.?(io, request, &result));
-    return result.exists;
-}
 
 /// The whole file at `path` with a terminating zero, owned by the caller; null when there is no
 /// such file, which is asked first so that its absence is not a failed read.
-fn readText(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error!?[:0]u8 {
-    if (!try isFile(io, path)) return null;
-    var request: ?*abi_io.c.ke_io_request = null;
-    try R.check(io.read_file.?(io, path, &request));
-    var result: abi_io.c.ke_io_result = undefined;
-    R.check(io.wait.?(io, request, &result)) catch |err| {
-        log.warn("reading {s} failed: {t}", .{ path, err });
-        return err;
+fn readText(fs: *abi_file_system.c.ke_file_system, path: [*c]const u8) R.Error!?[:0]u8 {
+    var stat: abi_file_system.c.ke_file_stat = undefined;
+    R.check(fs.stat.?(fs, path, &stat)) catch |err| switch (err) {
+        error.NotFound => return null,
+        else => return err,
     };
-    defer io.free_bytes.?(io, result.bytes);
-    const bytes: []const u8 = if (result.bytes) |b| @as([*]const u8, @ptrCast(b))[0..@intCast(result.size)] else "";
-    return try gpa.dupeZ(u8, bytes);
+    if (stat.kind != abi_file_system.c.KE_FILE_KIND_FILE) return null;
+    var file: ?*abi_file_system.c.ke_open_file = null;
+    try R.check(fs.open.?(fs, path, &file));
+    defer fs.close.?(fs, file);
+    var size: u64 = 0;
+    try R.check(fs.size.?(fs, file, &size));
+    const text = try gpa.allocSentinel(u8, @intCast(size), 0);
+    errdefer gpa.free(text);
+    var done: usize = 0;
+    while (done < text.len) {
+        var read: usize = 0;
+        R.check(fs.read_at.?(fs, file, done, text.ptr + done, text.len - done, &read)) catch |err| {
+            log.warn("reading {s} failed: {t}", .{ path, err });
+            return err;
+        };
+        if (read == 0) break;
+        done += read;
+    }
+    return text[0..done :0];
 }
 
 /// Slot `load`. A file that does not exist succeeds with nothing written. A parse error fails
@@ -145,7 +150,7 @@ fn readText(io: *abi_io.c.ke_io, path: [*c]const u8) R.Error!?[:0]u8 {
 /// configuration or path is an invalid argument.
 fn load(self: [*c]abi_configuration.c.ke_configuration_source, cfg: [*c]abi_configuration.c.ke_configuration, path: [*c]const u8) callconv(.c) abi_result.c.ke_result {
     if (self == null or cfg == null or path == null) return R.code(error.InvalidArgument);
-    const text = (readText(stateOf(self).io, path) catch |err| return R.code(err)) orelse return R.ok;
+    const text = (readText(stateOf(self).fs, path) catch |err| return R.code(err)) orelse return R.ok;
     defer gpa.free(text);
 
     var errbuf: [256]u8 = std.mem.zeroes([256]u8);
@@ -174,15 +179,15 @@ fn destroy(self: [*c]abi_configuration.c.ke_configuration_source) callconv(.c) v
 
 /// The factory. Fails with out of memory, leaving the handle zeroed, when the state cannot be
 /// allocated.
-export fn ke_configuration_toml_create(io_in: ?*abi_io.c.ke_io, out_source: ?*abi_configuration.c.ke_configuration_source_handle) callconv(.c) abi_result.c.ke_result {
+export fn ke_configuration_toml_create(fs_in: ?*abi_file_system.c.ke_file_system, out_source: ?*abi_configuration.c.ke_configuration_source_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_source orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_configuration.c.ke_configuration_source_handle);
-    const io = io_in orelse return R.code(error.InvalidArgument);
+    const fs = fs_in orelse return R.code(error.InvalidArgument);
     const s = gpa.create(State) catch {
         log.warn("creating the TOML source failed: out of memory", .{});
         return R.code(error.OutOfMemory);
     };
-    s.* = .{ .api = std.mem.zeroes(abi_configuration.c.ke_configuration_source), .io = io };
+    s.* = .{ .api = std.mem.zeroes(abi_configuration.c.ke_configuration_source), .fs = fs };
     s.api.handle = s;
     s.api.load = load;
     out.* = .{ .ref = &s.api, .destroy = destroy };
@@ -230,61 +235,61 @@ fn mockSetString(_: [*c]abi_configuration.c.ke_configuration, s: [*c]const u8, k
 const zsub = @import("zsub");
 
 var served: ?[]const u8 = null;
-var request_token: u8 = 0;
+var file_token: u8 = 0;
 
-fn readServed(args: zsub.For(abi_io.c.ke_io).Args(.read_file)) abi_result.c.ke_result {
-    args[2].?.* = @ptrCast(&request_token);
-    return R.ok;
-}
-
-var exists_token: u8 = 0;
-
-fn existsServed(args: zsub.For(abi_io.c.ke_io).Args(.file_exists)) abi_result.c.ke_result {
-    args[2].?.* = @ptrCast(&exists_token);
-    return R.ok;
-}
-
-fn waitServed(args: zsub.For(abi_io.c.ke_io).Args(.wait)) abi_result.c.ke_result {
-    if (args[2]) |out| out.* = std.mem.zeroes(abi_io.c.ke_io_result);
-    if (args[1] == @as(?*abi_io.c.ke_io_request, @ptrCast(&exists_token))) {
-        if (args[2]) |out| out.exists = served != null;
-        return R.ok;
-    }
+fn statServed(args: zsub.For(abi_file_system.c.ke_file_system).Args(.stat)) abi_result.c.ke_result {
     const text = served orelse return R.code(error.NotFound);
-    if (args[2]) |out| {
-        out.bytes = @constCast(text.ptr);
-        out.size = text.len;
-    }
+    args[2].?.* = .{ .kind = abi_file_system.c.KE_FILE_KIND_FILE, .size = text.len };
     return R.ok;
 }
 
-fn freeServed(_: zsub.For(abi_io.c.ke_io).Args(.free_bytes)) void {}
+fn openServed(args: zsub.For(abi_file_system.c.ke_file_system).Args(.open)) abi_result.c.ke_result {
+    args[2].?.* = @ptrCast(&file_token);
+    return R.ok;
+}
 
-/// A substitute io serving `text` for every path, or no file at all when `text` is null.
-fn servingIo(sub: *zsub.For(abi_io.c.ke_io), text: ?[]const u8) !*abi_io.c.ke_io {
+fn sizeServed(args: zsub.For(abi_file_system.c.ke_file_system).Args(.size)) abi_result.c.ke_result {
+    args[2].?.* = served.?.len;
+    return R.ok;
+}
+
+fn readServed(args: zsub.For(abi_file_system.c.ke_file_system).Args(.read_at)) abi_result.c.ke_result {
+    const text = served.?;
+    const from: usize = @intCast(args[2]);
+    const n = @min(args[4], text.len - from);
+    @memcpy(@as([*]u8, @ptrCast(args[3].?))[0..n], text[from..][0..n]);
+    args[5].?.* = n;
+    return R.ok;
+}
+
+fn closeServed(_: zsub.For(abi_file_system.c.ke_file_system).Args(.close)) void {}
+
+/// A substitute file system serving `text` for every path, or no file at all when `text` is null.
+fn servingFs(sub: *zsub.For(abi_file_system.c.ke_file_system), text: ?[]const u8) !*abi_file_system.c.ke_file_system {
     served = text;
     try sub.init();
-    _ = sub.when(.read_file).does(readServed);
-    _ = sub.when(.file_exists).does(existsServed);
-    _ = sub.when(.wait).does(waitServed);
-    _ = sub.when(.free_bytes).does(freeServed);
+    _ = sub.when(.stat).does(statServed);
+    _ = sub.when(.open).does(openServed);
+    _ = sub.when(.size).does(sizeServed);
+    _ = sub.when(.read_at).does(readServed);
+    _ = sub.when(.close).does(closeServed);
     return sub.api();
 }
 
-fn madeSource(io: *abi_io.c.ke_io) !abi_configuration.c.ke_configuration_source_handle {
+fn madeSource(fs: *abi_file_system.c.ke_file_system) !abi_configuration.c.ke_configuration_source_handle {
     var h: abi_configuration.c.ke_configuration_source_handle = undefined;
-    try R.check(ke_configuration_toml_create(io, &h));
+    try R.check(ke_configuration_toml_create(fs, &h));
     return h;
 }
 
 fn testLoad(cfg: *abi_configuration.c.ke_configuration, text: ?[]const u8) !bool {
-    var sub: zsub.For(abi_io.c.ke_io) = undefined;
-    const io = try servingIo(&sub, text);
+    var sub: zsub.For(abi_file_system.c.ke_file_system) = undefined;
+    const fs = try servingFs(&sub, text);
     defer sub.deinit();
-    const h = try madeSource(io);
+    const h = try madeSource(fs);
     defer h.destroy.?(h.ref);
     const loaded = h.ref.?.load.?(h.ref, cfg, "Project") == R.ok;
-    if (text == null) try sub.received(.read_file).never();
+    if (text == null) try sub.received(.open).never();
     return loaded;
 }
 
@@ -419,12 +424,12 @@ test "parse error returns false" {
 test "null args rejected" {
     defer clearRecs();
     var cfg = mockConfig();
-    var sub: zsub.For(abi_io.c.ke_io) = undefined;
-    const io = try servingIo(&sub, null);
+    var sub: zsub.For(abi_file_system.c.ke_file_system) = undefined;
+    const fs = try servingFs(&sub, null);
     defer sub.deinit();
     var none: abi_configuration.c.ke_configuration_source_handle = undefined;
     try std.testing.expectError(error.InvalidArgument, R.check(ke_configuration_toml_create(null, &none)));
-    const h = try madeSource(io);
+    const h = try madeSource(fs);
     defer h.destroy.?(h.ref);
     try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.load.?(null, &cfg, "x")));
     try std.testing.expectError(error.InvalidArgument, R.check(h.ref.?.load.?(h.ref, null, "x")));
