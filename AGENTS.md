@@ -46,7 +46,8 @@ dotnet run scripts/ci_local.cs            # verify.cs in a fresh clone inside th
   materials under `src/shaders/`; they compile to WGSL and are loaded at runtime by logical name.
 - Coverage: `zig build coverage -Dcoverage` runs every plugin's tests under kcov, fetched by
   `build.zig.zon` and built for musl, compiling them with LLVM, whose line table kcov reads; the merged
-  report lands in `<prefix>/coverage`. `scripts/coverage.cs` measures the C#.
+  report lands in `<prefix>/coverage`. `dotnet run scripts/coverage.cs` measures the C# and the Zig and
+  prints both as tables, per module; `-- report` prints them again.
 
 ## Tests
 
