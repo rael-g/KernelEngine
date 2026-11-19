@@ -95,7 +95,7 @@ public static class DefaultCore
         services.TryAddSingleton<RenderCamera>(sp => new DefaultRenderCamera(Get<ViewSpace>(sp), Get<Render.Gpu.GpuDevice>(sp)));
         services.TryAddSingleton<RenderSceneResolve>(sp => new DefaultRenderSceneResolve(Get<Ecs.EcsRegistry>(sp), RenderWorld(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp)));
         services.TryAddSingleton<Render.Frame.RenderFrame>(sp => new DefaultRenderFrame(RenderWorld(sp), Get<RenderGraph.RenderGraph>(sp), Get<RenderService>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp),
-            GpuTextureFormat.Rgba16Float, GpuTextureFormat.D32Float, Get<Configuration.Configuration>(sp).Section("render")));
+            Get<Configuration.Configuration>(sp).Section("render")));
         services.TryAddSingleton<RenderUi>(sp => new DefaultRenderUi(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
 
         void Pass<T>(Func<IServiceProvider, T> make) where T : Module.Module => services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, T>(make));

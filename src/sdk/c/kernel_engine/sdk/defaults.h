@@ -253,7 +253,7 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
     if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref,
-        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, ke_sdk_settings(e, "render"), &r->frame);
+        ke_sdk_settings(e, "render"), &r->frame);
     if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
     if (made != KE_OK) return made;

@@ -36,18 +36,18 @@ extern "C"
     /// @param service The frame begins, uploads and presents on it; borrowed, must outlive it.
     /// @param camera  Turns the camera entity into matrices; borrowed, must outlive it.
     /// @param scene   Names the components the frame reads; borrowed, must outlive it.
-    /// @param color_format Format of the colour the frame begins with, up to KE_RENDER_STAGE_HDR_POST.
-    /// @param depth_format Format of the frame's depth.
     /// @param settings [borrowed] Read once. `clear_color`, four numbers from 0 to 1 under
     ///        `clear_color.0` to `clear_color.3`, default 0, 0, 0, 1: the colour the frame's colour is
-    ///        cleared to.
+    ///        cleared to. `color_format`, one of rgba8_unorm, rgba8_srgb, bgra8_unorm, rgba16_float or
+    ///        rgba32_float, default rgba16_float: the colour the frame begins with, up to
+    ///        KE_RENDER_STAGE_HDR_POST. `depth_format`, one of d16_unorm, d24_unorm_s8_uint, d32_float
+    ///        or d32_float_s8_uint, default d32_float: the frame's depth.
     /// @param out_frame [out] Receives the handle; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL part or settings, an invalid format, or a
-    ///         setting that is unknown, of another type or out of its range;
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL part or settings, or a setting that is
+    ///         unknown, of another type, out of its range or naming no format;
     ///         the ecs's code when it refuses the tag; KE_RESULT_OUT_OF_MEMORY.
     KE_RENDER_FRAME_API ke_result ke_render_frame_create(ke_ecs *ecs, ke_render_graph *graph, ke_render_service *service,
                                                          ke_render_camera *camera, ke_render_scene_resolve *scene,
-                                                         ke_gpu_texture_format color_format, ke_gpu_texture_format depth_format,
                                                          ke_settings *settings, ke_render_frame_handle *out_frame);
 
 #ifdef __cplusplus

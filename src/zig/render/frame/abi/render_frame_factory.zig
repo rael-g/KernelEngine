@@ -5,7 +5,6 @@ const abi_logger = @import("logger");
 const abi_module = @import("module");
 const abi_render = @import("render");
 const abi_render_frame = @import("render_frame");
-const abi_render_gpu = @import("render_gpu");
 const abi_render_graph = @import("render_graph");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
@@ -20,9 +19,9 @@ const resultOf = abi_result.resultOf;
 
 /// Makes the frame and registers the tag "render.frame" in ecs. Its systems come from
 /// ke_render_frame_systems_create.
-pub fn renderFrameCreate(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*abi_render_graph.c.ke_render_graph, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, color_format: abi_render_gpu.c.ke_gpu_texture_format, depth_format: abi_render_gpu.c.ke_gpu_texture_format, settings: ?*abi_settings.c.ke_settings) Error!abi_render_frame.c.ke_render_frame_handle {
+pub fn renderFrameCreate(ecs: ?*abi_ecs.c.ke_ecs, graph: ?*abi_render_graph.c.ke_render_graph, service: ?*abi_render.c.ke_render_service, camera: ?*abi_render.c.ke_render_camera, scene: ?*abi_render.c.ke_render_scene_resolve, settings: ?*abi_settings.c.ke_settings) Error!abi_render_frame.c.ke_render_frame_handle {
     var written: abi_render_frame.c.ke_render_frame_handle = undefined;
-    try checkResult(c.ke_render_frame_create(ecs, graph, service, camera, scene, color_format, depth_format, settings, &written));
+    try checkResult(c.ke_render_frame_create(ecs, graph, service, camera, scene, settings, &written));
     return written;
 }
 
