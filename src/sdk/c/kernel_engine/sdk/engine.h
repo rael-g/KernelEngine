@@ -138,11 +138,11 @@ typedef ke_result (*ke_sdk_engine_schedule)(ke_sdk_engine *engine, ke_schedule_h
 /** The function each part of an engine is made by, in the order they are made; NULL leaves the part out. */
 typedef struct ke_sdk_engine_desc
 {
+    ke_sdk_engine_part file_system;
+    ke_sdk_engine_part configuration;
     ke_sdk_engine_part job_system;
     ke_sdk_engine_part async;
-    ke_sdk_engine_part file_system;
     ke_sdk_engine_part io;
-    ke_sdk_engine_part configuration;
     ke_sdk_engine_part input;
     ke_sdk_engine_part window;
     ke_sdk_engine_part ecs;
@@ -173,21 +173,12 @@ typedef struct ke_sdk_engine_desc
 /** The configuration the default parts read their sections from. */
 static inline ke_configuration *ke_sdk_engine_configuration(ke_sdk_engine *e) { return e->configuration.ref; }
 
-static inline ke_result ke_sdk_no_bool(ke_settings *self, const char *key, bool *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
-static inline ke_result ke_sdk_no_int(ke_settings *self, const char *key, int64_t *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
-static inline ke_result ke_sdk_no_double(ke_settings *self, const char *key, double *out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
-static inline ke_result ke_sdk_no_string(ke_settings *self, const char *key, const char **out) { (void)self; (void)key; (void)out; return KE_RESULT_NOT_FOUND; }
-static inline ke_result ke_sdk_no_keys(ke_settings *self, ke_settings_key_func each, void *ctx) { (void)self; (void)ctx; return each ? KE_OK : KE_RESULT_INVALID_ARGUMENT; }
 
-/** Settings that hold nothing, so a part takes its implementation's defaults. */
-static ke_settings ke_sdk_empty_settings = { NULL, ke_sdk_no_bool, ke_sdk_no_int, ke_sdk_no_double, ke_sdk_no_string, ke_sdk_no_keys };
-
-/** The section @p section of the engine's configuration as the settings a part is created with; empty settings while the
- * engine has no configuration yet, as for the job and async systems the configuration is read through; NULL when the section
- * cannot be viewed, which the part refuses. */
+/** The section @p section of the engine's configuration as the settings a part is created with; NULL when the engine has
+ * no configuration or the section cannot be viewed, which the part refuses. */
 static inline ke_settings *ke_sdk_settings(ke_sdk_engine *e, const char *section)
 {
-    if (!e->configuration.ref) return &ke_sdk_empty_settings;
+    if (!e->configuration.ref) return NULL;
     ke_settings *settings = NULL;
     if (e->configuration.ref->section(e->configuration.ref, section, &settings) != KE_OK) settings = NULL;
     return settings;
@@ -319,12 +310,12 @@ static inline void ke_sdk_engine_destroy(ke_sdk_engine *engine)
     KE_SDK_ENGINE_RELEASE(engine->gpu_device);
     KE_SDK_ENGINE_RELEASE(engine->window);
     KE_SDK_ENGINE_RELEASE(engine->input);
-    KE_SDK_ENGINE_RELEASE(engine->configuration_source);
-    KE_SDK_ENGINE_RELEASE(engine->configuration);
     KE_SDK_ENGINE_RELEASE(engine->io);
-    KE_SDK_ENGINE_RELEASE(engine->file_system);
     KE_SDK_ENGINE_RELEASE(engine->async);
     KE_SDK_ENGINE_RELEASE(engine->job_system);
+    KE_SDK_ENGINE_RELEASE(engine->configuration_source);
+    KE_SDK_ENGINE_RELEASE(engine->configuration);
+    KE_SDK_ENGINE_RELEASE(engine->file_system);
 }
 
 /**
@@ -343,7 +334,7 @@ static inline ke_result ke_sdk_engine_create(const ke_sdk_engine_desc *desc, con
     snprintf(out->default_font, sizeof out->default_font, "%s/assets/fonts/LiberationSans-Regular.ttf", out->project_dir);
 
     const ke_sdk_engine_part core[] = {
-        desc->job_system, desc->async, desc->file_system, desc->io, desc->configuration, desc->input, desc->window, desc->ecs,
+        desc->file_system, desc->configuration, desc->job_system, desc->async, desc->io, desc->input, desc->window, desc->ecs,
         desc->scheduler,
     };
     const ke_sdk_engine_part parts[] = {

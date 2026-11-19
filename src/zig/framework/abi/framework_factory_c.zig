@@ -83,9 +83,9 @@ pub const ke_scheduler_run_fn = ?*const fn (?*anyopaque, f32, ?*?*abi_completion
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
-/// loader. project_root may be NULL — res:// resolution is then disabled; only absolute or
-/// CWD-relative paths work.
-pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, project_root: ?[*:0]const u8, io: ?*abi_io.c.ke_io, out_resolver: ?*abi_asset_resolver.c.ke_asset_resolver_handle) abi_result.c.ke_result;
+/// loader. A path that begins with res:// names what follows the prefix, resolved by io against
+/// the root of its file system; any other path is passed on as written.
+pub extern fn ke_asset_resolver_create(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, io: ?*abi_io.c.ke_io, out_resolver: ?*abi_asset_resolver.c.ke_asset_resolver_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_framework logs to callback, with ctx; a NULL callback sends them back to
 /// stderr, where they go until this is called. Called once, before the library logs.

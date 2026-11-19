@@ -162,15 +162,15 @@ static ke_settings *clear;
 
 static void renderer_compose(renderer *r, ke_ecs *main_world, ke_ecs *render_world, ke_extraction *extraction, ke_schedule *schedule, ke_gpu_device *gpu, ke_gpu_render_target *target, ke_io *io)
 {
-    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, "shaders", &r->binder));
-    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, "shaders", &r->service));
+    check("resource binder", ke_render_resource_binder_grouped_create(gpu, io, unset, &r->binder));
+    check("render service", ke_render_service_create(gpu, target, io, r->binder.ref, unset, &r->service));
     ke_render_service *core = r->service.ref;
     check("render graph", ke_render_graph_simple_create(gpu, &r->graph));
     check("view space", ke_view_space_rh_create(&r->view_space));
     check("camera", ke_render_camera_create(r->view_space.ref, gpu, &r->camera));
     check("scene resolve", ke_render_scene_resolve_create(main_world, render_world, extraction, core, NULL, &r->scene));
     check("frame", ke_render_frame_create(render_world, r->graph.ref, core, r->camera.ref, r->scene.ref,
-        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, clear, &r->frame));
+        clear, &r->frame));
     check("frame systems", ke_render_frame_systems_create(r->frame.ref, &r->frame_systems));
 
     const ke_render_context context = {

@@ -16,6 +16,7 @@
         .abi_render_ui_factory = .{ .path = "../../ui/abi" },
         .abi_result = .{ .path = "../../../abi/result" },
         .abi_schedule = .{ .path = "../../../abi/schedule" },
+        .abi_settings = .{ .path = "../../../abi/settings" },
     },
     .paths = .{"."},
 }

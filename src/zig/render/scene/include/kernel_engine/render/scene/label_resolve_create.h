@@ -1,6 +1,7 @@
 #ifndef KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 #define KERNEL_ENGINE_RENDER_SCENE_LABEL_RESOLVE_CREATE_H_
 
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/asset/asset_resolver.h>
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/render/context.h>
@@ -39,14 +40,15 @@ extern "C"
     /// @param ui Registers the font; borrowed, must outlive it.
     /// @param resolver [optional] Reads the font a label names; borrowed. Without it every label is
     ///                 reported.
-    /// @param default_font [borrowed,optional,utf8] The font a label that names none draws with;
-    ///        copied. NULL leaves such a label without text.
+    /// @param settings [borrowed] Read once. `default_font`, a string, default empty: the font a label
+    ///        that names none draws with; empty leaves such a label without text.
     /// @param out_module [out] Receives the resolve; left zeroed on failure.
-    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL context, scene, service or ui;
+    /// @return KE_OK; KE_RESULT_INVALID_ARGUMENT for a NULL context, scene, service, ui or settings,
+    ///         or a setting that is unknown or of another type;
     ///         KE_RESULT_OUT_OF_MEMORY.
     KE_RENDER_SCENE_API ke_result ke_render_label_resolve_create(
         const ke_render_context *context, ke_render_ui *ui, ke_asset_resolver *resolver,
-        const char *default_font, ke_module_handle *out_module);
+        ke_settings *settings, ke_module_handle *out_module);
 
 #ifdef __cplusplus
 }

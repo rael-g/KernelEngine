@@ -29,6 +29,7 @@
     <ProjectReference Include="..\..\input\KernelEngine.Input\KernelEngine.Input.csproj" />
     <ProjectReference Include="..\..\ecs\KernelEngine.Ecs.Flecs\KernelEngine.Ecs.Flecs.csproj" />
     <ProjectReference Include="..\..\configuration\KernelEngine.Configuration\KernelEngine.Configuration.csproj" />
+    <ProjectReference Include="..\..\io\KernelEngine.Io\KernelEngine.Io.csproj" />
   </ItemGroup>
 
   <ItemGroup>

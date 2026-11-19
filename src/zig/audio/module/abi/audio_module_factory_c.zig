@@ -44,4 +44,4 @@ pub extern fn ke_audio_module_set_log_callback(callback: ke_log_callback, ctx: ?
 /// Creates the module that loads, plays and releases the clip of every ke_sound_component;
 /// attaching it registers its system in the update schedule's post_update set. Destroying the
 /// module stops every voice and releases every clip it holds.
-pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, root: ?[*:0]const u8, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+pub extern fn ke_sound_create(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;

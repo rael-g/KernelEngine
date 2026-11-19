@@ -37,7 +37,6 @@ const Module = struct {
     api: abi_module.c.ke_module = std.mem.zeroes(abi_module.c.ke_module),
     audio: *abi_audio.c.ke_audio,
     scheduler: ?*abi_schedule.c.ke_schedule = null,
-    root: ?[]u8 = null,
     system: abi_schedule.c.ke_schedule_system_id = 0,
     set: [1]abi_schedule.c.ke_schedule_set_id = .{0},
     tracked: std.AutoHashMapUnmanaged(abi_ecs.c.ke_entity, Tracked) = .empty,
@@ -51,7 +50,7 @@ fn moduleOf(user: ?*anyopaque) *Module {
 }
 
 /// The post-update-phase system. A component whose clip is not loaded and whose path is not empty
-/// has it loaded, from the path joined to the root. A voice that reached its end ends the sound; a
+/// has it loaded, from its path as written. A voice that reached its end ends the sound; a
 /// cleared `playing` stops the voice; a set `playing` without a voice starts one at the component's
 /// volume, pitch and looping. A sound ends by clearing `playing`, and its entity is despawned
 /// through the context's command queue when its release is when-done; a clip that cannot be loaded
@@ -119,7 +118,7 @@ fn end(ctx: *abi_schedule.c.ke_schedule_ctx, entity: abi_ecs.c.ke_entity, p: *So
 fn load(m: *Module, entity: abi_ecs.c.ke_entity, p: *Sound) void {
     const path = std.mem.sliceTo(&p.path, 0);
     if (path.len == 0) return;
-    const full = (if (m.root) |root| std.fs.path.joinZ(gpa, &.{ root, path }) else gpa.dupeZ(u8, path)) catch return;
+    const full = gpa.dupeZ(u8, path) catch return;
     defer gpa.free(full);
     var clip: abi_audio.c.ke_audio_sound = abi_audio.c.KE_AUDIO_SOUND_INVALID;
     R.check(m.audio.load_sound.?(m.audio, full.ptr, &clip)) catch |err| {
@@ -152,7 +151,6 @@ fn destroyModule(m: *Module) void {
     var it = m.tracked.valueIterator();
     while (it.next()) |t| release(m, t.*);
     m.tracked.deinit(gpa);
-    if (m.root) |root| gpa.free(root);
     gpa.destroy(m);
 }
 
@@ -205,28 +203,22 @@ fn destroyHandle(self: ?*abi_module.c.ke_module) callconv(.c) void {
 export fn ke_sound_create(
     ecs: ?*abi_ecs.c.ke_ecs,
     audio: ?*abi_audio.c.ke_audio,
-    root_in: ?[*:0]const u8,
     out_module: ?*abi_module.c.ke_module_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = .{ .ref = null, .destroy = null };
-    const root = root_in orelse {
-        log.warn("creating the sound module failed: no root", .{});
-        return R.code(error.InvalidArgument);
-    };
-    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument), root) catch |err| {
+    out.* = create(ecs orelse return R.code(error.InvalidArgument), audio orelse return R.code(error.InvalidArgument)) catch |err| {
         log.warn("creating the sound module failed: {t}", .{err});
         return R.code(err);
     };
     return R.ok;
 }
 
-fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio, root: [*:0]const u8) R.Error!abi_module.c.ke_module_handle {
+fn create(ecs: *abi_ecs.c.ke_ecs, audio: *abi_audio.c.ke_audio) R.Error!abi_module.c.ke_module_handle {
     const m = try gpa.create(Module);
     m.* = .{ .audio = audio };
     m.api = .{ .handle = m, .attach = attach, .detach = detach };
     errdefer destroyModule(m);
-    m.root = try gpa.dupe(u8, std.mem.span(root));
 
     var cid: abi_ecs.c.ke_component_id = abi_ecs.c.KE_COMPONENT_INVALID;
     try R.check(ecs.*.component_register.?(ecs, &abi_ecs.c.ke_component_desc{ .name = abi_audio_contract.c.KE_COMPONENT_NAME_SOUND, .size = @sizeOf(Sound), .alignment = @alignOf(Sound), .fields = &abi_audio_contract.c.ke_sound_component_fields, .field_count = abi_audio_contract.c.ke_sound_component_fields.len }, &cid));
@@ -336,7 +328,7 @@ const Harness = struct {
     ctx: abi_schedule.c.ke_schedule_ctx,
     m: *Module,
 
-    fn init(h: *Harness, root: ?[]const u8) !void {
+    fn init(h: *Harness) !void {
         FakeAudio.reset();
         h.audio = FakeAudio.api();
         try h.rt.init();
@@ -346,7 +338,6 @@ const Harness = struct {
         h.ctx.commands = h.cmds.api();
         h.m = try gpa.create(Module);
         h.m.* = .{ .audio = &h.audio };
-        if (root) |r| h.m.root = try gpa.dupe(u8, r);
     }
 
     fn tick(h: *Harness) !void {
@@ -360,16 +351,14 @@ const Harness = struct {
     }
 };
 
-test "a clip is loaded from its path joined to the root on the first update" {
+test "a clip is loaded from its path, as written, on the first update" {
     var h: Harness = undefined;
-    try h.init("base");
+    try h.init();
     SoundView.author("hit.wav");
     try h.tick();
     try h.tick();
     try testing.expectEqual(@as(usize, 1), FakeAudio.load_count);
-    const expected = try std.fs.path.join(testing.allocator, &.{ "base", "hit.wav" });
-    defer testing.allocator.free(expected);
-    try testing.expectEqualStrings(expected, std.mem.sliceTo(&FakeAudio.loaded[0], 0));
+    try testing.expectEqualStrings("hit.wav", std.mem.sliceTo(&FakeAudio.loaded[0], 0));
     try testing.expect(SoundView.sounds[0].clip != abi_audio.c.KE_AUDIO_SOUND_INVALID);
     h.deinit();
     try testing.expectEqual(@as(usize, 1), FakeAudio.unloaded);
@@ -377,7 +366,7 @@ test "a clip is loaded from its path joined to the root on the first update" {
 
 test "a playing sound starts one voice at its pitch and keeps it while the voice plays" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
@@ -392,7 +381,7 @@ test "a playing sound starts one voice at its pitch and keeps it while the voice
 
 test "a sound whose pitch is not positive starts no voice and ends" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
@@ -405,7 +394,7 @@ test "a sound whose pitch is not positive starts no voice and ends" {
 
 test "clearing playing stops the voice, and setting it again starts a new one" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
@@ -421,7 +410,7 @@ test "clearing playing stops the voice, and setting it again starts a new one" {
 
 test "a voice that reached its end clears playing and keeps the entity of a kept sound" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
@@ -436,7 +425,7 @@ test "a voice that reached its end clears playing and keeps the entity of a kept
 
 test "a voice that reached its end despawns the entity of a sound released when done" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
@@ -450,7 +439,7 @@ test "a voice that reached its end despawns the entity of a sound released when 
 
 test "a clip the audio cannot load ends the sound without a voice and is retried" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     defer h.deinit();
     FakeAudio.refuses = true;
     SoundView.author("missing.wav");
@@ -467,7 +456,7 @@ test "a clip the audio cannot load ends the sound without a voice and is retried
 
 test "a sound whose entity no longer holds it is stopped and its clip released on the next update" {
     var h: Harness = undefined;
-    try h.init(null);
+    try h.init();
     SoundView.author("hit.wav");
     SoundView.sounds[0].playing = true;
     try h.tick();
@@ -492,11 +481,10 @@ test "a sound module missing its ecs or audio is refused, and a whole one attach
     _ = rt.when(.register_system).writesFresh(2);
 
     var h: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), &audio, null, &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, "base", &h)));
-    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, "base", &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(null, &audio, &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_sound_create(ecs.api(), null, &h)));
     try testing.expect(h.ref == null);
-    try R.check(ke_sound_create(ecs.api(), &audio, "base", &h));
+    try R.check(ke_sound_create(ecs.api(), &audio, &h));
     var targets = std.mem.zeroes(abi_module.c.ke_module_targets);
     try testing.expectError(error.InvalidArgument, R.check(h.ref.?.attach.?(h.ref, &targets)));
     targets.update = @ptrCast(rt.api());

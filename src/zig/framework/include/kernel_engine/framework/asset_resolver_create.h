@@ -31,8 +31,8 @@ extern "C"
     /// Allocates a new resolver. Both loader pointers may be NULL — the
     /// corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT.
     /// The resolver does NOT take ownership of either loader.
-    /// @p project_root may be NULL — res:// resolution is
-    /// then disabled; only absolute or CWD-relative paths work.
+    /// A path that begins with res:// names what follows the prefix, resolved by @p io against the
+    /// root of its file system; any other path is passed on as written.
     /// @param image_loader [borrowed,optional] NULL refuses every texture.
     /// @param font_loader [borrowed,optional] NULL refuses every font.
     /// @param io [borrowed] What every file the resolver opens is read through; must outlive the
@@ -43,7 +43,6 @@ extern "C"
     KE_FRAMEWORK_API ke_result ke_asset_resolver_create(
         ke_image_loader          *image_loader,
         ke_font_loader           *font_loader,
-        const char               *project_root,
         ke_io                    *io,
         ke_asset_resolver_handle *out_resolver);
 

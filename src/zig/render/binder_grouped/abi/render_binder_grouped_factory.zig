@@ -4,6 +4,7 @@ const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 /// The ABI as the headers declare it.
 pub const c = @import("render_binder_grouped_factory_c.zig");
@@ -21,8 +22,8 @@ pub fn renderBinderGroupedSetLogCallback(callback: c.ke_log_callback, ctx: ?*any
 
 /// Creates a resource binder that gives every group of a shader one bind group and every
 /// material one bind group of its own.
-pub fn renderResourceBinderGroupedCreate(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, shader_dir: [:0]const u8) Error!abi_render_gpu.c.ke_render_resource_binder_handle {
+pub fn renderResourceBinderGroupedCreate(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings) Error!abi_render_gpu.c.ke_render_resource_binder_handle {
     var written: abi_render_gpu.c.ke_render_resource_binder_handle = undefined;
-    try checkResult(c.ke_render_resource_binder_grouped_create(device, io, shader_dir.ptr, &written));
+    try checkResult(c.ke_render_resource_binder_grouped_create(device, io, settings, &written));
     return written;
 }

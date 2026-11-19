@@ -9,7 +9,9 @@ const std = @import("std");
 
 pub const std_options: std.Options = .{ .signal_stack_size = null, .logFn = @import("log").Destination("ke_render_service").logFn };
 
-pub const abi_io = @import("abi_io");
+pub const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
+const abi_io = @import("abi_io");
 const abi_math = @import("abi_math");
 const abi_render = @import("abi_render");
 const abi_render_service_factory = @import("abi_render_service_factory");
@@ -306,15 +308,21 @@ fn resourceCache(destroy_fn: abi_resource_cache.c.ke_resource_destroy_func, st: 
 /// each given its destroy function and the state as context, then the vtable, then the shared
 /// globals, which it gives the binder. The default resources and the "blit" shaders come last
 /// because they go through the functions of the vtable just built. `destroyCore` undoes this in
-/// reverse and frees the vtable last. A null dependency, config or shader directory fails as an
-/// invalid argument; a step that fails fails the factory with its code. On success the ref is the new
+/// reverse and frees the vtable last. A null dependency or settings, or a setting the schema refuses,
+/// fails as an invalid argument; a step that fails fails the factory with its code. On success the ref is the new
 /// vtable and `destroy` is `destroyCore`.
+/// The service's settings, with this implementation's defaults: the directory, under the file
+/// system's root, its shaders are read from.
+const Settings = struct {
+    shader_dir: [:0]const u8 = "shaders",
+};
+
 export fn ke_render_service_create(
     device: ?*abi_render_gpu.c.ke_gpu_device,
     target: ?*abi_render_gpu.c.ke_gpu_render_target,
     io: ?*abi_io.c.ke_io,
     binder: ?*abi_render_gpu.c.ke_render_resource_binder,
-    shader_dir_in: ?[*:0]const u8,
+    settings: ?*abi_settings.c.ke_settings,
     out_service: [*c]abi_render.c.ke_render_service_handle,
 ) callconv(.c) abi_result.c.ke_result {
     const out = out_service orelse return R.code(error.InvalidArgument);
@@ -323,9 +331,9 @@ export fn ke_render_service_create(
     const tgt = target orelse return R.code(error.InvalidArgument);
     const files = io orelse return R.code(error.InvalidArgument);
     const bnd = binder orelse return R.code(error.InvalidArgument);
-    const shader_dir = shader_dir_in orelse return R.code(error.InvalidArgument);
+    const values = settings_schema.read(Settings, settings orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
 
-    const core = assemble(dev, tgt, bnd, std.mem.span(shader_dir), files) catch |err| return R.code(err);
+    const core = assemble(dev, tgt, bnd, values.shader_dir, files) catch |err| return R.code(err);
     prepare(core) catch |err| {
         destroyCore(core);
         return R.code(err);
@@ -563,9 +571,9 @@ const Target = struct {
     }
 };
 
-fn serviceOf(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, shader_dir: [*c]const u8) abi_render.c.ke_render_service_handle {
+fn serviceOf(device: ?*abi_render_gpu.c.ke_gpu_device, target: ?*abi_render_gpu.c.ke_gpu_render_target, io: ?*abi_io.c.ke_io, binder: ?*abi_render_gpu.c.ke_render_resource_binder, settings: ?*abi_settings.c.ke_settings) abi_render.c.ke_render_service_handle {
     var h: abi_render.c.ke_render_service_handle = .{ .ref = null, .destroy = null };
-    _ = ke_render_service_create(device, target, io, binder, shader_dir, &h);
+    _ = ke_render_service_create(device, target, io, binder, settings, &h);
     return h;
 }
 
@@ -595,8 +603,10 @@ const ShaderDir = struct {
         _ = self.io.when(.wait).does(waitEmpty);
     }
 
-    fn path(_: *ShaderDir) [*:0]const u8 {
-        return "shaders";
+    var no_settings = settings_schema.Fixed.init(&.{});
+
+    fn settings(_: *ShaderDir) *abi_settings.c.ke_settings {
+        return &no_settings.api;
     }
 
     fn api(self: *ShaderDir) *abi_io.c.ke_io {
@@ -617,7 +627,7 @@ test "creating and destroying the render service leaves no block allocated and n
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     try testing.expect(h.ref != null);
     h.destroy.?(h.ref);
     try gpu.expectReleased();
@@ -641,7 +651,7 @@ test "a shader read the calling thread may not wait for is pending until a later
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     var module: abi_asset_resolver.c.ke_gpu_shader_module = undefined;
@@ -665,7 +675,7 @@ test "a render service created without a render target is refused and leaves not
     try gpu.init();
     defer gpu.deinit();
     var h: abi_render.c.ke_render_service_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(gpu.dev.api(), null, sd.api(), gpu.binder.api(), sd.path(), &h)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_service_create(gpu.dev.api(), null, sd.api(), gpu.binder.api(), sd.settings(), &h)));
     try testing.expect(h.ref == null);
     try gpu.expectReleased();
     try heap.expectNoLeaks();
@@ -680,7 +690,7 @@ test "a frame acquires the render target, hands out its view and presents it onc
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
     defer h.destroy.?(svc);
     try testing.expectEqual(@as(abi_render_gpu.c.ke_gpu_texture_format, abi_render_gpu.c.KE_GPU_TEXTURE_FORMAT_RGBA8_UNORM), svc.*.backbuffer_format.?(svc));
@@ -703,7 +713,7 @@ test "uploads beyond the first frame's records and arena are all written when su
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
 
     const upload_count = first_upload_records + 100;
@@ -739,7 +749,7 @@ test "a blit draws its source over the whole of the render pass it is given, in 
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     const svc = h.ref orelse return error.TestUnexpectedResult;
     var view: abi_asset_resolver.c.ke_gpu_texture_view = abi_render_gpu.c.KE_GPU_INVALID_HANDLE;
     try R.check(svc.*.begin_frame.?(svc, &view));
@@ -767,7 +777,7 @@ test "a render service created without a shader directory is refused and leaves 
     try heap.expectNoLeaks();
 }
 
-test "a render service created without a config is refused and leaves nothing behind" {
+test "a render service created without settings is refused and leaves nothing behind" {
     var gpu: Gpu = undefined;
     try gpu.init();
     defer gpu.deinit();
@@ -807,7 +817,7 @@ test "pipelines requested from several threads at once settle on one answer per 
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     try testing.expect(h.ref != null);
 
     var params: [stress_keys]abi_render_gpu.c.ke_gpu_render_pipeline_desc = undefined;
@@ -843,7 +853,7 @@ test "a pipeline is answered with its fallback first and with the compiled one a
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     try testing.expect(h.ref != null);
 
     var p = std.mem.zeroes(abi_render_gpu.c.ke_gpu_render_pipeline_desc);
@@ -871,7 +881,7 @@ test "a pipeline is keyed by its vertex layout's content, not by where the layou
     defer gpu.deinit();
     var target: Target = undefined;
     target.init();
-    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.path());
+    const h = serviceOf(gpu.dev.api(), target.api(), sd.api(), gpu.binder.api(), sd.settings());
     try testing.expect(h.ref != null);
 
     const attrs = [_]abi_render_gpu.c.ke_gpu_vertex_attribute{.{ .shader_location = 0, .format = 0, .offset = 0 }};

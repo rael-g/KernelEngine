@@ -11,6 +11,7 @@ const abi_render_graph = @import("render_graph");
 const abi_render_ui = @import("render_ui");
 const abi_result = @import("result");
 const abi_schedule = @import("schedule");
+const abi_settings = @import("settings");
 
 pub const ke_component_id = u32;
 pub const ke_entity = u64;
@@ -37,6 +38,9 @@ pub const ke_render_resource_set = u64;
 pub const ke_render_shader_layout = u64;
 pub const ke_schedule_set_id = u32;
 pub const ke_schedule_system_id = u64;
+
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
 
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
@@ -82,7 +86,7 @@ pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, 
 
 /// Makes the label resolve. Attached, its system "render.label.resolve" gives each label of the
 /// main world, in the update set, the font it names.
-pub extern fn ke_render_label_resolve_create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, default_font: ?[*:0]const u8, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
+pub extern fn ke_render_label_resolve_create(context: ?*const abi_render_context.c.ke_render_context, ui: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) abi_result.c.ke_result;
 
 /// Sends every line ke_render_scene logs to callback, with ctx; a NULL callback sends them back
 /// to stderr, where they go until this is called. Called once, before the library logs.

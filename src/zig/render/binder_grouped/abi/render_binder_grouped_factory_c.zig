@@ -4,6 +4,7 @@ const abi_io = @import("io");
 const abi_logger = @import("logger");
 const abi_render_gpu = @import("render_gpu");
 const abi_result = @import("result");
+const abi_settings = @import("settings");
 
 pub const ke_gpu_bind_group = u64;
 pub const ke_gpu_bind_group_layout = u64;
@@ -29,6 +30,9 @@ pub const ke_render_shader_layout = u64;
 /// thread logged.
 pub const ke_log_callback = ?*const fn (?*anyopaque, abi_logger.c.ke_log_level, ?[*:0]const u8, ?[*:0]const u8) callconv(.c) void;
 
+/// Receives one key the settings hold.
+pub const ke_settings_key_func = ?*const fn (?[*:0]const u8, ?*anyopaque) callconv(.c) void;
+
 /// Receives a pipeline compiled asynchronously.
 pub const ke_gpu_pipeline_ready_func = ?*const fn (abi_result.c.ke_result, ke_gpu_pipeline, ?*anyopaque) callconv(.c) void;
 
@@ -42,4 +46,4 @@ pub extern fn ke_render_binder_grouped_set_log_callback(callback: ke_log_callbac
 
 /// Creates a resource binder that gives every group of a shader one bind group and every
 /// material one bind group of its own.
-pub extern fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, shader_dir: ?[*:0]const u8, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) abi_result.c.ke_result;
+pub extern fn ke_render_resource_binder_grouped_create(device: ?*abi_render_gpu.c.ke_gpu_device, io: ?*abi_io.c.ke_io, settings: ?*abi_settings.c.ke_settings, out_binder: ?*abi_render_gpu.c.ke_render_resource_binder_handle) abi_result.c.ke_result;

@@ -4,6 +4,7 @@
 #include <kernel_engine/result/result.h>
 #include <kernel_engine/common/export.h>
 #include <kernel_engine/io/io.h>
+#include <kernel_engine/settings/settings.h>
 #include <kernel_engine/render/binding/resource_binder.h>
 #include <kernel_engine/render/gpu/gpu_device.h>
 
@@ -25,13 +26,14 @@ extern "C"
  * one bind group of its own.
  * @param device Borrowed; must outlive the binder.
  * @param io     [provider] Borrowed; must outlive the binder. The reflection is read through it.
- * @param shader_dir [borrowed,utf8] Directory the build wrote each compiled shader's reflection
- *        into; copied.
- * @return KE_OK, or KE_RESULT_INVALID_ARGUMENT when @p device, @p io or @p shader_dir is NULL.
+ * @param settings [borrowed] Read once. `shader_dir`, a string, default "shaders": the directory,
+ *        under the root of the io's file system, the build wrote each compiled shader's reflection into.
+ * @return KE_OK, or KE_RESULT_INVALID_ARGUMENT when @p device, @p io or @p settings is NULL or a
+ *         setting is refused.
  * @param out_binder [out] Receives the handle; left zeroed on failure.
  */
 KE_RENDER_BINDER_GROUPED_API ke_result ke_render_resource_binder_grouped_create(
-    ke_gpu_device *device, ke_io *io, const char *shader_dir,
+    ke_gpu_device *device, ke_io *io, ke_settings *settings,
     ke_render_resource_binder_handle *out_binder);
 
 #ifdef __cplusplus

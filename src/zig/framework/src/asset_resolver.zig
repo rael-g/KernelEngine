@@ -28,8 +28,7 @@ const path_buf_max = 1024;
 
 /// Allocated by `ke_asset_resolver_create` and freed by `vtDestroy`. `api` is the vtable the handle
 /// refers to. The loaders and `io`, through which every file is read, are borrowed and stay null when none was injected, which makes the
-/// resolving slots that need them fail. `project_root` is the only memory the state owns, and it is
-/// null exactly when no root was given.
+/// resolving slots that need them fail. The state owns no memory beyond itself.
 ///
 /// The resolver keeps no asset: decoded textures, baked meshes, parsed materials and baked fonts
 /// belong to the caller until handed back to the matching free slot. The plain slots produce data
@@ -42,19 +41,11 @@ const State = struct {
     api: abi_asset_resolver.c.ke_asset_resolver,
     image_loader: ?*abi_image_loader.c.ke_image_loader,
     font_loader: ?*abi_text.c.ke_font_loader,
-    project_root: ?[:0]u8,
     io: *abi_io.c.ke_io,
 };
 
 fn stateOf(self: *abi_asset_resolver.c.ke_asset_resolver) *State {
     return @ptrCast(@alignCast(self.handle));
-}
-
-/// Returns null for a null input and also when the allocation fails, so a caller that needs to tell
-/// the two apart must check its own input.
-fn dupCStr(s: [*c]const u8) ?[:0]u8 {
-    if (s == null) return null;
-    return heap.gpa.dupeZ(u8, std.mem.span(s)) catch null;
 }
 
 fn copyStringClamped(dst: []u8, src: []const u8) void {
@@ -64,20 +55,13 @@ fn copyStringClamped(dst: []u8, src: []const u8) void {
     dst[n] = 0;
 }
 
-/// Writes the file path `path` names into `out`, terminated: a path that begins with "res://" is
-/// joined to the project root, or stands as its remainder when there is none, and any other path
-/// is copied as written. Fails as an invalid argument, leaving `out` unspecified, when the result
+/// Writes the file path `path` names into `out`, terminated: a path that begins with "res://"
+/// stands as what follows the prefix, which the io resolves against its file system's root, and
+/// any other path is copied as written. Fails as an invalid argument, leaving `out` unspecified, when the result
 /// and its terminator do not fit.
-fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) R.Error!void {
+fn resolvePath(path: [*:0]const u8, out: []u8) R.Error!void {
     const p = std.mem.span(path);
-    const written = if (!std.mem.startsWith(u8, p, res_prefix))
-        std.fmt.bufPrintZ(out, "{s}", .{p})
-    else if (s.project_root) |root| blk: {
-        const remainder = p[res_prefix.len..];
-        const sep: []const u8 = if (root.len > 0 and root[root.len - 1] != '/' and root[root.len - 1] != '\\' and
-            (remainder.len == 0 or (remainder[0] != '/' and remainder[0] != '\\'))) "/" else "";
-        break :blk std.fmt.bufPrintZ(out, "{s}{s}{s}", .{ root, sep, remainder });
-    } else std.fmt.bufPrintZ(out, "{s}", .{p[res_prefix.len..]});
+    const written = std.fmt.bufPrintZ(out, "{s}", .{if (std.mem.startsWith(u8, p, res_prefix)) p[res_prefix.len..] else p});
     _ = written catch {
         log.warn("the resolved path of {s} does not fit", .{p});
         return error.InvalidArgument;
@@ -88,7 +72,7 @@ fn resolvePath(s: *const State, path: [*:0]const u8, out: []u8) R.Error!void {
 fn vtResolvePath(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, path: [*c]const u8, out: [*c]u8, capacity: usize) callconv(.c) abi_result.c.ke_result {
     const self = self_in orelse return R.code(error.InvalidArgument);
     if (self.handle == null or path == null or out == null) return R.code(error.InvalidArgument);
-    resolvePath(stateOf(self), path, out[0..capacity]) catch |err| return R.code(err);
+    resolvePath(path, out[0..capacity]) catch |err| return R.code(err);
     return R.ok;
 }
 
@@ -186,7 +170,7 @@ fn resolveTexture(s: *const State, path: [*:0]const u8) R.Error!*abi_mesh_data.c
         return error.InvalidArgument;
     };
     var buf: [path_buf_max]u8 = undefined;
-    try resolvePath(s, path, &buf);
+    try resolvePath(path, &buf);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     var data: [*c]abi_mesh_data.c.ke_texture_data = null;
     try R.check(loader.load_image.?(loader, resolved, &data));
@@ -264,7 +248,7 @@ fn vtResolveMaterial(self_in: ?*abi_asset_resolver.c.ke_asset_resolver, path: [*
 
 fn readMaterial(s: *const State, path: [*:0]const u8, out: *abi_render_material.c.ke_material_spec) R.Error!void {
     var buf: [path_buf_max]u8 = undefined;
-    try resolvePath(s, path, &buf);
+    try resolvePath(path, &buf);
     parseMaterialFile(s.io, @ptrCast(&buf), out) catch |err| switch (err) {
         error.NotFound => {
             log.warn("material file {s} not found", .{path});
@@ -297,7 +281,7 @@ fn vtResolveFont(
     };
 
     var buf: [path_buf_max]u8 = undefined;
-    resolvePath(s, path, &buf) catch |err| return R.code(err);
+    resolvePath(path, &buf) catch |err| return R.code(err);
     const resolved: [*:0]const u8 = @ptrCast(&buf);
     return loader.load_font.?(loader, resolved, pixel_size, first_codepoint, codepoint_count, atlas_size, out);
 }
@@ -431,24 +415,21 @@ fn materialInto(s: *State, core: *abi_render.c.ke_render_service, path: [*:0]con
     return h;
 }
 
-/// The destroy of the handle that `ke_asset_resolver_create` returns. Frees the root copy and the
-/// state; the loaders are not touched.
+/// The destroy of the handle that `ke_asset_resolver_create` returns. Frees the state; the loaders
+/// are not touched.
 fn vtDestroy(self_in: ?*abi_asset_resolver.c.ke_asset_resolver) callconv(.c) void {
     const self = self_in orelse return;
     if (self.handle == null) return;
     const s = stateOf(self);
-    if (s.project_root) |root| heap.gpa.free(root);
     heap.gpa.destroy(s);
 }
 
 /// Factory. The loaders are kept by pointer and never freed, and either may be null, which makes
-/// the slots that need it fail; the project root is copied. A failed state allocation or root
-/// copy fails as out of memory and leaves the handle zeroed, the state freed again in the second
-/// case. A null out-parameter fails as an invalid argument.
+/// the slots that need it fail. A failed state allocation fails as out of memory and leaves the
+/// handle zeroed. A null out-parameter fails as an invalid argument.
 export fn ke_asset_resolver_create(
     image_loader: ?*abi_image_loader.c.ke_image_loader,
     font_loader: ?*abi_text.c.ke_font_loader,
-    project_root: [*c]const u8,
     io_in: ?*abi_io.c.ke_io,
     out_resolver: ?*abi_asset_resolver.c.ke_asset_resolver_handle,
 ) callconv(.c) abi_result.c.ke_result {
@@ -461,13 +442,8 @@ export fn ke_asset_resolver_create(
         .api = std.mem.zeroes(abi_asset_resolver.c.ke_asset_resolver),
         .image_loader = image_loader,
         .font_loader = font_loader,
-        .project_root = dupCStr(project_root),
         .io = io,
     };
-    if (project_root != null and s.project_root == null) {
-        heap.gpa.destroy(s);
-        return R.code(error.OutOfMemory);
-    }
 
     s.api.handle = s;
     s.api.resolve_texture = vtResolveTexture;
@@ -488,9 +464,9 @@ export fn ke_asset_resolver_create(
 
 const testing = std.testing;
 
-fn testResolver(image_loader: ?*abi_image_loader.c.ke_image_loader, project_root: [*c]const u8) abi_asset_resolver.c.ke_asset_resolver_handle {
+fn testResolver(image_loader: ?*abi_image_loader.c.ke_image_loader) abi_asset_resolver.c.ke_asset_resolver_handle {
     var h = std.mem.zeroes(abi_asset_resolver.c.ke_asset_resolver_handle);
-    _ = ke_asset_resolver_create(image_loader, null, project_root, served_files.io(), &h);
+    _ = ke_asset_resolver_create(image_loader, null, served_files.io(), &h);
     return h;
 }
 
@@ -683,8 +659,8 @@ const TempAsset = struct {
 const Resolver = struct {
     handle: abi_asset_resolver.c.ke_asset_resolver_handle,
 
-    fn init(loader: ?*abi_image_loader.c.ke_image_loader, root: ?[*:0]const u8) !Resolver {
-        const h = testResolver(loader, root);
+    fn init(loader: ?*abi_image_loader.c.ke_image_loader) !Resolver {
+        const h = testResolver(loader);
         try testing.expect(h.ref != null);
         return .{ .handle = h };
     }
@@ -706,7 +682,7 @@ fn resolveMesh(r: *const Resolver, path: [*:0]const u8) !*abi_mesh_data.c.ke_mes
 }
 
 fn resolveMaterial(path: [*:0]const u8) !abi_render_material.c.ke_material_spec {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
     var spec = std.mem.zeroes(abi_render_material.c.ke_material_spec);
     const a = r.api();
@@ -719,7 +695,7 @@ test "an absolute texture path is handed to the injected image loader untouched"
     var img = try TempAsset.init("probe.png", "x");
     defer img.deinit();
 
-    var r = try Resolver.init(loader, null);
+    var r = try Resolver.init(loader);
     defer r.deinit();
 
     const a = r.api();
@@ -733,25 +709,25 @@ test "an absolute texture path is handed to the injected image loader untouched"
     try testing.expectEqual(@as(u32, 1), fake_loader_free_count);
 }
 
-test "a res prefixed texture path is joined onto the project root" {
+test "a res prefixed texture path reaches the loader as what follows the prefix" {
     const loader = resetFakeLoader();
     var img = try TempAsset.init("probe.png", "x");
     defer img.deinit();
 
-    var r = try Resolver.init(loader, img.cDir());
+    var r = try Resolver.init(loader);
     defer r.deinit();
 
     const a = r.api();
     var data: ?*abi_mesh_data.c.ke_texture_data = null;
     try testing.expect(a.resolve_texture.?(a, "res://probe.png", &data) == R.ok);
-    try testing.expectEqualStrings(img.fullPath(), fakeLoaderLastPath());
+    try testing.expectEqualStrings("probe.png", fakeLoaderLastPath());
 
     a.free_texture.?(a, data);
 }
 
 test "a texture the image loader cannot read fails with the loader's code" {
     const loader = resetFakeLoader();
-    var r = try Resolver.init(loader, null);
+    var r = try Resolver.init(loader);
     defer r.deinit();
 
     const a = r.api();
@@ -762,7 +738,7 @@ test "a texture the image loader cannot read fails with the loader's code" {
 }
 
 test "a resolver built without an image loader refuses to resolve a texture" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -771,7 +747,7 @@ test "a resolver built without an image loader refuses to resolve a texture" {
 }
 
 test "every built in primitive resolves to a mesh" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const names = [_][*:0]const u8{
@@ -787,7 +763,7 @@ test "every built in primitive resolves to a mesh" {
 }
 
 test "each cube face is flat and carries the four corner uvs" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const data = try resolveMesh(&r, "res://primitives/cube");
@@ -832,7 +808,7 @@ test "each cube face is flat and carries the four corner uvs" {
 }
 
 test "every sphere vertex sits on a half unit radius with a unit normal" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const data = try resolveMesh(&r, "res://primitives/sphere");
@@ -851,7 +827,7 @@ test "every sphere vertex sits on a half unit radius with a unit normal" {
 }
 
 test "a resolved quad faces the camera while a resolved plane faces up" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const quad = try resolveMesh(&r, "res://primitives/quad");
@@ -866,7 +842,7 @@ test "a resolved quad faces the camera while a resolved plane faces up" {
 }
 
 test "a primitive name the baker does not know is not found" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -876,7 +852,7 @@ test "a primitive name the baker does not know is not found" {
 }
 
 test "a mesh reference outside the primitive namespace is not found" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -889,7 +865,7 @@ test "a path carrying backslashes still reaches the loader as authored" {
     var img = try TempAsset.init("probe.png", "x");
     defer img.deinit();
 
-    var r = try Resolver.init(loader, null);
+    var r = try Resolver.init(loader);
     defer r.deinit();
 
     const a = r.api();
@@ -903,7 +879,7 @@ test "a material file that is not toml fails to resolve" {
     var mat = try TempAsset.init("broken.material", "not toml [ [ [");
     defer mat.deinit();
 
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -977,15 +953,15 @@ test "an authored distortion strength overrides the default" {
     try testing.expectApproxEqAbs(@as(f32, 0.2), spec.distortion_strength, material_tolerance);
 }
 
-test "a resolver with neither a loader nor a project root is still constructible" {
-    const h = testResolver(null, null);
+test "a resolver with no loader is still constructible" {
+    const h = testResolver(null);
     try testing.expect(h.ref != null);
     try testing.expect(h.destroy != null);
     h.destroy.?(h.ref);
 }
 
 test "resolving a texture through a null self, path or output is rejected" {
-    var r = try Resolver.init(resetFakeLoader(), null);
+    var r = try Resolver.init(resetFakeLoader());
     defer r.deinit();
 
     const a = r.api();
@@ -996,7 +972,7 @@ test "resolving a texture through a null self, path or output is rejected" {
 }
 
 test "resolving a mesh through a null self, path or output is rejected" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -1007,7 +983,7 @@ test "resolving a mesh through a null self, path or output is rejected" {
 }
 
 test "resolving a material through a null self, path or output is rejected" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -1018,7 +994,7 @@ test "resolving a material through a null self, path or output is rejected" {
 }
 
 test "freeing a texture through a null self or a null texture is harmless" {
-    var r = try Resolver.init(resetFakeLoader(), null);
+    var r = try Resolver.init(resetFakeLoader());
     defer r.deinit();
 
     const a = r.api();
@@ -1028,7 +1004,7 @@ test "freeing a texture through a null self or a null texture is harmless" {
 }
 
 test "freeing a mesh through a null self or a null mesh is harmless" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     const a = r.api();
@@ -1037,17 +1013,17 @@ test "freeing a mesh through a null self or a null mesh is harmless" {
 }
 
 test "destroying a null resolver is harmless" {
-    var r = try Resolver.init(null, null);
+    var r = try Resolver.init(null);
     defer r.deinit();
 
     r.handle.destroy.?(null);
 }
 
-test "without a project root a res prefixed path keeps only what follows the prefix" {
+test "a res prefixed path keeps only what follows the prefix" {
     var mat = try TempAsset.init("m.material", "[material]\nbase_color = [1.0, 1.0, 1.0, 1.0]\n");
     defer mat.deinit();
 
-    var r = try Resolver.init(resetFakeLoader(), null);
+    var r = try Resolver.init(resetFakeLoader());
     defer r.deinit();
 
     var ref_buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -1070,20 +1046,20 @@ test "the none handle of every render resource is all bits zero" {
     try testing.expectEqual(@as(u32, abi_render_handles.c.KE_HANDLE_NONE), zeroed.bits);
 }
 
-test "a res:// path joins the project root and any other path stands as written" {
-    const h = testResolver(null, "/game");
+test "a res:// path keeps what follows the prefix and any other path stands as written" {
+    const h = testResolver(null);
     defer h.destroy.?(h.ref);
     const r = h.ref.?;
     var out: [64]u8 = undefined;
 
     try testing.expect(r.*.resolve_path.?(r, "res://scenes/a.toml", &out, out.len) == R.ok);
-    try testing.expectEqualStrings("/game/scenes/a.toml", std.mem.sliceTo(&out, 0));
+    try testing.expectEqualStrings("scenes/a.toml", std.mem.sliceTo(&out, 0));
     try testing.expect(r.*.resolve_path.?(r, "other/b.toml", &out, out.len) == R.ok);
     try testing.expectEqualStrings("other/b.toml", std.mem.sliceTo(&out, 0));
 }
 
 test "a resolved path that does not fit is refused rather than cut" {
-    const h = testResolver(null, "/game");
+    const h = testResolver(null);
     defer h.destroy.?(h.ref);
     const r = h.ref.?;
     var out: [8]u8 = undefined;
@@ -1091,7 +1067,7 @@ test "a resolved path that does not fit is refused rather than cut" {
 }
 
 test "creating and destroying a resolver leaves no block allocated" {
-    const h = testResolver(null, null);
+    const h = testResolver(null);
     h.destroy.?(h.ref);
     try heap.expectNoLeaks();
 }

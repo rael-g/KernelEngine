@@ -13,7 +13,6 @@ using KernelEngine.Render.Webgpu;
 using KernelEngine.Render.Webgpu.Native;
 using KernelEngine.Schedule;
 using KernelEngine.Scheduler;
-using KernelEngine.Settings;
 using KernelEngine.Text.StbTrueType;
 using KernelEngine.View;
 using KernelEngine.Window.Glfw;
@@ -38,16 +37,18 @@ public static class DefaultCore
         var root = projectDir.TrimEnd(Path.DirectorySeparatorChar);
         static T Get<T>(IServiceProvider sp) where T : notnull => sp.GetRequiredService<T>();
 
-        services.TryAddKeyedSingleton<Configuration.Configuration>("bootstrap", (sp, _) => new DefaultConfiguration());
-        IPartSettings Bootstrap(IServiceProvider sp, string section) => sp.GetRequiredKeyedService<Configuration.Configuration>("bootstrap").Section(section);
-        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Bootstrap(sp, "job")));
-        services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem("."));
-        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Bootstrap(sp, "async")));
-        services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Bootstrap(sp, "io")));
-        services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<Io.Io>(sp)));
+        services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Get<Configuration.Configuration>(sp).Section("job")));
+        services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(root));
+        services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Get<Configuration.Configuration>(sp).Section("async")));
+        services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Get<Configuration.Configuration>(sp).Section("io")));
+        services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<FileSystem.FileSystem>(sp)));
         services.TryAddSingleton<Configuration.Configuration>(sp =>
         {
             var config = new DefaultConfiguration();
+            var shaders = Path.Combine(AppContext.BaseDirectory, "shaders");
+            config.SetString("render.binder", "shader_dir", shaders);
+            config.SetString("render.service", "shader_dir", shaders);
+            config.SetString("render.label", "default_font", Path.Combine(AppContext.BaseDirectory, "assets", "fonts", "LiberationSans-Regular.ttf"));
             Get<ConfigurationSource>(sp).Load(config, Path.Combine(root, "Project"));
             return config;
         });
@@ -64,7 +65,7 @@ public static class DefaultCore
         services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));
         services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp => new WebgpuWindowGpuRenderTarget(Get<Render.Gpu.GpuDevice>(sp), Get<Window.Window>(sp), Get<Configuration.Configuration>(sp).Section("runtime.renderer")));
         services.TryAddSingleton<Text.FontLoader>(sp => new StbFontLoader(Get<Io.Io>(sp)));
-        services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(null, Get<Text.FontLoader>(sp), root, Get<Io.Io>(sp)));
+        services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(null, Get<Text.FontLoader>(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<SceneTree>(sp => new DefaultSceneTree(Get<Ecs.EcsRegistry>(sp)));
         services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Get<Configuration.Configuration>(sp), "input"));
         services.TryAddSingleton<NodeTypes>(sp => new DefaultNodeTypes(Get<Scheduler.Scheduler>(sp), Get<Ecs.EcsRegistry>(sp), Get<SceneTree>(sp), Get<InputActions>(sp)));
@@ -78,22 +79,20 @@ public static class DefaultCore
             return new SceneHierarchyModule(Get<Ecs.EcsRegistry>(sp));
         }));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Physics.PhysicsBody2DModule>(sp => new Physics.PhysicsBody2DModule(Get<Ecs.EcsRegistry>(sp), Get<Physics.Physics2D>(sp), Get<SceneTree>(sp))));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp), root)));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, InputActionsEvaluationModule>(sp => new InputActionsEvaluationModule(Get<InputActions>(sp), Get<Input.Input>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Extraction.ExtractionHistoryModule>(sp => new Extraction.ExtractionHistoryModule(Get<Extraction.Extraction>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, NodeTypesSystemsModule>(sp => new NodeTypesSystemsModule(Get<NodeTypes>(sp))));
 
-        var shaderDir = Path.Combine(AppContext.BaseDirectory, "shaders");
-        var defaultFont = Path.Combine(AppContext.BaseDirectory, "assets", "fonts", "LiberationSans-Regular.ttf");
         Ecs.EcsRegistry RenderWorld(IServiceProvider sp) => sp.GetRequiredKeyedService<Ecs.EcsRegistry>("render");
-        services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), shaderDir));
-        services.TryAddSingleton<RenderService>(sp => new DefaultRenderService(Get<Render.Gpu.GpuDevice>(sp), Get<Render.Gpu.GpuRenderTarget>(sp), Get<Io.Io>(sp), Get<Render.Gpu.RenderResourceBinder>(sp), shaderDir));
+        services.TryAddSingleton<Render.Gpu.RenderResourceBinder>(sp => new GroupedRenderResourceBinder(Get<Render.Gpu.GpuDevice>(sp), Get<Io.Io>(sp), Get<Configuration.Configuration>(sp).Section("render.binder")));
+        services.TryAddSingleton<RenderService>(sp => new DefaultRenderService(Get<Render.Gpu.GpuDevice>(sp), Get<Render.Gpu.GpuRenderTarget>(sp), Get<Io.Io>(sp), Get<Render.Gpu.RenderResourceBinder>(sp), Get<Configuration.Configuration>(sp).Section("render.service")));
         services.TryAddSingleton<RenderGraph.RenderGraph>(sp => new RenderGraph.Simple.SimpleRenderGraph(Get<Render.Gpu.GpuDevice>(sp)));
         services.TryAddSingleton<ViewSpace>(sp => new RhViewSpace());
         services.TryAddSingleton<RenderCamera>(sp => new DefaultRenderCamera(Get<ViewSpace>(sp), Get<Render.Gpu.GpuDevice>(sp)));
         services.TryAddSingleton<RenderSceneResolve>(sp => new DefaultRenderSceneResolve(Get<Ecs.EcsRegistry>(sp), RenderWorld(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp)));
         services.TryAddSingleton<Render.Frame.RenderFrame>(sp => new DefaultRenderFrame(RenderWorld(sp), Get<RenderGraph.RenderGraph>(sp), Get<RenderService>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp),
-            GpuTextureFormat.Rgba16Float, GpuTextureFormat.D32Float, Get<Configuration.Configuration>(sp).Section("render")));
+            Get<Configuration.Configuration>(sp).Section("render")));
         services.TryAddSingleton<RenderUi>(sp => new DefaultRenderUi(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
 
         void Pass<T>(Func<IServiceProvider, T> make) where T : Module.Module => services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, T>(make));
@@ -106,7 +105,7 @@ public static class DefaultCore
         Pass(sp => new RenderForwardModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<Configuration.Configuration>(sp).Section("render.forward")));
         Pass(sp => new RenderTonemapModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp)));
         Pass(sp => new RenderUiSystemsModule(Get<RenderUi>(sp)));
-        Pass(sp => new RenderLabelResolveModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), defaultFont));
+        Pass(sp => new RenderLabelResolveModule(RenderWorld(sp), Get<Ecs.EcsRegistry>(sp), Get<Extraction.Extraction>(sp), Get<RenderService>(sp), Get<Render.Gpu.GpuDevice>(sp), Get<ViewSpace>(sp), Get<RenderCamera>(sp), Get<RenderSceneResolve>(sp), Get<Render.Frame.RenderFrame>(sp), Get<RenderUi>(sp), Get<AssetResolver>(sp), Get<Configuration.Configuration>(sp).Section("render.label")));
         return services;
     }
 }

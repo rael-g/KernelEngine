@@ -148,10 +148,10 @@ static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
     return ke_async_enki_create(ke_sdk_settings(e, "async"), &e->async);
 }
 
-/** The operating system's files, relative to the working directory. */
+/** The operating system's files, relative to the project directory. */
 static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
 {
-    return ke_file_system_std_create(".", &e->file_system);
+    return ke_file_system_std_create(e->project_dir, &e->file_system);
 }
 
 /** Reads on a pool of threads of its own, through the file system. */
@@ -166,7 +166,10 @@ static inline ke_result ke_sdk_configuration_toml(ke_sdk_engine *e)
     char project_file[KE_SDK_ENGINE_PATH_CAPACITY + 16];
     snprintf(project_file, sizeof project_file, "%s/Project", e->project_dir);
     ke_result made = ke_configuration_create(&e->configuration);
-    if (made == KE_OK) made = ke_configuration_toml_create(e->io.ref, &e->configuration_source);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.binder", "shader_dir", e->shader_dir);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.service", "shader_dir", e->shader_dir);
+    if (made == KE_OK) made = e->configuration.ref->set_string(e->configuration.ref, "render.label", "default_font", e->default_font);
+    if (made == KE_OK) made = ke_configuration_toml_create(e->file_system.ref, &e->configuration_source);
     if (made == KE_OK) made = e->configuration_source.ref->load(e->configuration_source.ref, e->configuration.ref, project_file);
     return made;
 }
@@ -217,7 +220,7 @@ static inline ke_result ke_sdk_fonts_stb(ke_sdk_engine *e)
 /** Assets resolved under the project directory. */
 static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 {
-    return ke_asset_resolver_create(NULL, e->fonts.ref, e->project_dir, e->io.ref, &e->assets);
+    return ke_asset_resolver_create(NULL, e->fonts.ref, e->io.ref, &e->assets);
 }
 
 
@@ -242,8 +245,8 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     memset(r, 0, sizeof *r);
     e->release_extra = ke_sdk_renderer_release;
     ke_gpu_device *gpu = e->gpu_device.ref;
-    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, e->shader_dir, &r->binder);
-    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, e->shader_dir, &r->service);
+    ke_result made = ke_render_resource_binder_grouped_create(gpu, e->io.ref, ke_sdk_settings(e, "render.binder"), &r->binder);
+    if (made == KE_OK) made = ke_render_service_create(gpu, e->render_target.ref, e->io.ref, r->binder.ref, ke_sdk_settings(e, "render.service"), &r->service);
     if (made == KE_OK) made = ke_render_graph_simple_create(gpu, &r->graph);
     if (made == KE_OK) made = ke_view_space_rh_create(&r->view_space);
     if (made == KE_OK) made = ke_render_camera_create(r->view_space.ref, gpu, &r->camera);
@@ -251,7 +254,7 @@ static inline ke_result ke_sdk_render_service(ke_sdk_engine *e)
     if (made == KE_OK) made = ke_render_scene_resolve_systems_create(r->scene.ref, &r->scene_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->scene_systems.ref);
     if (made == KE_OK) made = ke_render_frame_create(e->render_world.ref, r->graph.ref, r->service.ref, r->camera.ref, r->scene.ref,
-        KE_GPU_TEXTURE_FORMAT_RGBA16_FLOAT, KE_GPU_TEXTURE_FORMAT_D32_FLOAT, ke_sdk_settings(e, "render"), &r->frame);
+        ke_sdk_settings(e, "render"), &r->frame);
     if (made == KE_OK) made = ke_render_frame_systems_create(r->frame.ref, &r->frame_systems);
     if (made == KE_OK) made = ke_sdk_add_module(e, r->frame_systems.ref);
     if (made != KE_OK) return made;
@@ -323,7 +326,7 @@ static inline ke_result ke_sdk_ui(ke_sdk_engine *e)
 static inline ke_result ke_sdk_labels(ke_sdk_engine *e)
 {
     ke_sdk_renderer *r = ke_sdk_renderer_of(e);
-    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, e->default_font, &r->labels);
+    ke_result made = ke_render_label_resolve_create(&r->context, r->ui.ref, e->assets.ref, ke_sdk_settings(e, "render.label"), &r->labels);
     return made == KE_OK ? ke_sdk_add_module(e, r->labels.ref) : made;
 }
 
@@ -340,7 +343,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
-    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, e->project_dir, &e->sounds);
+    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &e->sounds);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
     return made;
 }

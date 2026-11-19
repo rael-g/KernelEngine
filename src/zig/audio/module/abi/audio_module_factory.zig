@@ -23,8 +23,8 @@ pub fn audioModuleSetLogCallback(callback: c.ke_log_callback, ctx: ?*anyopaque) 
 /// Creates the module that loads, plays and releases the clip of every ke_sound_component;
 /// attaching it registers its system in the update schedule's post_update set. Destroying the
 /// module stops every voice and releases every clip it holds.
-pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio, root_: [:0]const u8) Error!abi_module.c.ke_module_handle {
+pub fn soundCreate(ecs: ?*abi_ecs.c.ke_ecs, audio: ?*abi_audio.c.ke_audio) Error!abi_module.c.ke_module_handle {
     var written: abi_module.c.ke_module_handle = undefined;
-    try checkResult(c.ke_sound_create(ecs, audio, root_.ptr, &written));
+    try checkResult(c.ke_sound_create(ecs, audio, &written));
     return written;
 }

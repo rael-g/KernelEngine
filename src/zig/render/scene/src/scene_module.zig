@@ -19,6 +19,8 @@ const abi_render_scene_factory = @import("abi_render_scene_factory");
 const abi_render_ui_factory = @import("abi_render_ui_factory");
 const abi_render_ui = @import("abi_render_ui");
 const abi_result = @import("abi_result");
+const abi_settings = @import("abi_settings");
+const settings_schema = @import("settings_schema");
 const abi_schedule = @import("abi_schedule");
 const abi_module = @import("abi_module");
 const abi_extraction = @import("abi_extraction");
@@ -277,15 +279,23 @@ fn destroyLabel(self: ?*abi_module.c.ke_module) callconv(.c) void {
     gpa.destroy(st);
 }
 
-/// The factory declared in label_resolve_create.h. A missing context, scene, service or ui
-/// fails as an invalid argument and a failed allocation as out of memory.
-export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, default_font: ?[*:0]const u8, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
+/// The label resolve's settings, with this implementation's defaults: the font a label that names
+/// none draws with, empty for none.
+const LabelSettings = struct {
+    default_font: [:0]const u8 = "",
+};
+
+/// The factory declared in label_resolve_create.h. A missing context, scene, service, ui or
+/// settings, or a setting the schema refuses, fails as an invalid argument and a failed allocation
+/// as out of memory.
+export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.c.ke_render_context, ui_in: ?*abi_render_ui.c.ke_render_ui, resolver: ?*abi_asset_resolver.c.ke_asset_resolver, settings: ?*abi_settings.c.ke_settings, out_module: ?*abi_module.c.ke_module_handle) callconv(.c) abi_result.c.ke_result {
     const out = out_module orelse return R.code(error.InvalidArgument);
     out.* = std.mem.zeroes(abi_module.c.ke_module_handle);
     const p = context_in orelse return R.code(error.InvalidArgument);
     const core = p.service orelse return R.code(error.InvalidArgument);
     const ui = ui_in orelse return R.code(error.InvalidArgument);
     const scene = p.scene orelse return R.code(error.InvalidArgument);
+    const values = settings_schema.read(LabelSettings, settings orelse return R.code(error.InvalidArgument)) catch |err| return R.code(err);
 
     const st = gpa.create(LabelResolve) catch |err| return R.code(err);
     st.* = .{
@@ -295,7 +305,7 @@ export fn ke_render_label_resolve_create(context_in: ?*const abi_render_context.
         .queries = undefined,
     };
     st.queries = .{.{ .terms = st.terms[0..].ptr, .term_count = 1 }};
-    if (default_font) |d| st.state.default_font = gpa.dupeZ(u8, std.mem.span(d)) catch |err| {
+    if (values.default_font.len > 0) st.state.default_font = gpa.dupeZ(u8, values.default_font) catch |err| {
         gpa.destroy(st);
         return R.code(err);
     };
@@ -412,6 +422,8 @@ test "a scene resolve missing its extraction is refused as an invalid argument" 
     try testing.expect(h.ref == null);
 }
 
+var default_font = settings_schema.Fixed.init(&.{.{ .key = "default_font", .value = .{ .string = "res://default.ttf" } }});
+
 test "the label resolve attaches its system to the update set, and detaching removes it" {
     var rig: Rig = undefined;
     try rig.init();
@@ -419,7 +431,7 @@ test "the label resolve attaches its system to the update set, and detaching rem
     var ui = std.mem.zeroes(abi_render_ui.c.ke_render_ui);
     const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
     var m: abi_module.c.ke_module_handle = undefined;
-    try R.check(ke_render_label_resolve_create(&p, &ui, null, "res://default.ttf", &m));
+    try R.check(ke_render_label_resolve_create(&p, &ui, null, &default_font.api, &m));
     const t = rig.targets();
     try R.check(m.ref.?.attach.?(m.ref, &t));
     try rig.schedule.received(.register_system).times(1);
@@ -433,7 +445,7 @@ test "a label resolve missing its ui is refused as an invalid argument" {
     defer rig.deinit();
     const p = std.mem.zeroInit(abi_render_context.c.ke_render_context, .{ .service = rig.core.api(), .scene = &test_scene });
     var m: abi_module.c.ke_module_handle = undefined;
-    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, null, null, null, &m)));
+    try testing.expectError(error.InvalidArgument, R.check(ke_render_label_resolve_create(&p, null, null, &default_font.api, &m)));
     try testing.expect(m.ref == null);
 }
 

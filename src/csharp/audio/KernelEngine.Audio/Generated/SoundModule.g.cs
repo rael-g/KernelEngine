@@ -53,23 +53,18 @@ public sealed unsafe partial class SoundModule : KernelEngine.Module.Module
     /// <summary>Creates the module that loads, plays and releases the clip of every ke_sound_component; attaching it registers its system in the update schedule's post_update set. Destroying the module stops every voice and releases every clip it holds.</summary>
     /// <param name="ecs">Resolves the component id.</param>
     /// <param name="audio">Loads the clips and plays their voices; must outlive the module.</param>
-    /// <param name="root">Directory a clip's path is joined to; copied.</param>
-    public SoundModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root = default) : base(Create(ecs, audio, root))
+    public SoundModule(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio) : base(Create(ecs, audio))
     {
         Hold(ecs.Owner);
         Hold(audio.Owner);
     }
 
-    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio, string? root)
+    private static KernelEngine.Module.Native.ke_module_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.Audio.INativeAudio audio)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(audio);
-        var rootBytes = root is null ? null : System.Text.Encoding.UTF8.GetBytes(root + "\0");
-        fixed (byte* rootPtr = rootBytes)
-        {
-            KernelEngine.Module.Native.ke_module_handle handle;
-            NativeResult.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_create(ecs.Native, audio.Native, (sbyte*)rootPtr, &handle), "ke_sound_create");
-            return handle;
-        }
+        KernelEngine.Module.Native.ke_module_handle handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Audio.Native.NativeMethods.sound_create(ecs.Native, audio.Native, &handle), "ke_sound_create");
+        return handle;
     }
 }

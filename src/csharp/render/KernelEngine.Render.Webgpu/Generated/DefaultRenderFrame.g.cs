@@ -56,10 +56,8 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
     /// <param name="service">The frame begins, uploads and presents on it; borrowed, must outlive it.</param>
     /// <param name="camera">Turns the camera entity into matrices; borrowed, must outlive it.</param>
     /// <param name="scene">Names the components the frame reads; borrowed, must outlive it.</param>
-    /// <param name="colorFormat">Format of the colour the frame begins with, up to KE_RENDER_STAGE_HDR_POST.</param>
-    /// <param name="depthFormat">Format of the frame's depth.</param>
-    /// <param name="settings">Read once. `clear_color`, four numbers from 0 to 1 under `clear_color.0` to `clear_color.3`, default 0, 0, 0, 1: the colour the frame's colour is cleared to.</param>
-    public DefaultRenderFrame(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, graph, service, camera, scene, colorFormat, depthFormat, settings))
+    /// <param name="settings">Read once. `clear_color`, four numbers from 0 to 1 under `clear_color.0` to `clear_color.3`, default 0, 0, 0, 1: the colour the frame's colour is cleared to. `color_format`, one of rgba8_unorm, rgba8_srgb, bgra8_unorm, rgba16_float or rgba32_float, default rgba16_float: the colour the frame begins with, up to KE_RENDER_STAGE_HDR_POST. `depth_format`, one of d16_unorm, d24_unorm_s8_uint, d32_float or d32_float_s8_uint, default d32_float: the frame's depth.</param>
+    public DefaultRenderFrame(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Settings.IPartSettings settings) : base(Create(ecs, graph, service, camera, scene, settings))
     {
         Hold(ecs.Owner);
         Hold(graph.Owner);
@@ -68,7 +66,7 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
         Hold(scene.Owner);
     }
 
-    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, global::KernelEngine.Render.GpuTextureFormat colorFormat, global::KernelEngine.Render.GpuTextureFormat depthFormat, KernelEngine.Settings.IPartSettings settings)
+    private static KernelEngine.Render.Frame.Native.ke_render_frame_handle Create(KernelEngine.Ecs.INativeEcs ecs, KernelEngine.RenderGraph.INativeRenderGraph graph, KernelEngine.Render.INativeRenderService service, KernelEngine.Render.INativeRenderCamera camera, KernelEngine.Render.INativeRenderSceneResolve scene, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(ecs);
         ArgumentNullException.ThrowIfNull(graph);
@@ -76,7 +74,7 @@ public sealed unsafe partial class DefaultRenderFrame : KernelEngine.Render.Fram
         ArgumentNullException.ThrowIfNull(camera);
         ArgumentNullException.ThrowIfNull(scene);
         KernelEngine.Render.Frame.Native.ke_render_frame_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, colorFormat, depthFormat, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_frame_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_frame_create(ecs.Native, graph.Native, service.Native, camera.Native, scene.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_frame_create");
         return handle;
     }
 }

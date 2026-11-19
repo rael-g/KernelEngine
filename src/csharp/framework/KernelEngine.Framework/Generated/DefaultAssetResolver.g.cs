@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Framework;
 
-/// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. project_root may be NULL — res:// resolution is then disabled; only absolute or CWD-relative paths work.</summary>
+/// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. A path that begins with res:// names what follows the prefix, resolved by io against the root of its file system; any other path is passed on as written.</summary>
 public sealed unsafe partial class DefaultAssetResolver : KernelEngine.Framework.AssetResolver
 {
 
@@ -50,27 +50,22 @@ public sealed unsafe partial class DefaultAssetResolver : KernelEngine.Framework
         }
     }
 
-    /// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. project_root may be NULL — res:// resolution is then disabled; only absolute or CWD-relative paths work.</summary>
+    /// <summary>Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either loader. A path that begins with res:// names what follows the prefix, resolved by io against the root of its file system; any other path is passed on as written.</summary>
     /// <param name="imageLoader">NULL refuses every texture.</param>
     /// <param name="fontLoader">NULL refuses every font.</param>
-    /// <param name="projectRoot"></param>
     /// <param name="io">What every file the resolver opens is read through; must outlive the resolver.</param>
-    public DefaultAssetResolver(KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io) : base(Create(imageLoader, fontLoader, projectRoot, io))
+    public DefaultAssetResolver(KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, KernelEngine.Io.INativeIo io) : base(Create(imageLoader, fontLoader, io))
     {
         Hold(imageLoader?.Owner);
         Hold(fontLoader?.Owner);
         Hold(io.Owner);
     }
 
-    private static KernelEngine.Asset.Native.ke_asset_resolver_handle Create(KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, string? projectRoot, KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Asset.Native.ke_asset_resolver_handle Create(KernelEngine.Asset.INativeImageLoader? imageLoader, KernelEngine.Text.INativeFontLoader? fontLoader, KernelEngine.Io.INativeIo io)
     {
         ArgumentNullException.ThrowIfNull(io);
-        var projectRootBytes = projectRoot is null ? null : System.Text.Encoding.UTF8.GetBytes(projectRoot + "\0");
-        fixed (byte* projectRootPtr = projectRootBytes)
-        {
-            KernelEngine.Asset.Native.ke_asset_resolver_handle handle;
-            NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create((imageLoader is null ? null : imageLoader.Native), (fontLoader is null ? null : fontLoader.Native), (sbyte*)projectRootPtr, io.Native, &handle), "ke_asset_resolver_create");
-            return handle;
-        }
+        KernelEngine.Asset.Native.ke_asset_resolver_handle handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Framework.Native.NativeMethods.asset_resolver_create((imageLoader is null ? null : imageLoader.Native), (fontLoader is null ? null : fontLoader.Native), io.Native, &handle), "ke_asset_resolver_create");
+        return handle;
     }
 }

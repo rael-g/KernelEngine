@@ -5,7 +5,7 @@
 
 namespace KernelEngine.Configuration;
 
-/// <summary>Creates a configuration source that reads a TOML file through io: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
+/// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
 public sealed unsafe partial class ConfigurationTomlConfigurationSource : KernelEngine.Configuration.ConfigurationSource
 {
 
@@ -50,18 +50,18 @@ public sealed unsafe partial class ConfigurationTomlConfigurationSource : Kernel
         }
     }
 
-    /// <summary>Creates a configuration source that reads a TOML file through io: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
-    /// <param name="io">The io it reads through; borrowed for the lifetime of the source.</param>
-    public ConfigurationTomlConfigurationSource(KernelEngine.Io.INativeIo io) : base(Create(io))
+    /// <summary>Creates a configuration source that reads a TOML file through file_system, synchronously: each table becomes a section named by its path joined with dots, arrays are skipped, and every other key is written as an integer, a double, a boolean or a string, tried in that order. A parse error writes nothing.</summary>
+    /// <param name="fileSystem">The file system it reads through; borrowed for the lifetime of the source.</param>
+    public ConfigurationTomlConfigurationSource(KernelEngine.FileSystem.INativeFileSystem fileSystem) : base(Create(fileSystem))
     {
-        Hold(io.Owner);
+        Hold(fileSystem.Owner);
     }
 
-    private static KernelEngine.Configuration.Native.ke_configuration_source_handle Create(KernelEngine.Io.INativeIo io)
+    private static KernelEngine.Configuration.Native.ke_configuration_source_handle Create(KernelEngine.FileSystem.INativeFileSystem fileSystem)
     {
-        ArgumentNullException.ThrowIfNull(io);
+        ArgumentNullException.ThrowIfNull(fileSystem);
         KernelEngine.Configuration.Native.ke_configuration_source_handle handle;
-        NativeResult.ThrowIfFailed(KernelEngine.Configuration.Native.NativeMethods.configuration_toml_create(io.Native, &handle), "ke_configuration_toml_create");
+        NativeResult.ThrowIfFailed(KernelEngine.Configuration.Native.NativeMethods.configuration_toml_create(fileSystem.Native, &handle), "ke_configuration_toml_create");
         return handle;
     }
 }

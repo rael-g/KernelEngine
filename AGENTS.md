@@ -42,7 +42,7 @@ dotnet run scripts/ci_local.cs            # verify.cs in a fresh clone inside th
 - Bindings and projections are generated, never edited:
   `dotnet run --project external/kabic/src/Kabic -- --cache-dir build/kabic-cache bindings` regenerates the
   P/Invoke layer, `generate` every kabic domain from `scripts/api_domains.json`, with no extension of the
-  engine's.
+  engine's, and `write zig` the ABI packages under `src/zig/abi/` and each plugin's `abi/`.
 - Slang shaders live with the pass that owns them (`src/zig/render/<pass>/shaders/`), shared modules and
   materials under `src/shaders/`; they compile to WGSL and are loaded at runtime by logical name.
 - Coverage: `zig build coverage -Dcoverage` runs every plugin's tests under kcov, fetched by

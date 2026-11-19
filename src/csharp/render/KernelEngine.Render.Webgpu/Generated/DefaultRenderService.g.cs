@@ -55,8 +55,8 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
     /// <param name="target">Borrowed, must outlive the service; every frame acquires and presents it.</param>
     /// <param name="io">Borrowed, must outlive the service; the shaders are read through it.</param>
     /// <param name="binder">Borrowed, must outlive the service; it holds the service's materials and is given the parameters every shader shares.</param>
-    /// <param name="shaderDir">Directory the shaders are loaded from; copied.</param>
-    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir = default) : base(Create(device, target, io, binder, shaderDir))
+    /// <param name="settings">Read once. `shader_dir`, a string, default "shaders": the directory, under the root of the io's file system, the shaders are loaded from.</param>
+    public DefaultRenderService(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Settings.IPartSettings settings) : base(Create(device, target, io, binder, settings))
     {
         Hold(device.Owner);
         Hold(target.Owner);
@@ -64,18 +64,14 @@ public sealed unsafe partial class DefaultRenderService : KernelEngine.Render.Re
         Hold(binder.Owner);
     }
 
-    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, string? shaderDir)
+    private static KernelEngine.Render.Native.ke_render_service_handle Create(KernelEngine.Render.Gpu.INativeGpuDevice device, KernelEngine.Render.Gpu.INativeGpuRenderTarget target, KernelEngine.Io.INativeIo io, KernelEngine.Render.Gpu.INativeRenderResourceBinder binder, KernelEngine.Settings.IPartSettings settings)
     {
         ArgumentNullException.ThrowIfNull(device);
         ArgumentNullException.ThrowIfNull(target);
         ArgumentNullException.ThrowIfNull(io);
         ArgumentNullException.ThrowIfNull(binder);
-        var shaderDirBytes = shaderDir is null ? null : System.Text.Encoding.UTF8.GetBytes(shaderDir + "\0");
-        fixed (byte* shaderDirPtr = shaderDirBytes)
-        {
-            KernelEngine.Render.Native.ke_render_service_handle handle;
-            NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, io.Native, binder.Native, (sbyte*)shaderDirPtr, &handle), "ke_render_service_create");
-            return handle;
-        }
+        KernelEngine.Render.Native.ke_render_service_handle handle;
+        NativeResult.ThrowIfFailed(KernelEngine.Render.Webgpu.Native.NativeMethods.render_service_create(device.Native, target.Native, io.Native, binder.Native, ((KernelEngine.Settings.INativeSettings)settings).Native, &handle), "ke_render_service_create");
+        return handle;
     }
 }
