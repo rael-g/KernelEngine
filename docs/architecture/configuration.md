@@ -12,7 +12,7 @@ plugins under `src/zig/configuration/`, the managed side under `src/csharp/confi
 | source | `ke_configuration_source`, made for TOML by `ke_configuration_toml_create` | a store and a file path | writes into the store through its setter slots |
 | settings | `ke_settings` under `src/c/settings/`, handed by the store's `section` | a key | its value, or that it is absent or of another type |
 | schema | `settings_schema` (`src/zig/settings/schema/`), read by each plugin's factory | a `ke_settings` and the struct of the plugin's settings | the struct filled, with the plugin's defaults for absent keys |
-| managed store | `Configuration`, `IConfiguration` | a path through `LoadToml`, and typed writes | typed reads, and `Section` as `PartSettings` |
+| managed store | `Configuration`, `IConfiguration` | a `ConfigurationSource` loading into it, such as `ConfigurationTomlConfigurationSource`, and typed writes | typed reads, and `Section` as `PartSettings` |
 
 The store is in the plugin `ke_configuration`, the TOML source in `ke_configuration_toml`; a
 source knows the store only through its contract, and another source fits beside it.

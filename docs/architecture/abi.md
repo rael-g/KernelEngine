@@ -13,7 +13,7 @@ on the generated page of its header, under `src/c/`.
 | factory | the factory header in a plugin's `include/`, for example `ke_window_glfw_create` | its dependencies and what the host computes, positionally, then the `ke_settings` it is created with (the window reads the `KE_WINDOW_SETTING_*` keys), and the `out_` handle | `KE_OK` and an owner through the output |
 | result code | `ke_result` in `kernel_engine/result/result.h` | nothing | `KE_OK`, or the code of the failure |
 | result helper | `Result` in `src/zig/result/result.zig` | the plugin's own translated C namespace | `R.ok`, `R.code`, `R.check` and `R.Error`, the conversions between a Zig error and a code |
-| managed translation | `NativeResults` in `src/csharp/result` | a `ke_result` | a .NET exception, or a `ke_result` written from one |
+| managed translation | the private `NativeResult` of each generated class, from `resultExceptions` in `scripts/api_domains.json` | a `ke_result` | the .NET exception the manifest names for it, or the code an exception stands for |
 
 **A call goes through a pointer.** A caller holds a pointer to a contract struct and calls one of
 its slots, handing the struct back as first argument. The only symbol resolved by name is the
@@ -31,8 +31,9 @@ reason is logged where it happens, and the caller checks the code; ignoring it i
 by `KE_RESULT_CODE`. The generic codes, `KE_RESULT_GENERAL` among them, are domain zero, and a code
 the managed side does not know becomes the general exception.
 
-**The managed side maps by code.** `NativeResults.FromCode` looks the code up in the generated table
-of exceptions and falls back to a general one; `ToCode` goes the other way for a callback that threw.
+**The managed side maps by code.** A failed call throws the exception `resultExceptions` names for its
+code, and `resultGeneralException` for a code with no entry; a callback that threw reports the first code
+naming its exception's exact type, or `KE_RESULT_GENERAL`.
 
 **Booleans are C `bool`.** A slot or a struct that crosses the ABI takes C `bool`, one byte. It
 reaches C# as a one-byte `bool` because every engine assembly disables runtime marshalling

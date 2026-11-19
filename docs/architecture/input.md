@@ -10,7 +10,7 @@ part works inside is on the generated page of its file. Contracts are under `src
 |---|---|---|---|---|
 | window | `ke_window` | glfw | OS events, a borrowed `ke_input` | calls on the four sinks of `ke_input` |
 | input | `ke_input` | default | the sink calls | live queries, a `ke_input_snapshot`, a queue of events |
-| managed input | `IInput`, `IInputReader` | `Input` in `KernelEngine.Input` | the native `ke_input` | an `IInputReader` over one snapshot |
+| managed input | `IInput` | `Input` in `KernelEngine.Input` | the native `ke_input` | live queries, and one `InputSnapshot` through `GetSnapshot` |
 | action maps | `ke_input_actions`, `InputActions` | framework | maps and actions added through its slots, from code or from the `input` section of a configuration; one snapshot per frame | polled action values |
 | node field | `ke_action_ref` | framework | an action name, written by a scene or by code | the action's value through `axis` and `pressed` of `ke_node_ctx` |
 | system | the "input.actions" system of the module `ke_input_actions_evaluation_create` returns | framework | the `ke_input_actions` and the `ke_input` it was given, then the standard schedules at attach | the actions evaluated for the tick |

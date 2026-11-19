@@ -10,15 +10,14 @@ is in abi.md. How a wrapper works inside is on the generated page of its file.
 |---|---|---|---|
 | generated wrapper | one class per vtable, under `Generated/` | the owner struct a factory returned, or a borrowed pointer | managed methods over the vtable slots |
 | native interface | one per domain, such as `INativeEcs`, `INativeIo` | nothing | the wrapper's pointer, as `Native` |
-| idiom half | `<Name>.Idiom.cs`, a `partial` of the wrapper | managed dependencies | what a header cannot express |
-| result translation | `NativeResults` | a `ke_result`, or a managed exception | the matching exception, or a `ke_result` |
+| result translation | the private `NativeResult` of each generated class | a `ke_result`, or a managed exception | the exception the manifest names for the code, or the code it stands for |
 | SDK | `Engine`, `AddKernelEngine` | the parts registered under their contracts in the host's container | the standard schedules, the modules attached to them, the loop |
 | defaults | `DefaultCore.AddDefaultCore`, `DefaultEngine` | a project directory | the common implementation of every part the host did not register |
 
 ## What ties the parts together
 
 **A wrapper owns one pointer, and holds what it borrows.** An owned wrapper keeps its pointer in a
-`NativeOwner`, a `SafeHandle` from `KernelEngine.Interop` whose release runs the factory's destroy
+`NativeOwner`, a private `SafeHandle` the wrapper declares, whose release runs the factory's destroy
 function. A wrapper made by a factory adds a reference to the `Owner` of every contract it was
 given and drops it when it is destroyed, so disposing a dependency first only drops its own
 reference: the native object goes when its last holder does, in whatever order they are disposed.
@@ -35,7 +34,7 @@ side calls it on whichever worker it picked.
 **An exception does not cross the native frame.** A handler's exception is caught and either
 written to the result code, queued on the wrapper, or held for the call that returns to
 managed code. The call that observes the failure throws `InvalidOperationException` carrying
-what was queued, or the exception `NativeResults.FromCode` makes for the code.
+what was queued, or the exception the manifest names for the code.
 
 **A game is composed in the host's container.** Each part is registered under its contract with
 the constructor the projection generates; `AddDefaultCore` adds the common implementation of every
