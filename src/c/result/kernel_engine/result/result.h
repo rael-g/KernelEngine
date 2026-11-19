@@ -36,6 +36,7 @@ extern "C"
         KE_RESULT_DOMAIN_TEXT           = 15,
         KE_RESULT_DOMAIN_VIEW           = 16,
         KE_RESULT_DOMAIN_WINDOW         = 17,
+        KE_RESULT_DOMAIN_ASSEMBLY       = 18,
     } ke_result_domain;
 
 /** The value of code `code` of domain `domain`: the domain in the high 16 bits, the code in the low. */

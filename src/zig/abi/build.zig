@@ -5,6 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const tests = b.step("test", "Check the ABI of every domain against the headers");
     inline for (.{
+        "abi_assembly",
         "abi_asset_loader",
         "abi_asset_resolver",
         "abi_async",
@@ -31,6 +32,7 @@ pub fn build(b: *std.Build) void {
         "abi_mesh_data",
         "abi_module",
         "abi_node_types",
+        "abi_part",
         "abi_physics",
         "abi_physics_components",
         "abi_physics_contract",

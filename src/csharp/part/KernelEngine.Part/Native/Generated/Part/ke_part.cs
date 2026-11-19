@@ -1,0 +1,51 @@
+using System.Numerics;
+
+using global::KernelEngine.Ecs;
+using global::KernelEngine.Logger;
+using global::KernelEngine.Part;
+
+using KernelEngine.Completion.Native;
+using KernelEngine.Result.Native;
+using KernelEngine.Schedule.Native;
+using KernelEngine.Settings.Native;
+
+namespace KernelEngine.Part.Native;
+
+public unsafe partial struct ke_part
+{
+    [NativeTypeName("const char *")]
+    public sbyte* name;
+
+    [NativeTypeName("const char *")]
+    public sbyte* provides;
+
+    [NativeTypeName("const ke_part_slot *")]
+    public ke_part_slot* slots;
+
+    [NativeTypeName("size_t")]
+    public nuint slot_count;
+
+    [NativeTypeName("const ke_part_hook *")]
+    public ke_part_hook* hooks;
+
+    [NativeTypeName("size_t")]
+    public nuint hook_count;
+
+    [NativeTypeName("const ke_part_set *")]
+    public ke_part_set* sets;
+
+    [NativeTypeName("size_t")]
+    public nuint set_count;
+
+    [NativeTypeName("ke_result (*)(const struct ke_part *, const ke_part_bound *, const ke_part_hooked *, ke_settings *, ke_part_instance *)")]
+    public delegate* unmanaged[Cdecl]<ke_part*, ke_part_bound*, ke_part_hooked*, KernelEngine.Settings.Native.ke_settings*, ke_part_instance*, KernelEngine.Result.Native.Result> create;
+
+    [NativeTypeName("ke_result (*)(void *, ke_completion **)")]
+    public delegate* unmanaged[Cdecl]<void*, KernelEngine.Completion.Native.ke_completion**, KernelEngine.Result.Native.Result> ready;
+
+    [NativeTypeName("void (*)(void *)")]
+    public delegate* unmanaged[Cdecl]<void*, void> pump;
+
+    [NativeTypeName("void (*)(ke_log_callback, void *)")]
+    public delegate* unmanaged[Cdecl]<delegate* unmanaged[Cdecl]<void*, global::KernelEngine.Logger.LogLevel, sbyte*, sbyte*, void>, void*, void> set_log;
+}

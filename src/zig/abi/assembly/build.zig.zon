@@ -1,0 +1,14 @@
+.{
+    .name = .abi_assembly,
+    .version = "0.1.0",
+    .fingerprint = 0x3fa8588e2326b885,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .abi_ecs = .{ .path = "../ecs" },
+        .abi_logger = .{ .path = "../logger" },
+        .abi_part = .{ .path = "../part" },
+        .abi_result = .{ .path = "../result" },
+        .abi_schedule = .{ .path = "../schedule" },
+    },
+    .paths = .{"."},
+}

@@ -1,0 +1,13 @@
+.{
+    .name = .ke_part,
+    .version = "0.1.0",
+    .fingerprint = 0x9eecae4832f8993e,
+    .minimum_zig_version = "0.16.0",
+    .dependencies = .{
+        .ke_build = .{ .path = "../build" },
+        .abi_part = .{ .path = "../abi/part" },
+        .abi_result = .{ .path = "../abi/result" },
+        .abi_settings = .{ .path = "../abi/settings" },
+    },
+    .paths = .{"."},
+}

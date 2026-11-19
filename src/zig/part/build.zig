@@ -1,0 +1,17 @@
+const std = @import("std");
+const ke_build = @import("ke_build");
+
+pub fn build(b: *std.Build) void {
+    const target = b.standardTargetOptions(.{});
+    const optimize = b.standardOptimizeOption(.{});
+    const mod = b.addModule("part", .{ .root_source_file = b.path("part.zig"), .target = target, .optimize = optimize });
+    const tests_mod = b.createModule(.{ .root_source_file = b.path("part.zig"), .target = target, .optimize = optimize });
+    for ([_]*std.Build.Module{ mod, tests_mod }) |m| {
+        m.addImport("abi_part", b.dependency("abi_part", .{}).module("abi"));
+        m.addImport("abi_settings", b.dependency("abi_settings", .{}).module("abi"));
+        m.addImport("abi_result", b.dependency("abi_result", .{}).module("abi"));
+    }
+    const tests = b.addTest(.{ .name = "ke_part", .root_module = tests_mod });
+    b.step("test", "Run the part tests").dependOn(&b.addRunArtifact(tests).step);
+    ke_build.coverage(b, "ke_part", tests, "");
+}

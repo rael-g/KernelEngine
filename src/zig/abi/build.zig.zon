@@ -4,6 +4,7 @@
     .fingerprint = 0xd5f1a8dc1bdf6b97,
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
+        .abi_assembly = .{ .path = "assembly" },
         .abi_asset_loader = .{ .path = "asset_loader" },
         .abi_asset_resolver = .{ .path = "asset_resolver" },
         .abi_async = .{ .path = "async" },
@@ -30,6 +31,7 @@
         .abi_mesh_data = .{ .path = "mesh_data" },
         .abi_module = .{ .path = "module" },
         .abi_node_types = .{ .path = "node_types" },
+        .abi_part = .{ .path = "part" },
         .abi_physics = .{ .path = "physics" },
         .abi_physics_components = .{ .path = "physics_components" },
         .abi_physics_contract = .{ .path = "physics_contract" },
