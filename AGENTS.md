@@ -168,27 +168,25 @@ holds a ceiling that only goes down.
 **Dissatisfaction is a requirement not yet named.** A design its owner is unsatisfied with is not finished:
 name what it fails to honour and design again from that.
 
-1. **A plugin exposes vtables behind one factory per header.** Only the shared kernel library exports plain
-   functions.
-2. **No `InternalsVisibleTo`.**
-3. **Search precedents before inventing, and judge the precedent first.** Find the closest existing case and
+1. **No `InternalsVisibleTo`.**
+2. **Search precedents before inventing, and judge the precedent first.** Find the closest existing case and
    match it. Frequency is not endorsement: much of the code predates the convention that now governs it,
    and old code is refactored, not copied. A workaround, a shortcut, coupling, or anything a rule here
    forbids is debt, never a precedent. The test is "was this chosen, and is it still what we'd choose?";
    when unsure, ask.
-4. **Consult legacy before rewriting.** Read what was there, then design the replacement consciously.
-5. **No mutex, condition variable or raw thread in a plugin.** Only the job system, the async system and an
+3. **Consult legacy before rewriting.** Read what was there, then design the replacement consciously.
+4. **No mutex, condition variable or raw thread in a plugin.** Only the job system, the async system and an
    I/O implementation start threads. Producers and consumers are ordered through `ke_completion`,
    dependencies and component access.
-6. **A caller's failure is a `ke_result`; an internal invariant is a debug assert.** `abort` and `@panic`
+5. **A caller's failure is a `ke_result`; an internal invariant is a debug assert.** `abort` and `@panic`
    never appear.
-7. **The framework is a plugin like any other**, at `src/zig/framework/`, reached through its contracts.
-8. **No magic numbers.** A bare constant only when the algorithm implies it; any other is a setting or a
+6. **The framework is a plugin like any other**, at `src/zig/framework/`, reached through its contracts.
+7. **No magic numbers.** A bare constant only when the algorithm implies it; any other is a setting or a
    factory argument, with the current value as default.
-9. **The correct shape beats the easy one.** A design is judged by its shape, never by how much code would
+8. **The correct shape beats the easy one.** A design is judged by its shape, never by how much code would
    change. A local workaround for a narrow problem is allowed and named as one.
-10. **Code first, files on top.** Everything a file describes is first an API a program calls; the file is
+9. **Code first, files on top.** Everything a file describes is first an API a program calls; the file is
     a loader over that API and reaches nothing the code cannot.
-11. **The contract is the product.** A contract serves every way of implementing it, promises only what all
+10. **The contract is the product.** A contract serves every way of implementing it, promises only what all
     of them keep, and names another contract's type only where the concept is inherent. An implementation
     starts as the simplest one that keeps the contract, on a third-party library where one exists.
