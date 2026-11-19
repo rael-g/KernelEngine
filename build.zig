@@ -158,6 +158,7 @@ pub fn build(b: *std.Build) void {
     ctx.moduleTests("ke_result", .{ .target = target, .optimize = optimize }, .measured);
     ctx.moduleTests("ke_io_pending_reads", .{ .target = target, .optimize = optimize }, .measured);
     ctx.moduleTests("ke_settings_schema", .{ .target = target, .optimize = optimize }, .measured);
+    ctx.moduleTests("ke_part", .{ .target = target, .optimize = optimize }, .measured);
 
     _ = ctx.member("ke_ecs_flecs", .{
         .target = target,
