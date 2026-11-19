@@ -26,11 +26,11 @@ const resultOf = abi_result.resultOf;
 
 /// Allocates a new resolver. Both loader pointers may be NULL — the corresponding resolve_* slot
 /// then returns KE_RESULT_INVALID_ARGUMENT. The resolver does NOT take ownership of either
-/// loader. project_root may be NULL — res:// resolution is then disabled; only absolute or
-/// CWD-relative paths work.
-pub fn assetResolverCreate(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, project_root: [:0]const u8, io: ?*abi_io.c.ke_io) Error!abi_asset_resolver.c.ke_asset_resolver_handle {
+/// loader. A path that begins with res:// names what follows the prefix, resolved by io against
+/// the root of its file system; any other path is passed on as written.
+pub fn assetResolverCreate(image_loader: ?*abi_image_loader.c.ke_image_loader, font_loader: ?*abi_text.c.ke_font_loader, io: ?*abi_io.c.ke_io) Error!abi_asset_resolver.c.ke_asset_resolver_handle {
     var written: abi_asset_resolver.c.ke_asset_resolver_handle = undefined;
-    try checkResult(c.ke_asset_resolver_create(image_loader, font_loader, project_root.ptr, io, &written));
+    try checkResult(c.ke_asset_resolver_create(image_loader, font_loader, io, &written));
     return written;
 }
 

@@ -41,7 +41,7 @@ public static class DefaultCore
         services.TryAddKeyedSingleton<Configuration.Configuration>("bootstrap", (sp, _) => new DefaultConfiguration());
         IPartSettings Bootstrap(IServiceProvider sp, string section) => sp.GetRequiredKeyedService<Configuration.Configuration>("bootstrap").Section(section);
         services.TryAddSingleton<Job.JobSystem>(sp => new EnkiJobSystem(Bootstrap(sp, "job")));
-        services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem("."));
+        services.TryAddSingleton<FileSystem.FileSystem>(sp => new StdFileSystem(root));
         services.TryAddSingleton<Async.Async>(sp => new EnkiAsync(Bootstrap(sp, "async")));
         services.TryAddSingleton<Io.Io>(sp => new StdIo(Get<FileSystem.FileSystem>(sp), Bootstrap(sp, "io")));
         services.TryAddSingleton<ConfigurationSource>(sp => new ConfigurationTomlConfigurationSource(Get<FileSystem.FileSystem>(sp)));
@@ -64,7 +64,7 @@ public static class DefaultCore
         services.AddSingleton(sp => new EngineReadiness(Get<Render.Gpu.GpuDevice>(sp) is WebgpuGpuDevice device ? device.Ready : 0));
         services.TryAddSingleton<Render.Gpu.GpuRenderTarget>(sp => new WebgpuWindowGpuRenderTarget(Get<Render.Gpu.GpuDevice>(sp), Get<Window.Window>(sp), Get<Configuration.Configuration>(sp).Section("runtime.renderer")));
         services.TryAddSingleton<Text.FontLoader>(sp => new StbFontLoader(Get<Io.Io>(sp)));
-        services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(null, Get<Text.FontLoader>(sp), root, Get<Io.Io>(sp)));
+        services.TryAddSingleton<AssetResolver>(sp => new DefaultAssetResolver(null, Get<Text.FontLoader>(sp), Get<Io.Io>(sp)));
         services.TryAddSingleton<SceneTree>(sp => new DefaultSceneTree(Get<Ecs.EcsRegistry>(sp)));
         services.TryAddSingleton<InputActions>(sp => new DefaultInputActions(Get<Configuration.Configuration>(sp), "input"));
         services.TryAddSingleton<NodeTypes>(sp => new DefaultNodeTypes(Get<Scheduler.Scheduler>(sp), Get<Ecs.EcsRegistry>(sp), Get<SceneTree>(sp), Get<InputActions>(sp)));
@@ -78,7 +78,7 @@ public static class DefaultCore
             return new SceneHierarchyModule(Get<Ecs.EcsRegistry>(sp));
         }));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Physics.PhysicsBody2DModule>(sp => new Physics.PhysicsBody2DModule(Get<Ecs.EcsRegistry>(sp), Get<Physics.Physics2D>(sp), Get<SceneTree>(sp))));
-        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp), root)));
+        services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Audio.SoundModule>(sp => new Audio.SoundModule(Get<Ecs.EcsRegistry>(sp), Get<Audio.Audio>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, InputActionsEvaluationModule>(sp => new InputActionsEvaluationModule(Get<InputActions>(sp), Get<Input.Input>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, Extraction.ExtractionHistoryModule>(sp => new Extraction.ExtractionHistoryModule(Get<Extraction.Extraction>(sp))));
         services.TryAddEnumerable(ServiceDescriptor.Singleton<Module.Module, NodeTypesSystemsModule>(sp => new NodeTypesSystemsModule(Get<NodeTypes>(sp))));

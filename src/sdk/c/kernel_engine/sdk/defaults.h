@@ -148,10 +148,10 @@ static inline ke_result ke_sdk_async_enki(ke_sdk_engine *e)
     return ke_async_enki_create(ke_sdk_settings(e, "async"), &e->async);
 }
 
-/** The operating system's files, relative to the working directory. */
+/** The operating system's files, relative to the project directory. */
 static inline ke_result ke_sdk_file_system_std(ke_sdk_engine *e)
 {
-    return ke_file_system_std_create(".", &e->file_system);
+    return ke_file_system_std_create(e->project_dir, &e->file_system);
 }
 
 /** Reads on a pool of threads of its own, through the file system. */
@@ -217,7 +217,7 @@ static inline ke_result ke_sdk_fonts_stb(ke_sdk_engine *e)
 /** Assets resolved under the project directory. */
 static inline ke_result ke_sdk_assets(ke_sdk_engine *e)
 {
-    return ke_asset_resolver_create(NULL, e->fonts.ref, e->project_dir, e->io.ref, &e->assets);
+    return ke_asset_resolver_create(NULL, e->fonts.ref, e->io.ref, &e->assets);
 }
 
 
@@ -340,7 +340,7 @@ static inline ke_result ke_sdk_physics_box2d(ke_sdk_engine *e)
 static inline ke_result ke_sdk_audio_miniaudio(ke_sdk_engine *e)
 {
     ke_result made = ke_audio_miniaudio_create(e->io.ref, &e->audio);
-    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, e->project_dir, &e->sounds);
+    if (made == KE_OK) made = ke_sound_create(e->ecs.ref, e->audio.ref, &e->sounds);
     if (made == KE_OK) made = ke_sdk_add_module(e, e->sounds.ref);
     return made;
 }
