@@ -136,7 +136,8 @@ The full rules are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
   writes in the project file, read once. A value that changes afterwards is a slot, never a setting. A key
   every implementation reads is a `KE_<DOMAIN>_SETTING_*` macro in the contract; the implementation
   publishes defaults and ranges through `settings_schema` (`src/zig/settings/schema/`) and refuses an
-  unknown key, a wrong type or an out-of-range value. Zero is a value, never "use the default".
+  unknown key, a wrong type or an out-of-range value. A contract declares no defaults, and zero is a value,
+  never "use the default". How a node of a type is born is the type's `initial`, stated by its author.
 - Shape of a plugin: the entry file is named after domain and plugin (a render pass ends in `module`); the
   state is `State`, embedding the vtable as `api`, recovered by `stateOf`; a slot function is a camelCase
   verb named after its slot, never `impl`; a slot refuses a null first argument; a factory is `export`
