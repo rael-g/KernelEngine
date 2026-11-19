@@ -37,6 +37,7 @@ test "every enum value is the header's value" {
 test "every constant is the header's value" {
     @setEvalBranchQuota(100_000_000);
     try std.testing.expectEqual(@as(i128, c.KE_SOUND_MAX_PATH), @as(i128, abi.c.KE_SOUND_MAX_PATH));
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SOUND, abi.c.KE_COMPONENT_NAME_SOUND);
 }
 
 extern const layout_values: [10]c_ulonglong;

@@ -5,8 +5,8 @@
 #include <kernel_engine/audio/components.h>
 #include <stddef.h>
 
-#define KE_COMPONENT_NAME_SOUND "sound"
-
+/// The fields of `ke_sound_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_sound_component_fields[] = {
     { "path", KE_VARIANT_STRING, offsetof(ke_sound_component, path), sizeof(((ke_sound_component *)0)->path), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
     { "volume", KE_VARIANT_FLOAT, offsetof(ke_sound_component, volume), sizeof(((ke_sound_component *)0)->volume), { KE_VARIANT_FLOAT, { .f = 1.0 } }, NULL, 0 },

@@ -23,6 +23,14 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_camera_component, translated("ke_camera_component"));
+    try expectSameLayout(abi.c.ke_directional_light_component, translated("ke_directional_light_component"));
+    try expectSameLayout(abi.c.ke_point_light_component, translated("ke_point_light_component"));
+    try expectSameLayout(abi.c.ke_spot_light_component, translated("ke_spot_light_component"));
+    try expectSameLayout(abi.c.ke_ambient_light_component, translated("ke_ambient_light_component"));
+    try expectSameLayout(abi.c.ke_skybox_component, translated("ke_skybox_component"));
+    try expectSameLayout(abi.c.ke_mesh_component, translated("ke_mesh_component"));
+    try expectSameLayout(abi.c.ke_sprite2d_component, translated("ke_sprite2d_component"));
 }
 
 test "every constant is the header's value" {
@@ -35,15 +43,63 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SKYBOX, abi.c.KE_COMPONENT_NAME_SKYBOX);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_MESH, abi.c.KE_COMPONENT_NAME_MESH);
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_SPRITE2D, abi.c.KE_COMPONENT_NAME_SPRITE2D);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_UI_QUAD, abi.c.KE_COMPONENT_NAME_UI_QUAD);
-    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_LABEL, abi.c.KE_COMPONENT_NAME_LABEL);
 }
 
-extern const layout_values: [1]c_ulonglong;
+extern const layout_values: [51]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_camera_component),
+        @offsetOf(abi.c.ke_camera_component, "fov"),
+        @offsetOf(abi.c.ke_camera_component, "near_plane"),
+        @offsetOf(abi.c.ke_camera_component, "far_plane"),
+        @offsetOf(abi.c.ke_camera_component, "orthographic_size"),
+        @offsetOf(abi.c.ke_camera_component, "orthographic"),
+        @offsetOf(abi.c.ke_camera_component, "cull_mask"),
+        @sizeOf(abi.c.ke_directional_light_component),
+        @offsetOf(abi.c.ke_directional_light_component, "direction"),
+        @offsetOf(abi.c.ke_directional_light_component, "color"),
+        @offsetOf(abi.c.ke_directional_light_component, "intensity"),
+        @offsetOf(abi.c.ke_directional_light_component, "ambient"),
+        @sizeOf(abi.c.ke_point_light_component),
+        @offsetOf(abi.c.ke_point_light_component, "color"),
+        @offsetOf(abi.c.ke_point_light_component, "intensity"),
+        @offsetOf(abi.c.ke_point_light_component, "radius"),
+        @sizeOf(abi.c.ke_spot_light_component),
+        @offsetOf(abi.c.ke_spot_light_component, "direction"),
+        @offsetOf(abi.c.ke_spot_light_component, "color"),
+        @offsetOf(abi.c.ke_spot_light_component, "intensity"),
+        @offsetOf(abi.c.ke_spot_light_component, "range"),
+        @offsetOf(abi.c.ke_spot_light_component, "inner_angle"),
+        @offsetOf(abi.c.ke_spot_light_component, "outer_angle"),
+        @sizeOf(abi.c.ke_ambient_light_component),
+        @offsetOf(abi.c.ke_ambient_light_component, "color"),
+        @sizeOf(abi.c.ke_skybox_component),
+        @offsetOf(abi.c.ke_skybox_component, "cubemap"),
+        @sizeOf(abi.c.ke_mesh_component),
+        @offsetOf(abi.c.ke_mesh_component, "mesh"),
+        @offsetOf(abi.c.ke_mesh_component, "material"),
+        @offsetOf(abi.c.ke_mesh_component, "primitive"),
+        @offsetOf(abi.c.ke_mesh_component, "base_color"),
+        @offsetOf(abi.c.ke_mesh_component, "roughness"),
+        @offsetOf(abi.c.ke_mesh_component, "alpha_mode"),
+        @offsetOf(abi.c.ke_mesh_component, "alpha_cutoff"),
+        @offsetOf(abi.c.ke_mesh_component, "ior"),
+        @offsetOf(abi.c.ke_mesh_component, "distortion_strength"),
+        @offsetOf(abi.c.ke_mesh_component, "layers"),
+        @sizeOf(abi.c.ke_sprite2d_component),
+        @offsetOf(abi.c.ke_sprite2d_component, "texture"),
+        @offsetOf(abi.c.ke_sprite2d_component, "region"),
+        @offsetOf(abi.c.ke_sprite2d_component, "size"),
+        @offsetOf(abi.c.ke_sprite2d_component, "pivot"),
+        @offsetOf(abi.c.ke_sprite2d_component, "flip_h"),
+        @offsetOf(abi.c.ke_sprite2d_component, "flip_v"),
+        @offsetOf(abi.c.ke_sprite2d_component, "color"),
+        @offsetOf(abi.c.ke_sprite2d_component, "alpha_mode"),
+        @offsetOf(abi.c.ke_sprite2d_component, "alpha_cutoff"),
+        @offsetOf(abi.c.ke_sprite2d_component, "texture_handle"),
+        @offsetOf(abi.c.ke_sprite2d_component, "attached"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

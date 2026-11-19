@@ -5,6 +5,11 @@ const abi_math = @import("math");
 const abi_physics = @import("physics");
 const abi_result = @import("result");
 
+/// The name the `body2d` component is registered under.
+pub const KE_COMPONENT_NAME_BODY2D = "body2d";
+/// The name the `collider2d` component is registered under.
+pub const KE_COMPONENT_NAME_COLLIDER2D = "collider2d";
+
 pub const ke_shape_kind_2d = c_uint;
 /// Axis-aligned box, sized by half_extents.
 pub const KE_SHAPE_KIND_2D_BOX: ke_shape_kind_2d = 0;

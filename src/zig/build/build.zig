@@ -112,23 +112,27 @@ pub fn plugin(b: *std.Build, description: Plugin) Built {
     const lib = b.addLibrary(.{ .name = description.name, .root_module = modules.lib, .linkage = .dynamic });
     b.getInstallStep().dependOn(&b.addInstallArtifact(lib, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } }).step);
     const test_step = b.step("test", description.tests);
-    const test_compile = b.addTest(.{ .root_module = tests[0] });
+    const test_compile = b.addTest(.{ .name = description.name, .root_module = tests[0] });
     test_step.dependOn(&b.addRunArtifact(test_compile).step);
-    coverage(b, description.name, test_compile, b.path("src"));
+    coverage(b, description.name, test_compile, "src");
     return .{ .test_step = test_step, .extra = tests[1..] };
 }
 
-/// Measures `tests`, of the package `name`, over `sources` when the build is given the option `kcov`, the path of a kcov
+/// Measures `tests`, of the package `name`, over the directory `sources` of the package when the build is given the option `kcov`, the path of a kcov
 /// executable: the tests are compiled with LLVM, whose line table kcov reads, and the `coverage`
 /// step runs them under kcov, installs the report under `coverage` and names it `coverage` for a
-/// consumer. Without the option it changes nothing. Call it once per build.
-pub fn coverage(b: *std.Build, name: []const u8, tests: *std.Build.Step.Compile, sources: std.Build.LazyPath) void {
+/// consumer. The sources are matched by their path from `src/zig/`, so a test binary compiled where
+/// the tree is reached by another absolute path is still measured. Without the option it changes
+/// nothing. Call it once per build.
+pub fn coverage(b: *std.Build, name: []const u8, tests: *std.Build.Step.Compile, sources: []const u8) void {
     const kcov = b.option(std.Build.LazyPath, "kcov", "kcov executable the coverage step runs the tests under") orelse return;
     tests.use_llvm = true;
     const run = std.Build.Step.Run.create(b, b.fmt("cover {s}", .{name}));
     run.addFileArg(kcov);
     run.addArg("--skip-solibs");
-    run.addPrefixedDirectoryArg("--include-path=", sources);
+    const root = b.build_root.path orelse ".";
+    const from = std.mem.lastIndexOf(u8, root, "/src/zig/") orelse 0;
+    run.addArg(b.fmt("--include-pattern={s}/{s}{s}", .{ root[from..], sources, if (sources.len > 0) "/" else "" }));
     const report = run.addOutputDirectoryArg("coverage");
     run.addArtifactArg(tests);
     b.addNamedLazyPath("coverage", report);

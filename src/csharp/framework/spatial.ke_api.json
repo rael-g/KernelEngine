@@ -255,5 +255,25 @@
   "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_COMPONENT_NAME_TRANSFORM",
+      "type": "const char *",
+      "value": "\u0022transform\u0022",
+      "doc": "The name the \u0060transform\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_TRANSFORM2D",
+      "type": "const char *",
+      "value": "\u0022transform2d\u0022",
+      "doc": "The name the \u0060transform2d\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_WORLD_TRANSFORM",
+      "type": "const char *",
+      "value": "\u0022world_transform\u0022",
+      "doc": "The name the \u0060world_transform\u0060 component is registered under."
+    }
+  ]
 }

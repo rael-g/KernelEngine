@@ -7,11 +7,13 @@ pub fn build(b: *std.Build) void {
     const abi = b.addModule("abi", .{ .root_source_file = b.path("spatial_contract.zig") });
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
+    abi.addImport("math", b.dependency("abi_math", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
     abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/spatial/component_fields.h>
+        \\#include <kernel_engine/spatial/transform.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/ecs"));

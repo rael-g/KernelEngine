@@ -777,5 +777,55 @@
   "callbacks": [],
   "id_types": [],
   "foreign_id_types": [],
-  "type_aliases": {}
+  "type_aliases": {},
+  "constants": [
+    {
+      "name": "KE_COMPONENT_NAME_CAMERA",
+      "type": "const char *",
+      "value": "\u0022camera\u0022",
+      "doc": "The name the \u0060camera\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_DIRECTIONAL_LIGHT",
+      "type": "const char *",
+      "value": "\u0022directional_light\u0022",
+      "doc": "The name the \u0060directional_light\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_POINT_LIGHT",
+      "type": "const char *",
+      "value": "\u0022point_light\u0022",
+      "doc": "The name the \u0060point_light\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_SPOT_LIGHT",
+      "type": "const char *",
+      "value": "\u0022spot_light\u0022",
+      "doc": "The name the \u0060spot_light\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_AMBIENT_LIGHT",
+      "type": "const char *",
+      "value": "\u0022ambient_light\u0022",
+      "doc": "The name the \u0060ambient_light\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_SKYBOX",
+      "type": "const char *",
+      "value": "\u0022skybox\u0022",
+      "doc": "The name the \u0060skybox\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_MESH",
+      "type": "const char *",
+      "value": "\u0022mesh\u0022",
+      "doc": "The name the \u0060mesh\u0060 component is registered under."
+    },
+    {
+      "name": "KE_COMPONENT_NAME_SPRITE2D",
+      "type": "const char *",
+      "value": "\u0022sprite2d\u0022",
+      "doc": "The name the \u0060sprite2d\u0060 component is registered under."
+    }
+  ]
 }

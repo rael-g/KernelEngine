@@ -5,13 +5,16 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
 
     const abi = b.addModule("abi", .{ .root_source_file = b.path("audio_contract.zig") });
+    abi.addImport("audio", b.dependency("abi_audio", .{}).module("abi"));
     abi.addImport("audio_components", b.dependency("abi_audio_components", .{}).module("abi"));
     abi.addImport("ecs", b.dependency("abi_ecs", .{}).module("abi"));
     abi.addImport("ecs_variant", b.dependency("abi_ecs_variant", .{}).module("abi"));
     abi.addImport("result", b.dependency("abi_result", .{}).module("abi"));
+    abi.addImport("spatial", b.dependency("abi_spatial", .{}).module("abi"));
 
     const headers = b.addWriteFiles().add("layout.h",
         \\#include <kernel_engine/audio/component_fields.h>
+        \\#include <kernel_engine/audio/components.h>
     );
     const translated = b.addTranslateC(.{ .root_source_file = headers, .target = target, .optimize = optimize });
     translated.addIncludePath(b.path("../../../c/audio"));

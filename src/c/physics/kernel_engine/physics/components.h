@@ -79,4 +79,9 @@ extern "C"
 }
 #endif
 
+/// The name the `body2d` component is registered under.
+#define KE_COMPONENT_NAME_BODY2D "body2d"
+/// The name the `collider2d` component is registered under.
+#define KE_COMPONENT_NAME_COLLIDER2D "collider2d"
+
 #endif

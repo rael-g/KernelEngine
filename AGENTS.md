@@ -40,8 +40,9 @@ dotnet run scripts/ci_local.cs            # verify.cs in a fresh clone inside th
 - Never `dotnet run --no-build` after a native rebuild: the native libraries are copied into the C# output
   only during a build (`src/csharp/NativeDependencies.targets`), so `--no-build` runs the old native code.
 - Bindings and projections are generated, never edited:
-  `dotnet run --project src/csharp/generators/KernelEngine.Kabic -- bindings` regenerates the P/Invoke layer,
-  `-- generate` every kabic domain from `scripts/api_domains.json`.
+  `dotnet run --project external/kabic/src/Kabic -- --cache-dir build/kabic-cache bindings` regenerates the
+  P/Invoke layer, `generate` every kabic domain from `scripts/api_domains.json`, with no extension of the
+  engine's.
 - Slang shaders live with the pass that owns them (`src/zig/render/<pass>/shaders/`), shared modules and
   materials under `src/shaders/`; they compile to WGSL and are loaded at runtime by logical name.
 - Coverage: `zig build coverage -Dcoverage` runs every plugin's tests under kcov, fetched by
@@ -135,7 +136,8 @@ The full rules are in [`docs/conventions/docs.md`](docs/conventions/docs.md).
   writes in the project file, read once. A value that changes afterwards is a slot, never a setting. A key
   every implementation reads is a `KE_<DOMAIN>_SETTING_*` macro in the contract; the implementation
   publishes defaults and ranges through `settings_schema` (`src/zig/settings/schema/`) and refuses an
-  unknown key, a wrong type or an out-of-range value. Zero is a value, never "use the default".
+  unknown key, a wrong type or an out-of-range value. A contract declares no defaults, and zero is a value,
+  never "use the default". How a node of a type is born is the type's `initial`, stated by its author.
 - Shape of a plugin: the entry file is named after domain and plugin (a render pass ends in `module`); the
   state is `State`, embedding the vtable as `api`, recovered by `stateOf`; a slot function is a camelCase
   verb named after its slot, never `impl`; a slot refuses a null first argument; a factory is `export`

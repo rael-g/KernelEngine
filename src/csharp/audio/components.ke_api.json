@@ -684,6 +684,12 @@
       "name": "KE_SOUND_MAX_PATH",
       "type": "int",
       "value": "256"
+    },
+    {
+      "name": "KE_COMPONENT_NAME_SOUND",
+      "type": "const char *",
+      "value": "\u0022sound\u0022",
+      "doc": "The name the \u0060sound\u0060 component is registered under."
     }
   ]
 }

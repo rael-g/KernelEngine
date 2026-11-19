@@ -41,4 +41,11 @@ extern "C"
 }
 #endif
 
+/// The name the `transform` component is registered under.
+#define KE_COMPONENT_NAME_TRANSFORM "transform"
+/// The name the `transform2d` component is registered under.
+#define KE_COMPONENT_NAME_TRANSFORM2D "transform2d"
+/// The name the `world_transform` component is registered under.
+#define KE_COMPONENT_NAME_WORLD_TRANSFORM "world_transform"
+
 #endif

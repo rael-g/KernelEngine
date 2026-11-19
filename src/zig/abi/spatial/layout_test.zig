@@ -28,6 +28,13 @@ test "every record is laid out as the header lays it out" {
     try expectSameLayout(abi.c.ke_world_transform_component, translated("ke_world_transform_component"));
 }
 
+test "every constant is the header's value" {
+    @setEvalBranchQuota(100_000_000);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM, abi.c.KE_COMPONENT_NAME_TRANSFORM);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_TRANSFORM2D, abi.c.KE_COMPONENT_NAME_TRANSFORM2D);
+    try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi.c.KE_COMPONENT_NAME_WORLD_TRANSFORM);
+}
+
 extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {

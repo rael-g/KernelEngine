@@ -23,6 +23,9 @@ fn translated(comptime name: []const u8) type {
 
 test "every record is laid out as the header lays it out" {
     @setEvalBranchQuota(100_000_000);
+    try expectSameLayout(abi.c.ke_transform_component, translated("ke_transform_component"));
+    try expectSameLayout(abi.c.ke_transform2d_component, translated("ke_transform2d_component"));
+    try expectSameLayout(abi.c.ke_world_transform_component, translated("ke_world_transform_component"));
 }
 
 test "every constant is the header's value" {
@@ -32,11 +35,22 @@ test "every constant is the header's value" {
     try std.testing.expectEqualStrings(c.KE_COMPONENT_NAME_WORLD_TRANSFORM, abi.c.KE_COMPONENT_NAME_WORLD_TRANSFORM);
 }
 
-extern const layout_values: [1]c_ulonglong;
+extern const layout_values: [12]c_ulonglong;
 
 test "every size and offset is the one C computes" {
     @setEvalBranchQuota(100_000_000);
     const expected = [_]usize{
+        @sizeOf(abi.c.ke_transform_component),
+        @offsetOf(abi.c.ke_transform_component, "position"),
+        @offsetOf(abi.c.ke_transform_component, "rotation"),
+        @offsetOf(abi.c.ke_transform_component, "scale"),
+        @sizeOf(abi.c.ke_transform2d_component),
+        @offsetOf(abi.c.ke_transform2d_component, "position"),
+        @offsetOf(abi.c.ke_transform2d_component, "rotation"),
+        @offsetOf(abi.c.ke_transform2d_component, "scale"),
+        @offsetOf(abi.c.ke_transform2d_component, "depth"),
+        @sizeOf(abi.c.ke_world_transform_component),
+        @offsetOf(abi.c.ke_world_transform_component, "matrix"),
     };
     for (expected, 0..) |value, at| try std.testing.expectEqual(layout_values[at], value);
 }

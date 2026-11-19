@@ -5,9 +5,8 @@
 #include <kernel_engine/physics/components.h>
 #include <stddef.h>
 
-#define KE_COMPONENT_NAME_BODY2D "body2d"
-#define KE_COMPONENT_NAME_COLLIDER2D "collider2d"
-
+/// The fields of `ke_body2d_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_body2d_component_fields[] = {
     { "type", KE_VARIANT_INT, offsetof(ke_body2d_component, type), sizeof(((ke_body2d_component *)0)->type), { KE_VARIANT_NULL, { 0 } }, (const char *const[]){ "static", "kinematic", "dynamic" }, 3 },
     { "velocity", KE_VARIANT_VEC2, offsetof(ke_body2d_component, velocity), sizeof(((ke_body2d_component *)0)->velocity), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
@@ -17,6 +16,8 @@ static const ke_component_field ke_body2d_component_fields[] = {
     { "fixed_rotation", KE_VARIANT_BOOL, offsetof(ke_body2d_component, fixed_rotation), sizeof(((ke_body2d_component *)0)->fixed_rotation), { KE_VARIANT_NULL, { 0 } }, NULL, 0 },
 };
 
+/// The fields of `ke_collider2d_component` a scene or the game writes by name: each name, kind, place, size, default
+/// and, for an enumeration, its value names.
 static const ke_component_field ke_collider2d_component_fields[] = {
     { "kind", KE_VARIANT_INT, offsetof(ke_collider2d_component, kind), sizeof(((ke_collider2d_component *)0)->kind), { KE_VARIANT_NULL, { 0 } }, (const char *const[]){ "box", "circle" }, 2 },
     { "half_extents", KE_VARIANT_VEC2, offsetof(ke_collider2d_component, half_extents), sizeof(((ke_collider2d_component *)0)->half_extents), { KE_VARIANT_VEC2, { .v2 = { 0.5f, 0.5f } } }, NULL, 0 },

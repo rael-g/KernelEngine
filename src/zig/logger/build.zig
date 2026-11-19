@@ -13,11 +13,11 @@ pub fn build(b: *std.Build) void {
 
     _ = b.addModule("log", .{ .root_source_file = b.path("log.zig") });
 
-    const tests = b.addTest(.{ .root_module = b.createModule(.{
+    const tests = b.addTest(.{ .name = "ke_logger", .root_module = b.createModule(.{
         .root_source_file = b.path("log.zig"),
         .target = target,
         .optimize = optimize,
     }) });
     b.step("test", "Run the log destination tests").dependOn(&b.addRunArtifact(tests).step);
-    ke_build.coverage(b, "ke_logger", tests, b.path(""));
+    ke_build.coverage(b, "ke_logger", tests, "");
 }

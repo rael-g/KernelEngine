@@ -50,4 +50,7 @@ extern "C"
 }
 #endif
 
+/// The name the `sound` component is registered under.
+#define KE_COMPONENT_NAME_SOUND "sound"
+
 #endif

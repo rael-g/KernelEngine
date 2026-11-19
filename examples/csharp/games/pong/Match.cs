@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
+using KernelEngine.Audio;
 using KernelEngine.Framework.Nodes;
 
 namespace Pong;
@@ -43,6 +44,6 @@ partial class Match : Node
         else Right++;
         Serving = true;
         Raise(new ScoreChanged { Left = Left, Right = Right });
-        Spawn("Sound", Sounds.Once(ScoreSound, ScoreVolume));
+        Spawn(AudioComponentsConstants.ComponentNameSound, "Sound", Sounds.Once(ScoreSound, ScoreVolume));
     }
 }
