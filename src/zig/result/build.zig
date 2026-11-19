@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     test_mod.addImport("abi_result", abi);
-    const tests = b.addTest(.{ .root_module = test_mod });
+    const tests = b.addTest(.{ .name = "ke_result", .root_module = test_mod });
     const test_step = b.step("test", "Run the result conversion tests and, on Windows, the DLL entry point test");
     test_step.dependOn(&b.addRunArtifact(tests).step);
     ke_build.coverage(b, "ke_result", tests, b.path(""));

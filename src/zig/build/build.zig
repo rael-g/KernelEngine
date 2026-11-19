@@ -112,7 +112,7 @@ pub fn plugin(b: *std.Build, description: Plugin) Built {
     const lib = b.addLibrary(.{ .name = description.name, .root_module = modules.lib, .linkage = .dynamic });
     b.getInstallStep().dependOn(&b.addInstallArtifact(lib, .{ .dest_dir = .{ .override = .{ .custom = "lib" } } }).step);
     const test_step = b.step("test", description.tests);
-    const test_compile = b.addTest(.{ .root_module = tests[0] });
+    const test_compile = b.addTest(.{ .name = description.name, .root_module = tests[0] });
     test_step.dependOn(&b.addRunArtifact(test_compile).step);
     coverage(b, description.name, test_compile, b.path("src"));
     return .{ .test_step = test_step, .extra = tests[1..] };
