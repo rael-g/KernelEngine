@@ -147,8 +147,22 @@ static class Coverage
         var baseUri = Norm(BaseDir).TrimEnd('/') + "/";
         if (filePath.StartsWith(baseUri)) filePath = filePath[baseUri.Length..];
         if (!filePath.StartsWith("src/csharp/") || filePath.Contains("/Generated/") || filePath.EndsWith(".g.cs")) return null;
-        return Short(ModuleFor(filePath));
+        var parts = filePath.Split('/');
+        return parts.Length >= 4 ? parts[3] : null;
     }
+
+    static bool HandWritten(string file)
+    {
+        var path = Norm(file);
+        return !path.Contains("/Generated/") && !path.Contains("/obj/") && !path.Contains("/bin/")
+            && !path.EndsWith(".g.cs") && Path.GetFileName(path) != "GlobalUsings.cs";
+    }
+
+    static Dictionary<string, int> ManagedProjects() =>
+        Directory.EnumerateFiles(Path.Combine(BaseDir, "src", "csharp"), "*.csproj", SearchOption.AllDirectories)
+            .Select(Path.GetDirectoryName)
+            .ToDictionary(dir => Path.GetFileName(dir!)!, dir => Directory.EnumerateFiles(dir!, "*.cs", SearchOption.AllDirectories)
+                .Where(HandWritten).Sum(f => File.ReadLines(f).Count()));
 
     static string? ZigModule(string filePath)
     {
@@ -156,7 +170,7 @@ static class Coverage
         return at > 0 ? filePath[..at] : Path.GetDirectoryName(filePath)?.Replace('\\', '/');
     }
 
-    static void Section(List<string> outLines, string title, string cobertura, Func<string, string?> moduleOf, string missing)
+    static void Section(List<string> outLines, string title, string cobertura, Func<string, string?> moduleOf, string missing, Dictionary<string, int>? expected = null)
     {
         void W(string s = "") => outLines.Add(s);
         var total = new Counts();
@@ -173,6 +187,14 @@ static class Coverage
         foreach (var (module, m) in modules.OrderBy(kv => kv.Value.Pct).ThenBy(kv => kv.Key, StringComparer.Ordinal))
             W($"    {module,-38} {m.Pct,5:F1}%   {m.Covered,6}/{m.Total}");
         W();
+        var untested = (expected ?? []).Where(kv => kv.Value > 0 && !modules.ContainsKey(kv.Key)).OrderByDescending(kv => kv.Value).ToList();
+        if (untested.Count > 0)
+        {
+            W("    No test loads these, so they are not counted above (hand-written source lines):");
+            foreach (var (project, lines) in untested)
+                W($"    {project,-38} {"-",6}   {lines,6} lines");
+            W();
+        }
         var gaps = modules.Where(kv => kv.Value.Total >= GapThresholdLines && kv.Value.Pct < GapThresholdPct).ToList();
         if (gaps.Count > 0)
         {
@@ -191,7 +213,7 @@ static class Coverage
         outLines.Add($"  KernelEngine Coverage - {now}");
         outLines.Add(new string('=', 70));
         outLines.Add("");
-        Section(outLines, "C#", Path.Combine(ReportDir, "Cobertura.xml"), ManagedModule, "no Cobertura.xml - run the pipeline first");
+        Section(outLines, "C#", Path.Combine(ReportDir, "Cobertura.xml"), ManagedModule, "no Cobertura.xml - run the pipeline first", ManagedProjects());
         Section(outLines, "Zig", ZigCobertura, ZigModule, "no kcov report - run zig build coverage -Dcoverage");
         outLines.Add(new string('=', 70));
 
